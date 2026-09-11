@@ -31,11 +31,6 @@ export const PURE_TEST_SCRUBBED_ENV_NAMES = Object.freeze([
   'S3_SECRET_ACCESS_KEY',
 ]);
 const removedNames = new Set(PURE_TEST_SCRUBBED_ENV_NAMES);
-const pureLaneIds = new Set([
-  'turbo:test:unit:prebuilt',
-  'test:unit:prebuilt:fast',
-  'agent:test:unit',
-]);
 
 export function buildPureTestEnv(sourceEnv) {
   const pureEnv = {};
@@ -52,11 +47,4 @@ export function buildPureTestEnv(sourceEnv) {
   }
   pureEnv.VALIDATION_TEST_CLASS = 'pure';
   return pureEnv;
-}
-
-export function resolveValidationLaneEnv({ laneId, sourceEnv, backendDbEnv = false }) {
-  if (backendDbEnv || !pureLaneIds.has(laneId)) {
-    return { ...sourceEnv };
-  }
-  return buildPureTestEnv(sourceEnv);
 }

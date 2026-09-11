@@ -150,12 +150,15 @@ Transport notes:
 Rollout/readiness sequence:
 
 ```bash
-pnpm check:fast
 pnpm --filter @esl-pipeline/telegram-ops-bot test
 pnpm test:integration
 bash scripts/smoke/run-telegram-ops-compose-smoke.sh
 pnpm ops:telegram:preflight --profile=readonly_canary
 ```
+
+Use successful hosted PR CI and `CI gate` for the target commit as the comprehensive-validation
+prerequisite. The commands above retain only Telegram-specific package, Compose, and rollout
+evidence.
 
 Post-deploy:
 

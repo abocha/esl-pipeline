@@ -107,7 +107,8 @@ Copy this block into each retirement PR:
 Before merging any item PR:
 
 1. Item-specific test commands pass.
-2. `pnpm check:fast` passes for repo guardrails.
+2. Focused checks for the retired surface pass; hosted PR CI and `CI gate` provide comprehensive
+   validation.
 3. `pnpm docs:check` passes when docs/contract text changed.
 4. PR has exactly one release label and matches item requirement.
 

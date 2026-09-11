@@ -53,8 +53,10 @@ surface.
 
 ## Rollout Gates
 
+Confirm successful hosted PR CI and `CI gate` for the target commit. The commands below retain only
+Telegram-specific package, Compose, and rollout evidence.
+
 ```bash
-pnpm check:fast
 pnpm --filter @esl-pipeline/telegram-ops-bot test
 pnpm test:integration
 bash scripts/smoke/run-telegram-ops-compose-smoke.sh

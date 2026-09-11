@@ -614,6 +614,13 @@ describe('telegram go-live gates script', () => {
     expect(result.exitCode).toBe(0);
     expect(result.report.summary.passed).toBe(true);
     expect(result.report.summary.executed).toBe(GATE_STEPS.length);
+    expect(GATE_STEPS.map((step) => step.id)).toEqual([
+      'telegram_ops_bot_tests',
+      'integration_tests',
+      'compose_smoke',
+      'preflight_readonly_canary',
+    ]);
+    expect(GATE_STEPS.some((step) => step.id === 'check_fast')).toBe(false);
     expect(seenCommands).toEqual(GATE_STEPS.map((step) => step.id));
     const expectedTmpRoot = process.platform === 'linux' ? '/tmp' : seenTmpDir;
     const expectedTmp = process.platform === 'linux' ? '/tmp' : seenTmp;

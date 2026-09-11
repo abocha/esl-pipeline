@@ -54,18 +54,15 @@ Use [`docs/reference/TESTING_GUIDELINES.md`](../docs/reference/TESTING_GUIDELINE
 verification baseline in [`docs/reference/agents-ssot.md`](../docs/reference/agents-ssot.md):
 
 - run the narrowest focused tests first;
-- use `pnpm --silent run check:fast:agent` as the default affected gate;
-- use `pnpm check:pre-pr` directly for broad, cross-cutting, shared-contract, or toolchain work;
-- use `pnpm check:pre-pr:agent` when that same broad gate should return the existing persisted agent
-  summary and lane-log references for a completion handoff; it uses the same `--broad` validation
-  plan and does not change broad semantics;
-- use `pnpm check:agent` for DB, migration, worker, integration behavior, or local CI reproduction
-  when the completion handoff needs persisted evidence; use `pnpm check` for the same human-readable
-  gate;
-- use existing `:agent` lanes and inspect their cited artifacts before diagnostic reruns;
-- keep selected PostgreSQL and Redis requirements visible as CI-owned evidence;
-- treat `PASS_WITH_CI_REQUIREMENTS` as permission to create a PR, never to merge; every selected
-  hosted job and `CI gate` must pass before merge.
+- use the owning package's focused test, typecheck, lint, or build command while editing and before
+  pushing;
+- use the narrow `pnpm test:backend:db:worker` helper only when PostgreSQL/Redis service behavior
+  needs local diagnosis;
+- use `pnpm docs:generate:indexes`, `pnpm format`, and `pnpm docs:check` for docs-only changes;
+- do not automatically run a repository-wide local gate; broader diagnostics require a concrete
+  suspected cross-package/environment failure, an unavailable hosted equivalent, or reproduction of
+  a specific hosted-CI failure;
+- treat hosted PR CI and the fail-closed `CI gate` as comprehensive merge evidence.
 
 When a validation command produces structured or persisted evidence, completion handoffs must retain
 the exact local summary/run-directory reference (or hosted run, job, and artifact identity), the

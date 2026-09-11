@@ -42,8 +42,8 @@ the fixed 120-attempt Gemini baseline remains immutable historical evidence.
   future retry design requires a separate crash-safe physical-call ledger and budget review.
 - Never commit live raw outputs, audio, private learner text, credentials, environment dumps, or the
   ignored original-issue fixture.
-- Tests must fail for the expected reason before implementation. Run `pnpm test:check-routing`
-  before canonical unit execution and follow current `agents-ssot` routing.
+- Tests must fail for the expected reason before implementation. Run the focused package/tooling
+  checks appropriate to the change and follow current `agents-ssot` routing.
 - Human listening results must come from the user; never infer or fabricate them.
 - A Luna comparison is a later stage, not part of the harness-fidelity repair and not permission to
   change any default.
@@ -67,7 +67,7 @@ the fixed 120-attempt Gemini baseline remains immutable historical evidence.
 Focused validation:
 
 ```powershell
-pnpm test:check-routing
+pnpm test:tooling
 pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.speech-performance-planner.test.ts tests/application.speech-planner-evaluator.test.ts
 ```
 
@@ -113,7 +113,7 @@ Primary files:
 Focused validation:
 
 ```powershell
-pnpm test:check-routing
+pnpm test:tooling
 pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.speech-planner-eval-fixtures.test.ts tests/application.speech-planner-evaluator.test.ts tests/tools.eval-speech-planner.test.ts
 pnpm --filter @esl-pipeline/orchestrator exec vitest run tests/runtime.speech-performance.test.ts
 pnpm eval:speech-planner -- --offline-output-fixtures=packages/batch-backend/fixtures/speech-planner-eval/planner-outputs-v1.json
@@ -143,7 +143,7 @@ pnpm eval:speech-planner -- --offline-output-fixtures=packages/batch-backend/fix
 Focused validation:
 
 ```powershell
-pnpm test:check-routing
+pnpm test:tooling
 pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.generation-providers.structured-output.test.ts tests/application.speech-performance-planner.test.ts tests/application.speech-planner-evaluator.test.ts
 ```
 
@@ -168,7 +168,7 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.gene
 Focused validation:
 
 ```powershell
-pnpm test:check-routing
+pnpm test:tooling
 pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.generation-providers.structured-output.test.ts tests/application.speech-planner-evaluator.test.ts
 ```
 
@@ -242,13 +242,12 @@ Future implementation surfaces:
 
 ## Task 8: Validation, review, and decision boundary
 
-- [ ] Run format, repo hygiene, docs checks, package builds/typechecks, offline dry-run, and the
-      canonical broad gate selected by current test routing. This work is cross-cutting, so use
-      `pnpm check:pre-pr` unless the final diff is materially narrower.
+- [ ] Run format, repo hygiene, docs checks, package builds/typechecks, and the focused offline
+      checks appropriate to the final diff. Hosted PR CI is the comprehensive merge gate.
 - [ ] Review harness/control separation, shared parsing, cost math, resumability, privacy, fair
       provider comparison, and listening blocks before any default conclusion.
-- [ ] Record local `PASS`, `PASS_WITH_CI_REQUIREMENTS`, provider-eval results, human-input gaps, and
-      CI-owned service requirements separately.
+- [ ] Record focused local evidence, hosted CI status, provider-eval results, human-input gaps, and
+      environment-owned service requirements separately.
 - [ ] Retain `gemini-3.1-flash-lite` and current TTS defaults if results are mixed, incomplete, or
       missing human/private evidence. Any default change is a separate reviewed configuration change.
 
@@ -259,6 +258,5 @@ pnpm format:write
 pnpm format
 pnpm run lint:repo-hygiene
 pnpm docs:check
-pnpm test:check-routing
-pnpm check:pre-pr
+pnpm test:tooling
 ```

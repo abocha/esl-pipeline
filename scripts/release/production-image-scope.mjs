@@ -1,4 +1,4 @@
-import { expandTransitiveDependents } from '../check/affected-check-lib.mjs';
+import { expandTransitiveDependents } from '../check/workspace-change-scope.mjs';
 import { flattenChangedFilePayload } from './release-label-policy.mjs';
 
 const TARGETS = Object.freeze({

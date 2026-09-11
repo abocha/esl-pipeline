@@ -34,7 +34,8 @@
    - `pnpm --filter @esl-pipeline/batch-backend run student-system:backfill:dry`
    - `pnpm --filter @esl-pipeline/batch-backend run student-system:backfill`
    - `pnpm --filter @esl-pipeline/batch-backend run student-system:verify:oneoff`
-3. Run `pnpm check:fast`.
+3. Run focused checks for the changed student-system package(s), then rely on hosted PR CI and
+   `CI gate` for comprehensive validation.
 4. Validate one assignment flow through draft -> publish -> rerun audio.
 
 ## Locked Decisions
