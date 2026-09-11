@@ -49,9 +49,9 @@ Purpose: record which non-code lint tools are promoted in this repo, which are a
 ## CI Behavior
 
 - GitHub Actions verifies the runner-provided ShellCheck, downloads checksum-verified Actionlint,
-  and runs both in the static-checks job.
-- Static checks run `pnpm docker:lint`, covering dclint and Hadolint.
-- Biome is already part of CI because the main lint step runs `pnpm lint`.
+  and runs both in the always-selected repository-policy job.
+- Repository policy runs `pnpm docker:lint`, covering dclint and Hadolint.
+- Biome is part of the runtime-selected build-and-code-quality job through `pnpm lint`.
 - `SQLFluff` is intentionally not part of the blocking CI lane yet.
 
 ## Revisit Trigger

@@ -1,6 +1,15 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { BACKEND_TEST_PROJECT_FILES } from '../../packages/batch-backend/vitest.projects.mjs';
+
+const backendPostgresTestPaths = new Set(
+  [...BACKEND_TEST_PROJECT_FILES.migrations, ...BACKEND_TEST_PROJECT_FILES.postgres].map(
+    backendTestPath,
+  ),
+);
+const backendWorkerTestPaths = new Set(BACKEND_TEST_PROJECT_FILES.worker.map(backendTestPath));
+const backendMediaTestPaths = new Set(BACKEND_TEST_PROJECT_FILES.media.map(backendTestPath));
 const defaultTurboTasks = ['build', 'typecheck', 'test:unit:prebuilt'];
 const alwaysLanes = [
   lane('guard:orchestrator:boundary', ['run', 'guard:orchestrator:boundary'], {
@@ -777,6 +786,12 @@ function resolvePathTriggeredLanes(file) {
     );
   }
 
+  if (isBackendMediaBoundaryFile(file)) {
+    lanes.push(
+      lane('backend:test:media', ['--filter', '@esl-pipeline/batch-backend', 'run', 'test:media']),
+    );
+  }
+
   return lanes;
 }
 
@@ -788,6 +803,9 @@ function resolveSkippedBroadLanes({ changedFiles, triggeredLanes }) {
   }
   if (!triggeredIds.has('backend:test:integration:http')) {
     skipped.push('backend HTTP integration: no HTTP transport paths changed');
+  }
+  if (!triggeredIds.has('backend:test:media')) {
+    skipped.push('backend media boundary: no recording-media paths changed');
   }
   if (!changedFiles.some(isBackendMigrationOrSchema)) {
     skipped.push('DB migration/postgres lanes: no migrations or schema baseline changed');
@@ -950,14 +968,17 @@ function resolveCiRequirements(files, { conservativeReason = null } = {}) {
 }
 
 function isBackendPostgresTest(file) {
-  return /^packages\/batch-backend\/tests\/(?:domain\.(?:.*-repository|student-memory-openai-batch-import|student-repository\.workspace)|application\.(?:assignment-step-confirmation|homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression|recording-tenant-authority))\.test\.ts$/u.test(
-    file,
-  );
+  return backendPostgresTestPaths.has(file);
 }
 
 function isBackendWorkerTest(file) {
-  return /^packages\/batch-backend\/tests\/(?:transport\.worker-runner\.integration|integration\.student-memory-pacing-delay|integration\.assignment-share-recovery\.redis|infrastructure\.transcribe-queue\.redis\.integration|integration\.transcription-execution-worker\.redis)\.test\.ts$/u.test(
-    file,
+  return backendWorkerTestPaths.has(file);
+}
+
+function isBackendMediaBoundaryFile(file) {
+  return (
+    backendMediaTestPaths.has(file) ||
+    file === 'packages/batch-backend/src/infrastructure/recording-media.ts'
   );
 }
 
@@ -994,6 +1015,10 @@ function readPackageManifest(dir) {
 
 function normalizePath(file) {
   return file.replaceAll('\\', '/').replace(/^\.\//u, '');
+}
+
+function backendTestPath(file) {
+  return `packages/batch-backend/tests/${file}`;
 }
 
 function isValidChangedFileStatus(status) {

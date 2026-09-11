@@ -21,6 +21,7 @@ test('CI keeps one manifest-guarded PostgreSQL and Redis service job', () => {
 test('CI gate fails closed over the selected service job', () => {
   const gateJob = workflowSection('  ci-gate:', null);
 
+  assert.match(gateJob, /- deterministic-integration-media/u);
   assert.match(gateJob, /- backend-db-integration/u);
   assert.match(gateJob, /'backend-db-integration': 'backend_db_worker'/u);
   assert.match(gateJob, /selected \? result !== 'success'/u);
@@ -28,16 +29,28 @@ test('CI gate fails closed over the selected service job', () => {
 
 for (const lane of [
   {
-    jobStart: '  static-checks:',
-    jobEnd: '  integration-tests:',
-    directory: 'tmp/ci-logs/static-checks',
-    artifact: 'static-checks-logs',
+    jobStart: '  repository-policy:',
+    jobEnd: '  build-code-quality:',
+    directory: 'tmp/ci-logs/repository-policy',
+    artifact: 'repository-policy-logs',
   },
   {
-    jobStart: '  integration-tests:',
+    jobStart: '  build-code-quality:',
+    jobEnd: '  unit-component:',
+    directory: 'tmp/ci-logs/build-code-quality',
+    artifact: 'build-code-quality-logs',
+  },
+  {
+    jobStart: '  unit-component:',
+    jobEnd: '  deterministic-integration-media:',
+    directory: 'tmp/ci-logs/unit-component',
+    artifact: 'unit-component-logs',
+  },
+  {
+    jobStart: '  deterministic-integration-media:',
     jobEnd: '  backend-db-integration:',
-    directory: 'tmp/ci-logs/integration-tests',
-    artifact: 'integration-tests-logs',
+    directory: 'tmp/ci-logs/deterministic-integration-media',
+    artifact: 'deterministic-integration-media-logs',
   },
 ]) {
   test(`${lane.artifact} retains actionable logs and a manifest`, () => {

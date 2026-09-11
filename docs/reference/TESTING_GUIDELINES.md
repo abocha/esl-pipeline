@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents adding or updating tests.
 - Read Time: 6 minutes.
 - Authority Level: active test methodology guide.
-- Last Verified Against: 2026-07-29 repo state.
+- Last Verified Against: 2026-09-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after test-lane/CI changes.
 - Status: `active`.
@@ -22,10 +22,11 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 1. [`docs/reference/agents-ssot.md`](agents-ssot.md)
 2. [`package.json`](../../package.json)
 3. [`packages/batch-backend/package.json`](../../packages/batch-backend/package.json)
-4. [`packages/orchestrator/package.json`](../../packages/orchestrator/package.json)
-5. [`packages/tts-core/package.json`](../../packages/tts-core/package.json)
-6. [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
-7. [`biome.json`](../../biome.json)
+4. [`packages/batch-backend/vitest.projects.mjs`](../../packages/batch-backend/vitest.projects.mjs)
+5. [`packages/orchestrator/package.json`](../../packages/orchestrator/package.json)
+6. [`packages/tts-core/package.json`](../../packages/tts-core/package.json)
+7. [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
+8. [`biome.json`](../../biome.json)
 
 ## Lane Contract
 
@@ -37,8 +38,9 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
   - Runs every root `scripts/**/*.test.mjs` test.
   - Runs inside `check`, `check:pre-pr`, and the always-run static CI guard.
 - Focused CI-routing tooling lane: `pnpm test:check-routing`
-  - Validates every discovered backend test against the operational routing manifest and package
-    scripts.
+  - Validates every discovered backend test against the package-local Vitest project configuration.
+  - Rejects missing or overlapping explicit prerequisite entries and service bootstrap imports from
+    the derived pure project.
   - Runs before affected and broad unit lanes; a routing failure blocks unit execution only.
 - Root unit timing lane: `pnpm test:timings:unit`
 - Root integration lane: `pnpm test:integration`
@@ -116,6 +118,11 @@ four evidence classes: focused local evidence, optional/risk-triggered local agg
 CI-owned comprehensive evidence, and manual/environment-owned evidence. Required hosted jobs and
 `CI gate` still determine merge readiness.
 
+The hosted `unit-component` job provisionally runs at two workspace packages concurrently and one
+Vitest worker per package. It records runner CPU/memory/disk context and `/usr/bin/time -v` resource
+evidence in its retained artifact. Treat that as the initial conservative budget; adjust it only from
+hosted measurements, without using timeout inflation as resource control.
+
 Affected and broad gates run selected lanes serially. Independent lanes continue after failure so one
 run reports every available problem. A prebuilt test lane is marked blocked when its build
 prerequisite fails; lint, typecheck, docs, contracts, and unrelated guards still run. Inspect the
@@ -160,22 +167,26 @@ Script contract baseline for unit-only packages:
 For `@esl-pipeline/batch-backend`:
 
 - Classify tests by operational prerequisite in
-  [`packages/batch-backend/tests/test-routing.json`](../../packages/batch-backend/tests/test-routing.json).
-  File naming is descriptive but does not determine the lane.
+  [`packages/batch-backend/vitest.projects.mjs`](../../packages/batch-backend/vitest.projects.mjs). This
+  executable Vitest project configuration is the only prerequisite-membership SSOT; file naming is
+  descriptive except for the established deterministic HTTP integration prefix.
 - Preserve these public routes:
   - pure unit: `test:unit`, `test:unit:prebuilt`, and `test:unit:timings`;
   - deterministic in-process HTTP: `test:integration:http`;
   - serial PostgreSQL migrations: `test:db:migrations`;
   - serial PostgreSQL repositories/queries: `test:db:postgres`;
-  - serial PostgreSQL + Redis workers: `test:integration:worker`.
-- Service-backed tests are positively listed. Unit is the discovered remainder, guarded against known
-  PostgreSQL/Redis bootstrap imports and environment signals. Every service test must be selected by
-  its service script and excluded from every unit script.
+  - serial PostgreSQL + Redis workers: `test:integration:worker`;
+  - real FFmpeg-backed recording media: `test:media`.
+- The established HTTP prefix and positive prerequisite groups represent non-pure tests once. Pure
+  unit is the discovered remainder, guarded against known PostgreSQL/Redis bootstrap imports and
+  environment signals. Named package scripts select projects instead of repeating file lists or
+  exclusions.
 - Run `pnpm test:check-routing` after adding, moving, or changing the prerequisites of a backend test.
-- Canonical affected/broad and agent unit lanes remove ambient PostgreSQL, Redis, Docker endpoint,
-  AWS/provider credentials and set `VALIDATION_TEST_CLASS=pure`. Explicit DB/worker agent lanes keep
-  their constructed service environment. Deterministic HTTP fixtures must explicitly disable or
-  replace service-backed facilities they do not exercise.
+- Backend project setup constructs the test environment before test modules load. The pure project
+  removes ambient PostgreSQL, Redis, Docker endpoint, and AWS/provider credentials and sets
+  `VALIDATION_TEST_CLASS=pure`, including for direct package entrypoints. Explicit DB/worker projects
+  retain their constructed service environment. Deterministic HTTP fixtures must explicitly disable
+  or replace service-backed facilities they do not exercise.
 - Keep `test:ci` as the ordered aggregator.
 - `test:ci` must include:
   - `test:unit`
@@ -183,6 +194,7 @@ For `@esl-pipeline/batch-backend`:
   - DB migration lane (`test:db:migrations`)
   - DB query lane (`test:db:postgres`)
   - worker integration lane (`test:integration:worker`)
+  - media boundary lane (`test:media`)
 - DB safety invariant:
   - `BATCH_BACKEND_TEST_PG` must point to a database name ending in `_test`; non-`_test` targets are rejected by the test env helper to prevent destructive test SQL from hitting dev/runtime data.
 - Local Docker/Postgres note:
@@ -308,6 +320,8 @@ Important path rules:
 - Telegram Compose smoke is selected by its own Telegram/subsystem rule; ordinary runtime selection
   does not imply it.
 - backend HTTP transport route and middleware paths trigger HTTP integration.
+- backend recording-media implementation or media-project test changes trigger `test:media` because
+  that suite is excluded from pure unit execution.
 - root validation config, package manager metadata, Turbo config, and validation-runner files classify
   to the explicit broad `check:pre-pr` lane plan. `check:fast:agent` persists that plan and delegates
   its broad execution to hosted PR CI; explicit `check:pre-pr` variants still execute it locally.
@@ -326,16 +340,20 @@ For production image changes:
 Deployment/test gating currently uses these blocking names:
 
 - `CI gate`
-- `static checks (node 24.x)`
-- `integration lane (blocking)`
+- `repository policy (node 24.x)`
+- `build + code quality (node 24.x)`
+- `unit + component (node 24.x)`
+- `deterministic integration + media (blocking)`
 - `backend db + worker integration (blocking)`
 - `telegram command-loop compose smoke`
 
 `CI gate` is the canonical aggregate status and should become the single required branch-protection
 check when repository plan capabilities permit. Selected runtime steps and jobs remain blocking;
 unselected conditional jobs may report skipped, but a selected job that is missing, cancelled, or
-skipped fails the gate. Static and deterministic integration jobs always upload 14-day log artifacts
-with a command/outcome manifest. PostgreSQL and Redis are provisioned only in the isolated
+skipped fails the gate. All four policy/runtime/integration evidence jobs retain 14-day logs
+and a command/outcome manifest. Repository policy always runs; build/code-quality and unit/component
+follow the existing runtime selection, while deterministic integration/media follows the existing
+integration selection. PostgreSQL and Redis are provisioned only in the isolated
 `backend-db-integration` job, which runs the manifest-guarded migration, PostgreSQL, and worker
 scripts.
 
