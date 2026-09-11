@@ -23,10 +23,11 @@ Choose the smallest gate that covers the change. The canonical routing and CI-ow
 [`docs/reference/TESTING_GUIDELINES.md`](docs/reference/TESTING_GUIDELINES.md).
 
 - Documentation-only changes: `pnpm docs:generate:indexes`, `pnpm format`, and `pnpm docs:check`.
-- Normal affected changes: `pnpm --silent run check:fast:agent`.
-- Broad, shared-contract, or toolchain changes: `pnpm check:pre-pr` (use `pnpm check` when
-  reproducing CI or changing migrations, database, workers, or integrations).
-- Run the owning package's focused tests and build before the selected repository gate.
+- Normal changes: run the smallest relevant owning-package test, typecheck, lint, or build command.
+- Use `pnpm test:backend:db:worker` only for a concrete local PostgreSQL/Redis diagnostic.
+- Hosted PR CI is the comprehensive merge gate. If it fails, inspect its logs/artifacts and
+  reproduce that job's actual command, configuration, and prerequisites; do not run a repository-
+  wide approximation automatically.
 
 ## Release overview
 

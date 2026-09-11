@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  buildPureTestEnv,
-  PURE_TEST_SCRUBBED_ENV_NAMES,
-  resolveValidationLaneEnv,
-} from './pure-test-env.mjs';
+import { buildPureTestEnv, PURE_TEST_SCRUBBED_ENV_NAMES } from './pure-test-env.mjs';
 
 const poisonedEnv = {
   PATH: 'toolchain-path',
@@ -69,27 +65,5 @@ test('pure test environments keep toolchain state and remove ambient prerequisit
     poisonedEnv.OPENAI_API_KEY,
     'openai_api_key-secret',
     'source environment is not mutated',
-  );
-});
-
-test('canonical unit lanes use the pure environment', () => {
-  assert.deepEqual(
-    resolveValidationLaneEnv({
-      laneId: 'turbo:test:unit:prebuilt',
-      sourceEnv: poisonedEnv,
-      backendDbEnv: false,
-    }),
-    buildPureTestEnv(poisonedEnv),
-  );
-});
-
-test('explicit backend service environments bypass pure scrubbing', () => {
-  assert.deepEqual(
-    resolveValidationLaneEnv({
-      laneId: 'backend-db-worker',
-      sourceEnv: poisonedEnv,
-      backendDbEnv: true,
-    }),
-    poisonedEnv,
   );
 });

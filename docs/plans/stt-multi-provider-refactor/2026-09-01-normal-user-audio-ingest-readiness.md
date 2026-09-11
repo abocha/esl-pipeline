@@ -522,12 +522,12 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
    for a concrete plausible wider failure, local environment behavior under test, unavailable equivalent
    hosted evidence, or a specific CI failure being reproduced or diagnosed. Diff breadth alone is not
    sufficient.
-2. Hosted PR CI is the comprehensive regression executor. `check:fast:agent` may run selected
-   affected local evidence, but its conservative broad fallback records the plan and delegates it to
-   CI; use `check:pre-pr:agent` / `check:pre-pr` only when deliberately running that broad local plan.
-3. Reuse still-fresh evidence and do not repeat aggregate reruns without a relevant state change.
-4. Selected PostgreSQL/Redis hosted lanes and the `CI gate` remain merge evidence where applicable;
-   `PASS_WITH_CI_REQUIREMENTS` permits PR creation but not merge.
+2. Hosted PR CI is the comprehensive merge gate. Run focused local evidence appropriate to the
+   changed recording paths; do not automatically run a repository-wide local gate.
+3. If hosted CI fails, inspect its logs/artifacts and reproduce that job's actual command,
+   configuration, and prerequisites. Reuse still-fresh evidence and do not repeat diagnostic runs
+   without a relevant state change.
+4. Selected PostgreSQL/Redis hosted lanes and the `CI gate` remain merge evidence where applicable.
 5. `pnpm release:verify:contracts`, backend baseline verification, docs index generation, formatting, repository hygiene, and docs checks remain required where their paths are affected.
 6. One final Terra/high whole-branch review for cross-boundary regressions after the three narrow Sol/high risk reviews are resolved.
 

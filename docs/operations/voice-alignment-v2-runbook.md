@@ -124,7 +124,7 @@ Also watch metric streams/logs:
 
 ## 6) Deployment Checklist
 
-1. `pnpm check:fast`
+1. Confirm successful hosted PR CI and `CI gate` for the target commit.
 2. Validate one canary assignment in each mode:
    - compatibility shadow
    - strict validation

@@ -3,7 +3,7 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readWorkspacePackages } from '../check/affected-check-lib.mjs';
+import { readWorkspacePackages } from '../check/workspace-change-scope.mjs';
 import { buildProductionImageScope } from './production-image-scope.mjs';
 
 function valueAfter(flag) {

@@ -1,22 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  formatCiScopeGithubOutputs,
-  formatCiScopeSummary,
-  formatScopePreview,
-} from './affected-check-lib.mjs';
-
-const docsDecision = {
-  runtime: false,
-  integration: false,
-  backend_db_worker: false,
-  telegram: false,
-  docs_only: true,
-  changedFiles: ['docs/guide.md'],
-  affectedPackages: [],
-  reasons: [{ code: 'docs-only', scope: 'docs_only', subject: 'docs/guide.md' }],
-};
+import { formatCiScopeGithubOutputs, formatCiScopeSummary } from './workspace-change-scope.mjs';
 
 test('GitHub outputs are single-line lowercase booleans only', () => {
   assert.equal(
@@ -51,17 +36,4 @@ test('scope summary renders structured reasons without exporting prose', () => {
     }),
     /affected-package.*@esl-pipeline\/batch-frontend/u,
   );
-});
-
-test('dual preview keeps uncommitted paths out of hosted scope', () => {
-  const text = formatScopePreview({
-    planText: 'Local plan',
-    hostedDecision: docsDecision,
-    uncommittedFiles: ['scratch.ts'],
-  });
-
-  assert.match(text, /Local validation scope/u);
-  assert.match(text, /Hosted CI preview/u);
-  assert.match(text, /Hosted preview excludes 1 uncommitted path/u);
-  assert.doesNotMatch(text, /scratch\.ts/u);
 });

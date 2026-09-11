@@ -181,50 +181,33 @@ Required repo checks for behavior changes:
   failure to catch before CI, local environment behavior under test, unavailable equivalent hosted
   evidence, or a specific CI failure being reproduced or diagnosed. Diff breadth alone is not a
   reason. Clearly docs-only work may use the documented docs-specific lanes.
-- Hosted PR CI is the default comprehensive regression executor for the resource-constrained
-  developer laptop. A task with focused evidence covering its plausible failure modes may be ready
-  for hosted CI without a local aggregate gate. Primary validation accountability means selecting,
-  inspecting, and reporting focused local, optional/risk-triggered local aggregate, CI-owned
-  comprehensive, and manual/environment-owned evidence; it does not require every broad suite to
-  run locally.
-- `check:fast` is affected-package validation. It must include committed, staged, unstaged, and
-  untracked changes; expand to workspace dependents; run cheap global guards; apply explicit
-  path-risk rules; and fail conservatively to a broader lane when the affected scope is uncertain.
-- `check:fast:dry-run` must show local working-tree scope separately from the committed hosted CI
-  preview. A conservative `check:fast:agent` fallback persists the broad plan but does not execute
-  broad lanes locally: it reports `PASS_WITH_CI_REQUIREMENTS` with hosted comprehensive regression
-  outstanding. This preserves fail-closed classification without presenting broad local evidence.
-- `check:pre-pr` and `check:pre-pr:agent` deliberately execute the broad build, typecheck, lint, and
-  core unit regression plan when a concrete diagnostic reason justifies local broad validation.
-- Affected and broad local validation run selected lanes serially to completion. Independent lanes
-  continue after another lane fails; prebuilt test lanes are blocked when their build prerequisite
-  fails. The aggregate summary and cited raw logs are the canonical diagnostic starting point.
+- Hosted PR CI is the comprehensive merge gate for the resource-constrained developer laptop. A task
+  with focused evidence covering its plausible failure modes may be ready for hosted CI without a
+  repository-wide local gate. If hosted CI fails, inspect its logs/artifacts and reproduce that
+  job's actual commands, configuration, and prerequisites.
+- The committed hosted scope helper preserves name-status parsing, workspace discovery, relevant
+  path/package classification, transitive workspace-dependent projection, and hosted CI output and
+  summary formatting. The production-image selector shares workspace/dependency impact logic and
+  retains transitive dependent coverage. It does not collect local working-tree scope or plan local
+  lanes.
 - Backend test class is an operational contract, not a filename convention. The executable Vitest
   project model at `packages/batch-backend/vitest.projects.mjs` is the sole prerequisite-membership
   SSOT. It retains the established deterministic HTTP prefix and positively owns PostgreSQL migration,
   PostgreSQL query, PostgreSQL + Redis worker, and real media suites. Unit is the discovered remainder
   and must not import known service bootstrap signals.
-- `test:check-routing` is always selected locally and must pass before unit execution. Canonical local
-  and agent unit lanes run with ambient PostgreSQL, Redis, Docker endpoint, and provider credentials
-  removed and `VALIDATION_TEST_CLASS=pure`. Package-local Vitest project setup establishes this before
-  test modules load, including for direct package entrypoints. Explicit DB/worker projects preserve
-  their constructed service environment.
-- Selected PostgreSQL and Redis lanes remain visible in affected plans with CI ownership. Local
-  validation reports them as `ciRequirements` and does not silently start services. A local run with
-  all executed lanes passing and outstanding CI evidence reports `PASS_WITH_CI_REQUIREMENTS`; this
-  permits PR creation but not merge.
+- Package-local Vitest project setup establishes the pure environment before test modules load,
+  including for direct package entrypoints. It removes ambient PostgreSQL, Redis, Docker endpoint,
+  provider, and repository `.env` inputs and sets `VALIDATION_TEST_CLASS=pure`; explicit DB/worker
+  projects preserve their constructed service environment.
 - An isolated rerun is allowed only to diagnose a specific failure and does not replace the complete
   gate result. Allow at most one isolated diagnostic rerun per unchanged failure. Repeat the complete
   gate only after relevant source, configuration, toolchain, or a diagnosed prerequisite condition
   changed. Stop and report a stable infrastructure or prerequisite failure instead of assembling a
   green cache through reruns.
-- `check:pre-pr:agent` and `check:agent` preserve their explicit local execution scope and exit
-  semantics while changing output presentation and persisted evidence. `check:fast:agent` preserves
-  affected classification and artifacts, but delegates a conservative broad fallback to hosted CI.
-- A successful `pnpm check` or `pnpm check:agent` subsumes both narrower pre-push gates.
-- Run `pnpm check` for human-readable local CI reproduction, or `pnpm check:agent` when the same
-  full gate needs persisted agent evidence, including for DB, migration, worker, integration, or
-  similarly broad behavior changes.
+- Use the smallest relevant package test, typecheck, lint, or build command while editing and before
+  pushing. Use `pnpm test:backend:db:worker` only for a concrete local PostgreSQL/Redis diagnostic.
+  It is a narrow reachability, environment-construction, and Windows-compatible invocation helper,
+  not a comprehensive local CI wrapper.
 
 Canonical blocking PR check names are `CI gate`, `repository policy (node 24.x)`,
 `build + code quality (node 24.x)`, `unit + component (node 24.x)`,
