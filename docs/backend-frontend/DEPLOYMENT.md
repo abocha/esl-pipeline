@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 7 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-08-31 repo state.
+- Last Verified Against: 2026-09-12 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -466,8 +466,10 @@ can explain server-side stalls without waiting for a failure window to reproduce
 Deployment changes should preserve green CI for:
 
 - `CI gate`
-- `static checks (node 24.x)`
-- `integration lane (blocking)`
+- `repository policy (node 24.x)`
+- `build + code quality (node 24.x)`
+- `unit + component (node 24.x)`
+- `deterministic integration + media (blocking)`
 - `backend db + worker integration (blocking)`
 - `telegram command-loop compose smoke`
 

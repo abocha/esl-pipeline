@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents implementing or reviewing repo behavior.
 - Authority Level: authoritative contracts and invariants.
-- Last Verified Against: 2026-08-31 repo state.
+- Last Verified Against: 2026-09-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly and after contract-level changes.
 - Status: `reference`.
@@ -199,14 +199,16 @@ Required repo checks for behavior changes:
 - Affected and broad local validation run selected lanes serially to completion. Independent lanes
   continue after another lane fails; prebuilt test lanes are blocked when their build prerequisite
   fails. The aggregate summary and cited raw logs are the canonical diagnostic starting point.
-- Backend test class is an operational contract, not a filename convention. The manifest at
-  `packages/batch-backend/tests/test-routing.json` positively owns deterministic HTTP, PostgreSQL
-  migration, PostgreSQL query, and PostgreSQL + Redis worker suites. Unit is the discovered remainder
+- Backend test class is an operational contract, not a filename convention. The executable Vitest
+  project model at `packages/batch-backend/vitest.projects.mjs` is the sole prerequisite-membership
+  SSOT. It retains the established deterministic HTTP prefix and positively owns PostgreSQL migration,
+  PostgreSQL query, PostgreSQL + Redis worker, and real media suites. Unit is the discovered remainder
   and must not import known service bootstrap signals.
 - `test:check-routing` is always selected locally and must pass before unit execution. Canonical local
   and agent unit lanes run with ambient PostgreSQL, Redis, Docker endpoint, and provider credentials
-  removed and `VALIDATION_TEST_CLASS=pure`. Explicit DB/worker lanes preserve their constructed
-  service environment.
+  removed and `VALIDATION_TEST_CLASS=pure`. Package-local Vitest project setup establishes this before
+  test modules load, including for direct package entrypoints. Explicit DB/worker projects preserve
+  their constructed service environment.
 - Selected PostgreSQL and Redis lanes remain visible in affected plans with CI ownership. Local
   validation reports them as `ciRequirements` and does not silently start services. A local run with
   all executed lanes passing and outstanding CI evidence reports `PASS_WITH_CI_REQUIREMENTS`; this
@@ -224,8 +226,9 @@ Required repo checks for behavior changes:
   full gate needs persisted agent evidence, including for DB, migration, worker, integration, or
   similarly broad behavior changes.
 
-Canonical blocking PR check names are `CI gate`, `static checks (node 24.x)`,
-`integration lane (blocking)`, `backend db + worker integration (blocking)`, and
+Canonical blocking PR check names are `CI gate`, `repository policy (node 24.x)`,
+`build + code quality (node 24.x)`, `unit + component (node 24.x)`,
+`deterministic integration + media (blocking)`, `backend db + worker integration (blocking)`, and
 `telegram command-loop compose smoke`. `CI gate` is the aggregate result and should become the
 single branch-protection requirement when repository plan capabilities permit. Every selected job
 must succeed; a required job that is missing, cancelled, or unexpectedly skipped fails the gate.
