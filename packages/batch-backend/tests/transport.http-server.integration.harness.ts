@@ -122,7 +122,9 @@ vi.mock('../src/infrastructure/recording-media.js', async () => {
   );
   return {
     ...actual,
-    ensureRecordingUploadCapacity: vi.fn(actual.ensureRecordingUploadCapacity),
+    ensureRecordingUploadCapacity: vi
+      .fn<typeof actual.ensureRecordingUploadCapacity>()
+      .mockResolvedValue(undefined),
     prepareRecordingMedia: vi.fn(
       async (params: { sourcePath: string; sourceSha256: string; sourceBytes: number }) => ({
         path: params.sourcePath,
