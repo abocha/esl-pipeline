@@ -150,7 +150,13 @@ export function buildCiScopeDecision({ changedFileRecords, workspacePackages }) 
   let conservativeFallback = false;
   for (const file of changedFiles) {
     const matchedPackage = findPackageForFile(file, workspacePackages);
-    if (matchedPackage?.name) changedPackages.add(matchedPackage.name);
+    if (matchedPackage?.name) {
+      changedPackages.add(matchedPackage.name);
+    } else if (matchedPackage) {
+      enableAll('untrusted-workspace-metadata', file);
+      conservativeFallback = true;
+      continue;
+    }
 
     if (isCiRootToolchainPath(file)) {
       enableAll('root-toolchain', file);
@@ -173,21 +179,10 @@ export function buildCiScopeDecision({ changedFileRecords, workspacePackages }) 
   ) {
     decision.runtime = true;
     decision.integration = true;
+    decision.backend_db_worker = true;
     addReason('runtime-change', 'runtime', changedFiles.join(','));
     addReason('runtime-implies-integration', 'integration', 'runtime');
-  }
-
-  const sharedHighRiskPackages = new Set([
-    '@esl-pipeline/contracts',
-    '@esl-pipeline/shared-infrastructure',
-  ]);
-  if (
-    !conservativeFallback &&
-    ([...changedPackages].some((name) => sharedHighRiskPackages.has(name)) ||
-      changedFiles.some(isCiBackendDbWorkerPath))
-  ) {
-    decision.backend_db_worker = true;
-    addReason('backend-db-worker-change', 'backend_db_worker', changedFiles.join(','));
+    addReason('runtime-implies-backend-db-worker', 'backend_db_worker', 'runtime');
   }
 
   if (
@@ -1028,18 +1023,6 @@ function isCiRuntimePath(file) {
   return (
     /^(?:Dockerfile|docker-compose(?:\.[^/]+)?\.ya?ml)$/u.test(file) ||
     /^(?:docker|scripts\/deploy|scripts\/smoke)\//u.test(file)
-  );
-}
-
-function isCiBackendDbWorkerPath(file) {
-  return (
-    /^packages\/batch-backend\/(?:migrations\/|schema\.sql$)/u.test(file) ||
-    /^packages\/batch-backend\/src\/infrastructure\//u.test(file) ||
-    isBackendRepositoryImplementation(file) ||
-    /^packages\/batch-backend\/src\/.*(?:worker|queue|process-(?:queue-)?job)/u.test(file) ||
-    /^packages\/batch-backend\/tests\/support\//u.test(file) ||
-    isBackendPostgresTest(file) ||
-    isBackendWorkerTest(file)
   );
 }
 
