@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.7] - 2026-09-11
+
+### Changed
+
+- Automated release from PR #236: Simplify hosted CI topology and unify backend test prerequisites (https://github.com/abocha/esl-pipeline/pull/236)
+
 ## [10.11.6] - 2026-09-10
 
 ### Changed
