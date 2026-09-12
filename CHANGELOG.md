@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.9] - 2026-09-12
+
+### Changed
+
+- Automated release from PR #239: fix(stt): harden ElevenLabs malformed-result handling (https://github.com/abocha/esl-pipeline/pull/239)
+
 ## [10.11.8] - 2026-09-12
 
 ### Changed
