@@ -31,7 +31,7 @@ Commands:
 
 - onboarding: `/start`, `/help`
 - reads: `/status`, `/op`, `/students`, `/student`, `/jobs`, `/today`, `/botstatus`, `/finished`, `/job`, `/share`
-- gated actions: `/backup`, `/drill`, `/approve`
+- gated actions: `/backup`, `/integrity`, `/approve`
 
 Browse model:
 

@@ -3,9 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
-DEFAULT_LOG_DIR="${ROOT_DIR}/tmp/logs/backup"
-DEFAULT_STATE_FILE="${ROOT_DIR}/tmp/state/postgres-ops-alert-state.json"
 STATUS_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-ops-status.sh"
+COMMON_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-ops-common.sh"
+
+# shellcheck source=scripts/docker/postgres-ops-common.sh
+. "$COMMON_SCRIPT"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
 if [[ -f "$ENV_FILE" ]]; then
@@ -15,8 +17,9 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-LOG_DIR="${PG_BACKUP_LOG_DIR:-$DEFAULT_LOG_DIR}"
-STATE_FILE="${PG_BACKUP_ALERT_STATE_FILE:-$DEFAULT_STATE_FILE}"
+HOST_STATE_DIR="$(pg_backup_resolve_host_state_dir)"
+LOG_DIR="${PG_BACKUP_LOG_DIR:-${HOST_STATE_DIR}/logs}"
+STATE_FILE="${PG_BACKUP_ALERT_STATE_FILE:-${HOST_STATE_DIR}/state/postgres-ops-alert-state.json}"
 COOLDOWN_MINUTES="${PG_BACKUP_ALERT_COOLDOWN_MINUTES:-360}"
 
 TELEGRAM_DISABLE="${PG_BACKUP_ALERT_TELEGRAM_DISABLE:-false}"
@@ -66,7 +69,7 @@ CHECKED_AT_UTC="$(printf '%s' "$STATUS_JSON" | node -e "const fs=require('node:f
 CURRENT_REASONS="$(printf '%s' "$STATUS_JSON" | node -e "const fs=require('node:fs'); const d=JSON.parse(fs.readFileSync(0,'utf8')); const reasons=Array.isArray(d.overall?.reasons)?d.overall.reasons:[]; process.stdout.write(reasons.join('\\n- '));")"
 BACKUP_AGE_HOURS="$(printf '%s' "$STATUS_JSON" | node -e "const fs=require('node:fs'); const d=JSON.parse(fs.readFileSync(0,'utf8')); const val=d.backup?.ageHours; process.stdout.write(Number.isInteger(val)?String(val):'');")"
 DRILL_AGE_DAYS="$(printf '%s' "$STATUS_JSON" | node -e "const fs=require('node:fs'); const d=JSON.parse(fs.readFileSync(0,'utf8')); const val=d.restoreDrill?.ageDays; process.stdout.write(Number.isInteger(val)?String(val):'');")"
-KEY_AGE_DAYS="$(printf '%s' "$STATUS_JSON" | node -e "const fs=require('node:fs'); const d=JSON.parse(fs.readFileSync(0,'utf8')); const val=d.keyRotation?.oldestAgeDays; process.stdout.write(Number.isInteger(val)?String(val):'');")"
+INTEGRITY_AGE_DAYS="$(printf '%s' "$STATUS_JSON" | node -e "const fs=require('node:fs'); const d=JSON.parse(fs.readFileSync(0,'utf8')); const val=d.artifactIntegrity?.ageDays; process.stdout.write(Number.isInteger(val)?String(val):'');")"
 
 NOW_EPOCH="$(date -u +%s)"
 CURRENT_SEVERITY="$(severity_for_state "$CURRENT_STATE")"
@@ -127,8 +130,8 @@ ESL ops status recovered to healthy.
 
 Checked at: ${CHECKED_AT_UTC}
 Backup age: ${BACKUP_AGE_HOURS:-n/a}h
+Artifact integrity age: ${INTEGRITY_AGE_DAYS:-n/a}d
 Drill age: ${DRILL_AGE_DAYS:-n/a}d
-Key age: ${KEY_AGE_DAYS:-n/a}d
 EOF
       )
     else
@@ -138,8 +141,8 @@ ESL ops alert: ${CURRENT_STATE} (${ALERT_KIND})
 
 Checked at: ${CHECKED_AT_UTC}
 Backup age: ${BACKUP_AGE_HOURS:-n/a}h
+Artifact integrity age: ${INTEGRITY_AGE_DAYS:-n/a}d
 Drill age: ${DRILL_AGE_DAYS:-n/a}d
-Key age: ${KEY_AGE_DAYS:-n/a}d
 
 Reasons:
 - ${CURRENT_REASONS}

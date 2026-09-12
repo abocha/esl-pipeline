@@ -1,168 +1,57 @@
-# Postgres Backup to S3 (Automated + Restorable)
+# PostgreSQL Backup to S3
 
 ## Meta
 
-- Audience: maintainers and AI agents operating backup archival.
+- Audience: maintainers and operators of backup archival.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-09-11 repo state.
+- Last Verified Against: 2026-09-13 repo state.
 - Owner: ops maintainer + automation agents.
-- Review Cadence: monthly or after scheduler/env changes.
+- Review Cadence: monthly or after scheduler/environment changes.
 - Status: `runbook`.
 
-This runbook adds remote backup archival on top of the local Docker backup routine.
+This runbook covers host-owned PostgreSQL backup creation, encrypted S3 archival, remote artifact
+integrity checks, and isolated restore drills. For health/alert semantics, see
+[`postgres-ops-health.md`](postgres-ops-health.md).
 
-For alerting/status/key-rotation operational checks, see:
-`docs/operations/postgres-ops-health.md`.
+## Configuration
 
-## TL;DR (Copy/Paste)
-
-Local one-off sanity checks:
-
-```bash
-pnpm docker:db:backup:s3 -- manual_checkpoint
-pnpm docker:db:list:s3
-pnpm docker:db:restore:s3 -- <key-or-s3-uri-to-.dump> --download-only
-```
-
-Daily scheduled task (WSL/Windows Task Scheduler):
-
-- Program/script:
-
-```text
-C:\Windows\System32\wsl.exe
-```
-
-- Add arguments:
-
-```text
--d Ubuntu-24.04 -- /bin/bash -lc "/home/abocha/code/esl-pipeline/scripts/docker/run-postgres-backup-s3.sh"
-```
-
-Monthly reminder/drill task:
-
-- Reminder only:
-
-```text
--d Ubuntu-24.04 -- /bin/bash -lc "/home/abocha/code/esl-pipeline/scripts/docker/run-postgres-restore-drill-reminder.sh"
-```
-
-- Auto drill (`--download-only`):
-
-```text
--d Ubuntu-24.04 -- /bin/bash -lc "PG_BACKUP_RESTORE_DRILL_AUTO=true /home/abocha/code/esl-pipeline/scripts/docker/run-postgres-restore-drill-reminder.sh"
-```
-
-## Scripts and Commands
-
-- Local backup source of truth: `scripts/docker/postgres-backup-restore.sh`
-- S3 wrapper: `scripts/docker/postgres-backup-s3.sh`
-- Production Compose targeting wrapper: `scripts/docker/postgres-prod-backup-s3.sh`
-- Scheduler wrapper: `scripts/docker/run-postgres-backup-s3.sh`
-- Monthly drill reminder wrapper: `scripts/docker/run-postgres-restore-drill-reminder.sh`
-- Ops status helper: `scripts/docker/postgres-ops-status.sh`
-- Ops alert wrapper: `scripts/docker/run-postgres-ops-alert.sh`
-- Key-rotation reminder wrapper: `scripts/docker/run-aws-key-rotation-reminder.sh`
-
-Wrapper commands:
-
-- `pnpm docker:db:backup:s3` (create local backup set + upload all artifacts)
-- `pnpm docker:db:backup:s3:scheduled` (scheduler wrapper; loads env + logs)
-- `pnpm docker:db:upload:s3` (upload latest local backup set)
-- `pnpm docker:db:list:s3` (list remote backup objects)
-- `pnpm docker:db:restore:s3 -- <s3://bucket/key.dump|key.dump> [--clean]`
-- `pnpm docker:prod:db:backup:s3` (same operation, targeting `docker-compose.prod.yml`)
-- `pnpm docker:prod:db:upload:s3` (upload latest local prod-targeted set)
-- `pnpm docker:prod:db:list:s3` (list remote backup objects for prod/alpha env)
-- `pnpm docker:prod:db:restore:s3 -- <s3://bucket/key.dump|key.dump> [--download-only|--clean]`
-- `pnpm docker:db:restore-drill:reminder` (monthly reminder with latest remote key)
-- `pnpm docker:db:restore-drill:auto` (monthly reminder + auto `--download-only` drill)
-- `pnpm ops:status` (table) / `pnpm ops:status:json` (machine-readable)
-- `pnpm ops:alert:check` (Telegram failure/recovery alerts + cooldown state)
-- `pnpm ops:key-rotation:check` (weekly IAM access key-age reminder)
-
-## Required Environment
-
-Set these in `.env` (or shell env):
+The namespace remains environment-selectable:
 
 ```bash
 PG_BACKUP_S3_BUCKET=esl-pipeline-db-backups
 PG_BACKUP_S3_PREFIX=backups/postgres
 PG_BACKUP_S3_REGION=ap-southeast-1
 PG_BACKUP_S3_SSE=aws:kms
-PG_BACKUP_S3_KMS_KEY_ID=arn:aws:kms:ap-southeast-1:123456789012:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+PG_BACKUP_S3_KMS_KEY_ID=arn:aws:kms:ap-southeast-1:123456789012:key/...
 PG_BACKUP_S3_ENV=dev
-# Optional profile override:
-# PG_BACKUP_S3_PROFILE=default
 ```
 
-Use `PG_BACKUP_S3_ENV=alpha` on the private hosted Lightsail deployment so hosted rehearsal backups
-do not blend into the local/dev prefix.
+Production uses `PG_BACKUP_S3_ENV=prod`. The production wrapper defaults to `prod` while preserving
+an explicit `PG_BACKUP_S3_ENV` override. Do not use the retired `alpha` namespace for production.
 
-By default, `postgres-backup-s3.sh` auto-loads `.env` when present.
-Override with `PG_BACKUP_ENV_FILE=/path/to/env`.
-
-Defaults:
-
-- `PG_BACKUP_S3_PREFIX=backups/postgres`
-- `PG_BACKUP_S3_SSE=aws:kms`
-- `PG_BACKUP_S3_ENV=dev`
-- Backup source dir is still `tmp/backups/postgres`
-- Scheduled maintenance defaults:
-  - `PG_BACKUP_LOCAL_RETENTION_DAYS=30`
-  - `PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS=14`
-  - `PG_BACKUP_LOG_RETENTION_DAYS=30`
-  - `PG_BACKUP_RESTORE_DRILL_AUTO=false`
-
-### Environment Checklist
-
-Make sure these are present in `.env`:
+Host operations state must not live under the checkout or use container `/app/...` paths:
 
 ```bash
-PG_BACKUP_S3_BUCKET=...
-PG_BACKUP_S3_PREFIX=backups/postgres
-PG_BACKUP_S3_REGION=ap-southeast-1
-PG_BACKUP_S3_SSE=aws:kms
-PG_BACKUP_S3_KMS_KEY_ID=arn:aws:kms:...
-PG_BACKUP_S3_ENV=dev # use alpha on the hosted Lightsail deployment
+PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops
 ```
 
-Optional maintenance knobs:
+The generic local default is `${XDG_STATE_HOME:-$HOME/.local/state}/esl-pipeline/ops`. See
+[`postgres-ops-health.md`](postgres-ops-health.md) for the directory layout and ownership boundary.
+Scripts load `<repo>/.env` by default; use `PG_BACKUP_ENV_FILE=/absolute/host/path` to select another
+host environment file.
+
+## Commands
+
+Create and upload a complete backup set:
 
 ```bash
-PG_BACKUP_ALLOW_EMPTY_SOURCE=false
-PG_BACKUP_LOCAL_RETENTION_DAYS=30
-PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS=14
-PG_BACKUP_LOG_RETENTION_DAYS=30
-PG_BACKUP_RESTORE_DRILL_AUTO=false
+pnpm docker:db:backup:s3 -- manual_checkpoint
+pnpm docker:prod:db:backup:s3 -- pre_change
 ```
 
-## Upload Workflow
-
-Create and upload a fresh set:
-
-```bash
-pnpm docker:db:backup:s3 -- nightly
-```
-
-For the production Compose project used by the closed-alpha Lightsail rehearsal:
-
-```bash
-pnpm docker:prod:db:backup:s3 -- alpha_manual_check
-```
-
-`backup-upload` inherits empty-source protection from `postgres-backup-restore.sh` during local backup creation:
-
-- default behavior blocks backup/upload when `users`, `jobs`, and `transcripts` are all empty.
-- override only when intentional: `PG_BACKUP_ALLOW_EMPTY_SOURCE=true`.
-
-Upload latest existing set only:
-
-```bash
-pnpm docker:db:upload:s3
-pnpm docker:prod:db:upload:s3
-```
-
-`upload-latest` does not perform source-db guard checks because it reuses an already-created local dump set.
+The production wrapper targets `docker-compose.prod.yml`, defaults the Compose project to
+`esl-pipeline-prod`, the host state root to `/var/lib/esl-pipeline/ops`, and the S3 namespace to
+`prod`. Each setting remains explicitly overrideable.
 
 List remote objects:
 
@@ -171,257 +60,116 @@ pnpm docker:db:list:s3
 pnpm docker:prod:db:list:s3
 ```
 
+Upload the latest complete local set without creating a new snapshot:
+
+```bash
+pnpm docker:db:upload:s3
+pnpm docker:prod:db:upload:s3
+```
+
 Object layout:
 
 ```text
-s3://<bucket>/<prefix>/<env>/<db>/<YYYY>/<MM>/<DD>/<set-prefix>/
+s3://<bucket>/<prefix>/<environment>/<database>/<YYYY>/<MM>/<DD>/<set-prefix>/
 ```
 
-Each set uploads:
+Each set contains `.dump`, `.sql.gz`, `_schema.sql`, and `.sha256` artifacts. Backup creation retains
+the empty-source guard over `users`, `jobs`, and `transcripts`; set
+`PG_BACKUP_ALLOW_EMPTY_SOURCE=true` only for an intentional empty database snapshot.
 
-- `<prefix>.dump`
-- `<prefix>.sql.gz`
-- `<prefix>_schema.sql`
-- `<prefix>.sha256`
+## Remote Artifact Integrity
 
-## Restore Drill from S3
-
-Restore from a remote dump object:
+Check the latest configured dump, or select one explicitly:
 
 ```bash
-pnpm docker:db:restore:s3 -- s3://esl-pipeline-db-backups/backups/postgres/dev/esl_batch/2026/03/03/esl_batch_20260303_024204_pre-cleanup-20260303-024203/esl_batch_20260303_024204_pre-cleanup-20260303-024203.dump --clean
+pnpm docker:db:artifact-integrity
+pnpm docker:db:artifact-integrity -- backups/postgres/prod/esl_batch/.../backup.dump
+pnpm docker:prod:db:artifact-integrity -- [dump-key-or-s3-uri]
 ```
 
-Or using key-only input (uses `PG_BACKUP_S3_BUCKET`):
+This downloads the `.dump` and matching `.sha256`, verifies SHA-256, and writes an artifact-integrity
+report. It does not restore a database. The low-level equivalent for a selected key is:
 
 ```bash
-pnpm docker:db:restore:s3 -- backups/postgres/dev/esl_batch/2026/03/03/<set>/<set>.dump --clean
+bash scripts/docker/postgres-backup-s3.sh verify-remote <key-or-s3-uri>
 ```
 
-What happens:
+`restore-remote --download-only` has been retired because it described an integrity check as a
+restore drill. Use `verify-remote` or `docker:db:artifact-integrity` instead.
 
-1. Downloads `.dump` and matching `.sha256` to `tmp/backups/postgres/remote-restore/`.
-2. Verifies dump digest before restore.
-3. Delegates restore to `postgres-backup-restore.sh`.
-4. If restored snapshot is older than current backend schema, run:
-   `docker compose exec -T batch-backend pnpm --filter @esl-pipeline/batch-backend db:migrate`
-   before serving normal API traffic.
+An empty or mistargeted prefix produces `no_remote_dump_found` cleanly. S3 discovery coalesces
+`Contents=null` to an empty array before sorting.
 
-To validate download + digest only (no restore side effects):
+## Disposable Restore Drill
+
+Restore the latest configured dump, or a selected dump, into isolated PostgreSQL 18.6:
 
 ```bash
-pnpm docker:db:restore:s3 -- backups/postgres/dev/esl_batch/2026/03/03/<set>/<set>.dump --download-only
-pnpm docker:prod:db:restore:s3 -- backups/postgres/alpha/esl_batch/2026/06/10/<set>/<set>.dump --download-only
+pnpm docker:db:restore-drill
+pnpm docker:db:restore-drill -- backups/postgres/prod/esl_batch/.../backup.dump
+pnpm docker:prod:db:restore-drill -- [dump-key-or-s3-uri]
 ```
 
-## Completion Telegram Notifications
+The drill creates unique disposable Docker resources, publishes no port, uses `--network none`,
+restores and reads only the disposable database, records structured evidence, and removes the
+container and volume through an exit trap. It does not reference or attach production
+`postgres18_data`.
 
-Completion notifications are sent for:
+The default drill image is `postgres:18.6-alpine3.24`. Override it only as part of a reviewed runtime
+change:
 
-- `backup-upload` (success/failure)
-- `restore-remote` (success/failure, including `--download-only`)
+```bash
+PG_BACKUP_RESTORE_DRILL_IMAGE=postgres:18.6-alpine3.24
+PG_BACKUP_RESTORE_DRILL_EXPECTED_VERSION=18.6
+```
 
-Notification delivery uses the same env vars as ops alerts:
+## Intentional Restore into a Configured Database
+
+The existing explicit restore command remains available for an operator-selected target:
+
+```bash
+pnpm docker:db:restore:s3 -- <key-or-s3-uri> [--clean]
+pnpm docker:prod:db:restore:s3 -- <key-or-s3-uri> [--clean]
+```
+
+This is destructive to the configured database target and is not the restore drill. Verify the
+container/Compose target and backup before running it. Repository tests and scheduled drills never
+invoke this production-targeted path.
+
+## Scheduling and Retention
+
+Recommended production host jobs:
+
+- daily: `scripts/docker/run-postgres-backup-s3.sh`
+- weekly: `pnpm docker:prod:db:artifact-integrity`
+- monthly: `pnpm docker:prod:db:restore-drill`
+- every 6 hours: `pnpm ops:alert:check`
+
+For a systemd service, use the deployed checkout as `WorkingDirectory`, load the host `.env`, and set
+`PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops`. The service user needs write access to that
+directory, Docker access for backup/drill operations, and least-privilege access to the configured
+S3/KMS objects.
+
+Retention knobs:
+
+```bash
+PG_BACKUP_LOCAL_RETENTION_DAYS=30
+PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS=14
+PG_BACKUP_LOG_RETENTION_DAYS=30
+```
+
+The scheduler prunes only files under the resolved host backup/log directories. S3 object lifecycle
+and versioning remain AWS-owned configuration and are not changed by these scripts.
+
+## Completion Notifications
+
+Backup upload, remote restore, and selected remote artifact verification reuse:
 
 - `PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN`
 - `PG_BACKUP_ALERT_TELEGRAM_CHAT_ID`
 - optional `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID`
 - `PG_BACKUP_ALERT_TELEGRAM_DISABLE`
 
-These notification variables are separate from the optional `TELEGRAM_OPS_BOT_*` runtime. During
-manual deployment or restore work, set `PG_BACKUP_ALERT_TELEGRAM_DISABLE=true` unless the bot token,
-chat id, and optional forum thread id are known-good. A stale
-`PG_BACKUP_ALERT_TELEGRAM_THREAD_ID` can make Telegram reject an otherwise successful backup/restore
-completion message.
-
-When `postgres-backup-s3.sh` calls `postgres-backup-restore.sh`, nested completion notifications are internally suppressed to avoid duplicate Telegram messages.
-
-## Daily Automation (Host systemd)
-
-Recommended host timer setup:
-
-`/etc/systemd/system/esl-postgres-backup.service`
-
-```ini
-[Unit]
-Description=ESL Postgres backup to S3
-After=docker.service
-
-[Service]
-Type=oneshot
-WorkingDirectory=/home/abocha/code/esl-pipeline
-ExecStart=/usr/bin/bash /home/abocha/code/esl-pipeline/scripts/docker/run-postgres-backup-s3.sh
-```
-
-`/etc/systemd/system/esl-postgres-backup.timer`
-
-```ini
-[Unit]
-Description=Daily ESL Postgres backup to S3
-
-[Timer]
-OnCalendar=*-*-* 03:15:00
-RandomizedDelaySec=10m
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-Enable timer:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now esl-postgres-backup.timer
-systemctl list-timers --all | rg esl-postgres-backup
-```
-
-If you are on WSL and see:
-
-```text
-System has not been booted with systemd as init system (PID 1)
-```
-
-use Windows Task Scheduler instead (see TL;DR above).
-
-Logs:
-
-- `tmp/logs/backup/postgres-backup-s3-*.log`
-- Default log retention: 30 days (`PG_BACKUP_LOG_RETENTION_DAYS`)
-- Local backup artifact pruning:
-  - `tmp/backups/postgres/*.dump|*.sql.gz|*_schema.sql|*.sha256` pruned by `PG_BACKUP_LOCAL_RETENTION_DAYS`
-  - `tmp/backups/postgres/remote-restore/*` pruned by `PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS`
-
-## Monthly Restore Drill Reminder
-
-Run reminder manually:
-
-```bash
-pnpm docker:db:restore-drill:reminder
-```
-
-This logs the latest remote dump key and a ready-to-run drill command.
-
-Auto-run a safe monthly drill (`--download-only`):
-
-```bash
-pnpm docker:db:restore-drill:auto
-```
-
-On Windows Task Scheduler (WSL), use:
-
-- Program/script:
-
-```text
-C:\Windows\System32\wsl.exe
-```
-
-- Add arguments (monthly reminder only):
-
-```text
--d Ubuntu-24.04 -- /bin/bash -lc "/home/abocha/code/esl-pipeline/scripts/docker/run-postgres-restore-drill-reminder.sh"
-```
-
-- Add arguments (monthly auto drill):
-
-```text
--d Ubuntu-24.04 -- /bin/bash -lc "PG_BACKUP_RESTORE_DRILL_AUTO=true /home/abocha/code/esl-pipeline/scripts/docker/run-postgres-restore-drill-reminder.sh"
-```
-
-## Logs and Where to Look
-
-Primary logs:
-
-- `tmp/logs/backup/postgres-backup-s3-*.log`
-- `tmp/logs/backup/restore-drill-reminder-*.log`
-
-In WSL shell:
-
-```bash
-ls -lt /home/abocha/code/esl-pipeline/tmp/logs/backup
-tail -n 80 /home/abocha/code/esl-pipeline/tmp/logs/backup/<latest-log-file>
-```
-
-In Windows Explorer:
-
-```text
-\\wsl$\Ubuntu-24.04\home\abocha\code\esl-pipeline\tmp\logs\backup
-```
-
-If Task Scheduler flashes a black window and no log is created, the usual cause is
-wrong Program path. Use `C:\\Windows\\System32\\wsl.exe` exactly.
-
-## One-Time AWS Bootstrap (Admin Principal)
-
-Use an elevated IAM principal for bucket/KMS/lifecycle configuration.
-
-Create dedicated bucket:
-
-```bash
-aws s3api create-bucket \
-  --bucket esl-pipeline-db-backups \
-  --region ap-southeast-1 \
-  --create-bucket-configuration LocationConstraint=ap-southeast-1
-```
-
-Enable versioning:
-
-```bash
-aws s3api put-bucket-versioning \
-  --bucket esl-pipeline-db-backups \
-  --versioning-configuration Status=Enabled
-```
-
-Block public access:
-
-```bash
-aws s3api put-public-access-block \
-  --bucket esl-pipeline-db-backups \
-  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
-```
-
-Set lifecycle (90 days current, 30 days noncurrent):
-
-```bash
-aws s3api put-bucket-lifecycle-configuration \
-  --bucket esl-pipeline-db-backups \
-  --lifecycle-configuration '{
-    "Rules": [
-      {
-        "ID": "postgres-backups-retention",
-        "Status": "Enabled",
-        "Filter": {"Prefix": "backups/postgres/"},
-        "Expiration": {"Days": 90},
-        "NoncurrentVersionExpiration": {"NoncurrentDays": 30}
-      }
-    ]
-  }'
-```
-
-Create a KMS key + alias (if you do not already have one):
-
-```bash
-aws kms create-key \
-  --description "esl-pipeline postgres backup encryption key" \
-  --region ap-southeast-1
-
-aws kms create-alias \
-  --alias-name alias/esl-pipeline-postgres-backup \
-  --target-key-id <kms-key-id-or-arn> \
-  --region ap-southeast-1
-```
-
-If your uploader IAM user cannot run bucket-level read APIs (for example `GetBucketVersioning`), that is expected under strict least privilege.
-Likewise, if object tagging permissions are not granted, uploads still succeed and log a warning.
-
-## Suggested Routine
-
-1. Daily scheduler runs `run-postgres-backup-s3.sh`.
-2. Monthly scheduler runs `run-postgres-restore-drill-reminder.sh` (or `AUTO=true` variant).
-3. Before risky DB changes, run manual checkpoint:
-
-```bash
-pnpm docker:db:backup:s3 -- pre_change
-```
-
-4. Keep periodic restore drills in non-prod to verify end-to-end recovery.
+Set `PG_BACKUP_ALERT_TELEGRAM_DISABLE=true` during manual maintenance unless the target is known-good.
+Nested local backup/restore notifications remain suppressed so one operation does not send duplicate
+messages.

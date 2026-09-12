@@ -124,10 +124,10 @@ function callbackMetricLabel(data: string): string {
       return 'job_share';
     }
     case 'a': {
-      return param === 'backup' || param === 'drill' ? `action_${param}` : 'action_unknown';
+      return param === 'backup' || param === 'integrity' ? `action_${param}` : 'action_unknown';
     }
     case 'c': {
-      return param === 'backup' || param === 'drill' ? `confirm_${param}` : 'confirm_unknown';
+      return param === 'backup' || param === 'integrity' ? `confirm_${param}` : 'confirm_unknown';
     }
     default: {
       return 'unknown';

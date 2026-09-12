@@ -189,7 +189,8 @@ Security rules:
 PG_BACKUP_S3_BUCKET=<existing-backup-bucket>
 PG_BACKUP_S3_PREFIX=backups/postgres
 PG_BACKUP_S3_REGION=<existing-region>
-PG_BACKUP_S3_ENV=alpha
+PG_BACKUP_S3_ENV=prod
+PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops
 PG_BACKUP_S3_SSE=<aws:kms-or-AES256-or-current-choice>
 PG_BACKUP_S3_KMS_KEY_ID=<required-if-SSE-is-aws:kms>
 PG_BACKUP_LOCAL_RETENTION_DAYS=30
@@ -429,9 +430,10 @@ docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml
 docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
   --env-file /var/lib/esl-pipeline/deploy/current-images.env \
   exec batch-backend node dist/tools/smoke-s3-storage.js
-pnpm docker:prod:db:backup:s3 -- alpha_manual_check
+pnpm docker:prod:db:backup:s3 -- production_manual_check
 pnpm docker:prod:db:list:s3
-pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only
+pnpm docker:prod:db:artifact-integrity -- <latest-backup-key.dump>
+pnpm docker:prod:db:restore-drill -- <latest-backup-key.dump>
 ```
 
 Deferred HTTPS checks after DNS points to the real VPS:
@@ -466,7 +468,7 @@ backup with the production Compose wrapper:
 ```bash
 pnpm docker:prod:db:backup:s3 -- pre_migration_<short-sha>
 pnpm docker:prod:db:list:s3
-pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only
+pnpm docker:prod:db:artifact-integrity -- <latest-backup-key.dump>
 ```
 
 Application rollback and database rollback are separate. The deployment script may tell you how to

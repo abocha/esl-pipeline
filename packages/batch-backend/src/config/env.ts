@@ -267,7 +267,7 @@ export interface BatchBackendConfig {
     botSharedSecret?: string;
     statusCommand: string;
     backupCommand: string;
-    restoreDrillCommand: string;
+    artifactIntegrityCommand: string;
     actionTimeoutMs: number;
     actionHistoryLimit: number;
     actionRetentionDays: number;
@@ -621,8 +621,8 @@ export function loadConfig(): BatchBackendConfig {
   const opsControlBotSharedSecret = readString('BATCH_BACKEND_OPS_CONTROL_BOT_SECRET');
   const opsControlStatusCommand = readString('BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND', '')!;
   const opsControlBackupCommand = readString('BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND', '')!;
-  const opsControlRestoreDrillCommand = readString(
-    'BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND',
+  const opsControlArtifactIntegrityCommand = readString(
+    'BATCH_BACKEND_OPS_CONTROL_ARTIFACT_INTEGRITY_COMMAND',
     '',
   )!;
   const opsControlActionTimeoutMs = readInt(
@@ -1101,7 +1101,7 @@ export function loadConfig(): BatchBackendConfig {
       botSharedSecret: opsControlBotSharedSecret ?? undefined,
       statusCommand: opsControlStatusCommand,
       backupCommand: opsControlBackupCommand,
-      restoreDrillCommand: opsControlRestoreDrillCommand,
+      artifactIntegrityCommand: opsControlArtifactIntegrityCommand,
       actionTimeoutMs: opsControlActionTimeoutMs,
       actionHistoryLimit: opsControlActionHistoryLimit,
       actionRetentionDays: opsControlActionRetentionDays,
