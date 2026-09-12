@@ -65,8 +65,9 @@ job, its output, and the completed session remain unchanged.
 - [x] Update current frontend/backend and pipeline behavior documentation.
 - [x] Run integrated focused contract, backend, queue/worker, orchestrator, and frontend tests and
       inspect artifacts; use a narrow service-backed local diagnostic only when concretely needed.
-- [x] Confirm successful hosted PR CI and the final `CI gate` for the target commit; report selected
-      PostgreSQL/Redis evidence as CI-owned where local services are not needed.
+- [ ] Confirm successful hosted PR CI and the final `CI gate` for the target commit after PR
+      creation and before merge; report selected PostgreSQL/Redis evidence as CI-owned where local
+      services are not needed.
 - [x] Obtain narrow Sol review for concurrency/idempotency/snapshot/lineage risk.
 - [x] Obtain final Terra review for cross-boundary integration, state-machine consistency, tests,
       historical rerun preservation, and complexity.
