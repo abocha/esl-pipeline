@@ -370,7 +370,7 @@ if (opsScope) {
   assert(opsCommands.includes('help'), 'Ops chat scope should advertise /help');
   assert(opsCommands.includes('status'), 'Ops chat scope should advertise /status');
   assert(!opsCommands.includes('backup'), 'Read-only smoke should not advertise /backup');
-  assert(!opsCommands.includes('drill'), 'Read-only smoke should not advertise /drill');
+  assert(!opsCommands.includes('integrity'), 'Read-only smoke should not advertise /integrity');
   assert(!opsCommands.includes('approve'), 'Polling smoke should not advertise /approve');
 }
 

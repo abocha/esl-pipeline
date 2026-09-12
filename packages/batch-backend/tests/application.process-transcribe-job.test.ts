@@ -1688,7 +1688,7 @@ function createConfig(): BatchBackendConfig {
       botSharedSecret: undefined,
       statusCommand: 'echo {}',
       backupCommand: 'echo backup',
-      restoreDrillCommand: 'echo restore-drill',
+      artifactIntegrityCommand: 'echo artifact-integrity',
       actionTimeoutMs: 60_000,
       actionHistoryLimit: 100,
       actionRetentionDays: 30,

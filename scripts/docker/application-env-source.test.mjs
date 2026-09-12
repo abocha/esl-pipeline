@@ -18,10 +18,10 @@ test('host backup and operations scripts default to the canonical application en
     'scripts/docker/postgres-backup-s3.sh',
     'scripts/docker/postgres-backup-restore.sh',
     'scripts/docker/postgres-ops-status.sh',
-    'scripts/docker/run-aws-key-rotation-reminder.sh',
+    'scripts/docker/run-postgres-artifact-integrity-check.sh',
     'scripts/docker/run-postgres-backup-s3.sh',
     'scripts/docker/run-postgres-ops-alert.sh',
-    'scripts/docker/run-postgres-restore-drill-reminder.sh',
+    'scripts/docker/run-postgres-restore-drill.sh',
   ];
 
   for (const file of scripts) {

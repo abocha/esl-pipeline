@@ -732,7 +732,7 @@ describe('config/env - ops control settings', () => {
         expect(cfg.opsControl.botSharedSecret).toBeUndefined();
         expect(cfg.opsControl.statusCommand).toBe('');
         expect(cfg.opsControl.backupCommand).toBe('');
-        expect(cfg.opsControl.restoreDrillCommand).toBe('');
+        expect(cfg.opsControl.artifactIntegrityCommand).toBe('');
         expect(cfg.opsControl.actionTimeoutMs).toBe(10 * 60 * 1000);
         expect(cfg.opsControl.actionHistoryLimit).toBe(100);
         expect(cfg.opsControl.actionRetentionDays).toBe(30);
@@ -748,7 +748,7 @@ describe('config/env - ops control settings', () => {
         BATCH_BACKEND_OPS_CONTROL_BOT_SECRET: 'secret-token',
         BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND: 'echo {}',
         BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND: 'echo backup',
-        BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND: 'echo drill',
+        BATCH_BACKEND_OPS_CONTROL_ARTIFACT_INTEGRITY_COMMAND: 'echo integrity',
         BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS: '45000',
         BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT: '42',
         BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS: '14',
@@ -759,7 +759,7 @@ describe('config/env - ops control settings', () => {
         expect(cfg.opsControl.botSharedSecret).toBe('secret-token');
         expect(cfg.opsControl.statusCommand).toBe('echo {}');
         expect(cfg.opsControl.backupCommand).toBe('echo backup');
-        expect(cfg.opsControl.restoreDrillCommand).toBe('echo drill');
+        expect(cfg.opsControl.artifactIntegrityCommand).toBe('echo integrity');
         expect(cfg.opsControl.actionTimeoutMs).toBe(45000);
         expect(cfg.opsControl.actionHistoryLimit).toBe(42);
         expect(cfg.opsControl.actionRetentionDays).toBe(14);

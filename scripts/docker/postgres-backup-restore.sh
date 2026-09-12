@@ -2,9 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEFAULT_BACKUP_DIR="${ROOT_DIR}/tmp/backups/postgres"
 DEFAULT_COMPOSE_FILE="${ROOT_DIR}/docker-compose.yml"
 DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
+COMMON_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-ops-common.sh"
+
+# shellcheck source=scripts/docker/postgres-ops-common.sh
+. "$COMMON_SCRIPT"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
 RESOLVED_CONTAINER_REF=""
@@ -31,7 +34,8 @@ SERVICE_NAME="${PG_SERVICE_NAME:-postgres}"
 CONTAINER_NAME_OVERRIDE="${PG_CONTAINER_NAME:-}"
 DB_NAME="${PG_DATABASE:-esl_batch}"
 DB_USER="${PG_USER:-esl}"
-BACKUP_DIR="${PG_BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
+HOST_STATE_DIR="$(pg_backup_resolve_host_state_dir)"
+BACKUP_DIR="${PG_BACKUP_DIR:-${HOST_STATE_DIR}/backups/postgres}"
 PG_BACKUP_ALLOW_EMPTY_SOURCE="${PG_BACKUP_ALLOW_EMPTY_SOURCE:-false}"
 PG_BACKUP_NOTIFY_SUPPRESS="${PG_BACKUP_NOTIFY_SUPPRESS:-false}"
 PG_BACKUP_ALERT_TELEGRAM_DISABLE="${PG_BACKUP_ALERT_TELEGRAM_DISABLE:-false}"
@@ -54,7 +58,8 @@ Environment overrides:
   PG_CONTAINER_NAME  (override compose discovery)
   PG_DATABASE        (default: esl_batch)
   PG_USER            (default: esl)
-  PG_BACKUP_DIR      (default: <repo>/tmp/backups/postgres)
+  PG_BACKUP_HOST_STATE_DIR (default: XDG state home/esl-pipeline/ops; host path only)
+  PG_BACKUP_DIR      (default: <host-state>/backups/postgres)
   PG_BACKUP_ENV_FILE (default: <repo>/.env if present)
   PG_BACKUP_ALLOW_EMPTY_SOURCE (default: false)
   PG_BACKUP_NOTIFY_SUPPRESS (default: false; internal use)

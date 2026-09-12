@@ -458,8 +458,8 @@ export interface OpsStatusResponse {
   };
   thresholds: {
     backupMaxAgeHours: number | null;
+    integrityMaxAgeDays: number | null;
     drillMaxAgeDays: number | null;
-    keyRotationMaxAgeDays: number | null;
   };
   backup: {
     state: OpsHealthState;
@@ -468,24 +468,29 @@ export interface OpsStatusResponse {
     lastModifiedUtc: string | null;
     ageHours: number | null;
   };
+  artifactIntegrity: {
+    state: OpsHealthState;
+    reason: string;
+    lastReportUtc: string | null;
+    ageDays: number | null;
+    reportStatus: string | null;
+    remoteDumpKey: string | null;
+    result: string | null;
+    checksumVerified: boolean;
+  };
   restoreDrill: {
     state: OpsHealthState;
     reason: string;
     lastReportUtc: string | null;
     ageDays: number | null;
     reportStatus: string | null;
-    reportMode: string | null;
-    latestRemoteDumpKey: string | null;
-    drillResult: string | null;
-  };
-  keyRotation: {
-    state: OpsHealthState;
-    reason: string;
-    iamUser: string | null;
-    oldestAccessKeyId: string | null;
-    oldestCreatedUtc: string | null;
-    oldestAgeDays: number | null;
-    oldestLastUsedUtc: string | null;
+    remoteDumpKey: string | null;
+    result: string | null;
+    postgresVersion: string | null;
+    restoreVerified: boolean;
+    cleanupStatus: string | null;
+    publicTableCount: number | null;
+    schemaMigrationCount: number | null;
   };
 }
 

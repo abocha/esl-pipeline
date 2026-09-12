@@ -150,7 +150,7 @@ describe('telegram commands - core', () => {
     expect(readOnlyOpsCommands).not.toContain('start');
     expect(readOnlyOpsCommands).not.toContain('links');
     expect(readOnlyOpsCommands).not.toContain('backup');
-    expect(readOnlyOpsCommands).not.toContain('drill');
+    expect(readOnlyOpsCommands).not.toContain('integrity');
     expect(readOnlyOpsCommands).not.toContain('approve');
 
     const webhookOpsCommands = getAdvertisedCommands(
@@ -163,7 +163,7 @@ describe('telegram commands - core', () => {
       'ops_chat',
     ).map((command) => command.command);
     expect(webhookOpsCommands).toContain('backup');
-    expect(webhookOpsCommands).toContain('drill');
+    expect(webhookOpsCommands).toContain('integrity');
     expect(webhookOpsCommands).toContain('approve');
   });
 

@@ -35,7 +35,8 @@
   - `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`
 - Action allowlist remains intentionally narrow:
   - `backup_upload`
-  - `restore_drill_download_only`
+  - `restore_drill_download_only` (retained durable action-history token; now presented and
+    configured as the non-restoring artifact-integrity check)
 
 Backend action execution:
 
@@ -43,7 +44,7 @@ Backend action execution:
   backend process enqueues the request and executes the configured command with
   `bash -lc <command>` in its own process environment (`PIPELINE_CWD` when set, otherwise the
   backend process working directory).
-- `BATCH_BACKEND_ENABLE_OPS_CONTROL` is `false` by default. Status, backup, and restore-drill
+- `BATCH_BACKEND_ENABLE_OPS_CONTROL` is `false` by default. Status, backup, and artifact-integrity
   command variables are empty by default, so an operator must explicitly configure each command;
   an unset action command fails closed as unconfigured.
 - The long-running backend runtime must not require Docker CLI, AWS CLI, Docker socket mounts, or
@@ -73,8 +74,11 @@ Read commands:
 Safe actions:
 
 - `/backup [label]`
-- `/drill`
+- `/integrity`
 - `/approve <token>` in webhook approval flows
+
+The real PostgreSQL restore drill is deliberately host-only and is not exposed as a backend or
+Telegram action. Run `pnpm docker:db:restore-drill` from the operations host.
 
 Behavior notes:
 
