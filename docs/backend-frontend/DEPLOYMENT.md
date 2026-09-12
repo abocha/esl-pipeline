@@ -461,6 +461,23 @@ keeps persistence disabled for fast reset semantics unless you take a manual sna
 container refresh. Latency monitoring is enabled at 100 ms so `LATENCY DOCTOR` and `LATENCY LATEST`
 can explain server-side stalls without waiting for a failure window to reproduce.
 
+Before the first BullMQ 6 deployment, run the read-only legacy-repeatable preflight against every
+configured ESL Pipeline queue while the currently running backend container still has BullMQ 5:
+
+```bash
+cd /opt/esl-pipeline
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec -T batch-backend node --input-type=module \
+  < scripts/deploy/check-bullmq-v5-repeatable-jobs.mjs
+```
+
+Record the three zero counts before proceeding. A nonzero count is a deployment blocker: do not
+deploy BullMQ 6 or introduce Job Schedulers automatically. Inspect and migrate or remove the legacy
+definitions with the BullMQ 5 APIs only after that production-data change is separately approved.
+The script intentionally fails when run inside a BullMQ 6 container, because v6 removed the
+supported v5 API that it uses to read this legacy metadata.
+
 ## CI Expectations
 
 Deployment changes should preserve green CI for:

@@ -12,7 +12,7 @@ let client: Redis | null = null;
 export async function closeRedisClient(): Promise<void> {
   const redis = client;
   client = null;
-  if (redis) {
+  if (redis && redis.status !== 'end') {
     await redis.quit();
   }
 }
