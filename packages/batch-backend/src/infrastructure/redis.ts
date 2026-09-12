@@ -31,6 +31,7 @@ export function createRedisClient(): Redis {
     host: config.redis.host,
     port: config.redis.port,
     password: config.redis.password,
+    protocol: 2,
     maxRetriesPerRequest: null,
     enableReadyCheck: true,
     lazyConnect: false,
