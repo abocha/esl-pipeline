@@ -10,7 +10,7 @@ import {
   formatCiScopeSummary,
   parseNameStatusZ,
   readWorkspacePackages,
-} from './affected-check-lib.mjs';
+} from './workspace-change-scope.mjs';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const args = process.argv.slice(2);

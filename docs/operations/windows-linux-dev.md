@@ -18,11 +18,11 @@ Run these from the checkout you intend to edit:
 ```bash
 corepack enable
 pnpm install
-pnpm check:fast
+pnpm --filter @esl-pipeline/<package> test
 pnpm docker:up
 ```
 
-On Windows, run the same commands from PowerShell. The root `docker:prepare` script is Node-based, so it does not require Bash.
+On Windows, run the same commands from PowerShell. The root `docker:prepare` script is Node-based, so it does not require Bash. Hosted PR CI is the comprehensive merge gate; use its exact job commands for failure reproduction.
 
 ## Docker Bind-Mount Rule
 

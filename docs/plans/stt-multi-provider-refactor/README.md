@@ -58,7 +58,9 @@ Archived phase details remain available for rationale, but this README is the ac
 1. The active plan's Goal Contract matrix passes, including tenant, concurrency, retry, media, retention, and refresh/resume boundaries.
 2. Provider package, batch-backend, and batch-frontend targeted tests pass.
 3. The exact production Docker image passes synthetic FFmpeg probe/copy tests before video is enabled.
-4. DB/worker/integration changes pass `pnpm check` and required contract/baseline verification.
+4. DB/worker/integration changes pass focused relevant local/package tests and checks, any
+   concretely needed narrow service-backed diagnostics, and required contract/baseline verification;
+   successful hosted PR CI and the final `CI gate` provide the comprehensive merge requirement.
 5. Active runtime and operations docs pass generated-index, format, hygiene, and docs checks.
 
 ## Rollback Notes

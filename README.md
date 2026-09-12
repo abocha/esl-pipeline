@@ -21,12 +21,13 @@ For prerequisites, local Docker behavior, environment setup, and operational com
 ## Validate
 
 ```bash
-pnpm check:fast
+pnpm --filter @esl-pipeline/<package> test
 pnpm docs:check
 ```
 
-Use `pnpm check:pre-pr` for broad changes and `pnpm check` when reproducing full CI or validating
-database, worker, migration, or integration behavior.
+Run focused package commands while editing and before pushing. Hosted PR CI is the comprehensive
+merge gate; when a hosted job fails, reproduce its actual command, configuration, and prerequisites
+from the retained logs rather than running a repository-wide approximation.
 
 ## Architecture
 

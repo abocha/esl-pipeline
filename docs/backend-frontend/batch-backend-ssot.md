@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 8 minutes.
 - Authority Level: Backend architecture and service-boundary reference.
-- Last Verified Against: 2026-07-28 repo state.
+- Last Verified Against: 2026-09-12 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major backend workflow changes.
 - Status: `reference`.
@@ -80,10 +80,10 @@ Env reference: [`docs/reference/env.md`](../reference/env.md)
   - `GET /students/:id/homework-memory`
   - `GET /students/:id/memory-snapshots`
 - Tutor business data:
-  - `GET|PATCH /business/settings`
+  - `GET|PUT /business/settings`
   - `GET /business/schedule`
   - `GET /business/stats`
-  - `GET|PATCH /students/:id/surfaces/schedule-billing`
+  - `GET /students/:id/surfaces/schedule-billing`
 - Jobs and events:
   - `GET /jobs/:id`
   - `POST /jobs/:id/approve`

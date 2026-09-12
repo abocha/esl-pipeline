@@ -63,8 +63,11 @@ job, its output, and the completed session remain unchanged.
 ### 4. Documentation, integrated validation, and review
 
 - [x] Update current frontend/backend and pipeline behavior documentation.
-- [x] Run integrated focused tests, then `pnpm --silent run check:fast:agent` and inspect artifacts.
-- [x] Run the appropriate `pnpm check` worker/integration lane and report CI-owned service evidence.
+- [x] Run integrated focused contract, backend, queue/worker, orchestrator, and frontend tests and
+      inspect artifacts; use a narrow service-backed local diagnostic only when concretely needed.
+- [ ] Confirm successful hosted PR CI and the final `CI gate` for the target commit after PR
+      creation and before merge; report selected PostgreSQL/Redis evidence as CI-owned where local
+      services are not needed.
 - [x] Obtain narrow Sol review for concurrency/idempotency/snapshot/lineage risk.
 - [x] Obtain final Terra review for cross-boundary integration, state-machine consistency, tests,
       historical rerun preservation, and complexity.
@@ -75,6 +78,7 @@ job, its output, and the completed session remain unchanged.
 ## Validation evidence target
 
 - Focused contract, backend transaction, queue/worker, orchestrator, and frontend Vitest lanes.
-- `pnpm --silent run check:fast:agent`.
-- `pnpm check` because worker/integration behavior changes.
+- Focused relevant local/package tests and checks for the changed behavior.
+- Successful hosted PR CI and the final `CI gate` are the comprehensive merge requirement; use a
+  narrow service-backed local diagnostic only when concretely needed for worker/integration behavior.
 - Selected PostgreSQL/Redis evidence may remain CI-owned; never manufacture local service state.

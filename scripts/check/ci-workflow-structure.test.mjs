@@ -39,7 +39,7 @@ test('PR CI exposes scoped evidence jobs and an always-running aggregate gate', 
 test('bootstrap scope check is mechanically independent from the classifier', () => {
   const script = markedScript('ci-bootstrap');
   assert.doesNotMatch(script, /run-ci-scope/u);
-  assert.doesNotMatch(script, /affected-check-lib/u);
+  assert.doesNotMatch(script, /workspace-change-scope/u);
   assert.match(script, /git diff --name-status -z/u);
 });
 

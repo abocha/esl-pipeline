@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-08-12 repository/workflow state and current Codex agent guidance.
+- Last Verified Against: 2026-09-12 repository/workflow state and current Codex agent guidance.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -143,24 +143,20 @@ execution retains its exemption; a diff alone does not require a reviewer.
 - Focused local evidence is the default. Run a local aggregate gate only for a concrete plausible
   wider failure, local-environment behavior under test, unavailable equivalent hosted evidence, or a
   specific CI failure being reproduced or diagnosed. Diff breadth alone is not a reason.
-- Hosted PR CI is the default comprehensive regression executor for the resource-constrained
-  developer laptop. `pnpm --silent run check:fast:agent` may supply selected affected local evidence,
-  but its conservative broad fallback records the broad plan and delegates it to hosted CI rather
-  than executing broad local lanes. Use `pnpm check:pre-pr:agent` only when broad local execution is
-  deliberately justified; use `pnpm check:agent` for local CI reproduction or DB, migration, worker,
-  or integration behavior. The corresponding non-agent commands remain human-readable equivalents.
+- Hosted PR CI is the comprehensive merge gate for the resource-constrained developer laptop.
+  Focused local evidence may prepare a change for hosted CI, but no repository-wide local gate is
+  required or implied. If hosted CI fails, inspect its logs/artifacts and reproduce that job's
+  actual commands, configuration, and prerequisites.
 - The primary owns the validation decision and evidence handoff: choose, inspect, and report focused,
   optional local aggregate, CI-owned, and manual/environment-owned evidence. A task may be ready for
   hosted CI without a local aggregate gate; it is never merge-ready until required hosted jobs and
   `CI gate` pass.
-- Prefer existing `:agent` commands. Read their cited artifacts under `tmp/check-logs/...` or
-  `tmp/test-logs/...` before any diagnostic rerun. Allow at most one isolated rerun per unchanged
-  failure; rerun the complete gate only after relevant state changes.
+- Read cited hosted/local artifacts under `tmp/ci-logs/...` or `tmp/test-logs/...` before any
+  diagnostic rerun; allow at most one isolated rerun per unchanged failure.
 - Clearly docs-only work may use `pnpm docs:generate:indexes`, `pnpm format`, and
   `pnpm docs:check`. Follow [`docs/reference/TESTING_GUIDELINES.md`](docs/reference/TESTING_GUIDELINES.md)
   for test-lane details.
-- `PASS_WITH_CI_REQUIREMENTS` permits PR creation, not merge. Every selected hosted job and `CI gate`
-  must pass before merge.
+- Every selected hosted job and `CI gate` must pass before merge.
 - Migration, schema-baseline, and contract-version changes also require the verification commands in
   [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).
 - Production Compose remains pull-based with SHA-tagged images and deployment state outside the
@@ -170,9 +166,10 @@ execution retains its exemption; a diff alone does not require a reviewer.
 ## Local service-test endpoint
 
 - The supported local Docker Redis endpoint for `@esl-pipeline/batch-backend` PostgreSQL + BullMQ
-  worker tests is `redis://127.0.0.1:6380`. The test bootstrap defaults to this endpoint when
-  `BATCH_BACKEND_TEST_REDIS` is absent; an explicit value remains authoritative for CI or an
-  alternate isolated test service. Do not point this variable at production or a shared runtime.
+  worker tests is `redis://127.0.0.1:6380`. The test bootstrap and retained DB/worker helper
+  default to this endpoint when `BATCH_BACKEND_TEST_REDIS` is absent; an explicit value remains
+  authoritative for CI or an alternate isolated test service. Do not point this variable at
+  production or a shared runtime.
 
 ## Definition of Done
 

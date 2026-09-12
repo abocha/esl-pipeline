@@ -23,6 +23,16 @@ const retiredFiles = [
   'scripts/deps/README.md',
   'scripts/check/run-agent-check-fast.mjs',
   'scripts/test/run-agent-vitest.mjs',
+  'scripts/check/affected-check-lib.mjs',
+  'scripts/check/affected-check-lib.test.mjs',
+  'scripts/check/agent-check-lib.mjs',
+  'scripts/check/execution-lane-lib.mjs',
+  'scripts/check/full-check-lib.mjs',
+  'scripts/check/run-affected-check.mjs',
+  'scripts/check/run-affected-check-lib.mjs',
+  'scripts/check/run-full-check.mjs',
+  'scripts/test/agent-vitest-lib.mjs',
+  'scripts/test/run-agent-vitest-lane.mjs',
   'scripts/docker/prepare-host-paths.sh',
   'scripts/setup-agent-env.sh',
   'scripts/git/gh-auth-from-env.sh',
@@ -43,6 +53,21 @@ const retiredScripts = [
   'test:timings:frontend',
   'test:topo',
   'lint:eslint:specialized',
+  'check',
+  'check:agent',
+  'check:fast',
+  'check:fast:agent',
+  'check:fast:dry-run',
+  'check:pre-pr',
+  'check:pre-pr:agent',
+  'test:check-routing',
+  'test:unit:prebuilt:fast',
+  'test:unit:prebuilt:fast:agent',
+  'test:agent:html-publisher',
+  'test:backend:db:worker:agent',
+  'test:integration:prebuilt:agent',
+  'test:unit:agent',
+  'test:unit:prebuilt:agent',
 ];
 
 test('retired tooling files and aliases stay absent', () => {
@@ -62,21 +87,19 @@ test('canonical replacements remain available', () => {
     'docker:up',
     'docker:up:build',
     'docs:garden',
-    'test:check-routing',
     'test:timings:unit',
   ]) {
     assert.equal(typeof pkg.scripts[script], 'string', script);
   }
 });
 
-test('the complete tooling suite remains available through broad local guards', () => {
+test('focused and hosted tooling surfaces remain available without local aggregate aliases', () => {
   assert.equal(pkg.scripts['test:tooling'], 'node --test "scripts/**/*.test.mjs"');
-  assert.equal(pkg.scripts.check, 'node scripts/check/run-full-check.mjs');
-  assert.equal(pkg.scripts['check:agent'], 'node scripts/check/run-full-check.mjs --agent');
-  assert.equal(pkg.scripts['check:pre-pr'], 'node scripts/check/run-affected-check.mjs --broad');
+  assert.equal(typeof pkg.scripts['test:unit'], 'string');
+  assert.equal(typeof pkg.scripts['test:unit:prebuilt'], 'string');
   assert.equal(
-    pkg.scripts['check:pre-pr:agent'],
-    'node scripts/check/run-affected-check.mjs --broad --agent',
+    pkg.scripts['test:backend:db:worker'],
+    'node scripts/test/run-backend-db-worker-check.mjs',
   );
 });
 
