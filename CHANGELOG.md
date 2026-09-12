@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.16] - 2026-09-12
+
+### Changed
+
+- Automated release from PR #249: chore(backend): upgrade ioredis to v6 (https://github.com/abocha/esl-pipeline/pull/249)
+
 ## [10.11.15] - 2026-09-12
 
 ### Changed
