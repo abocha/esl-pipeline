@@ -1,131 +1,127 @@
-# ESL Pipeline Codex Adapter
+# ESL Pipeline Project Orchestration Adapter
 
-This file maps the portable orchestration mechanics in [`ORCHESTRATION.md`](ORCHESTRATION.md) onto
-ESL Pipeline. It is a concise adapter, not a second product or testing manual.
+This is the sole ESL-specific adapter for the portable Codex workflow. Portable workflow mechanics
+belong in `WORKFLOW_MODES.md`, `ORCHESTRATION.md`, and `PLANNING_HANDOFF.md`; durable repository and
+product policies belong in root `AGENTS.md` and the ESL SSOT.
 
 ## Authority and routing
 
-Read selectively in this order; this is a reading route, not descending authority. User/task
-authorization controls scope. The ESL SSOT wins conflicts with repository instruction documents.
+- Repository instructions: root [`AGENTS.md`](../AGENTS.md) is the compact router and repo-wide
+  operating contract.
+- Product/runtime authority: [`docs/reference/agents-ssot.md`](../docs/reference/agents-ssot.md)
+  owns ESL contracts and invariants and wins conflicts with router docs or package READMEs.
+- Documentation: start with [`docs/README.md`](../docs/README.md); use
+  [`docs/reference/DOCS_IA_MAP.md`](../docs/reference/DOCS_IA_MAP.md) only when that category route is
+  unclear, then read the task-specific active document or owning package README.
+- Validation and CI: use
+  [`docs/reference/TESTING_GUIDELINES.md`](../docs/reference/TESTING_GUIDELINES.md) with current
+  repository scripts, manifests, test configuration, and hosted workflow configuration.
+- Release/deployment: use
+  [`docs/backend-frontend/DEPLOYMENT.md`](../docs/backend-frontend/DEPLOYMENT.md), the applicable
+  current [`docs/operations/`](../docs/operations/) runbook, and the SSOT production rules.
 
-1. user/task authorization and an approved plan where applicable;
-2. root [`AGENTS.md`](../AGENTS.md), the ESL router and operating contract;
-3. [`.codex/ORCHESTRATION.md`](ORCHESTRATION.md), portable delegation and review mechanics;
-4. this ESL-specific adapter;
-5. [`docs/README.md`](../docs/README.md) and
-   [`docs/reference/DOCS_IA_MAP.md`](../docs/reference/DOCS_IA_MAP.md) for progressive routing;
-6. the task-specific active doc or owning package README;
-7. [`docs/reference/agents-ssot.md`](../docs/reference/agents-ssot.md), which remains the canonical
-   ESL product/runtime contract and wins on product/runtime conflicts.
+Current code, configuration, and live Git/CI state outrank dated plans, evidence records, and
+archive material for facts that can change.
 
-## Workflow source and adaptation
+## Portable workflow source
 
-Portable source: `D:/code/codex-workflow`. `WORKFLOW_MODES.md` is copied from the portable
-standard. The installed `ORCHESTRATION.md` and `PLANNING_HANDOFF.md` retain reviewed ESL
-adaptations; compare and reconcile upstream changes rather than overwriting them with `-Force`.
-Keep new ESL-specific policy here or in root `AGENTS.md`. Role and skill differences should be
-reviewed separately from formatting-only differences. Model defaults live in `WORKFLOW_MODES.md`.
+The portable authority is `abocha/codex-workflow`; the expected local source is
+`D:/code/codex-workflow` when it reflects current upstream `main`. Reconcile the standard documents
+and portable role definitions from that source instead of maintaining ESL-specific forks. Keep ESL
+facts in this adapter, root `AGENTS.md`, authoritative ESL documentation, or a narrowly triggered
+repository skill.
 
-## Major ownership boundaries
+## Validation mapping
 
-Use current ESL docs and code as source of truth. Common boundaries are:
+### Focused local evidence
 
-- `@esl-pipeline/orchestrator`: canonical pipeline semantics and manifest behavior; route through
-  [`docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`](../docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md),
-  [`docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`](../docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md),
-  and [`docs/reference/pipeline-manifest.md`](../docs/reference/pipeline-manifest.md).
-- `@esl-pipeline/contracts`: public request, response, and transport DTOs.
-- `@esl-pipeline/batch-backend`: durable workflow state, persistence, queueing, authentication, and
-  operational orchestration; start with
-  [`packages/batch-backend/README.md`](../packages/batch-backend/README.md).
-- `@esl-pipeline/batch-frontend`: operator UI over backend-owned state; start with
-  [`packages/batch-frontend/README.md`](../packages/batch-frontend/README.md).
-- provider/runtime packages: provider capability, selection, and adapters, including
-  `provider-runtime`, `tts-*`, `stt-*`, and shared runtime utilities; route provider policy through
-  [`docs/reference/GENERATION_PROVIDER_POLICY.md`](../docs/reference/GENERATION_PROVIDER_POLICY.md).
-- publishing packages: rendered and stored artifacts, including `html-publisher` and
-  `storage-uploader`; preserve orchestrator and manifest contracts.
+Use the narrowest reliable route owned by `docs/reference/TESTING_GUIDELINES.md` and the affected
+package or tool: typically one focused test, `vitest related --run`, or the owning package's test,
+typecheck, lint, or build command. Docs-only work uses the repository-owned documentation lane:
 
-These are common ownership boundaries, not mandatory child assignments.
+```text
+pnpm docs:generate:indexes
+pnpm format
+pnpm docs:check
+```
 
-## Validation routing
+### Broader local evidence
 
-Use [`docs/reference/TESTING_GUIDELINES.md`](../docs/reference/TESTING_GUIDELINES.md) and the runtime
-verification baseline in [`docs/reference/agents-ssot.md`](../docs/reference/agents-ssot.md):
+Broader local or service-backed evidence is conditional, not automatic. Use it only for a concrete
+suspected cross-package/environment failure, an unavailable hosted equivalent, or reproduction of a
+specific hosted-CI failure. `pnpm test:backend:db:worker` is a narrow PostgreSQL/Redis diagnostic,
+not a comprehensive local CI gate.
 
-- run the narrowest focused tests first;
-- use the owning package's focused test, typecheck, lint, or build command while editing and before
-  pushing;
-- use the narrow `pnpm test:backend:db:worker` helper only when PostgreSQL/Redis service behavior
-  needs local diagnosis;
-- use `pnpm docs:generate:indexes`, `pnpm format`, and `pnpm docs:check` for docs-only changes;
-- do not automatically run a repository-wide local gate; broader diagnostics require a concrete
-  suspected cross-package/environment failure, an unavailable hosted equivalent, or reproduction of
-  a specific hosted-CI failure;
-- treat hosted PR CI and the fail-closed `CI gate` as comprehensive merge evidence.
+### Hosted / CI-owned evidence
 
-When a validation command produces structured or persisted evidence, completion handoffs must retain
-the exact local summary/run-directory reference (or hosted run, job, and artifact identity), the
-outcome, outstanding CI/manual/environment-owned requirements, and enough execution-state or
-relevant-delta context for a fresh agent to assess freshness. Follow the detailed evidence reuse
-policy in the validation skill; if continuity cannot be established cheaply, rerun the affected
-scope. Do not treat a `HEAD` value plus a dirty flag as proof that dirty content is unchanged.
+- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) owns comprehensive PR validation and
+  each selected job's exact commands and prerequisites.
+- Every job required by current repository policy must pass; the fail-closed `CI gate` owns the
+  aggregate merge result. Focused local evidence does not establish merge readiness.
 
-Docs-only harness changes use the docs-specific lanes selected by `AGENTS.md`; do not run broad
-application or service integration merely for ceremony.
+### Manual or environment-owned evidence
+
+Runtime, provider, browser, media, migration, and deployment checks remain manual or
+environment-owned when their current guide says so. Destructive install, upgrade, migration,
+restore, and data checks require an explicitly suitable disposable or operator-approved environment.
+
+## Common ownership boundaries
+
+- Orchestrator/manifest semantics: `packages/orchestrator`; route through
+  `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`,
+  `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`, and
+  `docs/reference/pipeline-manifest.md`.
+- Public contracts: `packages/contracts` and transport consumers; `@esl-pipeline/contracts`,
+  manifest compatibility rules, and the ESL SSOT remain authoritative.
+- Backend workflow/persistence: `packages/batch-backend` owns PostgreSQL, Redis, queues, workers,
+  auth, operational orchestration, and durable workflow state; start with its README.
+- Frontend workflow: `packages/batch-frontend` is the operator UI over backend-owned persisted
+  truth; start with its README.
+- Provider/runtime adapters: `provider-runtime`, `tts-*`, `stt-*`, shared runtime utilities, and
+  provider adapters; route through `docs/reference/GENERATION_PROVIDER_POLICY.md`,
+  `docs/reference/env.md`, and orchestrator capability contracts.
+- Publishing: `html-publisher`, `storage-uploader`, rendered/stored artifacts, and publication
+  consumers; preserve orchestrator, manifest, and backend-persisted publication truth.
+
+These are repository maps, not mandatory child assignments.
 
 ## Exceptional-risk surfaces
 
-Route narrow Sol review only when the actual diff contains a concrete risk. High-signal ESL routes
-include:
+- Migrations/schema: use versioned migrations; include `packages/batch-backend/schema.sql` and
+  current contract verification when applicable.
+- Public contracts: treat DTO, manifest, compatibility, and versioning changes explicitly; route
+  release compatibility through `docs/reference/VERSIONING_MODEL.md`.
+- Auth/privacy: preserve authenticated backend/operator boundaries, secret handling, and fail-safe
+  environment defaults.
+- Durable state/data integrity: PostgreSQL/backend persistence, action history, lineage,
+  publication truth, replay, backup, and restore remain backend-owned.
+- Concurrency/idempotency: cover queue workers, retries, mutual exclusion, rollback, and competing
+  operation orderings for affected shared mutable state.
+- Provider credentials/configuration: preserve namespaced environment contracts, capabilities,
+  quotas, and fail-safe defaults.
+- Production/destructive operations: use the deployment guide, applicable current operations
+  runbook, and the narrowly triggered deployment checklist skill.
 
-- migrations or schema: versioned migrations, `packages/batch-backend/schema.sql`, and contract
-  verification requirements in `agents-ssot.md`;
-- public DTOs and contracts: `@esl-pipeline/contracts`, manifest fields, compatibility, and
-  [`docs/reference/VERSIONING_MODEL.md`](../docs/reference/VERSIONING_MODEL.md);
-- auth, security, and privacy: authenticated backend/operations surfaces, secret handling, and
-  [`docs/reference/env.md`](../docs/reference/env.md);
-- durable workflow state and data integrity: backend persistence, action history, lineage, backup,
-  restore, and replay paths;
-- concurrency and idempotency: queue workers, retries, mutual exclusion, rollback, and both relevant
-  operation orderings for shared mutable state;
-- provider credentials and configuration: namespaced environment contracts, provider capabilities,
-  quotas, and fail-safe defaults;
-- production, deployment, or destructive operations:
-  [`docs/backend-frontend/DEPLOYMENT.md`](../docs/backend-frontend/DEPLOYMENT.md) and the applicable
-  runbook under [`docs/operations/`](../docs/operations/).
+Portable review routing remains owned by `ORCHESTRATION.md`; these entries identify ESL risk, not a
+second review choreography.
 
-## Mutation authorization
+## Mutation and operational boundaries
 
-- Delegated workers may edit only when the task explicitly authorizes delegated writes and only
-  within their assigned files or responsibility.
-- Workers never create worktrees, commits, branches, pushes, pull requests, releases, deployments,
-  destructive operations, or external mutations by default.
-- The primary owns integration, repository-level validation, and any Git or external mutation that
-  the user separately authorizes.
-- Preserve dirty and unrelated user work. Stop before overlapping or overwriting unknown changes.
+- Root `AGENTS.md` controls repository and external mutation authorization. Preserve dirty or
+  unrelated user work; ordinary local-edit permission does not authorize Git, GitHub, release,
+  deployment, destructive, or production actions.
+- The developer laptop is the normal edit, debug, test, integration, and migration-test
+  environment. Git commits plus required hosted CI are the source of deployable code.
+- The AWS Lightsail VPS is production runtime, not a normal development/full-test environment.
+  Deployment is a separate operator action using reviewed migrations, pull-based immutable images,
+  recorded versions, health checks, and current runbooks.
+- Keep production data outside the application checkout; do not make server-local application edits
+  or manually mutate files in running containers as normal procedure.
+- Broad local OS access such as `danger-full-access` does not expand behavioral or mutation
+  authority. The instruction chain, role contract, and task authorization remain controlling, and
+  user-level Codex configuration is outside repository-task scope.
 
-## Local sandbox policy
+## Repository-specific execution notes
 
-The maintainer currently accepts `danger-full-access` for ordinary local development as a deliberate
-convenience/risk tradeoff. Role mutation boundaries, the active instruction chain, and task
-authorization remain controlling even when effective OS sandbox permissions are broader.
-
-Do not assume explorer or reviewer read-only behavior is technically enforced solely by sandbox
-metadata. Their role contract still prohibits repository or external mutation. Full Access is not
-equivalent in safety to restricted modes; the maintainer may choose restricted or approval modes for
-more sensitive work.
-
-Do not change user-level Codex configuration from repository tasks.
-
-## Primary integration notes
-
-- For plan-backed execution, treat the approved implementation plan as the scope and acceptance
-  contract, not a mandatory agent-per-task script. For goal-backed orchestration, the approved Goal
-  Contract is the durable scope and completion contract; the current implementation plan is revisable
-  strategy.
-- Prefer the smallest useful role set and fresh child contexts for heterogeneous registered roles.
-- Run the proportionate ESL repository gate before expensive Sol review when applicable.
-- Use a final whole-branch Terra review only for substantial multi-boundary work where cross-boundary
-  regressions are genuinely plausible.
-- Report actual validation, CI-owned requirements, manual checks, and unresolved runtime ambiguity.
+Historical evidence and archives do not preserve retired commands or gates. Re-discover current
+validation, release, and operational procedure from the active owners above.

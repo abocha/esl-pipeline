@@ -4,270 +4,211 @@
 
 Choose the control loop before choosing agents.
 
-The workflow has three useful modes. Do not force a bounded question into a multi-agent plan, and do not run a large known implementation as a sequence of disconnected one-off probes.
+Use the lightest mode that can produce the next useful evidence-backed result.
 
-| Mode                     | Use when                                                                                                                                                                      | Default control loop                                                                           |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Atomic task**          | One bounded question, investigation, edit, or report can produce a useful result.                                                                                             | One prompt -> one result. Use the lightest capable model/thread.                               |
-| **Exploratory campaign** | Several related questions sit under one umbrella, but each answer determines what is worth asking or changing next.                                                           | Maintainer + ChatGPT steer; Codex threads are bounded probes or implementers.                  |
-| **Goal execution**       | The desired outcome and acceptance boundary are stable enough, and reaching them requires several dependent implementation steps. The path may be known or expected to adapt. | Approved design/plan -> Sol-medium primary orchestrator -> smallest useful delegated role set. |
+| Mode | Use when | Default control loop |
+| --- | --- | --- |
+| **Atomic task** | One bounded question, investigation, edit, or report can produce the useful result. | One coherent task -> one result. |
+| **Exploratory campaign** | Several related questions share an umbrella, but each result determines what is worth investigating or changing next. | Maintainer + ChatGPT steer; Codex owns bounded probes or consequences. |
+| **Goal execution** | The desired outcome and acceptance boundary are stable enough, and several dependent implementation boundaries need coordination. | Approved handoff -> primary orchestration -> coherent implementation/review boundaries -> integration. |
 
-`ORCHESTRATION.md` and `PLANNING_HANDOFF.md` primarily govern **Goal execution**. Atomic tasks and exploratory campaigns should not manufacture an implementation plan or primary orchestrator merely to conform to that workflow.
+`PLANNING_HANDOFF.md` and `ORCHESTRATION.md` primarily govern Goal execution.
+
+Do not manufacture a plan, durable goal, primary orchestrator, delegation, or review simply because the workflow supports them.
 
 ## Model and environment selection
 
 Model selection is a revisable operating default, not an ownership or authorization rule.
-Keep ChatGPT Sol High as the default discussion and planning environment when it fits the
-maintainer's access and quota. Keep Codex Sol Medium as the initial ordinary coordination
-default and retain the registered Luna/Terra implementation and Terra/Sol review roles.
 
-Use Codex Astra selectively for difficult repository-grounded decisions, contradictory evidence,
-elusive bugs, or consequential design questions that need repeated local inspection. Start with
-Low for bounded assessments; try Medium for difficult interacting-component investigations.
-These are trial defaults, not measured rankings or guarantees about Plus quota. Increase effort
-when the reasoning problem warrants it. Do not require a cheaper failed attempt before choosing
-Astra for an already clearly difficult problem, or add a mandatory Astra review layer.
+Keep ChatGPT Sol High as the default discussion and planning environment when it fits the maintainer's access and quota.
 
-Once the difficult uncertainty is resolved, normally hand routine implementation and tool execution
-to cheaper roles. This is a default, not an invariant: Astra may remain the root orchestrator while
-continued Astra-level judgment, newly changing evidence, or preservation of expensive decision state
-materially warrants its active-context carrying cost.
+Keep Codex Sol Medium as the ordinary coordination default, with the registered Luna/Terra implementation roles and Terra/Sol review roles.
 
-Let planning happen where the evidence is. A bounded Codex investigation may develop an
-evidence-backed recommendation; return to ChatGPT when discussion benefits from it, without
-requiring a round trip for routine execution. The human retains approval of material design
-and scope decisions. Suggest manual commands when quick and convenient for the maintainer;
-use Codex when gathering and interpreting evidence forms a coherent investigation.
+Use Codex Astra selectively for difficult repository-grounded decisions, contradictory evidence, elusive bugs, or consequential design questions requiring repeated local inspection.
 
-Evaluate naturally occurring tasks by uncertainty resolved, rework avoided, and maintainer
-intervention. Quota observations are useful but token counts and API prices are not exact
-Plus-usage conversions. Do not manufacture work for benchmarking or change registered roles
-merely to try Astra as the primary.
+Trial defaults:
 
-## 1. Select the mode from uncertainty, not task size
+- Astra Low for bounded difficult assessments;
+- Astra Medium for difficult interacting-component investigations.
 
-Use **Atomic task** when the next useful result is already clear and bounded.
+These are operating defaults, not measured rankings or quota guarantees. Do not require a cheaper failed attempt before using Astra on an already clearly difficult problem, and do not create a mandatory Astra review layer.
 
-Use **Exploratory campaign** when the umbrella is clear but a truthful task list cannot be written yet because the next question depends on current evidence. Typical examples include maintenance triage, toolchain simplification, repository archaeology, migration feasibility, and deciding whether suspicious architecture should change at all.
+Once difficult uncertainty is resolved, routine implementation and tool execution can normally move to cheaper registered roles. Keep Astra active when continued high-level judgment, changing evidence, or preservation of expensive decision state materially justifies that context.
 
-### Atomic implementation discipline
+Planning may happen where the evidence is. Return to ChatGPT when discussion, synthesis, prioritization, or approval benefits from it. Routine execution needs no mandatory round trip.
 
-Atomic work does not imply strict red-green TDD. Choose the cheapest reliable feedback loop for the
-actual risk and uncertainty.
+Use manual commands when they are genuinely the cheapest path for the maintainer. Use Codex when evidence gathering and interpretation form a coherent repository investigation.
 
-- Prefer test-first work for reproducible bug fixes and durable behavior changes where a regression
-  would be costly or subtle, especially contracts, state transitions, persistence, concurrency,
-  authentication/authorization, money, data integrity, or edge-case-heavy business logic.
-- For small standalone tools or scripts, exploratory utilities, spikes/prototypes, one-off automation,
-  or code whose useful shape is still being discovered, prefer a smallest working vertical slice
-  against real inputs first. Validate observable behavior, then add focused regression tests around
-  stable or expensive-to-break logic before treating it as durable.
-- Documentation, configuration, mechanical edits, existing sufficient regression coverage, deterministic
-  fixture/output checks, compilation, linting, or another cheaper direct oracle may provide the
-  proportionate evidence for a bounded change.
-- Do not invoke strict TDD solely because code is being written or a generic TDD skill is available.
-  Repository policy, task risk, and the lowest-cost reliable evidence path control the discipline.
+Do not infer Plus/Codex quota from API pricing or logged token counts, and do not manufacture repository work for model benchmarking.
 
-Use **Goal execution** when the desired outcome and acceptance boundary are stable enough that implementation can be decomposed without repeatedly reopening what success means. The full future implementation path does not need to be known when the path is expected to adapt under a stable outcome. If the desired outcome or whether to pursue it is still unresolved, remain in **Exploratory campaign**.
+## 1. Select from uncertainty, not task size
 
-### Goal execution variants
+### Atomic task
 
-Goal execution has two variants; it is still one top-level workflow mode.
+Use Atomic task when the next useful result is already clear and bounded.
 
-**Plan-backed execution** remains the normal default. Use it when the desired change is contained, the implementation path is sufficiently known, and an approved implementation plan is a good scope and acceptance contract. Durable goal state would add more ceremony than information.
+A small diff can require expensive reasoning, while a large mechanical change can be straightforward once uncertainty is removed. Route by discovery cost, semantic coupling, and consequence rather than expected file count or diff size.
 
-```text
-approved design + implementation plan
-        -> Sol-medium primary
-        -> coherent implementation/review boundaries
-        -> final integration and validation
-```
+Atomic work does not require strict red-green TDD.
 
-**Goal-backed orchestration** is optional and requires explicit user selection or approval. Use it when the outcome is already stable and verifiable, but the execution strategy is expected to change materially as repository evidence emerges; several dependent ownership boundaries or root turns may be needed; durable outcome state across a long-lived primary agent is useful; and outcome-level completion is distinct from exhausting the current task list.
+Choose the cheapest reliable evidence loop for the actual risk:
 
-```text
-approved Goal Contract + known decisions + current plan/evidence
-        -> goal-backed Sol-medium primary
-        -> adaptive plans, tasks, and coherent children
-        -> periodic outcome audits
-        -> final outcome evidence and goal completion
-```
+- use test-first reproduction when a bug or durable behavior change has subtle or expensive regression risk;
+- use a small working vertical slice first for exploratory tools, prototypes, one-off automation, or behavior whose useful shape is still being discovered;
+- use deterministic fixtures, compilation, linting, existing coverage, documentation checks, or another direct oracle when they provide sufficient evidence for a bounded change.
 
-Goal-backed orchestration is not a reason to promote a fuzzy umbrella prematurely, and ordinary bounded or merely multi-step work should not create a durable goal. The goal is the stable completion boundary; the plan and current task routing remain revisable strategy under it. See `PLANNING_HANDOFF.md` and `ORCHESTRATION.md` for the handoff and execution rules.
+Do not invoke strict TDD merely because code is being written or a generic skill exists. Repository policy and actual risk control validation.
 
-A three-line change can require expensive exploration. A large implementation can become mechanical once uncertainty is removed. Route by **discovery cost and semantic coupling**, not expected diff size.
+### Exploratory campaign
+
+Use Exploratory campaign when the umbrella is clear but a truthful implementation plan cannot yet be written because the next useful question depends on current evidence.
+
+Typical examples include maintenance triage, repository archaeology, tooling simplification, migration feasibility, elusive bug investigation, or deciding whether suspicious architecture should change at all.
+
+The result of an exploratory probe may be implementation, another investigation, KEEP, or DEFER. Exploration is not required to produce a diff.
+
+### Goal execution
+
+Use Goal execution when the desired outcome and acceptance boundary are stable enough that dependent implementation can proceed without repeatedly reopening WHAT success means.
+
+If WHAT success means or WHETHER to pursue it remains unresolved, stay exploratory.
+
+Goal execution has two variants.
+
+**Plan-backed execution** is the default when the implementation path is sufficiently known and an approved implementation plan is a useful scope and acceptance contract.
+
+**Goal-backed orchestration** is optional and requires explicit approval. Use it when the outcome is stable and verifiable but the implementation strategy is expected to adapt materially from repository evidence, several dependent boundaries or root turns may be needed, durable outcome state is useful, and outcome completion is meaningfully different from exhausting the current task list.
+
+The goal defines the stable completion boundary. Plans and task routing remain revisable strategy beneath it.
+
+See `PLANNING_HANDOFF.md` for the handoff contract and `ORCHESTRATION.md` for execution mechanics.
 
 ## 2. Change modes when the problem changes
 
 Modes are not sticky.
 
-Promote an exploratory campaign to Goal execution when:
+Promote exploration to Goal execution when:
 
 - a concrete desired outcome and acceptance boundary have emerged;
-- several dependent edits now need coordinated implementation;
-- integration, sequencing, or shared contracts have become the main risk;
-- preserving one approved plan, or one approved durable outcome with an adaptive strategy, is cheaper than continued human-by-human steering.
+- dependent implementation boundaries now need coordination;
+- integration or shared contracts have become the main execution risk; and
+- preserving one approved completion contract is cheaper and safer than continued one-result-at-a-time steering.
 
-Do not keep probing after the work has crystallized. Stop, capture the approved behavior and acceptance boundary, choose the appropriate Goal-execution variant, and launch it. Perfect knowledge of every future implementation step is not required for goal-backed execution, but fuzzy WHAT/WHETHER questions still belong in Exploratory campaign.
+Do not keep probing merely because exploration has momentum.
 
-Conversely, do not preserve orchestration ceremony when a remaining task has collapsed into one independent bounded action.
+Conversely, when remaining work collapses into one bounded independent action, stop paying orchestration overhead and treat it atomically.
 
-## 3. Exploratory campaigns use ChatGPT as the controller/notebook
+Goal-backed execution does not require perfect knowledge of every future implementation step. It does require stable WHAT and WHY.
 
-In an exploratory campaign, the stable control plane is normally the maintainer + ChatGPT conversation. A bounded local investigation may own successive evidence-dependent probes and recommendations when this avoids repeated manual handoffs; the maintainer still controls priorities and material decisions.
+## 3. Exploratory campaigns
 
-Use it to retain:
+The stable control plane for an exploratory campaign is normally the maintainer + ChatGPT conversation.
 
-- the umbrella goal;
-- what has already been investigated;
+Use it to preserve:
+
+- the umbrella question;
+- important evidence already obtained;
 - decisions and rejected alternatives;
 - deferred items and reconsideration triggers;
-- branch/commit state;
-- which Codex threads hold useful active context or recoverable historical evidence;
+- useful repository or branch state;
+- which active contexts retain expensive relevant evidence;
 - the next question worth spending effort on.
 
-Codex tasks in this mode are normally **one prompt, one result**. They may investigate or implement a bounded consequence, but they do not need a Sol primary orchestrator simply because several probes belong to the same maintenance umbrella.
+A bounded Codex investigation may own several successive evidence-dependent probes when keeping that local context is cheaper than repeated handoffs.
 
-The maintainer is part of the scheduler, not merely an authorization gate. Human judgment about whether two changes belong in one PR, whether a context is still hot, or whether another probe is worth its cost is valid routing evidence.
+The maintainer remains part of the scheduler and controls material product, design, scope, and priority decisions.
 
-## 4. Choose context from working-set economics
+### KEEP, CHANGE, and DEFER
 
-Distinguish the active working context that the model must carry through the next response from
-historical evidence that remains recoverable without staying continuously active. Depending on
-runtime support and the task, choose among:
+An investigation succeeds when it reduces uncertainty.
 
-- continuing the active context;
-- reducing or rolling over the active working set while preserving recoverable history; or
-- starting a fresh independent context.
+Valid outcomes are:
 
-Choose from active-context carrying cost, rediscovery cost, historical recoverability, the value of
-independence, and model cost. Do not encode token or context-size crossover thresholds as policy.
+- **KEEP:** current behavior or tooling remains the best fit;
+- **CHANGE:** a bounded improvement is justified;
+- **DEFER:** the direction may be valid, but present value, evidence, or risk does not justify implementation.
 
-Continue an existing active context when:
+Preserve counterintuitive or expensive KEEP/DEFER rationale when it is likely to recur. Record concrete reconsideration triggers rather than archiving an entire investigation transcript.
 
-- it already owns the evidence needed for the next step;
-- the next step is a direct, bounded consequence of its finding;
-- scope and authorization are clear;
-- rediscovery would dominate the work.
+### Stopping rule
 
-Examples: an investigator implements its own tiny cleanup recommendation; a repository-debris auditor removes only the approved artifacts it already proved obsolete; a context-holding worker composes the final PR summary.
+Before another probe, identify what unresolved decision or evidence gap its result can change.
 
-Prefer a fresh independent context when:
+Continue while the expected value of the next probe is meaningfully positive.
 
-- the problem changes domain or ownership boundary;
-- independent skepticism is materially valuable;
-- the current context is stale, confused, or overloaded;
-- a different model capability is actually needed.
+Stop when available evidence is sufficient for the current decision. Do not turn exploration into permanent repository archaeology.
 
-Use rollover or active-working-set reduction when the current decision state remains valuable but
-carrying the whole active context no longer does. Reuse context for execution; buy fresh context for
-skepticism only when skepticism is worth buying.
+## 4. Context economics
+
+Choose context from the cost of the next useful decision rather than fixed token thresholds.
+
+Consider:
+
+- active-context carrying cost;
+- rediscovery cost;
+- historical recoverability;
+- value of independent skepticism;
+- model capability;
+- tool/delegation churn;
+- maintainer attention.
+
+Continue an active context when it already owns expensive relevant evidence and the next step is a direct bounded consequence.
+
+Prefer fresh context when the problem moves to a different ownership boundary, meaningful independent skepticism is useful, the existing context has become stale or confused, or another model capability is genuinely needed.
+
+When runtime support allows reducing the active working set while retaining recoverable history, use that option when the decision state remains valuable but carrying all active context does not.
+
+Freshness is a tool, not a ritual. Reuse context for execution when rediscovery would dominate; buy fresh context when independence is worth buying.
 
 ### Continuation prompts are deltas
 
 A fresh thread needs a self-contained assignment.
 
-An active continuation usually needs only:
+An active continuation normally needs only:
 
-- the decision/authorization that changed;
+- the new decision or authorization;
 - the exact next deliverable;
-- any narrowed scope or non-goals;
-- required validation or commit boundary.
+- changed or narrowed scope;
+- new external evidence the context has not seen;
+- task-specific completion or validation requirements.
 
-Do not replay the agent's own investigation back to it as a long contract.
+Do not replay the context's own findings back to it as a long prompt.
 
-## 5. Investigation is allowed to conclude KEEP or DEFER
+## 5. Time-sensitive premises
 
-An investigation is successful when it reduces uncertainty, not when it produces a diff.
+When implementation depends on a moving external fact such as a current stable release, runtime, model, API, or platform capability, verify that premise from an authoritative current source before freezing it into a plan or change.
 
-Useful outcomes are:
+Prefer requirements such as "upgrade to the current stable release; verify the target first" when the exact version may change before execution.
 
-- **KEEP**: current behavior/tooling remains the best fit;
-- **CHANGE**: a bounded improvement is justified;
-- **DEFER**: a direction may be valid, but current evidence, value, or risk does not justify implementation now.
+Do not replace repository or external evidence with remembered version numbers.
 
-A good exploratory report should provide enough decision information to choose the next move:
+## 6. Review follows residual risk
 
-- finding and confidence;
-- current evidence;
-- cost/benefit;
-- remaining uncertainty;
-- recommendation;
-- plausible next action;
-- reason not to act.
+A completed diff does not automatically require an independent reviewer.
 
-Counterintuitive or expensive KEEP/DEFER decisions should be preserved in lightweight repository documentation when they are likely to recur. Record the reason and concrete triggers for reconsideration rather than archiving the whole investigation.
+Review is valuable when meaningful semantic uncertainty remains, especially around interacting components, failure handling, security/authorization, privacy, persistent data, migrations, concurrency, retry/idempotency, destructive operations, or other high-consequence behavior.
 
-## 6. Verify time-sensitive premises before hard-coding them
+Strong focused evidence and mechanically constrained implementation may make dedicated review low-value for a bounded task.
 
-When the task depends on `latest`, `current stable`, a current runtime, or another moving external fact, verify that premise from an authoritative current source before writing the implementation prompt.
+Do not create a fresh implementer merely to manufacture independence. When independent challenge is useful, obtain it at review time.
 
-Prefer prompts such as "upgrade to the current stable release; verify the target first" over hard-coded remembered versions when publication state can change between planning and execution.
+For substantial work, cumulative cross-boundary risk may justify integration review even when individual changes were each locally simple.
 
-## 7. Review follows residual semantic risk
+Detailed delegated-review routing belongs in `ORCHESTRATION.md`.
 
-A completed diff does not automatically deserve a reviewer.
+## 7. Keep the modes asymmetric
 
-Review is valuable when unresolved semantic risk remains: cross-component interaction, failure handling, security/auth, privacy, persistent-data integrity, migrations, concurrency, retry/idempotency, destructive operations, or similarly consequential behavior.
-
-Strong focused tests, explicit before/after behavior, mechanically constrained edits, and repository-level validation can make a dedicated review low-value for a bounded change.
-
-The same investigator may implement its own low-risk recommendation. If independent challenge matters, obtain it at review time rather than forcing a fresh implementer solely to manufacture independence.
-
-Before final integration, also consider **cumulative branch risk**. Several individually safe commits can collectively cross enough ownership boundaries that one whole-branch review becomes useful. File count alone is not the criterion.
-
-## 8. Commit boundaries are cheaper than PR boundaries
-
-Use separate commits when work has a distinct rationale, rollback unit, or review story.
-
-Use separate PRs when risk, review requirements, release/deployment sequencing, merge independence, or reviewability materially differ.
-
-Do not pay branch -> PR -> CI -> merge -> resync overhead for every small coherent cleanup merely because it deserves its own commit.
-
-## 9. Treat flaky broad-gate evidence honestly
-
-When a broad gate hits a known timing-sensitive/interference failure:
-
-1. record the actual broad failure;
-2. isolate the failing test or narrow boundary once;
-3. if the isolated result and surrounding evidence support the known-flake classification, report that evidence;
-4. do not repeatedly rerun the broad suite only to obtain a green summary.
-
-If the isolated test also fails, or the changed area plausibly caused the failure, investigate normally.
-
-## 10. Exploratory campaigns need a stopping rule
-
-Do not ask "have we inspected everything?" Ask whether the **expected value of the next probe is still clearly positive**.
-
-Before another round, identify:
-
-- what signal suggests something useful remains;
-- what class of improvement the probe is looking for;
-- what result would make the campaign stop.
-
-An optional final closure sweep can be useful when there is a concrete signal, such as obvious repository/tooling residue. It should remain bounded rather than becoming permanent archaeology.
-
-### Repository-debris audit pattern
-
-For a read-only junk/residue sweep, classify candidates as:
-
-- **SAFE TO DELETE**: strong evidence of no current consumer;
-- **PROBABLY DELETE, VERIFY ONE THING**: one explicit uncertainty remains;
-- **SUSPICIOUS BUT KEEP**: looks stale but still has a purpose or meaningful deletion risk;
-- **NOT JUNK / FALSE POSITIVE**: tempting artifact that is clearly intentional.
-
-For each deletion candidate, establish origin/owner, current callers or references, behavioral effect of deletion, and confidence. "No grep result" alone is not enough for manual operational artifacts.
-
-## 11. Keep the modes asymmetric
-
-Superpowers-style design, implementation planning, and a Sol primary orchestrator are powerful when a substantial **Goal execution** problem needs them. Plan-backed execution is the default; goal-backed orchestration pays for its extra durable state only when adaptive, long-lived execution and outcome-level completion evidence justify it. Both are overhead when the work is atomic or when an exploratory campaign has not yet discovered what should be implemented.
-
-The lightest safe workflow wins:
+The three modes solve different problem shapes:
 
 ```text
-bounded result known      -> Atomic task
-next question depends on evidence -> Exploratory campaign
-stable outcome + dependent implementation -> Goal execution
+bounded result already clear
+    -> Atomic task
+
+next useful question depends on evidence
+    -> Exploratory campaign
+
+stable outcome + dependent implementation
+    -> Goal execution
 ```
 
-Do not turn a useful method into ceremony by applying it outside the problem shape it was designed for.
+Do not turn a useful workflow into ceremony by applying its most expensive machinery outside the problem shape it was designed for.
