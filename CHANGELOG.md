@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.12] - 2026-09-12
+
+### Changed
+
+- Automated release from PR #242: fix(stt): preserve ElevenLabs non-speech events (https://github.com/abocha/esl-pipeline/pull/242)
+
 ## [10.11.11] - 2026-09-12
 
 ### Changed
