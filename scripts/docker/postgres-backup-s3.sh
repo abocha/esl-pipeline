@@ -2,9 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEFAULT_BACKUP_DIR="${ROOT_DIR}/tmp/backups/postgres"
 DEFAULT_RESTORE_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-backup-restore.sh"
 DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
+COMMON_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-ops-common.sh"
+
+# shellcheck source=scripts/docker/postgres-ops-common.sh
+. "$COMMON_SCRIPT"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
 if [[ -f "$ENV_FILE" ]]; then
@@ -14,7 +17,8 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-BACKUP_DIR="${PG_BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
+HOST_STATE_DIR="$(pg_backup_resolve_host_state_dir)"
+BACKUP_DIR="${PG_BACKUP_DIR:-${HOST_STATE_DIR}/backups/postgres}"
 RESTORE_SCRIPT="${PG_BACKUP_LOCAL_SCRIPT:-$DEFAULT_RESTORE_SCRIPT}"
 DB_NAME="${PG_DATABASE:-esl_batch}"
 
@@ -47,10 +51,12 @@ Usage:
   postgres-backup-s3.sh backup-upload [label] [--from-latest]
   postgres-backup-s3.sh upload-latest
   postgres-backup-s3.sh list-remote
-  postgres-backup-s3.sh restore-remote <s3://bucket/key.dump|key.dump> [--clean] [--download-only]
+  postgres-backup-s3.sh verify-remote <s3://bucket/key.dump|key.dump>
+  postgres-backup-s3.sh restore-remote <s3://bucket/key.dump|key.dump> [--clean]
 
 Environment overrides:
-  PG_BACKUP_DIR            (default: <repo>/tmp/backups/postgres)
+  PG_BACKUP_HOST_STATE_DIR (default: XDG state home/esl-pipeline/ops; host path only)
+  PG_BACKUP_DIR            (default: <host-state>/backups/postgres)
   PG_BACKUP_LOCAL_SCRIPT   (default: <repo>/scripts/docker/postgres-backup-restore.sh)
   PG_BACKUP_ENV_FILE       (default: <repo>/.env when present)
   PG_DATABASE              (default: esl_batch)
@@ -66,7 +72,8 @@ Environment overrides:
 Notes:
   - backup-upload creates a new local backup by default, then uploads all four backup artifacts.
   - --from-latest reuses the latest local .dump set without creating a new backup.
-  - restore-remote downloads a .dump + .sha256, verifies digest, then delegates to postgres-backup-restore.sh.
+  - verify-remote downloads a .dump + .sha256 and verifies the digest without restoring it.
+  - restore-remote performs the same integrity check, then delegates to postgres-backup-restore.sh.
   - completion Telegram notifications reuse PG_BACKUP_ALERT_TELEGRAM_* config.
 USAGE
 }
@@ -192,7 +199,7 @@ emit_completion_notification() {
   fi
   now_utc="$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 
-  if [[ "$NOTIFY_ACTION" != "backup-upload" && "$NOTIFY_ACTION" != "restore-remote" ]]; then
+  if [[ "$NOTIFY_ACTION" != "backup-upload" && "$NOTIFY_ACTION" != "restore-remote" && "$NOTIFY_ACTION" != "verify-remote" ]]; then
     return 0
   fi
   if is_notification_suppressed; then
@@ -202,6 +209,7 @@ emit_completion_notification() {
   case "$NOTIFY_ACTION" in
     backup-upload) action_title="Backup Upload" ;;
     restore-remote) action_title="Remote Restore" ;;
+    verify-remote) action_title="Remote Artifact Integrity Check" ;;
     *) action_title="$NOTIFY_ACTION" ;;
   esac
   if [[ "$status" == "success" ]]; then
@@ -247,7 +255,7 @@ EOF
       message+=$'\n'"<b>Override</b> ⚠️ <code>PG_BACKUP_ALLOW_EMPTY_SOURCE=true</code>"
     fi
   fi
-  if [[ "$NOTIFY_ACTION" == "restore-remote" ]]; then
+  if [[ "$NOTIFY_ACTION" == "restore-remote" || "$NOTIFY_ACTION" == "verify-remote" ]]; then
     esc_restore_mode="$(html_escape "${NOTIFY_RESTORE_MODE:-unknown}")"
     message+=$'\n\n'"<b>Mode</b> <code>${esc_restore_mode}</code>"
   fi
@@ -278,7 +286,7 @@ EOF
 on_exit() {
   local rc="$1"
   set +e
-  if [[ "$NOTIFY_ACTION" == "backup-upload" || "$NOTIFY_ACTION" == "restore-remote" ]]; then
+  if [[ "$NOTIFY_ACTION" == "backup-upload" || "$NOTIFY_ACTION" == "restore-remote" || "$NOTIFY_ACTION" == "verify-remote" ]]; then
     if [[ "$rc" -eq 0 ]]; then
       emit_completion_notification "success" "$rc"
     else
@@ -614,7 +622,6 @@ do_list_remote() {
 do_restore_remote() {
   local input="$1"
   local clean_mode="$2"
-  local download_only="$3"
 
   NOTIFY_STEP="validate_s3_config"
   require_s3_base_config
@@ -626,13 +633,6 @@ do_restore_remote() {
   NOTIFY_SOURCE="$input"
   NOTIFY_TARGET="$local_dump"
 
-  if [[ "$download_only" == "true" ]]; then
-    NOTIFY_RESTORE_MODE="download_only"
-    NOTIFY_STEP="download_only_complete"
-    echo "Download + checksum verification complete: $local_dump"
-    return
-  fi
-
   NOTIFY_RESTORE_MODE="apply_restore"
   NOTIFY_STEP="restore_local_database"
   if [[ "$clean_mode" == "true" ]]; then
@@ -641,6 +641,23 @@ do_restore_remote() {
     PG_BACKUP_NOTIFY_SUPPRESS=true "$RESTORE_SCRIPT" restore "$local_dump"
   fi
   NOTIFY_STEP="restore_remote_complete"
+}
+
+do_verify_remote() {
+  local input="$1"
+
+  NOTIFY_STEP="validate_s3_config"
+  require_s3_base_config
+
+  local staging_dir="${BACKUP_DIR}/remote-restore"
+  local local_dump
+  NOTIFY_STEP="download_and_verify_remote_dump"
+  local_dump="$(download_and_verify_dump "$input" "$staging_dir")"
+  NOTIFY_SOURCE="$input"
+  NOTIFY_TARGET="$local_dump"
+  NOTIFY_RESTORE_MODE="download_checksum_only"
+  NOTIFY_STEP="artifact_integrity_complete"
+  echo "Remote artifact download + checksum verification complete: $local_dump"
 }
 
 main() {
@@ -695,6 +712,21 @@ main() {
     list-remote)
       do_list_remote
       ;;
+    verify-remote)
+      NOTIFY_ACTION="verify-remote"
+      NOTIFY_START_EPOCH="$(date -u +%s)"
+      NOTIFY_STEP="parse_verify_remote_args"
+      if [[ "${1:-}" == "--" ]]; then
+        shift
+      fi
+      if [[ $# -ne 1 ]]; then
+        NOTIFY_FAILURE_HINT="verify-remote requires one dump key/uri"
+        echo "ERROR: verify-remote requires <s3://bucket/key.dump|key.dump>" >&2
+        print_usage
+        exit 1
+      fi
+      do_verify_remote "$1"
+      ;;
     restore-remote)
       NOTIFY_ACTION="restore-remote"
       NOTIFY_START_EPOCH="$(date -u +%s)"
@@ -712,16 +744,11 @@ main() {
       local input="$1"
       shift
       local clean_mode="false"
-      local download_only="false"
 
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --clean)
             clean_mode="true"
-            shift
-            ;;
-          --download-only)
-            download_only="true"
             shift
             ;;
           *)
@@ -732,7 +759,7 @@ main() {
         esac
       done
 
-      do_restore_remote "$input" "$clean_mode" "$download_only"
+      do_restore_remote "$input" "$clean_mode"
       ;;
     *)
       echo "ERROR: unknown action: $action" >&2

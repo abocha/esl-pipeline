@@ -58,7 +58,7 @@ interface PendingAdvancedApproval {
   expiresAtMs: number;
   requestedByUserId: number;
   request: OpsActionRequest;
-  sourceCommand: 'backup' | 'drill';
+  sourceCommand: 'backup' | 'integrity';
 }
 
 const ADVANCED_APPROVAL_TTL_MS = 10 * 60 * 1000;
@@ -290,7 +290,7 @@ function decodeApprovalToken(
   if (typeof obj.uid !== 'number' || !Number.isInteger(obj.uid) || obj.uid <= 0) {
     return null;
   }
-  if (obj.sourceCommand !== 'backup' && obj.sourceCommand !== 'drill') {
+  if (obj.sourceCommand !== 'backup' && obj.sourceCommand !== 'integrity') {
     return null;
   }
 
@@ -300,7 +300,7 @@ function decodeApprovalToken(
   }
   if (
     (obj.sourceCommand === 'backup' && action !== 'backup_upload') ||
-    (obj.sourceCommand === 'drill' && action !== 'restore_drill_download_only')
+    (obj.sourceCommand === 'integrity' && action !== 'restore_drill_download_only')
   ) {
     return null;
   }
@@ -320,7 +320,7 @@ function decodeApprovalToken(
 
 async function queueAdvancedApproval(
   context: CommandContext,
-  sourceCommand: 'backup' | 'drill',
+  sourceCommand: 'backup' | 'integrity',
   request: OpsActionRequest,
 ): Promise<void> {
   const nowMs = Date.now();
@@ -506,7 +506,7 @@ function visibleInOpsChat(command: CommandDefinition, config: CommandContext['co
   if (command.command === 'links') {
     return false;
   }
-  if (command.command === 'backup' || command.command === 'drill') {
+  if (command.command === 'backup' || command.command === 'integrity') {
     return config.enableActionCommands;
   }
   if (command.command === 'approve') {
@@ -549,7 +549,10 @@ export function buildGuidedHomeKeyboard(
   if (config.enableActionCommands) {
     rows.push([
       { text: 'Backup', callback_data: encodeGuidedCallback({ kind: 'action', action: 'backup' }) },
-      { text: 'Drill', callback_data: encodeGuidedCallback({ kind: 'action', action: 'drill' }) },
+      {
+        text: 'Artifact integrity',
+        callback_data: encodeGuidedCallback({ kind: 'action', action: 'integrity' }),
+      },
     ]);
   }
 
@@ -559,13 +562,13 @@ export function buildGuidedHomeKeyboard(
 }
 
 export function buildGuidedActionConfirmationKeyboard(
-  action: 'backup' | 'drill',
+  action: 'backup' | 'integrity',
 ): TelegramInlineKeyboardMarkup {
   return {
     inline_keyboard: [
       [
         {
-          text: action === 'backup' ? 'Confirm Backup' : 'Confirm Drill',
+          text: action === 'backup' ? 'Confirm Backup' : 'Confirm Integrity Check',
           callback_data: encodeGuidedCallback({ kind: 'confirm', action }),
         },
       ],
@@ -1008,7 +1011,7 @@ async function guardActionCommandsEnabled(context: CommandContext): Promise<bool
   await sendDomainMessage(
     context,
     'ops',
-    '<b>Action commands disabled</b>\n\nThis bot is running in read-only mode. Enable `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true` to use `/backup` and `/drill`.',
+    '<b>Action commands disabled</b>\n\nThis bot is running in read-only mode. Enable `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true` to use `/backup` and `/integrity`.',
   );
   return false;
 }
@@ -1827,7 +1830,7 @@ function resolveTopicStatus(
 
 export function renderGuidedActionConfirmation(
   context: CommandContext,
-  action: 'backup' | 'drill',
+  action: 'backup' | 'integrity',
 ): {
   html: string;
   replyMarkup: TelegramInlineKeyboardMarkup;
@@ -1843,7 +1846,7 @@ export function renderGuidedActionConfirmation(
 
 export function renderGuidedActionSubmitted(
   context: CommandContext,
-  action: 'backup' | 'drill',
+  action: 'backup' | 'integrity',
 ): {
   html: string;
   replyMarkup: TelegramInlineKeyboardMarkup;
@@ -2352,7 +2355,7 @@ export async function executeBackupAction(context: CommandContext, label?: strin
   await sendDomainMessage(context, 'ops', formatActionQueued(result));
 }
 
-export async function executeDrillAction(context: CommandContext): Promise<void> {
+export async function executeIntegrityAction(context: CommandContext): Promise<void> {
   if (!(await guardActionCommandsEnabled(context))) {
     return;
   }
@@ -2360,7 +2363,7 @@ export async function executeDrillAction(context: CommandContext): Promise<void>
     action: 'restore_drill_download_only',
   };
   if (advancedControlsEnabled(context)) {
-    await queueAdvancedApproval(context, 'drill', request);
+    await queueAdvancedApproval(context, 'integrity', request);
     return;
   }
   const result = await context.backend.enqueueOpsAction(request);
@@ -2621,11 +2624,11 @@ export function createCommandRegistry(args?: {
       },
     },
     {
-      command: 'drill',
-      description: 'Queue restore drill (download-only)',
+      command: 'integrity',
+      description: 'Queue remote backup download + checksum check',
       domain: 'ops',
       async execute(context) {
-        await executeDrillAction(context);
+        await executeIntegrityAction(context);
       },
     },
     {

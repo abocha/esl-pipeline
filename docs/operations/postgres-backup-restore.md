@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating backup/restore locally.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-09-11 repo state.
+- Last Verified Against: 2026-09-13 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after backup script changes.
 - Status: `runbook`.
@@ -34,7 +34,8 @@ For S3 archival + automated scheduling, see
 - Service: `postgres`
 - Database: `esl_batch`
 - User: `esl`
-- Backup directory: `tmp/backups/postgres`
+- Host state root: `${XDG_STATE_HOME:-$HOME/.local/state}/esl-pipeline/ops`
+- Backup directory: `<host-state>/backups/postgres`
 
 Override any default with env vars:
 
@@ -49,7 +50,7 @@ PG_SERVICE_NAME=postgres \
 PG_CONTAINER_NAME=esl-pipeline-postgres-1 \
 PG_DATABASE=esl_batch \
 PG_USER=esl \
-PG_BACKUP_DIR=tmp/backups/postgres \
+PG_BACKUP_HOST_STATE_DIR=/absolute/host/path/esl-pipeline/ops \
 pnpm docker:db:backup
 ```
 
@@ -107,7 +108,7 @@ Messages include operation, status, UTC timestamp, duration, db name, source/tar
 Verify checksum and, for `.dump`, verify TOC readability with `pg_restore -l`:
 
 ```bash
-pnpm docker:db:verify-backup -- tmp/backups/postgres/esl_batch_YYYYMMDD_HHMMSS.dump
+pnpm docker:db:verify-backup -- /host/ops/backups/postgres/esl_batch_YYYYMMDD_HHMMSS.dump
 ```
 
 ## Restore
@@ -115,19 +116,19 @@ pnpm docker:db:verify-backup -- tmp/backups/postgres/esl_batch_YYYYMMDD_HHMMSS.d
 Restore from custom dump (recommended):
 
 ```bash
-pnpm docker:db:restore -- tmp/backups/postgres/esl_batch_YYYYMMDD_HHMMSS.dump
+pnpm docker:db:restore -- /host/ops/backups/postgres/esl_batch_YYYYMMDD_HHMMSS.dump
 ```
 
 Clean restore from custom dump (drops existing objects first):
 
 ```bash
-pnpm docker:db:restore -- tmp/backups/postgres/esl_batch_YYYYMMDD_HHMMSS.dump --clean
+pnpm docker:db:restore -- /host/ops/backups/postgres/esl_batch_YYYYMMDD_HHMMSS.dump --clean
 ```
 
 Restore from plain SQL:
 
 ```bash
-pnpm docker:db:restore -- tmp/backups/postgres/esl_batch_YYYYMMDD_HHMMSS.sql.gz
+pnpm docker:db:restore -- /host/ops/backups/postgres/esl_batch_YYYYMMDD_HHMMSS.sql.gz
 ```
 
 Notes:

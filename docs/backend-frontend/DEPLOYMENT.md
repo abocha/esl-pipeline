@@ -419,8 +419,9 @@ chosen a non-sensitive key.
 - Daily backup archival to S3:
   - local/dev stack: `pnpm docker:db:backup:s3:scheduled`
   - production Compose one-shot: `pnpm docker:prod:db:backup:s3 -- <label>`
-  - production Compose list/drill: `pnpm docker:prod:db:list:s3` and
-    `pnpm docker:prod:db:restore:s3 -- <key.dump> --download-only`
+  - production Compose listing: `pnpm docker:prod:db:list:s3`
+  - remote download/checksum evidence: `pnpm docker:db:artifact-integrity -- <key.dump>`
+  - isolated PostgreSQL 18.6 restore/read evidence: `pnpm docker:db:restore-drill -- <key.dump>`
 - Ops health status:
   - `pnpm ops:status`
 - Alert check (Telegram + cooldown/recovery):

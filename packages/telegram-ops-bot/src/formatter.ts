@@ -142,8 +142,8 @@ export function formatOpsStatus(status: OpsStatusResponse): string {
     `<code>${escapeHtml(status.checkedAtUtc)}</code>`,
     '',
     `<b>Backup</b> ${escapeHtml(status.backup.state)} • ${escapeHtml(status.backup.reason)}`,
+    `<b>Artifact integrity</b> ${escapeHtml(status.artifactIntegrity.state)} • ${escapeHtml(status.artifactIntegrity.reason)}`,
     `<b>Drill</b> ${escapeHtml(status.restoreDrill.state)} • ${escapeHtml(status.restoreDrill.reason)}`,
-    `<b>Keys</b> ${escapeHtml(status.keyRotation.state)} • ${escapeHtml(status.keyRotation.reason)}`,
     '',
     `<b>Reasons</b>`,
     ...reasons.map((reason) => `• ${escapeHtml(reason)}`),
@@ -618,7 +618,7 @@ export function formatCommandError(message: string): string {
 }
 
 export function formatGuidedActionConfirmation(args: {
-  action: 'backup' | 'drill';
+  action: 'backup' | 'integrity';
   webhookMode: boolean;
 }): string {
   if (args.action === 'backup') {
@@ -634,21 +634,21 @@ export function formatGuidedActionConfirmation(args: {
   }
 
   return [
-    '<b>Confirm restore drill</b>',
+    '<b>Confirm artifact integrity check</b>',
     '',
-    'This runs the download-only restore drill.',
+    'This downloads the selected remote dump and verifies its matching checksum. It does not restore PostgreSQL.',
     args.webhookMode
       ? 'Confirming here will generate the normal approval-token flow.'
-      : 'Confirming here will queue the drill immediately.',
+      : 'Confirming here will queue the integrity check immediately.',
   ].join('\n');
 }
 
 export function formatGuidedActionSubmitted(args: {
-  action: 'backup' | 'drill';
+  action: 'backup' | 'integrity';
   webhookMode: boolean;
 }): string {
   return [
-    `<b>${args.action === 'backup' ? 'Backup' : 'Restore drill'} request submitted</b>`,
+    `<b>${args.action === 'backup' ? 'Backup' : 'Artifact integrity check'} request submitted</b>`,
     '',
     args.webhookMode
       ? 'The approval or execution result was posted as a new ops message. The confirm button here has been disabled.'

@@ -1,4 +1,4 @@
-export type GuidedActionName = 'backup' | 'drill';
+export type GuidedActionName = 'backup' | 'integrity';
 export type JobsViewKey =
   | 'gr'
   | 'gf'
@@ -148,12 +148,12 @@ export function decodeGuidedCallback(value: string): GuidedCallbackAction | null
       return rest.length === 1 && rest[0] ? { kind: 'job_share', jobId: rest[0] } : null;
     }
     case 'a': {
-      return rest.length === 1 && (rest[0] === 'backup' || rest[0] === 'drill')
+      return rest.length === 1 && (rest[0] === 'backup' || rest[0] === 'integrity')
         ? { kind: 'action', action: rest[0] }
         : null;
     }
     case 'c': {
-      return rest.length === 1 && (rest[0] === 'backup' || rest[0] === 'drill')
+      return rest.length === 1 && (rest[0] === 'backup' || rest[0] === 'integrity')
         ? { kind: 'confirm', action: rest[0] }
         : null;
     }

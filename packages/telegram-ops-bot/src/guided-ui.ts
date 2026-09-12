@@ -1,6 +1,6 @@
 import {
   executeBackupAction,
-  executeDrillAction,
+  executeIntegrityAction,
   loadFinishedJobsView,
   loadJobDetailsView,
   loadJobsViewFromKey,
@@ -198,7 +198,7 @@ export async function handleGuidedCallback(args: {
         try {
           await (action.action === 'backup'
             ? executeBackupAction(actionContext)
-            : executeDrillAction(actionContext));
+            : executeIntegrityAction(actionContext));
         } catch (error: unknown) {
           guidedConfirmGuards.delete(confirmKey);
           throw error;
@@ -237,7 +237,7 @@ function withCommand(
   };
 }
 
-function buildConfirmGuardKey(context: CommandContext, action: 'backup' | 'drill'): string {
+function buildConfirmGuardKey(context: CommandContext, action: 'backup' | 'integrity'): string {
   return `${context.message.chat.id}:${context.message.message_id}:${action}`;
 }
 
