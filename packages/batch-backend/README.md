@@ -93,6 +93,9 @@ Useful indexes:
   inputs: the rejected interval was produced during normalization. The former does not rule out an
   additional merge defect. Missing or malformed provenance yields no origin inference. The whole
   summary and arbitrary provider fields are never forwarded to structural failure logs.
+- ElevenLabs `audio_event` annotations are retained in the human-readable transcript as non-speech
+  segments with only the provider-supplied text, timestamp, and speaker metadata. They are excluded
+  from lexical validation, exact-speaker counting, speech-turn coalescing, and speaker-track metrics.
 - Successful Source confirmation makes retained recording audio unavailable immediately and requests
   asynchronous recording-owned deletion. The transcribe worker sweeps bounded PostgreSQL claims for
   confirmed audio plus eligible failed or unconfirmed audio after

@@ -330,6 +330,7 @@ export function validateTranscriptionResult(
     if (segment.text !== undefined && typeof segment.text !== 'string') {
       return structuralFailure('invalid_segments_container', { segmentCount, segmentIndex: index });
     }
+    if (segment.kind === 'non_speech') continue;
     if (typeof segment.text === 'string' && segment.text.trim()) {
       lexicalSegments.push({ segment, index });
     }

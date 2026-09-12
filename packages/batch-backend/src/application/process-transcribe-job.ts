@@ -522,6 +522,7 @@ function buildSpeakerTracks(
 
   const bySpeaker = new Map<number, { lines: string[]; turns: number }>();
   for (const segment of segments) {
+    if (segment.kind === 'non_speech') continue;
     const normalizedText = segment.text.trim();
     if (!normalizedText) continue;
     const speaker = segment.speaker ?? 0;

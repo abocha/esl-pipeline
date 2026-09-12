@@ -376,7 +376,7 @@ function buildElevenLabsSegments(
     return [];
   }
 
-  const turnChunks: TranscriptSegment[][] = [[]];
+  const segments: TranscriptSegment[] = [];
 
   for (const entry of wordsWithContext) {
     const word = entry.word;
@@ -386,17 +386,24 @@ function buildElevenLabsSegments(
     }
 
     const tokenType = classifyElevenLabsTokenType(word.type);
-    const currentChunk = turnChunks.at(-1)!;
     if (tokenType === 'spacing') {
       continue;
     }
     if (tokenType === 'punctuation') {
-      const previousLexical = currentChunk.at(-1);
-      if (previousLexical) previousLexical.text = `${previousLexical.text}${normalizedText}`;
+      const previousLexical = segments.at(-1);
+      if (previousLexical && previousLexical.kind !== 'non_speech') {
+        previousLexical.text = `${previousLexical.text}${normalizedText}`;
+      }
       continue;
     }
     if (tokenType === 'audio_event') {
-      if (currentChunk.length > 0) turnChunks.push([]);
+      segments.push({
+        text: normalizedText,
+        kind: 'non_speech',
+        speaker: resolveElevenLabsSpeakerIndex(word, entry.channelIndex),
+        start: typeof word.start === 'number' ? word.start : undefined,
+        end: typeof word.end === 'number' ? word.end : undefined,
+      });
       continue;
     }
 
@@ -404,14 +411,12 @@ function buildElevenLabsSegments(
     const start = typeof word.start === 'number' ? word.start : undefined;
     const end = typeof word.end === 'number' ? word.end : undefined;
 
-    currentChunk.push({ text: normalizedText, speaker, start, end });
+    segments.push({ text: normalizedText, speaker, start, end });
   }
 
   // Use the shared turn coalescing path, but retain malformed provider timing for
   // the worker's deterministic structural validation rather than synthesizing it.
-  return turnChunks
-    .flatMap((chunk) => mergeSegments(chunk, { preserveSegmentTimings: true }))
-    .sort((left, right) => (left.start ?? 0) - (right.start ?? 0));
+  return mergeSegments(segments, { preserveSegmentTimings: true });
 }
 
 function classifyElevenLabsTokenType(
