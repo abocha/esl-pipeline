@@ -80,8 +80,9 @@ Useful indexes:
   is enabled, a received provider response is persisted before this validation; structural-failure logs
   expose only its resulting `rawResponseUri`. Provider SDK retries remain disabled.
 - Structural timing failure logs include a controlled `timingIssue`: `missing_start`, `missing_end`,
-  `non_finite_start`, `non_finite_end`, `negative_start`, or `non_positive_duration` (first failed
-  check in that order). Null/undefined timing is missing. `segmentIndexBasis: normalized` identifies
+  `non_finite_start`, `non_finite_end`, `negative_start`, or `reversed_timing` (first failed check
+  in that order). Finite non-negative point timing (`start === end`) is valid. Null/undefined timing
+  is missing. `segmentIndexBasis: normalized` identifies
   the zero-based index after adapter coalescing/sorting, not the original provider word index.
   No transcript text, timing values, or raw provider fields are included. BullMQ worker completion
   reports delivery completion, including terminal-run skips; it does not assert transcription success.

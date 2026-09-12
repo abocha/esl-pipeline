@@ -51,6 +51,15 @@ function getGapSeconds(previousEnd?: number, nextStart?: number): number {
   return next - previous;
 }
 
+function getPreservedTimingDistance(
+  previous: TranscriptSegment & { start: number; end: number },
+  current: TranscriptSegment & { start: number; end: number },
+): number {
+  if (current.start > previous.end) return current.start - previous.end;
+  if (previous.start > current.end) return previous.start - current.end;
+  return 0;
+}
+
 export function mergeSegments(
   segments: TranscriptSegment[],
   options?: {
@@ -86,9 +95,11 @@ export function mergeSegments(
     // provider word inherit the preceding speaker before validation can see it.
     const canMerge =
       previous.speaker === current.speaker &&
-      getGapSeconds(previous.end, current.start) <= utteranceGapSec &&
-      (!preserveSegmentTimings ||
-        (hasValidSegmentTiming(previous) && hasValidSegmentTiming(current)));
+      (preserveSegmentTimings
+        ? hasValidSegmentTiming(previous) &&
+          hasValidSegmentTiming(current) &&
+          getPreservedTimingDistance(previous, current) <= utteranceGapSec
+        : getGapSeconds(previous.end, current.start) <= utteranceGapSec);
 
     if (!canMerge) {
       merged.push(current);
@@ -96,7 +107,26 @@ export function mergeSegments(
     }
 
     previous.text = `${previous.text} ${current.text}`.trim();
-    if (typeof current.end === 'number') {
+    if (preserveSegmentTimings) {
+      if (
+        typeof current.start === 'number' &&
+        Number.isFinite(current.start) &&
+        (typeof previous.start !== 'number' ||
+          !Number.isFinite(previous.start) ||
+          current.start < previous.start)
+      ) {
+        previous.start = current.start;
+      }
+      if (
+        typeof current.end === 'number' &&
+        Number.isFinite(current.end) &&
+        (typeof previous.end !== 'number' ||
+          !Number.isFinite(previous.end) ||
+          current.end > previous.end)
+      ) {
+        previous.end = current.end;
+      }
+    } else if (typeof current.end === 'number') {
       previous.end = current.end;
     }
   }
@@ -105,14 +135,16 @@ export function mergeSegments(
   return normalized.sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
 }
 
-function hasValidSegmentTiming(segment: TranscriptSegment): boolean {
+function hasValidSegmentTiming(
+  segment: TranscriptSegment,
+): segment is TranscriptSegment & { start: number; end: number } {
   return (
     typeof segment.start === 'number' &&
     Number.isFinite(segment.start) &&
     segment.start >= 0 &&
     typeof segment.end === 'number' &&
     Number.isFinite(segment.end) &&
-    segment.end > segment.start
+    segment.end >= segment.start
   );
 }
 

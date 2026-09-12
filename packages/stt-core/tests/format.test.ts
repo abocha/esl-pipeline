@@ -43,6 +43,65 @@ describe('stt-core format helpers', () => {
     expect(merged[1]?.speaker).toBe(1);
   });
 
+  it('preserves default merge timing assignment semantics', () => {
+    expect(
+      mergeSegments([
+        { text: 'later', speaker: 0, start: 10, end: 11 },
+        { text: 'earlier', speaker: 0, start: 0, end: 1 },
+      ]),
+    ).toEqual([{ text: 'later earlier', speaker: 0, start: 10, end: 1 }]);
+  });
+
+  it('keeps the temporal envelope when merging out-of-order overlapping intervals', () => {
+    expect(
+      mergeSegments(
+        [
+          { text: 'later', speaker: 0, start: 10, end: 12 },
+          { text: 'earlier', speaker: 0, start: 9, end: 11 },
+          { text: 'overlap', speaker: 0, start: 11.5, end: 13 },
+        ],
+        { preserveSegmentTimings: true },
+      ),
+    ).toEqual([{ text: 'later earlier overlap', speaker: 0, start: 9, end: 13 }]);
+  });
+
+  it('does not merge far-apart backward disjoint intervals', () => {
+    expect(
+      mergeSegments(
+        [
+          { text: 'later', speaker: 0, start: 10, end: 11 },
+          { text: 'earlier', speaker: 0, start: 0, end: 1 },
+        ],
+        { preserveSegmentTimings: true },
+      ),
+    ).toEqual([
+      { text: 'earlier', speaker: 0, start: 0, end: 1 },
+      { text: 'later', speaker: 0, start: 10, end: 11 },
+    ]);
+  });
+
+  it('merges coincident point timings and nearby backward intervals', () => {
+    expect(
+      mergeSegments(
+        [
+          { text: 'point one', speaker: 0, start: 5, end: 5 },
+          { text: 'point two', speaker: 0, start: 5, end: 5 },
+        ],
+        { preserveSegmentTimings: true },
+      ),
+    ).toEqual([{ text: 'point one point two', speaker: 0, start: 5, end: 5 }]);
+
+    expect(
+      mergeSegments(
+        [
+          { text: 'later', speaker: 0, start: 10, end: 11 },
+          { text: 'nearby earlier', speaker: 0, start: 9, end: 9.5 },
+        ],
+        { preserveSegmentTimings: true },
+      ),
+    ).toEqual([{ text: 'later nearby earlier', speaker: 0, start: 9, end: 11 }]);
+  });
+
   it('normalizes common Deepgram multilingual transcript quirks', () => {
     expect(normalizeTranscriptText('Ajá, I see. ajá.')).toBe('Ага, I see. Ага.');
   });

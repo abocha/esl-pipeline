@@ -67,8 +67,7 @@ describe('transcription execution contract', () => {
     [1, -Infinity, 'non_finite_end'],
     [1, NaN, 'non_finite_end'],
     [-1, 2, 'negative_start'],
-    [1, 1, 'non_positive_duration'],
-    [2, 1, 'non_positive_duration'],
+    [2, 1, 'reversed_timing'],
     [undefined, undefined, 'missing_start'],
   ])(
     'classifies normalized timing (%s, %s) as %s without exposing values',
@@ -192,7 +191,6 @@ describe('transcription execution contract', () => {
     }
 
     for (const segment of [
-      { text: 'Zero', speaker: 0, start: 0, end: 0 },
       { text: 'Reversed', speaker: 0, start: 1, end: 0 },
       { text: 'Missing', speaker: 0, start: 0, end: undefined },
     ]) {
@@ -206,6 +204,19 @@ describe('transcription execution contract', () => {
         ),
       ).toMatchObject({ diagnostics: { reason: 'invalid_segment_timing', segmentIndex: 0 } });
     }
+
+    expect(
+      validateTranscriptionResult(
+        {
+          ...result,
+          segments: [
+            { text: 'Point teacher', speaker: 0, start: 5, end: 5 },
+            { text: 'Point student', speaker: 1, start: 5, end: 5 },
+          ],
+        },
+        'mixed_recording',
+      ),
+    ).toEqual({ valid: true });
 
     for (const speaker of [undefined, 1.5]) {
       expect(

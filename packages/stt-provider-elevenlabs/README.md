@@ -14,13 +14,16 @@ Behavior:
 - signed URLs and provider responses are never logged. The worker may persist the complete raw
   response, including for URL-backed submissions, only when `ESL_STT_STORE_RAW_RESPONSE` is enabled.
 - spacing/audio events are excluded from lexical turns; explicit punctuation tokens attach to the
-  preceding lexical token. Other token types are treated as lexical. Malformed lexical timing stays
-  visible to worker validation; missing timestamps are not synthesized. Coalescing and sorting mean
-  normalized segment indexes do not preserve provider word indexes (missing starts sort as zero).
+  preceding lexical token. Other token types are treated as lexical. Finite, non-negative lexical
+  timing, including point timing where `start === end`, is structurally usable; missing, non-finite,
+  negative-start, and reversed timing stays visible to worker validation. Missing timestamps are not
+  synthesized. Coalescing and sorting mean normalized segment indexes do not preserve provider word
+  indexes (missing starts sort as zero).
 - SDK 2.67.0 retains optional word start/end numbers and token kinds `word`, `spacing`,
   and `audio_event`. Its schema does not constrain duration or explain missing lexical timing for
-  word-granularity Scribe v2. This alone does not justify repairing, dropping, or accepting an untimed
-  or non-positive-duration lexical token.
+  word-granularity Scribe v2. This alone does not justify repairing or dropping lexical text, or
+  synthesizing timing; untimed and otherwise malformed lexical timing remains visible to worker
+  validation.
 - Before mapping or merging, lexical provider tokens are inspected into
   `summary.elevenLabsPreMergeTiming`: `indexBasis: provider_words_zero_based`, `lexicalTokenCount`,
   `invalidTimingTokenCount`, and (only if invalid) `firstInvalidTokenIndex` / `firstInvalidTimingIssue`.
