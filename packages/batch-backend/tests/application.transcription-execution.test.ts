@@ -253,7 +253,21 @@ describe('transcription execution contract', () => {
 
     expect(
       validateTranscriptionResult(
-        { ...result, segments: [segment('Teacher', 0, 0, 0.5), segment('Student', 1, 1, 1.5)] },
+        {
+          ...result,
+          segments: [
+            segment('Teacher', 0, 0, 0.5),
+            {
+              text: '[cough]',
+              kind: 'non_speech',
+              speaker: 99,
+              start: 10,
+              end: 9,
+            },
+            segment('Student', 1, 1, 1.5),
+            { text: '[laughter]', kind: 'non_speech' },
+          ],
+        },
         'mixed_recording',
       ),
     ).toEqual({ valid: true });

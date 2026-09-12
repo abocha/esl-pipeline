@@ -31,6 +31,22 @@ describe('stt-core format helpers', () => {
     expect(text).not.toContain('00:00.000-00:00.500');
   });
 
+  it('formats attributed and unattributed non-speech events without inventing metadata', () => {
+    expect(
+      formatTranscriptFromSegments(
+        '',
+        [
+          { text: 'Hello', speaker: 0, start: 0, end: 0.5 },
+          { text: '[cough]', kind: 'non_speech', speaker: 1, start: 1.2, end: 1.4 },
+          { text: '[laughter]', kind: 'non_speech' },
+          { text: 'Hi', speaker: 1, start: 2, end: 2.4 },
+        ],
+        'timeline',
+        'mixed_recording',
+      ),
+    ).toBe('[Speaker 1 00:00] Hello\n[Speaker 2 00:01] [cough]\n[laughter]\n[Speaker 2 00:02] Hi');
+  });
+
   it('merges adjacent same-speaker segments under gap threshold', () => {
     const merged = mergeSegments([
       { text: 'Hello', speaker: 0, start: 0, end: 0.4 },
@@ -63,6 +79,20 @@ describe('stt-core format helpers', () => {
         { preserveSegmentTimings: true },
       ),
     ).toEqual([{ text: 'later earlier overlap', speaker: 0, start: 9, end: 13 }]);
+  });
+
+  it('preserves non-speech events and their missing timing through merging', () => {
+    expect(
+      mergeSegments([
+        { text: 'Hello', speaker: 0, start: 0, end: 0.5 },
+        { text: '[cough]', kind: 'non_speech', speaker: 0, start: 0.6 },
+        { text: 'there', speaker: 0, start: 0.7, end: 1 },
+      ]),
+    ).toEqual([
+      { text: 'Hello', speaker: 0, start: 0, end: 0.5 },
+      { text: '[cough]', kind: 'non_speech', speaker: 0, start: 0.6 },
+      { text: 'there', speaker: 0, start: 0.7, end: 1 },
+    ]);
   });
 
   it('does not merge far-apart backward disjoint intervals', () => {
