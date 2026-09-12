@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-08-12 repository/workflow state and current Codex agent guidance.
+- Last Verified Against: 2026-09-12 repository/workflow state and current Codex agent guidance.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
