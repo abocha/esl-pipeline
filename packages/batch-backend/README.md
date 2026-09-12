@@ -74,8 +74,9 @@ Useful indexes:
   `audio_lifecycle=not_retained`, uploads no audio, creates no run, and enqueues no BullMQ job.
 - Transcription runs use a short durable claim lease and at most three committed provider-submission
   reservations. BullMQ delivery/reconciliation count is separate and can exceed three. Permanent
-  failures stop; transient, ambiguous, and malformed provider outcomes recover automatically within
-  the reservation ceiling. Provider SDK retries remain disabled.
+  failures stop; transient, ambiguous, and provider-detected malformed outcomes recover automatically
+  within the reservation ceiling. A successfully normalized result rejected by deterministic structural
+  validation is terminal and does not consume another provider submission. Provider SDK retries remain disabled.
 - Successful Source confirmation makes retained recording audio unavailable immediately and requests
   asynchronous recording-owned deletion. The transcribe worker sweeps bounded PostgreSQL claims for
   confirmed audio plus eligible failed or unconfirmed audio after

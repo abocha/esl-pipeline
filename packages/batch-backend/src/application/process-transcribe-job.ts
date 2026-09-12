@@ -38,6 +38,7 @@ import {
   classifyTranscriptionFailure,
   createTranscriptionDispatchGuard,
   malformedProviderResultError,
+  readStructuralValidationDiagnostics,
   TranscriptionExecutionLostError,
   validateTranscriptionResult,
 } from './transcription-execution.js';
@@ -153,6 +154,9 @@ async function processTranscribeJobWithinFence(
   const transcriptId = randomUUID();
   const topology: AudioInputTopology = recording.audioTopology ?? 'mixed_recording';
   let sttProvider: SttProviderId = claimed.provider;
+  let sttRequestProfile: string | undefined;
+  let providerModel: string | undefined;
+  let submissionSlot: number | undefined;
 
   try {
     const route = resolveTranscriptionRoute({
@@ -161,6 +165,8 @@ async function processTranscribeJobWithinFence(
       requestedProvider: claimed.provider,
     });
     sttProvider = route.provider;
+    sttRequestProfile = route.profile;
+    providerModel = configuredSttModel(config, sttProvider);
 
     if (!recording.storageUri) {
       throw new Error(`Recording has no retained audio: ${recording.id}`);
@@ -185,6 +191,7 @@ async function processTranscribeJobWithinFence(
       }
       return null;
     }
+    submissionSlot = reserved.currentSubmissionSlot ?? reserved.submissionSlotsReserved;
     const storageUri = recording.storageUri;
     const readStorage =
       overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
@@ -224,7 +231,7 @@ async function processTranscribeJobWithinFence(
       guard.stop();
     }
     const validation = validateTranscriptionResult(transcription, topology);
-    if (!validation.valid) throw malformedProviderResultError();
+    if (!validation.valid) throw malformedProviderResultError(validation.diagnostics);
 
     const transcriptText = formatTranscriptFromSegments(
       transcription.text,
@@ -373,6 +380,7 @@ async function processTranscribeJobWithinFence(
       throw new TranscriptionDeliveryDeferredError();
     }
     const classification = classifyTranscriptionFailure(error);
+    const structuralDiagnostics = readStructuralValidationDiagnostics(error);
     const current = await getTranscriptionRunById(claimed.id);
     const canRetry = classification.retryable && (current?.submissionSlotsReserved ?? 3) < 3;
     const transitioned = canRetry
@@ -412,6 +420,16 @@ async function processTranscribeJobWithinFence(
       provider: sttProvider,
       providerCategory: classification.category,
       errorCode: classification.errorCode,
+      ...(structuralDiagnostics
+        ? {
+            runId: claimed.id,
+            recordingId: recording.id,
+            sttRequestProfile,
+            providerModel,
+            submissionSlot,
+            structuralValidation: structuralDiagnostics,
+          }
+        : {}),
     });
 
     throw new Error(classification.errorCode);
@@ -477,6 +495,15 @@ function buildSttProviderConfig(
       gcsStagingPrefix: config.stt.providers.google.gcsStagingPrefix,
     },
   };
+}
+
+function configuredSttModel(
+  config: BatchBackendConfig,
+  provider: SttProviderId,
+): string | undefined {
+  if (provider === 'deepgram') return config.stt.providers.deepgram.model;
+  if (provider === 'elevenlabs') return config.stt.providers.elevenlabs.model;
+  return config.stt.providers.google.model;
 }
 
 function buildSpeakerTracks(

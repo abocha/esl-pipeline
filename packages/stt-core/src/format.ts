@@ -55,10 +55,13 @@ export function mergeSegments(
   segments: TranscriptSegment[],
   options?: {
     utteranceGapSec?: number;
+    /** Preserve malformed provider timings for caller-owned structural validation. */
+    preserveSegmentTimings?: boolean;
   },
 ): TranscriptSegment[] {
   if (segments.length === 0) return segments;
   const utteranceGapSec = options?.utteranceGapSec ?? 1.5;
+  const preserveSegmentTimings = options?.preserveSegmentTimings ?? false;
   const merged: TranscriptSegment[] = [];
 
   for (const segment of segments) {
@@ -83,7 +86,9 @@ export function mergeSegments(
     // provider word inherit the preceding speaker before validation can see it.
     const canMerge =
       previous.speaker === current.speaker &&
-      getGapSeconds(previous.end, current.start) <= utteranceGapSec;
+      getGapSeconds(previous.end, current.start) <= utteranceGapSec &&
+      (!preserveSegmentTimings ||
+        (hasValidSegmentTiming(previous) && hasValidSegmentTiming(current)));
 
     if (!canMerge) {
       merged.push(current);
@@ -96,7 +101,19 @@ export function mergeSegments(
     }
   }
 
-  return normalizeSegmentEnds(merged).sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  const normalized = preserveSegmentTimings ? merged : normalizeSegmentEnds(merged);
+  return normalized.sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+}
+
+function hasValidSegmentTiming(segment: TranscriptSegment): boolean {
+  return (
+    typeof segment.start === 'number' &&
+    Number.isFinite(segment.start) &&
+    segment.start >= 0 &&
+    typeof segment.end === 'number' &&
+    Number.isFinite(segment.end) &&
+    segment.end > segment.start
+  );
 }
 
 export function formatTranscriptFromSegments(
