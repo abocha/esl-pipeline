@@ -32,7 +32,7 @@ describe('student-memory pacing delayed-job contract (requires Redis)', () => {
     're-runs a manually delayed job without consuming an attempt',
     async () => {
       const queueName = `student-memory-pacing-delay-${randomUUID()}`;
-      const connection = new Redis(redis.url, { maxRetriesPerRequest: null });
+      const connection = new Redis(redis.url, { maxRetriesPerRequest: null, protocol: 2 });
       const queue = new Queue(queueName, { connection });
       const queueEvents = new QueueEvents(queueName, { connection });
       const attemptsMade: number[] = [];

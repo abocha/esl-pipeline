@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 7 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-09-12 repo state.
+- Last Verified Against: 2026-09-13 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -477,6 +477,11 @@ deploy BullMQ 6 or introduce Job Schedulers automatically. Inspect and migrate o
 definitions with the BullMQ 5 APIs only after that production-data change is separately approved.
 The script intentionally fails when run inside a BullMQ 6 container, because v6 removed the
 supported v5 API that it uses to read this legacy metadata.
+
+The direct Redis client uses ioredis 6 with `protocol: 2` set explicitly. This keeps the deployed
+BullMQ 6 stack and application Redis consumers on the existing RESP2 wire protocol. Treat any
+future RESP3 adoption as a separate migration with its own compatibility evidence; do not remove
+the explicit protocol setting as routine dependency cleanup.
 
 ## CI Expectations
 
