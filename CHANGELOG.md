@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.13] - 2026-09-12
+
+### Changed
+
+- Automated release from PR #243: docs(agents): streamline Codex workflow guidance (https://github.com/abocha/esl-pipeline/pull/243)
+
 ## [10.11.12] - 2026-09-12
 
 ### Changed
