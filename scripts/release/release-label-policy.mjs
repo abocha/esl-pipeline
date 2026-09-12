@@ -84,8 +84,11 @@ function isMaintenanceOnlyPath(path) {
   if (MAINTENANCE_ONLY_ROOT_FILES.has(path) || MAINTENANCE_ONLY_EXACT_PATHS.has(path)) return true;
   if (/^[^/]+\.md$/u.test(path)) return true;
   if (path.startsWith('.github/') || path.startsWith('.impeccable/')) return true;
+  if (path.startsWith('.agents/skills/')) return true;
   if (path.startsWith('.codex/')) return true;
   if (path.startsWith('docs/')) return true;
+  if (path.startsWith('scripts/git/')) return true;
+  if (/^scripts\/(?:docker|release)\/.+\.test\.mjs$/u.test(path)) return true;
   return (
     path.startsWith('scripts/check/') ||
     path.startsWith('scripts/docs/') ||

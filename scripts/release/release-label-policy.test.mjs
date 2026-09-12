@@ -74,6 +74,7 @@ test('maintenance-only paths accept release:none', () => {
     'knip.json',
   ];
   const paths = [
+    '.agents/skills/esl-pipeline-pr-ci-babysit/SKILL.md',
     '.github/workflows/ci.yml',
     '.impeccable/critique/local.md',
     '.codex/ORCHESTRATION.md',
@@ -83,8 +84,11 @@ test('maintenance-only paths accept release:none', () => {
     'docs/prompt-gallery/retired.md',
     'scripts/check/ci-workflow-structure.test.mjs',
     'scripts/docs/check-core-docs.mjs',
+    'scripts/docker/prod-compose-config.test.mjs',
     'scripts/docker/run-hadolint.mjs',
     'scripts/docker/run-hadolint.test.mjs',
+    'scripts/git/pr-style-summary.sh',
+    'scripts/release/production-image-scope.test.mjs',
     ...allowedRootFiles,
   ];
 
@@ -109,10 +113,14 @@ test('runtime, dependency, deployment, prompt, and unknown paths require a relea
     '.dockerignore',
     '.env.example',
     '.nvmrc',
+    '.agents/runtime-config.json',
     'packages/batch-backend/Dockerfile',
     'docker-compose.prod.yml',
+    'scripts/audio-benchmark/tests/core.test.ts',
     'scripts/deploy/deploy-prod-images.sh',
     'scripts/docker/prod-compose.mjs',
+    'scripts/release/release-label-policy.mjs',
+    'scripts/smoke/run-telegram-ops-compose-smoke.sh',
     'unknown-root-file.txt',
   ]) {
     const result = classifyReleaseImpact([path]);
