@@ -105,9 +105,12 @@ export function createTranscribeWorker(
   });
 
   worker.on('completed', (job: import('bullmq').Job<TranscribeQueuePayload>) => {
-    createJobLogger(job.data.recordingId, job.id?.toString()).info('Recording transcribed', {
-      event: 'transcribe_worker_completed',
-    });
+    createJobLogger(job.data.recordingId, job.id?.toString()).info(
+      'Transcribe worker job completed',
+      {
+        event: 'transcribe_worker_completed',
+      },
+    );
   });
 
   worker.on('failed', (job, err: Error) => {

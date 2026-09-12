@@ -651,23 +651,136 @@ describe('application/process-transcribe-job', () => {
     );
   });
 
-  it('terminalizes a structurally rejected first submission and logs only controlled diagnostics', async () => {
-    const secret = 'TRANSCRIPT_SECRET_DO_NOT_LOG';
-    const resultModelSecret = 'RESULT_MODEL_SECRET_DO_NOT_LOG';
-    const recording = createRecording('recording-structural-rejection');
+  it.each([
+    ['missing_start', undefined, 0.9],
+    ['missing_end', 0.5, undefined],
+    ['non_finite_start', NaN, 0.9],
+    ['non_finite_end', 0.5, Infinity],
+    ['negative_start', -0.5, 0.9],
+    ['non_positive_duration', 0.5, 0.5],
+    ['non_positive_duration', 0.9, 0.5],
+    ['invalid_speaker_attribution', 0.5, 0.9],
+  ])(
+    'terminalizes first-submission %s and logs only controlled diagnostics',
+    async (issue, start, end) => {
+      const secret = 'TRANSCRIPT_SECRET_DO_NOT_LOG';
+      const resultModelSecret = 'RESULT_MODEL_SECRET_DO_NOT_LOG';
+      const recording = createRecording('recording-structural-rejection');
+      const sttTranscribe = vi.fn(async () =>
+        createSttResult({
+          provider: 'elevenlabs',
+          model: resultModelSecret,
+          language: 'auto',
+          text: `Teacher ${secret} Student`,
+          segments: [
+            { text: 'Teacher', speaker: 0, start: 0, end: 0.4 },
+            { text: secret, start: start as number | undefined, end: end as number | undefined },
+            { text: 'Student', speaker: 1, start: 1, end: 1.4 },
+          ],
+        }),
+      );
+      const updateStatus = vi.fn(async ({ status, error }) => {
+        recording.status = status;
+        recording.error = error ?? null;
+        return recording;
+      });
+      transcriptionRuns.claim.mockClear();
+      transcriptionRuns.get.mockClear();
+      transcriptionRuns.retry.mockClear();
+      transcriptionRuns.fail.mockClear();
+      jobLogger.error.mockClear();
+      transcriptionRuns.claim
+        .mockResolvedValueOnce({
+          id: recording.id,
+          recordingId: recording.id,
+          provider: 'elevenlabs',
+          claimToken: 'claim-token',
+          submissionSlotsReserved: 0,
+        })
+        .mockResolvedValueOnce(null as never);
+      transcriptionRuns.get
+        .mockResolvedValueOnce({ submissionSlotsReserved: 1 } as never)
+        .mockResolvedValueOnce({ state: 'failed' } as never);
+
+      const dependencies = {
+        config: createConfig(),
+        storage: createStorageStub(),
+        sttTranscribe,
+        recordings: { getById: async () => recording, updateStatus },
+        transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+        publishEvent: vi.fn(),
+      };
+      dependencies.config.stt.defaultProvider = 'elevenlabs';
+
+      await expect(
+        processTranscribeJob({ recordingId: recording.id }, dependencies),
+      ).rejects.toThrow('malformed_provider_result');
+      await expect(
+        processTranscribeJob({ recordingId: recording.id }, dependencies),
+      ).resolves.toBeNull();
+
+      expect(sttTranscribe).toHaveBeenCalledTimes(1);
+      expect(transcriptionRuns.retry).not.toHaveBeenCalled();
+      expect(transcriptionRuns.fail).toHaveBeenCalledTimes(1);
+      expect(transcriptionRuns.fail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          errorCode: 'malformed_provider_result',
+          outcome: 'known_failure',
+        }),
+      );
+      expect(recording).toMatchObject({ status: 'failed', error: 'malformed_provider_result' });
+      const logFields = jobLogger.error.mock.calls[0]?.[1];
+      expect(logFields).toMatchObject({
+        provider: 'elevenlabs',
+        providerCategory: 'malformed',
+        errorCode: 'malformed_provider_result',
+        runId: recording.id,
+        recordingId: recording.id,
+        sttRequestProfile: MIXED_ELEVENLABS_PROFILE,
+        providerModel: 'scribe_v2',
+        submissionSlot: 1,
+        structuralValidation: {
+          reason: issue === 'invalid_speaker_attribution' ? issue : 'invalid_segment_timing',
+          ...(issue === 'invalid_speaker_attribution'
+            ? {}
+            : {
+                timingIssue: issue,
+                segmentIndexBasis: 'normalized',
+              }),
+          segmentCount: 3,
+          lexicalSegmentCount: 3,
+          segmentIndex: 1,
+        },
+      });
+      expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(secret);
+      expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(resultModelSecret);
+    },
+  );
+
+  it('persists a received structural-failure response before terminalization and logs only its URI', async () => {
+    const rawResponse = { providerPayload: 'RAW_PROVIDER_SECRET_DO_NOT_LOG' };
+    const recording = createRecording('recording-structural-raw-response');
     const sttTranscribe = vi.fn(async () =>
       createSttResult({
         provider: 'elevenlabs',
-        model: resultModelSecret,
+        model: 'scribe_v2',
         language: 'auto',
-        text: `Teacher ${secret} Student`,
+        text: 'Teacher malformed Student',
         segments: [
           { text: 'Teacher', speaker: 0, start: 0, end: 0.4 },
-          { text: secret, start: 0.5, end: 0.9 },
+          { text: 'malformed', speaker: 0, start: 0.5, end: 0.5 },
           { text: 'Student', speaker: 1, start: 1, end: 1.4 },
         ],
+        rawResponse,
       }),
     );
+    const putRawResponse = vi.fn(async () => ({
+      uri: 's3://bucket/transcripts/structural-response.json',
+      bytes: 1,
+      sha256: 'raw-hash',
+    }));
+    const putTranscript = vi.fn(createStorageStub().putTranscript);
+    const insert = vi.fn();
     const updateStatus = vi.fn(async ({ status, error }) => {
       recording.status = status;
       recording.error = error ?? null;
@@ -691,16 +804,16 @@ describe('application/process-transcribe-job', () => {
       .mockResolvedValueOnce({ submissionSlotsReserved: 1 } as never)
       .mockResolvedValueOnce({ state: 'failed' } as never);
 
+    const config = createConfig();
+    config.stt.defaultProvider = 'elevenlabs';
     const dependencies = {
-      config: createConfig(),
-      storage: createStorageStub(),
+      config,
+      storage: { ...createStorageStub(), putRawResponse, putTranscript },
       sttTranscribe,
       recordings: { getById: async () => recording, updateStatus },
-      transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+      transcripts: { getByRecordingId: async () => null, insert },
       publishEvent: vi.fn(),
     };
-    dependencies.config.stt.defaultProvider = 'elevenlabs';
-
     await expect(processTranscribeJob({ recordingId: recording.id }, dependencies)).rejects.toThrow(
       'malformed_provider_result',
     );
@@ -708,32 +821,65 @@ describe('application/process-transcribe-job', () => {
       processTranscribeJob({ recordingId: recording.id }, dependencies),
     ).resolves.toBeNull();
 
-    expect(sttTranscribe).toHaveBeenCalledTimes(1);
-    expect(transcriptionRuns.retry).not.toHaveBeenCalled();
-    expect(transcriptionRuns.fail).toHaveBeenCalledTimes(1);
-    expect(transcriptionRuns.fail).toHaveBeenCalledWith(
-      expect.objectContaining({ errorCode: 'malformed_provider_result', outcome: 'known_failure' }),
+    expect(putRawResponse).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ transcriptId: expect.any(String), json: rawResponse }),
     );
-    expect(recording).toMatchObject({ status: 'failed', error: 'malformed_provider_result' });
-    const logFields = jobLogger.error.mock.calls[0]?.[1];
-    expect(logFields).toMatchObject({
-      provider: 'elevenlabs',
-      providerCategory: 'malformed',
-      errorCode: 'malformed_provider_result',
-      runId: recording.id,
-      recordingId: recording.id,
-      sttRequestProfile: MIXED_ELEVENLABS_PROFILE,
-      providerModel: 'scribe_v2',
-      submissionSlot: 1,
-      structuralValidation: {
-        reason: 'invalid_speaker_attribution',
-        segmentCount: 3,
-        lexicalSegmentCount: 3,
-        segmentIndex: 1,
-      },
+    expect(putRawResponse.mock.invocationCallOrder[0]).toBeLessThan(
+      transcriptionRuns.fail.mock.invocationCallOrder[0]!,
+    );
+    expect(putTranscript).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+    expect(sttTranscribe).toHaveBeenCalledTimes(1);
+    expect(jobLogger.error.mock.calls[0]?.[1]).toMatchObject({
+      rawResponseUri: 's3://bucket/transcripts/structural-response.json',
+      structuralValidation: { reason: 'invalid_segment_timing' },
     });
-    expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(secret);
-    expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(resultModelSecret);
+    expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(
+      'RAW_PROVIDER_SECRET_DO_NOT_LOG',
+    );
+  });
+
+  it('does not persist a received structural-failure response when raw-response storage is disabled', async () => {
+    const recording = createRecording('recording-structural-raw-disabled');
+    const putRawResponse = vi.fn(createStorageStub().putRawResponse);
+    const config = createConfig();
+    config.stt.defaultProvider = 'elevenlabs';
+    config.stt.storeRawResponse = false;
+
+    await expect(
+      processTranscribeJob(
+        { recordingId: recording.id },
+        {
+          config,
+          storage: { ...createStorageStub(), putRawResponse },
+          sttTranscribe: async () =>
+            createSttResult({
+              provider: 'elevenlabs',
+              model: 'scribe_v2',
+              language: 'auto',
+              text: 'Teacher malformed Student',
+              segments: [
+                { text: 'Teacher', speaker: 0, start: 0, end: 0.4 },
+                { text: 'malformed', speaker: 0, start: 0.5, end: 0.5 },
+                { text: 'Student', speaker: 1, start: 1, end: 1.4 },
+              ],
+              rawResponse: { providerPayload: 'not-stored' },
+            }),
+          recordings: {
+            getById: async () => recording,
+            updateStatus: async ({ status, error }) => {
+              recording.status = status;
+              recording.error = error ?? null;
+              return recording;
+            },
+          },
+          transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+          publishEvent: vi.fn(),
+        },
+      ),
+    ).rejects.toThrow('malformed_provider_result');
+
+    expect(putRawResponse).not.toHaveBeenCalled();
   });
 
   it('keeps reflected signed URL details out of worker persistence and logs', async () => {
@@ -829,7 +975,7 @@ describe('application/process-transcribe-job', () => {
     });
   });
 
-  it('does not persist arbitrary URL-backed provider responses', async () => {
+  it('persists a URL-backed provider response once and attaches its URI to the successful transcript', async () => {
     const signedUrl =
       'https://storage.example.test/audio.mp3?X-Amz-Signature=SIGNED_URL_SECRET_123&X-Amz-Security-Token=TEMP_TOKEN_SECRET_456';
     const recording = {
@@ -856,7 +1002,7 @@ describe('application/process-transcribe-job', () => {
     const config = createConfig();
     config.stt.defaultProvider = 'elevenlabs';
     config.stt.providers.elevenlabs.apiKey = 'elevenlabs-test-key';
-    const convert = vi.fn(async (_request: Record<string, unknown>) => ({
+    const response = {
       language_code: 'eng',
       language_probability: 1,
       text: 'Hello there',
@@ -866,7 +1012,8 @@ describe('application/process-transcribe-job', () => {
       ],
       provider_echo: signedUrl,
       diagnostics: { nested_secret: 'TEMP_TOKEN_SECRET_456' },
-    }));
+    };
+    const convert = vi.fn(async (_request: Record<string, unknown>) => response);
     const provider = createElevenLabsSttProvider({
       clientFactory: () => ({ speechToText: { convert } }),
     });
@@ -921,18 +1068,20 @@ describe('application/process-transcribe-job', () => {
     expect(recording.status).toBe('transcribed');
     expect(recording.error).toBeNull();
     expect(storedTexts).toContain('[Speaker 1 00:00] Hello\n[Speaker 2 00:01] there');
-    expect(inserted[0]?.rawResponseUri).toBeNull();
+    expect(inserted[0]?.rawResponseUri).toBe('local://transcripts/raw.json');
+    expect(putRawResponse).toHaveBeenCalledTimes(2);
     expect(putRawResponse).toHaveBeenCalledWith(
-      expect.objectContaining({
-        transcriptId: expect.stringContaining('-speaker-tracks'),
-      }),
+      expect.objectContaining({ transcriptId: expect.any(String), json: response }),
+    );
+    expect(putRawResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ transcriptId: expect.stringContaining('-speaker-tracks') }),
     );
     expect(convert).toHaveBeenCalledTimes(1);
     const durableState = JSON.stringify({ recording, inserted, storedTexts });
     expect(durableState).not.toContain(signedUrl);
     expect(durableState).not.toContain('SIGNED_URL_SECRET_123');
     expect(durableState).not.toContain('TEMP_TOKEN_SECRET_456');
-    expect(JSON.stringify(putRawResponse.mock.calls)).not.toContain(signedUrl);
+    expect(JSON.stringify(putRawResponse.mock.calls)).toContain(signedUrl);
     expect(JSON.stringify(jobLogger.info.mock.calls)).not.toContain('SIGNED_URL_SECRET_123');
     expect(JSON.stringify(jobLogger.info.mock.calls)).not.toContain('TEMP_TOKEN_SECRET_456');
     expect(jobLogger.error).not.toHaveBeenCalled();
@@ -1124,6 +1273,96 @@ describe('application/process-transcribe-job', () => {
     expect(storedTexts).toContain('Hello there.');
     expect(storedTexts).toContain('Hi.');
   });
+
+  it.each(['provider_invalid_present', 'normalization'] as const)(
+    'logs allowlisted adapter provenance for %s timing failure',
+    async (origin) => {
+      const secret = 'TRANSCRIPT_PROVIDER_URL_CREDENTIAL_SECRET';
+      const recording = createRecording('recording-provenance');
+      const provider = createElevenLabsSttProvider({
+        clientFactory: () => ({
+          speechToText: {
+            convert: async () => ({
+              text: secret,
+              arbitrary: secret,
+              words: [
+                { text: ' ', type: 'spacing' },
+                {
+                  text: secret,
+                  type: 'word',
+                  speaker_id: 'speaker_0',
+                  start: 10,
+                  end: origin === 'normalization' ? 11 : 10,
+                },
+                { text: secret, type: 'word', speaker_id: 'speaker_0', start: 0, end: 1 },
+                { text: secret, type: 'word', speaker_id: 'speaker_1', start: 12, end: 13 },
+              ],
+            }),
+          },
+        }),
+      });
+      const sttTranscribe = vi.fn(async ({ context }) => {
+        const result = await provider.transcribe({ context, config: { apiKey: 'test' } });
+        result.summary = {
+          ...result.summary,
+          arbitrary: secret,
+          elevenLabsPreMergeTiming: {
+            ...(result.summary?.elevenLabsPreMergeTiming as object),
+            text: secret,
+            start: secret,
+            end: secret,
+            rawResponse: { secret },
+            url: secret,
+          },
+        };
+        return result;
+      });
+      const config = createConfig();
+      config.stt.defaultProvider = 'elevenlabs';
+      const storage = createStorageStub();
+      storage.getProviderSubmissionSource = async () => ({
+        kind: 'url',
+        url: 'https://storage.example.test/audio.wav',
+      });
+      jobLogger.error.mockClear();
+      await expect(
+        processTranscribeJob(
+          { recordingId: recording.id },
+          {
+            config,
+            storage,
+            sttTranscribe,
+            recordings: {
+              getById: async () => recording,
+              updateStatus: vi.fn(async () => recording),
+            },
+            transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+            publishEvent: vi.fn(),
+          },
+        ),
+      ).rejects.toThrow('malformed_provider_result');
+      const fields = jobLogger.error.mock.calls[0]?.[1];
+      expect(fields.structuralValidation).toEqual({
+        reason: 'invalid_segment_timing',
+        segmentCount: origin === 'normalization' ? 2 : 3,
+        lexicalSegmentCount: origin === 'normalization' ? 2 : 3,
+        segmentIndex: origin === 'normalization' ? 0 : 1,
+        segmentIndexBasis: 'normalized',
+        timingIssue: 'non_positive_duration',
+        timingOrigin: origin,
+        elevenLabsPreMergeTiming: {
+          indexBasis: 'provider_words_zero_based',
+          lexicalTokenCount: 3,
+          invalidTimingTokenCount: origin === 'normalization' ? 0 : 1,
+          ...(origin === 'normalization'
+            ? {}
+            : { firstInvalidTokenIndex: 1, firstInvalidTimingIssue: 'non_positive_duration' }),
+        },
+      });
+      expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(secret);
+      expect(sttTranscribe).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('preserves ElevenLabs speaker turns through timeline formatting and speaker-track counts', async () => {
     const recording = createRecording('recording-elevenlabs-turns');
@@ -1483,6 +1722,7 @@ function createSttResult(params: {
   text: string;
   segments: SttTranscriptionResult['segments'];
   fallbackUsed?: boolean;
+  rawResponse?: unknown | null;
 }): SttTranscriptionResult {
   return {
     provider: params.provider,
@@ -1490,7 +1730,8 @@ function createSttResult(params: {
     language: params.language,
     text: params.text,
     segments: params.segments,
-    rawResponse: { provider: params.provider },
+    rawResponse:
+      params.rawResponse === undefined ? { provider: params.provider } : params.rawResponse,
     fallbackUsed: params.fallbackUsed ?? false,
     summary: {
       provider: params.provider,

@@ -321,8 +321,8 @@ importers:
         specifier: ^3.1106.0
         version: 3.1106.0
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.62.0
-        version: 2.62.0
+        specifier: ^2.67.0
+        version: 2.67.0
       '@google-cloud/text-to-speech':
         specifier: ^6.4.1
         version: 6.4.1
@@ -522,8 +522,8 @@ importers:
   packages/stt-provider-elevenlabs:
     dependencies:
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.62.0
-        version: 2.62.0
+        specifier: ^2.67.0
+        version: 2.67.0
       '@esl-pipeline/stt-core':
         specifier: workspace:*
         version: link:../stt-core
@@ -613,8 +613,8 @@ importers:
   packages/tts-provider-elevenlabs:
     dependencies:
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.62.0
-        version: 2.62.0
+        specifier: ^2.67.0
+        version: 2.67.0
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -928,8 +928,8 @@ packages:
     resolution: {integrity: sha512-A0uIaLukO+8JXUuT+iDE5ts8PCmdLCxDajawghFHLDEnFvA8dYYecCFxqFaTWgjJcJil0CtgIHKzm23E4RVqOA==}
     engines: {node: '>=18.0.0'}
 
-  '@elevenlabs/elevenlabs-js@2.62.0':
-    resolution: {integrity: sha512-OK/9uuSUf5gq0+7WgBhhLQ3PEFxxmH7BUHfctUxaiWLRyI9EMBBhSUiVID3Lj1TjxfNUL6CahLTSm8v2M+uomQ==}
+  '@elevenlabs/elevenlabs-js@2.67.0':
+    resolution: {integrity: sha512-nEywojTSXQYwefxSzo1Ca6pc/68rx7aWXa0SrWuoAjFSvgZH2HFqqAmIoiatBiVC0Jq/6E6Ojd/8KO1O3KaIZw==}
     engines: {node: '>=18.0.0'}
 
   '@emnapi/core@1.11.2':
@@ -4524,7 +4524,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@elevenlabs/elevenlabs-js@2.62.0':
+  '@elevenlabs/elevenlabs-js@2.67.0':
     dependencies:
       command-exists: 1.2.9
       node-fetch: 2.7.0

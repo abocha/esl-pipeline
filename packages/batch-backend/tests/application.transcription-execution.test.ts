@@ -3,11 +3,122 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   classifyTranscriptionFailure,
   createTranscriptionDispatchGuard,
+  malformedProviderResultError,
+  readStructuralValidationDiagnostics,
   TranscriptionExecutionLostError,
   validateTranscriptionResult,
 } from '../src/application/transcription-execution.js';
 
 describe('transcription execution contract', () => {
+  it.each([
+    undefined,
+    {},
+    { indexBasis: 'provider_words_zero_based', lexicalTokenCount: 0, invalidTimingTokenCount: 0 },
+    { indexBasis: 'provider_words_zero_based', lexicalTokenCount: 2, invalidTimingTokenCount: 3 },
+    {
+      indexBasis: 'provider_words_zero_based',
+      lexicalTokenCount: 2,
+      invalidTimingTokenCount: 1,
+      firstInvalidTokenIndex: -1,
+      firstInvalidTimingIssue: 'missing_start',
+    },
+    {
+      indexBasis: 'provider_words_zero_based',
+      lexicalTokenCount: 2,
+      invalidTimingTokenCount: 1,
+      firstInvalidTokenIndex: Number.MAX_SAFE_INTEGER + 1,
+      firstInvalidTimingIssue: 'missing_start',
+    },
+    {
+      indexBasis: 'provider_words_zero_based',
+      lexicalTokenCount: 2,
+      invalidTimingTokenCount: 1,
+      firstInvalidTokenIndex: 0,
+      firstInvalidTimingIssue: 'SECRET',
+    },
+    {
+      indexBasis: 'provider_words_zero_based',
+      lexicalTokenCount: 2,
+      invalidTimingTokenCount: 0,
+      firstInvalidTokenIndex: 0,
+    },
+  ])(
+    'does not infer normalization origin from absent or malformed provenance: %j',
+    (provenance) => {
+      const diagnostics = readStructuralValidationDiagnostics({
+        code: 'TRANSCRIPTION_STRUCTURAL_VALIDATION_FAILED',
+        structuralDiagnostics: {
+          reason: 'invalid_segment_timing',
+          timingOrigin: 'normalization',
+          elevenLabsPreMergeTiming: provenance,
+        },
+      });
+      expect(diagnostics).toEqual({ reason: 'invalid_segment_timing' });
+    },
+  );
+
+  it.each([
+    [undefined, 2, 'missing_start'],
+    [null, 2, 'missing_start'],
+    [1, undefined, 'missing_end'],
+    [1, null, 'missing_end'],
+    [NaN, 2, 'non_finite_start'],
+    [Infinity, 2, 'non_finite_start'],
+    [1, -Infinity, 'non_finite_end'],
+    [1, NaN, 'non_finite_end'],
+    [-1, 2, 'negative_start'],
+    [1, 1, 'non_positive_duration'],
+    [2, 1, 'non_positive_duration'],
+    [undefined, undefined, 'missing_start'],
+  ])(
+    'classifies normalized timing (%s, %s) as %s without exposing values',
+    (start, end, timingIssue) => {
+      const validation = validateTranscriptionResult(
+        {
+          provider: 'elevenlabs',
+          model: 'scribe_v2',
+          language: 'auto',
+          text: 'TRANSCRIPT_SECRET',
+          rawResponse: { secret: 'RAW_SECRET' },
+          fallbackUsed: false,
+          segments: [{ text: 'TRANSCRIPT_SECRET', speaker: 0, start, end }] as never,
+        },
+        'mixed_recording',
+      );
+      expect(validation.valid).toBe(false);
+      if (validation.valid) throw new Error('Expected rejection');
+      const diagnostics = {
+        reason: 'invalid_segment_timing',
+        segmentCount: 1,
+        lexicalSegmentCount: 1,
+        segmentIndex: 0,
+        segmentIndexBasis: 'normalized',
+        timingIssue,
+      };
+      expect(validation.diagnostics).toEqual(diagnostics);
+      expect(
+        readStructuralValidationDiagnostics(malformedProviderResultError(validation.diagnostics)),
+      ).toEqual(diagnostics);
+    },
+  );
+
+  it('drops arbitrary diagnostic fields and unrecognized timing classifications', () => {
+    expect(
+      readStructuralValidationDiagnostics({
+        code: 'TRANSCRIPTION_STRUCTURAL_VALIDATION_FAILED',
+        structuralDiagnostics: {
+          reason: 'invalid_segment_timing',
+          segmentIndex: 3,
+          segmentIndexBasis: 'SECRET',
+          timingIssue: 'SECRET',
+          text: 'SECRET',
+          start: 'SECRET',
+          rawResponse: { secret: 'SECRET' },
+        },
+      }),
+    ).toEqual({ reason: 'invalid_segment_timing', segmentIndex: 3 });
+  });
+
   it('classifies a provider timeout as retryable without retaining provider text', () => {
     const error = Object.assign(new Error('upstream details must not become durable'), {
       status: 504,
