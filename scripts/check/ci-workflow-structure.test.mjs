@@ -36,6 +36,57 @@ test('PR CI exposes scoped evidence jobs and an always-running aggregate gate', 
   assert.doesNotMatch(jobBlock('repository-policy'), /^ {4}(?:needs|if):/mu);
 });
 
+test('CI keeps one manifest-guarded PostgreSQL and Redis service job', () => {
+  const serviceJob = jobBlock('backend-db-integration');
+
+  assert.match(serviceJob, /postgres:\s*\n\s+image: postgres:18/u);
+  assert.match(serviceJob, /redis:\s*\n\s+image: redis:8/u);
+  assert.match(serviceJob, /test:db:migrations/u);
+  assert.match(serviceJob, /test:db:postgres/u);
+  assert.match(serviceJob, /test:integration:worker/u);
+  assert.match(serviceJob, /if: always\(\)[\s\S]*backend-db-integration-artifacts/u);
+});
+
+for (const lane of [
+  {
+    job: 'repository-policy',
+    directory: 'tmp/ci-logs/repository-policy',
+    artifact: 'repository-policy-logs',
+  },
+  {
+    job: 'build-code-quality',
+    directory: 'tmp/ci-logs/build-code-quality',
+    artifact: 'build-code-quality-logs',
+  },
+  {
+    job: 'unit-component',
+    directory: 'tmp/ci-logs/unit-component',
+    artifact: 'unit-component-logs',
+  },
+  {
+    job: 'deterministic-integration-media',
+    directory: 'tmp/ci-logs/deterministic-integration-media',
+    artifact: 'deterministic-integration-media-logs',
+  },
+]) {
+  test(`${lane.artifact} retains actionable logs and a manifest`, () => {
+    const job = jobBlock(lane.job);
+
+    assert.match(job, /set -o pipefail/u);
+    assert.match(job, new RegExp(escapeRegExp(lane.directory), 'u'));
+    assert.match(job, /tee/u);
+    assert.match(job, /manifest\.json/u);
+    assert.match(job, /"command"/u);
+    assert.match(job, /"conclusion"/u);
+    assert.match(job, /"logPath"/u);
+    assert.match(
+      job,
+      new RegExp(`if: always\\(\\)[\\s\\S]*name: ${escapeRegExp(lane.artifact)}`, 'u'),
+    );
+    assert.match(job, /retention-days: 14/u);
+  });
+}
+
 test('bootstrap scope check is mechanically independent from the classifier', () => {
   const script = markedScript('ci-bootstrap');
   assert.doesNotMatch(script, /run-ci-scope/u);
@@ -113,6 +164,49 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
   assert.notEqual(
     runEvaluator(evaluator, { ...baseResults, 'telegram-compose-smoke': 'cancelled' }, allSelected),
     0,
+  );
+
+  const backendOnlySelected = {
+    runtime: 'false',
+    integration: 'false',
+    backend_db_worker: 'true',
+    telegram: 'false',
+  };
+  const backendOnlyResults = {
+    ...baseResults,
+    'build-code-quality': 'skipped',
+    'unit-component': 'skipped',
+    'deterministic-integration-media': 'skipped',
+    'telegram-compose-smoke': 'skipped',
+  };
+
+  assert.equal(runEvaluator(evaluator, backendOnlyResults, backendOnlySelected), 0);
+  for (const outcome of ['failure', 'skipped', 'cancelled']) {
+    assert.notEqual(
+      runEvaluator(
+        evaluator,
+        { ...backendOnlyResults, 'backend-db-integration': outcome },
+        backendOnlySelected,
+      ),
+      0,
+      `selected backend DB/worker result ${outcome} must fail the gate`,
+    );
+  }
+  const missingBackendResult = { ...backendOnlyResults };
+  delete missingBackendResult['backend-db-integration'];
+  assert.notEqual(
+    runEvaluator(evaluator, missingBackendResult, backendOnlySelected),
+    0,
+    'missing selected backend DB/worker evidence must fail the gate',
+  );
+  assert.equal(
+    runEvaluator(
+      evaluator,
+      { ...backendOnlyResults, 'backend-db-integration': 'skipped' },
+      { ...backendOnlySelected, backend_db_worker: 'false' },
+    ),
+    0,
+    'skipped backend DB/worker evidence is allowed when the scope is unselected',
   );
 });
 
@@ -303,4 +397,8 @@ function runEvaluator(script, results, scopes) {
     },
     encoding: 'utf8',
   }).status;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
