@@ -10,6 +10,7 @@ const config = {
     connectionTimeoutMs: 5_000,
   },
   transcription: { reconciliationBatchSize: 5, reconciliationIntervalMs: 30_000 },
+  stt: { storeRawResponse: false },
   recordings: { audioCleanupEnabled: false, audioRecoveryTtlDays: 7 },
 };
 
@@ -63,6 +64,10 @@ describe('transport/transcribe-worker recording audio cleanup', () => {
     try {
       await startTranscribeWorker();
       expect(sweepRecordingAudio).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        'Startup configuration resolved',
+        expect.objectContaining({ sttStoreRawResponse: false }),
+      );
     } finally {
       processOn.mockRestore();
     }
