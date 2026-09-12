@@ -1391,13 +1391,20 @@ describe('application/process-transcribe-job', () => {
         speechToText: {
           async convert() {
             return {
-              text: 'Hello there! [applause] Again hi',
+              text: 'Hello there! [applause] [laughter] Again hi',
               words: [
                 { text: 'Hello', type: 'word', speakerId: 'speaker_0', start: 0, end: 0.2 },
                 { text: ' ', type: 'spacing', start: 0.2, end: 0.2 },
                 { text: 'there', type: 'word', speakerId: 'speaker_0', start: 0.3, end: 0.5 },
                 { text: '!', type: 'punctuation', start: 0.5, end: 0.5 },
-                { text: '[applause]', type: 'audio_event', start: 0.6, end: 0.8 },
+                {
+                  text: '[applause]',
+                  type: 'audio_event',
+                  speakerId: 'speaker_0',
+                  start: 0.6,
+                  end: 0.8,
+                },
+                { text: '[laughter]', type: 'audio_event', start: 0.85, end: 0.9 },
                 { text: 'Again', type: 'word', speakerId: 'speaker_0', start: 0.9, end: 1.1 },
                 { text: 'hi', type: 'word', speakerId: 'speaker_1', start: 1.2, end: 1.4 },
               ],
@@ -1430,7 +1437,7 @@ describe('application/process-transcribe-job', () => {
     );
 
     expect(storedTexts).toContain(
-      '[Speaker 1 00:00] Hello there!\n[Speaker 1 00:01] Again\n[Speaker 2 00:01] hi',
+      '[Speaker 1 00:00] Hello there!\n[Speaker 1 00:01] [applause]\n[00:01] [laughter]\n[Speaker 1 00:01] Again\n[Speaker 2 00:01] hi',
     );
     const speakerTracks = rawPayloads.find(
       (payload) =>

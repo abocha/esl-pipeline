@@ -28,6 +28,9 @@ export function normalizeSegmentEnds<T extends { start?: number; end?: number }>
   segments: T[],
 ): T[] {
   return segments.map((segment, index) => {
+    if ('kind' in segment && segment.kind === 'non_speech') {
+      return segment;
+    }
     if (typeof segment.end === 'number') {
       return segment;
     }
@@ -82,6 +85,7 @@ export function mergeSegments(
       speaker: segment.speaker,
       start: segment.start,
       end: segment.end,
+      ...(segment.kind ? { kind: segment.kind } : {}),
     };
 
     const previous = merged.at(-1);
@@ -94,6 +98,8 @@ export function mergeSegments(
     // topology contract.  Treating it as speaker 0 here would let a malformed
     // provider word inherit the preceding speaker before validation can see it.
     const canMerge =
+      previous.kind !== 'non_speech' &&
+      current.kind !== 'non_speech' &&
       previous.speaker === current.speaker &&
       (preserveSegmentTimings
         ? hasValidSegmentTiming(previous) &&
@@ -132,7 +138,21 @@ export function mergeSegments(
   }
 
   const normalized = preserveSegmentTimings ? merged : normalizeSegmentEnds(merged);
-  return normalized.sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  return normalized.sort(compareSegmentStarts);
+}
+
+function compareSegmentStarts(left: TranscriptSegment, right: TranscriptSegment): number {
+  const leftStart =
+    left.kind === 'non_speech' && (typeof left.start !== 'number' || !Number.isFinite(left.start))
+      ? Number.POSITIVE_INFINITY
+      : (left.start ?? 0);
+  const rightStart =
+    right.kind === 'non_speech' &&
+    (typeof right.start !== 'number' || !Number.isFinite(right.start))
+      ? Number.POSITIVE_INFINITY
+      : (right.start ?? 0);
+  if (leftStart === rightStart) return 0;
+  return leftStart - rightStart;
 }
 
 function hasValidSegmentTiming(
@@ -160,23 +180,57 @@ export function formatTranscriptFromSegments(
 
   if (mode === 'stack') {
     const grouped = new Map<number, string[]>();
+    const unattributedEvents: string[] = [];
     for (const segment of segments) {
+      if (segment.kind === 'non_speech') {
+        const rendered = formatNonSpeechSegment(segment, topology);
+        if (typeof segment.speaker !== 'number' || !Number.isInteger(segment.speaker)) {
+          unattributedEvents.push(rendered);
+          continue;
+        }
+        const lines = grouped.get(segment.speaker) ?? [];
+        lines.push(rendered);
+        grouped.set(segment.speaker, lines);
+        continue;
+      }
       const speaker = segment.speaker ?? 0;
       const list = grouped.get(speaker) ?? [];
       list.push(normalizeTranscriptText(segment.text));
       grouped.set(speaker, list);
     }
 
-    return [...grouped.entries()]
-      .map(([speaker, lines]) => `${formatSpeakerLabel(speaker, topology)}:\n${lines.join('\n')}`)
-      .join('\n\n');
+    const sections = [...grouped.entries()].map(
+      ([speaker, lines]) => `${formatSpeakerLabel(speaker, topology)}:\n${lines.join('\n')}`,
+    );
+    if (unattributedEvents.length > 0) {
+      sections.push(`Non-speech:\n${unattributedEvents.join('\n')}`);
+    }
+    return sections.join('\n\n');
   }
 
   return segments
     .map((segment) => {
+      if (segment.kind === 'non_speech') {
+        return formatNonSpeechSegment(segment, topology);
+      }
       const start = formatTimestamp(segment.start ?? 0);
       const speaker = formatSpeakerLabel(segment.speaker ?? 0, topology);
       return `[${speaker} ${start}] ${normalizeTranscriptText(segment.text)}`;
     })
     .join('\n');
+}
+
+function formatNonSpeechSegment(
+  segment: TranscriptSegment,
+  topology: SpeakerLabelTopology,
+): string {
+  const metadata: string[] = [];
+  if (typeof segment.speaker === 'number' && Number.isInteger(segment.speaker)) {
+    metadata.push(formatSpeakerLabel(segment.speaker, topology));
+  }
+  if (typeof segment.start === 'number' && Number.isFinite(segment.start)) {
+    metadata.push(formatTimestamp(segment.start));
+  }
+  const prefix = metadata.length > 0 ? `[${metadata.join(' ')}] ` : '';
+  return `${prefix}${normalizeTranscriptText(segment.text)}`;
 }
