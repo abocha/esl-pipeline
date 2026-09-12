@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.11] - 2026-09-12
+
+### Changed
+
+- Automated release from PR #241: fix(stt): accept ElevenLabs zero-duration timings (https://github.com/abocha/esl-pipeline/pull/241)
+
 ## [10.11.10] - 2026-09-12
 
 ### Changed
