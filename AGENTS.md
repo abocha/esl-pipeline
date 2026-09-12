@@ -1,5 +1,14 @@
 # Agent Handbook
 
+## Meta
+
+- Audience: AI agents and maintainers.
+- Authority Level: router + compact operating contract.
+- Last Verified Against: 2026-09-12 repository/workflow state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: biweekly or after major workflow/tooling changes.
+- Status: `router`.
+
 ## Purpose
 
 This file is the always-loaded repository entrypoint for AI agents and maintainers. Keep it as a

@@ -25,11 +25,11 @@ archive material for facts that can change.
 
 ## Portable workflow source
 
-The portable authority is `abocha/codex-workflow`; the expected local source is
-`D:/code/codex-workflow` when it reflects current upstream `main`. Reconcile the standard documents
-and portable role definitions from that source instead of maintaining ESL-specific forks. Keep ESL
-facts in this adapter, root `AGENTS.md`, authoritative ESL documentation, or a narrowly triggered
-repository skill.
+The portable authority is `abocha/codex-workflow`. Use a verified-current local or sibling checkout
+when available; otherwise use current upstream repository state. Reconcile the standard documents
+and portable role definitions from that authority instead of maintaining ESL-specific forks. Keep
+ESL facts in this adapter, root `AGENTS.md`, authoritative ESL documentation, or a narrowly
+triggered repository skill.
 
 ## Validation mapping
 
