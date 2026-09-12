@@ -35,6 +35,7 @@ const postgresFiles = [
 
 const workerFiles = [
   'transport.worker-runner.integration.test.ts',
+  'integration.bullmq-v6-runtime.test.ts',
   'integration.student-memory-pacing-delay.test.ts',
   'integration.assignment-share-recovery.redis.test.ts',
   'infrastructure.transcribe-queue.redis.integration.test.ts',
