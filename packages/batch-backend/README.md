@@ -76,7 +76,22 @@ Useful indexes:
   reservations. BullMQ delivery/reconciliation count is separate and can exceed three. Permanent
   failures stop; transient, ambiguous, and provider-detected malformed outcomes recover automatically
   within the reservation ceiling. A successfully normalized result rejected by deterministic structural
-  validation is terminal and does not consume another provider submission. Provider SDK retries remain disabled.
+  validation is terminal and does not consume another provider submission. When raw-response storage
+  is enabled, a received provider response is persisted before this validation; structural-failure logs
+  expose only its resulting `rawResponseUri`. Provider SDK retries remain disabled.
+- Structural timing failure logs include a controlled `timingIssue`: `missing_start`, `missing_end`,
+  `non_finite_start`, `non_finite_end`, `negative_start`, or `non_positive_duration` (first failed
+  check in that order). Null/undefined timing is missing. `segmentIndexBasis: normalized` identifies
+  the zero-based index after adapter coalescing/sorting, not the original provider word index.
+  No transcript text, timing values, or raw provider fields are included. BullMQ worker completion
+  reports delivery completion, including terminal-run skips; it does not assert transcription success.
+- For ElevenLabs timing rejection, the worker explicitly allowlists `elevenLabsPreMergeTiming` from
+  the adapter summary. `timingOrigin: provider_invalid_present` means at least one lexical provider
+  token was already invalid before mapping/coalescing; its first invalid index and classification are
+  included. `timingOrigin: normalization` requires a positive inspected lexical count and zero invalid
+  inputs: the rejected interval was produced during normalization. The former does not rule out an
+  additional merge defect. Missing or malformed provenance yields no origin inference. The whole
+  summary and arbitrary provider fields are never forwarded to structural failure logs.
 - Successful Source confirmation makes retained recording audio unavailable immediately and requests
   asynchronous recording-owned deletion. The transcribe worker sweeps bounded PostgreSQL claims for
   confirmed audio plus eligible failed or unconfirmed audio after

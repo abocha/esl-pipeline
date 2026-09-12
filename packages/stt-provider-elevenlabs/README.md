@@ -11,4 +11,19 @@ Behavior:
   whole-file Buffer collector
 - SDK retries are disabled; the durable transcription run owns bounded recovery and reservations
 - robust speaker parsing (`speakerId`/`speaker_id`, `channelIndex`/`channel_index`)
-- signed URLs and URL-backed raw provider responses are not logged or persisted
+- signed URLs and provider responses are never logged. The worker may persist the complete raw
+  response, including for URL-backed submissions, only when `ESL_STT_STORE_RAW_RESPONSE` is enabled.
+- spacing/audio events are excluded from lexical turns; explicit punctuation tokens attach to the
+  preceding lexical token. Other token types are treated as lexical. Malformed lexical timing stays
+  visible to worker validation; missing timestamps are not synthesized. Coalescing and sorting mean
+  normalized segment indexes do not preserve provider word indexes (missing starts sort as zero).
+- SDK 2.67.0 retains optional word start/end numbers and token kinds `word`, `spacing`,
+  and `audio_event`. Its schema does not constrain duration or explain missing lexical timing for
+  word-granularity Scribe v2. This alone does not justify repairing, dropping, or accepting an untimed
+  or non-positive-duration lexical token.
+- Before mapping or merging, lexical provider tokens are inspected into
+  `summary.elevenLabsPreMergeTiming`: `indexBasis: provider_words_zero_based`, `lexicalTokenCount`,
+  `invalidTimingTokenCount`, and (only if invalid) `firstInvalidTokenIndex` / `firstInvalidTimingIssue`.
+  The index counts all entries in the SDK response's `words` array, including excluded token kinds.
+  Only counts, an index, and controlled classifications are carried; no text, timestamps, or provider
+  fields are copied. This is diagnostic metadata and does not change acceptance or retry behavior.
