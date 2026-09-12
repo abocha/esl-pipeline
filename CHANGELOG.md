@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.14] - 2026-09-12
+
+### Changed
+
+- Automated release from PR #248: chore(infra): upgrade PostgreSQL to 18.6 (https://github.com/abocha/esl-pipeline/pull/248)
+
 ## [10.11.13] - 2026-09-12
 
 ### Changed
