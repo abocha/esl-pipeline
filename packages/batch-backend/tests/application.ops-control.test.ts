@@ -91,8 +91,8 @@ describe('application/ops-control', () => {
               },
               thresholds: {
                 backupMaxAgeHours: 26,
+                integrityMaxAgeDays: 8,
                 drillMaxAgeDays: 35,
-                keyRotationMaxAgeDays: 80,
               },
               backup: {
                 state: 'healthy',
@@ -101,24 +101,29 @@ describe('application/ops-control', () => {
                 lastModifiedUtc: '2026-03-10T23:00:00Z',
                 ageHours: 1,
               },
+              artifactIntegrity: {
+                state: 'healthy',
+                reason: 'ok',
+                lastReportUtc: '2026-03-10T00:00:00Z',
+                ageDays: 1,
+                reportStatus: 'ok',
+                remoteDumpKey: 'key.dump',
+                result: 'download_checksum_verified',
+                checksumVerified: true,
+              },
               restoreDrill: {
                 state: 'healthy',
                 reason: 'ok',
                 lastReportUtc: '2026-03-01T00:00:00Z',
                 ageDays: 10,
                 reportStatus: 'ok',
-                reportMode: 'auto_download_only',
-                latestRemoteDumpKey: 'key.dump',
-                drillResult: 'auto_download_only_ok',
-              },
-              keyRotation: {
-                state: 'healthy',
-                reason: 'ok',
-                iamUser: 'ops-user',
-                oldestAccessKeyId: 'AKIA...',
-                oldestCreatedUtc: '2026-01-01T00:00:00Z',
-                oldestAgeDays: 30,
-                oldestLastUsedUtc: '2026-03-10T00:00:00Z',
+                remoteDumpKey: 'key.dump',
+                result: 'restore_schema_and_reads_verified',
+                postgresVersion: '18.6',
+                restoreVerified: true,
+                cleanupStatus: 'removed',
+                publicTableCount: 42,
+                schemaMigrationCount: 50,
               },
             }),
             stderr: '',
@@ -129,7 +134,8 @@ describe('application/ops-control', () => {
         const status = await ops.getOpsStatus();
         expect(status.overall.state).toBe('healthy');
         expect(status.backup.latestDumpKey).toBe('s3://x.dump');
-        expect(status.restoreDrill.drillResult).toBe('auto_download_only_ok');
+        expect(status.restoreDrill.result).toBe('restore_schema_and_reads_verified');
+        expect(status.artifactIntegrity.checksumVerified).toBe(true);
       },
     );
   });
@@ -284,7 +290,7 @@ describe('application/ops-control', () => {
         NODE_ENV: 'test',
         BATCH_BACKEND_ENABLE_OPS_CONTROL: 'true',
         BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS: '1000',
-        BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND: "trap '' TERM; sleep 30",
+        BATCH_BACKEND_OPS_CONTROL_ARTIFACT_INTEGRITY_COMMAND: "trap '' TERM; sleep 30",
       },
       async () => {
         const ops = await loadOpsControlFresh();

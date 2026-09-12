@@ -106,7 +106,6 @@ services:
       FILESYSTEM_UPLOAD_DIR: /app/uploads
       PG_BACKUP_ENV_FILE: /dev/null
       PG_CONTAINER_NAME: ${COMPOSE_PROJECT_NAME:-esl-pipeline}-postgres-1
-      PG_BACKUP_RESTORE_DRILL_REPORT_LATEST: /app/tmp/logs/backup/restore-drill-report-latest.json
       PG_APPLICATION_NAME: esl-pipeline-api
       PG_POOL_MAX: '8'
       PNPM_STORE_DIR: /pnpm/store

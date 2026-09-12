@@ -397,12 +397,14 @@ function resolveActionCommand(request: OpsActionRequest): {
       };
     }
     case 'restore_drill_download_only': {
-      const command = config.opsControl.restoreDrillCommand.trim();
+      // The persisted action token is retained for existing action-history rows. Its executable
+      // contract is now explicitly the non-restoring artifact-integrity check.
+      const command = config.opsControl.artifactIntegrityCommand.trim();
       if (!command) {
         return {
           command: '',
           unconfiguredMessage:
-            'Restore drill command is not configured. Set BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND to enable restore drill actions.',
+            'Artifact integrity command is not configured. Set BATCH_BACKEND_OPS_CONTROL_ARTIFACT_INTEGRITY_COMMAND to enable integrity actions.',
         };
       }
       return { command, unconfiguredMessage: null };
@@ -729,6 +731,10 @@ function asNumberOrNull(value: unknown): number | null {
   return null;
 }
 
+function asBoolean(value: unknown): boolean {
+  return value === true;
+}
+
 function normalizeOpsStatusResponse(value: unknown, now: Date): OpsStatusResponse {
   const obj = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   const overall =
@@ -739,13 +745,13 @@ function normalizeOpsStatusResponse(value: unknown, now: Date): OpsStatusRespons
       : {};
   const backup =
     obj.backup && typeof obj.backup === 'object' ? (obj.backup as Record<string, unknown>) : {};
+  const artifactIntegrity =
+    obj.artifactIntegrity && typeof obj.artifactIntegrity === 'object'
+      ? (obj.artifactIntegrity as Record<string, unknown>)
+      : {};
   const restoreDrill =
     obj.restoreDrill && typeof obj.restoreDrill === 'object'
       ? (obj.restoreDrill as Record<string, unknown>)
-      : {};
-  const keyRotation =
-    obj.keyRotation && typeof obj.keyRotation === 'object'
-      ? (obj.keyRotation as Record<string, unknown>)
       : {};
 
   return {
@@ -758,8 +764,8 @@ function normalizeOpsStatusResponse(value: unknown, now: Date): OpsStatusRespons
     },
     thresholds: {
       backupMaxAgeHours: asNumberOrNull(thresholds.backupMaxAgeHours),
+      integrityMaxAgeDays: asNumberOrNull(thresholds.integrityMaxAgeDays),
       drillMaxAgeDays: asNumberOrNull(thresholds.drillMaxAgeDays),
-      keyRotationMaxAgeDays: asNumberOrNull(thresholds.keyRotationMaxAgeDays),
     },
     backup: {
       state: normalizeHealthState(backup.state),
@@ -768,24 +774,29 @@ function normalizeOpsStatusResponse(value: unknown, now: Date): OpsStatusRespons
       lastModifiedUtc: asStringOrNull(backup.lastModifiedUtc),
       ageHours: asNumberOrNull(backup.ageHours),
     },
+    artifactIntegrity: {
+      state: normalizeHealthState(artifactIntegrity.state),
+      reason: asStringOrNull(artifactIntegrity.reason) ?? 'unknown',
+      lastReportUtc: asStringOrNull(artifactIntegrity.lastReportUtc),
+      ageDays: asNumberOrNull(artifactIntegrity.ageDays),
+      reportStatus: asStringOrNull(artifactIntegrity.reportStatus),
+      remoteDumpKey: asStringOrNull(artifactIntegrity.remoteDumpKey),
+      result: asStringOrNull(artifactIntegrity.result),
+      checksumVerified: asBoolean(artifactIntegrity.checksumVerified),
+    },
     restoreDrill: {
       state: normalizeHealthState(restoreDrill.state),
       reason: asStringOrNull(restoreDrill.reason) ?? 'unknown',
       lastReportUtc: asStringOrNull(restoreDrill.lastReportUtc),
       ageDays: asNumberOrNull(restoreDrill.ageDays),
       reportStatus: asStringOrNull(restoreDrill.reportStatus),
-      reportMode: asStringOrNull(restoreDrill.reportMode),
-      latestRemoteDumpKey: asStringOrNull(restoreDrill.latestRemoteDumpKey),
-      drillResult: asStringOrNull(restoreDrill.drillResult),
-    },
-    keyRotation: {
-      state: normalizeHealthState(keyRotation.state),
-      reason: asStringOrNull(keyRotation.reason) ?? 'unknown',
-      iamUser: asStringOrNull(keyRotation.iamUser),
-      oldestAccessKeyId: asStringOrNull(keyRotation.oldestAccessKeyId),
-      oldestCreatedUtc: asStringOrNull(keyRotation.oldestCreatedUtc),
-      oldestAgeDays: asNumberOrNull(keyRotation.oldestAgeDays),
-      oldestLastUsedUtc: asStringOrNull(keyRotation.oldestLastUsedUtc),
+      remoteDumpKey: asStringOrNull(restoreDrill.remoteDumpKey),
+      result: asStringOrNull(restoreDrill.result),
+      postgresVersion: asStringOrNull(restoreDrill.postgresVersion),
+      restoreVerified: asBoolean(restoreDrill.restoreVerified),
+      cleanupStatus: asStringOrNull(restoreDrill.cleanupStatus),
+      publicTableCount: asNumberOrNull(restoreDrill.publicTableCount),
+      schemaMigrationCount: asNumberOrNull(restoreDrill.schemaMigrationCount),
     },
   };
 }
@@ -799,8 +810,8 @@ function buildStatusFailureResponse(reason: string, now: Date): OpsStatusRespons
     },
     thresholds: {
       backupMaxAgeHours: null,
+      integrityMaxAgeDays: null,
       drillMaxAgeDays: null,
-      keyRotationMaxAgeDays: null,
     },
     backup: {
       state: 'degraded',
@@ -809,24 +820,29 @@ function buildStatusFailureResponse(reason: string, now: Date): OpsStatusRespons
       lastModifiedUtc: null,
       ageHours: null,
     },
+    artifactIntegrity: {
+      state: 'degraded',
+      reason,
+      lastReportUtc: null,
+      ageDays: null,
+      reportStatus: null,
+      remoteDumpKey: null,
+      result: null,
+      checksumVerified: false,
+    },
     restoreDrill: {
       state: 'degraded',
       reason,
       lastReportUtc: null,
       ageDays: null,
       reportStatus: null,
-      reportMode: null,
-      latestRemoteDumpKey: null,
-      drillResult: null,
-    },
-    keyRotation: {
-      state: 'degraded',
-      reason,
-      iamUser: null,
-      oldestAccessKeyId: null,
-      oldestCreatedUtc: null,
-      oldestAgeDays: null,
-      oldestLastUsedUtc: null,
+      remoteDumpKey: null,
+      result: null,
+      postgresVersion: null,
+      restoreVerified: false,
+      cleanupStatus: null,
+      publicTableCount: null,
+      schemaMigrationCount: null,
     },
   };
 }

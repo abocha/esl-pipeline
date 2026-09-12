@@ -173,14 +173,16 @@ Read next:
 Primary groups:
 
 - Backup/archive:
-  - `PG_BACKUP_S3_*`, `PG_BACKUP_LOCAL_RETENTION_DAYS`, `PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS`
+  - `PG_BACKUP_S3_*`, `PG_BACKUP_HOST_STATE_DIR`, `PG_BACKUP_LOCAL_RETENTION_DAYS`,
+    `PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS`
 - Ops health / alerting:
-  - `PG_BACKUP_HEALTH_*`, `PG_BACKUP_KEY_ROTATION_*`, `PG_BACKUP_ALERT_*`
+  - `PG_BACKUP_HEALTH_*`, `PG_BACKUP_RESTORE_DRILL_*`, `PG_BACKUP_ALERT_*`
 - Container targeting:
   - `PG_COMPOSE_PROJECT`, `PG_COMPOSE_FILE`, `PG_CONTAINER_NAME`
 
-Use the `pnpm docker:prod:db:*` wrappers for the closed-alpha production Compose stack; they set
-the prod Compose project/file/container defaults before delegating to the shared backup scripts.
+Use the `pnpm docker:prod:db:*` wrappers for the production Compose stack; they set the production
+Compose project/file/container, host-state, and default `prod` namespace before delegating to the
+shared backup scripts. Host operation paths are never container `/app/...` paths.
 
 Read next:
 

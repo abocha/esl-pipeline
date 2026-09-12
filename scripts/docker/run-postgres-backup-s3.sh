@@ -3,9 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
-DEFAULT_LOG_DIR="${ROOT_DIR}/tmp/logs/backup"
-DEFAULT_BACKUP_DIR="${ROOT_DIR}/tmp/backups/postgres"
 BACKUP_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-backup-s3.sh"
+COMMON_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-ops-common.sh"
+
+# shellcheck source=scripts/docker/postgres-ops-common.sh
+. "$COMMON_SCRIPT"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
 
@@ -23,9 +25,10 @@ else
   echo "WARN: env file not found, continuing with current shell env: $ENV_FILE"
 fi
 
-LOG_DIR="${PG_BACKUP_LOG_DIR:-$DEFAULT_LOG_DIR}"
+HOST_STATE_DIR="$(pg_backup_resolve_host_state_dir)"
+LOG_DIR="${PG_BACKUP_LOG_DIR:-${HOST_STATE_DIR}/logs}"
 RETENTION_DAYS="${PG_BACKUP_LOG_RETENTION_DAYS:-30}"
-BACKUP_DIR="${PG_BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
+BACKUP_DIR="${PG_BACKUP_DIR:-${HOST_STATE_DIR}/backups/postgres}"
 LOCAL_RETENTION_DAYS="${PG_BACKUP_LOCAL_RETENTION_DAYS:-30}"
 REMOTE_RESTORE_RETENTION_DAYS="${PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS:-14}"
 LABEL="${PG_BACKUP_SCHEDULE_LABEL:-nightly}"
