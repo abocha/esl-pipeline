@@ -4,9 +4,12 @@ import type { ProviderRuntimeCategory } from '@esl-pipeline/provider-runtime';
 
 export type SttProviderId = 'deepgram' | 'elevenlabs' | 'google';
 export type TranscriptMode = 'timeline' | 'stack';
+export type TranscriptSegmentKind = 'speech' | 'non_speech';
 
 export interface TranscriptSegment {
   text: string;
+  /** Omitted for backward-compatible lexical speech segments. */
+  kind?: TranscriptSegmentKind;
   speaker?: number;
   start?: number;
   end?: number;

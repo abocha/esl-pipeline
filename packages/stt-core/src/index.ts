@@ -59,4 +59,5 @@ export type {
   SttTranscriptionResult,
   TranscriptMode,
   TranscriptSegment,
+  TranscriptSegmentKind,
 } from './types.js';

@@ -460,15 +460,22 @@ describe('stt-provider-elevenlabs', () => {
     expect(convert.mock.calls[0]?.[0]).not.toHaveProperty('file');
   });
 
-  it('coalesces Scribe speech into turns while excluding spacing and non-speech audio events', async () => {
+  it('preserves audio events while coalescing only the surrounding Scribe speech turns', async () => {
     const convert = vi.fn(async () => ({
-      text: 'Hello there! [applause] Again hi',
+      text: 'Hello there! [applause] [laughter] Again hi',
       words: [
         { text: 'Hello', type: 'word', speakerId: 'speaker_0', start: 0, end: 0.4 },
         { text: ' ', type: 'spacing', start: 0.4, end: 0.4 },
         { text: 'there', type: 'word', speakerId: 'speaker_0', start: 0.5, end: 0.8 },
         { text: '!', type: 'punctuation', start: 0.8, end: 0.8 },
-        { text: '[applause]', type: 'audio_event', start: 0.9, end: 1.2 },
+        {
+          text: '[applause]',
+          type: 'audio_event',
+          speakerId: 'speaker_0',
+          start: 0.9,
+          end: 1.2,
+        },
+        { text: '[laughter]', type: 'audio_event', start: 1.25, end: 1.3 },
         { text: 'Again', type: 'word', speakerId: 'speaker_0', start: 1.3, end: 1.6 },
         { text: 'hi', type: 'word', speakerId: 'speaker_1', start: 1.7, end: 2 },
       ],
@@ -491,9 +498,17 @@ describe('stt-provider-elevenlabs', () => {
       config: { apiKey: 'test' },
     });
 
-    expect(result.text).toBe('Hello there! [applause] Again hi');
+    expect(result.text).toBe('Hello there! [applause] [laughter] Again hi');
     expect(result.segments).toEqual([
       { text: 'Hello there!', speaker: 0, start: 0, end: 0.8 },
+      {
+        text: '[applause]',
+        kind: 'non_speech',
+        speaker: 0,
+        start: 0.9,
+        end: 1.2,
+      },
+      { text: '[laughter]', kind: 'non_speech', start: 1.25, end: 1.3 },
       { text: 'Again', speaker: 0, start: 1.3, end: 1.6 },
       { text: 'hi', speaker: 1, start: 1.7, end: 2 },
     ]);
