@@ -107,22 +107,26 @@ export function mergeSegments(
     }
 
     previous.text = `${previous.text} ${current.text}`.trim();
-    if (
-      typeof current.start === 'number' &&
-      Number.isFinite(current.start) &&
-      (typeof previous.start !== 'number' ||
-        !Number.isFinite(previous.start) ||
-        current.start < previous.start)
-    ) {
-      previous.start = current.start;
-    }
-    if (
-      typeof current.end === 'number' &&
-      Number.isFinite(current.end) &&
-      (typeof previous.end !== 'number' ||
-        !Number.isFinite(previous.end) ||
-        current.end > previous.end)
-    ) {
+    if (preserveSegmentTimings) {
+      if (
+        typeof current.start === 'number' &&
+        Number.isFinite(current.start) &&
+        (typeof previous.start !== 'number' ||
+          !Number.isFinite(previous.start) ||
+          current.start < previous.start)
+      ) {
+        previous.start = current.start;
+      }
+      if (
+        typeof current.end === 'number' &&
+        Number.isFinite(current.end) &&
+        (typeof previous.end !== 'number' ||
+          !Number.isFinite(previous.end) ||
+          current.end > previous.end)
+      ) {
+        previous.end = current.end;
+      }
+    } else if (typeof current.end === 'number') {
       previous.end = current.end;
     }
   }

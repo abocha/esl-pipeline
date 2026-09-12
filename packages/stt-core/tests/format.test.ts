@@ -43,6 +43,15 @@ describe('stt-core format helpers', () => {
     expect(merged[1]?.speaker).toBe(1);
   });
 
+  it('preserves default merge timing assignment semantics', () => {
+    expect(
+      mergeSegments([
+        { text: 'later', speaker: 0, start: 10, end: 11 },
+        { text: 'earlier', speaker: 0, start: 0, end: 1 },
+      ]),
+    ).toEqual([{ text: 'later earlier', speaker: 0, start: 10, end: 1 }]);
+  });
+
   it('keeps the temporal envelope when merging out-of-order overlapping intervals', () => {
     expect(
       mergeSegments(
