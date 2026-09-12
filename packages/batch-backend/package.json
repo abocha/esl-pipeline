@@ -51,7 +51,6 @@
     "student-system:backfill:dry": "tsx --tsconfig tsconfig.json src/tools/backfill-student-system.ts --dry-run",
     "student-system:verify:oneoff": "tsx --tsconfig tsconfig.json src/tools/verify-student-system-oneoff.ts",
     "test": "pnpm run test:unit",
-    "test:ci": "pnpm run test:unit && pnpm run test:integration && pnpm run test:db:migrations && pnpm run test:db:postgres && pnpm run test:integration:worker && pnpm run test:media",
     "test:db:migrations": "vitest run --config vitest.config.ts --project migrations --reporter=dot",
     "test:db:postgres": "vitest run --config vitest.config.ts --project postgres --reporter=dot",
     "test:integration": "pnpm run test:integration:http",

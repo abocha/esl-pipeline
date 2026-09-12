@@ -83,7 +83,6 @@ test('maintenance-only paths accept release:none', () => {
     'docs/prompt-gallery/retired.md',
     'scripts/check/ci-workflow-structure.test.mjs',
     'scripts/docs/check-core-docs.mjs',
-    'scripts/test/run-agent-vitest-lane.mjs',
     'scripts/docker/run-hadolint.mjs',
     'scripts/docker/run-hadolint.test.mjs',
     ...allowedRootFiles,

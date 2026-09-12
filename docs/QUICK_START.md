@@ -42,14 +42,14 @@ bind-mount, and host-vs-Docker dependency notes.
 ## Repo Checks
 
 ```bash
-pnpm --silent run check:fast:agent
+pnpm --filter @esl-pipeline/<package> test
 pnpm docs:check
 ```
 
-Use `pnpm check:fast` when human-readable lane selection is useful, `pnpm check:pre-pr:agent` for
-broad agent-driven PR validation, and `pnpm check:agent` for agent-driven CI reproduction or
-DB/worker/integration-risk changes. The corresponding non-agent commands remain human-readable and
-validate the same scope with the same exit semantics.
+Run the smallest relevant package test, typecheck, lint, or build while editing and before pushing.
+Hosted PR CI is the comprehensive merge gate. If a hosted job fails, inspect its logs/artifacts and
+reproduce that job's actual command, configuration, and prerequisites. Use
+`pnpm test:backend:db:worker` only for a concrete local PostgreSQL/Redis diagnostic.
 
 ## Operational Entry Point (Backend-First)
 

@@ -13,7 +13,6 @@ import {
 
 const DEFAULT_JSON_OUT = path.join(DEFAULT_ARTIFACT_DIR, 'ga-gates.json');
 const GATE_STEPS = [
-  { id: 'check_fast', command: 'pnpm', args: ['check:fast'] },
   {
     id: 'telegram_ops_bot_tests',
     command: 'pnpm',

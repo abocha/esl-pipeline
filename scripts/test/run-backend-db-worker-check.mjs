@@ -169,8 +169,8 @@ if (!pgUrl) {
 const redisCandidate =
   normalizeEnvValue(process.env.BATCH_BACKEND_TEST_REDIS) ||
   (normalizeEnvValue(process.env.REDIS_HOST)
-    ? `redis://${process.env.REDIS_HOST.trim()}:${normalizeEnvValue(process.env.REDIS_PORT) || '6379'}`
-    : 'redis://127.0.0.1:6379');
+    ? `redis://${process.env.REDIS_HOST.trim()}:${normalizeEnvValue(process.env.REDIS_PORT) || '6380'}`
+    : 'redis://127.0.0.1:6380');
 
 const redisUrl = normalizeServiceUrl(redisCandidate, {
   protocols: ['redis:', 'rediss:'],
@@ -185,7 +185,7 @@ if (!redisUrl) {
 const tmpRoot = normalizeEnvValue(process.env.TMPDIR) || '/tmp/codex-tmp';
 mkdirSync(tmpRoot, { recursive: true });
 const pgEndpoint = parseEndpoint(pgUrl, 5432);
-const redisEndpoint = parseEndpoint(redisUrl, 6379);
+const redisEndpoint = parseEndpoint(redisUrl, 6380);
 assertFinitePort(pgEndpoint.port, 'BATCH_BACKEND_TEST_PG');
 assertFinitePort(redisEndpoint.port, 'BATCH_BACKEND_TEST_REDIS');
 

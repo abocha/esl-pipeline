@@ -230,7 +230,6 @@ pnpm --filter @esl-pipeline/batch-backend build
 pnpm --filter @esl-pipeline/batch-backend test
 pnpm --filter @esl-pipeline/batch-backend test:integration:http
 pnpm --filter @esl-pipeline/batch-backend test:media
-pnpm test:check-routing
 pnpm --filter @esl-pipeline/batch-backend db:verify-baseline
 ```
 
@@ -244,11 +243,13 @@ including scrubbing ambient service and provider credentials from direct pure-te
 
 `db:generate-baseline` and `db:verify-baseline` require a Postgres connection that can create and drop temporary databases on the target server.
 
-Repo-wide checks commonly used before merge:
+For repository-wide merge evidence, use hosted PR CI. If a hosted job fails, reproduce that job's
+actual command and prerequisites from its retained logs; do not run a local aggregate approximation.
+
+Docs-only changes use:
 
 ```bash
 pnpm docs:check
-pnpm check:fast
 ```
 
 ## Related

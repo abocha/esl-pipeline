@@ -359,7 +359,7 @@ Do not run risky migrations without a rollback path.
 Codex must adjust these to the exact implementation:
 
 ```bash
-pnpm check:fast
+Confirm successful hosted PR CI and `CI gate` for the target commit.
 pnpm --filter @esl-pipeline/batch-backend test:db:migrations
 pnpm --filter @esl-pipeline/batch-backend test:integration:http
 pnpm --filter @esl-pipeline/batch-frontend test:unit
