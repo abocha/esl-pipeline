@@ -651,6 +651,91 @@ describe('application/process-transcribe-job', () => {
     );
   });
 
+  it('terminalizes a structurally rejected first submission and logs only controlled diagnostics', async () => {
+    const secret = 'TRANSCRIPT_SECRET_DO_NOT_LOG';
+    const resultModelSecret = 'RESULT_MODEL_SECRET_DO_NOT_LOG';
+    const recording = createRecording('recording-structural-rejection');
+    const sttTranscribe = vi.fn(async () =>
+      createSttResult({
+        provider: 'elevenlabs',
+        model: resultModelSecret,
+        language: 'auto',
+        text: `Teacher ${secret} Student`,
+        segments: [
+          { text: 'Teacher', speaker: 0, start: 0, end: 0.4 },
+          { text: secret, start: 0.5, end: 0.9 },
+          { text: 'Student', speaker: 1, start: 1, end: 1.4 },
+        ],
+      }),
+    );
+    const updateStatus = vi.fn(async ({ status, error }) => {
+      recording.status = status;
+      recording.error = error ?? null;
+      return recording;
+    });
+    transcriptionRuns.claim.mockClear();
+    transcriptionRuns.get.mockClear();
+    transcriptionRuns.retry.mockClear();
+    transcriptionRuns.fail.mockClear();
+    jobLogger.error.mockClear();
+    transcriptionRuns.claim
+      .mockResolvedValueOnce({
+        id: recording.id,
+        recordingId: recording.id,
+        provider: 'elevenlabs',
+        claimToken: 'claim-token',
+        submissionSlotsReserved: 0,
+      })
+      .mockResolvedValueOnce(null as never);
+    transcriptionRuns.get
+      .mockResolvedValueOnce({ submissionSlotsReserved: 1 } as never)
+      .mockResolvedValueOnce({ state: 'failed' } as never);
+
+    const dependencies = {
+      config: createConfig(),
+      storage: createStorageStub(),
+      sttTranscribe,
+      recordings: { getById: async () => recording, updateStatus },
+      transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+      publishEvent: vi.fn(),
+    };
+    dependencies.config.stt.defaultProvider = 'elevenlabs';
+
+    await expect(processTranscribeJob({ recordingId: recording.id }, dependencies)).rejects.toThrow(
+      'malformed_provider_result',
+    );
+    await expect(
+      processTranscribeJob({ recordingId: recording.id }, dependencies),
+    ).resolves.toBeNull();
+
+    expect(sttTranscribe).toHaveBeenCalledTimes(1);
+    expect(transcriptionRuns.retry).not.toHaveBeenCalled();
+    expect(transcriptionRuns.fail).toHaveBeenCalledTimes(1);
+    expect(transcriptionRuns.fail).toHaveBeenCalledWith(
+      expect.objectContaining({ errorCode: 'malformed_provider_result', outcome: 'known_failure' }),
+    );
+    expect(recording).toMatchObject({ status: 'failed', error: 'malformed_provider_result' });
+    const logFields = jobLogger.error.mock.calls[0]?.[1];
+    expect(logFields).toMatchObject({
+      provider: 'elevenlabs',
+      providerCategory: 'malformed',
+      errorCode: 'malformed_provider_result',
+      runId: recording.id,
+      recordingId: recording.id,
+      sttRequestProfile: MIXED_ELEVENLABS_PROFILE,
+      providerModel: 'scribe_v2',
+      submissionSlot: 1,
+      structuralValidation: {
+        reason: 'invalid_speaker_attribution',
+        segmentCount: 3,
+        lexicalSegmentCount: 3,
+        segmentIndex: 1,
+      },
+    });
+    expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(secret);
+    expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(resultModelSecret);
+  });
+
   it('keeps reflected signed URL details out of worker persistence and logs', async () => {
     const secret = 'SIGNED_URL_SECRET_123';
     const signedUrl = `https://storage.example.test/audio.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${secret}`;
@@ -1038,6 +1123,84 @@ describe('application/process-transcribe-job', () => {
     expect(storedTexts).toContain('[Speaker 1 00:00] Hello there.\n[Speaker 2 00:02] Hi.');
     expect(storedTexts).toContain('Hello there.');
     expect(storedTexts).toContain('Hi.');
+  });
+
+  it('preserves ElevenLabs speaker turns through timeline formatting and speaker-track counts', async () => {
+    const recording = createRecording('recording-elevenlabs-turns');
+    const storedTexts: string[] = [];
+    const rawPayloads: unknown[] = [];
+    const storage: TranscriptionStorage = {
+      ...createStorageStub(),
+      async getProviderSubmissionSource() {
+        return { kind: 'url' as const, url: 'https://storage.example.test/audio.wav' };
+      },
+      async putTranscript({ text }) {
+        storedTexts.push(text);
+        return { uri: 'local://transcripts/transcript.txt', bytes: text.length, sha256: 'hash' };
+      },
+      async putRawResponse({ json }) {
+        rawPayloads.push(json);
+        return { uri: 'local://transcripts/transcript.json', bytes: 10, sha256: 'raw-hash' };
+      },
+    };
+    const provider = createElevenLabsSttProvider({
+      clientFactory: () => ({
+        speechToText: {
+          async convert() {
+            return {
+              text: 'Hello there! [applause] Again hi',
+              words: [
+                { text: 'Hello', type: 'word', speakerId: 'speaker_0', start: 0, end: 0.2 },
+                { text: ' ', type: 'spacing', start: 0.2, end: 0.2 },
+                { text: 'there', type: 'word', speakerId: 'speaker_0', start: 0.3, end: 0.5 },
+                { text: '!', type: 'punctuation', start: 0.5, end: 0.5 },
+                { text: '[applause]', type: 'audio_event', start: 0.6, end: 0.8 },
+                { text: 'Again', type: 'word', speakerId: 'speaker_0', start: 0.9, end: 1.1 },
+                { text: 'hi', type: 'word', speakerId: 'speaker_1', start: 1.2, end: 1.4 },
+              ],
+            };
+          },
+        },
+      }),
+    });
+
+    await processTranscribeJob(
+      { recordingId: recording.id },
+      {
+        config: createConfig(),
+        storage,
+        sttTranscribe: ({ context }) =>
+          provider.transcribe({ context, config: { apiKey: 'elevenlabs-test-key' } }),
+        recordings: {
+          async getById() {
+            return recording;
+          },
+          async updateStatus({ status, error }) {
+            recording.status = status;
+            recording.error = error ?? null;
+            return recording;
+          },
+        },
+        transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(storedTexts).toContain(
+      '[Speaker 1 00:00] Hello there!\n[Speaker 1 00:01] Again\n[Speaker 2 00:01] hi',
+    );
+    const speakerTracks = rawPayloads.find(
+      (payload) =>
+        payload &&
+        typeof payload === 'object' &&
+        Array.isArray((payload as { tracks?: unknown }).tracks),
+    );
+    expect(speakerTracks).toMatchObject({
+      tracks: [
+        { speaker: 0, text: 'Hello there!\nAgain', turns: 2 },
+        { speaker: 1, text: 'hi', turns: 1 },
+      ],
+    });
   });
 });
 

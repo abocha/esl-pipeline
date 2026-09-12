@@ -21,20 +21,26 @@ describe('transcription execution contract', () => {
   });
 
   it('rejects structurally unusable provider results without judging transcript quality', () => {
-    expect(
-      validateTranscriptionResult(
-        {
-          provider: 'elevenlabs',
-          model: 'scribe_v2',
-          language: 'auto',
-          text: '   ',
-          segments: [],
-          rawResponse: null,
-          fallbackUsed: false,
-        },
-        'mixed_recording',
-      ),
-    ).toEqual({ valid: false, errorCode: 'malformed_provider_result' });
+    for (const text of ['   ', undefined]) {
+      expect(
+        validateTranscriptionResult(
+          {
+            provider: 'elevenlabs',
+            model: 'scribe_v2',
+            language: 'auto',
+            text: text as string,
+            segments: [],
+            rawResponse: null,
+            fallbackUsed: false,
+          },
+          'mixed_recording',
+        ),
+      ).toEqual({
+        valid: false,
+        errorCode: 'malformed_provider_result',
+        diagnostics: { reason: 'missing_top_level_text', segmentCount: 0 },
+      });
+    }
   });
 
   it('routes malformed successful provider provenance through bounded recovery', () => {
@@ -45,7 +51,17 @@ describe('transcription execution contract', () => {
     });
   });
 
-  it('requires valid timing and exactly two observed speakers for mixed recordings', () => {
+  it('terminalizes deterministic structural validation without changing adapter-originated malformed retries', () => {
+    expect(
+      classifyTranscriptionFailure({ code: 'TRANSCRIPTION_STRUCTURAL_VALIDATION_FAILED' }),
+    ).toEqual({
+      category: 'malformed',
+      errorCode: 'malformed_provider_result',
+      retryable: false,
+    });
+  });
+
+  it('identifies invalid segment containers, timing, and speaker attribution', () => {
     const result = {
       provider: 'elevenlabs' as const,
       model: 'scribe_v2',
@@ -55,40 +71,94 @@ describe('transcription execution contract', () => {
       fallbackUsed: false,
     };
 
+    for (const segments of [undefined, {}]) {
+      expect(
+        validateTranscriptionResult(
+          { ...result, segments: segments as unknown as [] },
+          'mixed_recording',
+        ),
+      ).toMatchObject({ diagnostics: { reason: 'invalid_segments_container' } });
+    }
+
+    for (const segment of [
+      { text: 'Zero', speaker: 0, start: 0, end: 0 },
+      { text: 'Reversed', speaker: 0, start: 1, end: 0 },
+      { text: 'Missing', speaker: 0, start: 0, end: undefined },
+    ]) {
+      expect(
+        validateTranscriptionResult(
+          {
+            ...result,
+            segments: [segment, { text: 'Student', speaker: 1, start: 1, end: 2 }],
+          },
+          'mixed_recording',
+        ),
+      ).toMatchObject({ diagnostics: { reason: 'invalid_segment_timing', segmentIndex: 0 } });
+    }
+
+    for (const speaker of [undefined, 1.5]) {
+      expect(
+        validateTranscriptionResult(
+          {
+            ...result,
+            segments: [
+              { text: 'Teacher', speaker: 0, start: 0, end: 0.2 },
+              { text: 'Unknown', speaker, start: 0.3, end: 0.5 },
+              { text: 'Student', speaker: 1, start: 0.6, end: 0.8 },
+            ],
+          },
+          'mixed_recording',
+        ),
+      ).toMatchObject({ diagnostics: { reason: 'invalid_speaker_attribution', segmentIndex: 1 } });
+    }
+  });
+
+  it('requires exactly two observed speakers for mixed recordings', () => {
+    const result = {
+      provider: 'elevenlabs' as const,
+      model: 'scribe_v2',
+      language: 'auto',
+      text: 'Teacher Student',
+      rawResponse: null,
+      fallbackUsed: false,
+    };
+    const segment = (text: string, speaker: number, start: number, end: number) => ({
+      text,
+      speaker,
+      start,
+      end,
+    });
+
     expect(
       validateTranscriptionResult(
-        {
-          ...result,
-          segments: [{ text: 'Teacher', speaker: 0, start: 0, end: 1 }],
-        },
+        { ...result, segments: [segment('Teacher', 0, 0, 0.5), segment('Student', 1, 1, 1.5)] },
         'mixed_recording',
       ),
-    ).toEqual({ valid: false, errorCode: 'malformed_provider_result' });
+    ).toEqual({ valid: true });
+
+    for (const segments of [
+      [segment('Teacher', 0, 0, 0.5)],
+      [segment('Teacher', 0, 0, 0.5), segment('Student', 1, 1, 1.5), segment('Third', 2, 2, 2.5)],
+    ]) {
+      expect(validateTranscriptionResult({ ...result, segments }, 'mixed_recording')).toMatchObject(
+        {
+          diagnostics: { reason: 'unexpected_observed_speakers' },
+        },
+      );
+    }
+
     expect(
       validateTranscriptionResult(
         {
           ...result,
           segments: [
-            { text: 'Teacher', speaker: 0, start: 1, end: 0 },
-            { text: 'Student', speaker: 1, start: 1, end: 2 },
+            { text: 'Teacher', speaker: 1, start: 0, end: 0.5 },
+            { text: 'Student', speaker: 2, start: 1, end: 1.5 },
           ],
         },
-        'mixed_recording',
+        'trusted_split_channels',
       ),
-    ).toEqual({ valid: false, errorCode: 'malformed_provider_result' });
-    expect(
-      validateTranscriptionResult(
-        {
-          ...result,
-          segments: [
-            { text: 'Teacher', speaker: 0, start: 0, end: 0.2 },
-            { text: 'Unknown', start: 0.3, end: 0.5 },
-            { text: 'Student', speaker: 1, start: 0.6, end: 0.8 },
-          ],
-        },
-        'mixed_recording',
-      ),
-    ).toEqual({ valid: false, errorCode: 'malformed_provider_result' });
+    ).toMatchObject({ diagnostics: { reason: 'unexpected_observed_speakers' } });
   });
 
   it('latches cancellation at the injected transport boundary when durable authority is lost', async () => {
