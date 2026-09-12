@@ -80,6 +80,10 @@ Keep package-level test scripts that have concrete hosted or diagnostic callers.
 aliases whose only purpose was to assemble the retired local validation hierarchy; do not add a new
 generalized local orchestrator.
 
+## Test portfolio maintenance
+
+During ordinary maintenance, obsolete or superseded assertions may be removed when cheaper or stronger evidence still protects the same meaningful defect class. Before removing coverage, identify the plausible regression it uniquely catches and the surviving evidence for that regression. Do not retain tests merely because they already exist, but do not remove consequential coverage merely because it is mocked, old, slow, or implementation-coupled.
+
 ## Evidence and merge boundary
 
 Report the exact focused commands run and their outcomes. Distinguish local evidence from hosted,
