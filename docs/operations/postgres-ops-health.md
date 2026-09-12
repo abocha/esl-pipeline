@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating backup health automation.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-08-20 repo state.
+- Last Verified Against: 2026-09-13 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after alerting logic changes.
 - Status: `runbook`.
@@ -81,6 +81,113 @@ LIMIT 20;
 
 If `pg_stat_user_tables.n_live_tup` looks wrong after a restore, import, or long local session, run
 `ANALYZE;` before using table statistics for sizing or query-plan decisions.
+
+## PostgreSQL 18.6 Production Maintenance Handoff
+
+PostgreSQL 18.6 is a same-major update from 18.4. The production Compose service retains Alpine
+3.24, `shared_preload_libraries=pg_stat_statements`, and the existing `postgres18_data` mount at
+`/var/lib/postgresql`. Do not add `pg_upgrade`, dump/restore migration, or a replacement volume for
+this update.
+
+The maintenance rationale and post-upgrade check come from the official
+[PostgreSQL 18.6 release notes](https://www.postgresql.org/docs/release/18.6/) and
+[CVE-2026-14676 advisory](https://www.postgresql.org/support/security/CVE-2026-14676/).
+
+Run this maintenance separately from the BullMQ 6 cutover. On the production host, first load the
+currently deployed application image references so the production Compose file can be evaluated,
+then create and confirm the normal encrypted backup evidence:
+
+```bash
+cd /opt/esl-pipeline
+set -a
+source /var/lib/esl-pipeline/deploy/current-images.env
+set +a
+pnpm docker:prod:db:backup:s3 -- postgres_18_6_pre_upgrade
+pnpm docker:prod:db:list:s3
+pnpm ops:status
+```
+
+Stop if the backup upload/verification or ops status does not provide acceptable pre-restart
+evidence. With the checkout at the reviewed PostgreSQL 18.6 commit, validate Compose, pull the new
+database image, and recreate only PostgreSQL. Compose reattaches the existing named volume:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env config --quiet
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env pull postgres
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env up -d --no-deps --force-recreate postgres
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env ps postgres
+```
+
+Verify the server version, retained preload configuration, installed extension, and usable
+statistics view:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env exec -T postgres \
+  psql -U esl -d esl_batch -v ON_ERROR_STOP=1 -c "SHOW server_version;" \
+  -c "SHOW shared_preload_libraries;" \
+  -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'pg_stat_statements';" \
+  -c "SELECT count(*) AS tracked_statements FROM pg_stat_statements;"
+```
+
+PostgreSQL 18.6 fixes a case where parallel GIN index builds could leave the owning table's
+`pg_class.reltuples` anomalous, including `Infinity` or `NaN`, which can prevent automatic vacuum
+and analyze work from triggering. Inspect every table with a GIN index after the restart:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env exec -T postgres \
+  psql -U esl -d esl_batch -v ON_ERROR_STOP=1 <<'SQL'
+SELECT DISTINCT
+  format('%I.%I', ns.nspname, t.relname) AS table_name,
+  t.reltuples,
+  s.n_live_tup,
+  pg_size_pretty(pg_total_relation_size(t.oid)) AS total_size,
+  CASE
+    WHEN t.reltuples::text IN ('NaN', 'Infinity', '-Infinity') OR t.reltuples < -1
+      THEN 'ANALYZE required'
+    ELSE 'inspect'
+  END AS assessment
+FROM pg_class AS t
+JOIN pg_namespace AS ns ON ns.oid = t.relnamespace
+JOIN pg_index AS i ON i.indrelid = t.oid
+JOIN pg_class AS ic ON ic.oid = i.indexrelid
+JOIN pg_am AS am ON am.oid = ic.relam AND am.amname = 'gin'
+LEFT JOIN pg_stat_user_tables AS s ON s.relid = t.oid
+ORDER BY table_name;
+SQL
+```
+
+Compare finite estimates with the table's expected scale and `n_live_tup`. Run
+`ANALYZE schema.table;` only for a table whose value is non-finite, below `-1`, or otherwise clearly
+implausible; then rerun the query and retain the before/after output. Do not turn this into an
+application migration or an unconditional database-wide `ANALYZE`.
+
+Complete a short database/application smoke and record the command output with the backup key,
+deployed commit, image, and restart time:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env exec -T batch-backend \
+  node dist/tools/migrate-db.js status
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env exec -T batch-backend \
+  node dist/tools/migrate-db.js verify
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env exec -T batch-backend \
+  curl -fsS http://127.0.0.1:8080/health
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env ps
+pnpm ops:status
+```
+
+Proceed with the separate BullMQ 6 production cutover only after the PostgreSQL 18.6 version,
+health, `pg_stat_statements`, GIN statistics, schema verification, and application smoke evidence is
+recorded and accepted.
 
 ## Local Migration Checksum Recovery
 
