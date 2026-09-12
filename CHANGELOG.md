@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.17] - 2026-09-12
+
+### Changed
+
+- Automated release from PR #250: fix(ops): modernize PostgreSQL backup health (https://github.com/abocha/esl-pipeline/pull/250)
+
 ## [10.11.16] - 2026-09-12
 
 ### Changed
