@@ -14,6 +14,13 @@ Use the smallest reliable local evidence for the change in progress. Hosted PR C
 comprehensive merge gate. Local commands do not emulate the hosted gate and are not a substitute
 for a successful `CI gate`.
 
+Hosted scope distinguishes docs-only, explicit repository-maintenance-only, and application/runtime
+changes. Repository-maintenance-only currently covers `.agents/skills/**`, `scripts/git/**`, and the
+`scripts/release/release-label-policy.mjs` module and its `.test.mjs` test; it still runs the
+unconditional repository policy job while skipping application runtime, integration/media,
+PostgreSQL/Redis worker, and Telegram jobs. This classification is independent of `release:none`;
+workflow, root toolchain, deployment/runtime, and unknown paths remain conservative and fail closed.
+
 If hosted CI fails, inspect that job's logs and retained manifest, then reproduce the job's actual
 command, configuration, and prerequisites. Do not replace a failing hosted job with a repository-wide
 local approximation.

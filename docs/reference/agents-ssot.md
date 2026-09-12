@@ -187,9 +187,12 @@ Required repo checks for behavior changes:
   job's actual commands, configuration, and prerequisites.
 - The committed hosted scope helper preserves name-status parsing, workspace discovery, relevant
   path/package classification, transitive workspace-dependent projection, and hosted CI output and
-  summary formatting. The production-image selector shares workspace/dependency impact logic and
-  retains transitive dependent coverage. It does not collect local working-tree scope or plan local
-  lanes.
+  summary formatting. It represents explicit repository-maintenance-only paths separately from
+  docs-only paths; those paths require repository-policy evidence but do not select application
+  runtime lanes. This classification is independent of release labels, and unknown or ambiguous
+  paths remain fail-closed. The production-image selector shares workspace/dependency impact logic
+  and retains transitive dependent coverage. It does not collect local working-tree scope or plan
+  local lanes.
 - Backend test class is an operational contract, not a filename convention. The executable Vitest
   project model at `packages/batch-backend/vitest.projects.mjs` is the sole prerequisite-membership
   SSOT. It retains the established deterministic HTTP prefix and positively owns PostgreSQL migration,
