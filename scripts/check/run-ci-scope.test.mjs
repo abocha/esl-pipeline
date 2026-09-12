@@ -11,8 +11,9 @@ test('GitHub outputs are single-line lowercase booleans only', () => {
       backend_db_worker: false,
       telegram: false,
       docs_only: false,
+      maintenance_only: true,
     }),
-    'runtime=true\nintegration=false\nbackend_db_worker=false\ntelegram=false\ndocs_only=false\n',
+    'runtime=true\nintegration=false\nbackend_db_worker=false\ntelegram=false\ndocs_only=false\nmaintenance_only=true\n',
   );
 });
 
@@ -24,6 +25,7 @@ test('scope summary renders structured reasons without exporting prose', () => {
       backend_db_worker: false,
       telegram: false,
       docs_only: false,
+      maintenance_only: false,
       changedFiles: ['packages/batch-frontend/src/main.tsx'],
       affectedPackages: ['@esl-pipeline/batch-frontend'],
       reasons: [
