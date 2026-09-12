@@ -70,6 +70,11 @@ const ciScopeCases = [
     records('M', '.github/actions/example/action.yml'),
     [true, true, true, true, false],
   ],
+  [
+    'scope classifier tooling',
+    records('M', 'scripts/check/workspace-change-scope.mjs'),
+    [true, true, true, true, false],
+  ],
   ['unknown', records('A', 'unexpected-root.file'), [true, true, true, true, false]],
 ];
 
@@ -79,6 +84,81 @@ for (const [name, changedFileRecords, expected] of ciScopeCases) {
     assert.deepEqual(scopeFlags(decision), expected);
   });
 }
+
+test('hosted scope classifies only explicit repository-maintenance paths', () => {
+  for (const file of [
+    '.agents/skills/esl-pipeline-validation-evidence/SKILL.md',
+    '.agents/skills/telegram-ops/SKILL.md',
+    'scripts/git/pr-style-summary.sh',
+    'scripts/release/release-label-policy.mjs',
+    'scripts/release/release-label-policy.test.mjs',
+  ]) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', file),
+      workspacePackages,
+    });
+    assert.equal(decision.maintenance_only, true, file);
+    assert.deepEqual(scopeFlags(decision), [false, false, false, false, false], file);
+    assert.equal(
+      decision.reasons.some((reason) => reason.code === 'repository-maintenance-only'),
+      true,
+      file,
+    );
+  }
+
+  const docsOnly = buildCiScopeDecision({
+    changedFileRecords: records('M', 'docs/reference/TESTING_GUIDELINES.md'),
+    workspacePackages,
+  });
+  assert.equal(docsOnly.docs_only, true);
+  assert.equal(docsOnly.maintenance_only, false);
+});
+
+test('hosted scope keeps maintenance classification narrow and fail-closed', () => {
+  for (const file of [
+    '.agents/README.md',
+    'scripts/release/production-image-scope.mjs',
+    'scripts/release/production-image-scope.test.mjs',
+    'package.json',
+  ]) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', file),
+      workspacePackages,
+    });
+    assert.equal(decision.maintenance_only, false, file);
+    assert.deepEqual(scopeFlags(decision), [true, true, true, true, false], file);
+  }
+});
+
+test('hosted scope treats maintenance plus runtime changes like the runtime change', () => {
+  const runtime = buildCiScopeDecision({
+    changedFileRecords: records('M', 'packages/batch-frontend/src/main.tsx'),
+    workspacePackages,
+  });
+  const mixed = buildCiScopeDecision({
+    changedFileRecords: [
+      ...records('M', '.agents/skills/esl-pipeline-validation-evidence/SKILL.md'),
+      ...records('M', 'packages/batch-frontend/src/main.tsx'),
+    ],
+    workspacePackages,
+  });
+  assert.deepEqual(scopeFlags(mixed), scopeFlags(runtime));
+  assert.equal(mixed.maintenance_only, false);
+});
+
+test('hosted scope treats both sides of a maintenance rename as known maintenance', () => {
+  const decision = buildCiScopeDecision({
+    changedFileRecords: [
+      {
+        status: 'R100',
+        paths: ['scripts/git/old-summary.sh', 'docs/reference/new-summary.md'],
+      },
+    ],
+    workspacePackages,
+  });
+  assert.equal(decision.maintenance_only, true);
+  assert.deepEqual(scopeFlags(decision), [false, false, false, false, false]);
+});
 
 test('hosted scope fails open for empty records', () => {
   const decision = buildCiScopeDecision({ changedFileRecords: [], workspacePackages });
@@ -98,7 +178,7 @@ test('hosted scope fails closed for discovered workspaces without trustworthy na
     assert.deepEqual(scopeFlags(decision), [true, true, true, true, false]);
     assert.equal(
       formatCiScopeGithubOutputs(decision),
-      'runtime=true\nintegration=true\nbackend_db_worker=true\ntelegram=true\ndocs_only=false\n',
+      'runtime=true\nintegration=true\nbackend_db_worker=true\ntelegram=true\ndocs_only=false\nmaintenance_only=false\n',
     );
     assert.equal(
       decision.reasons.some((reason) => reason.code === 'untrusted-workspace-metadata'),
@@ -202,7 +282,7 @@ test('hosted scope requires core service evidence for ordinary application runti
     assert.deepEqual(scopeFlags(decision), [true, true, true, false, false]);
     assert.equal(
       formatCiScopeGithubOutputs(decision),
-      'runtime=true\nintegration=true\nbackend_db_worker=true\ntelegram=false\ndocs_only=false\n',
+      'runtime=true\nintegration=true\nbackend_db_worker=true\ntelegram=false\ndocs_only=false\nmaintenance_only=false\n',
     );
   }
 });
