@@ -157,6 +157,7 @@ async function processTranscribeJobWithinFence(
   let sttRequestProfile: string | undefined;
   let providerModel: string | undefined;
   let submissionSlot: number | undefined;
+  let rawResponseUri: string | null = null;
 
   try {
     const route = resolveTranscriptionRoute({
@@ -230,6 +231,13 @@ async function processTranscribeJobWithinFence(
     } finally {
       guard.stop();
     }
+    if (config.stt.storeRawResponse && transcription.rawResponse !== null) {
+      const rawStored = await storage.putRawResponse({
+        transcriptId,
+        json: transcription.rawResponse,
+      });
+      rawResponseUri = rawStored.uri;
+    }
     const validation = validateTranscriptionResult(transcription, topology);
     if (!validation.valid) throw malformedProviderResultError(validation.diagnostics);
 
@@ -244,15 +252,6 @@ async function processTranscribeJobWithinFence(
       transcriptId,
       text: transcriptText,
     });
-
-    let rawResponseUri: string | null = null;
-    if (config.stt.storeRawResponse && transcription.rawResponse !== null) {
-      const rawStored = await storage.putRawResponse({
-        transcriptId,
-        json: transcription.rawResponse,
-      });
-      rawResponseUri = rawStored.uri;
-    }
 
     const speakerTracks = buildSpeakerTracks(transcription.segments, topology);
     let summaryJson: Record<string, unknown> = {
@@ -427,6 +426,7 @@ async function processTranscribeJobWithinFence(
             sttRequestProfile,
             providerModel,
             submissionSlot,
+            ...(rawResponseUri ? { rawResponseUri } : {}),
             structuralValidation: structuralDiagnostics,
           }
         : {}),

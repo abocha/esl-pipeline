@@ -159,7 +159,97 @@ export interface TranscriptionStructuralValidationDiagnostics {
   segmentCount?: number;
   lexicalSegmentCount?: number;
   segmentIndex?: number;
+  segmentIndexBasis?: 'normalized';
+  timingIssue?: TranscriptionTimingIssue;
+  elevenLabsPreMergeTiming?: ElevenLabsPreMergeTiming;
+  timingOrigin?: 'provider_invalid_present' | 'normalization';
   observedSpeakerCount?: number;
+}
+
+interface ElevenLabsPreMergeTiming {
+  indexBasis: 'provider_words_zero_based';
+  lexicalTokenCount: number;
+  invalidTimingTokenCount: number;
+  firstInvalidTokenIndex?: number;
+  firstInvalidTimingIssue?: TranscriptionTimingIssue;
+}
+
+/** Never forward the summary or arbitrary adapter/provider fields to the logger. */
+function readElevenLabsPreMergeTiming(value: unknown): ElevenLabsPreMergeTiming | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Record<string, unknown>;
+  const lexicalTokenCount = candidate.lexicalTokenCount;
+  const invalidTimingTokenCount = candidate.invalidTimingTokenCount;
+  if (
+    candidate.indexBasis !== 'provider_words_zero_based' ||
+    typeof lexicalTokenCount !== 'number' ||
+    !Number.isSafeInteger(lexicalTokenCount) ||
+    lexicalTokenCount <= 0 ||
+    typeof invalidTimingTokenCount !== 'number' ||
+    !Number.isSafeInteger(invalidTimingTokenCount) ||
+    invalidTimingTokenCount < 0 ||
+    invalidTimingTokenCount > lexicalTokenCount
+  )
+    return undefined;
+  const base = {
+    indexBasis: 'provider_words_zero_based' as const,
+    lexicalTokenCount,
+    invalidTimingTokenCount,
+  };
+  if (invalidTimingTokenCount === 0) {
+    if (
+      candidate.firstInvalidTokenIndex !== undefined ||
+      candidate.firstInvalidTimingIssue !== undefined
+    )
+      return undefined;
+    return base;
+  }
+  const firstInvalidTokenIndex = candidate.firstInvalidTokenIndex;
+  if (
+    typeof firstInvalidTokenIndex !== 'number' ||
+    !Number.isSafeInteger(firstInvalidTokenIndex) ||
+    firstInvalidTokenIndex < 0 ||
+    !isTimingIssue(candidate.firstInvalidTimingIssue)
+  )
+    return undefined;
+  return {
+    ...base,
+    firstInvalidTokenIndex,
+    firstInvalidTimingIssue: candidate.firstInvalidTimingIssue,
+  };
+}
+
+function timingProvenance(
+  value: unknown,
+): Pick<TranscriptionStructuralValidationDiagnostics, 'elevenLabsPreMergeTiming' | 'timingOrigin'> {
+  const preMerge = readElevenLabsPreMergeTiming(value);
+  if (!preMerge) return {};
+  return {
+    elevenLabsPreMergeTiming: preMerge,
+    timingOrigin:
+      preMerge.invalidTimingTokenCount > 0 ? 'provider_invalid_present' : 'normalization',
+  };
+}
+
+type TranscriptionTimingIssue =
+  | 'missing_start'
+  | 'missing_end'
+  | 'non_finite_start'
+  | 'non_finite_end'
+  | 'negative_start'
+  | 'non_positive_duration';
+
+/** First failed check, in this order. Never include provider values in diagnostics. */
+function classifySegmentTiming(
+  segment: Record<string, unknown>,
+): TranscriptionTimingIssue | undefined {
+  if (segment.start === undefined || segment.start === null) return 'missing_start';
+  if (segment.end === undefined || segment.end === null) return 'missing_end';
+  if (!Number.isFinite(segment.start)) return 'non_finite_start';
+  if (!Number.isFinite(segment.end)) return 'non_finite_end';
+  if ((segment.start as number) < 0) return 'negative_start';
+  if ((segment.end as number) <= (segment.start as number)) return 'non_positive_duration';
+  return undefined;
 }
 
 export type TranscriptionStructuralValidationResult =
@@ -245,16 +335,17 @@ export function validateTranscriptionResult(
     }
   }
   for (const { segment, index } of lexicalSegments) {
-    if (
-      !Number.isFinite(segment.start) ||
-      !Number.isFinite(segment.end) ||
-      (segment.start as number) < 0 ||
-      (segment.end as number) <= (segment.start as number)
-    ) {
+    const timingIssue = classifySegmentTiming(segment);
+    if (timingIssue) {
       return structuralFailure('invalid_segment_timing', {
         segmentCount,
         lexicalSegmentCount: lexicalSegments.length,
         segmentIndex: index,
+        segmentIndexBasis: 'normalized',
+        timingIssue,
+        ...(result.provider === 'elevenlabs'
+          ? timingProvenance(result.summary?.elevenLabsPreMergeTiming)
+          : {}),
       });
     }
     if (!Number.isInteger(segment.speaker)) {
@@ -318,6 +409,13 @@ export function readStructuralValidationDiagnostics(
 
   const allowed = {
     reason: candidate.reason,
+    ...(candidate.reason === 'invalid_segment_timing'
+      ? timingProvenance(candidate.elevenLabsPreMergeTiming)
+      : {}),
+    ...(candidate.segmentIndexBasis === 'normalized'
+      ? { segmentIndexBasis: 'normalized' as const }
+      : {}),
+    ...(isTimingIssue(candidate.timingIssue) ? { timingIssue: candidate.timingIssue } : {}),
     ...(asNonNegativeInteger(candidate.segmentCount) === undefined
       ? {}
       : { segmentCount: asNonNegativeInteger(candidate.segmentCount) }),
@@ -332,6 +430,17 @@ export function readStructuralValidationDiagnostics(
       : { observedSpeakerCount: asNonNegativeInteger(candidate.observedSpeakerCount) }),
   };
   return allowed;
+}
+
+function isTimingIssue(value: unknown): value is TranscriptionTimingIssue {
+  return (
+    value === 'missing_start' ||
+    value === 'missing_end' ||
+    value === 'non_finite_start' ||
+    value === 'non_finite_end' ||
+    value === 'negative_start' ||
+    value === 'non_positive_duration'
+  );
 }
 
 function isStructuralValidationReason(
