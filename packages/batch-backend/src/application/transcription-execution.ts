@@ -146,8 +146,36 @@ export interface ClassifiedTranscriptionFailure {
   retryable: boolean;
 }
 
+export type TranscriptionStructuralValidationReason =
+  | 'missing_top_level_text'
+  | 'missing_required_metadata'
+  | 'invalid_segments_container'
+  | 'invalid_segment_timing'
+  | 'invalid_speaker_attribution'
+  | 'unexpected_observed_speakers';
+
+export interface TranscriptionStructuralValidationDiagnostics {
+  reason: TranscriptionStructuralValidationReason;
+  segmentCount?: number;
+  lexicalSegmentCount?: number;
+  segmentIndex?: number;
+  observedSpeakerCount?: number;
+}
+
+export type TranscriptionStructuralValidationResult =
+  | { valid: true }
+  | {
+      valid: false;
+      errorCode: 'malformed_provider_result';
+      diagnostics: TranscriptionStructuralValidationDiagnostics;
+    };
+
 /** Only controlled transport facts are used; provider text is deliberately discarded. */
 export function classifyTranscriptionFailure(error: unknown): ClassifiedTranscriptionFailure {
+  const code = readCode(error);
+  if (code === 'TRANSCRIPTION_STRUCTURAL_VALIDATION_FAILED') {
+    return { category: 'malformed', errorCode: 'malformed_provider_result', retryable: false };
+  }
   const status = readStatus(error);
   if (status === 408 || status === 429 || (status !== null && status >= 500)) {
     return {
@@ -156,7 +184,6 @@ export function classifyTranscriptionFailure(error: unknown): ClassifiedTranscri
       retryable: true,
     };
   }
-  const code = readCode(error);
   if (code === 'MALFORMED_PROVIDER_RESULT' || code === 'PROVIDER_RESPONSE_INVALID') {
     return { category: 'malformed', errorCode: 'malformed_provider_result', retryable: true };
   }
@@ -184,47 +211,144 @@ export function classifyTranscriptionFailure(error: unknown): ClassifiedTranscri
 export function validateTranscriptionResult(
   result: SttTranscriptionResult,
   topology: AudioInputTopology,
-): { valid: true } | { valid: false; errorCode: 'malformed_provider_result' } {
+): TranscriptionStructuralValidationResult {
   // This is deliberately structural, rather than an assessment of transcription quality.
-  if (!result.provider || !result.model || !result.language || !result.text.trim()) {
-    return { valid: false, errorCode: 'malformed_provider_result' };
+  const candidate = result as unknown as Record<string, unknown>;
+  const segmentCount = Array.isArray(candidate.segments) ? candidate.segments.length : undefined;
+  if (typeof candidate.text !== 'string' || !candidate.text.trim()) {
+    return structuralFailure('missing_top_level_text', { segmentCount });
   }
-  if (!Array.isArray(result.segments)) {
-    return { valid: false, errorCode: 'malformed_provider_result' };
-  }
-  const lexicalSegments = result.segments.filter((segment) => segment.text?.trim());
   if (
-    lexicalSegments.some(
-      (segment) =>
-        !Number.isFinite(segment.start) ||
-        !Number.isFinite(segment.end) ||
-        (segment.start as number) < 0 ||
-        (segment.end as number) <= (segment.start as number),
-    )
+    typeof candidate.provider !== 'string' ||
+    !candidate.provider.trim() ||
+    typeof candidate.model !== 'string' ||
+    !candidate.model.trim() ||
+    typeof candidate.language !== 'string' ||
+    !candidate.language.trim()
   ) {
-    return { valid: false, errorCode: 'malformed_provider_result' };
+    return structuralFailure('missing_required_metadata', { segmentCount });
   }
-  if (topology === 'mixed_recording') {
-    const speakers = new Set<number>();
-    for (const segment of lexicalSegments) {
-      if (!Number.isInteger(segment.speaker)) {
-        return { valid: false, errorCode: 'malformed_provider_result' };
-      }
-      speakers.add(segment.speaker as number);
+  if (!Array.isArray(candidate.segments)) {
+    return structuralFailure('invalid_segments_container');
+  }
+  const lexicalSegments: { segment: Record<string, unknown>; index: number }[] = [];
+  for (const [index, rawSegment] of candidate.segments.entries()) {
+    if (!rawSegment || typeof rawSegment !== 'object') {
+      return structuralFailure('invalid_segments_container', { segmentCount, segmentIndex: index });
     }
-    if (speakers.size !== 2) return { valid: false, errorCode: 'malformed_provider_result' };
-  } else {
-    const speakers = new Set(lexicalSegments.map((segment) => segment.speaker));
-    if (!speakers.has(0) || !speakers.has(1) || speakers.size !== 2) {
-      return { valid: false, errorCode: 'malformed_provider_result' };
+    const segment = rawSegment as Record<string, unknown>;
+    if (segment.text !== undefined && typeof segment.text !== 'string') {
+      return structuralFailure('invalid_segments_container', { segmentCount, segmentIndex: index });
     }
+    if (typeof segment.text === 'string' && segment.text.trim()) {
+      lexicalSegments.push({ segment, index });
+    }
+  }
+  for (const { segment, index } of lexicalSegments) {
+    if (
+      !Number.isFinite(segment.start) ||
+      !Number.isFinite(segment.end) ||
+      (segment.start as number) < 0 ||
+      (segment.end as number) <= (segment.start as number)
+    ) {
+      return structuralFailure('invalid_segment_timing', {
+        segmentCount,
+        lexicalSegmentCount: lexicalSegments.length,
+        segmentIndex: index,
+      });
+    }
+    if (!Number.isInteger(segment.speaker)) {
+      return structuralFailure('invalid_speaker_attribution', {
+        segmentCount,
+        lexicalSegmentCount: lexicalSegments.length,
+        segmentIndex: index,
+      });
+    }
+  }
+  const speakers = new Set(lexicalSegments.map(({ segment }) => segment.speaker as number));
+  const expectedSpeakers =
+    topology === 'mixed_recording'
+      ? speakers.size === 2
+      : speakers.size === 2 && speakers.has(0) && speakers.has(1);
+  if (!expectedSpeakers) {
+    return structuralFailure('unexpected_observed_speakers', {
+      segmentCount,
+      lexicalSegmentCount: lexicalSegments.length,
+      observedSpeakerCount: speakers.size,
+    });
   }
   return { valid: true };
 }
 
-export function malformedProviderResultError(): Error & { code: string } {
+function structuralFailure(
+  reason: TranscriptionStructuralValidationReason,
+  details: Omit<TranscriptionStructuralValidationDiagnostics, 'reason'> = {},
+): Extract<TranscriptionStructuralValidationResult, { valid: false }> {
+  return {
+    valid: false,
+    errorCode: 'malformed_provider_result',
+    diagnostics: { reason, ...details },
+  };
+}
+
+export function malformedProviderResultError(
+  diagnostics: TranscriptionStructuralValidationDiagnostics,
+): Error & {
+  code: 'TRANSCRIPTION_STRUCTURAL_VALIDATION_FAILED';
+  structuralDiagnostics: TranscriptionStructuralValidationDiagnostics;
+} {
   const error = new Error('Provider returned a structurally unusable transcription result.');
-  return Object.assign(error, { code: 'malformed_provider_result' });
+  return Object.assign(error, {
+    code: 'TRANSCRIPTION_STRUCTURAL_VALIDATION_FAILED' as const,
+    structuralDiagnostics: diagnostics,
+  });
+}
+
+export function readStructuralValidationDiagnostics(
+  error: unknown,
+): TranscriptionStructuralValidationDiagnostics | null {
+  if (readCode(error) !== 'TRANSCRIPTION_STRUCTURAL_VALIDATION_FAILED') return null;
+  const diagnostics =
+    error && typeof error === 'object'
+      ? (error as { structuralDiagnostics?: unknown }).structuralDiagnostics
+      : undefined;
+  if (!diagnostics || typeof diagnostics !== 'object') return null;
+  const candidate = diagnostics as Record<string, unknown>;
+  if (!isStructuralValidationReason(candidate.reason)) return null;
+
+  const allowed = {
+    reason: candidate.reason,
+    ...(asNonNegativeInteger(candidate.segmentCount) === undefined
+      ? {}
+      : { segmentCount: asNonNegativeInteger(candidate.segmentCount) }),
+    ...(asNonNegativeInteger(candidate.lexicalSegmentCount) === undefined
+      ? {}
+      : { lexicalSegmentCount: asNonNegativeInteger(candidate.lexicalSegmentCount) }),
+    ...(asNonNegativeInteger(candidate.segmentIndex) === undefined
+      ? {}
+      : { segmentIndex: asNonNegativeInteger(candidate.segmentIndex) }),
+    ...(asNonNegativeInteger(candidate.observedSpeakerCount) === undefined
+      ? {}
+      : { observedSpeakerCount: asNonNegativeInteger(candidate.observedSpeakerCount) }),
+  };
+  return allowed;
+}
+
+function isStructuralValidationReason(
+  value: unknown,
+): value is TranscriptionStructuralValidationReason {
+  return (
+    value === 'missing_top_level_text' ||
+    value === 'missing_required_metadata' ||
+    value === 'invalid_segments_container' ||
+    value === 'invalid_segment_timing' ||
+    value === 'invalid_speaker_attribution' ||
+    value === 'unexpected_observed_speakers'
+  );
+}
+
+function asNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
 function readStatus(error: unknown): number | null {

@@ -316,18 +316,27 @@ function buildElevenLabsSegments(
     return [];
   }
 
-  const segments: TranscriptSegment[] = [];
-  let current: TranscriptSegment | null = null;
+  const turnChunks: TranscriptSegment[][] = [[]];
 
-  for (const [index, entry] of wordsWithContext.entries()) {
+  for (const entry of wordsWithContext) {
     const word = entry.word;
-    const normalizedText = (word.text ?? '').trim();
+    const normalizedText = typeof word.text === 'string' ? word.text.trim() : '';
     if (!normalizedText) {
       continue;
     }
 
-    const wordType = word.type ?? 'word';
-    if (wordType === 'spacing' || wordType === 'punctuation') {
+    const tokenType = classifyElevenLabsTokenType(word.type);
+    const currentChunk = turnChunks.at(-1)!;
+    if (tokenType === 'spacing') {
+      continue;
+    }
+    if (tokenType === 'punctuation') {
+      const previousLexical = currentChunk.at(-1);
+      if (previousLexical) previousLexical.text = `${previousLexical.text}${normalizedText}`;
+      continue;
+    }
+    if (tokenType === 'audio_event') {
+      if (currentChunk.length > 0) turnChunks.push([]);
       continue;
     }
 
@@ -335,38 +344,25 @@ function buildElevenLabsSegments(
     const start = typeof word.start === 'number' ? word.start : undefined;
     const end = typeof word.end === 'number' ? word.end : undefined;
 
-    if (!current || current.speaker !== speaker) {
-      if (current) {
-        segments.push(current);
-      }
-      current = {
-        text: normalizedText,
-        speaker,
-        start,
-        end,
-      };
-      continue;
-    }
-
-    current.text = `${current.text} ${normalizedText}`.trim();
-    if (typeof end === 'number') {
-      current.end = end;
-    }
-
-    const next = wordsWithContext[index + 1]?.word;
-    const currentSpeakerId = resolveElevenLabsSpeakerId(word);
-    const nextSpeakerId = next ? resolveElevenLabsSpeakerId(next) : null;
-    if (currentSpeakerId && nextSpeakerId && currentSpeakerId !== nextSpeakerId) {
-      segments.push(current);
-      current = null;
-    }
+    currentChunk.push({ text: normalizedText, speaker, start, end });
   }
 
-  if (current) {
-    segments.push(current);
-  }
+  // Use the shared turn coalescing path, but retain malformed provider timing for
+  // the worker's deterministic structural validation rather than synthesizing it.
+  return turnChunks
+    .flatMap((chunk) => mergeSegments(chunk, { preserveSegmentTimings: true }))
+    .sort((left, right) => (left.start ?? 0) - (right.start ?? 0));
+}
 
-  return mergeSegments(segments);
+function classifyElevenLabsTokenType(
+  type: unknown,
+): 'lexical' | 'spacing' | 'punctuation' | 'audio_event' {
+  if (typeof type !== 'string') return 'lexical';
+  const normalized = type.toLowerCase();
+  if (normalized === 'spacing') return 'spacing';
+  if (normalized === 'punctuation') return 'punctuation';
+  if (normalized === 'audio_event') return 'audio_event';
+  return 'lexical';
 }
 
 function resolveElevenLabsSpeakerIndex(
