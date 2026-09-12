@@ -23,6 +23,7 @@ jobs:
       backend_db_worker: ${{ steps.scope.outputs.backend_db_worker }}
       telegram: ${{ steps.scope.outputs.telegram }}
       docs_only: ${{ steps.scope.outputs.docs_only }}
+      maintenance_only: ${{ steps.scope.outputs.maintenance_only }}
     steps:
       - name: Checkout
         # actions/checkout v6
@@ -85,17 +86,19 @@ jobs:
           BACKEND_DB_WORKER: ${{ steps.projection.outputs.backend_db_worker }}
           TELEGRAM: ${{ steps.projection.outputs.telegram }}
           DOCS_ONLY: ${{ steps.projection.outputs.docs_only }}
+          MAINTENANCE_ONLY: ${{ steps.projection.outputs.maintenance_only }}
         run: |
           set -euo pipefail
           if [[ "$FORCE_ALL" == true ]]; then
-            printf '%s\n' runtime=true integration=true backend_db_worker=true telegram=true docs_only=false >> "$GITHUB_OUTPUT"
+            printf '%s\n' runtime=true integration=true backend_db_worker=true telegram=true docs_only=false maintenance_only=false >> "$GITHUB_OUTPUT"
           else
             printf '%s\n' \
               "runtime=$RUNTIME" \
               "integration=$INTEGRATION" \
               "backend_db_worker=$BACKEND_DB_WORKER" \
               "telegram=$TELEGRAM" \
-              "docs_only=$DOCS_ONLY" >> "$GITHUB_OUTPUT"
+              "docs_only=$DOCS_ONLY" \
+              "maintenance_only=$MAINTENANCE_ONLY" >> "$GITHUB_OUTPUT"
           fi
 
   repository-policy:

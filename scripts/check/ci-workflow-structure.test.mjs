@@ -34,6 +34,16 @@ test('PR CI exposes scoped evidence jobs and an always-running aggregate gate', 
   assert.match(jobBlock('ci-gate'), /- change-scope(?:\n|$)/u);
   assert.match(jobBlock('ci-gate'), /- repository-policy(?:\n|$)/u);
   assert.doesNotMatch(jobBlock('repository-policy'), /^ {4}(?:needs|if):/mu);
+
+  const scope = jobBlock('change-scope');
+  assert.match(scope, /maintenance_only: \$\{\{ steps\.scope\.outputs\.maintenance_only \}\}/u);
+  const combine = namedStep(scope, 'Combine bootstrap and projection');
+  assert.match(
+    combine,
+    /MAINTENANCE_ONLY: \$\{\{ steps\.projection\.outputs\.maintenance_only \}\}/u,
+  );
+  assert.match(combine, /maintenance_only=false/u);
+  assert.match(combine, /maintenance_only=\$MAINTENANCE_ONLY/u);
 });
 
 test('CI keeps one manifest-guarded PostgreSQL and Redis service job', () => {
@@ -207,6 +217,35 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     ),
     0,
     'skipped backend DB/worker evidence is allowed when the scope is unselected',
+  );
+
+  const maintenanceOnlySelected = {
+    runtime: 'false',
+    integration: 'false',
+    backend_db_worker: 'false',
+    telegram: 'false',
+  };
+  const maintenanceOnlyResults = {
+    ...baseResults,
+    'build-code-quality': 'skipped',
+    'unit-component': 'skipped',
+    'deterministic-integration-media': 'skipped',
+    'backend-db-integration': 'skipped',
+    'telegram-compose-smoke': 'skipped',
+  };
+  assert.equal(
+    runEvaluator(evaluator, maintenanceOnlyResults, maintenanceOnlySelected),
+    0,
+    'maintenance-only scope may skip application evidence while repository policy succeeds',
+  );
+  assert.notEqual(
+    runEvaluator(
+      evaluator,
+      { ...maintenanceOnlyResults, 'unit-component': 'failure' },
+      maintenanceOnlySelected,
+    ),
+    0,
+    'unexpected failure in an unselected lane must still fail the gate',
   );
 });
 

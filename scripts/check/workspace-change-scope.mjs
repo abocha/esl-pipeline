@@ -50,6 +50,7 @@ export function buildCiScopeDecision({ changedFileRecords, workspacePackages }) 
     backend_db_worker: false,
     telegram: false,
     docs_only: false,
+    maintenance_only: false,
     changedFiles,
     affectedPackages: [],
     reasons,
@@ -67,6 +68,12 @@ export function buildCiScopeDecision({ changedFileRecords, workspacePackages }) 
   decision.docs_only = changedFiles.every(isCiDocsPath);
   if (decision.docs_only) {
     addReason('docs-only', 'docs_only', changedFiles.join(','));
+    return stableCiDecision(decision);
+  }
+
+  decision.maintenance_only = changedFiles.every(isCiMaintenanceOnlyPath);
+  if (decision.maintenance_only) {
+    addReason('repository-maintenance-only', 'maintenance_only', changedFiles.join(','));
     return stableCiDecision(decision);
   }
 
@@ -176,14 +183,28 @@ export function readWorkspacePackages(repoRoot) {
 }
 
 export function formatCiScopeGithubOutputs(decision) {
-  return ['runtime', 'integration', 'backend_db_worker', 'telegram', 'docs_only']
+  return [
+    'runtime',
+    'integration',
+    'backend_db_worker',
+    'telegram',
+    'docs_only',
+    'maintenance_only',
+  ]
     .map((scope) => `${scope}=${decision[scope] === true}`)
     .join('\n')
     .concat('\n');
 }
 
 export function formatCiScopeSummary(decision) {
-  const scopes = ['runtime', 'integration', 'backend_db_worker', 'telegram', 'docs_only'];
+  const scopes = [
+    'runtime',
+    'integration',
+    'backend_db_worker',
+    'telegram',
+    'docs_only',
+    'maintenance_only',
+  ];
   return [
     '### Hosted CI scope',
     '',
@@ -232,6 +253,15 @@ function isCiDocsPath(file) {
   );
 }
 
+function isCiMaintenanceOnlyPath(file) {
+  return (
+    isCiDocsPath(file) ||
+    file.startsWith('.agents/skills/') ||
+    file.startsWith('scripts/git/') ||
+    /^scripts\/release\/release-label-policy(?:\.test)?\.mjs$/u.test(file)
+  );
+}
+
 function isCiRuntimePath(file) {
   return (
     /^(?:Dockerfile|docker-compose(?:\.[^/]+)?\.ya?ml)$/u.test(file) ||
@@ -248,7 +278,12 @@ function isCiTelegramPath(file) {
 }
 
 function isKnownCiNonPackagePath(file) {
-  return isCiDocsPath(file) || isCiRuntimePath(file) || isCiTelegramPath(file);
+  return (
+    isCiDocsPath(file) ||
+    isCiMaintenanceOnlyPath(file) ||
+    isCiRuntimePath(file) ||
+    isCiTelegramPath(file)
+  );
 }
 
 function stableCiDecision(decision) {
