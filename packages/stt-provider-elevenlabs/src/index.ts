@@ -129,9 +129,15 @@ export function createElevenLabsSttProvider(
         language: 'auto',
         text: parsed.text,
         segments: parsed.segments,
-        rawResponse: submissionSource.kind === 'url' ? null : response,
+        // The worker owns opt-in raw-response storage and persists this before
+        // structural validation, including for the normal S3 source_url path.
+        rawResponse: response,
         fallbackUsed: false,
-        summary: { segmentCount: parsed.segments.length, fallbackUsed: false },
+        summary: {
+          segmentCount: parsed.segments.length,
+          fallbackUsed: false,
+          elevenLabsPreMergeTiming: parsed.preMergeTiming,
+        },
       };
     },
   };
@@ -302,11 +308,65 @@ function parseElevenLabsMultichannelResponse(
 function parseElevenLabsDiarizedResponse(response: unknown): {
   text: string;
   segments: TranscriptSegment[];
+  preMergeTiming: ElevenLabsPreMergeTiming;
 } {
   const text = ((response as { text?: string }).text ?? '').trim();
   const words: ElevenLabsWord[] = (response as { words?: ElevenLabsWord[] }).words ?? [];
+  const preMergeTiming = inspectElevenLabsTiming(words);
   const segments = buildElevenLabsSegments(words.map((word) => ({ word })));
-  return { text, segments };
+  return { text, segments, preMergeTiming };
+}
+
+interface ElevenLabsPreMergeTiming {
+  indexBasis: 'provider_words_zero_based';
+  lexicalTokenCount: number;
+  invalidTimingTokenCount: number;
+  firstInvalidTokenIndex?: number;
+  firstInvalidTimingIssue?:
+    | 'missing_start'
+    | 'missing_end'
+    | 'non_finite_start'
+    | 'non_finite_end'
+    | 'negative_start'
+    | 'non_positive_duration';
+}
+
+/** Inspect the same lexical inputs as buildElevenLabsSegments, before timing mapping or merging. */
+function inspectElevenLabsTiming(words: ElevenLabsWord[]): ElevenLabsPreMergeTiming {
+  const diagnostic: ElevenLabsPreMergeTiming = {
+    indexBasis: 'provider_words_zero_based',
+    lexicalTokenCount: 0,
+    invalidTimingTokenCount: 0,
+  };
+  for (const [index, word] of words.entries()) {
+    if (
+      typeof word.text !== 'string' ||
+      !word.text.trim() ||
+      classifyElevenLabsTokenType(word.type) !== 'lexical'
+    )
+      continue;
+    diagnostic.lexicalTokenCount += 1;
+    const issue = classifyElevenLabsTiming(word);
+    if (!issue) continue;
+    diagnostic.invalidTimingTokenCount += 1;
+    if (diagnostic.firstInvalidTokenIndex === undefined) {
+      diagnostic.firstInvalidTokenIndex = index;
+      diagnostic.firstInvalidTimingIssue = issue;
+    }
+  }
+  return diagnostic;
+}
+
+function classifyElevenLabsTiming(
+  word: ElevenLabsWord,
+): ElevenLabsPreMergeTiming['firstInvalidTimingIssue'] {
+  if (word.start == null) return 'missing_start';
+  if (word.end == null) return 'missing_end';
+  if (!Number.isFinite(word.start)) return 'non_finite_start';
+  if (!Number.isFinite(word.end)) return 'non_finite_end';
+  if (word.start < 0) return 'negative_start';
+  if (word.end <= word.start) return 'non_positive_duration';
+  return undefined;
 }
 
 function buildElevenLabsSegments(

@@ -12,6 +12,151 @@ import { createElevenLabsSttProvider } from '../src/index.js';
 const TEST_MODULE_PATH = fileURLToPath(import.meta.url);
 
 describe('stt-provider-elevenlabs', () => {
+  it.each([
+    [undefined, 2, 'missing_start'],
+    [null, 2, 'missing_start'],
+    [1, undefined, 'missing_end'],
+    [NaN, 2, 'non_finite_start'],
+    [1, Infinity, 'non_finite_end'],
+    [-1, 2, 'negative_start'],
+    [1, 1, 'non_positive_duration'],
+    [2, 1, 'non_positive_duration'],
+  ])('records pre-merge lexical provenance for %s, %s as %s', async (start, end, issue) => {
+    const provider = createElevenLabsSttProvider({
+      clientFactory: () => ({
+        speechToText: {
+          convert: async () => ({
+            text: 'TRANSCRIPT_SECRET',
+            privateField: 'PROVIDER_SECRET',
+            words: [
+              { text: ' ', type: 'spacing' },
+              { text: '[sound]', type: 'audio_event' },
+              { text: '!', type: 'punctuation' },
+              { text: 'TRANSCRIPT_SECRET', type: 'word', speaker_id: 'speaker_0', start, end },
+              { text: 'OTHER_SECRET', type: 'ARBITRARY_PROVIDER_KIND', start: 3, end: 3 },
+            ],
+          }),
+        },
+      }),
+    });
+    const result = await provider.transcribe({
+      context: {
+        recordingId: 'provenance',
+        storageUri: 's3://bucket/audio.wav',
+        getStream: async () => Readable.from(['unused']),
+        getSubmissionSource: async () => ({
+          kind: 'url',
+          url: 'https://storage.example.test/audio.wav',
+        }),
+      },
+      config: { apiKey: 'test' },
+    });
+    expect(result.summary?.elevenLabsPreMergeTiming).toEqual({
+      indexBasis: 'provider_words_zero_based',
+      lexicalTokenCount: 2,
+      invalidTimingTokenCount: 2,
+      firstInvalidTokenIndex: 3,
+      firstInvalidTimingIssue: issue,
+    });
+    expect(JSON.stringify(result.summary)).not.toMatch(/SECRET|ARBITRARY_PROVIDER_KIND|https:/);
+  });
+
+  it('records all-valid provider timing when coalescing creates a reversed normalized interval', async () => {
+    const provider = createElevenLabsSttProvider({
+      clientFactory: () => ({
+        speechToText: {
+          convert: async () => ({
+            text: 'Hello again hi',
+            words: [
+              { text: 'Hello', type: 'word', speaker_id: 'speaker_0', start: 10, end: 11 },
+              { text: 'again', type: 'word', speaker_id: 'speaker_0', start: 0, end: 1 },
+              { text: 'hi', type: 'word', speaker_id: 'speaker_1', start: 12, end: 13 },
+            ],
+          }),
+        },
+      }),
+    });
+    const result = await provider.transcribe({
+      context: {
+        recordingId: 'provenance',
+        storageUri: 's3://bucket/audio.wav',
+        getStream: async () => Readable.from(['unused']),
+        getSubmissionSource: async () => ({
+          kind: 'url',
+          url: 'https://storage.example.test/audio.wav',
+        }),
+      },
+      config: { apiKey: 'test' },
+    });
+    expect(result.summary?.elevenLabsPreMergeTiming).toEqual({
+      indexBasis: 'provider_words_zero_based',
+      lexicalTokenCount: 3,
+      invalidTimingTokenCount: 0,
+    });
+    expect(result.segments[0]).toMatchObject({ start: 10, end: 1 });
+  });
+
+  it.each([
+    [undefined, 3],
+    [null, 3],
+    [2, undefined],
+    [2, null],
+    [2, 2],
+    [2, 1],
+  ])(
+    'preserves unusable lexical timing (%s, %s) through the installed SDK and turn merging',
+    async (start, end) => {
+      const guardedFetch = vi.fn<typeof fetch>(
+        async () =>
+          new Response(
+            JSON.stringify({
+              language_code: 'eng',
+              language_probability: 1,
+              text: 'Hello bad hi',
+              words: [
+                {
+                  text: 'Hello',
+                  type: 'word',
+                  speaker_id: 'speaker_0',
+                  start: 1,
+                  end: 1.5,
+                  logprob: 0,
+                },
+                { text: 'bad', type: 'word', speaker_id: 'speaker_0', start, end, logprob: 0 },
+                { text: 'hi', type: 'word', speaker_id: 'speaker_1', start: 4, end: 5, logprob: 0 },
+              ],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      );
+      const result = await createElevenLabsSttProvider().transcribe({
+        context: {
+          recordingId: 'rec-timing',
+          storageUri: 's3://bucket/audio.wav',
+          async getStream() {
+            return Readable.from(['audio']);
+          },
+          async getSubmissionSource() {
+            return { kind: 'url' as const, url: 'https://storage.example.test/audio.wav' };
+          },
+          providerTransport: { fetch: guardedFetch, signal: new AbortController().signal },
+        },
+        config: { apiKey: 'test' },
+      });
+      expect(guardedFetch).toHaveBeenCalledTimes(1);
+      expect(result.segments).toHaveLength(3);
+      expect(result.segments).toContainEqual({
+        text: 'bad',
+        speaker: 0,
+        start: start ?? undefined,
+        end: end ?? undefined,
+      });
+      // Missing start moves provider word 1 to normalized index 0; it is not repaired to zero.
+      if (start == null) expect(result.segments[0]?.text).toBe('bad');
+      expect(result.rawResponse).toMatchObject({ text: 'Hello bad hi' });
+    },
+  );
+
   it('uses the installed SDK transport with the execution abort signal', async () => {
     let receivedSignal: AbortSignal | undefined;
     const controller = new AbortController();
@@ -350,10 +495,10 @@ describe('stt-provider-elevenlabs', () => {
     });
   });
 
-  it('does not expose arbitrary URL-backed provider response fields', async () => {
+  it('exposes the complete URL-backed provider response for worker-owned raw storage', async () => {
     const signedUrl =
       'https://storage.example.test/audio.wav?X-Amz-Signature=SIGNED_URL_SECRET_123&X-Amz-Security-Token=TEMP_TOKEN_SECRET_456';
-    const convert = vi.fn(async (_request: Record<string, unknown>) => ({
+    const response = {
       language_code: 'eng',
       language_probability: 1,
       text: 'Hello hi',
@@ -363,7 +508,8 @@ describe('stt-provider-elevenlabs', () => {
       ],
       provider_echo: signedUrl,
       diagnostics: { nested_secret: 'TEMP_TOKEN_SECRET_456' },
-    }));
+    };
+    const convert = vi.fn(async (_request: Record<string, unknown>) => response);
     const provider = createElevenLabsSttProvider({
       clientFactory: () => ({ speechToText: { convert } }),
     });
@@ -386,11 +532,7 @@ describe('stt-provider-elevenlabs', () => {
     expect(result.segments).toHaveLength(2);
     expect(result.segments[0]?.speaker).toBe(1);
     expect(result.segments[1]?.speaker).toBe(0);
-    expect(result.rawResponse).toBeNull();
-    const serializedResult = JSON.stringify(result);
-    expect(serializedResult).not.toContain(signedUrl);
-    expect(serializedResult).not.toContain('SIGNED_URL_SECRET_123');
-    expect(serializedResult).not.toContain('TEMP_TOKEN_SECRET_456');
+    expect(result.rawResponse).toBe(response);
   });
 
   it('rejects URL-backed normalized results containing exact submitted credential material', async () => {
