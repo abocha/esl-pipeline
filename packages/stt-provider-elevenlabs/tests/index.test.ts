@@ -19,8 +19,7 @@ describe('stt-provider-elevenlabs', () => {
     [NaN, 2, 'non_finite_start'],
     [1, Infinity, 'non_finite_end'],
     [-1, 2, 'negative_start'],
-    [1, 1, 'non_positive_duration'],
-    [2, 1, 'non_positive_duration'],
+    [2, 1, 'reversed_timing'],
   ])('records pre-merge lexical provenance for %s, %s as %s', async (start, end, issue) => {
     const provider = createElevenLabsSttProvider({
       clientFactory: () => ({
@@ -54,14 +53,14 @@ describe('stt-provider-elevenlabs', () => {
     expect(result.summary?.elevenLabsPreMergeTiming).toEqual({
       indexBasis: 'provider_words_zero_based',
       lexicalTokenCount: 2,
-      invalidTimingTokenCount: 2,
+      invalidTimingTokenCount: 1,
       firstInvalidTokenIndex: 3,
       firstInvalidTimingIssue: issue,
     });
     expect(JSON.stringify(result.summary)).not.toMatch(/SECRET|ARBITRARY_PROVIDER_KIND|https:/);
   });
 
-  it('records all-valid provider timing when coalescing creates a reversed normalized interval', async () => {
+  it('does not coalesce far-backward disjoint provider intervals', async () => {
     const provider = createElevenLabsSttProvider({
       clientFactory: () => ({
         speechToText: {
@@ -93,7 +92,52 @@ describe('stt-provider-elevenlabs', () => {
       lexicalTokenCount: 3,
       invalidTimingTokenCount: 0,
     });
-    expect(result.segments[0]).toMatchObject({ start: 10, end: 1 });
+    expect(result.segments).toEqual([
+      { text: 'again', speaker: 0, start: 0, end: 1 },
+      { text: 'Hello', speaker: 0, start: 10, end: 11 },
+      { text: 'hi', speaker: 1, start: 12, end: 13 },
+    ]);
+  });
+
+  it('retains and coalesces same-speaker runs of point-timed lexical tokens', async () => {
+    const provider = createElevenLabsSttProvider({
+      clientFactory: () => ({
+        speechToText: {
+          convert: async () => ({
+            text: 'У тебя yes Hi',
+            words: [
+              { text: 'У', type: 'word', speaker_id: 'speaker_0', start: 11.01, end: 11.01 },
+              { text: 'тебя', type: 'word', speaker_id: 'speaker_0', start: 11.01, end: 11.01 },
+              { text: 'yes', type: 'word', speaker_id: 'speaker_0', start: 11.01, end: 11.01 },
+              { text: 'Hi', type: 'word', speaker_id: 'speaker_1', start: 11.01, end: 11.01 },
+            ],
+          }),
+        },
+      }),
+    });
+
+    const result = await provider.transcribe({
+      context: {
+        recordingId: 'rec-point-timing',
+        storageUri: 's3://bucket/audio.wav',
+        getStream: async () => Readable.from(['unused']),
+        getSubmissionSource: async () => ({
+          kind: 'url',
+          url: 'https://storage.example.test/audio.wav',
+        }),
+      },
+      config: { apiKey: 'test' },
+    });
+
+    expect(result.summary?.elevenLabsPreMergeTiming).toEqual({
+      indexBasis: 'provider_words_zero_based',
+      lexicalTokenCount: 4,
+      invalidTimingTokenCount: 0,
+    });
+    expect(result.segments).toEqual([
+      { text: 'У тебя yes', speaker: 0, start: 11.01, end: 11.01 },
+      { text: 'Hi', speaker: 1, start: 11.01, end: 11.01 },
+    ]);
   });
 
   it.each([
@@ -101,10 +145,9 @@ describe('stt-provider-elevenlabs', () => {
     [null, 3],
     [2, undefined],
     [2, null],
-    [2, 2],
     [2, 1],
   ])(
-    'preserves unusable lexical timing (%s, %s) through the installed SDK and turn merging',
+    'preserves malformed lexical timing (%s, %s) through the installed SDK and turn merging',
     async (start, end) => {
       const guardedFetch = vi.fn<typeof fetch>(
         async () =>

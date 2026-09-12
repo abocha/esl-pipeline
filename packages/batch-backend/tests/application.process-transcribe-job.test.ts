@@ -657,8 +657,7 @@ describe('application/process-transcribe-job', () => {
     ['non_finite_start', NaN, 0.9],
     ['non_finite_end', 0.5, Infinity],
     ['negative_start', -0.5, 0.9],
-    ['non_positive_duration', 0.5, 0.5],
-    ['non_positive_duration', 0.9, 0.5],
+    ['reversed_timing', 0.9, 0.5],
     ['invalid_speaker_attribution', 0.5, 0.9],
   ])(
     'terminalizes first-submission %s and logs only controlled diagnostics',
@@ -768,7 +767,7 @@ describe('application/process-transcribe-job', () => {
         text: 'Teacher malformed Student',
         segments: [
           { text: 'Teacher', speaker: 0, start: 0, end: 0.4 },
-          { text: 'malformed', speaker: 0, start: 0.5, end: 0.5 },
+          { text: 'malformed', speaker: 0, start: 0.5, end: 0.4 },
           { text: 'Student', speaker: 1, start: 1, end: 1.4 },
         ],
         rawResponse,
@@ -860,7 +859,7 @@ describe('application/process-transcribe-job', () => {
               text: 'Teacher malformed Student',
               segments: [
                 { text: 'Teacher', speaker: 0, start: 0, end: 0.4 },
-                { text: 'malformed', speaker: 0, start: 0.5, end: 0.5 },
+                { text: 'malformed', speaker: 0, start: 0.5, end: 0.4 },
                 { text: 'Student', speaker: 1, start: 1, end: 1.4 },
               ],
               rawResponse: { providerPayload: 'not-stored' },
@@ -1292,7 +1291,7 @@ describe('application/process-transcribe-job', () => {
                   type: 'word',
                   speaker_id: 'speaker_0',
                   start: 10,
-                  end: origin === 'normalization' ? 11 : 10,
+                  end: origin === 'normalization' ? 11 : 9,
                 },
                 { text: secret, type: 'word', speaker_id: 'speaker_0', start: 0, end: 1 },
                 { text: secret, type: 'word', speaker_id: 'speaker_1', start: 12, end: 13 },
@@ -1303,6 +1302,11 @@ describe('application/process-transcribe-job', () => {
       });
       const sttTranscribe = vi.fn(async ({ context }) => {
         const result = await provider.transcribe({ context, config: { apiKey: 'test' } });
+        if (origin === 'normalization') {
+          const firstSegment = result.segments[0];
+          if (!firstSegment) throw new Error('Expected a normalized segment.');
+          result.segments[0] = { ...firstSegment, start: 10, end: 9 };
+        }
         result.summary = {
           ...result.summary,
           arbitrary: secret,
@@ -1344,11 +1348,11 @@ describe('application/process-transcribe-job', () => {
       const fields = jobLogger.error.mock.calls[0]?.[1];
       expect(fields.structuralValidation).toEqual({
         reason: 'invalid_segment_timing',
-        segmentCount: origin === 'normalization' ? 2 : 3,
-        lexicalSegmentCount: origin === 'normalization' ? 2 : 3,
+        segmentCount: 3,
+        lexicalSegmentCount: 3,
         segmentIndex: origin === 'normalization' ? 0 : 1,
         segmentIndexBasis: 'normalized',
-        timingIssue: 'non_positive_duration',
+        timingIssue: 'reversed_timing',
         timingOrigin: origin,
         elevenLabsPreMergeTiming: {
           indexBasis: 'provider_words_zero_based',
@@ -1356,7 +1360,7 @@ describe('application/process-transcribe-job', () => {
           invalidTimingTokenCount: origin === 'normalization' ? 0 : 1,
           ...(origin === 'normalization'
             ? {}
-            : { firstInvalidTokenIndex: 1, firstInvalidTimingIssue: 'non_positive_duration' }),
+            : { firstInvalidTokenIndex: 1, firstInvalidTimingIssue: 'reversed_timing' }),
         },
       });
       expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(secret);
