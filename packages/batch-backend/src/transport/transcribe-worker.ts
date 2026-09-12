@@ -30,6 +30,7 @@ export async function startTranscribeWorker(): Promise<void> {
     poolMax: config.pg.poolMax,
     idleTimeoutMs: config.pg.idleTimeoutMs,
     connectionTimeoutMs: config.pg.connectionTimeoutMs,
+    sttStoreRawResponse: config.stt.storeRawResponse,
     recordingAudioCleanupEnabled: config.recordings.audioCleanupEnabled,
     recordingAudioRecoveryTtlDays: config.recordings.audioRecoveryTtlDays,
   });

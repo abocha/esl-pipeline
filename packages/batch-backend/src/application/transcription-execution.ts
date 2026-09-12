@@ -237,7 +237,7 @@ type TranscriptionTimingIssue =
   | 'non_finite_start'
   | 'non_finite_end'
   | 'negative_start'
-  | 'non_positive_duration';
+  | 'reversed_timing';
 
 /** First failed check, in this order. Never include provider values in diagnostics. */
 function classifySegmentTiming(
@@ -248,7 +248,7 @@ function classifySegmentTiming(
   if (!Number.isFinite(segment.start)) return 'non_finite_start';
   if (!Number.isFinite(segment.end)) return 'non_finite_end';
   if ((segment.start as number) < 0) return 'negative_start';
-  if ((segment.end as number) <= (segment.start as number)) return 'non_positive_duration';
+  if ((segment.end as number) < (segment.start as number)) return 'reversed_timing';
   return undefined;
 }
 
@@ -439,7 +439,7 @@ function isTimingIssue(value: unknown): value is TranscriptionTimingIssue {
     value === 'non_finite_start' ||
     value === 'non_finite_end' ||
     value === 'negative_start' ||
-    value === 'non_positive_duration'
+    value === 'reversed_timing'
   );
 }
 

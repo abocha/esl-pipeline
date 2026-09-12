@@ -328,7 +328,7 @@ interface ElevenLabsPreMergeTiming {
     | 'non_finite_start'
     | 'non_finite_end'
     | 'negative_start'
-    | 'non_positive_duration';
+    | 'reversed_timing';
 }
 
 /** Inspect the same lexical inputs as buildElevenLabsSegments, before timing mapping or merging. */
@@ -365,7 +365,7 @@ function classifyElevenLabsTiming(
   if (!Number.isFinite(word.start)) return 'non_finite_start';
   if (!Number.isFinite(word.end)) return 'non_finite_end';
   if (word.start < 0) return 'negative_start';
-  if (word.end <= word.start) return 'non_positive_duration';
+  if (word.end < word.start) return 'reversed_timing';
   return undefined;
 }
 
