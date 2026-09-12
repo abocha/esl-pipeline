@@ -24,7 +24,7 @@ Completion requires evidence that:
 1. A normal supported audio upload works end to end.
 2. Cheap-demux video works if the feasibility boundary below remains valid in the production FFmpeg image; only its extracted audio is retained remotely and its temporary source video is removed.
 3. The browser rejects a file larger than the initial 2 GiB operational upload guard before upload, while the backend independently rejects oversize, disk-capacity-constrained, corrupt, no-audio, and over-duration sources before paid STT.
-4. Injected transient, ambiguous, and malformed STT failures recover automatically within the bounded retry policy.
+4. Injected transient, ambiguous, and provider/adapter-malformed STT failures recover automatically within the bounded retry policy; a successfully received and normalized response rejected by worker deterministic structural validation terminalizes without another automatic paid provider submission.
 5. Concurrent duplicate enqueue cannot create parallel STT submissions for one recording attempt.
 6. Cross-tutor student resolution, recording, transcript, cache, retry, retrieval, and deletion access is denied, including legacy name-based student seams.
 7. Source confirmation makes retained lesson audio unavailable and schedules physical deletion.
@@ -88,7 +88,7 @@ Do not add or reopen:
 10. One stable transcription-run identity owns queue deduplication, execution claiming, submission-slot accounting, and final outcome.
 11. The application owns one retry policy: at most three durably reserved submission slots per run that can possibly cross the paid provider boundary. Provider-library retries are disabled.
 12. A genuinely ambiguous/crashed call may be charged twice during recovery; exact-once billing is not promised.
-13. Retrying is non-terminal. A user sees terminal failure only after automatic recovery is exhausted or the failure is deterministic/permanent.
+13. Retrying is non-terminal. A user sees terminal failure only after automatic recovery is exhausted, the failure is deterministic/permanent, or a successfully received and normalized response fails worker deterministic structural validation.
 14. Once a usable transcript exists, normal-user retry is forbidden.
 15. Retained audio remains recoverable through transcription and Source review, becomes inaccessible immediately after successful Source confirmation, and is physically deleted asynchronously. Cache-hit recordings that never retained audio remain `not_retained`. Transcripts remain durable.
 16. Abandoned/permanently failed retained audio expires after seven days by default. `RECORDING_AUDIO_RECOVERY_TTL_DAYS` makes that cheap policy configurable.
@@ -283,7 +283,7 @@ Retryable transient failures include HTTP 408, 429, provider 5xx/unavailability,
 
 Ambiguous failures include a connection loss/timeout after a request may have reached the provider, or recovery of an expired `submitting` claim with a reserved slot and no durable result. Mark that slot outcome ambiguous; it remains consumed, may have incurred a charge, and may retry only if another of the three slots remains.
 
-Malformed STT is objective protocol/output invalidity, not a quality judgment. Retry when the response cannot be parsed/validated, has no non-whitespace transcript or usable timed lexical segments, contains non-finite or invalid segment timing, or violates route-specific speaker structure. A malformed Deepgram success enters this bounded recovery path and never becomes a transcript winner. For `mixed_recording`, every lexical segment must have a provider speaker ID and the result must contain exactly two observed speakers. For trusted split, retain the existing exact Teacher/Student channel invariant. Do not score grammar, WER, semantic quality, confidence, or role correctness.
+Malformed STT is objective protocol/output invalidity, not a quality judgment. Provider/adapter-detected malformed outcomes retain their existing bounded recovery policy where applicable, including a response that cannot be parsed or adapter-validated. After a provider response has been successfully received and normalized, the worker's deterministic structural validation is terminal: no non-whitespace transcript or usable timed lexical segments, non-finite or invalid segment timing, or route-specific speaker-structure violations terminalize the run without another automatic paid provider submission. A provider/adapter-detected malformed Deepgram success enters this bounded recovery path and never becomes a transcript winner. For `mixed_recording`, every lexical segment must have a provider speaker ID and the result must contain exactly two observed speakers. For trusted split, retain the existing exact Teacher/Student channel invariant. Do not score grammar, WER, semantic quality, confidence, or role correctness.
 
 ### Paid submission observability
 
@@ -451,7 +451,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 1. Concurrent duplicate enqueue and duplicate Bull delivery produce at most one live provider call for a run claim; a valid cache hit creates no run or job to duplicate.
 2. No run reserves more than three submission slots that could possibly cross the paid boundary; BullMQ delivery attempts may exceed three, and tests and observability do not claim reservations equal exact physical submissions.
-3. Injected transient, ambiguous, crash-recovery, and malformed outcomes retry and eventually succeed or terminally exhaust as specified; malformed provider success is never accepted as a transcript winner.
+3. Injected transient, ambiguous, crash-recovery, and provider/adapter-malformed outcomes retry and eventually succeed or terminally exhaust as specified; a successfully received and normalized response that fails worker deterministic structural validation terminalizes without another automatic paid provider submission and is never accepted as a transcript winner.
 4. Permanent failures do not retry.
 5. Competing completion cannot write two transcripts.
 6. Success and active runs cannot be retried through the server; normal-user transcription retry UI is Slice 5 work.

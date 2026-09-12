@@ -53,8 +53,10 @@
 ## Core Invariants
 
 - Users interact with artifact IDs, not file paths.
-- Transient, ambiguous, and malformed outcomes recover automatically within three durable provider
-  reservations. BullMQ delivery attempts are not provider reservations.
+- Transient, ambiguous, and provider/adapter-malformed outcomes recover automatically within three
+  durable provider reservations where their existing policy permits. A response successfully received
+  and normalized but rejected by worker deterministic structural validation terminalizes without another
+  automatic paid provider submission. BullMQ delivery attempts are not provider reservations.
 - Normal users cannot retry active or successful transcription; terminal recovery is a new or
   replacement recording upload.
 - Runtime provider selection is explicit (`request override` or configured default); no cross-provider fallback.
