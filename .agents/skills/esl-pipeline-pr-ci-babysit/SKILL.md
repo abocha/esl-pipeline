@@ -1,63 +1,37 @@
 ---
 name: esl-pipeline-pr-ci-babysit
-description: Use when an esl-pipeline pull request needs template cleanup, release-label verification, exact GitHub Actions failure diagnosis, CI monitoring, or one explicitly authorized fix-and-push pass.
+description: Use only when work directly operates on an ESL Pipeline pull request or its hosted CI state, including PR metadata, release-label verification, hosted failure diagnosis, check monitoring, or an explicitly authorized fix-and-push pass. Do not use for routine local validation before a PR exists.
 ---
 
-# ESL Pipeline PR and CI follow-up
+# ESL Pipeline PR and hosted CI follow-up
 
-Operate on live PR or GitHub state only to the extent explicitly authorized by the user. Do not
-turn a request to inspect or explain into a PR edit, push, review submission, or CI watch.
+Use live GitHub evidence and keep PR/CI actions inside the user's authorized scope.
 
-## Establish live state
+## Live state first
 
-1. Read `AGENTS.md`, `.github/pull_request_template.md`, and the relevant repository-administration
-   sections routed through `docs/reference/agents-ssot.md`.
-2. Read `docs/reference/VERSIONING_MODEL.md` before selecting a release label.
-3. Retrieve the live PR body, labels, head branch, URL, and checks with `gh`; do not reconstruct them
-   from memory or a local diff alone.
-4. Infer from the request and applicable prior authorization whether the scope is:
-   - report only;
-   - PR body or label correction;
-   - one CI fix and push;
-   - continuous CI monitoring through green.
-     Ask only if a material authorization boundary remains unresolved.
+- Read the current PR body, labels, head, and checks rather than reconstructing them from memory or local state.
+- Use the current PR template and versioning policy when metadata or release labels matter.
+- PR validation text must describe validation actually performed.
+- A PR must have exactly one release label permitted by current repository policy.
 
-For report-only requests, report discrepancies without correcting metadata, changing code, pushing,
-or starting a watch. The correction steps below apply only within authorized scope.
+A request to inspect, explain, or diagnose does not authorize editing PR metadata, changing code, pushing, submitting reviews, or monitoring checks.
 
-## Normalize PR metadata
+## Diagnose the exact hosted failure
 
-- Use the template sections exactly: `Summary`, `Validation`, `Risk Notes`, and `Checklist`.
-- List only validation commands actually run.
-- Require exactly one release label allowed by the current versioning policy.
-- Stop and ask when the release-label choice is ambiguous.
-- Re-read the live PR after any authorized edit and verify its body and labels.
+Start from the failing hosted job and its own logs/artifacts. Do not infer the cause from a neighboring job, summary, or stale local result.
 
-## Diagnose CI from exact evidence
+Reproduce locally only when doing so can resolve a concrete uncertainty. Match the hosted command, configuration, prerequisites, or resource conditions that matter instead of substituting an unrelated broad local gate.
 
-1. Identify the exact failing job with `gh pr checks` or `statusCheckRollup`.
-2. Open that job's log before changing code. Do not diagnose from a neighboring summary.
-3. Reproduce the exact failing command locally when practical.
-4. Apply the narrowest correction supported by the failure evidence.
-5. Run the focused command, then the repository gate required by `AGENTS.md`.
-6. Push only when the user authorized a push.
+Inspect retained validation artifacts before rerunning unchanged work.
 
-If the user requested monitoring, resume `gh pr checks <pr-number> --watch --interval 30` after an
-authorized fix. If the user requested one fix without babysitting, stop after the verified push and
-do not claim the hosted rerun result.
+Apply a code fix or push only when that mutation is authorized.
 
-## Common failure handling
+## Monitoring boundary
 
-- If job logs are unavailable while a workflow is running, try the job-level log. If it is also
-  unavailable, report the evidence gap; wait only within authorized monitoring scope. Do not infer
-  a cause or change code from a neighboring summary.
-- If a local branch tracks the wrong upstream, inspect the branch and upstream before using an
-  explicit destination such as `git push -u origin HEAD:<branch>`.
-- If a gate times out, inspect `tmp/check-logs` before classifying it as failed or rerunning.
-- If labels are missing or duplicated, report them; when correction is authorized, correct and
-  re-query them before reporting completion.
+Monitoring through a later hosted result is a separate requested activity. Authorization for one fix or push does not by itself require or authorize continued babysitting.
 
-## Completion evidence
+After an authorized PR metadata change or push, re-read the relevant live state before claiming the mutation succeeded.
 
-Report the PR URL, metadata changes made, exact commands run, focused and canonical validation
-results, current hosted-check state, and whether monitoring was or was not requested.
+## Completion
+
+Report the PR identity, mutations actually made, exact hosted/local evidence used, current check state, and any remaining CI or maintainer-owned action. Do not claim a hosted rerun result that was not observed.

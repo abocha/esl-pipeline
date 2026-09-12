@@ -1,63 +1,39 @@
 ---
 name: esl-pipeline-validation-evidence
-description: Use when work in esl-pipeline changes validation policy, hosted CI scope, backend test projects, service-test helpers, or evidence handoff.
+description: Use only when changing ESL Pipeline validation or hosted-CI policy/topology, backend test-project classification, service-test infrastructure, validation evidence machinery, or when diagnosing a failure of that validation system itself. Do not use merely to validate an ordinary application or documentation change.
 ---
 
-# ESL Pipeline validation evidence
+# ESL Pipeline validation-system changes
 
-Use the smallest reliable validation path. Focused local evidence is the default; hosted PR CI is
-the comprehensive merge gate on the resource-constrained developer laptop.
+This skill governs the validation system itself, not routine validation of feature work.
 
-## Establish the contract
+Current `AGENTS.md` and testing documentation own the normal validation policy and commands.
 
-1. Read `AGENTS.md` and `docs/reference/TESTING_GUIDELINES.md`.
-2. Read `docs/reference/agents-ssot.md` when the task changes validation policy, CI ownership,
-   contracts, or repository administration.
-3. When changing hosted scope or backend test routing, inspect the relevant subset of:
-   - `scripts/check/run-ci-scope.mjs`
-   - `scripts/check/workspace-change-scope.mjs`
-   - `packages/batch-backend/vitest.projects.mjs`
-   - `.github/workflows/ci.yml`
-4. For a hosted failure, open its retained log manifest/artifact before rerunning anything.
+## Preserve the validation model
 
-## Local validation
+- Focused local evidence is the normal development path; hosted PR CI owns comprehensive merge regression.
+- Do not make repository-wide local gates an automatic prerequisite for ordinary changes.
+- When diagnosing hosted CI, start from the exact selected job, logs/artifacts, configuration, and prerequisites rather than approximating it with a broader local command.
+- Inspect existing persisted evidence before rerunning unchanged work.
 
-- Run the narrowest relevant test, package command, typecheck, lint, or build while editing.
-- Before pushing, rerun focused evidence appropriate to the final diff.
-- Docs-only changes use `pnpm docs:generate:indexes`, `pnpm format`, and `pnpm docs:check`.
-- Do not automatically run a repository-wide local gate. Broader local or service-backed
-  diagnostics require a concrete suspected cross-package/environment failure, an unavailable
-  hosted equivalent, or a specific hosted-CI failure to reproduce.
-- Keep direct package scripts and the narrow `pnpm test:backend:db:worker` helper available where
-  they have concrete callers. Do not add a generalized local orchestration wrapper.
+## When changing validation infrastructure
 
-## Hosted CI and reproduction
+Inspect only the affected validation owners, such as the current testing guidelines, CI workflow, change-scope logic, backend test-project configuration, or service-test helpers.
 
-Hosted PR CI owns comprehensive regression and the fail-closed `CI gate`. Every selected hosted job
-must succeed before merge. When a job fails, reproduce that job's actual command, configuration,
-resource settings, and prerequisites. Do not substitute an approximate repository-wide local run.
+Preserve these semantic properties where applicable:
 
-The retained committed-diff scope helper must preserve name-status parsing, workspace discovery,
-transitive dependent selection, fail-closed path classification, and hosted summary/output
-formatting. The production-image selector shares workspace/dependency impact logic and must retain
-transitive dependent coverage.
+- hosted scope selection fails closed for changes it cannot safely classify;
+- workspace/dependency impact includes required transitive dependents;
+- test projects are classified by actual imports, bootstrap, and operational prerequisites rather than filename convention alone;
+- tests intended to be pure are isolated from ambient service/provider/repository environment;
+- service-test helpers remain narrow tools for their real callers rather than becoming a second generalized local CI orchestrator.
 
-The backend Vitest project configuration is the prerequisite-membership source of truth. Classify
-tests by imports/bootstrap and operational prerequisites, not filename alone. Pure setup must scrub
-ambient PostgreSQL, Redis, Docker, provider, and repository `.env` inputs before test modules load
-and set `VALIDATION_TEST_CLASS=pure`; service projects keep their explicit environment.
+Treat current scripts, environment values, project names, and command spelling as repository-owned implementation details, not durable skill content.
 
-The retained DB/worker helper provides reachability checks, safe `_test` PostgreSQL handling,
-explicit service-test environment construction, and Windows-compatible invocation. Its local Redis
-fallback is `redis://127.0.0.1:6380`; explicit service-test URLs remain authoritative. It is not a
-full CI reproduction command and must not be described as migration preflight unless its commands
-actually provide that behavior.
+Historical artifacts may document commands that once ran; they are evidence, not current procedure and do not by themselves justify compatibility aliases.
 
-## Completion handoff
+## Completion
 
-Report exact focused commands and outcomes, with artifact paths when a command produces them.
-Distinguish focused local evidence from hosted, manual, and environment-owned requirements. A local
-focused pass is not merge evidence; selected hosted jobs and `CI gate` remain required.
+Validate the changed validation machinery with the narrowest reliable evidence that proves its intended behavior.
 
-Historical acceptance records and archived documents may retain old command names as evidence of
-what ran. They are not current instructions and do not justify compatibility aliases.
+Report what validation/CI behavior changed, the evidence obtained, and which hosted, manual, or environment-owned requirements remain. Do not convert a focused local pass into a claim of merge readiness.

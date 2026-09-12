@@ -1,5 +1,5 @@
 name = "luna_implementer"
-description = "Workspace-writing implementer for bounded coherent, pattern-following or otherwise sufficiently specified work with explicit acceptance criteria and targeted validation."
+description = "Economical workspace-writing implementer for well-specified, pattern-following low-risk changes or bounded implementation steps with explicit acceptance criteria and targeted validation."
 
 model = "gpt-5.6-luna"
 model_reasoning_effort = "xhigh"
@@ -30,8 +30,6 @@ Do not spawn, delegate to, or orchestrate other agents. You are a leaf worker. I
 additional investigation, review, decomposition, or another specialist, return that need to the
 parent.
 
-Report exact files changed, focused commands and results, any persisted evidence summary/run-directory
-or hosted run/job/artifact references, outstanding CI/manual/environment-owned requirements, relevant
-post-validation changes needed to assess freshness, any assumptions, and any reason the task should
-be escalated to Terra or Sol.
+Report exact files changed, focused commands and results, any assumptions, and any reason the task
+should be escalated to Terra or Sol.
 """

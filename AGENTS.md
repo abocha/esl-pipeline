@@ -1,190 +1,131 @@
-# Agent Handbook (v6)
+# Agent Handbook
 
 ## Meta
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-09-12 repository/workflow state and current Codex agent guidance.
+- Last Verified Against: 2026-09-12 repository/workflow state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
 
-This file is the always-loaded repository entrypoint. Keep it short, follow the smallest relevant
-documentation route, and let task docs and SSOT carry subsystem detail.
+## Purpose
 
-If this file conflicts with [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md), the
-SSOT wins.
+This file is the always-loaded repository entrypoint for AI agents and maintainers. Keep it as a
+compact router plus repo-wide operating contract. Let task docs, package READMEs, skills, scripts,
+CI, and the SSOT own detail.
 
-## Task Routing
+For product/runtime contracts and invariants, `docs/reference/agents-ssot.md` is authoritative when
+it conflicts with this file.
 
-1. For delegated work or execution from an approved plan or explicitly approved Goal Contract, read
-   [`.codex/ORCHESTRATION.md`](.codex/ORCHESTRATION.md), then
-   [`.codex/PROJECT.md`](.codex/PROJECT.md).
-2. Start with [`docs/README.md`](docs/README.md) for a known ESL task.
-3. Use [`docs/reference/DOCS_IA_MAP.md`](docs/reference/DOCS_IA_MAP.md) only when the route is unclear.
-4. Read the task-specific doc, active plan, or owning package README.
-5. Read [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) when work touches contracts,
-   invariants, validation policy, production, or repository administration.
+## Routing
 
-## Non-Negotiables
+Use the smallest current route that answers the task.
+
+- Start from the task itself and this file.
+- Use `docs/README.md`, the owning package README, active plan, or task-specific doc for normal
+  repository work.
+- Use `docs/reference/DOCS_IA_MAP.md` only when the documentation route is unclear.
+- Read `docs/reference/agents-ssot.md` when work touches contracts, invariants, persistence,
+  security/auth, validation policy, production, or repository administration.
+- For delegated execution, approved plans/Goal Contracts, role routing, context reuse, or review
+  mechanics, use `.codex/WORKFLOW_MODES.md`, `.codex/ORCHESTRATION.md`, and `.codex/PROJECT.md` as
+  applicable.
+- Invoke project skills only when their narrow trigger applies. Do not load adjacent skills merely
+  because they exist.
+
+Current code/configuration and live Git/CI/GitHub state outrank dated plans, evidence records, and
+archive material for facts that can change.
+
+## Repo-wide invariants
 
 - Do not bypass orchestrator contracts for pipeline behavior changes.
 - Do not hardcode secrets.
-- Do not silently change manifest, DTO, environment, or database contracts.
-- Do not treat archive docs as current truth.
-- Keep code, tests, active docs, and package READMEs aligned when behavior changes.
-- When implementing from an approved plan or Goal Contract, re-read that exact handoff after context
-  compaction.
-- Treat the developer laptop as the primary development environment, Git/CI as the source of truth,
-  and the Lightsail VPS as production runtime only.
+- Do not silently change manifest, DTO, environment, database, or other public/durable contracts.
+- Treat archive and historical evidence as history, not current procedure.
+- Keep behavior, tests, owning docs, and package READMEs aligned when the change affects them.
+- Preserve unrelated or unknown user work. Do not overwrite or clean it up as a side effect.
 
-## Instruction Scope
+Put subsystem-specific detail in its owning package/doc. Put reusable optional procedures in skills.
+Put deterministic requirements in code, scripts, hooks, or CI rather than relying on prose alone.
 
-- Keep only durable repo-wide conventions, commands, constraints, review expectations, and
-  completion criteria here.
-- Put subsystem detail in the nearest package README or task-specific doc. Use nested `AGENTS.md`
-  files only for repeated subtree-specific overrides.
-- Put one-off outcomes and acceptance criteria in the task prompt or active plan.
-- Put reusable procedures in skills and deterministic requirements in scripts, hooks, or CI.
+## Workflow and authorization
 
-## Workflow Selection
+Choose the lightest workflow that fits current ambiguity and risk. Detailed workflow/model routing
+belongs in `.codex/WORKFLOW_MODES.md` and `.codex/ORCHESTRATION.md`.
 
-Choose the lightest workflow consistent with ambiguity and risk. For mode or model selection,
-use [`.codex/WORKFLOW_MODES.md`](.codex/WORKFLOW_MODES.md).
+Do not manufacture planning, delegation, review, or Goal Contracts for bounded work. Material
+architecture, contract, security/privacy, persistence, concurrency, migration, or production design
+decisions require the approval expected by the current workflow. Goal-backed orchestration is
+explicit opt-in.
 
-- **Direct execution:** use for obvious, isolated, low-risk changes. Do not require brainstorming, a
-  specification, an implementation plan, a worktree, delegated implementation, or delegated review.
-- **Targeted discipline:** use for contained bugs and behavior changes. Invoke only the relevant
-  debugging, TDD, review, or verification workflow rather than the full design lifecycle.
-- **Full design and planning:** use for unresolved design decisions or material changes to
-  architecture, contracts, migrations, authentication, authorization, persistent state, concurrency,
-  data integrity, or production behavior. Established bounded fixes may use targeted discipline
-  when they preserve approved contracts and introduce no new risk-sensitive decisions. Obtain approval for the design decisions before
-  implementation. After that approval, normal plan-backed execution remains the default; explicitly
-  approved goal-backed orchestration is an optional handoff when the outcome is stable and verifiable
-  but the implementation strategy is expected to adapt materially. If WHAT success means or WHETHER
-  to pursue it is unresolved, remain in interactive design/exploration. Goal-backed execution does not
-  bypass human approval of architecture, contracts, or risk-sensitive behavior.
+Do not create worktrees, commits, branches, pushes, pull requests, releases, deployments, destructive
+operations, production mutations, or other external mutations unless the user/task authorization
+covers that action and scope. Authorization persists while its action and scope remain unchanged; it
+does not expand through delegation or broad OS/tool access.
 
-Repository authorization overrides workflow-plugin defaults. Do not create worktrees, commits,
-branches, pushes, pull requests, deployments, delegated writes, or external mutations unless the
-user explicitly authorizes that action. The user prompt or an approved task plan may further narrow
-the workflow. Authorization covering the action and scope remains applicable; do not request it again
-solely because execution continues in another turn.
+## Execution and delegation
 
-## GitHub Issue Workflow
+The primary agent owns repository accountability, integration, validation decisions, authorized Git
+mutations, and the final result.
 
-- GitHub Issues is the only canonical engineering backlog.
-- When selecting work, use open issues labeled `status:ready` by default and match `effort:*` to the
-  maintainer's available time and quota.
-- Read the complete issue before editing. Validate the reported behavior first; proposed causes and
-  fixes are hypotheses until evidence confirms them.
-- `status:inbox` means captured but not yet actionable; `status:blocked` means a stated dependency,
-  missing evidence, or required decision prevents progress.
-- Use `Fixes #N` only when the linked issue's acceptance criteria are genuinely satisfied.
+Delegation is optional. Delegate by coherent ownership boundary when it materially helps; do not
+spawn agents per checklist item or merely to create independence. Use registered project roles and
+their current routing rules rather than inventing substitutes.
 
-The detailed intake and selection procedure is in
-[`docs/operations/github-issue-intake-and-codex-work-selection.md`](docs/operations/github-issue-intake-and-codex-work-selection.md).
+Let a capable worker own its local inspect/edit/test loop. Treat worker completion as evidence, not
+automatic acceptance, but do not shadow or repeat its investigation without a concrete unresolved
+risk.
 
-## Complexity Discipline
+Use the project complexity discipline only when structural-complexity judgment is genuinely
+non-trivial. Straightforward pattern-following work does not need a complexity ritual.
 
-- Do not introduce structural complexity without a concrete reason grounded in requirements,
-  repository contracts, correctness/risk, or an evidenced constraint whose retrofit cost matters.
-  Prefer the simplest adequate design, not the smallest diff or fewest files.
-- Use `$complexity-discipline` only when that structural-complexity judgment is non-trivial. Typical
-  triggers include new abstractions/helper layers, dependencies, configuration surfaces, compatibility
-  mechanisms, generalized extension points, duplicated repository/platform/standard-library capability,
-  substantial newly discovered work, or deciding whether a difficult-to-reverse known future constraint
-  should be handled now.
-- Do not invoke it for straightforward pattern-following work whose design is already established and
-  unambiguous. Do not apply YAGNI mechanically. The discipline does not expand task scope, role
-  authority, mutation authorization, or architectural authority.
+## Evidence and validation
 
-## Ownership and Project Roles
+Prefer the lowest-cost reliable evidence path and stop when it answers the decision.
 
-- The primary agent owns decomposition, integration, repository accountability, repository-level
-  validation, separately authorized Git mutations, and the final result.
-- Delegated implementation is opt-in. It requires explicit scope, file or responsibility ownership,
-  acceptance criteria, validation, and a named project role.
-- Use registered roles: Luna for bounded specified implementation, Terra for coupled implementation,
-  exploration, or ordinary review, and Sol for exceptional-risk review. Detailed role boundaries,
-  model settings, context reuse, and routing integrity belong in
-  [`.codex/ORCHESTRATION.md`](.codex/ORCHESTRATION.md) and `.codex/agents/*.toml`.
-- Use the smallest useful role set and preserve the primary's integration accountability.
+- Focused local evidence is the default while editing and before handoff.
+- Do not automatically run a repository-wide local gate. Use broader local/service-backed evidence
+  only for a concrete plausible wider failure, environment behavior under test, unavailable hosted
+  equivalent, or reproduction/diagnosis of a specific hosted-CI failure.
+- Hosted PR CI is the comprehensive merge gate. A focused local pass can make work ready for hosted
+  CI; it does not make a PR merge-ready.
+- Diagnose hosted failures from the exact selected job and its logs/artifacts. Do not substitute a
+  neighboring summary or unrelated broad local run.
+- Inspect existing retained evidence before rerunning. Do not repeatedly rerun unchanged failures to
+  obtain a green result; allow at most one isolated rerun when it can resolve a real uncertainty.
+- Follow `docs/reference/TESTING_GUIDELINES.md` and owning package scripts for current commands.
+  Invoke `esl-pipeline-validation-evidence` only when its validation-system trigger applies.
 
-## Review Routing
+All hosted checks required by current repository policy must pass before merge.
 
-These rules apply when delegated implementation or independent review is warranted. Direct
-execution retains its exemption; a diff alone does not require a reviewer.
+## Review
 
-- Review coherent subsystem and risk batches, not every implementation-plan checklist item.
-- Use `terra_reviewer` at high reasoning for ordinary meaningful review batches.
-- A dedicated local Terra review may be skipped only when the child boundary is small and bounded,
-  risk is non-exceptional, focused and appropriate repository-level validation are green, no concrete
-  independent review risk exists, and an independently justified final whole-branch Terra review is
-  already planned to cover the boundary before final integration or release. Skipping must
-  meaningfully avoid duplicate review or context cost; this is review deduplication, not avoidance.
-- Reserve `sol_reviewer` at high reasoning for the narrow exceptional-risk surfaces named above. When
-  the repo-wide automated gate is proportionate, run it first so Sol spends context on semantic risk
-  rather than failures the normal suite already exposes.
-- For substantial multi-boundary work, use one final Terra/high whole-branch review when
-  cross-boundary regressions are genuinely plausible. Do not make this universal or stack broad
-  review ceremony without a concrete unresolved reason.
-- Send follow-up review of the same implementation context to the original reviewer when available
-  so assumptions and unresolved findings carry forward. Use sibling or fresh reviewers only for
-  genuinely independent scopes, such as separate Terra and Sol risk surfaces or a separately scoped
-  final integration review.
+Review follows residual semantic risk, not diff existence, file count, delegation, or ceremony.
 
-## Evidence and Validation
+Use the current review routing in `.codex/ORCHESTRATION.md`. Once an invariant has been convincingly
+closed, later review should focus on the new fix and direct regressions unless evidence reopens it.
+Do not stack reviewers or whole-branch review without a concrete remaining cross-boundary risk.
 
-- Prefer the lowest-cost reliable evidence path: the smallest relevant doc set, targeted search,
-  focused test, or bounded specialist review. Stop when evidence is sufficient for the decision.
-- During editing, run the narrowest relevant package, file, or related-test lane first.
-- Focused local evidence is the default. Run a local aggregate gate only for a concrete plausible
-  wider failure, local-environment behavior under test, unavailable equivalent hosted evidence, or a
-  specific CI failure being reproduced or diagnosed. Diff breadth alone is not a reason.
-- Hosted PR CI is the comprehensive merge gate for the resource-constrained developer laptop.
-  Focused local evidence may prepare a change for hosted CI, but no repository-wide local gate is
-  required or implied. If hosted CI fails, inspect its logs/artifacts and reproduce that job's
-  actual commands, configuration, and prerequisites.
-- The primary owns the validation decision and evidence handoff: choose, inspect, and report focused,
-  optional local aggregate, CI-owned, and manual/environment-owned evidence. A task may be ready for
-  hosted CI without a local aggregate gate; it is never merge-ready until required hosted jobs and
-  `CI gate` pass.
-- Read cited hosted/local artifacts under `tmp/ci-logs/...` or `tmp/test-logs/...` before any
-  diagnostic rerun; allow at most one isolated rerun per unchanged failure.
-- Clearly docs-only work may use `pnpm docs:generate:indexes`, `pnpm format`, and
-  `pnpm docs:check`. Follow [`docs/reference/TESTING_GUIDELINES.md`](docs/reference/TESTING_GUIDELINES.md)
-  for test-lane details.
-- Every selected hosted job and `CI gate` must pass before merge.
-- Migration, schema-baseline, and contract-version changes also require the verification commands in
-  [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).
-- Production Compose remains pull-based with SHA-tagged images and deployment state outside the
-  checkout. Do not reintroduce production builds, local tags, `pull_policy: never`, `up --build`,
-  backend Docker socket mounts, or long-running backend Docker/AWS CLIs.
+## GitHub and repository administration
 
-## Local service-test endpoint
+GitHub Issues is the canonical engineering backlog. Read the complete issue before acting and treat
+proposed causes/fixes as hypotheses until evidence supports them. Follow
+`docs/operations/github-issue-intake-and-codex-work-selection.md` for current intake/status rules.
 
-- The supported local Docker Redis endpoint for `@esl-pipeline/batch-backend` PostgreSQL + BullMQ
-  worker tests is `redis://127.0.0.1:6380`. The test bootstrap and retained DB/worker helper
-  default to this endpoint when `BATCH_BACKEND_TEST_REDIS` is absent; an explicit value remains
-  authoritative for CI or an alternate isolated test service. Do not point this variable at
-  production or a shared runtime.
+Use short-lived feature branches and avoid direct pushes to `main`. Use Conventional Commit style.
+Every PR to `main` must have exactly one release label allowed by current versioning policy, and PR
+validation text must list evidence actually obtained. Follow the current PR/versioning docs rather
+than copying their mutable details here.
 
-## Definition of Done
+For PR metadata, hosted-CI follow-up, validation-system changes, or deployment work, use the matching
+project skill when its trigger applies.
 
-- The requested outcome is implemented without widening scope or silently changing contracts.
-- Relevant tests and validation have fresh evidence, and the final handoff lists commands run.
-- Behavior docs, package READMEs, plans, and generated indexes are synchronized where affected.
-- Deployment and other external mutations occur only when explicitly requested.
+## Definition of done
 
-## Repository Administration
-
-- Use short-lived feature branches; avoid direct pushes to `main`.
-- Use Conventional Commit style: `<type>(<scope>): <short imperative summary>`.
-- Every PR to `main` needs exactly one release label selected under
-  [`docs/reference/VERSIONING_MODEL.md`](docs/reference/VERSIONING_MODEL.md).
-- PR validation text must list commands actually run.
-- Follow [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) and
-  [`docs/operations/pr-style-release-notes.md`](docs/operations/pr-style-release-notes.md) for the
-  complete PR workflow.
+- The requested outcome is implemented without silently widening scope or changing unapproved
+  contracts.
+- Relevant evidence is current enough for the changed surface and is reported accurately.
+- Required docs/generated references are synchronized where affected.
+- Remaining hosted, manual, environment, deployment, or authorization-owned steps are stated
+  explicitly rather than implied complete.
