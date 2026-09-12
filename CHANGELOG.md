@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.15] - 2026-09-12
+
+### Changed
+
+- Automated release from PR #247: chore(backend): migrate BullMQ to v6 (https://github.com/abocha/esl-pipeline/pull/247)
+
 ## [10.11.14] - 2026-09-12
 
 ### Changed
