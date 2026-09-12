@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.10] - 2026-09-12
+
+### Changed
+
+- Automated release from PR #240: fix(stt): harden ElevenLabs failure diagnostics (https://github.com/abocha/esl-pipeline/pull/240)
+
 ## [10.11.9] - 2026-09-12
 
 ### Changed
