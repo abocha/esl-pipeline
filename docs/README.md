@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 1 minute.
 - Authority Level: router.
-- Last Verified Against: 2026-08-12 repository routes.
+- Last Verified Against: 2026-09-12 repository routes.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after documentation-topology changes.
 - Status: `router`.
