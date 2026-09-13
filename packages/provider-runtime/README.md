@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and shared runtime policy guide.
-- Last Verified Against: 2026-07-29 repo state.
+- Last Verified Against: 2026-09-13 repo state.
 - Owner: provider-runtime maintainers + automation agents.
 - Review Cadence: monthly or after major provider policy/runtime changes.
 - Status: `active`.
