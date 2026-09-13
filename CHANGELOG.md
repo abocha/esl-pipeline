@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.18] - 2026-09-13
+
+### Changed
+
+- Automated release from PR #252: fix(ops): harden postgres ops wrapper invocation (https://github.com/abocha/esl-pipeline/pull/252)
+
 ## [10.11.17] - 2026-09-12
 
 ### Changed
