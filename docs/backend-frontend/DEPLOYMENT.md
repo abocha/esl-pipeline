@@ -27,7 +27,7 @@
 - Node `24.15.0+`
 - Docker + Docker Compose
 - Postgres 18+
-- Redis 8+
+- Redis 8.10.1
 - ffmpeg available in backend runtime
 
 ## Operating Model
@@ -456,11 +456,40 @@ health, and application health endpoints during and after deploys.
 ## Redis Queue Runtime
 
 Compose-managed Redis is used as durable queue/event infrastructure for BullMQ, not as a disposable
-cache. Keep `maxmemory-policy noeviction` so Redis returns backpressure errors under memory pressure
-instead of evicting queue state. Production Compose enables AOF with `appendfsync everysec`; local dev
-keeps persistence disabled for fast reset semantics unless you take a manual snapshot before a Redis
-container refresh. Latency monitoring is enabled at 100 ms so `LATENCY DOCTOR` and `LATENCY LATEST`
-can explain server-side stalls without waiting for a failure window to reproduce.
+cache. Production uses the exact official `redis:8.10.1-alpine3.23` image in standalone mode, with
+the named `redis_data` volume mounted at `/data` and the host port published only on
+`127.0.0.1:6379`. Keep `maxmemory-policy noeviction` so Redis returns backpressure errors under
+memory pressure instead of evicting queue state. Production Compose enables AOF with
+`appendfsync everysec`; local dev keeps persistence disabled for fast reset semantics unless you
+take a manual snapshot before a Redis container refresh. Latency monitoring is enabled at 100 ms so
+`LATENCY DOCTOR` and `LATENCY LATEST` can explain server-side stalls without waiting for a failure
+window to reproduce.
+
+Treat a production Redis version change as a quiet stateful cutover. Before recreating Redis:
+
+1. Stop or otherwise quiesce queue producers, all BullMQ workers, and direct Redis consumers. Allow
+   already-active jobs to finish before stopping their workers; do not deliberately strand active
+   locks for the cutover.
+2. Record the running server version, container image ID/digest, `redis_data` volume identity,
+   `INFO persistence`, and the effective values of `appendonly`, `appendfsync`, `maxmemory-policy`,
+   and `latency-monitor-threshold`.
+3. With Redis and its writers stopped, create and verify a recoverable snapshot or copy of the
+   pre-upgrade `redis_data` volume. A whole-server Lightsail snapshot is acceptable only when its
+   Redis filesystem state is quiet and recovery of that volume has been verified operationally.
+4. Pull the reviewed exact Redis image, recreate only the intended services, and never run the old
+   and new Redis servers against the same volume concurrently.
+
+After recreation, require `redis_version:8.10.1`, a healthy Compose service, successful AOF load and
+rewrite status, and the same effective persistence, eviction, and latency settings. Inspect Redis
+and worker logs for AOF/load, protocol, connection, and stalled-job errors. Resume consumers in a
+controlled order, verify all workers reconnect, and prove an ordinary queued job completes with its
+QueueEvents notification before restoring normal traffic.
+
+If Redis cannot load the persisted state or queue/runtime verification fails, stop the new Redis and
+consumers. Do not start Redis 8.6 against a volume that Redis 8.10.1 may have rewritten. Restore the
+verified pre-upgrade volume snapshot or copy, restore the recorded exact prior image, start Redis,
+verify its version/persistence/configuration, then reconnect workers and producers. Do not attempt
+ad-hoc AOF repair or data conversion on production.
 
 Before the first BullMQ 6 deployment, run the read-only legacy-repeatable preflight against every
 configured ESL Pipeline queue while the currently running backend container still has BullMQ 5:
