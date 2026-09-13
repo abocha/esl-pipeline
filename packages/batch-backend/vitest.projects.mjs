@@ -107,10 +107,12 @@ export const BACKEND_TEST_PROJECTS = Object.freeze([
 
 function project(name, files, setupFile, options) {
   return {
+    extends: false,
     test: {
       name,
       environment: 'node',
       globals: true,
+      clearMocks: false,
       include: files.map((file) => `tests/${file}`),
       setupFiles: [setupFile],
       ...options,

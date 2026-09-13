@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const originalCwd = process.cwd();
 const syncVoicesTestTimeout = 45_000;
 
-describe.sequential('syncVoices path resolution', () => {
+describe('syncVoices path resolution', { concurrent: false }, () => {
   beforeEach(() => {
     process.chdir(originalCwd);
   });
