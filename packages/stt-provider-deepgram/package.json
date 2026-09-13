@@ -28,7 +28,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@deepgram/sdk": "^5.7.0",
+    "@deepgram/sdk": "^5.10.1",
     "@esl-pipeline/stt-core": "workspace:*"
   },
   "devDependencies": {
