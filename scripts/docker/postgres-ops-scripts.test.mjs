@@ -38,6 +38,18 @@ test('production evidence wrappers invoke non-executable runners through Bash', 
   }
 });
 
+test('restore drill invokes its integrity runner through Bash and preserves pipeline status', () => {
+  const drill = readRepoFile('scripts/docker/run-postgres-restore-drill.sh');
+
+  assert.match(drill, /if \[\[ ! -f "\$INTEGRITY_SCRIPT" \]\]; then/u);
+  assert.doesNotMatch(drill, /\[\[ ! -x "\$INTEGRITY_SCRIPT" \]\]/u);
+  assert.match(
+    drill,
+    /PG_BACKUP_ARTIFACT_RESULT_FILE="\$integrity_result_file" \\\r?\n  bash "\$INTEGRITY_SCRIPT" "\$\{integrity_args\[@\]\}" 2>&1 \| tee -a "\$log_file"\r?\n/u,
+  );
+  assert.match(drill, /integrity_rc=\$\{PIPESTATUS\[0\]\}/u);
+});
+
 test('latest remote dump discovery coalesces empty S3 Contents to an empty array', () => {
   const common = readRepoFile('scripts/docker/postgres-ops-common.sh');
   assert.match(
