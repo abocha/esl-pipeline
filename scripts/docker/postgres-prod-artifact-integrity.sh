@@ -6,4 +6,4 @@ source "${ROOT_DIR}/scripts/docker/postgres-ops-common.sh"
 
 pg_backup_set_production_defaults "$ROOT_DIR"
 
-exec "${ROOT_DIR}/scripts/docker/run-postgres-artifact-integrity-check.sh" "$@"
+exec bash "${ROOT_DIR}/scripts/docker/run-postgres-artifact-integrity-check.sh" "$@"
