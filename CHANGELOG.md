@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.20] - 2026-09-13
+
+### Changed
+
+- Automated release from PR #256: chore(infra): upgrade production Redis to 8.10.1 (https://github.com/abocha/esl-pipeline/pull/256)
+
 ## [10.11.19] - 2026-09-13
 
 ### Changed
