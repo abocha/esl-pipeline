@@ -132,7 +132,7 @@ test('Biome owns code and package-manifest tooling while Prettier remains docs-o
   ]) {
     assert.equal(pkg.devDependencies[dependency], undefined, dependency);
   }
-  assert.equal(pkg.devDependencies['@biomejs/biome'], '2.5.6');
+  assert.equal(pkg.devDependencies['@biomejs/biome'], '2.5.13');
   assert.equal(pkg.scripts['lint:eslint:specialized'], undefined);
   assert.match(pkg.scripts['format:biome'], /assist-enabled=true/u);
   assert.doesNotMatch(pkg.scripts['format:prettier'], /package\.json/u);

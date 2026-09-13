@@ -7,6 +7,6 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
-    "fastify": "^5.12.3"
+    "fastify": "^5.12.4"
   }
 }

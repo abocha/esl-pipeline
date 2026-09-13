@@ -31,25 +31,25 @@
     "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsup --config tsup.config.ts && tsc -p tsconfig.types.json",
     "postbuild": "node ./scripts/postbuild.js",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
-    "dev": "vitest --watch",
+    "dev": "vitest --watch --config ../../vitest.config.ts --dir .",
     "prepack": "pnpm run build",
     "test": "pnpm run test:unit",
-    "test:integration": "vitest run tests/pipeline.integration.test.ts",
-    "test:unit": "pnpm run test:unit:setup && vitest run --testTimeout=150000 --exclude \"tests/**/*.integration.test.ts\"",
-    "test:unit:prebuilt": "vitest run --testTimeout=150000 --exclude \"tests/**/*.integration.test.ts\"",
+    "test:integration": "vitest run --config ../../vitest.config.ts --dir . tests/pipeline.integration.test.ts",
+    "test:unit": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --testTimeout=150000 --exclude \"tests/**/*.integration.test.ts\"",
+    "test:unit:prebuilt": "vitest run --config ../../vitest.config.ts --dir . --testTimeout=150000 --exclude \"tests/**/*.integration.test.ts\"",
     "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/shared-infrastructure build && pnpm --filter @esl-pipeline/pmd build && pnpm --filter @esl-pipeline/md-validator build && pnpm --filter @esl-pipeline/storage-uploader build && pnpm --filter @esl-pipeline/tts-core build && pnpm --filter @esl-pipeline/tts-provider-elevenlabs build && pnpm --filter @esl-pipeline/tts-provider-google build && pnpm --filter @esl-pipeline/tts-provider-inworld build && pnpm --filter @esl-pipeline/html-publisher build",
-    "test:unit:timings": "pnpm run test:unit:setup && vitest run --testTimeout=150000 --reporter=json --outputFile=../../tmp/test-timings/orchestrator/vitest.json --exclude \"tests/**/*.integration.test.ts\"",
-    "test:watch": "vitest",
+    "test:unit:timings": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --testTimeout=150000 --reporter=json --outputFile=../../tmp/test-timings/orchestrator/vitest.json --exclude \"tests/**/*.integration.test.ts\"",
+    "test:watch": "vitest --config ../../vitest.config.ts --dir .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1106.0",
+    "@aws-sdk/client-s3": "^3.1131.0",
     "@elevenlabs/elevenlabs-js": "^2.67.0",
     "@google-cloud/text-to-speech": "^6.4.1",
-    "js-yaml": "^5.2.3",
+    "js-yaml": "^5.4.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
-    "zod": "^4.4.3"
+    "zod": "^4.6.4"
   },
   "devDependencies": {
     "@esl-pipeline/contracts": "workspace:*",
@@ -65,7 +65,7 @@
     "@types/node": "^24.13.4",
     "tsup": "8.5.1",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.0"
   },
   "engines": {
     "node": ">=24.15.0"

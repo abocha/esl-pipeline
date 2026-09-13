@@ -33,14 +33,14 @@
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch src/index.ts",
     "test": "pnpm run test:unit",
-    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
-    "test:unit:prebuilt": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
-    "test:watch": "vitest",
+    "test:unit": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:prebuilt": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:watch": "vitest --config ../../vitest.config.ts --dir .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
-    "js-yaml": "^5.2.3",
+    "js-yaml": "^5.4.1",
     "remark-directive": "^4.0.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
@@ -49,9 +49,9 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.4",
-    "tsx": "^4.23.11",
+    "tsx": "^4.23.13",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.0"
   },
   "engines": {
     "node": ">=24.15.0"

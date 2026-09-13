@@ -11,6 +11,7 @@ export default defineConfig({
     },
     environment: 'node',
     globals: true,
+    clearMocks: false,
     exclude: ['**/dist/**', '**/node_modules/**'],
     projects: BACKEND_TEST_PROJECTS,
   },
