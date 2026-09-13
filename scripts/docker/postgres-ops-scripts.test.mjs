@@ -22,6 +22,22 @@ test('production wrappers share host state and selectable prod namespace default
   }
 });
 
+test('production evidence wrappers invoke non-executable runners through Bash', () => {
+  for (const [wrapper, runner] of [
+    [
+      'scripts/docker/postgres-prod-artifact-integrity.sh',
+      'run-postgres-artifact-integrity-check.sh',
+    ],
+    ['scripts/docker/postgres-prod-restore-drill.sh', 'run-postgres-restore-drill.sh'],
+  ]) {
+    assert.match(
+      readRepoFile(wrapper),
+      new RegExp(`exec bash "\\$\\{ROOT_DIR\\}/scripts/docker/${runner}" "\\$@"`, 'u'),
+      wrapper,
+    );
+  }
+});
+
 test('latest remote dump discovery coalesces empty S3 Contents to an empty array', () => {
   const common = readRepoFile('scripts/docker/postgres-ops-common.sh');
   assert.match(
