@@ -28,12 +28,12 @@
     "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "test": "pnpm run test:unit",
-    "test:integration": "vitest run \"tests/integration.test.ts\"",
-    "test:unit": "pnpm run test:unit:setup && vitest run --exclude \"tests/integration.test.ts\"",
-    "test:unit:prebuilt": "vitest run --exclude \"tests/integration.test.ts\"",
+    "test:integration": "vitest run --config ../../vitest.config.ts --dir . \"tests/integration.test.ts\"",
+    "test:unit": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --exclude \"tests/integration.test.ts\"",
+    "test:unit:prebuilt": "vitest run --config ../../vitest.config.ts --dir . --exclude \"tests/integration.test.ts\"",
     "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/pmd build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/tts-core build",
-    "test:unit:timings": "pnpm run test:unit:setup && vitest run --exclude \"tests/integration.test.ts\" --reporter=json --outputFile=../../tmp/test-timings/tts-provider-elevenlabs/vitest.json",
-    "test:watch": "vitest",
+    "test:unit:timings": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --exclude \"tests/integration.test.ts\" --reporter=json --outputFile=../../tmp/test-timings/tts-provider-elevenlabs/vitest.json",
+    "test:watch": "vitest --config ../../vitest.config.ts --dir .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -48,7 +48,7 @@
   "devDependencies": {
     "@types/node": "^24.13.4",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "engines": {
     "node": ">=24.15.0"

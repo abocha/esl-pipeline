@@ -28,10 +28,10 @@
     "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "test": "pnpm run test:unit",
-    "test:unit": "pnpm run test:unit:setup && vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
-    "test:unit:prebuilt": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:prebuilt": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/pmd build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/tts-core build",
-    "test:watch": "vitest",
+    "test:watch": "vitest --config ../../vitest.config.ts --dir .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -44,7 +44,7 @@
   "devDependencies": {
     "@types/node": "^24.13.4",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "engines": {
     "node": ">=24.15.0"

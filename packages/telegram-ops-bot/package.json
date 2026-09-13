@@ -24,9 +24,9 @@
     "dev": "tsx watch --tsconfig tsconfig.json src/index.ts",
     "start": "node dist/src/index.js",
     "test": "pnpm run test:unit",
-    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
-    "test:unit:prebuilt": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
-    "test:unit:timings": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\" --reporter=json --outputFile=../../tmp/test-timings/telegram-ops-bot/vitest.json",
+    "test:unit": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:prebuilt": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:timings": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\" --reporter=json --outputFile=../../tmp/test-timings/telegram-ops-bot/vitest.json",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -39,7 +39,7 @@
     "@types/node": "^24.13.4",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "engines": {
     "node": ">=24.15.0"
