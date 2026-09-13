@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.19] - 2026-09-13
+
+### Changed
+
+- Automated release from PR #254: fix(ops): invoke restore integrity runner through bash (https://github.com/abocha/esl-pipeline/pull/254)
+
 ## [10.11.18] - 2026-09-13
 
 ### Changed
