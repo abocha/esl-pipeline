@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
-    "js-yaml": "^5.2.3",
+    "js-yaml": "^5.4.1",
     "remark-directive": "^4.0.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
@@ -51,7 +51,7 @@
     "@types/node": "^24.13.4",
     "tsx": "^4.23.11",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=24.15.0"

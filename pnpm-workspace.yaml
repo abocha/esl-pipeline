@@ -12,7 +12,6 @@ overrides:
   '@tootallnate/once': ^3.0.1
   'ajv@>=8.0.0 <8.18.0': ^8.18.0
   esbuild: ^0.28.1
-  fast-uri: ^3.1.5
   fast-xml-builder: ^1.2.0
   fast-xml-parser: ^5.5.8
   ioredis: ^6.0.0
@@ -40,3 +39,5 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - undici@7.29.0
   - '@types/node@24.13.4'
+  - fast-uri@3.1.6
+  - js-yaml@4.3.2
