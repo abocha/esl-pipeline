@@ -149,9 +149,9 @@ for command_name in docker node; do
     exit 1
   fi
 done
-if [[ ! -x "$INTEGRITY_SCRIPT" ]]; then
+if [[ ! -f "$INTEGRITY_SCRIPT" ]]; then
   result="missing_integrity_script"
-  echo "ERROR: artifact integrity script is missing or not executable: $INTEGRITY_SCRIPT" | tee -a "$log_file" >&2
+  echo "ERROR: artifact integrity script is missing or not a regular file: $INTEGRITY_SCRIPT" | tee -a "$log_file" >&2
   exit 1
 fi
 
@@ -162,7 +162,7 @@ if [[ -n "$remote_dump_key" ]]; then
 fi
 set +e
 PG_BACKUP_ARTIFACT_RESULT_FILE="$integrity_result_file" \
-  "$INTEGRITY_SCRIPT" "${integrity_args[@]}" 2>&1 | tee -a "$log_file"
+  bash "$INTEGRITY_SCRIPT" "${integrity_args[@]}" 2>&1 | tee -a "$log_file"
 integrity_rc=${PIPESTATUS[0]}
 set -e
 if [[ "$integrity_rc" -ne 0 ]]; then
