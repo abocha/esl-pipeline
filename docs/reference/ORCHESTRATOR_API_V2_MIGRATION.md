@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: active migration and cutover guidance.
-- Last Verified Against: 2026-07-29 repo state.
+- Last Verified Against: 2026-09-13 repo state.
 - Owner: orchestrator maintainers + automation agents.
 - Review Cadence: weekly while migration/cutover notes remain active.
 - Status: `active`.
