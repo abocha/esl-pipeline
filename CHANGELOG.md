@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.21] - 2026-09-13
+
+### Changed
+
+- Automated release from PR #257: chore(deps): execute dependency maintenance train (https://github.com/abocha/esl-pipeline/pull/257)
+
 ## [10.11.20] - 2026-09-13
 
 ### Changed
