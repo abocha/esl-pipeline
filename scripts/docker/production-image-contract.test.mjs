@@ -112,7 +112,24 @@ test('production infrastructure stays on controlled official image lines', () =>
   assert.match(dockerfiles.get('frontend'), /FROM nginx:1\.31-alpine3\.23-slim AS runtime/u);
   assert.match(composeService('caddy-edge'), /^    image: caddy:2\.11-alpine$/mu);
   assert.match(composeService('postgres'), /^    image: postgres:18\.6-alpine3\.24$/mu);
-  assert.match(composeService('redis'), /^    image: redis:8\.6-alpine3\.23$/mu);
+  const redisService = composeService('redis');
+  assert.match(redisService, /^    image: redis:8\.10\.1-alpine3\.23$/mu);
+  assert.match(redisService, /^      - redis_data:\/data$/mu);
+  assert.match(redisService, /^      - '127\.0\.0\.1:6379:6379'$/mu);
+  for (const argument of [
+    'redis-server',
+    '--save',
+    '--appendonly',
+    'yes',
+    '--appendfsync',
+    'everysec',
+    '--maxmemory-policy',
+    'noeviction',
+    '--latency-monitor-threshold',
+    '100',
+  ]) {
+    assert.match(redisService, new RegExp(`^        '${argument}',$`, 'mu'));
+  }
 });
 
 test('release publication pulls refreshed upstream bases', () => {

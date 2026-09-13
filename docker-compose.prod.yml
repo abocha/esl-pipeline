@@ -149,7 +149,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:8.6-alpine3.23
+    image: redis:8.10.1-alpine3.23
     volumes:
       - redis_data:/data
     ports:
