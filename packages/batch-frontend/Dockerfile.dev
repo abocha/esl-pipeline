@@ -6,7 +6,7 @@ ENV PATH="${PNPM_HOME}:${PATH}" \
     CI=false
 
 # Install system dependencies
-RUN corepack enable && corepack prepare pnpm@10 --activate \
+RUN corepack enable && corepack prepare pnpm@11.27.0 --activate \
     && apk add --no-cache ca-certificates \
     && mkdir -p /pnpm \
     && chmod 0777 /pnpm
