@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildProductionImageScope } from './production-image-scope.mjs';
+import {
+  buildProductionImageScope,
+  buildProductionImageScopeFromChangedFileRecords,
+} from './production-image-scope.mjs';
 
 const workspacePackages = [
   { name: '@esl-pipeline/contracts', dir: 'packages/contracts', dependencies: [] },
@@ -95,6 +98,25 @@ test('rename records account for both the old and new package paths', () => {
     workspacePackages,
   });
   assert.deepEqual(flags(result), { backend: true, frontend: false, bot: false });
+});
+
+test('git name-status records preserve production image scope for PR CI', () => {
+  const result = buildProductionImageScopeFromChangedFileRecords({
+    changedFileRecords: [
+      { status: 'M', paths: ['package.json'] },
+      {
+        status: 'R100',
+        paths: ['packages/batch-backend/old.ts', 'docs/retired.md'],
+      },
+    ],
+    workspacePackages,
+  });
+  assert.deepEqual(flags(result), { backend: true, frontend: true, bot: true });
+  assert.deepEqual(result.changedFiles, [
+    'docs/retired.md',
+    'package.json',
+    'packages/batch-backend/old.ts',
+  ]);
 });
 
 test('unknown root paths fail closed to all images', () => {

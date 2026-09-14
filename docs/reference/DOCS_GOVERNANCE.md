@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents editing docs.
 - Read Time: 3 minutes.
 - Authority Level: governance policy.
-- Last Verified Against: 2026-08-14 repo state.
+- Last Verified Against: 2026-09-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after docs-tooling changes.
 - Status: `reference`.
@@ -88,7 +88,7 @@
 
 ## Verification Procedure
 
-Before advancing `Last Verified Against` on a core document:
+Before advancing `Last Verified Against` on an enforced document:
 
 1. Compare its commands, package ownership, runtime assumptions, routes, and linked paths with the
    current repository.

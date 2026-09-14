@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents implementing or reviewing repo behavior.
 - Authority Level: authoritative contracts and invariants.
-- Last Verified Against: 2026-09-12 repo state.
+- Last Verified Against: 2026-09-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly and after contract-level changes.
 - Status: `reference`.
@@ -198,6 +198,10 @@ Required repo checks for behavior changes:
   SSOT. It retains the established deterministic HTTP prefix and positively owns PostgreSQL migration,
   PostgreSQL query, PostgreSQL + Redis worker, and real media suites. Unit is the discovered remainder
   and must not import known service bootstrap signals.
+- PR CI reuses the production-image scope to select the exact backend release Docker build when
+  shared image inputs or the affected workspace graph can change that image. This conditional lane
+  is required by `CI gate` when selected and may be skipped only when the production-image scope
+  excludes the backend.
 - Package-local Vitest project setup establishes the pure environment before test modules load,
   including for direct package entrypoints. It removes ambient PostgreSQL, Redis, Docker endpoint,
   provider, and repository `.env` inputs and sets `VALIDATION_TEST_CLASS=pure`; explicit DB/worker
@@ -215,7 +219,8 @@ Required repo checks for behavior changes:
 Canonical blocking PR check names are `CI gate`, `repository policy (node 24.x)`,
 `build + code quality (node 24.x)`, `unit + component (node 24.x)`,
 `deterministic integration + media (blocking)`, `backend db + worker integration (blocking)`, and
-`telegram command-loop compose smoke`. `CI gate` is the aggregate result and should become the
+`telegram command-loop compose smoke`; the conditional packaging check is
+`production backend packaging`. `CI gate` is the aggregate result and should become the
 single branch-protection requirement when repository plan capabilities permit. Every selected job
 must succeed; a required job that is missing, cancelled, or unexpectedly skipped fails the gate.
 

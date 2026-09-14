@@ -17,6 +17,7 @@ test('PR CI exposes scoped evidence jobs and an always-running aggregate gate', 
     ['deterministic-integration-media', 'integration'],
     ['backend-db-integration', 'backend_db_worker'],
     ['telegram-compose-smoke', 'telegram'],
+    ['production-backend-packaging', 'production_backend'],
   ]) {
     const block = jobBlock(job);
     assert.match(block, /needs: change-scope/u, `${job} must need change-scope`);
@@ -37,6 +38,10 @@ test('PR CI exposes scoped evidence jobs and an always-running aggregate gate', 
 
   const scope = jobBlock('change-scope');
   assert.match(scope, /maintenance_only: \$\{\{ steps\.scope\.outputs\.maintenance_only \}\}/u);
+  assert.match(
+    scope,
+    /production_backend: \$\{\{ steps\.projection\.outputs\.production_backend \}\}/u,
+  );
   const combine = namedStep(scope, 'Combine bootstrap and projection');
   assert.match(
     combine,
@@ -114,12 +119,14 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     'deterministic-integration-media': 'success',
     'backend-db-integration': 'success',
     'telegram-compose-smoke': 'success',
+    'production-backend-packaging': 'success',
   };
   const allSelected = {
     runtime: 'true',
     integration: 'true',
     backend_db_worker: 'true',
     telegram: 'true',
+    production_backend: 'true',
   };
 
   assert.equal(runEvaluator(evaluator, baseResults, allSelected), 0);
@@ -175,12 +182,21 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     runEvaluator(evaluator, { ...baseResults, 'telegram-compose-smoke': 'cancelled' }, allSelected),
     0,
   );
+  assert.notEqual(
+    runEvaluator(
+      evaluator,
+      { ...baseResults, 'production-backend-packaging': 'failure' },
+      allSelected,
+    ),
+    0,
+  );
 
   const backendOnlySelected = {
     runtime: 'false',
     integration: 'false',
     backend_db_worker: 'true',
     telegram: 'false',
+    production_backend: 'false',
   };
   const backendOnlyResults = {
     ...baseResults,
@@ -188,6 +204,7 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     'unit-component': 'skipped',
     'deterministic-integration-media': 'skipped',
     'telegram-compose-smoke': 'skipped',
+    'production-backend-packaging': 'skipped',
   };
 
   assert.equal(runEvaluator(evaluator, backendOnlyResults, backendOnlySelected), 0);
@@ -224,6 +241,7 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     integration: 'false',
     backend_db_worker: 'false',
     telegram: 'false',
+    production_backend: 'false',
   };
   const maintenanceOnlyResults = {
     ...baseResults,
@@ -232,6 +250,7 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     'deterministic-integration-media': 'skipped',
     'backend-db-integration': 'skipped',
     'telegram-compose-smoke': 'skipped',
+    'production-backend-packaging': 'skipped',
   };
   assert.equal(
     runEvaluator(evaluator, maintenanceOnlyResults, maintenanceOnlySelected),
@@ -278,6 +297,16 @@ test('integration/media lane installs FFmpeg and runs backend media coverage', (
     ],
     'FFmpeg installation must run after deterministic integration and immediately before media',
   );
+});
+
+test('production backend packaging matches the release build path', () => {
+  const packaging = jobBlock('production-backend-packaging');
+  assert.match(packaging, /docker\/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c/u);
+  assert.match(packaging, /docker\/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a/u);
+  assert.match(packaging, /file: packages\/batch-backend\/Dockerfile/u);
+  assert.match(packaging, /platforms: linux\/amd64/u);
+  assert.match(packaging, /pull: true/u);
+  assert.match(packaging, /push: false/u);
 });
 
 test('runtime lanes keep duplicated builds without sharding or matrix fanout', () => {

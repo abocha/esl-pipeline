@@ -4,6 +4,7 @@ import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildProductionImageScopeFromChangedFileRecords } from '../release/production-image-scope.mjs';
 import {
   buildCiScopeDecision,
   formatCiScopeGithubOutputs,
@@ -34,13 +35,30 @@ try {
     throw new Error(`committed diff ${from}...${to} is empty`);
   }
 
+  const workspacePackages = readWorkspacePackages(repoRoot);
   const decision = buildCiScopeDecision({
     changedFileRecords,
-    workspacePackages: readWorkspacePackages(repoRoot),
+    workspacePackages,
   });
-  const summary = formatCiScopeSummary(decision);
+  const productionBackend = buildProductionImageScopeFromChangedFileRecords({
+    changedFileRecords,
+    workspacePackages,
+  }).backend;
+  const summary = [
+    formatCiScopeSummary(decision),
+    '',
+    '### Production packaging scope',
+    '',
+    `- backend: ${productionBackend ? 'run' : 'skip'}`,
+  ].join('\n');
   console.log(summary);
-  if (githubOutput) appendFileSync(githubOutput, formatCiScopeGithubOutputs(decision), 'utf8');
+  if (githubOutput) {
+    appendFileSync(
+      githubOutput,
+      `${formatCiScopeGithubOutputs(decision)}production_backend=${productionBackend}\n`,
+      'utf8',
+    );
+  }
   if (githubSummary) appendFileSync(githubSummary, `${summary}\n`, 'utf8');
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

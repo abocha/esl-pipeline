@@ -103,3 +103,24 @@ export function buildProductionImageScope({ changedFilePayload, workspacePackage
 
   return { ...flags, changedFiles, affectedPackages, reasons };
 }
+
+export function buildProductionImageScopeFromChangedFileRecords({
+  changedFileRecords,
+  workspacePackages = [],
+}) {
+  const files = Array.isArray(changedFileRecords)
+    ? changedFileRecords.map((record) => {
+        const paths = Array.isArray(record?.paths) ? record.paths : [];
+        const filename = paths.at(-1);
+        return paths.length > 1 ? { filename, previous_filename: paths[0] } : { filename };
+      })
+    : [];
+
+  return buildProductionImageScope({
+    changedFilePayload: {
+      expectedFileCount: files.length,
+      files,
+    },
+    workspacePackages,
+  });
+}
