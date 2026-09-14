@@ -95,6 +95,7 @@ test('canonical replacements remain available', () => {
 
 test('focused and hosted tooling surfaces remain available without local aggregate aliases', () => {
   assert.equal(pkg.scripts['test:tooling'], 'node --test "scripts/**/*.test.mjs"');
+  assert.equal(pkg.scripts['docs:check:pr'], 'node scripts/docs/check-pr-docs.mjs');
   assert.equal(typeof pkg.scripts['test:unit'], 'string');
   assert.equal(typeof pkg.scripts['test:unit:prebuilt'], 'string');
   assert.equal(

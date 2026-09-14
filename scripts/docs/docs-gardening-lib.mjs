@@ -22,11 +22,24 @@ const CONFIDENCE_RANK = {
   low: 1,
 };
 
-function buildDocsChecks({ repoRoot = process.cwd(), config } = {}) {
+function buildDocsChecks({
+  repoRoot = process.cwd(),
+  config,
+  freshnessMode = 'full',
+  changedFiles,
+  now,
+} = {}) {
   const resolvedConfig = config ?? loadDocsCheckConfig(repoRoot);
-  const core = runDocsChecks('core', { repoRoot, config: resolvedConfig });
-  const ops = runDocsChecks('ops', { repoRoot, config: resolvedConfig });
-  const nonCore = runDocsChecks('non_core', { repoRoot, config: resolvedConfig });
+  const checkOptions = {
+    repoRoot,
+    config: resolvedConfig,
+    freshnessMode,
+    changedFiles,
+    now,
+  };
+  const core = runDocsChecks('core', checkOptions);
+  const ops = runDocsChecks('ops', checkOptions);
+  const nonCore = runDocsChecks('non_core', checkOptions);
 
   return {
     core,
@@ -43,9 +56,18 @@ function buildDocsChecks({ repoRoot = process.cwd(), config } = {}) {
 export function buildDocsHealthReport({
   repoRoot = process.cwd(),
   generatedAt = new Date().toISOString(),
+  freshnessMode = 'full',
+  changedFiles,
+  now,
   config,
 } = {}) {
-  const checks = buildDocsChecks({ repoRoot, config });
+  const checks = buildDocsChecks({
+    repoRoot,
+    config,
+    freshnessMode,
+    changedFiles,
+    now,
+  });
   return {
     generatedAt,
     metrics: checks.metrics,
@@ -221,7 +243,11 @@ export function buildDocsGardeningReport({
   config,
 } = {}) {
   const resolvedConfig = config ?? loadDocsCheckConfig(repoRoot);
-  const checks = buildDocsChecks({ repoRoot, config: resolvedConfig });
+  const checks = buildDocsChecks({
+    repoRoot,
+    config: resolvedConfig,
+    now,
+  });
   const health = buildHealthScorecard(checks);
   const staleActive = buildStaleActiveReport({
     repoRoot,
@@ -369,12 +395,16 @@ function buildHealthScorecard(checks) {
     'missing-route-doc',
   ]);
   const allErrors = [...checks.core.errors, ...checks.ops.errors, ...checks.non_core.errors];
+  const allWarnings = [
+    ...checks.core.warnings,
+    ...checks.ops.warnings,
+    ...checks.non_core.warnings,
+  ];
   const authorityPenalty = countMatches(allErrors, ['missing-meta']);
-  const freshnessPenalty = countMatches(allErrors, [
-    'stale-doc',
-    'missing-freshness',
-    'invalid-freshness',
-  ]);
+  const freshnessPenalty = countMatches(
+    [...allErrors, ...allWarnings],
+    ['stale-doc', 'missing-freshness', 'invalid-freshness'],
+  );
   const enforcePenalty = checks.metrics.errors;
   const opsPenalty = checks.ops.errors.length + checks.non_core.errors.length;
 

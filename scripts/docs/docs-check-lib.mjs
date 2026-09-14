@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { flattenChangedFileRecords, parseNameStatusZ } from '../check/workspace-change-scope.mjs';
 import { buildPlanLifecycleReport } from './plan-lifecycle-lib.mjs';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -15,6 +17,13 @@ export function loadDocsCheckConfig(repoRoot = process.cwd()) {
 export function runDocsChecks(scope, options = {}) {
   const repoRoot = options.repoRoot ?? process.cwd();
   const config = options.config ?? loadDocsCheckConfig(repoRoot);
+  const freshnessMode = options.freshnessMode ?? 'full';
+  if (!['full', 'pr'].includes(freshnessMode)) {
+    throw new Error(`Unsupported docs freshness mode: ${freshnessMode}`);
+  }
+  if (freshnessMode === 'pr' && !Array.isArray(options.changedFiles)) {
+    throw new Error('PR-scoped docs checks require changedFiles');
+  }
   const docs = resolveDocsForScope(scope, config);
   const errors = [];
   const warnings = [];
@@ -30,7 +39,17 @@ export function runDocsChecks(scope, options = {}) {
     validateBannedLiterals({ content, relPath, config, errors });
     validateLinks({ content, relPath, repoRoot, config, errors });
     validateMetadata({ content, relPath, config, errors });
-    validateFreshness({ content, relPath, config, scope, errors, warnings });
+    validateFreshness({
+      content,
+      relPath,
+      config,
+      scope,
+      freshnessMode,
+      changedFiles: options.changedFiles,
+      now: options.now,
+      errors,
+      warnings,
+    });
   }
 
   if (scope === 'core') {
@@ -46,6 +65,27 @@ export function runDocsChecks(scope, options = {}) {
     errors,
     warnings,
   };
+}
+
+export function readChangedFiles({ repoRoot = process.cwd(), from, to } = {}) {
+  if (!from || !to) throw new Error('Both from and to revisions are required');
+
+  const output = execFileSync(
+    'git',
+    [
+      'diff',
+      '--name-status',
+      '-z',
+      '--find-renames',
+      '--find-copies',
+      '--diff-filter=ACDMRTUXB',
+      `${from}...${to}`,
+    ],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+  const changedFiles = flattenChangedFileRecords(parseNameStatusZ(output));
+  if (changedFiles.length === 0) throw new Error(`committed diff ${from}...${to} is empty`);
+  return changedFiles;
 }
 
 function validatePlanLifecycle({ repoRoot, config, errors }) {
@@ -169,7 +209,17 @@ function validateMetadata({ content, relPath, config, errors }) {
   }
 }
 
-function validateFreshness({ content, relPath, config, scope, errors, warnings }) {
+function validateFreshness({
+  content,
+  relPath,
+  config,
+  scope,
+  freshnessMode,
+  changedFiles = [],
+  now = new Date(),
+  errors,
+  warnings,
+}) {
   if (!(config.meta_required_docs ?? []).includes(relPath)) return;
 
   const match = content.match(/Last Verified Against:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/);
@@ -184,8 +234,7 @@ function validateFreshness({ content, relPath, config, scope, errors, warnings }
     return;
   }
 
-  const today = new Date();
-  const daysOld = Math.floor((today.getTime() - verifiedDate.getTime()) / MS_PER_DAY);
+  const daysOld = Math.floor((now.getTime() - verifiedDate.getTime()) / MS_PER_DAY);
 
   const threshold =
     scope === 'core'
@@ -196,6 +245,10 @@ function validateFreshness({ content, relPath, config, scope, errors, warnings }
           ? config.freshness_days?.non_core
           : undefined;
   if (typeof threshold === 'number' && daysOld > threshold) {
+    if (freshnessMode === 'pr' && !isFreshnessRelevant({ relPath, content, changedFiles })) {
+      warnings.push(`[stale-doc-age-only] ${relPath} is ${daysOld} days old (max ${threshold})`);
+      return;
+    }
     errors.push(`[stale-doc] ${relPath} is ${daysOld} days old (max ${threshold})`);
     return;
   }
@@ -206,6 +259,47 @@ function validateFreshness({ content, relPath, config, scope, errors, warnings }
       warnings.push(`[stale-warning] ${relPath} is ${daysOld} days old (warn > ${warnThreshold})`);
     }
   }
+}
+
+function isFreshnessRelevant({ relPath, content, changedFiles }) {
+  if (changedFiles.includes(relPath)) return true;
+  if (changedFiles.some(isDocsHarnessPath)) return true;
+  if (changedFiles.some((file) => referencesChangedPackage({ content, file }))) return true;
+
+  if (relPath.startsWith('packages/')) {
+    const packageRoot = relPath.split('/').slice(0, 2).join('/');
+    return changedFiles.some((file) => file === packageRoot || file.startsWith(`${packageRoot}/`));
+  }
+
+  const docsOwnerRoot = getDocsOwnerRoot(relPath);
+  return (
+    docsOwnerRoot !== null &&
+    changedFiles.some((file) => file === docsOwnerRoot || file.startsWith(`${docsOwnerRoot}/`))
+  );
+}
+
+function referencesChangedPackage({ content, file }) {
+  const match = /^packages\/([^/]+)(?:\/|$)/u.exec(file);
+  if (!match) return false;
+
+  const packageRoot = `packages/${match[1]}`;
+  return content.includes(packageRoot) || content.includes(`@esl-pipeline/${match[1]}`);
+}
+
+function isDocsHarnessPath(file) {
+  return (
+    file.startsWith('scripts/docs/') ||
+    file === '.github/workflows/ci.yml' ||
+    file === '.github/workflows/docs-gardening.yml'
+  );
+}
+
+function getDocsOwnerRoot(relPath) {
+  if (relPath === 'AGENTS.md') return null;
+  if (!relPath.startsWith('docs/')) return null;
+
+  const parts = relPath.split('/');
+  return parts.length >= 3 ? parts.slice(0, 2).join('/') : 'docs';
 }
 
 function validateRouteHints({ repoRoot, config, errors }) {
