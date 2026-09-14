@@ -24,6 +24,7 @@ jobs:
       telegram: ${{ steps.scope.outputs.telegram }}
       docs_only: ${{ steps.scope.outputs.docs_only }}
       maintenance_only: ${{ steps.scope.outputs.maintenance_only }}
+      production_backend: ${{ steps.projection.outputs.production_backend }}
     steps:
       - name: Checkout
         # actions/checkout v6
@@ -640,6 +641,32 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+  production-backend-packaging:
+    name: production backend packaging
+    needs: change-scope
+    if: ${{ fromJSON(needs.change-scope.outputs.production_backend) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+
+      - name: Build production backend image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: packages/batch-backend/Dockerfile
+          platforms: linux/amd64
+          pull: true
+          push: false
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=pr-batch-backend
+          cache-to: type=gha,mode=max,scope=pr-batch-backend,ignore-error=true
+
   ci-gate:
     name: CI gate
     if: ${{ always() }}
@@ -651,15 +678,16 @@ jobs:
       - deterministic-integration-media
       - backend-db-integration
       - telegram-compose-smoke
+      - production-backend-packaging
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Evaluate required CI results
         env:
           CI_RESULTS: >-
-            {"change-scope":"${{ needs.change-scope.result }}","repository-policy":"${{ needs.repository-policy.result }}","build-code-quality":"${{ needs.build-code-quality.result }}","unit-component":"${{ needs.unit-component.result }}","deterministic-integration-media":"${{ needs.deterministic-integration-media.result }}","backend-db-integration":"${{ needs.backend-db-integration.result }}","telegram-compose-smoke":"${{ needs.telegram-compose-smoke.result }}"}
+            {"change-scope":"${{ needs.change-scope.result }}","repository-policy":"${{ needs.repository-policy.result }}","build-code-quality":"${{ needs.build-code-quality.result }}","unit-component":"${{ needs.unit-component.result }}","deterministic-integration-media":"${{ needs.deterministic-integration-media.result }}","backend-db-integration":"${{ needs.backend-db-integration.result }}","telegram-compose-smoke":"${{ needs.telegram-compose-smoke.result }}","production-backend-packaging":"${{ needs.production-backend-packaging.result }}"}
           CI_SCOPES: >-
-            {"runtime":"${{ needs.change-scope.outputs.runtime }}","integration":"${{ needs.change-scope.outputs.integration }}","backend_db_worker":"${{ needs.change-scope.outputs.backend_db_worker }}","telegram":"${{ needs.change-scope.outputs.telegram }}"}
+            {"runtime":"${{ needs.change-scope.outputs.runtime }}","integration":"${{ needs.change-scope.outputs.integration }}","backend_db_worker":"${{ needs.change-scope.outputs.backend_db_worker }}","telegram":"${{ needs.change-scope.outputs.telegram }}","production_backend":"${{ needs.change-scope.outputs.production_backend }}"}
         run: |
           node <<'NODE'
           // ci-gate-evaluator:start
@@ -672,6 +700,7 @@ jobs:
             'deterministic-integration-media': 'integration',
             'backend-db-integration': 'backend_db_worker',
             'telegram-compose-smoke': 'telegram',
+            'production-backend-packaging': 'production_backend',
           };
           const failures = [];
           for (const job of required) {
