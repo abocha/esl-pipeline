@@ -29,4 +29,4 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
 - Stable recording failure codes are `file_too_large`, `insufficient_upload_capacity`,
   `recording_too_long`, `no_audio`, `corrupt_media`, `unsupported_media`,
   `multiple_audio_streams`, `preparation_failed`, `speakers_not_separated`, and
-  `transcription_unavailable_after_retries`.
+  `transcription_provider_account_unavailable`, and `transcription_unavailable_after_retries`.

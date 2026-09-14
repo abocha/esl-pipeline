@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 3 minutes.
 - Authority Level: Canonical status tracker.
-- Last Verified Against: 2026-09-09 recording-ingest closeout state.
+- Last Verified Against: 2026-09-14 provider-account failure handling.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while alpha work continues.
 - Status: `active`.
@@ -43,6 +43,9 @@ Provider/model detail stays in
 - Use production observations and tutor reports to select work from
   [`docs/plans/2026-06-23-alpha-readiness.md`](../plans/2026-06-23-alpha-readiness.md).
 - Treat reproduced reliability or workflow failures as priority evidence.
+- Known provider-account unavailability is a durable provider-neutral recording terminal state with
+  operator guidance across polling, SSE, and resume; it does not invite replacement audio or another
+  BullMQ delivery after the run commits.
 - Keep speculative roadmap items in their plan; do not add them to this status matrix until a shared
   capability boundary changes.
 

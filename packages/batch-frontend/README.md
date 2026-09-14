@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-09-09 recording-ingest closeout state.
+- Last Verified Against: 2026-09-14 provider-account failure handling.
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -45,7 +45,9 @@ Canonical behavior and current status live in:
   media-integrity, and 100-minute checks remain authoritative. Recording state is projected
   consistently through upload reconciliation, polling, SSE, and resume as Checking, Waiting,
   Transcribing, Trying again, Ready, or a terminal needs-attention state. Normal tutors cannot retry
-  successful STT; terminal recovery is a new or replacement recording upload.
+  successful STT; terminal recovery is a new or replacement recording upload. A provider-account
+  terminal state instead tells the tutor to contact the service operator because replacing the recording
+  will not help.
 - A same-workspace transcript-cache hit owns independent recording/transcript lineage, creates no
   transcription run, retains no audio, and renders Ready with `audioLifecycle=not_retained` and no
   audio control.

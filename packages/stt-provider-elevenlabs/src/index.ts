@@ -201,6 +201,7 @@ function createSafeProviderSubmissionError(error?: unknown): Error {
 }
 
 function controlledProviderErrorCode(error: unknown, status: number | undefined): string {
+  if (hasKnownProviderAccountFailure(error)) return 'PROVIDER_ACCOUNT_UNAVAILABLE';
   if (status === 408 || status === 429 || (status !== undefined && status >= 500)) {
     return 'PROVIDER_RETRYABLE_HTTP';
   }
@@ -208,6 +209,38 @@ function controlledProviderErrorCode(error: unknown, status: number | undefined)
   const sourceCode = readSafeCode(error);
   if (sourceCode === 'ETIMEDOUT' || sourceCode === 'ESOCKETTIMEDOUT') return 'PROVIDER_TIMEOUT';
   return 'PROVIDER_TRANSPORT_ERROR';
+}
+
+const PROVIDER_ACCOUNT_FAILURE_CODES = new Set(['INSUFFICIENT_CREDITS', 'QUOTA_EXCEEDED']);
+
+/**
+ * Inspect only documented machine-code fields from the SDK error payload. Provider
+ * messages and arbitrary response content may contain credentials or lesson data
+ * and must never influence a durable classification.
+ */
+function hasKnownProviderAccountFailure(error: unknown): boolean {
+  return readKnownProviderMachineCodes(error).some((code) =>
+    PROVIDER_ACCOUNT_FAILURE_CODES.has(code),
+  );
+}
+
+function readKnownProviderMachineCodes(error: unknown): string[] {
+  if (!error || typeof error !== 'object') return [];
+  const candidate = error as { code?: unknown; body?: unknown };
+  const body = candidate.body;
+  const bodyRecord = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+  const detail = bodyRecord?.detail;
+  const detailRecord =
+    detail && typeof detail === 'object' ? (detail as Record<string, unknown>) : null;
+  return [
+    candidate.code,
+    bodyRecord?.code,
+    bodyRecord?.status,
+    bodyRecord?.message_type,
+    bodyRecord?.messageType,
+    detailRecord?.code,
+    detailRecord?.status,
+  ].flatMap((value) => (typeof value === 'string' ? [value.trim().toUpperCase()] : []));
 }
 
 const URL_SECRET_QUERY_KEYS = new Set([

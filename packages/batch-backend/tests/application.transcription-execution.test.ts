@@ -130,6 +130,21 @@ describe('transcription execution contract', () => {
     });
   });
 
+  it('classifies a controlled provider account failure as a terminal product condition', () => {
+    expect(
+      classifyTranscriptionFailure({
+        code: 'PROVIDER_ACCOUNT_UNAVAILABLE',
+        status: 402,
+        body: { detail: { status: 'insufficient_credits', message: 'PROVIDER_SECRET' } },
+      }),
+    ).toEqual({
+      category: 'permanent',
+      errorCode: 'transcription_provider_account_unavailable',
+      retryable: false,
+      providerStatus: 402,
+    });
+  });
+
   it('rejects structurally unusable provider results without judging transcript quality', () => {
     for (const text of ['   ', undefined]) {
       expect(
