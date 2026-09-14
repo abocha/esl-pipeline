@@ -18,7 +18,8 @@
 ## Standard Loop
 
 1. Run `pnpm docs:garden`.
-2. If you are fixing docs-heavy work before merge, also run `pnpm docs:check`.
+2. For PR work, run `pnpm docs:check:pr -- --from <base> --to <head>`; use `pnpm docs:check`
+   when a full configured-scope audit is intended.
 3. For plan-only lifecycle updates, run `pnpm docs:generate:plans-index` instead of regenerating
    every generated index.
 4. Review the rolling issue queue.
@@ -27,7 +28,8 @@
 ## What Each Artifact Is For
 
 - `docs:garden`: single harness entrypoint for the weekly gardening run.
-- `docs:check`: hard gate for merge safety.
+- `docs:check:pr`: PR hard gate with ownership-scoped freshness age and full structural checks.
+- `docs:check`: full configured-scope hard check, including repository-wide freshness age.
 - `tmp/docs-gardening.json`: canonical structured snapshot for the run.
 - `tmp/docs-gardening-issue.json` / `.md`: rolling issue payload generated from the snapshot.
 - `tmp/docs-health-report.json` / `.md`: health snapshot and scorecard rendering.
@@ -44,7 +46,9 @@ the single gardening issue.
 ### Fix now
 
 - Broken links.
-- Missing metadata or freshness in enforced scope.
+- Missing or invalid metadata/freshness, and relevant-document freshness violations.
+- Repository-wide age-only freshness findings are scheduled-gardening work unless the document or
+  its ownership surface is relevant to the PR.
 - Route hints or governance requirements that are mechanically failing.
 - Active plan lifecycle violations: completed/superseded plans under `docs/plans/`, missing exit
   triggers or current focus on routed active plans, non-editable active statuses, non-editable router
