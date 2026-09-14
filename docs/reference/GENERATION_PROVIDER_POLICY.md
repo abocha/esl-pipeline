@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: canonical provider/model/quota policy.
-- Last Verified Against: 2026-07-30 repo state.
+- Last Verified Against: 2026-09-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after provider policy/availability changes.
 - Status: `reference`.
@@ -27,10 +27,10 @@
 
 - Built-in workload policy:
   - assignment creation: `gpt-5.6-sol` with `medium` reasoning and `medium` text verbosity
-  - student-memory snapshot and profile revision: `gpt-5.6-luna` with `medium` reasoning and `low`
-    text verbosity
-  - lesson memory, homework memory, and the closed `apply`/`no_change` candidate-patch decision:
-    `gpt-5.6-luna` with `low` reasoning and `low` text verbosity
+  - lesson memory and homework memory: `gpt-5.6-luna` with `medium` reasoning and `low` text verbosity
+  - student-memory snapshot: `gpt-5.6-luna` with `high` reasoning and `low` text verbosity
+  - profile revision and the closed `apply`/`no_change` candidate-patch decision: `gpt-5.6-luna`
+    with `medium` reasoning and `low` text verbosity
 - `GEN_OPENAI_TARGET_MODELS_ENABLED` remains a compatibility and operator-observability signal. Both
   flag states now resolve to the GPT-5.6 built-in policy; explicit `GEN_OPENAI_MODEL_*` overrides
   remain authoritative. The flag is not a paywall or user-plan control.
@@ -66,6 +66,8 @@ prompts only for a measured failure or concrete contradiction.
   - `gemini-2.5-pro`
   - `gemini-2.5-flash`
   - `gemini-2.5-flash-lite`
+  - `gemma-4-31b-it`
+  - `gemma-4-26b-a4b-it`
 - `gemini-3.5-flash` is selectable as the stable 3.5 Flash model, but
   `gemini-3-flash-preview` remains the configured primary/default until a separate default-change
   decision lands.
