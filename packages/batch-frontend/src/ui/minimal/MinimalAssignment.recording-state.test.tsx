@@ -108,8 +108,8 @@ describe('MinimalAssignment recording projection', () => {
       status: 'failed',
       productState: 'attention',
       runState: 'failed',
-      error: 'transcription_unavailable_after_retries',
-      errorCode: 'transcription_unavailable_after_retries',
+      error: 'transcription_provider_account_unavailable',
+      errorCode: 'transcription_provider_account_unavailable',
     });
     vi.mocked(api.uploadRecording).mockResolvedValue(failed);
     vi.mocked(api.getRecording).mockResolvedValue(failed);
@@ -120,8 +120,36 @@ describe('MinimalAssignment recording projection', () => {
     fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
     expect(await screen.findAllByText('Recording needs attention')).not.toHaveLength(0);
-    expect(screen.getAllByText(/Upload the recording again later/i)).not.toHaveLength(0);
+    expect(
+      screen.getAllByText(
+        /transcription service account needs attention\. The recording itself is not the problem/i,
+      ),
+    ).not.toHaveLength(0);
     expect(screen.queryByRole('button', { name: /Retry transcript/i })).toBeNull();
+  });
+
+  it('preserves provider-account guidance after assignment resume', async () => {
+    vi.mocked(api.getRecording).mockResolvedValue(
+      makeRecording({
+        status: 'failed',
+        productState: 'attention',
+        runState: 'failed',
+        error: 'transcription_provider_account_unavailable',
+        errorCode: 'transcription_provider_account_unavailable',
+      }),
+    );
+
+    await renderResumedAssignment(
+      { status: { state: 'running', transcriptId: null, promptPackageId: null } },
+      { waitFor: 'none' },
+    );
+
+    expect(screen.getAllByText('Recording needs attention')).not.toHaveLength(0);
+    expect(
+      screen.getAllByText(
+        'Automatic transcription is unavailable because the transcription service account needs attention. The recording itself is not the problem. Contact the service operator; replacing the recording will not help.',
+      ),
+    ).not.toHaveLength(0);
   });
 
   it('keeps a cache-hit recording ready with no synthesized run or audio control', async () => {

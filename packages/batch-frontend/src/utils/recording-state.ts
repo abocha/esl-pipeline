@@ -19,6 +19,8 @@ export const RECORDING_ERROR_ACTIONS: Record<RecordingErrorCode, string> = {
     "This video's audio could not be extracted without conversion. Upload an audio export.",
   speakers_not_separated:
     'The transcript did not contain the expected two lesson speakers after automatic recovery. Upload a clearer or full lesson recording.',
+  transcription_provider_account_unavailable:
+    'Automatic transcription is unavailable because the transcription service account needs attention. The recording itself is not the problem. Contact the service operator; replacing the recording will not help.',
   transcription_unavailable_after_retries:
     'Automatic transcription could not finish. Upload the recording again later.',
 };

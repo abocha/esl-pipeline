@@ -50,6 +50,7 @@ export type RecordingErrorCode =
   | 'multiple_audio_streams'
   | 'preparation_failed'
   | 'speakers_not_separated'
+  | 'transcription_provider_account_unavailable'
   | 'transcription_unavailable_after_retries';
 
 export interface RecordingDto {

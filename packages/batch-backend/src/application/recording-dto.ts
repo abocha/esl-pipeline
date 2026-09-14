@@ -101,6 +101,7 @@ const STABLE_RECORDING_ERROR_CODES = new Set<RecordingErrorCode>([
   'multiple_audio_streams',
   'preparation_failed',
   'speakers_not_separated',
+  'transcription_provider_account_unavailable',
   'transcription_unavailable_after_retries',
 ]);
 

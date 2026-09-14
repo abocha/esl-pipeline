@@ -88,6 +88,15 @@ describe('recordingToDto canonical projection', () => {
       recordingToDto({ ...recording, status: 'failed' }, run('failed', 'speakers_not_separated')),
     ).toMatchObject({ errorCode: 'speakers_not_separated' });
     expect(
+      recordingToDto(
+        { ...recording, status: 'failed' },
+        run('failed', 'transcription_provider_account_unavailable'),
+      ),
+    ).toMatchObject({
+      errorCode: 'transcription_provider_account_unavailable',
+      error: 'transcription_provider_account_unavailable',
+    });
+    expect(
       recordingToDto({ ...recording, status: 'failed' }, run('failed', 'provider-secret')),
     ).toMatchObject({ error: null, errorCode: null });
   });

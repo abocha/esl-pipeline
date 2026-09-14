@@ -419,6 +419,9 @@ async function processTranscribeJobWithinFence(
       provider: sttProvider,
       providerCategory: classification.category,
       errorCode: classification.errorCode,
+      ...(classification.providerStatus === undefined
+        ? {}
+        : { providerStatus: classification.providerStatus }),
       ...(structuralDiagnostics
         ? {
             runId: claimed.id,
@@ -432,6 +435,10 @@ async function processTranscribeJobWithinFence(
         : {}),
     });
 
+    // A committed terminal state is the durable outcome. A BullMQ throw here
+    // would only redeliver a job that cannot dispatch again; retry_wait and
+    // authority-loss paths still throw so delivery/reconciliation can continue.
+    if (transitioned.state === 'failed') return null;
     throw new Error(classification.errorCode);
   }
 }
