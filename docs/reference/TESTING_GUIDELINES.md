@@ -38,7 +38,9 @@ While editing, run the narrowest relevant command:
 - the owning package's `test`, `typecheck`, `lint`, or `build` command when package behavior is
   involved;
 - direct tooling or contract tests for scripts, workflows, manifests, and release policy;
-- `pnpm docs:generate:indexes`, `pnpm format`, and `pnpm docs:check` for docs-only changes.
+- `pnpm docs:generate:indexes`, `pnpm format`, and the appropriate docs check for docs-only changes:
+  use `pnpm docs:check:pr -- --from <base> --to <head>` for PR scope or `pnpm docs:check` for a
+  full configured-scope audit.
 
 Before pushing, rerun focused evidence appropriate to the final diff. Do not automatically run a
 repository-wide local gate. Broader local or service-backed diagnostics require a concrete suspected
@@ -53,7 +55,7 @@ validation and records actionable logs/manifests. Reproduce the failing job dire
 - repository policy: the exact failing command, such as `pnpm env:validate:example`,
   `pnpm test:tooling`, `pnpm run lint:workflows`, `pnpm run lint:shell`, `pnpm docker:lint`,
   `pnpm deps:audit:strict`, `pnpm release:verify:contracts`,
-  `pnpm guard:orchestrator:boundary`, `pnpm docs:check`, or `pnpm docs:health:report`;
+  `pnpm guard:orchestrator:boundary`, `pnpm docs:check:pr`, or `pnpm docs:health:report`;
 - build and code quality: `pnpm build`, `pnpm typecheck`, or `pnpm lint`;
 - unit and component: the hosted recursive package command and its explicit workspace/Vitest
   resource settings from the job log;

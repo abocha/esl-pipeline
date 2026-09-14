@@ -212,13 +212,19 @@ jobs:
         id: docs_sanity
         continue-on-error: true
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -o pipefail
-          pnpm docs:check 2>&1 | tee tmp/ci-logs/repository-policy/docs-check.log
+          pnpm docs:check:pr -- --from "$BASE_SHA" --to "$HEAD_SHA" 2>&1 | tee tmp/ci-logs/repository-policy/docs-check.log
 
       - name: Generate docs health report
         if: always()
-        run: pnpm docs:health:report
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm docs:health:report -- --pr --from "$BASE_SHA" --to "$HEAD_SHA"
 
       - name: Upload docs health artifact on failure
         if: steps.docs_sanity.outcome == 'failure'
@@ -242,7 +248,7 @@ jobs:
         if: always()
         env:
           POLICY_RESULTS: >-
-            [{"command":"pnpm env:validate:example","conclusion":"${{ steps.env_template.outcome }}","logPath":"tmp/ci-logs/repository-policy/env-validate-example.log"},{"command":"pnpm test:tooling","conclusion":"${{ steps.tooling_tests.outcome }}","logPath":"tmp/ci-logs/repository-policy/test-tooling.log"},{"command":"pnpm run lint:workflows","conclusion":"${{ steps.lint_workflows.outcome }}","logPath":"tmp/ci-logs/repository-policy/lint-workflows.log"},{"command":"pnpm run lint:shell","conclusion":"${{ steps.lint_shell.outcome }}","logPath":"tmp/ci-logs/repository-policy/lint-shell.log"},{"command":"pnpm docker:lint","conclusion":"${{ steps.docker_lint.outcome }}","logPath":"tmp/ci-logs/repository-policy/docker-lint.log"},{"command":"pnpm deps:audit:strict","conclusion":"${{ steps.dependency_audit.outcome }}","logPath":"tmp/ci-logs/repository-policy/deps-audit-strict.log"},{"command":"pnpm release:verify:contracts","conclusion":"${{ steps.contract_versions.outcome }}","logPath":"tmp/ci-logs/repository-policy/release-verify-contracts.log"},{"command":"pnpm guard:orchestrator:boundary","conclusion":"${{ steps.orchestrator_boundary.outcome }}","logPath":"tmp/ci-logs/repository-policy/guard-orchestrator-boundary.log"},{"command":"pnpm docs:check","conclusion":"${{ steps.docs_sanity.outcome }}","logPath":"tmp/ci-logs/repository-policy/docs-check.log"}]
+            [{"command":"pnpm env:validate:example","conclusion":"${{ steps.env_template.outcome }}","logPath":"tmp/ci-logs/repository-policy/env-validate-example.log"},{"command":"pnpm test:tooling","conclusion":"${{ steps.tooling_tests.outcome }}","logPath":"tmp/ci-logs/repository-policy/test-tooling.log"},{"command":"pnpm run lint:workflows","conclusion":"${{ steps.lint_workflows.outcome }}","logPath":"tmp/ci-logs/repository-policy/lint-workflows.log"},{"command":"pnpm run lint:shell","conclusion":"${{ steps.lint_shell.outcome }}","logPath":"tmp/ci-logs/repository-policy/lint-shell.log"},{"command":"pnpm docker:lint","conclusion":"${{ steps.docker_lint.outcome }}","logPath":"tmp/ci-logs/repository-policy/docker-lint.log"},{"command":"pnpm deps:audit:strict","conclusion":"${{ steps.dependency_audit.outcome }}","logPath":"tmp/ci-logs/repository-policy/deps-audit-strict.log"},{"command":"pnpm release:verify:contracts","conclusion":"${{ steps.contract_versions.outcome }}","logPath":"tmp/ci-logs/repository-policy/release-verify-contracts.log"},{"command":"pnpm guard:orchestrator:boundary","conclusion":"${{ steps.orchestrator_boundary.outcome }}","logPath":"tmp/ci-logs/repository-policy/guard-orchestrator-boundary.log"},{"command":"pnpm docs:check:pr","conclusion":"${{ steps.docs_sanity.outcome }}","logPath":"tmp/ci-logs/repository-policy/docs-check.log"}]
         run: |
           mkdir -p tmp/ci-logs/repository-policy
           node -e "require('node:fs').writeFileSync('tmp/ci-logs/repository-policy/manifest.json', JSON.stringify(JSON.parse(process.env.POLICY_RESULTS), null, 2) + '\n')"

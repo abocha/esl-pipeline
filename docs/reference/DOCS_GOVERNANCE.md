@@ -17,9 +17,19 @@
 
 ## Harness Contract
 
-- `docs:check` is the hard gate.
-- `docs:check` runs the core, active-operations, and non-core scopes; the non-core scope also
-  enforces the plan-lifecycle checks.
+- `docs:check` is the full configured-scope hard check. It runs the core, active-operations, and
+  non-core scopes; the non-core scope also enforces the plan-lifecycle checks.
+- PR CI uses `docs:check:pr -- --from <base> --to <head>`. It checks every configured document for
+  structural failures, metadata, links, route hints, and lifecycle rules. Freshness age is a hard
+  failure only for a changed document or its relevant ownership surface; unrelated age-only
+  staleness is reported as a warning.
+- A package README is relevant when its package changes. A document under `docs/<area>/` is relevant
+  when that area changes, and a document that explicitly names a changed package is relevant to
+  that package's ownership surface. Changes to the docs harness or its CI workflow make the full
+  enforced set relevant. Directly changed documentation is always relevant.
+- Scheduled `pnpm docs:garden` keeps full-scope freshness enforcement and publishes the repository-wide
+  health, stale-active, plan-lifecycle, and rolling-issue artifacts. Calendar-driven age-only work
+  therefore remains visible there even when it is outside an ordinary PR's ownership surface.
 - Freshness is an age signal, not proof that a document is accurate. Advancing the
   `Last Verified Against` date requires reviewing the document against the current repository; a
   date-only edit does not satisfy this policy even when it clears the mechanical gate.
@@ -53,15 +63,19 @@
 
 ### Hard gates
 
-- Broken links, missing routes, missing metadata, and freshness violations are hard failures where the scope is enforced.
-- `docs:check` should remain the only gate that blocks merge on those violations.
+- Broken links, missing routes, missing metadata, invalid freshness metadata, banned patterns,
+  lifecycle contradictions, and other structural violations are hard failures in both full and PR
+  modes. Relevant-document freshness violations are hard failures in both modes as well.
+- `docs:check:pr` is the PR merge gate; `docs:check` and `docs:garden` retain full-scope enforcement
+  for explicit and scheduled audits.
 - The freshness gate deliberately cannot determine whether a review was substantive. Reviewers and
   agents must enforce the verification procedure below.
 
 ### Warnings
 
 - Warnings are allowed for trends that need attention but do not yet justify a merge block.
-- The current warning surface is the docs-health snapshot, especially repository-wide freshness or quality drift.
+- The current warning surface is the docs-health snapshot, especially repository-wide age-only
+  freshness or quality drift outside the PR ownership surface.
 
 ### Heuristics
 

@@ -109,6 +109,21 @@ test('bootstrap scope check is mechanically independent from the classifier', ()
   assert.match(script, /git diff --name-status -z/u);
 });
 
+test('PR repository policy scopes only freshness age while keeping docs structure blocking', () => {
+  const policy = jobBlock('repository-policy');
+  const docsCheck = namedStep(policy, 'Docs sanity checks');
+  const healthReport = namedStep(policy, 'Generate docs health report');
+
+  assert.match(docsCheck, /BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/u);
+  assert.match(docsCheck, /HEAD_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/u);
+  assert.match(docsCheck, /pnpm docs:check:pr -- --from "\$BASE_SHA" --to "\$HEAD_SHA"/u);
+  assert.match(
+    healthReport,
+    /pnpm docs:health:report -- --pr --from "\$BASE_SHA" --to "\$HEAD_SHA"/u,
+  );
+  assert.doesNotMatch(docsCheck, /pnpm docs:check(?!:pr)/u);
+});
+
 test('aggregate gate evaluator accepts only successful selected lanes', () => {
   const evaluator = markedScript('ci-gate-evaluator');
   const baseResults = {
