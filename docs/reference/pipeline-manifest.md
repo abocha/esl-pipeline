@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 6 minutes.
 - Authority Level: canonical manifest schema reference.
-- Last Verified Against: 2026-07-30 repo state.
+- Last Verified Against: 2026-09-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after manifest schema changes.
 - Status: `reference`.
@@ -17,7 +17,8 @@ This document captures the canonical schema so remote stores and services can va
 
 - **Current version:** `5`
 - Every manifest written by the pipeline now includes `schemaVersion: 5`.
-- Older manifests without `schemaVersion` are treated as legacy version `1` when read.
+- Filesystem reads tag older manifests without `schemaVersion` as legacy version `1`; remote stores
+  preserve the omitted version while remaining schema-compatible.
 - Future breaking changes to the manifest structure must bump `CURRENT_MANIFEST_SCHEMA_VERSION` in
   `packages/orchestrator/src/manifest.ts` and extend this document with migration guidance.
 
@@ -171,6 +172,8 @@ This document captures the canonical schema so remote stores and services can va
 - `audioArtifacts` stores per-target audio artifacts:
   - `audioArtifacts.studyText` for primary study-text audio.
   - `audioArtifacts.pronunciation` for canonical pronunciation audio, including the primary section clip and optional item clips.
+- `audioArtifacts.pronunciationShadowSentence` remains readable as the legacy shadow-sentence field;
+  new writes use the canonical `audioArtifacts.pronunciation` shape.
 - `publishTarget` is now html-only and retained for explicit manifest provenance.
 - `audioArtifacts.studyText.voices[*].selectionReason`, `capabilityMatches`, and `capabilityMismatches` are additive
   explainability fields for voice-alignment v2. Consumers SHOULD treat them as optional.
@@ -180,11 +183,11 @@ This document captures the canonical schema so remote stores and services can va
 ## Backwards Compatibility
 
 - Services should tolerate unknown fields to allow additive evolution.
-- When reading manifests without `schemaVersion`, the orchestrator treats them as legacy version `1`.
+- Filesystem reads tag manifests without `schemaVersion` as legacy version `1`; S3 reads preserve an omitted version.
 - Runtime logic is canonicalized to `audioArtifacts.*`; legacy manifests that only contain top-level `audio`
-  do not get implicit alias fallback and should be regenerated to schema `2`.
-- Remote stores should persist manifests verbatim to avoid losing optional fields used by other
-  stages (e.g., future metadata for adapters).
+  do not get implicit alias fallback and should be regenerated to the current schema `5`.
+- Manifest stores persist the supported shape after `sanitizeAssignmentManifest`; optional fields declared
+  here must remain preserved by storage adapters.
 - The optional voice, schema-v2 envelope, returned-model, and prompt-policy fields are additive.
   Unversioned schema-v1 plans remain readable and are not rewritten with invented markers or
   hashes. At execution time, legacy Inworld capability snapshots are normalized against the
@@ -225,4 +228,5 @@ bumps manifest schema version `5` or alters schema-v1 compatibility.
    - `ESL_PIPELINE_MANIFEST_BUCKET=<bucket-name>`
    - Optional: `ESL_PIPELINE_MANIFEST_PREFIX` and `ESL_PIPELINE_MANIFEST_ROOT` for custom layout.
 3. Copy historical manifests to the matching S3 prefix (`.manifest.json` files can be uploaded as-is).
-4. Restart the pipeline worker; new runs will write and read manifests from S3. Filesystem manifests remain untouched for fallback.
+4. Restart the pipeline worker; new runs will write and read manifests from S3. Filesystem manifests remain
+   untouched, and invalid or missing S3 configuration fails rather than falling back to filesystem storage.
