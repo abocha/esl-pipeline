@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.22] - 2026-09-14
+
+### Changed
+
+- Automated release from PR #258: fix(build): restore offline production deploy (https://github.com/abocha/esl-pipeline/pull/258)
+
 ## [10.11.21] - 2026-09-13
 
 ### Changed
