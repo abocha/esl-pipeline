@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.12.0] - 2026-09-14
+
+### Changed
+
+- Automated release from PR #261: fix(stt): handle provider account failures (https://github.com/abocha/esl-pipeline/pull/261)
+
 ## [10.11.23] - 2026-09-14
 
 ### Changed
