@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 4 minutes.
 - Authority Level: Operational quickstart.
-- Last Verified Against: 2026-08-14 repo state.
+- Last Verified Against: 2026-09-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `active`.
@@ -29,7 +29,8 @@ cp .env.example .env
 pnpm env:validate -- --profile=development
 ```
 
-Use the Node version in [`.nvmrc`](../.nvmrc); `package.json` defines the minimum supported engine.
+Use the Node version in [`.nvmrc`](../.nvmrc); `package.json` defines the minimum supported engine
+and pins the Corepack-managed pnpm version used by repository installs and production-image builds.
 
 Local pnpm commands use the repo-local `storeDir: .pnpm-store/v11` setting in
 [`pnpm-workspace.yaml`](../pnpm-workspace.yaml); project `.npmrc` is intentionally absent so npm
