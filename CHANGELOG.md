@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.23] - 2026-09-14
+
+### Changed
+
+- Automated release from PR #259: fix(ci): decouple age-only docs freshness (https://github.com/abocha/esl-pipeline/pull/259)
+
 ## [10.11.22] - 2026-09-14
 
 ### Changed
