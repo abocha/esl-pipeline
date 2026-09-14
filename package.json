@@ -81,6 +81,7 @@
     "docs:check": "pnpm docs:check:core && pnpm docs:check:ops && pnpm docs:check:non-core",
     "docs:check:core": "node scripts/docs/check-core-docs.mjs",
     "docs:check:non-core": "node scripts/docs/check-non-core-docs.mjs",
+    "docs:check:pr": "node scripts/docs/check-pr-docs.mjs",
     "docs:check:ops": "node scripts/docs/check-active-ops-docs.mjs",
     "docs:garden": "node scripts/docs/generate-docs-gardening.mjs",
     "docs:generate:indexes": "node scripts/docs/generate-docs-indexes.mjs",

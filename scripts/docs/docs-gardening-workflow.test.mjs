@@ -29,6 +29,11 @@ test('gardening preserves the complete report set for thirty days', () => {
   assert.match(upload, /retention-days: 30/u);
 });
 
+test('scheduled gardening continues to run the full docs-gardening harness', () => {
+  assert.match(workflow, /^ {2}schedule:/mu);
+  assert.match(namedStep(workflow, 'Generate docs gardening artifacts'), /pnpm docs:garden/u);
+});
+
 test('rolling issue lookup paginates through repository history', () => {
   const update = namedStep(workflow, 'Update rolling docs-gardening issue');
   assert.match(update, /const issues = await github\.paginate\(github\.rest\.issues\.listForRepo/u);
