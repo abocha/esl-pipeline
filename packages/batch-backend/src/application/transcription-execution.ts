@@ -140,10 +140,12 @@ export type TranscriptionFailureCategory = 'transient' | 'ambiguous' | 'malforme
 export interface ClassifiedTranscriptionFailure {
   category: TranscriptionFailureCategory;
   errorCode:
+    | 'transcription_provider_account_unavailable'
     | 'transcription_unavailable_after_retries'
     | 'malformed_provider_result'
     | 'transcription_permanent_failure';
   retryable: boolean;
+  providerStatus?: number;
 }
 
 export type TranscriptionStructuralValidationReason =
@@ -263,10 +265,18 @@ export type TranscriptionStructuralValidationResult =
 /** Only controlled transport facts are used; provider text is deliberately discarded. */
 export function classifyTranscriptionFailure(error: unknown): ClassifiedTranscriptionFailure {
   const code = readCode(error);
+  const status = readStatus(error);
+  if (code === 'PROVIDER_ACCOUNT_UNAVAILABLE') {
+    return {
+      category: 'permanent',
+      errorCode: 'transcription_provider_account_unavailable',
+      retryable: false,
+      ...(status === null ? {} : { providerStatus: status }),
+    };
+  }
   if (code === 'TRANSCRIPTION_STRUCTURAL_VALIDATION_FAILED') {
     return { category: 'malformed', errorCode: 'malformed_provider_result', retryable: false };
   }
-  const status = readStatus(error);
   if (status === 408 || status === 429 || (status !== null && status >= 500)) {
     return {
       category: 'transient',
@@ -466,7 +476,9 @@ function readStatus(error: unknown): number | null {
   const value =
     (error as { status?: unknown; statusCode?: unknown }).status ??
     (error as { statusCode?: unknown }).statusCode;
-  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+  return typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599
+    ? value
+    : null;
 }
 
 function readCode(error: unknown): string | null {

@@ -128,6 +128,60 @@ describe('application/process-transcribe-job', () => {
     );
   });
 
+  it('acknowledges a durably terminal provider account failure without another delivery', async () => {
+    const recording = createRecording('provider-account-unavailable');
+    const updateStatus = vi.fn(async ({ status, error }) => {
+      recording.status = status;
+      recording.error = error ?? null;
+      return recording;
+    });
+    const publishEvent = vi.fn();
+    transcriptionRuns.retry.mockClear();
+    transcriptionRuns.fail.mockClear();
+    jobLogger.error.mockClear();
+
+    await expect(
+      processTranscribeJob(
+        { recordingId: recording.id },
+        {
+          config: createConfig(),
+          storage: createStorageStub(),
+          sttTranscribe: vi.fn(async () => {
+            throw Object.assign(new Error('PROVIDER_SECRET'), {
+              code: 'PROVIDER_ACCOUNT_UNAVAILABLE',
+              status: 402,
+            });
+          }),
+          recordings: { getById: async () => recording, updateStatus },
+          transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+          publishEvent,
+        },
+      ),
+    ).resolves.toBeNull();
+
+    expect(transcriptionRuns.retry).not.toHaveBeenCalled();
+    expect(transcriptionRuns.fail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: 'transcription_provider_account_unavailable',
+        outcome: 'known_failure',
+      }),
+    );
+    expect(recording).toMatchObject({
+      status: 'failed',
+      error: 'transcription_provider_account_unavailable',
+    });
+    expect(publishEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        run: expect.objectContaining({ state: 'failed' }),
+      }),
+    );
+    expect(jobLogger.error.mock.calls[0]?.[1]).toMatchObject({
+      errorCode: 'transcription_provider_account_unavailable',
+      providerStatus: 402,
+    });
+    expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain('PROVIDER_SECRET');
+  });
+
   it('marks a recording failed when a forced route-resolution error occurs before provider execution', async () => {
     const recording = {
       ...createRecording('trusted-override'),
@@ -161,7 +215,7 @@ describe('application/process-transcribe-job', () => {
           publishEvent,
         },
       ),
-    ).rejects.toThrow('transcription_permanent_failure');
+    ).resolves.toBeNull();
 
     expect(sttTranscribe).not.toHaveBeenCalled();
     expect(updateStatus).toHaveBeenCalledWith(
@@ -532,7 +586,7 @@ describe('application/process-transcribe-job', () => {
     expect(inserted[0]?.sttProvider).toBe('elevenlabs');
   });
 
-  it('marks recording failed when STT provider throws', async () => {
+  it('acknowledges a terminal recording failure when the provider throws', async () => {
     const recording = createRecording('recording-fail');
 
     await expect(
@@ -565,7 +619,7 @@ describe('application/process-transcribe-job', () => {
           publishEvent: vi.fn(),
         },
       ),
-    ).rejects.toThrow('transcription_permanent_failure');
+    ).resolves.toBeNull();
 
     expect(recording.status).toBe('failed');
     expect(recording.error).toBe('transcription_permanent_failure');
@@ -713,7 +767,7 @@ describe('application/process-transcribe-job', () => {
 
       await expect(
         processTranscribeJob({ recordingId: recording.id }, dependencies),
-      ).rejects.toThrow('malformed_provider_result');
+      ).resolves.toBeNull();
       await expect(
         processTranscribeJob({ recordingId: recording.id }, dependencies),
       ).resolves.toBeNull();
@@ -813,9 +867,9 @@ describe('application/process-transcribe-job', () => {
       transcripts: { getByRecordingId: async () => null, insert },
       publishEvent: vi.fn(),
     };
-    await expect(processTranscribeJob({ recordingId: recording.id }, dependencies)).rejects.toThrow(
-      'malformed_provider_result',
-    );
+    await expect(
+      processTranscribeJob({ recordingId: recording.id }, dependencies),
+    ).resolves.toBeNull();
     await expect(
       processTranscribeJob({ recordingId: recording.id }, dependencies),
     ).resolves.toBeNull();
@@ -876,7 +930,7 @@ describe('application/process-transcribe-job', () => {
           publishEvent: vi.fn(),
         },
       ),
-    ).rejects.toThrow('malformed_provider_result');
+    ).resolves.toBeNull();
 
     expect(putRawResponse).not.toHaveBeenCalled();
   });
@@ -1163,7 +1217,7 @@ describe('application/process-transcribe-job', () => {
     expect(convert).toHaveBeenCalledTimes(1);
   });
 
-  it('fails loudly when provider raises async accepted response error', async () => {
+  it('acknowledges a terminal provider response error after durable failure projection', async () => {
     const recording = createRecording('recording-accepted-response');
 
     await expect(
@@ -1198,7 +1252,7 @@ describe('application/process-transcribe-job', () => {
           publishEvent: vi.fn(),
         },
       ),
-    ).rejects.toThrow('transcription_permanent_failure');
+    ).resolves.toBeNull();
 
     expect(recording.status).toBe('failed');
   });
@@ -1344,7 +1398,7 @@ describe('application/process-transcribe-job', () => {
             publishEvent: vi.fn(),
           },
         ),
-      ).rejects.toThrow('malformed_provider_result');
+      ).resolves.toBeNull();
       const fields = jobLogger.error.mock.calls[0]?.[1];
       expect(fields.structuralValidation).toEqual({
         reason: 'invalid_segment_timing',

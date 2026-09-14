@@ -29,9 +29,15 @@ describe('recording product state', () => {
 
   it('maps every stable backend error and fails safely for unknown diagnostics', () => {
     const codes = Object.keys(RECORDING_ERROR_ACTIONS) as RecordingErrorCode[];
-    expect(codes).toHaveLength(10);
+    expect(codes).toHaveLength(11);
     for (const code of codes) expect(getRecordingErrorAction(code)).toBeTruthy();
     expect(getRecordingErrorAction('raw-provider-stack')).toBe(GENERIC_RECORDING_TERMINAL_ACTION);
+  });
+
+  it('gives account-unavailable recordings the approved operator guidance', () => {
+    expect(getRecordingErrorAction('transcription_provider_account_unavailable')).toBe(
+      'Automatic transcription is unavailable because the transcription service account needs attention. The recording itself is not the problem. Contact the service operator; replacing the recording will not help.',
+    );
   });
 
   it('does not let an older asynchronous projection overwrite newer hydrated truth', () => {

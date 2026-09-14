@@ -8,7 +8,7 @@ import {
 
 describe('manual transcript contract versions', () => {
   it('tracks the recording cleanup contract', () => {
-    expect(API_CONTRACT_VERSION).toBe('4.4.0');
+    expect(API_CONTRACT_VERSION).toBe('4.5.0');
     expect(DB_CONTRACT_VERSION).toBe('0.30.1');
     expect(DB_MIGRATION_HEAD).toBe('0053_recording_audio_cleanup_backfill');
   });

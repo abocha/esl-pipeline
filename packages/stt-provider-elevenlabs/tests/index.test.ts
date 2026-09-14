@@ -799,6 +799,71 @@ describe('stt-provider-elevenlabs', () => {
     expect(convert).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['current', { detail: { status: 'insufficient_credits', message: 'PROVIDER_SECRET' } }],
+    ['legacy', { message_type: 'quota_exceeded', error: 'PROVIDER_SECRET' }],
+  ])(
+    'classifies the %s account-credit code without retaining provider text',
+    async (_kind, body) => {
+      const rawError = Object.assign(new Error('PROVIDER_SECRET'), {
+        body,
+        statusCode: 402,
+      });
+      const provider = createElevenLabsSttProvider({
+        clientFactory: () => ({
+          speechToText: { convert: vi.fn().mockRejectedValue(rawError) },
+        }),
+      });
+
+      const thrown = await provider
+        .transcribe({
+          context: {
+            recordingId: 'rec-provider-account',
+            storageUri: 's3://bucket/audio.wav',
+            getStream: async () => Readable.from(['unused']),
+            getSubmissionSource: async () => ({
+              kind: 'url' as const,
+              url: 'https://storage.example.test/audio.wav',
+            }),
+          },
+          config: { apiKey: 'test' },
+        })
+        .catch((error: unknown) => error);
+
+      expect(thrown).toMatchObject({ code: 'PROVIDER_ACCOUNT_UNAVAILABLE', status: 402 });
+      expect(JSON.stringify(thrown)).not.toContain('PROVIDER_SECRET');
+    },
+  );
+
+  it('does not infer account unavailability from arbitrary 4xx response text', async () => {
+    const rawError = Object.assign(new Error('insufficient_credits'), {
+      body: { detail: { message: 'insufficient_credits' } },
+      statusCode: 402,
+    });
+    const provider = createElevenLabsSttProvider({
+      clientFactory: () => ({
+        speechToText: { convert: vi.fn().mockRejectedValue(rawError) },
+      }),
+    });
+
+    const thrown = await provider
+      .transcribe({
+        context: {
+          recordingId: 'rec-provider-rejection',
+          storageUri: 's3://bucket/audio.wav',
+          getStream: async () => Readable.from(['unused']),
+          getSubmissionSource: async () => ({
+            kind: 'url' as const,
+            url: 'https://storage.example.test/audio.wav',
+          }),
+        },
+        config: { apiKey: 'test' },
+      })
+      .catch((error: unknown) => error);
+
+    expect(thrown).toMatchObject({ code: 'PROVIDER_PERMANENT_REJECTION', status: 402 });
+  });
+
   it('does not invoke ElevenLabs when provider source preparation fails', async () => {
     const convert = vi.fn(async (_request: Record<string, unknown>) => ({
       text: 'should not be returned',

@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-09-09 recording-ingest closeout state.
+- Last Verified Against: 2026-09-14 provider-account failure handling.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: monthly or after major API/worker changes.
 - Status: `active`.
@@ -79,6 +79,10 @@ Useful indexes:
   validation is terminal and does not consume another provider submission. When raw-response storage
   is enabled, a received provider response is persisted before this validation; structural-failure logs
   expose only its resulting `rawResponseUri`. Provider SDK retries remain disabled.
+- A narrowly allowlisted ElevenLabs account-credit response terminalizes the durable run as
+  `transcription_provider_account_unavailable`. The public state is provider-neutral; logs retain only
+  the controlled failure class and valid HTTP status when supplied, never provider response text or body.
+  After that terminal projection commits, the BullMQ delivery completes without a redundant redelivery.
 - Structural timing failure logs include a controlled `timingIssue`: `missing_start`, `missing_end`,
   `non_finite_start`, `non_finite_end`, `negative_start`, or `reversed_timing` (first failed check
   in that order). Finite non-negative point timing (`start === end`) is valid. Null/undefined timing
