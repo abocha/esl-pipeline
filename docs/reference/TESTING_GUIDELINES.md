@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents.
 - Authority Level: active test methodology guide.
-- Last Verified Against: 2026-09-12 repo state.
+- Last Verified Against: 2026-09-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Status: `active`.
 
@@ -24,6 +24,11 @@ workflow, root toolchain, deployment/runtime, and unknown paths remain conservat
 If hosted CI fails, inspect that job's logs and retained manifest, then reproduce the job's actual
 command, configuration, and prerequisites. Do not replace a failing hosted job with a repository-wide
 local approximation.
+
+The conditional `production backend packaging` job reuses the release production-image scope and
+executes the same backend Dockerfile, Buildx action, target platform, and fresh-base behavior as the
+release image build, without pushing an image. Shared image inputs and workspace changes that affect
+the backend select it; unrelated PRs skip it. `CI gate` requires the job to succeed whenever selected.
 
 ## Local feedback ladder
 
