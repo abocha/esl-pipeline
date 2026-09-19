@@ -11,6 +11,7 @@ export interface AssignmentWorkflowProps {
   activeStep: AssignmentStepId;
   highestAvailableStep: AssignmentStepId;
   saveState: 'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'ambiguous';
+  studentName?: string | null;
   guidance?: React.ReactNode;
   postFooter?: React.ReactNode;
   support?: React.ReactNode;
@@ -46,6 +47,7 @@ export function AssignmentWorkflow({
   steps,
   activeStep,
   saveState,
+  studentName,
   guidance,
   postFooter,
   support,
@@ -62,6 +64,9 @@ export function AssignmentWorkflow({
   return (
     <section className="assignment-workflow" aria-label="Assignment builder">
       <div className="assignment-workflow__status">
+        {studentName?.trim() ? (
+          <span className="assignment-workflow__identity">Assignment for {studentName.trim()}</span>
+        ) : null}
         <span
           className={`assignment-workflow__save assignment-workflow__save--${saveState}`}
           role="status"
@@ -122,7 +127,9 @@ export function AssignmentWorkflow({
             <div className="assignment-workflow__footer-feedback">{continueFeedback}</div>
           ) : null}
           {onComplete && completionLabel ? (
-            <ProductButton onClick={onComplete}>{completionLabel}</ProductButton>
+            <ProductButton variant="secondary" onClick={onComplete}>
+              {completionLabel}
+            </ProductButton>
           ) : onContinue && continueLabel ? (
             <ProductButton onClick={onContinue} disabled={continueDisabled}>
               {continueLabel}

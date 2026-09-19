@@ -138,7 +138,6 @@ interface SourceStageSectionProps {
   transcriptSaving: boolean;
   mixedSpeakerRoles: { speaker: number; role: 'teacher' | 'student' | '' }[];
   onMixedSpeakerRoleChange: (speaker: number, role: 'teacher' | 'student' | '') => void;
-  onSaveMixedSpeakerRoles: () => void;
   hideStudentSelection?: boolean;
   readOnly?: boolean;
 }
@@ -476,12 +475,11 @@ interface ReviewStageSectionProps {
   previewError: string | null;
   previewHtml: string | null;
   publishError: string | null;
+  jobActionFeedback?: string | null;
   currentJobStatus: JobStatus | null;
   jobFailureReason: string | null;
   jobReady: boolean;
   publishUrl: string | null | undefined;
-  publishLabel: string;
-  publishPending: string;
   completedReferenceMode?: boolean;
   correctionAvailable?: boolean;
   publicationRecoveryAvailable?: boolean;
@@ -490,6 +488,7 @@ interface ReviewStageSectionProps {
   correctionError?: string | null;
   correctionCanPublish?: boolean;
   savedUnpublishedChanges?: boolean;
+  onCopyPublishedUrl?: (url: string) => void;
   onEnterCorrection?: () => void;
   onRetryPublication?: () => void;
   onExitCorrection?: () => void;
@@ -548,6 +547,7 @@ export function StageSection({
   children,
 }: StageSectionProps) {
   const isLocked = stage.status === 'locked';
+  const showStageChrome = stage.id === 'start' || stage.id === 'advanced';
   const stageActions = isLocked ? null : actions;
   const stageGuidance = isLocked ? null : guidance;
   const stageContent = isLocked ? null : children;
@@ -560,12 +560,14 @@ export function StageSection({
           <h2 ref={headingRef} tabIndex={-1}>
             {stage.title}
           </h2>
-          <p>{stage.description}</p>
+          {showStageChrome && stage.description ? <p>{stage.description}</p> : null}
         </div>
         <div className="minimal-stage-header-actions">
-          <span className={`minimal-stage-state is-${stage.status}`}>
-            {formatWorkflowStageStatusLabel(stage.status)}
-          </span>
+          {showStageChrome ? (
+            <span className={`minimal-stage-state is-${stage.status}`}>
+              {formatWorkflowStageStatusLabel(stage.status)}
+            </span>
+          ) : null}
           {stageActions}
         </div>
       </div>
@@ -843,35 +845,20 @@ export function SourceStageSection({
   transcriptSaving,
   mixedSpeakerRoles,
   onMixedSpeakerRoleChange,
-  onSaveMixedSpeakerRoles,
   hideStudentSelection = false,
   readOnly = false,
 }: SourceStageSectionProps) {
   const recordingProductLabel = getRecordingProductLabel(recording, uploading, uploadProgress);
-  const sourceGuidance =
-    stage.status === 'current'
-      ? !selectedStudentId
-        ? 'Next step: choose the student for this lesson.'
-        : !recording
-          ? 'Next step: upload the lesson recording.'
-          : !transcriptReady && transcriptStatus === 'failed'
-            ? 'Next step: replace the recording or upload it again later.'
-            : !transcriptReady
-              ? 'Next step: wait for the transcript, then review it here.'
-              : null
-      : null;
+  const ordinaryTwoSpeakerMapping =
+    mixedSpeakerRoles.length === 2 &&
+    mixedSpeakerRoles[0]?.speaker !== mixedSpeakerRoles[1]?.speaker;
   const unexpectedTranscriptCharacters =
     transcriptReady && transcriptText
       ? getTranscriptUnexpectedCharacterWarnings(transcriptText)
       : [];
 
   return (
-    <StageSection
-      stage={stage}
-      sectionRef={sectionRef}
-      headingRef={headingRef}
-      guidance={sourceGuidance}
-    >
+    <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
@@ -1027,20 +1014,6 @@ export function SourceStageSection({
               <div className="minimal-meta">
                 <span>Recording: {recording.displayName || recording.recordingId}</span>
                 <span>Status: {recordingProductLabel ?? 'Checking recording'}</span>
-                <span>
-                  Audio source:{' '}
-                  {selectedAudioTopology === 'trusted_split_channels'
-                    ? 'Trusted OBS split'
-                    : 'Ordinary recording'}
-                </span>
-                <span>
-                  Transcript engine:{' '}
-                  {transcriptProvider === 'manual'
-                    ? 'Manual transcript'
-                    : transcriptProvider
-                      ? formatSttProviderLabel(transcriptProvider)
-                      : 'Processing'}
-                </span>
                 {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
               </div>
               {canReplaceAudio && !replacingAudio && !readOnly ? (
@@ -1052,6 +1025,25 @@ export function SourceStageSection({
                   Replace audio
                 </button>
               ) : null}
+              <details className="minimal-details">
+                <summary>Recording details</summary>
+                <div className="minimal-meta">
+                  <span>
+                    Audio source:{' '}
+                    {selectedAudioTopology === 'trusted_split_channels'
+                      ? 'Trusted OBS split'
+                      : 'Ordinary recording'}
+                  </span>
+                  <span>
+                    Transcript engine:{' '}
+                    {transcriptProvider === 'manual'
+                      ? 'Manual transcript'
+                      : transcriptProvider
+                        ? formatSttProviderLabel(transcriptProvider)
+                        : 'Processing'}
+                  </span>
+                </div>
+              </details>
             </div>
           ) : null}
           {recordingError ? <p className="minimal-error">{recordingError}</p> : null}
@@ -1089,6 +1081,59 @@ export function SourceStageSection({
                   before creating the assignment.
                 </div>
               ) : null}
+              {mixedSpeakerRoles.length > 0 ? (
+                <div className="minimal-block">
+                  {ordinaryTwoSpeakerMapping ? (
+                    <fieldset className="minimal-speaker-choice">
+                      <legend>Which one of these is the tutor?</legend>
+                      {mixedSpeakerRoles.map((item) => (
+                        <label key={item.speaker}>
+                          <input
+                            type="radio"
+                            name="tutor-speaker"
+                            checked={item.role === 'teacher'}
+                            onChange={() => {
+                              for (const candidate of mixedSpeakerRoles) {
+                                onMixedSpeakerRoleChange(
+                                  candidate.speaker,
+                                  candidate.speaker === item.speaker ? 'teacher' : 'student',
+                                );
+                              }
+                            }}
+                            disabled={readOnly || transcriptSaving}
+                          />
+                          Speaker {item.speaker + 1}
+                        </label>
+                      ))}
+                    </fieldset>
+                  ) : (
+                    <>
+                      <p className="minimal-help">
+                        Assign every anonymous speaker before confirming this source.
+                      </p>
+                      {mixedSpeakerRoles.map((item) => (
+                        <label className="minimal-select" key={item.speaker}>
+                          Speaker {item.speaker + 1}
+                          <select
+                            value={item.role}
+                            onChange={(event) =>
+                              onMixedSpeakerRoleChange(
+                                item.speaker,
+                                event.target.value as 'teacher' | 'student' | '',
+                              )
+                            }
+                            disabled={readOnly || transcriptSaving}
+                          >
+                            <option value="">Choose role</option>
+                            <option value="teacher">Teacher</option>
+                            <option value="student">Student</option>
+                          </select>
+                        </label>
+                      ))}
+                    </>
+                  )}
+                </div>
+              ) : null}
               <textarea
                 aria-label="Transcript text"
                 value={transcriptText}
@@ -1105,42 +1150,6 @@ export function SourceStageSection({
                       : 'Transcript changes saved'}
                 </span>
               </div>
-              {mixedSpeakerRoles.length > 0 ? (
-                <div className="minimal-block">
-                  <p className="minimal-help">
-                    Assign every anonymous speaker before confirming this source.
-                  </p>
-                  {mixedSpeakerRoles.map((item) => (
-                    <label className="minimal-select" key={item.speaker}>
-                      Speaker {item.speaker + 1}
-                      <select
-                        value={item.role}
-                        onChange={(event) =>
-                          onMixedSpeakerRoleChange(
-                            item.speaker,
-                            event.target.value as 'teacher' | 'student' | '',
-                          )
-                        }
-                        disabled={readOnly || transcriptSaving}
-                      >
-                        <option value="">Choose role</option>
-                        <option value="teacher">Teacher</option>
-                        <option value="student">Student</option>
-                      </select>
-                    </label>
-                  ))}
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={onSaveMixedSpeakerRoles}
-                    disabled={
-                      readOnly || transcriptSaving || mixedSpeakerRoles.some((item) => !item.role)
-                    }
-                  >
-                    Save speaker roles
-                  </button>
-                </div>
-              ) : null}
               {transcriptError ? <p className="minimal-error">{transcriptError}</p> : null}
             </div>
           ) : null}
@@ -1165,10 +1174,9 @@ export function ContextStageSection({
   readOnly = false,
 }: ContextStageSectionProps) {
   const isInRouterContext = useInRouterContext();
-  const contextGuidance =
-    stage.status === 'current'
-      ? 'Next step: review the learner context, add lesson goals here, then create the assignment in the next section.'
-      : null;
+  const learnerContextSections = profilePreview
+    ? buildCurrentProfileDossierSections(profilePreview)
+    : [];
   const renderLearningPageLink = (
     label: string,
     className = 'minimal-secondary minimal-link-button',
@@ -1196,13 +1204,21 @@ export function ContextStageSection({
   };
 
   return (
-    <StageSection
-      stage={stage}
-      sectionRef={sectionRef}
-      headingRef={headingRef}
-      guidance={contextGuidance}
-    >
+    <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
       <div className="minimal-stage-layout">
+        <div className="minimal-stage-panel">
+          <div className="minimal-stage-panel-title">
+            <h3>Lesson guidance</h3>
+          </div>
+          <textarea
+            aria-label="Teacher notes"
+            value={teacherNotes}
+            onChange={(event) => onTeacherNotesChange(event.target.value)}
+            readOnly={readOnly}
+            rows={8}
+            placeholder="Add lesson-specific context, corrections, or priorities for this assignment..."
+          />
+        </div>
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
@@ -1211,26 +1227,42 @@ export function ContextStageSection({
           </div>
           {profileRevisionError ? <p className="minimal-error">{profileRevisionError}</p> : null}
           {selectedProfileId && profilePreview ? (
-            <ProfileDossier
-              title="Student Learning page"
-              description="This approved profile is selected for the assignment."
-              statusLabel="Selected"
-              studentName={studentName}
-              studentDetail="Structured learner profile"
-              sections={buildCurrentProfileDossierSections(profilePreview)}
-              provenance={[
-                { icon: Database, label: 'Student Learning page' },
-                ...(formatDossierDate(profilePreview.updatedAt)
-                  ? [
-                      {
-                        icon: CheckCircle2,
-                        label: `Updated ${formatDossierDate(profilePreview.updatedAt)}`,
-                      },
-                    ]
-                  : []),
-              ]}
-              actions={renderLearningPageLink('Open Learning page')}
-            />
+            <>
+              <ProfileDossier
+                title="Learner context"
+                description="From the student's Learning page."
+                statusLabel="Current"
+                studentName={studentName}
+                studentDetail="Structured learner profile"
+                sections={learnerContextSections.filter((section) =>
+                  ['level', 'goals', 'challenges'].includes(section.id),
+                )}
+                provenance={[
+                  { icon: Database, label: 'Student Learning page' },
+                  ...(formatDossierDate(profilePreview.updatedAt)
+                    ? [
+                        {
+                          icon: CheckCircle2,
+                          label: `Updated ${formatDossierDate(profilePreview.updatedAt)}`,
+                        },
+                      ]
+                    : []),
+                ]}
+                actions={renderLearningPageLink('Open Learning page')}
+              />
+              <details className="minimal-details">
+                <summary>More learner context</summary>
+                <ProfileDossier
+                  title="Full learner context"
+                  description="Use this only when the lesson needs more detail."
+                  statusLabel="Current"
+                  studentName={studentName}
+                  studentDetail="Structured learner profile"
+                  sections={learnerContextSections}
+                  actions={renderLearningPageLink('Open Learning page')}
+                />
+              </details>
+            </>
           ) : selectedProfileId ? (
             <p className="minimal-muted">
               This student's Learning page context has not been structured yet. Add lesson guidance
@@ -1376,20 +1408,6 @@ export function ContextStageSection({
             </div>
           ) : null}
         </div>
-
-        <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-title">
-            <h3>Lesson guidance</h3>
-          </div>
-          <textarea
-            aria-label="Teacher notes"
-            value={teacherNotes}
-            onChange={(event) => onTeacherNotesChange(event.target.value)}
-            readOnly={readOnly}
-            rows={8}
-            placeholder="Add lesson-specific context, corrections, or priorities for this assignment..."
-          />
-        </div>
       </div>
     </StageSection>
   );
@@ -1422,28 +1440,15 @@ export function AssignmentStageSection({
   allowGenerate = true,
 }: AssignmentStageSectionProps) {
   const assignmentBusy = promptLoading || generatingDraft;
+  const hasDraft = draftText.trim().length > 0;
   const canGenerateAssignment =
     transcriptReady &&
     promptOptionsReady &&
     generationOptionsAvailable &&
     !assignmentBusy &&
     !generationBlockedByQuota;
-  const assignmentGuidance =
-    stage.status === 'current'
-      ? draftText.trim()
-        ? 'Next step: preview the assignment, then share it.'
-        : 'Next step: generate the assignment or paste your own version here.'
-      : stage.status === 'available' && transcriptReady
-        ? 'Ready when you are: create the assignment after you finish reviewing the teaching context.'
-        : null;
-
   return (
-    <StageSection
-      stage={stage}
-      sectionRef={sectionRef}
-      headingRef={headingRef}
-      guidance={assignmentGuidance}
-    >
+    <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
@@ -1451,20 +1456,22 @@ export function AssignmentStageSection({
               <h3>Assignment draft</h3>
             </div>
             <div className="minimal-inline">
-              {!readOnly && allowGenerate ? (
+              {!readOnly && allowGenerate && hasDraft ? (
                 <button
                   ref={generateDraftButtonRef}
                   type="button"
-                  className={`minimal-primary${
-                    stage.status === 'current' && !draftText.trim() ? ' minimal-guided-button' : ''
-                  }`}
+                  className="minimal-secondary"
                   onClick={onGenerateAssignment}
                   disabled={!canGenerateAssignment}
                 >
-                  {assignmentBusy ? 'Generating assignment...' : 'Generate assignment'}
+                  {assignmentBusy ? '✨ Generating assignment…' : 'Regenerate'}
                 </button>
               ) : null}
-              <span className="minimal-muted" role="status" aria-live="polite">
+              <span
+                className="minimal-muted assignment-draft-save-status"
+                role="status"
+                aria-live="polite"
+              >
                 {readOnly
                   ? 'Current saved draft (reference only)'
                   : validating
@@ -1488,7 +1495,24 @@ export function AssignmentStageSection({
           ) : null}
           {promptError ? <p className="minimal-error">{promptError}</p> : null}
           {generationError ? <p className="minimal-error">{generationError}</p> : null}
-          {generationSuccess ? <p className="minimal-success">{generationSuccess}</p> : null}
+          {generationSuccess && hasDraft ? (
+            <p className="minimal-success">{generationSuccess}</p>
+          ) : null}
+          {!readOnly && allowGenerate && !hasDraft ? (
+            <div className="minimal-empty-draft-action">
+              <button
+                ref={generateDraftButtonRef}
+                type="button"
+                className="minimal-primary"
+                onClick={onGenerateAssignment}
+                disabled={!canGenerateAssignment}
+                aria-busy={assignmentBusy || undefined}
+                aria-label={assignmentBusy ? 'Generating assignment' : 'Generate assignment'}
+              >
+                {assignmentBusy ? '✨ Generating assignment…' : '✨ Generate assignment'}
+              </button>
+            </div>
+          ) : null}
           <textarea
             aria-label="Draft markdown"
             value={draftText}
@@ -1543,12 +1567,11 @@ export function ReviewStageSection({
   previewError,
   previewHtml,
   publishError,
+  jobActionFeedback,
   currentJobStatus,
   jobFailureReason,
   jobReady,
   publishUrl,
-  publishLabel,
-  publishPending,
   completedReferenceMode = false,
   correctionAvailable = false,
   publicationRecoveryAvailable = false,
@@ -1561,26 +1584,24 @@ export function ReviewStageSection({
   onRetryPublication,
   onExitCorrection,
   onPublishCorrection,
+  onCopyPublishedUrl,
 }: ReviewStageSectionProps) {
-  const reviewGuidance =
-    stage.status === 'current' && shareAvailable
-      ? previewReadyForCurrentDraft
-        ? 'Next step: share the assignment when you are happy with the preview.'
-        : 'Next step: preview the current draft, then share the assignment.'
-      : null;
+  const jobState = currentJobStatus?.state ?? null;
+  const hasPublishedArtifact = jobState === 'succeeded' && Boolean(publishUrl?.trim());
+  const isPublishing = jobState === 'queued' || jobState === 'running';
+  const publicationNeedsAttention = jobState === 'succeeded' && !hasPublishedArtifact;
 
   return (
     <StageSection
       stage={stage}
       sectionRef={sectionRef}
       headingRef={headingRef}
-      guidance={reviewGuidance}
       actions={
         <>
           {completedReferenceMode && !correctionMode && correctionAvailable ? (
             <button
               type="button"
-              className="minimal-primary"
+              className="minimal-secondary"
               onClick={onEnterCorrection}
               disabled={!onEnterCorrection}
             >
@@ -1614,29 +1635,31 @@ export function ReviewStageSection({
               </button>
             </>
           ) : null}
-          {shareAvailable && !completedReferenceMode ? (
+          {shareAvailable && !completedReferenceMode && !jobReady ? (
             <button
               type="button"
-              className={`minimal-primary${
+              className={`${previewReadyForCurrentDraft ? 'minimal-primary' : 'minimal-secondary'}${
                 stage.status === 'current' && previewReadyForCurrentDraft
                   ? ' minimal-guided-button'
                   : ''
               }`}
               onClick={onPublish}
-              disabled={!canPublishWithPreview}
+              disabled={!canPublishWithPreview || publishing}
             >
               {publishing ? 'Sharing...' : 'Share assignment'}
             </button>
           ) : null}
-          <ProductButton
-            type="button"
-            variant="danger"
-            onClick={onCancelJob}
-            disabled={!cancelEnabled}
-            busy={actionBusy === 'cancel'}
-          >
-            {actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel'}
-          </ProductButton>
+          {isPublishing ? (
+            <ProductButton
+              type="button"
+              variant="secondary"
+              onClick={onCancelJob}
+              disabled={!cancelEnabled}
+              busy={actionBusy === 'cancel'}
+            >
+              {actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel'}
+            </ProductButton>
+          ) : null}
         </>
       }
     >
@@ -1650,8 +1673,10 @@ export function ReviewStageSection({
               <button
                 ref={previewButtonRef}
                 type="button"
-                className={`minimal-secondary${
-                  !previewReadyForCurrentDraft ? ' minimal-preview-attention' : ''
+                className={`${previewReadyForCurrentDraft || completedReferenceMode || jobReady ? 'minimal-secondary' : 'minimal-primary'}${
+                  !previewReadyForCurrentDraft && !completedReferenceMode && !jobReady
+                    ? ' minimal-preview-attention'
+                    : ''
                 }${
                   stage.status === 'current' && !previewReadyForCurrentDraft
                     ? ' minimal-guided-button minimal-guided-button--secondary'
@@ -1660,7 +1685,11 @@ export function ReviewStageSection({
                 onClick={onPreviewDraft}
                 disabled={previewing || !draftHasContent}
               >
-                {previewing ? 'Rendering preview...' : 'Preview assignment'}
+                {previewing
+                  ? 'Rendering preview…'
+                  : previewReadyForCurrentDraft
+                    ? 'Refresh preview'
+                    : 'Preview assignment'}
               </button>
             </div>
           </div>
@@ -1676,6 +1705,11 @@ export function ReviewStageSection({
             </details>
           ) : null}
           {publishError ? <p className="minimal-error">{publishError}</p> : null}
+          {jobActionFeedback ? (
+            <p className="minimal-success" role="status">
+              {jobActionFeedback}
+            </p>
+          ) : null}
           {correctionError ? <p className="minimal-error">{correctionError}</p> : null}
           {savedUnpublishedChanges ? (
             <p className="minimal-success" role="status">
@@ -1683,17 +1717,34 @@ export function ReviewStageSection({
             </p>
           ) : null}
           {jobFailureReason ? <p className="minimal-error">{jobFailureReason}</p> : null}
-          {jobReady ? (
-            <div className="minimal-meta">
-              <span>Job ID: {currentJobStatus?.jobId}</span>
-              <span>Status: {currentJobStatus?.state}</span>
-              {publishUrl ? (
-                <a href={publishUrl} target="_blank" rel="noreferrer">
-                  {publishLabel}
-                </a>
-              ) : (
-                <span className="minimal-muted">{publishPending}</span>
-              )}
+          {isPublishing ? (
+            <p className="minimal-help" role="status">
+              Publishing assignment… Your preview remains available while the handout is prepared.
+            </p>
+          ) : null}
+          {publicationNeedsAttention ? (
+            <p className="minimal-error" role="alert">
+              Publication completed but the shared handout link is unavailable. Contact support.
+            </p>
+          ) : null}
+          {hasPublishedArtifact && publishUrl ? (
+            <div className="minimal-publication-success">
+              <p>Published and ready for your student.</p>
+              <a
+                className="minimal-primary minimal-link-button"
+                href={publishUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open shared assignment
+              </a>
+              <button
+                type="button"
+                className="minimal-secondary"
+                onClick={() => onCopyPublishedUrl?.(publishUrl)}
+              >
+                Copy link
+              </button>
             </div>
           ) : null}
         </div>

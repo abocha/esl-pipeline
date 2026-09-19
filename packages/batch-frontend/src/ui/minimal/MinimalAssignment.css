@@ -496,6 +496,10 @@
   flex-wrap: wrap;
 }
 
+.assignment-draft-save-status {
+  flex: 0 0 min(30ch, 100%);
+}
+
 .minimal-block {
   display: flex;
   flex-direction: column;
@@ -930,7 +934,6 @@
 }
 
 .minimal-profile-dossier-section-badge {
-  margin-left: auto;
   padding: 0.25rem 0.55rem;
 }
 
@@ -1162,6 +1165,62 @@
   gap: var(--space-3);
   font-size: var(--text-sm);
   color: var(--text-secondary);
+}
+
+.minimal-empty-draft-action {
+  display: grid;
+  min-height: 8rem;
+  place-items: center;
+  border: 1px dashed var(--minimal-primary-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--minimal-primary-tint-soft);
+}
+
+.minimal-empty-draft-action .minimal-primary,
+.minimal-publication-success .minimal-primary,
+.minimal-publication-success .minimal-secondary {
+  min-height: 44px;
+}
+
+.minimal-speaker-choice {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--minimal-primary-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--minimal-primary-tint-soft);
+}
+
+.minimal-speaker-choice legend {
+  font-weight: 700;
+}
+
+.minimal-speaker-choice label {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+}
+
+.minimal-publication-success {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--color-success-500);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-success-500) 10%, var(--bg-primary));
+}
+
+.minimal-publication-success p {
+  width: 100%;
+  margin: 0;
+  font-weight: 700;
 }
 
 .minimal-pinned-job-meta {
