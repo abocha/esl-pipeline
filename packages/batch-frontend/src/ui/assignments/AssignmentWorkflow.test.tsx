@@ -59,6 +59,24 @@ describe('AssignmentWorkflow', () => {
     expect(screen.queryByRole('heading', { name: 'Lesson source' })).toBeNull();
   });
 
+  it('keeps the selected student visible in the workflow context', () => {
+    render(
+      <AssignmentWorkflow
+        steps={steps}
+        activeStep="source"
+        highestAvailableStep="source"
+        saveState="saved"
+        studentName="Yulia G"
+        onStepRequest={vi.fn()}
+        onBack={vi.fn()}
+      >
+        Lesson source content
+      </AssignmentWorkflow>,
+    );
+
+    expect(screen.getByText('Assignment for Yulia G')).toBeTruthy();
+  });
+
   it('allows returning to a completed step without discarding work', async () => {
     const onStepRequest = vi.fn();
     render(

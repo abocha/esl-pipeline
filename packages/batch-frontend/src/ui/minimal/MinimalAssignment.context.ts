@@ -68,7 +68,7 @@ function compactPreviewStrengths(profile: FoundationalProfile): string[] {
 function compactTeacherNote(note: string | null): string | null {
   const trimmed = note?.trim();
   if (!trimmed) return null;
-  return trimmed.length > 140 ? `${trimmed.slice(0, 137)}...` : trimmed;
+  return trimmed;
 }
 
 function buildProfilePreview(

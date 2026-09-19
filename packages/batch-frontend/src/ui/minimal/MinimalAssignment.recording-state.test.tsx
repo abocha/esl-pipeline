@@ -239,8 +239,8 @@ describe('MinimalAssignment recording projection', () => {
       });
     });
 
-    expect(await screen.findByRole('combobox', { name: /Speaker 1/i })).toBeTruthy();
-    expect(screen.getByRole('combobox', { name: /Speaker 2/i })).toBeTruthy();
+    expect(await screen.findByRole('radio', { name: /Speaker 1/i })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /Speaker 2/i })).toBeTruthy();
     expect(api.fetchRecordingTranscript).toHaveBeenCalledWith('rec-1');
     expect(api.getRecording).toHaveBeenCalledTimes(1);
   });

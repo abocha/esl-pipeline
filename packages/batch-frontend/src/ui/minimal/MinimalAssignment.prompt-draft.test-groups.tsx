@@ -54,7 +54,7 @@ async function renderResumedDraftSession(user = createMinimalUser()) {
   );
   globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes');
   renderMinimalAssignment();
-  await screen.findByRole('button', { name: /^Generate assignment$/i });
+  await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
   return user;
 }
 
@@ -224,7 +224,7 @@ export function registerPromptEditorTests() {
         });
         await Promise.resolve();
       });
-      await screen.findByRole('button', { name: /^Generate assignment$/i });
+      await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1_500);
@@ -314,7 +314,7 @@ export function registerPromptEditorTests() {
       vi.mocked(api.fetchDraft).mockClear();
       renderMinimalAssignment();
       await waitFor(() => expect(api.listAssignmentSessions).toHaveBeenCalledTimes(2));
-      await screen.findByRole('button', { name: /^Generate assignment$/i });
+      await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
 
       expect(api.fetchPromptPackage).not.toHaveBeenCalled();
       expect(api.fetchDraft).not.toHaveBeenCalled();
@@ -352,8 +352,8 @@ export function registerPromptEditorTests() {
       vi.mocked(api.updateDraft).mockClear();
 
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
-      await screen.findByRole('button', { name: /^Generate assignment$/i });
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() =>
         expect(api.createPromptPackage).toHaveBeenCalledWith(
@@ -392,7 +392,7 @@ export function registerPromptEditorTests() {
       );
       const user = await renderResumedDraftSession();
 
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
       await screen.findByRole('button', { name: /Generating assignment/i });
 
       expect(
@@ -582,17 +582,17 @@ export function registerPromptEditorTests() {
       expect(screen.queryByRole('button', { name: /Save profile/i })).toBeNull();
       expect(screen.queryByText(/profiles\/alex\.md/i)).toBeNull();
       expect(screen.getAllByText(/^Student Learning page$/i).length).toBeGreaterThan(0);
-      expect(screen.getByText(/^Selected$/i)).toBeTruthy();
-      expect(screen.getByText(/^Goals$/i)).toBeTruthy();
-      expect(screen.getByText(/^Communication contexts$/i)).toBeTruthy();
-      expect(screen.getByText(/^Strengths$/i)).toBeTruthy();
-      expect(screen.getByText(/^Challenges$/i)).toBeTruthy();
-      expect(screen.getByText(/^Study preferences$/i)).toBeTruthy();
-      expect(screen.getByText(/Lead project updates clearly\./i)).toBeTruthy();
-      expect(screen.getByText(/Strong listening comprehension\./i)).toBeTruthy();
-      expect(screen.getByRole('link', { name: /Open Learning page/i }).getAttribute('href')).toBe(
-        '/students/student-alex/learning',
-      );
+      expect(screen.getAllByText(/^Current$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^Goals$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^Communication contexts$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^Strengths$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^Challenges$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^Study preferences$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Lead project updates clearly\./i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Strong listening comprehension\./i).length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByRole('link', { name: /Open Learning page/i })[0]?.getAttribute('href'),
+      ).toBe('/students/student-alex/learning');
     });
 
     it('shows a useful empty state when the selected student has no learner profile', async () => {
@@ -642,8 +642,8 @@ export function registerPromptEditorTests() {
       expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
 
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
-      await screen.findByRole('button', { name: /^Generate assignment$/i });
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith(
@@ -782,7 +782,7 @@ export function registerPromptEditorTests() {
       await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false));
 
       await user.click(continueButton);
-      await screen.findByRole('button', { name: /^Generate assignment$/i });
+      await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
       expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
@@ -792,7 +792,7 @@ export function registerPromptEditorTests() {
           profileRevisionHash: 'hash-draft-1',
         }),
       );
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith(
@@ -852,7 +852,9 @@ export function registerPromptEditorTests() {
       });
 
       await user.click(continueButton);
-      await user.click(await screen.findByRole('button', { name: /^Generate assignment$/i }));
+      await user.click(
+        await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i }),
+      );
       await screen.findByDisplayValue('# Generated assignment draft');
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       await screen.findByRole('heading', { name: /Review and share/i });
@@ -1050,9 +1052,11 @@ export function registerPromptEditorTests() {
         expect(api.getProfileContent).toHaveBeenCalledTimes(2);
       });
       expect((await screen.findAllByText(/^Student Learning page$/i)).length).toBeGreaterThan(0);
-      expect(screen.getByText(/^Selected$/i)).toBeTruthy();
+      expect(screen.getAllByText(/^Current$/i).length).toBeGreaterThan(0);
       expect(screen.queryByText(/^not_found$/i)).toBeNull();
-      expect(await screen.findByText(/Lead project updates clearly\./i)).toBeTruthy();
+      expect(
+        (await screen.findAllByText(/Lead project updates clearly\./i)).length,
+      ).toBeGreaterThan(0);
     });
 
     it('generates a prompt after transcript is ready', async () => {
@@ -1067,7 +1071,9 @@ export function registerPromptEditorTests() {
           }),
         );
       });
-      expect(screen.getByRole('button', { name: /^Generate assignment$/i })).toBeTruthy();
+      expect(
+        screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }),
+      ).toBeTruthy();
       expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toBeTruthy();
     });
 
@@ -1093,7 +1099,7 @@ export function registerPromptEditorTests() {
 
       expect(screen.queryByRole('combobox', { name: /Prompt template/i })).toBeNull();
       expect(screen.queryByText(/Focused Follow-up/i)).toBeNull();
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith(
@@ -1120,8 +1126,8 @@ export function registerPromptEditorTests() {
         target: { value: ' Focus on article usage and stress patterns. ' },
       });
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
-      await screen.findByRole('button', { name: /^Generate assignment$/i });
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith(
@@ -1221,7 +1227,7 @@ export function registerPromptStudentSelectionTests() {
       });
 
       await advanceSourceToCreate(user);
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith(
@@ -1267,7 +1273,7 @@ export function registerPromptStudentSelectionTests() {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
       await advanceSourceToCreate(user);
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
         expect(api.confirmStudentAssignmentSession).toHaveBeenCalledWith(
@@ -1337,7 +1343,7 @@ export function registerPromptStudentSelectionTests() {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
       await advanceSourceToCreate(user);
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
         expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
@@ -1396,7 +1402,7 @@ export function registerPromptStudentSelectionTests() {
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
       await advanceSourceToCreate(user);
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
         expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(

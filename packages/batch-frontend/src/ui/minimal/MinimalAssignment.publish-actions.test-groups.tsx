@@ -33,6 +33,10 @@ function getCustomRerunSettingsGroup(name: RegExp): HTMLElement {
   return group as HTMLElement;
 }
 
+function openTechnicalRerunSettings(user: ReturnType<typeof createMinimalUser>) {
+  return user.click(screen.getByRole('button', { name: /^Technical rerun settings$/i }));
+}
+
 export function registerPublishValidationTests() {
   describe('MinimalAssignment - publish validation', () => {
     beforeEach(() => {
@@ -109,6 +113,36 @@ export function registerPublishValidationTests() {
 
       await screen.findAllByText(/Job ID:/i);
       expect(screen.getAllByText(/Ready/i).length).toBeGreaterThan(0);
+    }, 30_000);
+
+    it('disables Share while its submission is in flight', async () => {
+      const { user } = await renderPromptReadyAssignment();
+      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
+        target: { value: '# Final draft' },
+      });
+      await previewCurrentDraft(user);
+      let resolveShare!: (value: Awaited<ReturnType<typeof api.shareAssignmentSession>>) => void;
+      vi.mocked(api.shareAssignmentSession).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveShare = resolve;
+          }),
+      );
+
+      const shareButton = screen.getByRole('button', { name: /Share assignment/i });
+      await waitFor(() => expect((shareButton as HTMLButtonElement).disabled).toBe(false));
+      await user.click(shareButton);
+      const sharingButton = await screen.findByRole('button', { name: /Sharing/i });
+      expect((sharingButton as HTMLButtonElement).disabled).toBe(true);
+      await user.click(sharingButton);
+      expect(api.shareAssignmentSession).toHaveBeenCalledTimes(1);
+
+      const requestId = vi.mocked(api.shareAssignmentSession).mock.calls[0]![1].requestId;
+      resolveShare({
+        session: makeAssignmentSession({ confirmedStep: 'share', shareJobId: requestId }),
+        job: makeJobStatus({ jobId: requestId, state: 'queued' }),
+      });
+      await screen.findByText(/Publishing assignment/i);
     }, 30_000);
 
     it('reconciles dirty profile recovery and returns to Teaching context after Share rejects it', async () => {
@@ -217,12 +251,15 @@ export function registerJobActionTests() {
         const initialPublishButton = screen.getByRole('button', { name: /Share assignment/i });
         const initialPreviewButton = screen.getByRole('button', { name: /Preview assignment/i });
         expect((initialPublishButton as HTMLButtonElement).disabled).toBe(true);
+        expect(initialPublishButton.className).toContain('minimal-secondary');
+        expect(initialPreviewButton.className).toContain('minimal-primary');
         expect(initialPreviewButton.className).toContain('minimal-preview-attention');
         expect(screen.queryByText('Preview required before sharing.')).toBeNull();
         expect(api.materializeDraft).not.toHaveBeenCalled();
         await previewCurrentDraft(user);
         const publishButton = screen.getByRole('button', { name: /Share assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
+        expect(publishButton.className).toContain('minimal-primary');
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -311,7 +348,7 @@ export function registerJobActionTests() {
         await renderPublishedAssignment();
         openAdvancedActions();
 
-        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
+        await openTechnicalRerunSettings(user);
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         const studyTextSettings = getCustomRerunSettingsGroup(/^Study-text settings$/i);
         fireEvent.change(within(studyTextSettings).getByRole('textbox', { name: /^Voice ID$/i }), {
@@ -368,7 +405,7 @@ export function registerJobActionTests() {
         });
         openAdvancedActions();
 
-        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
+        await openTechnicalRerunSettings(user);
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
         const chunkSettings = getCustomRerunSettingsGroup(/^Pronunciation chunk settings$/i);
 
@@ -390,7 +427,7 @@ export function registerJobActionTests() {
         await renderPublishedAssignment();
         openAdvancedActions();
 
-        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
+        await openTechnicalRerunSettings(user);
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Main pronunciation audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
@@ -425,6 +462,7 @@ export function registerJobActionTests() {
           jobId: 'job-a',
           studentId: 'student-alex',
           state: 'succeeded',
+          htmlUrl: 'https://example.com/job-a.html',
           ttsProvider: 'elevenlabs',
           ttsModel: 'eleven_flash_v2_5',
         });
@@ -432,6 +470,7 @@ export function registerJobActionTests() {
           jobId: 'job-b',
           studentId: 'student-bella',
           state: 'succeeded',
+          htmlUrl: 'https://example.com/job-b.html',
           ttsProvider: 'google',
           ttsModel: 'studio',
         });
@@ -442,7 +481,7 @@ export function registerJobActionTests() {
         });
         openAdvancedActions();
 
-        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
+        await openTechnicalRerunSettings(user);
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         let studySettings = getCustomRerunSettingsGroup(/^Study-text settings$/i);
         fireEvent.change(within(studySettings).getByRole('textbox', { name: /^Voice ID$/i }), {
@@ -472,7 +511,7 @@ export function registerJobActionTests() {
         });
 
         openAdvancedActions();
-        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
+        await openTechnicalRerunSettings(user);
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         studySettings = getCustomRerunSettingsGroup(/^Study-text settings$/i);
 
@@ -602,7 +641,7 @@ export function registerJobActionTests() {
 
         const cancelButton = within(reviewSection).getByRole('button', { name: /^Cancel$/i });
         expect(cancelButton.className).toContain('product-button');
-        expect(cancelButton.className).toContain('product-button--danger');
+        expect(cancelButton.className).toContain('product-button--secondary');
         expect(cancelButton.className).not.toContain('minimal-secondary');
 
         await user.click(cancelButton);
@@ -629,7 +668,7 @@ export function registerJobActionTests() {
     );
 
     it(
-      'keeps cancel disabled for terminal jobs in review without duplicating it in advanced actions',
+      'hides cancel for terminal jobs in review without duplicating it in advanced actions',
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         await renderPublishedAssignment({ status: { state: 'succeeded' } });
@@ -640,10 +679,9 @@ export function registerJobActionTests() {
         if (!reviewSection) {
           throw new Error('Expected review section to be rendered');
         }
-        const cancelButton = within(reviewSection).getByRole('button', { name: /^Cancel$/i });
-        expect(cancelButton.getAttribute('disabled')).not.toBeNull();
+        expect(within(reviewSection).queryByRole('button', { name: /^Cancel$/i })).toBeNull();
 
-        const actionsHeading = screen.getByRole('heading', { name: /Advanced actions/i });
+        const actionsHeading = screen.getByRole('heading', { name: /Republish and recovery/i });
         const actionsSection = actionsHeading.closest('section');
         if (!actionsSection) {
           throw new Error('Expected job actions section to be rendered');
@@ -656,10 +694,12 @@ export function registerJobActionTests() {
         const support = screen.getByText(/^Support details$/i).closest('details')!;
         expect(actionsSection.contains(support)).toBe(false);
         expect(within(support).queryByRole('region', { name: /Quick reruns/i })).toBeNull();
-        expect(within(support).queryByRole('button', { name: /^Custom rerun$/i })).toBeNull();
+        expect(
+          within(support).queryByRole('button', { name: /^Technical rerun settings$/i }),
+        ).toBeNull();
         expect(within(actionsSection).getByRole('region', { name: /Quick reruns/i })).toBeTruthy();
         expect(
-          within(actionsSection).getByRole('button', { name: /^Custom rerun$/i }),
+          within(actionsSection).getByRole('button', { name: /^Technical rerun settings$/i }),
         ).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,

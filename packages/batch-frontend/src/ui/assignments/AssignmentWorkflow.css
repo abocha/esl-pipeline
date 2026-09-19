@@ -5,11 +5,20 @@
 }
 .assignment-workflow__status {
   display: flex;
+  align-items: center;
+  gap: 0.75rem;
   justify-content: flex-end;
   margin-bottom: 0.5rem;
 }
+.assignment-workflow__identity {
+  margin-right: auto;
+  color: var(--cs-ink);
+  font-size: var(--cs-text-support);
+  font-weight: 700;
+}
 .assignment-workflow__save {
   min-height: 32px;
+  min-width: 11rem;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -108,10 +117,8 @@
   font-weight: 600;
 }
 .assignment-workflow__step-copy strong {
-  overflow: hidden;
   font-size: var(--cs-text-support);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.2;
 }
 
 .assignment-workflow__layout {
@@ -173,6 +180,17 @@
   border: 1px solid var(--cs-border);
   border-radius: var(--cs-radius-surface);
   background: var(--cs-surface);
+}
+.assignment-advanced-disclosure {
+  margin-top: 1rem;
+}
+.assignment-advanced-disclosure > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--cs-ink-muted);
+  font-weight: 700;
 }
 .assignment-advanced-actions__quick {
   display: flex;
@@ -504,7 +522,7 @@
   height: 20px;
   color: var(--cs-action);
 }
-.assignment-source-choice__options span {
+.assignment-source-choice__copy {
   display: grid;
   gap: 0.15rem;
 }
@@ -547,7 +565,7 @@
     display: none;
   }
   .assignment-workflow__progress button {
-    justify-content: center;
+    align-items: flex-start;
   }
   .assignment-workflow__step-copy strong {
     font-size: var(--cs-text-meta);
@@ -574,6 +592,10 @@
 }
 
 @media (max-width: 620px) {
+  .assignment-workflow__status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
   .assignment-workflow__save {
     font-size: var(--cs-text-meta);
   }
@@ -585,7 +607,7 @@
     min-width: 520px;
   }
   .assignment-workflow__progress button {
-    min-height: 62px;
+    min-height: 68px;
   }
   .assignment-workflow__canvas {
     padding: 0.9rem;

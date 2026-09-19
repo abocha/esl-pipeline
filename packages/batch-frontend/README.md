@@ -57,10 +57,13 @@ Canonical behavior and current status live in:
 - The authenticated Calm Studio shell uses a persistent workspace rail and a focused five-step
   assignment flow: Student, Lesson source, Teaching context, Create, and Review & share. Back and
   completed-step navigation are user-owned and keep the current assignment state instead of
-  redirecting as readiness updates. A published assignment is complete until the tutor explicitly
-  chooses Start another assignment. Advanced actions appear only after sharing and contain
-  post-share rerun and republish operations; technical recovery, provider, quota, provenance, and
-  other diagnostics live under Support details rather than workflow steps.
+  redirecting as readiness updates. Step 2 keeps the prepared source visible and asks which of two
+  anonymous speakers is the tutor; unusual speaker counts retain explicit role pickers. Step 3
+  starts with lesson guidance and a compact learner dossier. Step 4 centers generation when empty.
+  Step 5 requires a current preview before Share, keeps queued/running publication distinct from a
+  succeeded handout with a URL, and offers Start another assignment only after that handout exists.
+  Advanced rerun and republish actions appear only for a succeeded handout with a URL; technical
+  settings are nested there, while provenance and diagnostics live under Support details.
 - Step 1 shows four recent assignment lineages initially. Reruns are collapsed only when an existing
   `sourceJobId` relationship proves the lineage, while every exact version remains selectable.
   Older lineages are revealed progressively through the existing job and assignment-session APIs;
@@ -135,8 +138,9 @@ Canonical behavior and current status live in:
   the tutor is returned to the earliest affected step with a concrete reconfirmation action. Once
   Share is confirmed, the session is immutable workflow history; changing the lesson starts a new
   assignment and never revokes the existing handout. Reopening a completed
-  session is reference-only. A failed/queued root offers **Retry publication** with the retained
-  Share request ID; **Correct published assignment** appears only for a succeeded HTML publication
+  session is reference-only. An ordinary queued/running root remains in **Publishing assignment…**;
+  a failed root offers **Retry publication** with the retained Share request ID.
+  **Correct published assignment** appears only for a succeeded HTML publication
   with a non-empty URL.
   Correction mode edits the current mutable draft without reopening session confirmation, drains
   durable autosave before publishing, and submits the exact saved version/hash through a stable
