@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.12.1] - 2026-09-19
+
+### Changed
+
+- Automated release from PR #265: feat(frontend): distill assignment steps 2-5 (https://github.com/abocha/esl-pipeline/pull/265)
+
 ## [10.12.0] - 2026-09-14
 
 ### Changed
