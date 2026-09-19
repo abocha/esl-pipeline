@@ -1800,6 +1800,8 @@ export const MinimalAssignment: React.FC = () => {
   }, [context, firstProfileDraft, markAssignmentUserEdit, source]);
 
   const jobReady = Boolean(jobStatus?.jobId);
+  const hasPublishedHandout =
+    jobStatus?.state === 'succeeded' && Boolean(jobStatus.htmlUrl?.trim());
   const completedReferenceMode = isCompletedAssignmentSession(activeAssignmentSession);
   const effectivePublicationParent = isValidAssignmentPublicationParent(
     activeAssignmentSession,
@@ -1871,6 +1873,13 @@ export const MinimalAssignment: React.FC = () => {
     () => new Map(source.studentOptions.map((student) => [student.id, student.name])),
     [source.studentOptions],
   );
+  const selectedStudentName = source.selectedStudent?.name?.trim() || null;
+  useEffect(() => {
+    document.title = selectedStudentName ? `${selectedStudentName} · ESL Pipeline` : 'ESL Pipeline';
+    return () => {
+      document.title = 'ESL Pipeline';
+    };
+  }, [selectedStudentName]);
   const resolvedEntrySummary = useMemo(() => {
     if (!entrySummary || entrySummary.learnerName !== 'Saved learner') return entrySummary;
     const learnerName = studentNameById.get(source.selectedStudentId);
@@ -1911,8 +1920,6 @@ export const MinimalAssignment: React.FC = () => {
     setActiveStep(result.destination);
   }, [resume, resumeJobItems]);
   const publishUrl = jobStatus?.htmlUrl;
-  const publishLabel = 'Open Assignment Handout';
-  const publishPending = 'HTML link pending...';
   const hasTeachingContext = Boolean(
     context.profilePreviewStatus === 'ready' || teacherNotes.trim() || authoring.promptReady,
   );
@@ -1940,8 +1947,18 @@ export const MinimalAssignment: React.FC = () => {
     if (!activeAssignmentSession && jobReady) {
       return deriveHistoricalAssignmentOutputWorkflow();
     }
-    return deriveAssignmentWorkflow(activeAssignmentSession, assignmentWorkingArtifacts);
-  }, [activeAssignmentSession, assignmentWorkingArtifacts, jobReady]);
+    const steps = deriveAssignmentWorkflow(activeAssignmentSession, assignmentWorkingArtifacts);
+    if (!completedReferenceMode || hasPublishedHandout) return steps;
+    return steps.map((step) =>
+      step.id === 'review' ? { ...step, status: 'available' as const } : step,
+    );
+  }, [
+    activeAssignmentSession,
+    assignmentWorkingArtifacts,
+    completedReferenceMode,
+    hasPublishedHandout,
+    jobReady,
+  ]);
   const shareRecoveryReady = Boolean(
     activeAssignmentSession?.shareJobId ||
       (activeAssignmentSession &&
@@ -2170,9 +2187,9 @@ export const MinimalAssignment: React.FC = () => {
       if (dirtyStep) setActiveStep(dirtyStep);
       return true;
     };
-    const presentSharedJob = async (job: JobStatus) => {
-      activeAssignmentSessionRef.current = null;
-      setActiveAssignmentSession(null);
+    const presentSharedJob = async (job: JobStatus, session?: AssignmentSession) => {
+      activeAssignmentSessionRef.current = session ?? null;
+      setActiveAssignmentSession(session ?? null);
       setJobStatusState(job);
       resume.applyJobStatusTransition(job);
       setAssignmentSaveState('saved');
@@ -2197,7 +2214,7 @@ export const MinimalAssignment: React.FC = () => {
         expectedRevision: recovered.revision,
         requestId,
       });
-      await presentSharedJob(response.job);
+      await presentSharedJob(response.job, response.session);
     } catch (error) {
       const latest =
         error instanceof AssignmentSessionConflictApiError
@@ -2209,7 +2226,7 @@ export const MinimalAssignment: React.FC = () => {
       }
       try {
         if (latest?.confirmedStep === 'share' && latest.shareJobId) {
-          await presentSharedJob(await getJobStatusWithRecoveryRetry(latest.shareJobId));
+          await presentSharedJob(await getJobStatusWithRecoveryRetry(latest.shareJobId), latest);
           return;
         }
         if (latest?.shareJobId) {
@@ -2217,7 +2234,7 @@ export const MinimalAssignment: React.FC = () => {
             expectedRevision: latest.revision,
             requestId,
           });
-          await presentSharedJob(resumed.job);
+          await presentSharedJob(resumed.job, resumed.session);
           return;
         }
         if (latest && returnToDirtyRecovery(latest)) return;
@@ -2623,12 +2640,14 @@ export const MinimalAssignment: React.FC = () => {
           : authoring.promptReady
             ? 'current'
             : 'available';
-    const reviewStatus: WorkflowStageStatus = jobReady
+    const reviewStatus: WorkflowStageStatus = hasPublishedHandout
       ? 'complete'
-      : hasAssignmentContent
+      : jobReady
         ? 'current'
-        : 'locked';
-    const advancedStatus: WorkflowStageStatus = jobReady ? 'current' : 'locked';
+        : hasAssignmentContent
+          ? 'current'
+          : 'locked';
+    const advancedStatus: WorkflowStageStatus = hasPublishedHandout ? 'current' : 'locked';
 
     return [
       {
@@ -2692,7 +2711,7 @@ export const MinimalAssignment: React.FC = () => {
       {
         id: 'advanced',
         title: 'Advanced actions',
-        description: jobReady ? 'Shared assignment ready.' : 'Available after sharing.',
+        description: hasPublishedHandout ? 'Shared assignment ready.' : 'Available after sharing.',
         status: advancedStatus,
       },
     ];
@@ -2700,6 +2719,7 @@ export const MinimalAssignment: React.FC = () => {
     authoring.promptReady,
     hasAssignmentContent,
     hasStartedFlow,
+    hasPublishedHandout,
     jobReady,
     jobStatus?.jobId,
     jobStatus?.state,
@@ -2727,9 +2747,13 @@ export const MinimalAssignment: React.FC = () => {
           'student'
         }
         saveState={assignmentSaveState}
+        studentName={selectedStudentName}
         onStepRequest={handleFocusedStepRequest}
         onBack={handleFocusedBack}
-        {...(activeStep === 'review' || activeStep === 'student' || completedReferenceMode
+        {...(activeStep === 'review' ||
+        activeStep === 'student' ||
+        completedReferenceMode ||
+        (activeStep === 'assignment' && !hasAssignmentContent)
           ? {}
           : {
               onContinue: handleFocusedContinue,
@@ -2747,34 +2771,37 @@ export const MinimalAssignment: React.FC = () => {
                   <span role="status">{assignmentRecoveryNotice}</span>
                 ) : null,
             })}
-        {...(activeStep === 'review' && jobReady
+        {...(activeStep === 'review' && hasPublishedHandout
           ? {
               onComplete: handleStartNewAssignmentWithSessionReset,
               completionLabel: 'Start another assignment',
             }
           : {})}
         postFooter={
-          jobReady && activeStep === 'review' ? (
-            <AdvancedActionsStage
-              stage={advancedStage}
-              sectionRef={advancedSectionRef}
-              headingRef={advancedHeadingRef}
-              jobReady
-              controller={advancedActions}
-              onRefreshActions={() => void loadJobOptions()}
-              jobOptionsError={jobOptionsError}
-              ttsProviders={ttsProviders}
-              ttsModelOptionsByProvider={ttsModelOptionsByProvider}
-              elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
-              pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
-              studyTextStrategies={
-                jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
-                  'auto',
-                  'dialogue',
-                  'tts',
-                ]
-              }
-            />
+          hasPublishedHandout && activeStep === 'review' ? (
+            <details className="assignment-advanced-disclosure">
+              <summary>Advanced actions</summary>
+              <AdvancedActionsStage
+                stage={{ ...advancedStage, title: 'Republish and recovery' }}
+                sectionRef={advancedSectionRef}
+                headingRef={advancedHeadingRef}
+                jobReady
+                controller={advancedActions}
+                onRefreshActions={() => void loadJobOptions()}
+                jobOptionsError={jobOptionsError}
+                ttsProviders={ttsProviders}
+                ttsModelOptionsByProvider={ttsModelOptionsByProvider}
+                elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
+                pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
+                studyTextStrategies={
+                  jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
+                    'auto',
+                    'dialogue',
+                    'tts',
+                  ]
+                }
+              />
+            </details>
           ) : null
         }
         support={
@@ -2832,6 +2859,8 @@ export const MinimalAssignment: React.FC = () => {
             manualSaving={source.manualTranscriptSaving}
             manualError={source.manualTranscriptError}
             transcriptReady={transcriptReady}
+            sourcePrepared={Boolean(source.recording || source.transcript)}
+            preparedSourceKey={`${source.recording?.recordingId ?? ''}:${source.transcript?.transcriptId ?? ''}`}
             onCreateManualTranscript={handleCreateManualTranscript}
           >
             <SourceStageSection
@@ -2906,14 +2935,6 @@ export const MinimalAssignment: React.FC = () => {
               onMixedSpeakerRoleChange={(speaker, role) =>
                 setMixedSpeakerRoleSelections((current) => ({ ...current, [speaker]: role }))
               }
-              onSaveMixedSpeakerRoles={() => {
-                const roles = mixedSpeakerRoles
-                  .filter((item): item is { speaker: number; role: 'teacher' | 'student' } =>
-                    Boolean(item.role),
-                  )
-                  .map((item) => ({ speaker: item.speaker, role: item.role }));
-                void source.handleSaveTranscript({ roles });
-              }}
               readOnly={completedReferenceMode}
             />
           </LessonSourceStep>
@@ -3025,6 +3046,7 @@ export const MinimalAssignment: React.FC = () => {
               previewError={authoring.previewError}
               previewHtml={authoring.previewHtml}
               publishError={assignmentShareError ?? authoring.publishError}
+              jobActionFeedback={!hasPublishedHandout ? advancedActions.actionSuccess : null}
               currentJobStatus={jobStatus}
               jobFailureReason={
                 jobStatus?.state === 'failed' && jobStatus.error
@@ -3033,11 +3055,12 @@ export const MinimalAssignment: React.FC = () => {
               }
               jobReady={Boolean(jobReady)}
               publishUrl={publishUrl}
-              publishLabel={publishLabel}
-              publishPending={publishPending}
+              onCopyPublishedUrl={(url) => void navigator.clipboard?.writeText(url)}
               completedReferenceMode={completedReferenceMode}
               correctionAvailable={validPublicationParent}
-              publicationRecoveryAvailable={publicationRecoveryAvailable}
+              publicationRecoveryAvailable={
+                publicationRecoveryAvailable && jobStatus?.state === 'failed'
+              }
               correctionMode={correctionMode}
               correctionPublishing={correctionPublishing}
               correctionError={correctionError}

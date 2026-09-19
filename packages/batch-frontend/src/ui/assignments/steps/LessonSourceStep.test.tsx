@@ -31,4 +31,67 @@ describe('LessonSourceStep', () => {
       'Pasted lesson transcript',
     );
   });
+
+  it('collapses mutually exclusive source choices after a source is prepared', () => {
+    render(
+      <LessonSourceStep
+        studentSelected
+        manualSaving={false}
+        manualError={null}
+        transcriptReady
+        sourcePrepared
+        onCreateManualTranscript={vi.fn().mockResolvedValue(undefined)}
+      >
+        Prepared source summary
+      </LessonSourceStep>,
+    );
+
+    expect(screen.queryByRole('button', { name: /Upload lesson audio/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Use an existing transcript/i })).toBeNull();
+    expect(screen.getByText('Prepared source summary')).toBeTruthy();
+  });
+
+  it('can abandon a source change and collapses again after a replacement is established', async () => {
+    const user = userEvent.setup();
+    const onCreateManualTranscript = vi.fn().mockResolvedValue(undefined);
+    const props = {
+      studentSelected: true,
+      manualSaving: false,
+      manualError: null,
+      transcriptReady: true,
+      sourcePrepared: true,
+      onCreateManualTranscript,
+    };
+    const { rerender } = render(
+      <LessonSourceStep {...props} preparedSourceKey="rec-1:tx-1">
+        Current source summary
+      </LessonSourceStep>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Change lesson source/i }));
+    expect(screen.getByRole('button', { name: /Use an existing transcript/i })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /Keep current source/i }));
+    expect(screen.queryByRole('button', { name: /Use an existing transcript/i })).toBeNull();
+    expect(screen.getByText('Current source summary')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: /Change lesson source/i }));
+    await user.click(screen.getByRole('button', { name: /Use an existing transcript/i }));
+    await user.type(
+      screen.getByRole('textbox', { name: /Existing lesson transcript/i }),
+      'New transcript',
+    );
+    await user.click(screen.getByRole('button', { name: /Use transcript/i }));
+    expect(onCreateManualTranscript).toHaveBeenCalledWith(
+      'New transcript',
+      'Pasted lesson transcript',
+    );
+
+    rerender(
+      <LessonSourceStep {...props} preparedSourceKey="rec-2:tx-2">
+        Replacement source summary
+      </LessonSourceStep>,
+    );
+    expect(screen.queryByRole('button', { name: /Use an existing transcript/i })).toBeNull();
+    expect(screen.getByText('Replacement source summary')).toBeTruthy();
+  });
 });

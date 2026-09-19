@@ -44,8 +44,14 @@ export function registerGenerationDefaultsTests() {
       expect(screen.queryByText(/RPM:/i)).toBeNull();
       expect(screen.queryByText(/TPM:/i)).toBeNull();
       expect(screen.queryByText(/RPD:/i)).toBeNull();
+      expect(screen.getByRole('button', { name: /^Regenerate$/i }).className).toContain(
+        'minimal-secondary',
+      );
+      expect(screen.getByRole('button', { name: /Confirm and continue/i }).className).toContain(
+        'product-button--primary',
+      );
 
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
         expect(api.generateDraft).toHaveBeenCalledWith({
@@ -79,7 +85,9 @@ export function registerGenerationDefaultsTests() {
         const user = createMinimalUser();
         await renderGenerationReadyAssignment();
 
-        await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+        await user.click(
+          screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }),
+        );
 
         await waitFor(() => {
           expect(api.generateDraft).toHaveBeenCalledWith({
@@ -230,14 +238,20 @@ export function registerGenerationThrottleTests() {
           await renderResumedAssignment();
 
           const generateDraftButton = screen.getByRole('button', {
-            name: /^Generate assignment$/i,
+            name: /^(Generate assignment|Regenerate)$/i,
           });
           await user.click(generateDraftButton);
 
           await waitFor(() => {
             expect(screen.getByText(/Per-minute request budget exhausted/i)).toBeTruthy();
           });
-          expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
+          expect(
+            (
+              screen.getByRole('button', {
+                name: /^(Generate assignment|Regenerate)$/i,
+              }) as HTMLButtonElement
+            ).disabled,
+          ).toBe(true);
 
           vi.setSystemTime(new Date('2026-02-18T00:01:05.000Z'));
           act(() => {
@@ -248,7 +262,7 @@ export function registerGenerationThrottleTests() {
             expect(
               (
                 screen.getByRole('button', {
-                  name: /^Generate assignment$/i,
+                  name: /^(Generate assignment|Regenerate)$/i,
                 }) as HTMLButtonElement
               ).disabled,
             ).toBe(false);
@@ -275,7 +289,9 @@ export function registerGenerationThrottleTests() {
         );
 
         await renderGenerationReadyAssignment();
-        await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+        await user.click(
+          screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }),
+        );
 
         await waitFor(() => {
           expect(api.generateDraft).toHaveBeenCalledWith({
@@ -318,7 +334,7 @@ export function registerGenerationThrottleTests() {
 
         await user.click(screen.getByRole('button', { name: /Create/i }));
         const generateDraftButton = await screen.findByRole('button', {
-          name: /^Generate assignment$/i,
+          name: /^(Generate assignment|Regenerate)$/i,
         });
         await waitFor(() => {
           expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
@@ -365,7 +381,9 @@ export function registerGenerationThrottleTests() {
 
         await renderResumedAssignment();
 
-        await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+        await user.click(
+          screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }),
+        );
         await waitFor(() => {
           expect(api.generateDraft).toHaveBeenCalledWith({
             promptPackageId: 'pkg-1',
