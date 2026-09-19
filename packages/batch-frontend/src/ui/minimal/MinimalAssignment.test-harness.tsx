@@ -489,7 +489,7 @@ export async function advanceSourceToCreate(user: ReturnType<typeof userEvent.se
   await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
   await screen.findByRole(
     'button',
-    { name: /^Generate assignment$/i },
+    { name: /^(Generate assignment|Regenerate)$/i },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
 }
@@ -615,13 +615,13 @@ async function waitForResumedPromptReady(user: ReturnType<typeof userEvent.setup
   }
   await screen.findByRole(
     'button',
-    { name: /^Generate assignment$/i },
+    { name: /^(Generate assignment|Regenerate)$/i },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
   await screen.findByRole('textbox', { name: /Draft markdown/i }, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
-async function waitForJobActionsReady(jobId = 'job-1') {
+async function waitForJobActionsReady(jobId = 'job-1', hasPublishedHandout = true) {
   const supportSummary = await screen.findByText(
     /Support details/i,
     {},
@@ -640,9 +640,18 @@ async function waitForJobActionsReady(jobId = 'job-1') {
     timeout: UI_WAIT_TIMEOUT_MS,
   });
   fireEvent.click(reviewStep);
+  if (!hasPublishedHandout) return;
+  const advancedSummary = await screen.findByText(
+    'Advanced actions',
+    {},
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  if (!(advancedSummary.closest('details') as HTMLDetailsElement | null)?.open) {
+    fireEvent.click(advancedSummary);
+  }
   await screen.findByRole(
     'heading',
-    { name: /Advanced actions/i },
+    { name: /Republish and recovery/i },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
   await screen.findByRole('region', { name: /Quick reruns/i }, { timeout: UI_WAIT_TIMEOUT_MS });
@@ -683,10 +692,8 @@ export function openPublishingSettings() {
 }
 
 export function openAdvancedActions() {
-  const trigger =
-    screen.queryByRole('button', { name: /Show advanced actions/i }) ??
-    screen.queryByRole('button', { name: /Hide advanced actions/i });
-  if (trigger && /show advanced actions/i.test(trigger.textContent ?? '')) {
+  const trigger = screen.queryByText('Advanced actions');
+  if (trigger && !(trigger.closest('details') as HTMLDetailsElement | null)?.open) {
     fireEvent.click(trigger);
   }
 }
@@ -804,7 +811,10 @@ export async function renderResumedAssignment(
   if (readyState === 'promptReady') {
     await waitForResumedPromptReady(user);
   } else if (readyState === 'jobActions') {
-    await waitForJobActionsReady(status.jobId);
+    await waitForJobActionsReady(
+      status.jobId,
+      status.state === 'succeeded' && Boolean(status.htmlUrl),
+    );
   }
   return { ...result, user, status };
 }
@@ -828,6 +838,7 @@ export async function renderPublishedAssignment(
       status: {
         state: 'succeeded',
         studentId: 'student-alex',
+        htmlUrl: 'https://example.com/published-assignment.html',
         ...overrides.status,
       },
     },

@@ -1,8 +1,7 @@
 import { AudioLines, FileText, RotateCcw } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ProductButton } from '../../system/ProductButton';
-import { ProductNotice } from '../../system/ProductNotice';
 import type { LessonSourceStepProps } from '../assignment-step-props';
 
 type LessonSourceMode = 'audio' | 'transcript';
@@ -12,53 +11,72 @@ export function LessonSourceStep({
   studentSelected,
   manualSaving,
   manualError,
-  transcriptReady,
+  sourcePrepared = false,
+  preparedSourceKey,
   onCreateManualTranscript,
 }: LessonSourceStepProps) {
   const [mode, setMode] = useState<LessonSourceMode>('audio');
   const [text, setText] = useState('');
+  const [changingSource, setChangingSource] = useState(false);
+  useEffect(() => {
+    if (sourcePrepared && preparedSourceKey !== undefined) setChangingSource(false);
+  }, [preparedSourceKey, sourcePrepared]);
+  const showChooser = !sourcePrepared || changingSource;
 
   return (
     <div className="assignment-step assignment-step--source">
-      <fieldset className="assignment-source-choice">
-        <legend>Choose the lesson source</legend>
-        <div className="assignment-source-choice__options">
-          <button
-            type="button"
-            className={mode === 'audio' ? 'is-selected' : ''}
-            aria-pressed={mode === 'audio'}
-            onClick={() => setMode('audio')}
-          >
-            <AudioLines aria-hidden="true" />
-            <span>
-              <strong>Upload lesson audio</strong>
-              <small>OPUS audio only during the alpha</small>
-            </span>
-          </button>
-          <button
-            type="button"
-            className={mode === 'transcript' ? 'is-selected' : ''}
-            aria-pressed={mode === 'transcript'}
-            onClick={() => setMode('transcript')}
-          >
-            <FileText aria-hidden="true" />
-            <span>
-              <strong>Use an existing transcript</strong>
-              <small>Paste text you already have</small>
-            </span>
-          </button>
-        </div>
-      </fieldset>
+      {sourcePrepared && !changingSource ? (
+        <button type="button" className="minimal-secondary" onClick={() => setChangingSource(true)}>
+          Change lesson source
+        </button>
+      ) : null}
+      {sourcePrepared && changingSource ? (
+        <button
+          type="button"
+          className="minimal-secondary"
+          onClick={() => setChangingSource(false)}
+        >
+          Keep current source
+        </button>
+      ) : null}
+      {showChooser ? (
+        <fieldset className="assignment-source-choice">
+          <legend>Choose the lesson source</legend>
+          <div className="assignment-source-choice__options">
+            <button
+              type="button"
+              className={mode === 'audio' ? 'is-selected' : ''}
+              aria-pressed={mode === 'audio'}
+              onClick={() => setMode('audio')}
+            >
+              <AudioLines aria-hidden="true" />
+              <span className="assignment-source-choice__copy">
+                <strong>Upload lesson audio</strong>
+                <small>OPUS audio only during the alpha</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className={mode === 'transcript' ? 'is-selected' : ''}
+              aria-pressed={mode === 'transcript'}
+              onClick={() => setMode('transcript')}
+            >
+              <FileText aria-hidden="true" />
+              <span className="assignment-source-choice__copy">
+                <strong>Use an existing transcript</strong>
+                <small>Paste text you already have</small>
+              </span>
+            </button>
+          </div>
+        </fieldset>
+      ) : null}
 
-      {mode === 'audio' ? (
+      {showChooser && mode === 'audio' ? (
         <div className="assignment-source-pane">
-          <ProductNotice tone="info" title="OPUS audio only during the alpha">
-            Other audio formats are coming later. Your recording and transcript stay attached to
-            this assignment as you move between steps.
-          </ProductNotice>
+          <p className="assignment-source-pane__hint">OPUS audio only during the alpha.</p>
           {children}
         </div>
-      ) : (
+      ) : showChooser ? (
         <div className="assignment-source-pane assignment-source-pane--manual">
           <label htmlFor="manual-lesson-transcript">Existing lesson transcript</label>
           <textarea
@@ -71,16 +89,7 @@ export function LessonSourceStep({
           <p className="assignment-source-pane__hint">
             This becomes the durable lesson source. No audio transcription is started.
           </p>
-          {manualError ? (
-            <ProductNotice tone="error" title="Transcript not ready">
-              {manualError}
-            </ProductNotice>
-          ) : null}
-          {transcriptReady ? (
-            <ProductNotice tone="success" title="Existing transcript ready">
-              You can continue to teaching context or return here to review it.
-            </ProductNotice>
-          ) : null}
+          {manualError ? <p className="assignment-source-pane__error">{manualError}</p> : null}
           <ProductButton
             busy={manualSaving}
             disabled={!studentSelected || !text.trim()}
@@ -93,7 +102,8 @@ export function LessonSourceStep({
             <p className="assignment-source-pane__error">Select a student first.</p>
           ) : null}
         </div>
-      )}
+      ) : null}
+      {sourcePrepared && !changingSource ? children : null}
     </div>
   );
 }

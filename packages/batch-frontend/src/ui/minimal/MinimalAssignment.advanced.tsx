@@ -568,13 +568,15 @@ export function AdvancedActionsStage({
                 onClick={controller.toggleCustomRerun}
                 disabled={!controller.rerunEnabled}
               >
-                {controller.showCustomRerun ? 'Hide custom rerun' : 'Custom rerun'}
+                {controller.showCustomRerun
+                  ? 'Hide technical rerun settings'
+                  : 'Technical rerun settings'}
               </ProductButton>
             </div>
             {controller.showCustomRerun ? (
-              <section className="minimal-custom-rerun" aria-label="Custom rerun selection">
+              <section className="minimal-custom-rerun" aria-label="Technical rerun settings">
                 <div className="minimal-list-heading">
-                  <strong>Custom rerun</strong>
+                  <strong>Technical rerun settings</strong>
                 </div>
                 <div className="minimal-rerun-picker-grid">
                   <label
