@@ -46,8 +46,10 @@ async function insertStudentConfirmedSession(params: {
     if (params.recordingId) {
       await client.query(
         `
-        INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
-        VALUES ($1, 'upload', $2, $3, 12, 'ingested')
+        INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status,
+          source_identity_kind, source_fingerprint_scheme, source_fingerprint)
+        VALUES ($1::uuid, 'upload', $2, $3, 12, 'ingested', 'audio',
+          'prepared-media-sha256-v1', replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''))
         ON CONFLICT (id) DO NOTHING
         `,
         [params.recordingId, params.studentId, `s3://recordings/${params.recordingId}.mp3`],
@@ -98,8 +100,10 @@ async function createMixedSourceConfirmationFixture(params: {
   await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query(
       `INSERT INTO recordings
-         (id, source, student_id, storage_uri, bytes, status, audio_topology)
-       VALUES ($1, 'upload', $2, $3, 12, 'transcribed', 'mixed_recording')`,
+         (id, source, student_id, storage_uri, bytes, status, audio_topology,
+          source_identity_kind, source_fingerprint_scheme, source_fingerprint)
+       VALUES ($1::uuid, 'upload', $2, $3, 12, 'transcribed', 'mixed_recording', 'audio',
+         'prepared-media-sha256-v1', replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''))`,
       [recordingId, studentId, `local://recordings/${recordingId}.mp3`],
     );
     await client.query(
@@ -131,7 +135,14 @@ async function createMixedSourceConfirmationFixture(params: {
       ],
     );
   });
-  return { userId, recordingId, transcriptId, sessionId: session.id, ...params };
+  await repository.attachAssignmentSourceCandidate({
+    id: session.id,
+    userId,
+    expectedRevision: session.revision,
+    recordingId,
+    transcriptId,
+  });
+  return { userId, studentId, recordingId, transcriptId, sessionId: session.id, ...params };
 }
 
 async function confirmMixedSource(
@@ -146,7 +157,7 @@ async function confirmMixedSource(
     userId: fixture.userId,
     request: {
       step: 'source',
-      expectedRevision: 1,
+      expectedRevision: 2,
       lessonId: null,
       recordingId: fixture.recordingId,
       transcriptId: fixture.transcriptId,
@@ -194,9 +205,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const studentId = randomUUID();
     const requestId = randomUUID();
     await insertUserAndStudent(userId, studentId);
-    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } = await import(
-      '../src/domain/assignment-session-repository.js'
-    );
+    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } =
+      await import('../src/domain/assignment-session-repository.js');
 
     const created = await confirmStudentAssignmentSession({
       userId,
@@ -273,9 +283,18 @@ describe('domain/assignment-session-repository persistence contract', () => {
         [transcriptId, recordingId, 'a'.repeat(64)],
       ),
     );
-    const { updateAssignmentSessionRecovery } = await import(
-      '../src/domain/assignment-session-repository.js'
-    );
+    const {
+      attachAssignmentSourceCandidate,
+      getCanonicalAssignmentSessionBySourceRecording,
+      updateAssignmentSessionRecovery,
+    } = await import('../src/domain/assignment-session-repository.js');
+    await attachAssignmentSourceCandidate({
+      id: canonicalSessionId,
+      userId,
+      expectedRevision: 1,
+      recordingId,
+      transcriptId,
+    });
 
     await expect(
       updateAssignmentSessionRecovery({
@@ -288,6 +307,136 @@ describe('domain/assignment-session-repository persistence contract', () => {
       code: 'ASSIGNMENT_SOURCE_ALREADY_OWNED',
       session: expect.objectContaining({ id: canonicalSessionId, recordingId }),
     });
+
+    const losingRecordingId = randomUUID();
+    const losingTranscriptId = randomUUID();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO recordings (
+           id, source, student_id, storage_uri, bytes, status,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint
+         )
+         SELECT $2, source, student_id, $3, bytes, status,
+                source_identity_kind, source_fingerprint_scheme, source_fingerprint
+         FROM recordings WHERE id = $1`,
+        [recordingId, losingRecordingId, `local://recordings/${losingRecordingId}.mp3`],
+      );
+      await client.query(
+        `INSERT INTO transcripts
+           (id, recording_id, storage_uri, working_version, content_hash, stt_provider)
+         VALUES ($1, $2, $3, 1, $4, 'deepgram')`,
+        [
+          losingTranscriptId,
+          losingRecordingId,
+          `local://transcripts/${losingTranscriptId}.txt`,
+          'b'.repeat(64),
+        ],
+      );
+    });
+
+    await expect(
+      attachAssignmentSourceCandidate({
+        id: newerSessionId,
+        userId,
+        expectedRevision: 1,
+        recordingId: losingRecordingId,
+        transcriptId: losingTranscriptId,
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'existing_assignment_resumed',
+      session: { id: canonicalSessionId },
+    });
+    const retired = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `SELECT audio_lifecycle, audio_deletion_requested_at
+         FROM recordings WHERE id = $1`,
+        [losingRecordingId],
+      ),
+    );
+    expect(retired.rows[0]).toMatchObject({
+      audio_lifecycle: 'pending',
+      audio_deletion_requested_at: expect.any(Date),
+    });
+    await expect(
+      getCanonicalAssignmentSessionBySourceRecording({
+        userId,
+        studentId,
+        recordingId: losingRecordingId,
+      }),
+    ).resolves.toMatchObject({ id: canonicalSessionId });
+  });
+
+  it('rejects mixing source attachment with unrelated recovery fields', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    await insertUserAndStudent(userId, studentId);
+    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } =
+      await import('../src/domain/assignment-session-repository.js');
+    const session = await confirmStudentAssignmentSession({
+      userId,
+      requestId: randomUUID(),
+      studentId,
+      lessonId: null,
+    });
+
+    await expect(
+      updateAssignmentSessionRecovery({
+        id: session.id,
+        userId,
+        expectedRevision: session.revision,
+        patch: {
+          recordingId,
+          transcriptId,
+          teacherNotes: 'must be a separate recovery write',
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_RECOVERY_LINEAGE_INVALID' });
+  });
+
+  it('keeps an unclassified historical source readable but rejects a new canonical claim', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    await insertUserAndStudent(userId, studentId);
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const session = await repository.confirmStudentAssignmentSession({
+      userId,
+      requestId: randomUUID(),
+      studentId,
+      lessonId: null,
+    });
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO recordings (
+           id, source, student_id, storage_uri, audio_lifecycle, bytes, status
+         ) VALUES ($1, 'manual_transcript', $2, NULL, 'not_retained', 12, 'transcribed')`,
+        [recordingId, studentId],
+      );
+      await client.query(
+        `INSERT INTO transcripts (
+           id, recording_id, storage_uri, working_version, content_hash, stt_provider,
+           mode, model, language, fallback_used
+         ) VALUES ($1, $2, $3, 1, $4, 'manual', 'timeline', 'manual', 'en', false)`,
+        [transcriptId, recordingId, `local://transcripts/${transcriptId}.txt`, 'a'.repeat(64)],
+      );
+    });
+    await expect(
+      repository.getAssignmentSessionByIdForUser(session.id, userId),
+    ).resolves.toMatchObject({
+      id: session.id,
+    });
+    await expect(
+      repository.attachAssignmentSourceCandidate({
+        id: session.id,
+        userId,
+        expectedRevision: session.revision,
+        recordingId,
+        transcriptId,
+      }),
+    ).rejects.toMatchObject({ code: 'SOURCE_IDENTITY_REQUIRED' });
   });
 
   it('rejects Student request-id reuse with different recovery identity', async () => {
@@ -297,9 +446,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const requestId = randomUUID();
     await insertUserAndStudent(userId, firstStudentId);
     await insertUserAndStudent(userId, secondStudentId);
-    const { confirmStudentAssignmentSession } = await import(
-      '../src/domain/assignment-session-repository.js'
-    );
+    const { confirmStudentAssignmentSession } =
+      await import('../src/domain/assignment-session-repository.js');
 
     await confirmStudentAssignmentSession({
       userId,
@@ -331,8 +479,12 @@ describe('domain/assignment-session-repository persistence contract', () => {
     await insertUserAndStudent(userId, studentId);
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
-        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
-         VALUES ($1, 'upload', $2, 'local://recordings/a.opus', 1, 'transcribed')`,
+        `INSERT INTO recordings (
+           id, source, student_id, storage_uri, bytes, status,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint
+         ) VALUES ($1::uuid, 'upload', $2, 'local://recordings/a.opus', 1, 'transcribed',
+           'audio', 'prepared-media-sha256-v1',
+           replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''))`,
         [recordingId, studentId],
       );
       await client.query(
@@ -377,6 +529,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
               transcriptWorkingVersion: 1,
               transcriptStorageUri: 'local://transcripts/a.txt',
               transcriptHash: 'a'.repeat(64),
+              sourceIdentityKind: 'audio',
+              sourceFingerprintScheme: 'prepared-media-sha256-v1',
+              sourceFingerprint: recordingId.replaceAll('-', '').repeat(2),
             },
             context: {
               teacherNotes: null,
@@ -393,6 +548,18 @@ describe('domain/assignment-session-repository persistence contract', () => {
             },
           }),
         ],
+      );
+      await client.query(
+        `INSERT INTO assignment_source_bindings (
+           id, workspace_id, user_id, student_id, assignment_session_id,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint,
+           binding_role, recording_id, transcript_id
+         )
+         SELECT $1, s.workspace_id, $2, $3, $4, 'audio', 'prepared-media-sha256-v1',
+                replace(($5::uuid)::text, '-', '') || replace(($5::uuid)::text, '-', ''),
+                'confirmed', $5, $6
+         FROM students s WHERE s.id = $3`,
+        [randomUUID(), userId, studentId, sessionId, recordingId, transcriptId],
       );
     });
     const { completeAssignmentShare, publishAssignmentCorrectionJob, reserveAssignmentShare } =
@@ -691,9 +858,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
         ],
       );
     });
-    const { publishAssignmentCorrectionJob } = await import(
-      '../src/domain/assignment-session-repository.js'
-    );
+    const { publishAssignmentCorrectionJob } =
+      await import('../src/domain/assignment-session-repository.js');
     const request = { requestId, draftId, draftWorkingVersion: 3, draftHash };
 
     const [first, second] = await Promise.all([
@@ -802,7 +968,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
   });
 
-  it('keeps completed Share readable but out of resume, counts, and active-recording reuse', async () => {
+  it('keeps completed Share readable while direct recovery cannot reclaim its recording pointer', async () => {
     const userId = randomUUID();
     const studentId = randomUUID();
     const recordingId = randomUUID();
@@ -818,8 +984,10 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
-        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
-         VALUES ($1, 'upload', $2, $3, 12, 'ingested')`,
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint)
+         VALUES ($1::uuid, 'upload', $2, $3, 12, 'ingested', 'audio',
+           'prepared-media-sha256-v1', replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''))`,
         [recordingId, studentId, `s3://recordings/${recordingId}.mp3`],
       );
       await client.query(
@@ -856,10 +1024,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
         expectedRevision: 1,
         patch: { recordingId },
       }),
-    ).resolves.toMatchObject({ id: next.id, recordingId });
-    await expect(
-      repository.getActiveAssignmentSessionByRecording(userId, recordingId),
-    ).resolves.toMatchObject({ id: next.id });
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_RECOVERY_LINEAGE_INVALID' });
   });
 
   it('fails closed when confirmed snapshot JSON is structurally malformed', async () => {
@@ -885,16 +1050,15 @@ describe('domain/assignment-session-repository persistence contract', () => {
         ],
       );
     });
-    const { getAssignmentSessionByIdForUser } = await import(
-      '../src/domain/assignment-session-repository.js'
-    );
+    const { getAssignmentSessionByIdForUser } =
+      await import('../src/domain/assignment-session-repository.js');
 
     await expect(getAssignmentSessionByIdForUser(sessionId, userId)).rejects.toMatchObject({
       name: 'ZodError',
     });
   });
 
-  it('treats confirmed Share as the active-session uniqueness boundary', async () => {
+  it('does not use assignment-session recording pointers as source ownership', async () => {
     const userId = randomUUID();
     const studentId = randomUUID();
     const recordingId = randomUUID();
@@ -915,7 +1079,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
         studentId,
         recordingId,
       }),
-    ).rejects.toMatchObject({ code: '23505' });
+    ).resolves.toBeDefined();
 
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
@@ -978,7 +1142,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     ).rejects.toMatchObject({ code: '23514' });
   });
 
-  it('defines every resumable-session index from confirmed Share completion', async () => {
+  it('keeps resumable indexes separate from canonical source-binding indexes', async () => {
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       const indexes = await client.query<{ indexname: string; indexdef: string }>(
         `
@@ -986,16 +1150,19 @@ describe('domain/assignment-session-repository persistence contract', () => {
         FROM pg_indexes
         WHERE schemaname = 'public'
           AND indexname IN (
-            'idx_assignment_sessions_user_active_recording',
             'idx_assignment_sessions_user_active_updated',
-            'idx_assignment_sessions_lesson_updated'
+            'idx_assignment_sessions_lesson_updated',
+            'idx_assignment_source_bindings_scoped_source',
+            'idx_assignment_source_bindings_session_role'
           )
         ORDER BY indexname
         `,
       );
 
-      expect(indexes.rows).toHaveLength(3);
-      for (const index of indexes.rows) {
+      expect(indexes.rows).toHaveLength(4);
+      for (const index of indexes.rows.filter((row) =>
+        row.indexname.startsWith('idx_assignment_sessions_'),
+      )) {
         expect(index.indexdef).toContain("confirmed_step <> 'share'::text");
         expect(index.indexdef).not.toContain('archived_at');
       }
@@ -1025,6 +1192,378 @@ describe('domain/assignment-session-repository persistence contract', () => {
       audio_lifecycle: 'pending',
       audio_deletion_requested_at: expect.any(Date),
     });
+  });
+
+  it('keeps confirmed binding lineage stable until same-identity replacement is confirmed', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const confirmed = await confirmMixedSource(repository, fixture);
+    const nextRecordingId = randomUUID();
+    const nextTranscriptId = randomUUID();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO recordings (
+           id, source, student_id, storage_uri, bytes, status, audio_topology,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint
+         )
+         SELECT $2, source, student_id, $3, bytes, status, audio_topology,
+                source_identity_kind, source_fingerprint_scheme, source_fingerprint
+         FROM recordings WHERE id = $1`,
+        [fixture.recordingId, nextRecordingId, `local://recordings/${nextRecordingId}.mp3`],
+      );
+      await client.query(
+        `INSERT INTO transcripts (
+           id, recording_id, storage_uri, working_version, content_hash, stt_provider,
+           mode, model, language, fallback_used, summary_json
+         )
+         SELECT $2, $3, $4, working_version, content_hash, stt_provider,
+                mode, model, language, fallback_used, summary_json
+         FROM transcripts WHERE id = $1`,
+        [
+          fixture.transcriptId,
+          nextTranscriptId,
+          nextRecordingId,
+          `local://transcripts/${nextTranscriptId}.txt`,
+        ],
+      );
+    });
+
+    const attached = await repository.attachAssignmentSourceCandidate({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      expectedRevision: confirmed.session.revision,
+      recordingId: nextRecordingId,
+      transcriptId: nextTranscriptId,
+    });
+    expect(attached).toMatchObject({
+      outcome: 'source_attached',
+      session: { recordingId: nextRecordingId, transcriptId: nextTranscriptId },
+    });
+    await expect(
+      repository.attachAssignmentSourceCandidate({
+        id: fixture.sessionId,
+        userId: fixture.userId,
+        expectedRevision: confirmed.session.revision,
+        recordingId: nextRecordingId,
+        transcriptId: nextTranscriptId,
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'source_attached',
+      session: { revision: attached.session.revision },
+    });
+    const bindingBeforeConfirmation = await withPgClientSessionContext(
+      { rlsBypass: true },
+      (client) =>
+        client.query(
+          `SELECT recording_id, transcript_id FROM assignment_source_bindings
+           WHERE assignment_session_id = $1 AND binding_role = 'confirmed'`,
+          [fixture.sessionId],
+        ),
+    );
+    expect(bindingBeforeConfirmation.rows[0]).toEqual({
+      recording_id: fixture.recordingId,
+      transcript_id: fixture.transcriptId,
+    });
+
+    const cancelled = await repository.updateAssignmentSessionRecovery({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      expectedRevision: attached.session.revision,
+      patch: { recordingId: null, transcriptId: null },
+    });
+    expect(cancelled).toMatchObject({
+      recordingId: fixture.recordingId,
+      transcriptId: fixture.transcriptId,
+    });
+    const reattached = await repository.attachAssignmentSourceCandidate({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      expectedRevision: cancelled.revision,
+      recordingId: nextRecordingId,
+      transcriptId: nextTranscriptId,
+    });
+    const replaced = await repository.confirmAssignmentSessionStepPersistence({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      request: {
+        step: 'source',
+        expectedRevision: reattached.session.revision,
+        lessonId: null,
+        recordingId: nextRecordingId,
+        transcriptId: nextTranscriptId,
+        transcriptWorkingVersion: 1,
+      },
+      lessonMemory: {
+        schemaVersion: 'lesson-memory-test-v1',
+        provider: 'openai',
+        model: 'test-model',
+        requestedAt: new Date(),
+      },
+    });
+    expect(replaced.session.confirmed.source).toMatchObject({
+      recordingId: nextRecordingId,
+      transcriptId: nextTranscriptId,
+    });
+    const bindingAfterConfirmation = await withPgClientSessionContext(
+      { rlsBypass: true },
+      (client) =>
+        client.query(
+          `SELECT recording_id, transcript_id FROM assignment_source_bindings
+           WHERE assignment_session_id = $1 AND binding_role = 'confirmed'`,
+          [fixture.sessionId],
+        ),
+    );
+    expect(bindingAfterConfirmation.rows[0]).toEqual({
+      recording_id: nextRecordingId,
+      transcript_id: nextTranscriptId,
+    });
+  });
+
+  it('serializes competing released-source claims and gives the new owner fresh lineage', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const confirmedA = await confirmMixedSource(repository, fixture);
+    const replacementRecordingId = randomUUID();
+    const replacementTranscriptId = randomUUID();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO recordings (
+           id, source, student_id, storage_uri, bytes, status,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint
+         ) VALUES ($1, 'upload', $2, $3, 10, 'transcribed',
+           'audio', 'prepared-media-sha256-v1', $4)`,
+        [
+          replacementRecordingId,
+          fixture.studentId,
+          `local://recordings/${replacementRecordingId}.mp3`,
+          'b'.repeat(64),
+        ],
+      );
+      await client.query(
+        `INSERT INTO transcripts (
+           id, recording_id, storage_uri, working_version, content_hash, stt_provider,
+           mode, model, language, fallback_used
+         ) VALUES ($1, $2, $3, 1, $4, 'deepgram', 'timeline', 'nova-3', 'multi', false)`,
+        [
+          replacementTranscriptId,
+          replacementRecordingId,
+          `local://transcripts/${replacementTranscriptId}.txt`,
+          'b'.repeat(64),
+        ],
+      );
+    });
+    const attachedB = await repository.attachAssignmentSourceCandidate({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      expectedRevision: confirmedA.session.revision,
+      recordingId: replacementRecordingId,
+      transcriptId: replacementTranscriptId,
+    });
+    expect(attachedB.outcome).toBe('source_attached');
+    await repository.confirmAssignmentSessionStepPersistence({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      request: {
+        step: 'source',
+        expectedRevision: attachedB.session.revision,
+        lessonId: null,
+        recordingId: replacementRecordingId,
+        transcriptId: replacementTranscriptId,
+        transcriptWorkingVersion: 1,
+      },
+      lessonMemory: {
+        schemaVersion: 'lesson-memory-test-v1',
+        provider: 'openai',
+        model: 'test-model',
+        requestedAt: new Date(),
+      },
+    });
+
+    const contenders = await Promise.all(
+      [randomUUID(), randomUUID()].map((requestId) =>
+        repository.confirmStudentAssignmentSession({
+          userId: fixture.userId,
+          requestId,
+          studentId: fixture.studentId,
+          lessonId: null,
+        }),
+      ),
+    );
+    const outcomes = await Promise.all(
+      contenders.map((session) =>
+        repository.attachAssignmentSourceCandidate({
+          id: session.id,
+          userId: fixture.userId,
+          expectedRevision: session.revision,
+          recordingId: fixture.recordingId,
+          transcriptId: fixture.transcriptId,
+        }),
+      ),
+    );
+    expect(outcomes.map((result) => result.outcome).sort()).toEqual([
+      'existing_assignment_resumed',
+      'source_attached',
+    ]);
+    const owner = outcomes.find((result) => result.outcome === 'source_attached')!.session;
+    const resumed = outcomes.find((result) => result.outcome === 'existing_assignment_resumed')!;
+    expect(resumed.session.id).toBe(owner.id);
+    expect(owner.recordingId).not.toBe(fixture.recordingId);
+    expect(owner.transcriptId).not.toBe(fixture.transcriptId);
+    const cloned = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query<{
+        source_fingerprint: string;
+        original_recording_id: string;
+        original_transcript_id: string;
+      }>(
+        `SELECT r.source_fingerprint,
+                $2::uuid::text AS original_recording_id,
+                $3::uuid::text AS original_transcript_id
+         FROM recordings r
+         JOIN transcripts t ON t.recording_id = r.id
+         WHERE r.id = $1 AND t.id = $4`,
+        [owner.recordingId, fixture.recordingId, fixture.transcriptId, owner.transcriptId],
+      ),
+    );
+    expect(cloned.rows[0]).toMatchObject({
+      source_fingerprint: fixture.recordingId.replaceAll('-', '').repeat(2),
+      original_recording_id: fixture.recordingId,
+      original_transcript_id: fixture.transcriptId,
+    });
+  });
+
+  it('makes operator remap authoritative immediately for bindings and late memory workers', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'd'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'd'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const confirmed = await confirmMixedSource(repository, fixture);
+    const target = await repository.confirmStudentAssignmentSession({
+      userId: fixture.userId,
+      requestId: randomUUID(),
+      studentId: fixture.studentId,
+      lessonId: null,
+    });
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE assignment_sessions
+         SET recording_id = $2, transcript_id = $3, confirmed_step = 'source',
+             confirmed_snapshot = $4::jsonb, revision = 2, updated_at = NOW()
+         WHERE id = $1`,
+        [
+          target.id,
+          fixture.recordingId,
+          fixture.transcriptId,
+          JSON.stringify({
+            student: { studentId: fixture.studentId },
+            source: confirmed.session.confirmed.source,
+            context: null,
+            create: null,
+          }),
+        ],
+      ),
+    );
+
+    const remapped = await repository.remapCanonicalAssignmentSource({
+      userId: fixture.userId,
+      targetSessionId: target.id,
+      reason: 'test historical correction',
+    });
+    expect(remapped).toMatchObject({
+      previousSessionId: fixture.sessionId,
+      session: { id: target.id },
+      changed: true,
+    });
+    await expect(
+      repository.isAssignmentConfirmedSourceCanonical(fixture.sessionId, fixture.userId),
+    ).resolves.toBe(false);
+    await expect(
+      repository.isAssignmentConfirmedSourceCanonical(target.id, fixture.userId),
+    ).resolves.toBe(true);
+
+    const { publishConfirmedLessonMemoryEntry } =
+      await import('../src/domain/lesson-memory-repository.js');
+    const source = confirmed.session.confirmed.source!;
+    await expect(
+      publishConfirmedLessonMemoryEntry({
+        id: confirmed.lessonMemoryIntent!.entryId,
+        assignmentSessionId: fixture.sessionId,
+        studentId: fixture.studentId,
+        transcriptId: fixture.transcriptId,
+        recordingId: fixture.recordingId,
+        schemaVersion: 'lesson-memory-test-v1',
+        generatedAt: new Date(),
+        provider: 'openai',
+        model: 'test-model',
+        sourceStorageUri: source.transcriptStorageUri,
+        sourceContentHash: source.transcriptHash,
+      }),
+    ).resolves.toBeNull();
+    const replayed = await repository.confirmAssignmentSessionStepPersistence({
+      id: target.id,
+      userId: fixture.userId,
+      request: {
+        step: 'source',
+        expectedRevision: 2,
+        lessonId: null,
+        recordingId: fixture.recordingId,
+        transcriptId: fixture.transcriptId,
+        transcriptWorkingVersion: 1,
+      },
+      lessonMemory: {
+        schemaVersion: 'lesson-memory-test-v1',
+        provider: 'openai',
+        model: 'test-model',
+        requestedAt: new Date(),
+      },
+    });
+    expect(replayed.lessonMemoryIntent).toMatchObject({
+      entryId: confirmed.lessonMemoryIntent!.entryId,
+      outcome: 'pending_exists',
+    });
+    await expect(
+      publishConfirmedLessonMemoryEntry({
+        id: confirmed.lessonMemoryIntent!.entryId,
+        assignmentSessionId: target.id,
+        studentId: fixture.studentId,
+        transcriptId: fixture.transcriptId,
+        recordingId: fixture.recordingId,
+        schemaVersion: 'lesson-memory-test-v1',
+        generatedAt: new Date(),
+        provider: 'openai',
+        model: 'test-model',
+        sourceStorageUri: source.transcriptStorageUri,
+        sourceContentHash: source.transcriptHash,
+      }),
+    ).resolves.toMatchObject({ assignmentSessionId: target.id, status: 'ready' });
+    const audit = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `SELECT prior_assignment_session_id, canonical_assignment_session_id, action, reason
+         FROM assignment_source_binding_audit
+         WHERE canonical_assignment_session_id = $1`,
+        [target.id],
+      ),
+    );
+    expect(audit.rows).toEqual([
+      {
+        prior_assignment_session_id: fixture.sessionId,
+        canonical_assignment_session_id: target.id,
+        action: 'operator_remap',
+        reason: 'test historical correction',
+      },
+    ]);
   });
 
   it('restores the deletion request without resetting state when Source confirmation is replayed', async () => {

@@ -1086,6 +1086,7 @@ async function listAllReadyLessonMemory(
     list({
       studentId,
       statuses: ['ready'],
+      canonicalOnly: true,
       limit,
       offset,
     }),

@@ -5,6 +5,7 @@ import type { AssignmentSessionDto, JobState } from '@esl-pipeline/contracts';
 
 import { AlphaInviteError, registerInvitedUser } from '../../application/alpha-invites.js';
 import {
+  attachAssignmentSourceForUser,
   confirmStudentAssignmentSessionForUser,
   getAssignmentSessionForUser,
   listAssignmentSessionsForUserDto,
@@ -819,6 +820,13 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       patch: assignmentRecoveryPatchSchema,
     })
     .strict();
+  const attachAssignmentSourceSchema = z
+    .object({
+      expectedRevision: z.number().int().positive(),
+      recordingId: z.string().uuid(),
+      transcriptId: z.string().uuid(),
+    })
+    .strict();
 
   const confirmAssignmentStepSchema = z.discriminatedUnion('step', [
     z
@@ -1049,6 +1057,15 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
             session: getConflictSession(error),
           });
         }
+        if (code === 'ASSIGNMENT_SOURCE_ALREADY_OWNED') {
+          return reply.code(409).send({
+            code: 'assignment_source_already_owned',
+            session: getConflictSession(error),
+          });
+        }
+        if (code === 'SOURCE_IDENTITY_REQUIRED') {
+          return reply.code(409).send({ code: 'source_identity_required' });
+        }
         if (isArtifactWorkingConflict(error)) {
           return reply.code(409).send({
             code: 'artifact_working_conflict',
@@ -1070,7 +1087,8 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           code === 'ASSIGNMENT_STEP_PREREQUISITE_MISSING' ||
           code === 'ASSIGNMENT_STEP_LINEAGE_INVALID' ||
           code === 'ASSIGNMENT_STEP_SPEAKER_ROLE_MAPPING_REQUIRED' ||
-          code === 'ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND'
+          code === 'ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND' ||
+          code === 'ASSIGNMENT_STEP_SOURCE_NOT_ATTACHED'
         ) {
           return reply.code(400).send({ code: code.toLowerCase() });
         }
@@ -1183,6 +1201,70 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           event: 'publish_assignment_correction_failed',
           userId: authenticatedUser.id,
           publishedJobId: (request.params as { publishedJobId?: string }).publishedJobId,
+        });
+        return reply.code(500).send({ error: 'internal_error' });
+      }
+    },
+  );
+
+  app.post(
+    '/assignment-sessions/:id/source-attachment',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) {
+        return reply.code(401).send({ error: 'unauthorized', message: 'Authentication required' });
+      }
+      const routePath = resolveRoutePath(
+        request,
+        'POST /assignment-sessions/:id/source-attachment',
+      );
+      try {
+        const params = z.object({ id: z.string().uuid() }).parse(request.params ?? {});
+        const body = attachAssignmentSourceSchema.parse(request.body ?? {});
+        const result = await attachAssignmentSourceForUser(authenticatedUser.id, params.id, body);
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          userId: authenticatedUser.id,
+          assignmentSessionId: params.id,
+          outcome: result.outcome,
+        });
+        return reply.code(200).send(result);
+      } catch (error: unknown) {
+        const errorCode = getErrorCode(error);
+        if (errorCode === 'ASSIGNMENT_SESSION_REVISION_CONFLICT') {
+          return reply.code(409).send({
+            code: 'assignment_session_revision_conflict',
+            session: getConflictSession(error),
+          });
+        }
+        if (errorCode === 'SOURCE_IDENTITY_REQUIRED') {
+          return reply.code(409).send({ code: 'source_identity_required' });
+        }
+        if (errorCode === 'ASSIGNMENT_RECOVERY_LINEAGE_INVALID') {
+          return reply.code(409).send({ code: 'assignment_recovery_lineage_invalid' });
+        }
+        if (errorCode === 'ASSIGNMENT_SESSION_NOT_FOUND') {
+          return reply.code(404).send({ error: 'not_found' });
+        }
+        if (
+          errorCode === 'ASSIGNMENT_SESSION_COMPLETED' ||
+          errorCode === 'ASSIGNMENT_SESSION_SHARE_IN_PROGRESS'
+        ) {
+          return reply.code(409).send({ code: errorCode.toLowerCase() });
+        }
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request',
+            details: error.issues,
+          });
+        }
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'attach_assignment_source_failed',
+          userId: authenticatedUser.id,
         });
         return reply.code(500).send({ error: 'internal_error' });
       }

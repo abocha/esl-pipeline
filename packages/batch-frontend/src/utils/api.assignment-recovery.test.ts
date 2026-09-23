@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ArtifactWorkingConflictApiError,
   AssignmentSpeakerRoleMappingRequiredApiError,
+  attachAssignmentSource,
   confirmAssignmentSessionStep,
   confirmStudentAssignmentSession,
   publishAssignmentCorrection,
@@ -116,6 +117,30 @@ describe('assignment recovery API', () => {
       updateAssignmentSessionRecovery('session-1', { expectedRevision: 1, patch: {} }),
     ).rejects.toMatchObject({ name: 'AssignmentSessionConflictApiError' });
     expect(apiClient.patch).toHaveBeenCalledTimes(1);
+  });
+
+  it('posts the explicit source attachment and preserves canonical resume outcomes', async () => {
+    const response = {
+      outcome: 'existing_assignment_resumed' as const,
+      session: { id: 'session-canonical', revision: 7 },
+    };
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: response });
+
+    await expect(
+      attachAssignmentSource('session-loser', {
+        expectedRevision: 1,
+        recordingId: 'recording-1',
+        transcriptId: 'transcript-1',
+      }),
+    ).resolves.toEqual(response);
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/assignment-sessions/session-loser/source-attachment',
+      {
+        expectedRevision: 1,
+        recordingId: 'recording-1',
+        transcriptId: 'transcript-1',
+      },
+    );
   });
 
   it('preserves the canonical assignment when lesson ownership conflicts', async () => {

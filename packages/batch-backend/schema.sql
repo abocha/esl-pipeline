@@ -389,6 +389,41 @@ CREATE TABLE public.assignment_sessions (
     CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
 );
 
+CREATE TABLE public.assignment_source_binding_audit (
+    id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    source_identity_kind text NOT NULL,
+    source_fingerprint_scheme text CONSTRAINT assignment_source_binding_au_source_fingerprint_scheme_not_null NOT NULL,
+    source_fingerprint text NOT NULL,
+    prior_assignment_session_id uuid,
+    canonical_assignment_session_id uuid CONSTRAINT assignment_source_binding_a_canonical_assignment_sessi_not_null NOT NULL,
+    action text NOT NULL,
+    reason text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT assignment_source_binding_audit_action_check CHECK ((action = ANY (ARRAY['migration_conflict_resolution'::text, 'operator_remap'::text])))
+);
+
+CREATE TABLE public.assignment_source_bindings (
+    id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    assignment_session_id uuid NOT NULL,
+    source_identity_kind text NOT NULL,
+    source_fingerprint_scheme text NOT NULL,
+    source_fingerprint text NOT NULL,
+    binding_role text NOT NULL,
+    recording_id uuid NOT NULL,
+    transcript_id uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT assignment_source_bindings_fingerprint_check CHECK ((source_fingerprint ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT assignment_source_bindings_identity_kind_check CHECK ((source_identity_kind = ANY (ARRAY['audio'::text, 'manual_transcript'::text]))),
+    CONSTRAINT assignment_source_bindings_role_check CHECK ((binding_role = ANY (ARRAY['confirmed'::text, 'working'::text])))
+);
+
 CREATE TABLE public.drafts (
     id uuid NOT NULL,
     prompt_package_id uuid NOT NULL,
@@ -551,6 +586,7 @@ CREATE TABLE public.lesson_memory_entries (
     lesson_title text,
     source_storage_uri text,
     source_content_hash text,
+    assignment_session_id uuid,
     CONSTRAINT lesson_memory_entries_confirmed_source_pair_check CHECK ((((source_storage_uri IS NULL) AND (source_content_hash IS NULL)) OR ((source_storage_uri IS NOT NULL) AND (source_content_hash IS NOT NULL) AND (NULLIF(btrim(source_storage_uri), ''::text) IS NOT NULL) AND (source_content_hash ~ '^[0-9a-f]{64}$'::text)))),
     CONSTRAINT lesson_memory_entries_source_kind_check CHECK ((source_kind = 'lesson_transcript'::text)),
     CONSTRAINT lesson_memory_entries_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text, 'superseded'::text])))
@@ -668,7 +704,10 @@ CREATE TABLE public.recording_upload_operations (
     completed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT recording_upload_operations_completed_check CHECK ((((state = 'completed'::text) AND (final_recording_id IS NOT NULL) AND (completed_at IS NOT NULL)) OR ((state = 'processing'::text) AND (final_recording_id IS NULL) AND (completed_at IS NULL)))),
+    outcome_kind text,
+    canonical_assignment_session_id uuid,
+    CONSTRAINT recording_upload_operations_completed_check CHECK ((((state = 'processing'::text) AND (final_recording_id IS NULL) AND (canonical_assignment_session_id IS NULL) AND (outcome_kind IS NULL) AND (completed_at IS NULL)) OR ((state = 'completed'::text) AND (completed_at IS NOT NULL) AND (((outcome_kind = 'source_candidate'::text) AND (final_recording_id IS NOT NULL) AND (canonical_assignment_session_id IS NULL)) OR ((outcome_kind = 'existing_assignment_resumed'::text) AND (final_recording_id IS NULL) AND (canonical_assignment_session_id IS NOT NULL)))))),
+    CONSTRAINT recording_upload_operations_outcome_kind_check CHECK (((outcome_kind IS NULL) OR (outcome_kind = ANY (ARRAY['source_candidate'::text, 'existing_assignment_resumed'::text])))),
     CONSTRAINT recording_upload_operations_state_check CHECK ((state = ANY (ARRAY['processing'::text, 'completed'::text])))
 );
 
@@ -695,11 +734,16 @@ CREATE TABLE public.recordings (
     audio_deletion_error_code text,
     audio_deletion_next_attempt_at timestamp with time zone,
     media_preparation_version text,
+    source_identity_kind text,
+    source_fingerprint_scheme text,
+    source_fingerprint text,
     CONSTRAINT recordings_audio_deletion_attempt_count_check CHECK ((audio_deletion_attempt_count >= 0)),
     CONSTRAINT recordings_audio_lifecycle_check CHECK ((audio_lifecycle = ANY (ARRAY['not_retained'::text, 'retained'::text, 'pending'::text, 'deleting'::text, 'deleted'::text, 'delete_failed'::text]))),
     CONSTRAINT recordings_audio_lifecycle_uri_check CHECK ((((audio_lifecycle = ANY (ARRAY['not_retained'::text, 'deleted'::text])) AND (storage_uri IS NULL)) OR ((audio_lifecycle = ANY (ARRAY['retained'::text, 'pending'::text, 'deleting'::text, 'delete_failed'::text])) AND (storage_uri IS NOT NULL)))),
     CONSTRAINT recordings_audio_topology_check CHECK ((audio_topology = ANY (ARRAY['mixed_recording'::text, 'trusted_split_channels'::text]))),
     CONSTRAINT recordings_source_check CHECK ((source = ANY (ARRAY['upload'::text, 'manual_transcript'::text]))),
+    CONSTRAINT recordings_source_identity_complete_check CHECK ((((source_identity_kind IS NULL) AND (source_fingerprint_scheme IS NULL) AND (source_fingerprint IS NULL)) OR ((source_identity_kind = ANY (ARRAY['audio'::text, 'manual_transcript'::text])) AND (NULLIF(btrim(source_fingerprint_scheme), ''::text) IS NOT NULL) AND (source_fingerprint ~ '^[0-9a-f]{64}$'::text)))),
+    CONSTRAINT recordings_source_identity_kind_matches_source_check CHECK (((source_identity_kind IS NULL) OR ((source = 'upload'::text) AND (source_identity_kind = 'audio'::text)) OR ((source = 'manual_transcript'::text) AND (source_identity_kind = 'manual_transcript'::text)))),
     CONSTRAINT recordings_status_check CHECK ((status = ANY (ARRAY['ingested'::text, 'queued'::text, 'transcribing'::text, 'transcribed'::text, 'failed'::text])))
 );
 
@@ -1202,6 +1246,12 @@ ALTER TABLE ONLY public.assignment_sessions
 ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_share_job_id_key UNIQUE (share_job_id);
 
+ALTER TABLE ONLY public.assignment_source_binding_audit
+    ADD CONSTRAINT assignment_source_binding_audit_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.assignment_source_bindings
+    ADD CONSTRAINT assignment_source_bindings_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_pkey PRIMARY KEY (id);
 
@@ -1346,13 +1396,19 @@ CREATE INDEX idx_alpha_invites_status_expires_at ON public.alpha_invites USING b
 
 CREATE INDEX idx_assignment_sessions_lesson_updated ON public.assignment_sessions USING btree (lesson_id, updated_at DESC, id DESC) WHERE ((confirmed_step <> 'share'::text) AND (lesson_id IS NOT NULL));
 
-CREATE UNIQUE INDEX idx_assignment_sessions_user_active_recording ON public.assignment_sessions USING btree (user_id, recording_id) WHERE ((confirmed_step <> 'share'::text) AND (recording_id IS NOT NULL));
-
 CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC) WHERE (confirmed_step <> 'share'::text);
 
 CREATE UNIQUE INDEX idx_assignment_sessions_user_creation_request ON public.assignment_sessions USING btree (user_id, creation_request_id) WHERE (creation_request_id IS NOT NULL);
 
 CREATE INDEX idx_assignment_sessions_user_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC);
+
+CREATE INDEX idx_assignment_source_binding_audit_source ON public.assignment_source_binding_audit USING btree (user_id, student_id, source_identity_kind, source_fingerprint_scheme, source_fingerprint, created_at DESC);
+
+CREATE UNIQUE INDEX idx_assignment_source_bindings_scoped_source ON public.assignment_source_bindings USING btree (user_id, student_id, source_identity_kind, source_fingerprint_scheme, source_fingerprint);
+
+CREATE INDEX idx_assignment_source_bindings_session ON public.assignment_source_bindings USING btree (assignment_session_id);
+
+CREATE UNIQUE INDEX idx_assignment_source_bindings_session_role ON public.assignment_source_bindings USING btree (assignment_session_id, binding_role);
 
 CREATE INDEX idx_drafts_created_by ON public.drafts USING btree (created_by);
 
@@ -1415,6 +1471,8 @@ CREATE INDEX idx_jobs_transcript_id ON public.jobs USING btree (transcript_id);
 CREATE INDEX idx_jobs_user_created_at_id ON public.jobs USING btree (user_id, created_at DESC, id DESC);
 
 CREATE INDEX idx_jobs_user_id ON public.jobs USING btree (user_id);
+
+CREATE INDEX idx_lesson_memory_entries_assignment_session ON public.lesson_memory_entries USING btree (assignment_session_id, generated_at DESC, id DESC);
 
 CREATE INDEX idx_lesson_memory_entries_recording_generated_at ON public.lesson_memory_entries USING btree (recording_id, generated_at DESC, id DESC);
 
@@ -1671,6 +1729,24 @@ ALTER TABLE ONLY public.assignment_sessions
 ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.assignment_source_bindings
+    ADD CONSTRAINT assignment_source_bindings_assignment_session_id_fkey FOREIGN KEY (assignment_session_id) REFERENCES public.assignment_sessions(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.assignment_source_bindings
+    ADD CONSTRAINT assignment_source_bindings_recording_id_fkey FOREIGN KEY (recording_id) REFERENCES public.recordings(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.assignment_source_bindings
+    ADD CONSTRAINT assignment_source_bindings_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.assignment_source_bindings
+    ADD CONSTRAINT assignment_source_bindings_transcript_id_fkey FOREIGN KEY (transcript_id) REFERENCES public.transcripts(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.assignment_source_bindings
+    ADD CONSTRAINT assignment_source_bindings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.assignment_source_bindings
+    ADD CONSTRAINT assignment_source_bindings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+
 ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
@@ -1726,6 +1802,9 @@ ALTER TABLE ONLY public.jobs
     ADD CONSTRAINT jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.lesson_memory_entries
+    ADD CONSTRAINT lesson_memory_entries_assignment_session_id_fkey FOREIGN KEY (assignment_session_id) REFERENCES public.assignment_sessions(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.lesson_memory_entries
     ADD CONSTRAINT lesson_memory_entries_recording_id_fkey FOREIGN KEY (recording_id) REFERENCES public.recordings(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.lesson_memory_entries
@@ -1760,6 +1839,9 @@ ALTER TABLE ONLY public.prompt_packages
 
 ALTER TABLE ONLY public.recording_upload_operation_attempts
     ADD CONSTRAINT recording_upload_operation_attempts_operation_id_fkey FOREIGN KEY (operation_id) REFERENCES public.recording_upload_operations(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.recording_upload_operations
+    ADD CONSTRAINT recording_upload_operations_canonical_assignment_session_i_fkey FOREIGN KEY (canonical_assignment_session_id) REFERENCES public.assignment_sessions(id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY public.recording_upload_operations
     ADD CONSTRAINT recording_upload_operations_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE RESTRICT;
@@ -2089,5 +2171,6 @@ VALUES
   ('0050_recording_media_preparation_version', 'ddfcb6bfbc7fc740b6642361ef15fdd96fcb868ce358dcdee7cc2d5ce2dc5c15', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0051_recording_upload_operations', '7353b778b5e973f4dc05774676ff0657062f31eb9966f1459e84dbc3edce03cb', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0052_recording_upload_candidate_cleanup_schedule', '34891f5ed3494026d41d58a9d901f2f31e5ce7802dcf706cb2f5468175080890', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0053_recording_audio_cleanup_backfill', '7d4e11f27d14a035f15d9b629ec00bdfcc641882dbb7eaf0ad16d87692f2440f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0053_recording_audio_cleanup_backfill', '7d4e11f27d14a035f15d9b629ec00bdfcc641882dbb7eaf0ad16d87692f2440f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0054_canonical_assignment_source_ownership', '4d4f6b8b4a79148e23a0aca45a91b4d6496927f6a9adf41f5eaa0148bdccdc16', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

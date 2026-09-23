@@ -105,6 +105,51 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('attaches a source atomically and returns canonical resume as a normal outcome', async () => {
+      const candidate = {
+        expectedRevision: 1,
+        recordingId: '33333333-3333-4333-8333-333333333333',
+        transcriptId: '44444444-4444-4444-8444-444444444444',
+      };
+      const attachedSession = {
+        ...session,
+        revision: 2,
+        recordingId: candidate.recordingId,
+        transcriptId: candidate.transcriptId,
+      };
+      const attach = vi
+        .spyOn(assignmentSessionsModule, 'attachAssignmentSourceForUser')
+        .mockResolvedValue({ outcome: 'source_attached', session: attachedSession });
+      const attached = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/source-attachment`,
+        payload: candidate,
+      });
+      expect(attached.statusCode).toBe(200);
+      expect(attached.json()).toEqual({ outcome: 'source_attached', session: attachedSession });
+      expect(attach).toHaveBeenCalledWith('test-user-id', session.id, candidate);
+
+      const canonicalSession = {
+        ...attachedSession,
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        revision: 5,
+      };
+      attach.mockResolvedValueOnce({
+        outcome: 'existing_assignment_resumed',
+        session: canonicalSession,
+      });
+      const resumed = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/source-attachment`,
+        payload: candidate,
+      });
+      expect(resumed.statusCode).toBe(200);
+      expect(resumed.json()).toEqual({
+        outcome: 'existing_assignment_resumed',
+        session: canonicalSession,
+      });
+    });
+
     it('returns the canonical assignment when recovery selects an owned source', async () => {
       const canonicalSession = {
         ...session,

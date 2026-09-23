@@ -15,9 +15,12 @@ import { getPromptPackage, getPromptPackageLineage } from '../../application/get
 import { getRecording } from '../../application/get-recording.js';
 import { getRecordingTranscript } from '../../application/get-recording-transcript.js';
 import {
+  canonicalizeManualTranscriptSource,
+  fingerprintManualTranscriptSource,
   ingestManualTranscriptSource,
   ManualTranscriptSourceValidationError,
 } from '../../application/ingest-manual-transcript-source.js';
+import { toAssignmentSessionDto } from '../../application/assignment-sessions.js';
 import { ingestRecordingUpload } from '../../application/ingest-recording-upload.js';
 import { listRecordingsWithDefaults } from '../../application/list-recordings.js';
 import { materializeDraft } from '../../application/materialize-draft.js';
@@ -54,8 +57,14 @@ import {
   updateRecordingStatus,
 } from '../../domain/recording-repository.js';
 import {
+  getCanonicalAssignmentSessionBySourceIdentity,
+  getAssignmentSessionByIdForUser,
+} from '../../domain/assignment-session-repository.js';
+import {
   beginRecordingUploadOperation,
+  completeRecordingUploadOperationWithCanonicalAssignment,
   getRecordingUploadOperation,
+  type RecordingUploadOperation,
   RecordingUploadOperationConflictError,
   recordUploadAttemptCandidate,
 } from '../../domain/recording-upload-operation-repository.js';
@@ -126,6 +135,28 @@ export function registerRecordingRoutes(
     transcriptionStorage,
     transcribeQueue,
   } = context;
+
+  const resolveCompletedUploadOperation = async (
+    operation: RecordingUploadOperation,
+    workspaceId: string,
+    userId: string,
+  ) => {
+    if (operation.outcomeKind === 'existing_assignment_resumed') {
+      const sessionId = operation.canonicalAssignmentSessionId;
+      const session = sessionId ? await getAssignmentSessionByIdForUser(sessionId, userId) : null;
+      if (!session) throw new Error('Completed upload operation has no canonical assignment.');
+      return {
+        outcome: 'existing_assignment_resumed' as const,
+        session: toAssignmentSessionDto(session),
+      };
+    }
+    const existing = await getRecording(
+      operation.finalRecordingId ?? operation.recordingId,
+      workspaceId,
+    );
+    if (!existing) throw new Error('Completed upload operation has no recording projection.');
+    return existing;
+  };
 
   app.post(
     '/recordings/upload',
@@ -207,12 +238,15 @@ export function registerRecordingRoutes(
           requestProfile: route.profile,
         });
         if (operationResult.kind === 'completed') {
-          const existing = await getRecording(
-            operationResult.operation.finalRecordingId ?? operationResult.operation.recordingId,
-            workspaceId,
-          );
-          if (existing) return reply.code(200).send(existing);
-          throw new Error('Completed upload operation has no recording projection.');
+          return reply
+            .code(200)
+            .send(
+              await resolveCompletedUploadOperation(
+                operationResult.operation,
+                workspaceId,
+                authenticatedUser.id,
+              ),
+            );
         }
         if (operationResult.kind === 'active') {
           return reply.code(202).send({
@@ -275,6 +309,40 @@ export function registerRecordingRoutes(
           const storageFilename = sanitizedFilename.replaceAll(/[^\w.-]/g, '_');
           const sourcePath = storageFilename || sanitizedFilename || filename;
           const fileSha256 = prepared.sha256;
+
+          const canonicalOwner = await getCanonicalAssignmentSessionBySourceIdentity({
+            userId: authenticatedUser.id,
+            studentId,
+            sourceIdentityKind: 'audio',
+            sourceFingerprintScheme: 'prepared-media-sha256-v1',
+            sourceFingerprint: fileSha256,
+          });
+          if (canonicalOwner) {
+            const completed = await completeRecordingUploadOperationWithCanonicalAssignment({
+              operationId: uploadOperation.id,
+              attemptToken: uploadOperation.attemptToken,
+              assignmentSessionId: canonicalOwner.id,
+            });
+            if (completed) {
+              return reply.code(200).send({
+                outcome: 'existing_assignment_resumed',
+                session: toAssignmentSessionDto(canonicalOwner),
+              });
+            }
+            const reconciled = await getRecordingUploadOperation(workspaceId, uploadOperationId);
+            if (reconciled?.state === 'completed') {
+              return reply
+                .code(200)
+                .send(
+                  await resolveCompletedUploadOperation(
+                    reconciled,
+                    workspaceId,
+                    authenticatedUser.id,
+                  ),
+                );
+            }
+            throw new Error('Upload operation ownership expired before canonical reconciliation.');
+          }
 
           const cachedRecordings = await listRecordingsBySha256ForWorkspace(
             fileSha256,
@@ -512,12 +580,9 @@ export function registerRecordingRoutes(
               : 'processing',
         });
       }
-      const recording = await getRecording(
-        operation.finalRecordingId ?? operation.recordingId,
-        workspaceId,
+      return reply.send(
+        await resolveCompletedUploadOperation(operation, workspaceId, authenticatedUser.id),
       );
-      if (!recording) return errorResponse(reply, 'not_found');
-      return reply.send(recording);
     },
   );
 
@@ -547,6 +612,20 @@ export function registerRecordingRoutes(
         const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
         const student = await getStudentById(body.studentId, { workspaceId });
         if (!student) return errorResponse(reply, 'not_found');
+        const canonicalText = canonicalizeManualTranscriptSource(body.text);
+        const canonicalOwner = await getCanonicalAssignmentSessionBySourceIdentity({
+          userId: authenticatedUser.id,
+          studentId: body.studentId,
+          sourceIdentityKind: 'manual_transcript',
+          sourceFingerprintScheme: 'manual-transcript-nfc-lf-v1',
+          sourceFingerprint: fingerprintManualTranscriptSource(canonicalText),
+        });
+        if (canonicalOwner) {
+          return reply.code(200).send({
+            outcome: 'existing_assignment_resumed',
+            session: toAssignmentSessionDto(canonicalOwner),
+          });
+        }
         const result = await ingestManualTranscriptSource({ ...body, workspaceId });
 
         logger.info('Manual transcript source created', {
@@ -1682,6 +1761,11 @@ async function cloneCachedRecordingForStudent(params: {
         channels: params.cachedRecording.channels,
         audioTopology: params.audioTopology,
         mediaPreparationVersion: params.mediaPreparationVersion,
+        sourceIdentity: {
+          kind: 'audio',
+          scheme: 'prepared-media-sha256-v1',
+          fingerprint: params.sha256,
+        },
         status: 'transcribed',
         error: null,
       },

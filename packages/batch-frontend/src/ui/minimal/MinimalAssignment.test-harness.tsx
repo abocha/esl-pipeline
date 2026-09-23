@@ -20,6 +20,7 @@ import { MinimalAssignment } from './MinimalAssignment';
 
 vi.mock('../../utils/api', () => ({
   activateProfileRevision: vi.fn(),
+  attachAssignmentSource: vi.fn(),
   AssignmentSessionConflictApiError: class AssignmentSessionConflictApiError extends Error {
     constructor(public readonly latestSession: api.AssignmentSession) {
       super('Newer saved assignment work was found. Review it before confirming again.');
@@ -978,6 +979,15 @@ export function setupMinimalAssignmentTest() {
       revision: request.expectedRevision + 1,
     });
     return currentSession;
+  });
+  vi.mocked(api.attachAssignmentSource).mockImplementation(async (_id, request) => {
+    currentSession = makeAssignmentSession({
+      ...currentSession,
+      recordingId: request.recordingId,
+      transcriptId: request.transcriptId,
+      revision: request.expectedRevision + 1,
+    });
+    return { outcome: 'source_attached', session: currentSession };
   });
   vi.mocked(api.confirmAssignmentSessionStep).mockImplementation(async (_id, request) => {
     const base = currentSession;

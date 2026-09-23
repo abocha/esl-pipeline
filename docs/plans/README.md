@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents working from plan docs.
 - Read Time: 4 minutes.
 - Authority Level: planning router.
-- Last Verified Against: 2026-08-12 repository planning topology.
+- Last Verified Against: 2026-09-23 repository planning topology.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major planning-topology changes.
 - Status: `router`.
@@ -75,15 +75,16 @@
 
 ### Standalone active plans
 
-1. `docs/plans/stt-multi-provider-refactor/2026-09-01-normal-user-audio-ingest-readiness.md`
-2. `docs/plans/2026-08-14-post-share-assignment-correction.md`
-3. `docs/plans/2026-07-29-speech-planner-evaluation-gap-remediation.md`
-4. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
-5. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
-6. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
-7. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
-8. `docs/plans/slice-2-invite-workspace-first-student.md`
-9. `docs/plans/2026-06-23-alpha-readiness.md`
+1. `docs/plans/2026-09-22-issue-266-lifetime-canonical-assignment.md`
+2. `docs/plans/stt-multi-provider-refactor/2026-09-01-normal-user-audio-ingest-readiness.md`
+3. `docs/plans/2026-08-14-post-share-assignment-correction.md`
+4. `docs/plans/2026-07-29-speech-planner-evaluation-gap-remediation.md`
+5. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
+6. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
+7. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
+8. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
+9. `docs/plans/slice-2-invite-workspace-first-student.md`
+10. `docs/plans/2026-06-23-alpha-readiness.md`
 
 ## Historical and Generated Aids
 

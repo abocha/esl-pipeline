@@ -532,6 +532,146 @@ describe('integration/migrations', () => {
   );
 
   it(
+    '0054 deterministically assigns duplicate historical sources and audits the loser',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0053_recording_audio_cleanup_backfill');
+        const userId = '00000000-0000-4000-8000-000000000054';
+        const workspaceId = '10000000-0000-4000-8000-000000000054';
+        const studentId = '20000000-0000-4000-8000-000000000054';
+        const winnerSessionId = '40000000-0000-4000-8000-000000000054';
+        const loserSessionId = '40000000-0000-4000-8000-000000000055';
+        const winnerRecordingId = '30000000-0000-4000-8000-000000000056';
+        const loserRecordingId = '30000000-0000-4000-8000-000000000057';
+        const winnerTranscriptId = '50000000-0000-4000-8000-000000000054';
+        const loserTranscriptId = '50000000-0000-4000-8000-000000000055';
+        const fingerprint = 'f'.repeat(64);
+        await pool.query(
+          `INSERT INTO users (id, email, password_hash, role)
+           VALUES ($1, 'source-cutover@example.test', 'hash', 'user')`,
+          [userId],
+        );
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Source cutover')`, [
+          workspaceId,
+        ]);
+        await pool.query(
+          `INSERT INTO workspace_memberships (workspace_id, user_id, role)
+           VALUES ($1, $2, 'owner')`,
+          [workspaceId, userId],
+        );
+        await pool.query(
+          `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Ari', $2)`,
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          `INSERT INTO recordings (
+             id, workspace_id, source, student_id, storage_uri, audio_lifecycle,
+             sha256, bytes, status
+           ) VALUES
+             ($1, $3, 'upload', $4, $5, 'retained', $7, 10, 'transcribed'),
+             ($2, $3, 'upload', $4, $6, 'retained', $7, 10, 'transcribed')`,
+          [
+            winnerRecordingId,
+            loserRecordingId,
+            workspaceId,
+            studentId,
+            `local://recordings/${winnerRecordingId}.mp3`,
+            `local://recordings/${loserRecordingId}.mp3`,
+            fingerprint,
+          ],
+        );
+        await pool.query(
+          `INSERT INTO transcripts (
+             id, recording_id, storage_uri, working_version, content_hash, stt_provider,
+             mode, model, language, fallback_used
+           ) VALUES
+             ($1, $3, $5, 1, $7, 'deepgram', 'timeline', 'nova-3', 'multi', false),
+             ($2, $4, $6, 1, $7, 'deepgram', 'timeline', 'nova-3', 'multi', false)`,
+          [
+            winnerTranscriptId,
+            loserTranscriptId,
+            winnerRecordingId,
+            loserRecordingId,
+            `local://transcripts/${winnerTranscriptId}.txt`,
+            `local://transcripts/${loserTranscriptId}.txt`,
+            'a'.repeat(64),
+          ],
+        );
+        const snapshot = (recordingId: string, transcriptId: string, storageUri: string) =>
+          JSON.stringify({
+            student: { studentId },
+            source: {
+              lessonId: null,
+              recordingId,
+              transcriptId,
+              transcriptWorkingVersion: 1,
+              transcriptStorageUri: storageUri,
+              transcriptHash: 'a'.repeat(64),
+            },
+            context: null,
+            create: null,
+          });
+        await pool.query(
+          `INSERT INTO assignment_sessions (
+             id, user_id, student_id, recording_id, transcript_id, revision,
+             confirmed_step, confirmed_snapshot, created_at, updated_at
+           ) VALUES
+             ($1, $3, $4, $5, $7, 2, 'source', $9::jsonb,
+              '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+             ($2, $3, $4, $6, $8, 2, 'source', $10::jsonb,
+              '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')`,
+          [
+            winnerSessionId,
+            loserSessionId,
+            userId,
+            studentId,
+            winnerRecordingId,
+            loserRecordingId,
+            winnerTranscriptId,
+            loserTranscriptId,
+            snapshot(
+              winnerRecordingId,
+              winnerTranscriptId,
+              `local://transcripts/${winnerTranscriptId}.txt`,
+            ),
+            snapshot(
+              loserRecordingId,
+              loserTranscriptId,
+              `local://transcripts/${loserTranscriptId}.txt`,
+            ),
+          ],
+        );
+
+        await pool.query(
+          await fs.readFile(
+            path.join(migrationsPath, '0054_canonical_assignment_source_ownership.sql'),
+            'utf8',
+          ),
+        );
+        const binding = await pool.query(
+          `SELECT assignment_session_id, source_fingerprint
+           FROM assignment_source_bindings`,
+        );
+        expect(binding.rows).toEqual([
+          { assignment_session_id: winnerSessionId, source_fingerprint: fingerprint },
+        ]);
+        const audit = await pool.query(
+          `SELECT prior_assignment_session_id, canonical_assignment_session_id, reason
+           FROM assignment_source_binding_audit`,
+        );
+        expect(audit.rows).toEqual([
+          {
+            prior_assignment_session_id: loserSessionId,
+            canonical_assignment_session_id: winnerSessionId,
+            reason: 'earliest_creation_tiebreak',
+          },
+        ]);
+      });
+    },
+    testTimeout,
+  );
+
+  it(
     'generated schema baseline matches current migration output',
     async () => {
       const expected = await generateSchemaBaselineSql(connectionString);

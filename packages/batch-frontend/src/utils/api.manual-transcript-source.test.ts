@@ -47,6 +47,25 @@ describe('utils/api manual transcript source', () => {
       text: 'Tutor supplied transcript',
       displayName: 'Lesson on travel',
     });
-    expect(result.source).toBe('manual_transcript');
+    expect(result).toMatchObject({ source: 'manual_transcript' });
+  });
+
+  it('preserves a canonical assignment resume acquisition outcome', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: {
+        outcome: 'existing_assignment_resumed',
+        session: { id: 'assignment-1' },
+      },
+    } as never);
+
+    await expect(
+      createManualTranscriptSource({
+        studentId: '11111111-1111-4111-8111-111111111111',
+        text: 'Tutor supplied transcript',
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'existing_assignment_resumed',
+      session: { id: 'assignment-1' },
+    });
   });
 });

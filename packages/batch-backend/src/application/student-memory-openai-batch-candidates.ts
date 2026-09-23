@@ -108,7 +108,14 @@ export async function buildStudentMemorySnapshotBatchCandidates(args: {
 
 async function listAllReadyLessonMemory(studentId: string) {
   return listAllPages(({ limit, offset }) =>
-    listLessonMemoryEntries({ studentId, statuses: ['ready'], limit, offset, order: 'asc' }),
+    listLessonMemoryEntries({
+      studentId,
+      statuses: ['ready'],
+      canonicalOnly: true,
+      limit,
+      offset,
+      order: 'asc',
+    }),
   );
 }
 

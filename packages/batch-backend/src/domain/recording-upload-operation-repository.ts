@@ -21,6 +21,8 @@ export interface RecordingUploadOperation extends RecordingUploadOperationContex
   attemptToken: string | null;
   attemptExpiresAt: Date | null;
   finalRecordingId: string | null;
+  outcomeKind: 'source_candidate' | 'existing_assignment_resumed' | null;
+  canonicalAssignmentSessionId: string | null;
 }
 
 export type BeginRecordingUploadOperation =
@@ -329,12 +331,62 @@ export async function completeRecordingUploadOperation(params: {
   if (!attempt.rows[0]) return false;
   const completed = await params.client.query(
     `UPDATE recording_upload_operations
-     SET state = 'completed', final_recording_id = $3, completed_at = now(),
+     SET state = 'completed', final_recording_id = $3, outcome_kind = 'source_candidate',
+         completed_at = now(),
          attempt_token = NULL, attempt_expires_at = NULL, updated_at = now()
      WHERE id = $1 AND attempt_token = $2 AND state = 'processing'`,
     [params.operationId, params.attemptToken, params.recordingId],
   );
   return completed.rowCount === 1;
+}
+
+/** Completes an acquired fingerprint without creating an artifact when it already has an owner. */
+export async function completeRecordingUploadOperationWithCanonicalAssignment(params: {
+  operationId: string;
+  attemptToken: string;
+  assignmentSessionId: string;
+}): Promise<boolean> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const attempt = await client.query(
+        `UPDATE recording_upload_operation_attempts attempt
+         SET state = 'adopted'
+         FROM recording_upload_operations operation
+         WHERE attempt.operation_id = operation.id
+           AND attempt.operation_id = $1
+           AND attempt.attempt_token = $2
+           AND attempt.state = 'active'
+           AND attempt.candidate_uri IS NULL
+           AND operation.state = 'processing'
+           AND operation.attempt_token = $2
+           AND operation.attempt_expires_at > now()
+         RETURNING attempt.operation_id`,
+        [params.operationId, params.attemptToken],
+      );
+      if (!attempt.rows[0]) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      const completed = await client.query(
+        `UPDATE recording_upload_operations
+         SET state = 'completed', outcome_kind = 'existing_assignment_resumed',
+             canonical_assignment_session_id = $3, completed_at = now(),
+             attempt_token = NULL, attempt_expires_at = NULL, updated_at = now()
+         WHERE id = $1 AND attempt_token = $2 AND state = 'processing'`,
+        [params.operationId, params.attemptToken, params.assignmentSessionId],
+      );
+      if (completed.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
 }
 
 export class RecordingUploadOperationConflictError extends Error {
@@ -372,5 +424,13 @@ function mapOperation(row: Record<string, unknown>): RecordingUploadOperation {
     attemptToken: typeof row.attempt_token === 'string' ? row.attempt_token : null,
     attemptExpiresAt: row.attempt_expires_at instanceof Date ? row.attempt_expires_at : null,
     finalRecordingId: typeof row.final_recording_id === 'string' ? row.final_recording_id : null,
+    outcomeKind:
+      row.outcome_kind === 'source_candidate' || row.outcome_kind === 'existing_assignment_resumed'
+        ? row.outcome_kind
+        : null,
+    canonicalAssignmentSessionId:
+      typeof row.canonical_assignment_session_id === 'string'
+        ? row.canonical_assignment_session_id
+        : null,
   };
 }
