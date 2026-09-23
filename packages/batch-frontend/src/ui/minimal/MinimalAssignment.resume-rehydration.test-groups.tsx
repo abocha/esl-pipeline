@@ -874,17 +874,9 @@ export function registerResumeBasicTests() {
         });
       });
       await waitFor(() => {
-        expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+        expect(api.attachAssignmentSource).toHaveBeenCalledWith(
           'session-resume',
-          expect.objectContaining({
-            patch: expect.objectContaining({ recordingId: 'rec-manual' }),
-          }),
-        );
-        expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
-          'session-resume',
-          expect.objectContaining({
-            patch: expect.objectContaining({ transcriptId: 'tx-manual' }),
-          }),
+          expect.objectContaining({ recordingId: 'rec-manual', transcriptId: 'tx-manual' }),
         );
       });
     });

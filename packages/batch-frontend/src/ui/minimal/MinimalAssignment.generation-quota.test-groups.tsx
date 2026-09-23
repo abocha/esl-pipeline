@@ -352,7 +352,7 @@ export function registerGenerationThrottleTests() {
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
         await waitFor(() =>
           expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
-            'session-1',
+            'session-resumed',
             expect.objectContaining({ step: 'create' }),
           ),
         );
