@@ -16,6 +16,7 @@ export interface RequestLessonMemoryGenerationParams {
   studentId: string | null;
   transcriptId: string;
   recordingId: string;
+  assignmentSessionId: string;
   sourceStorageUri: string;
   sourceContentHash: string;
   lessonId?: string | null;
@@ -95,6 +96,7 @@ export async function requestLessonMemoryGeneration(args: {
     studentId: args.params.studentId,
     transcriptId: args.params.transcriptId,
     recordingId: args.params.recordingId,
+    assignmentSessionId: args.params.assignmentSessionId,
     schemaVersion: LESSON_MEMORY_SCHEMA_VERSION,
     generatedAt: requestedAt,
     provider: candidate.provider,
@@ -122,6 +124,7 @@ export async function requestLessonMemoryGeneration(args: {
       sourceStorageUri: args.params.sourceStorageUri,
       sourceContentHash: args.params.sourceContentHash,
       pendingEntryId: pending.entry.id,
+      assignmentSessionId: args.params.assignmentSessionId,
       provider: candidate.provider,
       model: candidate.model,
     },

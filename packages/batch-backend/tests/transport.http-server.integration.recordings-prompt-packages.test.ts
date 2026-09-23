@@ -9,6 +9,7 @@ describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [recordings-prompt-packages]',
   ({
     app,
+    assignmentSessionRepositoryModule,
     createDraftModule,
     createPromptPackageModule,
     deriveStudentId,
@@ -43,6 +44,8 @@ describeHttpServerIntegrationSuite(
           attemptToken: randomUUID(),
           attemptExpiresAt: new Date(Date.now() + 60_000),
           finalRecordingId: null,
+          outcomeKind: null,
+          canonicalAssignmentSessionId: null,
         },
         obsoleteCandidateUris: [],
       }),
@@ -102,6 +105,77 @@ describeHttpServerIntegrationSuite(
         };
       });
     }
+
+    it('POST /recordings/upload durably resumes a canonical owner before cache or STT work', async () => {
+      const studentId = deriveStudentId('Anna');
+      vi.mocked(
+        assignmentSessionRepositoryModule.getCanonicalAssignmentSessionBySourceIdentity,
+      ).mockResolvedValueOnce({
+        id: '44444444-4444-4444-8444-444444444444',
+        userId: 'test-user-id',
+        studentId,
+        lessonId: null,
+        recordingId: '22222222-2222-4222-8222-222222222222',
+        transcriptId: '33333333-3333-4333-8333-333333333333',
+        promptPackageId: null,
+        draftId: null,
+        revision: 3,
+        confirmedStep: 'source',
+        confirmed: { source: null, context: null, create: null },
+        creationRequestId: '55555555-5555-4555-8555-555555555555',
+        publishTarget: null,
+        selectedTtsProvider: null,
+        selectedTtsStrategy: null,
+        selectedTtsModel: null,
+        selectedPreset: null,
+        selectedGenerationProvider: null,
+        selectedGenerationModel: null,
+        teacherNotes: null,
+        selectedProfileId: null,
+        selectedProfileRevisionId: null,
+        selectedProfileRevisionHash: null,
+        shareJobId: null,
+        createdAt: new Date('2026-09-23T00:00:00.000Z'),
+        updatedAt: new Date('2026-09-23T00:00:00.000Z'),
+      });
+      const complete = vi
+        .spyOn(
+          recordingUploadOperationRepositoryModule,
+          'completeRecordingUploadOperationWithCanonicalAssignment',
+        )
+        .mockResolvedValueOnce(true);
+      const cacheLookup = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256ForWorkspace');
+      cacheLookup.mockClear();
+      const payloadBoundary = '----canonical-owner-boundary';
+      const payload = Buffer.concat([
+        Buffer.from(
+          `--${payloadBoundary}\r\n` +
+            'Content-Disposition: form-data; name="file"; filename="lesson.mp3"\r\n' +
+            'Content-Type: audio/mpeg\r\n\r\n',
+        ),
+        Buffer.from('same-canonical-audio'),
+        Buffer.from(`\r\n--${payloadBoundary}--\r\n`),
+      ]);
+
+      const response = await injectRecordingUpload({
+        method: 'POST',
+        url: `/recordings/upload?studentId=${studentId}`,
+        headers: { 'content-type': `multipart/form-data; boundary=${payloadBoundary}` },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        outcome: 'existing_assignment_resumed',
+        session: { id: '44444444-4444-4444-8444-444444444444' },
+      });
+      expect(complete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assignmentSessionId: '44444444-4444-4444-8444-444444444444',
+        }),
+      );
+      expect(cacheLookup).not.toHaveBeenCalled();
+    });
 
     vi.spyOn(recordingRepositoryModule, 'insertCachedRecordingLineage').mockImplementation(
       async ({

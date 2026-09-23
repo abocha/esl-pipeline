@@ -85,6 +85,31 @@ describe('application/generate-draft', () => {
     vi.clearAllMocks();
   });
 
+  it('rechecks assignment ownership when an earlier prompt package is used for fresh generation', async () => {
+    let canonical = false;
+    const execute = vi.fn().mockResolvedValue({ text: '# Generated draft' });
+    const dependencies = {
+      config: createConfig(),
+      promptPackages: {
+        getById: vi.fn().mockResolvedValue({ id: 'old-assignment-package', text: 'PROMPT' }),
+        isSourceCanonical: vi.fn().mockImplementation(async () => canonical),
+      },
+      executors: { openai: execute },
+      now: () => new Date('2026-02-18T00:00:00.000Z'),
+      sleep: async () => {},
+    };
+    await expect(
+      generateDraft({ promptPackageId: 'old-assignment-package' }, dependencies),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL' });
+    expect(execute).not.toHaveBeenCalled();
+
+    canonical = true;
+    await expect(
+      generateDraft({ promptPackageId: 'old-assignment-package' }, dependencies),
+    ).resolves.toMatchObject({ text: '# Generated draft' });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it('returns generated text from first provider candidate', async () => {
     const config = createConfig();
     const openAi = vi.fn().mockResolvedValue({
@@ -100,6 +125,7 @@ describe('application/generate-draft', () => {
       {
         config,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: vi.fn().mockResolvedValue({ id: 'prompt-1', text: 'PROMPT' }),
         },
         executors: {
@@ -145,6 +171,7 @@ describe('application/generate-draft', () => {
       {
         config,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: vi.fn().mockResolvedValue({ id: 'prompt-2', text: 'PROMPT' }),
         },
         executors: {
@@ -185,6 +212,7 @@ describe('application/generate-draft', () => {
       {
         config,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: vi.fn().mockResolvedValue({ id: 'prompt-3', text: 'PROMPT' }),
         },
         executors: {
@@ -225,6 +253,7 @@ describe('application/generate-draft', () => {
         {
           config,
           promptPackages: {
+            isSourceCanonical: async () => true,
             getById: vi.fn().mockResolvedValue({ id: 'prompt-4', text: 'PROMPT' }),
           },
           executors: {
@@ -258,6 +287,7 @@ describe('application/generate-draft', () => {
       {
         config,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: vi.fn().mockResolvedValue({ id: 'prompt-5', text: 'PROMPT' }),
         },
         executors: {
@@ -287,6 +317,7 @@ describe('application/generate-draft', () => {
       {
         config,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: vi.fn().mockResolvedValue(null),
         },
       },
@@ -310,6 +341,7 @@ describe('application/generate-draft', () => {
         {
           config,
           promptPackages: {
+            isSourceCanonical: async () => true,
             getById: vi.fn().mockResolvedValue({ id: 'prompt-7', text: 'PROMPT' }),
           },
           executors: {
@@ -361,6 +393,7 @@ describe('application/generate-draft', () => {
         {
           config,
           promptPackages: {
+            isSourceCanonical: async () => true,
             getById: vi.fn().mockResolvedValue({ id: 'prompt-8', text: 'PROMPT' }),
           },
           executors: {
@@ -414,6 +447,7 @@ describe('application/generate-draft', () => {
       {
         config,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: vi.fn().mockResolvedValue({ id: 'prompt-override', text: 'PROMPT' }),
         },
         executors: {
@@ -448,6 +482,7 @@ describe('application/generate-draft', () => {
         {
           config,
           promptPackages: {
+            isSourceCanonical: async () => true,
             getById: vi.fn().mockResolvedValue({ id: 'prompt-6', text: 'PROMPT' }),
           },
           executors: {
@@ -481,6 +516,7 @@ describe('application/generate-draft', () => {
       {
         config,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: vi.fn().mockResolvedValue({
             id: 'prompt-repair',
             text: 'LEGACY PREVIEW',
@@ -528,6 +564,7 @@ describe('application/generate-draft', () => {
         {
           config,
           promptPackages: {
+            isSourceCanonical: async () => true,
             getById: vi.fn().mockResolvedValue({
               id: 'prompt-repair-fails',
               text: 'LEGACY PREVIEW',

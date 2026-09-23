@@ -23,6 +23,7 @@ interface LessonMemoryRow {
   student_id: string;
   transcript_id: string;
   recording_id: string;
+  assignment_session_id?: string | null;
   schema_version: string;
   generated_at: Date;
   provider: string;
@@ -59,6 +60,7 @@ export interface InsertLessonMemoryParams {
   studentId: string;
   transcriptId: string;
   recordingId: string;
+  assignmentSessionId?: string | null;
   schemaVersion: string;
   generatedAt?: Date;
   provider: string;
@@ -88,6 +90,34 @@ export interface ListLessonMemoryEntriesOptions {
   limit: number;
   offset: number;
   order?: 'asc' | 'desc';
+  canonicalOnly?: boolean;
+}
+
+export function buildCanonicalLessonMemoryAuthoritySqlPredicate(entryAlias: string): string {
+  if (!/^[a-z_][a-z0-9_]*$/.test(entryAlias)) {
+    throw new Error('Invalid lesson-memory SQL alias');
+  }
+  return `${entryAlias}.assignment_session_id IS NOT NULL AND EXISTS (
+    SELECT 1
+    FROM assignment_source_bindings AS source_binding
+    JOIN assignment_sessions AS source_session
+      ON source_session.id = source_binding.assignment_session_id
+    JOIN recordings AS source_recording ON source_recording.id = ${entryAlias}.recording_id
+    WHERE source_binding.assignment_session_id = ${entryAlias}.assignment_session_id
+      AND source_binding.binding_role = 'confirmed'
+      AND source_binding.recording_id = ${entryAlias}.recording_id
+      AND source_binding.transcript_id = ${entryAlias}.transcript_id
+      AND source_binding.source_identity_kind = source_recording.source_identity_kind
+      AND source_binding.source_fingerprint_scheme = source_recording.source_fingerprint_scheme
+      AND source_binding.source_fingerprint = source_recording.source_fingerprint
+      AND source_session.confirmed_snapshot #>> '{source,sourceIdentityKind}' = source_binding.source_identity_kind
+      AND source_session.confirmed_snapshot #>> '{source,sourceFingerprintScheme}' = source_binding.source_fingerprint_scheme
+      AND source_session.confirmed_snapshot #>> '{source,sourceFingerprint}' = source_binding.source_fingerprint
+      AND source_session.confirmed_snapshot #>> '{source,recordingId}' = ${entryAlias}.recording_id::text
+      AND source_session.confirmed_snapshot #>> '{source,transcriptId}' = ${entryAlias}.transcript_id::text
+      AND source_session.confirmed_snapshot #>> '{source,transcriptStorageUri}' = ${entryAlias}.source_storage_uri
+      AND source_session.confirmed_snapshot #>> '{source,transcriptHash}' = ${entryAlias}.source_content_hash
+  )`;
 }
 
 export interface ListRecentReadyLessonMemoryOptions {
@@ -230,6 +260,7 @@ export async function insertCanonicalReadyLessonMemoryEntry(
           student_id,
           transcript_id,
           recording_id,
+          assignment_session_id,
           schema_version,
           generated_at,
           provider,
@@ -250,8 +281,8 @@ export async function insertCanonicalReadyLessonMemoryEntry(
           follow_up_recommendations
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, 'ready', 'lesson_transcript', $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, 'ready', 'lesson_transcript', $10, $11,
+          $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
         )
         RETURNING
           id,
@@ -286,6 +317,7 @@ export async function insertCanonicalReadyLessonMemoryEntry(
           params.studentId,
           params.transcriptId,
           params.recordingId,
+          params.assignmentSessionId ?? null,
           params.schemaVersion,
           generatedAt,
           params.provider,
@@ -344,6 +376,44 @@ export async function insertCanonicalReadyLessonMemoryEntryWithinTransaction(
   return insertCanonicalReadyLessonMemoryEntry(params, { client });
 }
 
+async function assertCanonicalAssignmentMemoryAuthority(
+  client: PoolClient,
+  params: EnsurePendingLessonMemoryEntryParams & { assignmentSessionId: string },
+): Promise<void> {
+  const authority = await client.query(
+    `SELECT 1
+     FROM assignment_source_bindings b
+     JOIN assignment_sessions s ON s.id = b.assignment_session_id
+     JOIN recordings r ON r.id = b.recording_id
+     WHERE b.assignment_session_id = $1
+       AND b.student_id = $2
+       AND b.binding_role = 'confirmed'
+       AND b.recording_id = $3
+       AND b.transcript_id = $4
+       AND b.source_identity_kind = r.source_identity_kind
+       AND b.source_fingerprint_scheme = r.source_fingerprint_scheme
+       AND b.source_fingerprint = r.source_fingerprint
+       AND s.confirmed_snapshot #>> '{source,sourceIdentityKind}' = b.source_identity_kind
+       AND s.confirmed_snapshot #>> '{source,sourceFingerprintScheme}' = b.source_fingerprint_scheme
+       AND s.confirmed_snapshot #>> '{source,sourceFingerprint}' = b.source_fingerprint
+       AND s.confirmed_snapshot #>> '{source,recordingId}' = $3::uuid::text
+       AND s.confirmed_snapshot #>> '{source,transcriptId}' = $4::uuid::text
+       AND s.confirmed_snapshot #>> '{source,transcriptStorageUri}' = $5
+       AND s.confirmed_snapshot #>> '{source,transcriptHash}' = $6`,
+    [
+      params.assignmentSessionId,
+      params.studentId,
+      params.recordingId,
+      params.transcriptId,
+      params.sourceStorageUri,
+      params.sourceContentHash,
+    ],
+  );
+  if (!authority.rows[0]) {
+    throw new Error('Lesson-memory request is not authorized by the canonical assignment.');
+  }
+}
+
 export async function ensurePendingLessonMemoryEntry(
   params: EnsurePendingLessonMemoryEntryParams,
 ): Promise<EnsurePendingLessonMemoryEntryResult> {
@@ -368,6 +438,7 @@ export async function ensurePendingLessonMemoryEntry(
           student_id,
           transcript_id,
           recording_id,
+          assignment_session_id,
           schema_version,
           generated_at,
           provider,
@@ -401,6 +472,41 @@ export async function ensurePendingLessonMemoryEntry(
       );
       const existing = existingResult.rows[0];
       if (existing && (existing.status === 'ready' || existing.status === 'pending')) {
+        if (
+          params.assignmentSessionId &&
+          existing.assignment_session_id !== params.assignmentSessionId
+        ) {
+          await assertCanonicalAssignmentMemoryAuthority(client, {
+            ...params,
+            assignmentSessionId: params.assignmentSessionId,
+          });
+          const reassigned = await client.query<LessonMemoryRow>(
+            `UPDATE lesson_memory_entries
+             SET assignment_session_id = $2,
+                 generated_at = CASE WHEN status = 'pending' THEN $3 ELSE generated_at END,
+                 provider = CASE WHEN status = 'pending' THEN $4 ELSE provider END,
+                 model = CASE WHEN status = 'pending' THEN $5 ELSE model END,
+                 generation_notes = CASE WHEN status = 'pending' THEN $6::jsonb ELSE generation_notes END,
+                 updated_at = NOW()
+             WHERE id = $1
+             RETURNING *`,
+            [
+              existing.id,
+              params.assignmentSessionId,
+              generatedAt,
+              params.provider,
+              params.model,
+              JSON.stringify(params.generationNotes ?? null),
+            ],
+          );
+          const reassignedRow = reassigned.rows[0];
+          if (!reassignedRow) throw new Error('Failed to reassign canonical lesson-memory intent');
+          await client.query('COMMIT');
+          return {
+            outcome: existing.status === 'ready' ? 'ready_exists' : 'pending_exists',
+            entry: mapRowToLessonMemory(reassignedRow),
+          };
+        }
         await client.query('COMMIT');
         return {
           outcome: existing.status === 'ready' ? 'ready_exists' : 'pending_exists',
@@ -408,12 +514,13 @@ export async function ensurePendingLessonMemoryEntry(
         };
       }
 
-      if (existing?.status === 'failed') {
+      if (existing?.status === 'failed' || existing?.status === 'superseded') {
         const reset = await client.query<LessonMemoryRow>(
           `UPDATE lesson_memory_entries
            SET status = 'pending', generation_notes = $2::jsonb, generated_at = $3,
                provider = $4, model = $5, source_storage_uri = $6,
-               superseded_by_id = NULL, superseded_at = NULL, updated_at = NOW()
+               assignment_session_id = $7, superseded_by_id = NULL, superseded_at = NULL,
+               updated_at = NOW()
            WHERE id = $1
            RETURNING *`,
           [
@@ -423,6 +530,7 @@ export async function ensurePendingLessonMemoryEntry(
             params.provider,
             params.model,
             params.sourceStorageUri,
+            params.assignmentSessionId ?? null,
           ],
         );
         await client.query('COMMIT');
@@ -438,6 +546,7 @@ export async function ensurePendingLessonMemoryEntry(
           student_id,
           transcript_id,
           recording_id,
+          assignment_session_id,
           schema_version,
           generated_at,
           provider,
@@ -460,14 +569,15 @@ export async function ensurePendingLessonMemoryEntry(
           follow_up_recommendations
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'lesson_transcript', $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', 'lesson_transcript', $10, $11,
+          $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
         )
         RETURNING
           id,
           student_id,
           transcript_id,
           recording_id,
+          assignment_session_id,
           schema_version,
           generated_at,
           provider,
@@ -498,6 +608,7 @@ export async function ensurePendingLessonMemoryEntry(
           params.studentId,
           params.transcriptId,
           params.recordingId,
+          params.assignmentSessionId ?? null,
           params.schemaVersion,
           generatedAt,
           params.provider,
@@ -568,6 +679,7 @@ export async function getLessonMemoryEntryById(id: string): Promise<LessonMemory
         student_id,
         transcript_id,
         recording_id,
+        assignment_session_id,
         schema_version,
         generated_at,
         provider,
@@ -628,6 +740,7 @@ export async function publishConfirmedLessonMemoryEntry(
         AND source_content_hash = $3
         AND source_storage_uri = $20
         AND status = 'pending'
+        AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
       RETURNING *
       `,
       [
@@ -669,6 +782,7 @@ export async function getLatestReadyLessonMemoryByTranscriptId(
         lesson_memory_entries.student_id,
         lesson_memory_entries.transcript_id,
         lesson_memory_entries.recording_id,
+        lesson_memory_entries.assignment_session_id,
         lesson_memory_entries.schema_version,
         lesson_memory_entries.generated_at,
         lesson_memory_entries.provider,
@@ -697,6 +811,7 @@ export async function getLatestReadyLessonMemoryByTranscriptId(
       WHERE lesson_memory_entries.transcript_id = $1
         AND lesson_memory_entries.status = 'ready'
         AND lesson_memory_entries.source_content_hash IS NOT NULL
+        AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
       ORDER BY lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
       LIMIT 1
       `,
@@ -760,7 +875,16 @@ export async function getLatestPendingLessonMemoryByTranscriptId(
 export async function listLessonMemoryEntries(
   options: ListLessonMemoryEntriesOptions,
 ): Promise<LessonMemoryRecord[]> {
-  const { studentId, transcriptId, recordingId, statuses, limit, offset, order = 'desc' } = options;
+  const {
+    studentId,
+    transcriptId,
+    recordingId,
+    statuses,
+    limit,
+    offset,
+    order = 'desc',
+    canonicalOnly = false,
+  } = options;
   const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
 
@@ -786,6 +910,9 @@ export async function listLessonMemoryEntries(
       clauses.push('source_content_hash IS NOT NULL');
     }
   }
+  if (canonicalOnly) {
+    clauses.push(buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries'));
+  }
 
   values.push(limit);
   const limitParam = values.length;
@@ -803,6 +930,7 @@ export async function listLessonMemoryEntries(
         lesson_memory_entries.student_id,
         lesson_memory_entries.transcript_id,
         lesson_memory_entries.recording_id,
+        lesson_memory_entries.assignment_session_id,
         lesson_memory_entries.schema_version,
         lesson_memory_entries.generated_at,
         lesson_memory_entries.provider,
@@ -867,6 +995,7 @@ export async function listRecentReadyLessonMemoryByStudentId(
         lesson_memory_entries.student_id,
         lesson_memory_entries.transcript_id,
         lesson_memory_entries.recording_id,
+        lesson_memory_entries.assignment_session_id,
         lesson_memory_entries.schema_version,
         lesson_memory_entries.generated_at,
         lesson_memory_entries.provider,
@@ -894,6 +1023,7 @@ export async function listRecentReadyLessonMemoryByStudentId(
       FROM lesson_memory_entries
       WHERE ${clauses.join(' AND ')}
         AND lesson_memory_entries.source_content_hash IS NOT NULL
+        AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
       ORDER BY lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
       LIMIT $${limitParam}
       `,
@@ -1100,6 +1230,7 @@ function mapRowToLessonMemory(row: LessonMemoryRow): LessonMemoryRecord {
     studentId: row.student_id,
     transcriptId: row.transcript_id,
     recordingId: row.recording_id,
+    assignmentSessionId: row.assignment_session_id ?? null,
     schemaVersion: row.schema_version,
     generatedAt: row.generated_at,
     provider: row.provider,

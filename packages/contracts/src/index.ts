@@ -234,6 +234,9 @@ export interface AssignmentConfirmedSnapshot {
     transcriptWorkingVersion: number;
     transcriptStorageUri: string;
     transcriptHash: string;
+    sourceIdentityKind?: 'audio' | 'manual_transcript';
+    sourceFingerprintScheme?: string;
+    sourceFingerprint?: string;
   } | null;
   context: {
     teacherNotes: string | null;
@@ -311,6 +314,16 @@ export interface UpdateAssignmentSessionRecoveryRequest {
     selectedProfileRevisionHash: string | null;
   }>;
 }
+
+export interface AttachAssignmentSourceRequest {
+  expectedRevision: number;
+  recordingId: string;
+  transcriptId: string;
+}
+
+export type AttachAssignmentSourceResponse =
+  | { outcome: 'source_attached'; session: AssignmentSessionDto }
+  | { outcome: 'existing_assignment_resumed'; session: AssignmentSessionDto };
 
 export type ConfirmAssignmentSessionStepRequest =
   | {

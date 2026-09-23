@@ -4,6 +4,12 @@ import type { AudioInputTopology, RecordingSourceId } from '@esl-pipeline/contra
 
 export type RecordingSource = RecordingSourceId;
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
+export type SourceIdentityKind = 'audio' | 'manual_transcript';
+export interface SourceIdentity {
+  kind: SourceIdentityKind;
+  scheme: string;
+  fingerprint: string;
+}
 export type AudioLifecycle =
   | 'not_retained'
   | 'retained'
@@ -26,6 +32,7 @@ export interface RecordingRecord {
   audioTopology?: AudioInputTopology | null;
   /** Preparation semantics used to create this recording's canonical media candidate. */
   mediaPreparationVersion?: string | null;
+  sourceIdentity?: SourceIdentity | null;
   audioLifecycle: AudioLifecycle;
   audioDeletionRequestedAt?: Date | null;
   audioDeletedAt?: Date | null;
@@ -55,3 +62,4 @@ export const AudioLifecycleSchema = z.enum([
   'deleted',
   'delete_failed',
 ]);
+export const SourceIdentityKindSchema = z.enum(['audio', 'manual_transcript']);

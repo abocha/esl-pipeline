@@ -20,6 +20,7 @@ import {
   AssignmentSourceOwnershipApiError,
   AssignmentSpeakerRoleMappingRequiredApiError,
   activateProfileRevision,
+  attachAssignmentSource,
   confirmAssignmentSessionStep,
   confirmStudentAssignmentSession,
   fetchAssignmentSession,
@@ -830,6 +831,26 @@ export const MinimalAssignment: React.FC = () => {
   activeAssignmentSessionIdRef.current = activeAssignmentSession?.id ?? null;
   activeAssignmentSessionRef.current = activeAssignmentSession;
 
+  useEffect(() => {
+    const canonical = source.canonicalAssignmentResume;
+    if (!canonical) return;
+    source.consumeCanonicalAssignmentResume();
+    void (async () => {
+      const opened = await openAssignmentSession(canonical.id);
+      if (!opened.ok) {
+        setAssignmentRecoveryError('The canonical assignment could not be reopened.');
+        return;
+      }
+      setActiveStep(opened.destination);
+      setAssignmentRecoveryError(null);
+      setAssignmentRecoveryNotice('This lesson already has an assignment. We reopened it.');
+    })();
+  }, [
+    openAssignmentSession,
+    source.canonicalAssignmentResume,
+    source.consumeCanonicalAssignmentResume,
+  ]);
+
   const assignmentSessionWritesAllowed = useCallback(() => {
     return (
       !assignmentSessionPersistenceSuppressedRef.current || assignmentSessionUserEditedRef.current
@@ -1177,25 +1198,6 @@ export const MinimalAssignment: React.FC = () => {
   }, [source.selectedStudentId]);
 
   useEffect(() => {
-    const recordingId = source.recording?.recordingId ?? '';
-    if (!recordingId || assignmentSessionMilestoneRef.current.recordingId === recordingId) return;
-    assignmentSessionMilestoneRef.current.recordingId = recordingId;
-    if (!assignmentSessionWritesAllowed()) return;
-    void saveAssignmentSessionProgress({
-      recordingId,
-      ...(linkedLessonId ? { lessonId: linkedLessonId } : {}),
-    });
-  }, [
-    saveAssignmentSessionProgress,
-    source.recording?.recordingId,
-    source.recording?.studentId,
-    source.selectedStudentId,
-    linkedLessonId,
-    mixedSpeakerRoles,
-    assignmentSessionWritesAllowed,
-  ]);
-
-  useEffect(() => {
     const session = activeAssignmentSessionRef.current;
     if (!session || session.confirmedStep === 'share') return;
     const repairingPartialProfileLineage = Boolean(
@@ -1251,23 +1253,82 @@ export const MinimalAssignment: React.FC = () => {
   ]);
 
   useEffect(() => {
+    const recordingId = source.recording?.recordingId ?? '';
     const transcriptId = source.transcript?.transcriptId ?? '';
     if (
       source.transcriptStatus !== 'ready' ||
+      !recordingId ||
       !transcriptId ||
       assignmentSessionMilestoneRef.current.transcriptId === transcriptId
     ) {
       return;
     }
     assignmentSessionMilestoneRef.current.transcriptId = transcriptId;
+    assignmentSessionMilestoneRef.current.recordingId = recordingId;
     if (!assignmentSessionWritesAllowed()) return;
-    void saveAssignmentSessionProgress({
-      ...(source.recording?.recordingId ? { recordingId: source.recording.recordingId } : {}),
-      transcriptId,
-    });
+    const session = activeAssignmentSessionRef.current;
+    if (!session || session.confirmedStep === 'share') return;
+    const hydrationAtStart = hydrationIdRef.current;
+    setAssignmentSaveState('saving');
+    void (async () => {
+      try {
+        let current = activeAssignmentSessionRef.current;
+        if (!current) return;
+        let result;
+        try {
+          result = await attachAssignmentSource(current.id, {
+            expectedRevision: current.revision,
+            recordingId,
+            transcriptId,
+          });
+        } catch (error) {
+          if (!(error instanceof AssignmentSessionConflictApiError)) throw error;
+          current = error.latestSession;
+          activeAssignmentSessionRef.current = current;
+          setActiveAssignmentSession(current);
+          result = await attachAssignmentSource(current.id, {
+            expectedRevision: current.revision,
+            recordingId,
+            transcriptId,
+          });
+        }
+        if (hydrationIdRef.current !== hydrationAtStart) return;
+        if (result.outcome === 'existing_assignment_resumed') {
+          const opened = await openAssignmentSession(result.session.id);
+          if (!opened.ok) throw new Error('The canonical assignment could not be reopened.');
+          setActiveStep(opened.destination);
+          setAssignmentRecoveryNotice('This lesson already has an assignment. We reopened it.');
+        } else if (
+          result.session.recordingId !== recordingId ||
+          result.session.transcriptId !== transcriptId
+        ) {
+          const opened = await openAssignmentSession(result.session.id);
+          if (!opened.ok) throw new Error('The attached lesson source could not be reopened.');
+          setActiveStep(opened.destination);
+          setAssignmentRecoveryNotice(null);
+        } else {
+          activeAssignmentSessionRef.current = result.session;
+          setActiveAssignmentSession(result.session);
+          setAssignmentRecoveryNotice(null);
+        }
+        setAssignmentRecoveryError(null);
+        setAssignmentSaveState('saved');
+      } catch (error) {
+        if (hydrationIdRef.current !== hydrationAtStart) return;
+        console.warn('Unable to attach assignment source', error);
+        setAssignmentSaveState('error');
+        setAssignmentRecoveryNotice(null);
+        setAssignmentRecoveryError(
+          error instanceof Error
+            ? `Could not attach this lesson source: ${error.message}`
+            : 'Could not attach this lesson source. Try again.',
+        );
+      }
+    })();
   }, [
+    openAssignmentSession,
     assignmentSessionWritesAllowed,
-    saveAssignmentSessionProgress,
+    setActiveAssignmentSession,
     source.recording?.recordingId,
     source.transcript?.transcriptId,
     source.transcriptStatus,

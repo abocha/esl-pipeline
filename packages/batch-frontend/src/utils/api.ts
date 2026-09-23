@@ -38,6 +38,8 @@ import type {
   ArtifactWorkingContentDto as ContractArtifactWorkingContentDto,
   AssignmentSessionDto as ContractAssignmentSessionDto,
   AssignmentSessionListResponse as ContractAssignmentSessionListResponse,
+  AttachAssignmentSourceRequest as ContractAttachAssignmentSourceRequest,
+  AttachAssignmentSourceResponse as ContractAttachAssignmentSourceResponse,
   ConfirmAssignmentSessionShareRequest as ContractConfirmAssignmentSessionShareRequest,
   ConfirmAssignmentSessionShareResponse as ContractConfirmAssignmentSessionShareResponse,
   ConfirmAssignmentSessionStepRequest as ContractConfirmAssignmentSessionStepRequest,
@@ -115,6 +117,8 @@ export type StudentSummaryResponse = ContractStudentSummaryResponse;
 export type JobConfigOverrides = ContractJobConfigOverrides;
 export type AssignmentSession = ContractAssignmentSessionDto;
 export type AssignmentSessionListResponse = ContractAssignmentSessionListResponse;
+export type AttachAssignmentSourceRequest = ContractAttachAssignmentSourceRequest;
+export type AttachAssignmentSourceResponse = ContractAttachAssignmentSourceResponse;
 export type ConfirmStudentAssignmentSessionRequest = ContractConfirmStudentAssignmentSessionRequest;
 export type UpdateAssignmentSessionRecoveryRequest = ContractUpdateAssignmentSessionRecoveryRequest;
 export type ConfirmAssignmentSessionStepRequest = ContractConfirmAssignmentSessionStepRequest;
@@ -131,6 +135,9 @@ export type ElevenLabsTtsModelId = ContractElevenLabsTtsModelId;
 export type PronunciationChunkTtsProviderId = ContractPronunciationChunkTtsProviderId;
 export type MarkdownValidationResponse = ContractMarkdownValidationResponse;
 export type GenerateDraftRequest = ContractGenerateDraftRequest;
+export type RecordingSourceAcquisitionResult =
+  | RecordingListItem
+  | { outcome: 'existing_assignment_resumed'; session: AssignmentSession };
 
 export class AssignmentSessionConflictApiError extends Error {
   constructor(public readonly latestSession: AssignmentSession) {
@@ -1986,7 +1993,7 @@ export async function uploadRecording(
     onProgress?: UploadProgressCallback;
     signal?: AbortSignal;
   },
-): Promise<RecordingListItem> {
+): Promise<RecordingSourceAcquisitionResult> {
   if (file.size > DEFAULT_RECORDING_UPLOAD_MAX_BYTES) {
     throw new RecordingUploadPreDispatchError(
       'Choose a source file at or below the configured 2 GiB operational upload limit.',
@@ -2042,7 +2049,7 @@ export async function uploadRecording(
 }
 
 export type RecordingUploadOperationStatus =
-  | RecordingListItem
+  | RecordingSourceAcquisitionResult
   | { operationId: string; recordingId: string; status: 'processing' | 'reclaimable' };
 
 /** Resolve durable ownership before a browser retransmits an uncertain upload. */
@@ -2066,9 +2073,9 @@ export async function getRecordingUploadOperation(
 
 export async function createManualTranscriptSource(
   input: CreateManualTranscriptSourceInput,
-): Promise<RecordingListItem> {
+): Promise<RecordingSourceAcquisitionResult> {
   try {
-    const response = await apiClient.post<RecordingListItem>(
+    const response = await apiClient.post<RecordingSourceAcquisitionResult>(
       buildApiProxyPath('/recordings/transcript-source'),
       input,
     );
@@ -3527,6 +3534,35 @@ export async function updateAssignmentSessionRecovery(
     if (conflict) throw new AssignmentSessionConflictApiError(conflict);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to update assignment progress.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function attachAssignmentSource(
+  sessionId: string,
+  request: AttachAssignmentSourceRequest,
+): Promise<AttachAssignmentSourceResponse> {
+  try {
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(
+        buildApiProxyPath(
+          `/assignment-sessions/${encodeURIComponent(sessionId)}/source-attachment`,
+        ),
+        request,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    const conflict = getAssignmentSessionConflict(axiosError);
+    if (conflict) throw new AssignmentSessionConflictApiError(conflict);
+    const code = (axiosError?.response?.data as { code?: unknown } | undefined)?.code;
+    if (code === 'source_identity_required') {
+      throw new Error('Reacquire this historical lesson source before continuing.');
+    }
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to attach the lesson source.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

@@ -113,9 +113,12 @@ Canonical behavior and current status live in:
   reference without permitting session mutations. Pre-cutover jobs have no retained session link
   and remain limited to their historical output and post-share actions.
 - Opening an assignment session always re-fetches backend authority rather than hydrating from the
-  resume-list copy. If recovery discovers that the lesson belongs to another active assignment,
-  the UI reopens that canonical assignment automatically, rewrites the resume target, and explains
-  the handoff beside the primary action. Other recovery failures are shown in the same place.
+  resume-list copy. A ready upload or pasted transcript is not installed through generic recovery:
+  the frontend calls the explicit source-attachment command. If attachment reports existing source
+  ownership, including a completed assignment, the UI discards the losing session transition,
+  reopens backend authority, and explains `This lesson already has an assignment. We reopened it.`
+  If the backend materializes fresh released-source lineage, the UI rehydrates that returned session
+  rather than continuing with stale candidate IDs.
 - Prompt and draft recovery is lineage-safe: a generated draft is created against the exact prompt
   returned by that generation operation, prompt/draft IDs recover as a compatible pair, and Create
   navigation plus draft editing stays locked while prompt or draft generation is in flight.

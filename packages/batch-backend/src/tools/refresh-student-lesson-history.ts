@@ -10,6 +10,7 @@ import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { withPgClient } from '../infrastructure/db.js';
 
 interface ReplayTargetRow {
+  assignment_session_id: string;
   transcript_id: string;
   recording_id: string;
   student_id: string;
@@ -149,6 +150,8 @@ async function listReplayTargets(args: {
           SELECT 1
           FROM lesson_memory_entries lme
           WHERE lme.transcript_id = t.id
+            AND lme.assignment_session_id = source_binding.assignment_session_id
+            AND lme.source_content_hash = canonical_session.confirmed_snapshot #>> '{source,transcriptHash}'
             AND lme.status = 'ready'
         )`);
       } else if (args.selection === 'failed') {
@@ -157,12 +160,16 @@ async function listReplayTargets(args: {
             SELECT 1
             FROM lesson_memory_entries lme
             WHERE lme.transcript_id = t.id
+              AND lme.assignment_session_id = source_binding.assignment_session_id
+              AND lme.source_content_hash = canonical_session.confirmed_snapshot #>> '{source,transcriptHash}'
               AND lme.status = 'ready'
           )`,
           `EXISTS (
             SELECT 1
             FROM lesson_memory_entries lme
             WHERE lme.transcript_id = t.id
+              AND lme.assignment_session_id = source_binding.assignment_session_id
+              AND lme.source_content_hash = canonical_session.confirmed_snapshot #>> '{source,transcriptHash}'
               AND lme.status = 'failed'
           )`,
         );
@@ -175,6 +182,7 @@ async function listReplayTargets(args: {
     const result = await client.query<ReplayTargetRow>(
       `
       SELECT
+        canonical_session.id AS assignment_session_id,
         t.id AS transcript_id,
         t.recording_id,
         r.student_id,
@@ -185,30 +193,46 @@ async function listReplayTargets(args: {
           SELECT 1
           FROM lesson_memory_entries lme
           WHERE lme.transcript_id = t.id
+            AND lme.assignment_session_id = source_binding.assignment_session_id
+            AND lme.source_content_hash = canonical_session.confirmed_snapshot #>> '{source,transcriptHash}'
             AND lme.status = 'ready'
         ) AS has_ready,
         EXISTS (
           SELECT 1
           FROM lesson_memory_entries lme
           WHERE lme.transcript_id = t.id
+            AND lme.assignment_session_id = source_binding.assignment_session_id
+            AND lme.source_content_hash = canonical_session.confirmed_snapshot #>> '{source,transcriptHash}'
             AND lme.status = 'pending'
         ) AS has_pending,
         EXISTS (
           SELECT 1
           FROM lesson_memory_entries lme
           WHERE lme.transcript_id = t.id
+            AND lme.assignment_session_id = source_binding.assignment_session_id
+            AND lme.source_content_hash = canonical_session.confirmed_snapshot #>> '{source,transcriptHash}'
             AND lme.status = 'failed'
         ) AS has_failed
       FROM transcripts t
       INNER JOIN recordings r ON r.id = t.recording_id
+      INNER JOIN assignment_source_bindings source_binding
+        ON source_binding.recording_id = r.id
+       AND source_binding.transcript_id = t.id
+       AND source_binding.binding_role = 'confirmed'
+       AND source_binding.source_identity_kind = r.source_identity_kind
+       AND source_binding.source_fingerprint_scheme = r.source_fingerprint_scheme
+       AND source_binding.source_fingerprint = r.source_fingerprint
+      INNER JOIN assignment_sessions canonical_session
+        ON canonical_session.id = source_binding.assignment_session_id
+       AND canonical_session.confirmed_snapshot #>> '{source,sourceIdentityKind}' = source_binding.source_identity_kind
+       AND canonical_session.confirmed_snapshot #>> '{source,sourceFingerprintScheme}' = source_binding.source_fingerprint_scheme
+       AND canonical_session.confirmed_snapshot #>> '{source,sourceFingerprint}' = source_binding.source_fingerprint
+       AND canonical_session.confirmed_snapshot #>> '{source,recordingId}' = r.id::text
+       AND canonical_session.confirmed_snapshot #>> '{source,transcriptId}' = t.id::text
       INNER JOIN LATERAL (
         SELECT
-          assignment_sessions.confirmed_snapshot->'source'->>'transcriptStorageUri' AS source_storage_uri,
-          assignment_sessions.confirmed_snapshot->'source'->>'transcriptHash' AS source_content_hash
-        FROM assignment_sessions
-        WHERE assignment_sessions.confirmed_snapshot->'source'->>'transcriptId' = t.id::text
-        ORDER BY assignment_sessions.updated_at DESC, assignment_sessions.id DESC
-        LIMIT 1
+          canonical_session.confirmed_snapshot->'source'->>'transcriptStorageUri' AS source_storage_uri,
+          canonical_session.confirmed_snapshot->'source'->>'transcriptHash' AS source_content_hash
       ) confirmed_source ON TRUE
       WHERE ${whereClauses.join(' AND ')}
       ORDER BY t.created_at DESC, t.id DESC
@@ -265,6 +289,7 @@ async function run(): Promise<void> {
         [
           '[lesson-memory-refresh][dry-run]',
           `transcript=${target.transcript_id}`,
+          `assignment=${target.assignment_session_id}`,
           `recording=${target.recording_id}`,
           `student=${target.student_id}`,
           `hasReady=${target.has_ready}`,
@@ -281,6 +306,7 @@ async function run(): Promise<void> {
         studentId: target.student_id,
         transcriptId: target.transcript_id,
         recordingId: target.recording_id,
+        assignmentSessionId: target.assignment_session_id,
         sourceStorageUri: target.source_storage_uri,
         sourceContentHash: target.source_content_hash,
         trigger: 'replay',

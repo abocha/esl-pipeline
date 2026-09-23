@@ -2,9 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import type { DraftRecord } from '../domain/draft-model.js';
 import { insertDraft } from '../domain/draft-repository.js';
-import { getPromptPackageById } from '../domain/prompt-package-repository.js';
+import {
+  getPromptPackageById,
+  isPromptPackageSourceCanonical,
+} from '../domain/prompt-package-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
+import { PromptPackageAssignmentError } from './create-prompt-package.js';
 
 export interface CreateDraftParams {
   promptPackageId: string;
@@ -30,6 +34,7 @@ export interface CreateDraftDependencies {
   storage: TranscriptionStorage;
   promptPackages: {
     getById: typeof getPromptPackageById;
+    isSourceCanonical: typeof isPromptPackageSourceCanonical;
   };
   drafts: {
     insert: typeof insertDraft;
@@ -45,6 +50,7 @@ export async function createDraft(
   const storage = overrides?.storage ?? createTranscriptionStorage();
   const promptPackages = overrides?.promptPackages ?? {
     getById: getPromptPackageById,
+    isSourceCanonical: isPromptPackageSourceCanonical,
   };
   const drafts = overrides?.drafts ?? {
     insert: insertDraft,
@@ -52,6 +58,12 @@ export async function createDraft(
 
   const promptPackage = await promptPackages.getById(params.promptPackageId);
   if (!promptPackage) return null;
+  if (!(await promptPackages.isSourceCanonical(promptPackage.id))) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+      'Assignment source is no longer canonical',
+    );
+  }
 
   const draftId = randomUUID();
   const stored = await storage.putDraft({

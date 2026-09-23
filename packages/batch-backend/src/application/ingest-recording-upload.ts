@@ -126,6 +126,13 @@ export async function ingestRecordingUpload(
       bytes: storageResult.bytes,
       audioTopology: topology,
       mediaPreparationVersion: options.mediaPreparationVersion ?? null,
+      sourceIdentity: storageResult.sha256
+        ? {
+            kind: 'audio',
+            scheme: 'prepared-media-sha256-v1',
+            fingerprint: storageResult.sha256,
+          }
+        : null,
       status: 'queued',
     },
     provider: route.provider,
