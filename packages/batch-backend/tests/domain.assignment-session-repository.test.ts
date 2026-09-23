@@ -205,8 +205,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const studentId = randomUUID();
     const requestId = randomUUID();
     await insertUserAndStudent(userId, studentId);
-    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } =
-      await import('../src/domain/assignment-session-repository.js');
+    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
 
     const created = await confirmStudentAssignmentSession({
       userId,
@@ -372,8 +373,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const recordingId = randomUUID();
     const transcriptId = randomUUID();
     await insertUserAndStudent(userId, studentId);
-    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } =
-      await import('../src/domain/assignment-session-repository.js');
+    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
     const session = await confirmStudentAssignmentSession({
       userId,
       requestId: randomUUID(),
@@ -446,8 +448,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const requestId = randomUUID();
     await insertUserAndStudent(userId, firstStudentId);
     await insertUserAndStudent(userId, secondStudentId);
-    const { confirmStudentAssignmentSession } =
-      await import('../src/domain/assignment-session-repository.js');
+    const { confirmStudentAssignmentSession } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
 
     await confirmStudentAssignmentSession({
       userId,
@@ -858,8 +861,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
         ],
       );
     });
-    const { publishAssignmentCorrectionJob } =
-      await import('../src/domain/assignment-session-repository.js');
+    const { publishAssignmentCorrectionJob } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
     const request = { requestId, draftId, draftWorkingVersion: 3, draftHash };
 
     const [first, second] = await Promise.all([
@@ -1050,8 +1054,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
         ],
       );
     });
-    const { getAssignmentSessionByIdForUser } =
-      await import('../src/domain/assignment-session-repository.js');
+    const { getAssignmentSessionByIdForUser } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
 
     await expect(getAssignmentSessionByIdForUser(sessionId, userId)).rejects.toMatchObject({
       name: 'ZodError',
@@ -1450,6 +1455,18 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
     const repository = await import('../src/domain/assignment-session-repository.js');
     const confirmed = await confirmMixedSource(repository, fixture);
+    const { insertPromptPackage, isPromptPackageSourceCanonical } = await import(
+      '../src/domain/prompt-package-repository.js'
+    );
+    const originalPackage = await insertPromptPackage({
+      recordingId: fixture.recordingId,
+      transcriptId: fixture.transcriptId,
+      assignmentSessionId: fixture.sessionId,
+      studentId: fixture.studentId,
+      templateVersion: 'test',
+      storageUri: 'local://prompt-packages/original.txt',
+    });
+    await expect(isPromptPackageSourceCanonical(originalPackage.id)).resolves.toBe(true);
     const target = await repository.confirmStudentAssignmentSession({
       userId: fixture.userId,
       requestId: randomUUID(),
@@ -1492,9 +1509,28 @@ describe('domain/assignment-session-repository persistence contract', () => {
     await expect(
       repository.isAssignmentConfirmedSourceCanonical(target.id, fixture.userId),
     ).resolves.toBe(true);
+    await expect(isPromptPackageSourceCanonical(originalPackage.id)).resolves.toBe(false);
+    const currentPackage = await insertPromptPackage({
+      recordingId: fixture.recordingId,
+      transcriptId: fixture.transcriptId,
+      assignmentSessionId: target.id,
+      studentId: fixture.studentId,
+      templateVersion: 'test',
+      storageUri: 'local://prompt-packages/current.txt',
+    });
+    await expect(isPromptPackageSourceCanonical(currentPackage.id)).resolves.toBe(true);
+    const standalonePackage = await insertPromptPackage({
+      recordingId: fixture.recordingId,
+      transcriptId: fixture.transcriptId,
+      studentId: fixture.studentId,
+      templateVersion: 'test',
+      storageUri: 'local://prompt-packages/standalone.txt',
+    });
+    await expect(isPromptPackageSourceCanonical(standalonePackage.id)).resolves.toBe(true);
 
-    const { publishConfirmedLessonMemoryEntry } =
-      await import('../src/domain/lesson-memory-repository.js');
+    const { publishConfirmedLessonMemoryEntry } = await import(
+      '../src/domain/lesson-memory-repository.js'
+    );
     const source = confirmed.session.confirmed.source!;
     await expect(
       publishConfirmedLessonMemoryEntry({

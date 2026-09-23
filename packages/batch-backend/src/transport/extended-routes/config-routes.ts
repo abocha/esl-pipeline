@@ -14,6 +14,7 @@ import {
   resolveMarkdownTitle,
 } from '@esl-pipeline/shared-infrastructure';
 
+import { PromptPackageAssignmentError } from '../../application/create-prompt-package.js';
 import { GenerateDraftProviderError, generateDraft } from '../../application/generate-draft.js';
 import { getJobOptions } from '../../application/get-job-options.js';
 import { getPromptOptions } from '../../application/get-prompt-options.js';
@@ -710,6 +711,14 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
               : {}),
             requestId: String(request.id),
             timestamp: new Date().toISOString(),
+          });
+        }
+
+        if (error instanceof PromptPackageAssignmentError) {
+          return reply.code(409).send({
+            error: 'conflict',
+            code: error.code,
+            message: error.message,
           });
         }
 

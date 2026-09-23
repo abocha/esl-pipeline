@@ -5,6 +5,7 @@ import multipart, { type MultipartFile } from '@fastify/multipart';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { toAssignmentSessionDto } from '../../application/assignment-sessions.js';
 import { createDraft } from '../../application/create-draft.js';
 import {
   createPromptPackage,
@@ -20,7 +21,6 @@ import {
   ingestManualTranscriptSource,
   ManualTranscriptSourceValidationError,
 } from '../../application/ingest-manual-transcript-source.js';
-import { toAssignmentSessionDto } from '../../application/assignment-sessions.js';
 import { ingestRecordingUpload } from '../../application/ingest-recording-upload.js';
 import { listRecordingsWithDefaults } from '../../application/list-recordings.js';
 import { materializeDraft } from '../../application/materialize-draft.js';
@@ -44,6 +44,10 @@ import {
 import { updateRecordingTranscript } from '../../application/update-recording-transcript.js';
 import { resolvePrimaryWorkspaceIdForUser } from '../../application/workspace-context.js';
 import {
+  getAssignmentSessionByIdForUser,
+  getCanonicalAssignmentSessionBySourceIdentity,
+} from '../../domain/assignment-session-repository.js';
+import {
   type RecordingRecord,
   RecordingSourceSchema,
   RecordingStatusSchema,
@@ -56,10 +60,6 @@ import {
   listRecordingsBySha256ForWorkspace,
   updateRecordingStatus,
 } from '../../domain/recording-repository.js';
-import {
-  getCanonicalAssignmentSessionBySourceIdentity,
-  getAssignmentSessionByIdForUser,
-} from '../../domain/assignment-session-repository.js';
 import {
   beginRecordingUploadOperation,
   completeRecordingUploadOperationWithCanonicalAssignment,
@@ -1313,6 +1313,14 @@ export function registerRecordingRoutes(
         if (isApplicationValidationError(error)) {
           return reply.code(400).send({
             error: 'validation_failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        if (error instanceof PromptPackageAssignmentError) {
+          return reply.code(409).send({
+            error: 'conflict',
             message: error.message,
             code: error.code,
           });

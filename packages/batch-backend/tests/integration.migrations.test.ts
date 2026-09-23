@@ -642,6 +642,30 @@ describe('integration/migrations', () => {
           ],
         );
 
+        const winnerPackageId = randomUUID();
+        const loserPackageId = randomUUID();
+        await pool.query(
+          `INSERT INTO prompt_packages
+             (id, recording_id, transcript_id, student_id, template_version, storage_uri)
+           VALUES ($1, $3, $5, $7, 'test', 'local://prompt/winner'),
+                  ($2, $4, $6, $7, 'test', 'local://prompt/loser')`,
+          [
+            winnerPackageId,
+            loserPackageId,
+            winnerRecordingId,
+            loserRecordingId,
+            winnerTranscriptId,
+            loserTranscriptId,
+            studentId,
+          ],
+        );
+        await pool.query(
+          `UPDATE assignment_sessions
+           SET prompt_package_id = CASE id WHEN $1 THEN $3::uuid ELSE $4::uuid END
+           WHERE id IN ($1, $2)`,
+          [winnerSessionId, loserSessionId, winnerPackageId, loserPackageId],
+        );
+
         await pool.query(
           await fs.readFile(
             path.join(migrationsPath, '0054_canonical_assignment_source_ownership.sql'),
@@ -666,6 +690,22 @@ describe('integration/migrations', () => {
             reason: 'earliest_creation_tiebreak',
           },
         ]);
+        await pool.query(
+          await fs.readFile(
+            path.join(migrationsPath, '0055_prompt_package_assignment_provenance.sql'),
+            'utf8',
+          ),
+        );
+        const provenance = await pool.query(
+          `SELECT id, assignment_session_id FROM prompt_packages WHERE id IN ($1, $2) ORDER BY id`,
+          [winnerPackageId, loserPackageId],
+        );
+        expect(provenance.rows).toEqual(
+          [
+            { id: winnerPackageId, assignment_session_id: winnerSessionId },
+            { id: loserPackageId, assignment_session_id: loserSessionId },
+          ].sort((left, right) => left.id.localeCompare(right.id)),
+        );
       });
     },
     testTimeout,

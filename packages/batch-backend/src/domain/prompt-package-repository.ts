@@ -9,6 +9,7 @@ interface PromptPackageRow {
   id: string;
   recording_id: string;
   transcript_id: string;
+  assignment_session_id: string | null;
   student_id: string | null;
   lesson_id: string | null;
   student_memory_snapshot_id: string | null;
@@ -41,6 +42,7 @@ export interface InsertPromptPackageParams {
   id?: string;
   recordingId: string;
   transcriptId: string;
+  assignmentSessionId?: string | null;
   studentId?: string | null;
   lessonId?: string | null;
   studentMemorySnapshotId?: string | null;
@@ -105,17 +107,19 @@ export async function insertPromptPackage(
         storage_uri,
         request_envelope,
         created_at,
-        updated_at
+        updated_at,
+        assignment_session_id
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25, $26, $27, $28, $29
+        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30
       )
       RETURNING
         id,
         recording_id,
         transcript_id,
+        assignment_session_id,
         student_id,
         lesson_id,
         student_memory_snapshot_id,
@@ -173,6 +177,7 @@ export async function insertPromptPackage(
         params.requestEnvelope ?? null,
         now,
         now,
+        params.assignmentSessionId ?? null,
       ],
     );
     return result.rows[0];
@@ -186,7 +191,7 @@ export async function getPromptPackageById(id: string): Promise<PromptPackageRec
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
-      SELECT id, recording_id, transcript_id, profile_path, template_version,
+      SELECT id, recording_id, transcript_id, assignment_session_id, profile_path, template_version,
              student_id, lesson_id, resolved_profile_id, resolved_profile_hash,
              student_memory_snapshot_id, student_memory_snapshot_hash,
              selected_lesson_memory_ids, selected_homework_memory_ids,
@@ -208,11 +213,41 @@ export async function getPromptPackageById(id: string): Promise<PromptPackageRec
   return row ? mapRowToPromptPackage(row) : null;
 }
 
+export async function isPromptPackageSourceCanonical(id: string): Promise<boolean> {
+  return withPgClient(async (client) => {
+    const result = await client.query(
+      `SELECT 1 FROM prompt_packages p
+       WHERE p.id = $1 AND (
+         (p.assignment_session_id IS NULL AND NOT EXISTS (
+           SELECT 1 FROM assignment_sessions linked
+           WHERE linked.prompt_package_id = p.id
+              OR linked.confirmed_snapshot #>> '{create,promptPackageId}' = p.id::text
+         )) OR EXISTS (
+           SELECT 1 FROM assignment_source_bindings b
+           JOIN assignment_sessions s ON s.id = b.assignment_session_id
+           WHERE b.assignment_session_id = p.assignment_session_id
+             AND b.binding_role = 'confirmed'
+             AND b.recording_id = p.recording_id
+             AND b.transcript_id = p.transcript_id
+             AND s.confirmed_snapshot #>> '{source,sourceIdentityKind}' = b.source_identity_kind
+             AND s.confirmed_snapshot #>> '{source,sourceFingerprintScheme}' = b.source_fingerprint_scheme
+             AND s.confirmed_snapshot #>> '{source,sourceFingerprint}' = b.source_fingerprint
+             AND (s.confirmed_snapshot #>> '{source,recordingId}')::uuid = b.recording_id
+             AND (s.confirmed_snapshot #>> '{source,transcriptId}')::uuid = b.transcript_id
+         )
+       )`,
+      [id],
+    );
+    return Boolean(result.rows[0]);
+  });
+}
+
 function mapRowToPromptPackage(row: PromptPackageRow): PromptPackageRecord {
   return {
     id: row.id,
     recordingId: row.recording_id,
     transcriptId: row.transcript_id,
+    assignmentSessionId: row.assignment_session_id,
     studentId: row.student_id ?? null,
     lessonId: row.lesson_id ?? null,
     studentMemorySnapshotId: row.student_memory_snapshot_id ?? null,

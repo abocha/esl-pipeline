@@ -14,7 +14,9 @@ import {
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
+import { isPromptPackageSourceCanonical } from '../domain/prompt-package-repository.js';
 import { logger } from '../infrastructure/logger.js';
+import { PromptPackageAssignmentError } from './create-prompt-package.js';
 import {
   enforceGenerationBudgetBeforeAttempt,
   GenerationBudgetExceededError,
@@ -102,6 +104,7 @@ export interface GenerateDraftDependencies {
   config: BatchBackendConfig;
   promptPackages: {
     getById: typeof getPromptPackage;
+    isSourceCanonical: typeof isPromptPackageSourceCanonical;
   };
   executors: Partial<Record<GenerationProvider, ProviderExecutor>>;
   budget: GenerationBudgetGuardDependencies;
@@ -117,6 +120,7 @@ export async function generateDraft(
   const config = overrides?.config ?? loadConfig();
   const promptPackages = overrides?.promptPackages ?? {
     getById: getPromptPackage,
+    isSourceCanonical: isPromptPackageSourceCanonical,
   };
   const executors = {
     ...DEFAULT_EXECUTORS,
@@ -134,6 +138,12 @@ export async function generateDraft(
   const promptPackage = await promptPackages.getById(request.promptPackageId);
   if (!promptPackage) {
     return null;
+  }
+  if (!(await promptPackages.isSourceCanonical(request.promptPackageId))) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+      'Assignment source is no longer canonical',
+    );
   }
 
   const candidates = resolveGenerationCandidates({

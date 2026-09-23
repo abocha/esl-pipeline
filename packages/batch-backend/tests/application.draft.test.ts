@@ -13,6 +13,25 @@ import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js'
 import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
 
 describe('application/draft', () => {
+  it('does not create fresh draft lineage from a prompt whose assignment lost its source', async () => {
+    const putDraft = vi.fn();
+    const insert = vi.fn();
+    await expect(
+      createDraft(
+        { promptPackageId: 'prompt-1', text: 'DRAFT TEXT' },
+        {
+          storage: createStorageStub({ putDraft }),
+          promptPackages: {
+            getById: async () => ({ id: 'prompt-1' }) as PromptPackageRecord,
+            isSourceCanonical: async () => false,
+          },
+          drafts: { insert },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL' });
+    expect(putDraft).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
   it('creates a draft for a prompt package', async () => {
     const promptPackage: PromptPackageRecord = {
       id: 'prompt-1',
@@ -43,6 +62,7 @@ describe('application/draft', () => {
       {
         storage,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: async () => promptPackage,
         },
         drafts: {
@@ -115,6 +135,7 @@ describe('application/draft', () => {
       {
         storage,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: async () => null,
         },
         drafts: {

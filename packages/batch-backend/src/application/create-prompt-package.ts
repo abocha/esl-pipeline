@@ -3,7 +3,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { AssignmentSessionRecord } from '../domain/assignment-session-model.js';
-import { getAssignmentSessionByIdForUser } from '../domain/assignment-session-repository.js';
+import {
+  getAssignmentSessionByIdForUser,
+  isAssignmentConfirmedSourceCanonical,
+} from '../domain/assignment-session-repository.js';
 import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
 import {
   activateProfileRevision,
@@ -144,6 +147,7 @@ export interface CreatePromptPackageDependencies {
   };
   sessions: {
     getByIdForUser: typeof getAssignmentSessionByIdForUser;
+    isConfirmedSourceCanonical: typeof isAssignmentConfirmedSourceCanonical;
   };
   templateRevisions: {
     activate: typeof activateTemplateRevision;
@@ -157,7 +161,8 @@ export class PromptPackageAssignmentError extends Error {
       | 'PROMPT_PACKAGE_ASSIGNMENT_SESSION_NOT_FOUND'
       | 'PROMPT_PACKAGE_CONFIRMED_PREREQUISITE_MISSING'
       | 'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID'
-      | 'PROMPT_PACKAGE_CONFIRMED_SOURCE_HASH_MISMATCH',
+      | 'PROMPT_PACKAGE_CONFIRMED_SOURCE_HASH_MISMATCH'
+      | 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
     message: string,
   ) {
     super(message);
@@ -212,6 +217,7 @@ export async function createPromptPackage(
   };
   const sessions = overrides?.sessions ?? {
     getByIdForUser: getAssignmentSessionByIdForUser,
+    isConfirmedSourceCanonical: isAssignmentConfirmedSourceCanonical,
   };
   const templateRevisions = overrides?.templateRevisions ?? {
     activate: activateTemplateRevision,
@@ -257,6 +263,19 @@ export async function createPromptPackage(
         profileRevisions,
       })
     : null;
+  if (
+    assignmentSession &&
+    confirmedInputs &&
+    !(await sessions.isConfirmedSourceCanonical(assignmentSession.id, assignmentSession.userId, {
+      recordingId: confirmedInputs.source.recordingId,
+      transcriptId: confirmedInputs.source.transcriptId,
+    }))
+  ) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+      'Assignment source is no longer canonical',
+    );
+  }
   const transcript = confirmedInputs
     ? {
         id: confirmedInputs.source.transcriptId,
@@ -388,10 +407,25 @@ export async function createPromptPackage(
     text: payload,
   });
 
+  if (
+    assignmentSession &&
+    confirmedInputs &&
+    !(await sessions.isConfirmedSourceCanonical(assignmentSession.id, assignmentSession.userId, {
+      recordingId: confirmedInputs.source.recordingId,
+      transcriptId: confirmedInputs.source.transcriptId,
+    }))
+  ) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+      'Assignment source is no longer canonical',
+    );
+  }
+
   const promptPackage = await promptPackages.insert({
     id: promptPackageId,
     recordingId: transcript.recordingId,
     transcriptId: transcript.id,
+    assignmentSessionId: assignmentSession?.id ?? null,
     studentId: recording?.studentId ?? null,
     lessonId,
     studentMemorySnapshotId: memoryContext.studentMemorySnapshotId,

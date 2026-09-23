@@ -4,7 +4,7 @@
 
 - Audience: product owner, maintainers, frontend/backend agents.
 - Authority Level: active product design.
-- Last Verified Against: 2026-09-22 canonical source-ownership implementation.
+- Last Verified Against: 2026-09-23 canonical source-ownership implementation.
 - Owner: founder-maintainer + frontend/backend maintainers.
 - Review Cadence: after the canonical assignment-state upgrade ships or practical tutor use changes
   the decision.
@@ -39,6 +39,12 @@ and releases the old fingerprint. Failed, cancelled, stale, or merely attached r
 does not release confirmed ownership. A later assignment may acquire a released fingerprint, but it
 receives fresh recording and transcript IDs; prior artifact and lesson-memory lineage is historical
 and cannot be revived for the new owner.
+
+Historical nonowners can read their earlier prompts and drafts but cannot make new assignment
+content from the released source. Prompt packages created for an assignment retain its session ID;
+fresh draft creation and provider generation recheck the current confirmed binding, including after
+an operator remap. Frozen job reruns, publication repair, and valid post-Share correction continue
+from their existing job and artifact lineage.
 
 The backend owns source identity and assignment identity. Audio identity is the prepared-media
 fingerprint plus its scheme; manual transcript identity is the fingerprint of the acquisition-time

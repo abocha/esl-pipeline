@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
 import { resolvePromptTemplateSelection } from '../src/application/prompt-options.js';
@@ -72,6 +72,52 @@ function createConfirmedAssignmentSession(overrides: Record<string, unknown> = {
 }
 
 describe('application/prompt-package', () => {
+  it('blocks a historical nonowner before creating prompt-package lineage', async () => {
+    const session = createConfirmedAssignmentSession({
+      confirmed: {
+        student: { studentId: 'student-1' },
+        source: {
+          lessonId: '11111111-1111-4111-8111-111111111111',
+          recordingId: 'recording-1',
+          transcriptId: 'transcript-1',
+          transcriptWorkingVersion: 1,
+          transcriptStorageUri: 'local://confirmed/transcript-a.txt',
+          transcriptHash: createHash('sha256')
+            .update('CONFIRMED TRANSCRIPT A', 'utf8')
+            .digest('hex'),
+        },
+        context: {
+          teacherNotes: null,
+          profileId: null,
+          profileRevisionId: null,
+          profileRevisionHash: null,
+        },
+        create: null,
+      },
+    });
+    const insert = vi.fn();
+    await expect(
+      createPromptPackage(
+        {
+          recordingId: 'recording-1',
+          workspaceId: 'workspace-1',
+          assignmentSessionId: 'session-1',
+          userId: 'user-1',
+        },
+        {
+          sessions: {
+            getByIdForUser: async () => session,
+            isConfirmedSourceCanonical: async () => false,
+          },
+          recordings: {
+            getById: async () => ({ id: 'recording-1', studentId: 'student-1' }) as never,
+          },
+          promptPackages: { insert },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL' });
+    expect(insert).not.toHaveBeenCalled();
+  });
   it('uses exact confirmed transcript and profile inputs after mutable state advances', async () => {
     const confirmedProfileContent = 'CONFIRMED PROFILE A';
     const confirmedProfileHash = createHash('sha256')
@@ -142,7 +188,10 @@ describe('application/prompt-package', () => {
               ? 'CONFIRMED TRANSCRIPT A'
               : 'NEW WORKING TRANSCRIPT B',
         }),
-        sessions: { getByIdForUser: async () => createConfirmedAssignmentSession() },
+        sessions: {
+          isConfirmedSourceCanonical: async () => true,
+          getByIdForUser: async () => createConfirmedAssignmentSession(),
+        },
         transcripts: {
           getByRecordingId: async () => {
             throw new Error('mutable transcript lookup must not run');
@@ -235,7 +284,10 @@ describe('application/prompt-package', () => {
         storage: createStorageStub({
           getText: async () => 'CONFIRMED TRANSCRIPT A',
         }),
-        sessions: { getByIdForUser: async () => session },
+        sessions: {
+          isConfirmedSourceCanonical: async () => true,
+          getByIdForUser: async () => session,
+        },
         transcripts: {
           getByRecordingId: async () => {
             throw new Error('mutable transcript lookup must not run');
@@ -331,6 +383,7 @@ describe('application/prompt-package', () => {
     expect(result?.text).toContain('[FOUNDATIONAL_PROFILE]\nNot available.');
     expect(result?.profileSnapshot).toBeUndefined();
     expect(inserted[0]).toMatchObject({
+      assignmentSessionId: 'session-1',
       profilePath: null,
       resolvedProfileId: null,
       resolvedProfileHash: null,
@@ -347,7 +400,12 @@ describe('application/prompt-package', () => {
           assignmentSessionId: 'session-1',
           userId: 'other-user',
         },
-        { sessions: { getByIdForUser: async () => null } },
+        {
+          sessions: {
+            isConfirmedSourceCanonical: async () => true,
+            getByIdForUser: async () => null,
+          },
+        },
       ),
     ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_ASSIGNMENT_SESSION_NOT_FOUND' });
   });
@@ -363,6 +421,7 @@ describe('application/prompt-package', () => {
         },
         {
           sessions: {
+            isConfirmedSourceCanonical: async () => true,
             getByIdForUser: async () =>
               createConfirmedAssignmentSession({
                 confirmed: {
@@ -387,6 +446,7 @@ describe('application/prompt-package', () => {
         },
         {
           sessions: {
+            isConfirmedSourceCanonical: async () => true,
             getByIdForUser: async () =>
               createConfirmedAssignmentSession({ recordingId: 'different-recording' }),
           },
