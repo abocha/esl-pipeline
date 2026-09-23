@@ -19,16 +19,14 @@ WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 COPY .env.example ./.env.example
 
-RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
-    pnpm fetch --frozen-lockfile
+# Keep fetched artifacts in the layer cache so a restored fetch layer also restores its store.
+RUN pnpm fetch --frozen-lockfile
 
 COPY packages ./packages
 
-RUN find packages -name '*.tsbuildinfo' -delete
-RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
-    pnpm --filter @esl-pipeline/batch-backend... install --offline --frozen-lockfile
-RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
-    pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/batch-backend... run build \
+RUN find packages -name '*.tsbuildinfo' -delete \
+    && pnpm --filter @esl-pipeline/batch-backend... install --offline --frozen-lockfile \
+    && pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/batch-backend... run build \
     && pnpm --store-dir=/app/.pnpm-store/v11 --offline --filter @esl-pipeline/batch-backend deploy --prod /app/deployed
 
 FROM node:24-trixie-slim AS runtime
