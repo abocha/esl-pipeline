@@ -1346,6 +1346,10 @@ export function registerPromptStudentSelectionTests() {
       await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
       await waitFor(() => {
+        expect(api.attachAssignmentSource).toHaveBeenCalledWith(
+          'session-linked',
+          expect.objectContaining({ recordingId: 'rec-1', transcriptId: 'tx-1' }),
+        );
         expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
           'session-linked',
           expect.objectContaining({
