@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.13.0] - 2026-09-23
+
+### Changed
+
+- Automated release from PR #268: fix(assignments): enforce canonical lesson source ownership (https://github.com/abocha/esl-pipeline/pull/268)
+
 ## [10.12.1] - 2026-09-19
 
 ### Changed
