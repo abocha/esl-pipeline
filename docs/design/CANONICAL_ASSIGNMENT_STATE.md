@@ -4,7 +4,7 @@
 
 - Audience: product owner, maintainers, frontend/backend agents.
 - Authority Level: active product design.
-- Last Verified Against: 2026-07-23 product decision and assignment-state incident.
+- Last Verified Against: 2026-09-22 canonical source-ownership implementation.
 - Owner: founder-maintainer + frontend/backend maintainers.
 - Review Cadence: after the canonical assignment-state upgrade ships or practical tutor use changes
   the decision.
@@ -24,18 +24,28 @@ authority boundaries. It is not an implementation plan.
 The browser must never be responsible for assembling structural relationships among an assignment,
 source, transcript, profile revision, prompt package, draft, preview, or published job.
 
-## One Lifetime-Canonical Assignment
+## One Canonical Owner Per Lesson Source
 
-For one tutor, one student, and one canonical lesson source, there is exactly one assignment.
+For one tutor, one student, and one classified canonical lesson source, there is at most one current
+assignment owner.
 
 Selecting or uploading the same audio again reopens that assignment. It does not create a competing
 assignment, even after the assignment has been shared. A completed assignment opens as immutable
-history; the same audio cannot be used to create another homework assignment for that student.
+history and normally retains ownership because shared sessions cannot replace Source.
 
-The backend owns source identity and assignment identity. Filenames, component state, browser cache,
-and frontend-generated identifiers are not identity authorities. The system may reuse immutable
-media or transcript storage internally, but that storage optimization must not create or transfer a
-second assignment identity.
+An unfinished assignment may select a replacement Source without releasing the confirmed source.
+Only successful confirmation of that replacement transfers the assignment to the new fingerprint
+and releases the old fingerprint. Failed, cancelled, stale, or merely attached replacement work
+does not release confirmed ownership. A later assignment may acquire a released fingerprint, but it
+receives fresh recording and transcript IDs; prior artifact and lesson-memory lineage is historical
+and cannot be revived for the new owner.
+
+The backend owns source identity and assignment identity. Audio identity is the prepared-media
+fingerprint plus its scheme; manual transcript identity is the fingerprint of the acquisition-time
+NFC/LF canonical text plus its scheme. Filenames, mutable transcript hashes, component state,
+browser cache, job IDs, output IDs, and frontend-generated identifiers are not source-ownership
+authorities. The system may reuse immutable storage internally, but that optimization must not
+create a second owner or reuse assignment artifact lineage.
 
 Source acquisition has only two successful tutor-facing outcomes:
 
@@ -104,9 +114,10 @@ projections in the same authoritative transition or make every canonical reader 
 ineligibility immediately. A stored `ready` label alone cannot keep a snapshot current after its
 lesson evidence loses readiness, ownership, existence, or confirmed-source provenance.
 
-This invariant is implemented for the current cutover by the student-memory snapshot eligibility
-repair. The future lifetime-canonical assignment package must preserve it across every source
-replacement path rather than relying on a later cleanup migration.
+Lesson-memory intents carry the confirming assignment session. Worker commits, canonical
+lesson-memory reads, and student-memory snapshot eligibility all revalidate the session's current
+confirmed binding and exact source provenance. A binding remap therefore changes authority
+immediately without rewriting historical sessions, jobs, memories, or handouts.
 
 Frontend requests may echo server-issued versions, hashes, or opaque lineage tokens to prove what
 the tutor saw. They may not use hidden identifiers to dictate arbitrary structural combinations.

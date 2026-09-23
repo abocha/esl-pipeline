@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  attachAssignmentSourceForUser,
   confirmStudentAssignmentSessionForUser,
   updateAssignmentSessionRecoveryForUser,
 } from '../src/application/assignment-sessions.js';
@@ -1267,9 +1268,12 @@ describeIfPg('application/student-schedule-billing', () => {
     const draftId = randomUUID();
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
-        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
-         VALUES ($1, 'upload', $2, $3, 12, 'transcribed')`,
-        [recordingId, studentId, `s3://recordings/${recordingId}.mp3`],
+        `INSERT INTO recordings (
+           id, source, student_id, storage_uri, bytes, status, sha256,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint
+         ) VALUES ($1, 'upload', $2, $3, 12, 'transcribed', $4, 'audio',
+                   'prepared-media-sha256-v1', $4)`,
+        [recordingId, studentId, `s3://recordings/${recordingId}.mp3`, 'c'.repeat(64)],
       );
       await client.query(
         `INSERT INTO transcripts (
@@ -1329,9 +1333,15 @@ describeIfPg('application/student-schedule-billing', () => {
       'session_in_progress',
     );
 
-    await updateAssignmentSessionRecoveryForUser(userId, session.id, {
+    const attached = await attachAssignmentSourceForUser(userId, session.id, {
       expectedRevision: session.revision,
-      patch: { draftId, promptPackageId, recordingId, transcriptId },
+      recordingId,
+      transcriptId,
+    });
+    expect(attached.outcome).toBe('source_attached');
+    await updateAssignmentSessionRecoveryForUser(userId, session.id, {
+      expectedRevision: attached.session.revision,
+      patch: { draftId, promptPackageId },
     });
     surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
     expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(

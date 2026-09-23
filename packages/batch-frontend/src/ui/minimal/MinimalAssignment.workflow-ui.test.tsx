@@ -1042,10 +1042,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
     await waitFor(() =>
-      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
-        'session-new',
-        expect.anything(),
-      ),
+      expect(api.attachAssignmentSource).toHaveBeenCalledWith('session-new', expect.anything()),
     );
   });
 
@@ -1336,6 +1333,13 @@ describe('MinimalAssignment - staged workflow UI', () => {
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
 
+      await waitFor(() =>
+        expect(api.attachAssignmentSource).toHaveBeenCalledWith(
+          'session-1',
+          expect.objectContaining({ recordingId: 'rec-1', transcriptId: 'tx-1' }),
+        ),
+      );
+
       expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       await waitFor(() =>
@@ -1351,6 +1355,74 @@ describe('MinimalAssignment - staged workflow UI', () => {
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
+
+  it('reopens the canonical assignment when source attachment loses the ownership race', async () => {
+    const user = createMinimalUser();
+    const recording = makeRecording({ status: 'transcribed', transcriptId: 'tx-1' });
+    const canonical = makeAssignmentSession({
+      id: 'session-canonical',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      confirmedStep: 'source',
+      revision: 6,
+    });
+    vi.mocked(api.uploadRecording).mockResolvedValue(recording);
+    vi.mocked(api.getRecording).mockResolvedValue(recording);
+    vi.mocked(api.attachAssignmentSource).mockResolvedValueOnce({
+      outcome: 'existing_assignment_resumed',
+      session: canonical,
+    });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(canonical);
+
+    renderMinimalAssignment();
+    await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+    await screen.findByRole('option', { name: 'Alex' });
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Choose learner/i }),
+      'student-alex',
+    );
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+    await waitFor(() =>
+      expect(api.fetchAssignmentSession).toHaveBeenCalledWith('session-canonical'),
+    );
+    expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+  });
+
+  it('reopens the durable canonical assignment returned by audio acquisition', async () => {
+    const user = createMinimalUser();
+    const canonical = makeAssignmentSession({
+      id: 'session-canonical',
+      studentId: 'student-alex',
+      recordingId: 'rec-existing',
+      transcriptId: 'tx-existing',
+      confirmedStep: 'source',
+      revision: 9,
+    });
+    vi.mocked(api.uploadRecording).mockResolvedValue({
+      outcome: 'existing_assignment_resumed',
+      session: canonical,
+    });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(canonical);
+
+    renderMinimalAssignment();
+    await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+    await screen.findByRole('option', { name: 'Alex' });
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Choose learner/i }),
+      'student-alex',
+    );
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+    await waitFor(() =>
+      expect(api.fetchAssignmentSession).toHaveBeenCalledWith('session-canonical'),
+    );
+    expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+    expect(api.attachAssignmentSource).not.toHaveBeenCalled();
+  });
 
   it('uses one tutor choice for two anonymous speakers and saves it with Source confirmation', async () => {
     const user = createMinimalUser();

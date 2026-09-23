@@ -112,4 +112,23 @@ describe('utils/api recording upload request', () => {
       }),
     );
   });
+
+  it('preserves a canonical assignment resume acquisition outcome', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: {
+        outcome: 'existing_assignment_resumed',
+        session: { id: 'assignment-1' },
+      },
+    } as never);
+
+    await expect(
+      uploadRecording(new File(['audio'], 'lesson.mp3', { type: 'audio/mpeg' }), {
+        studentId: 'student-1',
+        uploadOperationId: '3a4e8b44-4967-4d3e-b8b5-1b4c434873f7',
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'existing_assignment_resumed',
+      session: { id: 'assignment-1' },
+    });
+  });
 });

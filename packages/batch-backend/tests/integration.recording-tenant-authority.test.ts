@@ -37,6 +37,8 @@ import {
 import {
   beginRecordingUploadOperation,
   completeRecordingUploadOperation,
+  completeRecordingUploadOperationWithCanonicalAssignment,
+  getRecordingUploadOperation,
   isObsoleteUploadCandidateDeletable,
   listObsoleteUploadCandidates,
   recordObsoleteUploadCandidateCleanupResult,
@@ -546,6 +548,15 @@ describe('recording tenant authority', () => {
       studentId: tenantA.studentId,
       lessonId: null,
     });
+    const attached = await updateAssignmentSessionRecovery({
+      id: session.id,
+      userId: tenantA.userId,
+      expectedRevision: session.revision,
+      patch: {
+        recordingId: lineageA.recordingId,
+        transcriptId: lineageA.transcriptId,
+      },
+    });
 
     for (const [promptPackageId, draftId] of [
       [lineageB.promptPackageId, null],
@@ -557,10 +568,8 @@ describe('recording tenant authority', () => {
         updateAssignmentSessionRecovery({
           id: session.id,
           userId: tenantA.userId,
-          expectedRevision: session.revision,
+          expectedRevision: attached.revision,
           patch: {
-            recordingId: lineageA.recordingId,
-            transcriptId: lineageA.transcriptId,
             promptPackageId,
             draftId,
           },
@@ -577,9 +586,9 @@ describe('recording tenant authority', () => {
       return result.rows[0];
     });
     expect(unchanged).toEqual({
-      revision: session.revision,
-      recording_id: null,
-      transcript_id: null,
+      revision: attached.revision,
+      recording_id: lineageA.recordingId,
+      transcript_id: lineageA.transcriptId,
       prompt_package_id: null,
       draft_id: null,
     });
@@ -588,10 +597,8 @@ describe('recording tenant authority', () => {
       updateAssignmentSessionRecovery({
         id: session.id,
         userId: tenantA.userId,
-        expectedRevision: session.revision,
+        expectedRevision: attached.revision,
         patch: {
-          recordingId: lineageA.recordingId,
-          transcriptId: lineageA.transcriptId,
           promptPackageId: lineageA.promptPackageId,
           draftId: null,
         },
@@ -889,7 +896,70 @@ describe('recording tenant authority', () => {
     });
     await expect(beginRecordingUploadOperation(context)).resolves.toMatchObject({
       kind: 'completed',
-      operation: { finalRecordingId: reclaimed.operation.recordingId },
+      operation: {
+        outcomeKind: 'source_candidate',
+        finalRecordingId: reclaimed.operation.recordingId,
+        canonicalAssignmentSessionId: null,
+      },
+    });
+  });
+
+  it('durably replays a canonical assignment upload outcome without adopting a recording', async () => {
+    const tenant = await seedTenant('Canonical upload outcome');
+    const session = await confirmStudentAssignmentSession({
+      userId: tenant.userId,
+      requestId: randomUUID(),
+      studentId: tenant.studentId,
+      lessonId: null,
+    });
+    const context = {
+      workspaceId: tenant.workspaceId,
+      operationUuid: randomUUID(),
+      studentId: tenant.studentId,
+      audioTopology: 'mixed_recording' as const,
+      requestedProvider: null,
+      requestProfile: 'ordinary_mixed_v1',
+    };
+    const started = await beginRecordingUploadOperation(context);
+    expect(started.kind).toBe('claimed');
+    if (started.kind !== 'claimed' || !started.operation.attemptToken) {
+      throw new Error('Expected upload operation claim.');
+    }
+
+    await expect(
+      completeRecordingUploadOperationWithCanonicalAssignment({
+        operationId: started.operation.id,
+        attemptToken: started.operation.attemptToken,
+        assignmentSessionId: session.id,
+      }),
+    ).resolves.toBe(true);
+
+    await expect(
+      getRecordingUploadOperation(tenant.workspaceId, context.operationUuid),
+    ).resolves.toMatchObject({
+      state: 'completed',
+      outcomeKind: 'existing_assignment_resumed',
+      finalRecordingId: null,
+      canonicalAssignmentSessionId: session.id,
+    });
+    await expect(beginRecordingUploadOperation(context)).resolves.toMatchObject({
+      kind: 'completed',
+      operation: {
+        outcomeKind: 'existing_assignment_resumed',
+        canonicalAssignmentSessionId: session.id,
+      },
+    });
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const attempts = await client.query(
+        `SELECT state, candidate_uri FROM recording_upload_operation_attempts
+         WHERE operation_id = $1`,
+        [started.operation.id],
+      );
+      expect(attempts.rows).toEqual([{ state: 'adopted', candidate_uri: null }]);
+      const recording = await client.query(`SELECT 1 FROM recordings WHERE id = $1`, [
+        started.operation.recordingId,
+      ]);
+      expect(recording.rowCount).toBe(0);
     });
   });
 
@@ -1043,6 +1113,11 @@ async function seedJobLineage(tenant: Awaited<ReturnType<typeof seedTenant>>, su
     bytes: 10,
     audioTopology: 'mixed_recording',
     status: 'transcribed',
+    sourceIdentity: {
+      kind: 'audio',
+      scheme: 'prepared-media-sha256-v1',
+      fingerprint: suffix.repeat(64).slice(0, 64),
+    },
   });
   const transcript = await insertTranscript({
     recordingId: recording.id,
@@ -1098,6 +1173,9 @@ async function insertContextConfirmedSession(
     transcriptWorkingVersion: 1,
     transcriptStorageUri: 'local://transcripts/a.txt',
     transcriptHash: 'a'.repeat(64),
+    sourceIdentityKind: 'audio' as const,
+    sourceFingerprintScheme: 'prepared-media-sha256-v1',
+    sourceFingerprint: 'a'.repeat(64),
   };
   const context = {
     teacherNotes: null,
@@ -1105,8 +1183,8 @@ async function insertContextConfirmedSession(
     profileRevisionId: null,
     profileRevisionHash: null,
   };
-  await withPgClientSessionContext({ rlsBypass: true }, (client) =>
-    client.query(
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
       `INSERT INTO assignment_sessions (
          id, user_id, student_id, recording_id, transcript_id, revision,
          confirmed_step, confirmed_snapshot, teacher_notes
@@ -1119,8 +1197,26 @@ async function insertContextConfirmedSession(
         lineage.transcriptId,
         JSON.stringify({ student: { studentId: tenant.studentId }, source, context, create: null }),
       ],
-    ),
-  );
+    );
+    await client.query(
+      `INSERT INTO assignment_source_bindings (
+         id, workspace_id, user_id, student_id, assignment_session_id,
+         source_identity_kind, source_fingerprint_scheme, source_fingerprint,
+         binding_role, recording_id, transcript_id
+       ) VALUES ($1, $2, $3, $4, $5, 'audio', 'prepared-media-sha256-v1', $6,
+                 'confirmed', $7, $8)`,
+      [
+        randomUUID(),
+        tenant.workspaceId,
+        tenant.userId,
+        tenant.studentId,
+        id,
+        'a'.repeat(64),
+        lineage.recordingId,
+        lineage.transcriptId,
+      ],
+    );
+  });
   return id;
 }
 

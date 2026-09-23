@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
 import type { RecordingRecord } from '../domain/recording-model.js';
@@ -15,6 +15,17 @@ const MANUAL_TRANSCRIPT_MODEL = 'manual-entry';
 const MANUAL_TRANSCRIPT_LANGUAGE = 'und';
 const DEFAULT_DISPLAY_NAME = 'Pasted lesson transcript';
 const MAX_MANUAL_TRANSCRIPT_CHARACTERS = 500_000;
+export const MANUAL_TRANSCRIPT_FINGERPRINT_SCHEME = 'manual-transcript-nfc-lf-v1';
+
+export function canonicalizeManualTranscriptSource(text: string): string {
+  return text.normalize('NFC').replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+}
+
+export function fingerprintManualTranscriptSource(text: string): string {
+  return createHash('sha256')
+    .update(canonicalizeManualTranscriptSource(text), 'utf8')
+    .digest('hex');
+}
 
 export interface ManualTranscriptSourceInput {
   workspaceId: string;
@@ -38,6 +49,7 @@ export interface PersistManualTranscriptSourceParams {
   bytes: number;
   workingVersion: number;
   contentHash: string;
+  sourceFingerprint: string;
 }
 
 export interface ManualTranscriptSourceDependencies {
@@ -59,7 +71,7 @@ export async function ingestManualTranscriptSource(
   input: ManualTranscriptSourceInput,
   overrides?: Partial<ManualTranscriptSourceDependencies>,
 ): Promise<ManualTranscriptSourceResult> {
-  const text = input.text.trim();
+  const text = canonicalizeManualTranscriptSource(input.text);
   if (text.length === 0) {
     throw new ManualTranscriptSourceValidationError(
       'Transcript text is required.',
@@ -89,6 +101,7 @@ export async function ingestManualTranscriptSource(
       bytes: Buffer.byteLength(text, 'utf8'),
       workingVersion: 1,
       contentHash: stored.sha256,
+      sourceFingerprint: fingerprintManualTranscriptSource(text),
     });
   } catch (error) {
     await storage.delete(stored.uri).catch(() => undefined);
@@ -113,6 +126,11 @@ export async function persistManualTranscriptSourceWithDefaults(
           audioLifecycle: 'not_retained',
           bytes: params.bytes,
           status: 'transcribed',
+          sourceIdentity: {
+            kind: 'manual_transcript',
+            scheme: MANUAL_TRANSCRIPT_FINGERPRINT_SCHEME,
+            fingerprint: params.sourceFingerprint,
+          },
         },
         { client },
       );

@@ -82,6 +82,7 @@ export interface LessonMemoryRecord {
   studentId: string;
   transcriptId: string;
   recordingId: string;
+  assignmentSessionId?: string | null;
   schemaVersion: string;
   generatedAt: Date;
   provider: string;
