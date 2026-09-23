@@ -164,8 +164,14 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   canonical lesson/student-memory reads revalidate the current confirmed source binding, so a late
   worker or historical nonowner cannot restore superseded memory. Changed confirmed content
   temporarily makes memory unavailable until its automatic replacement succeeds.
-- Prompt generation reads confirmed Source and Context inputs. Preview and Share read confirmed
-  Create content, so newer autosaved recovery cannot silently enter downstream output.
+- Assignment prompt creation reads confirmed Source and Context and requires the current confirmed
+  source binding. Prompt packages retain their assignment session ID so later draft creation and
+  provider generation recheck that same binding after replacement or operator remap. Standalone
+  prompt packages have no assignment session and retain their existing generation path. Preview and
+  Share read confirmed Create content, so newer autosaved recovery cannot silently enter downstream
+  output.
+  Migration backfills only unique direct session references; ambiguous historical references stay
+  unclassified and cannot pass the fresh-generation check.
 - Share reserves one existing job row with a stable database/BullMQ ID. Retry and ambiguous-response
   reconciliation reuse that identity. An unpublished failed/queued root is lineage-validated and
   made runnable in PostgreSQL before its matching retained BullMQ job is reactivated in place;

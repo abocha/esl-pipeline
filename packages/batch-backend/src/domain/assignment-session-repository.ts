@@ -2004,6 +2004,7 @@ export async function getCanonicalAssignmentSessionBySourceRecording(params: {
 export async function isAssignmentConfirmedSourceCanonical(
   sessionId: string,
   userId: string,
+  lineage?: { recordingId: string; transcriptId: string },
 ): Promise<boolean> {
   return withPgClient(async (client) => {
     const result = await client.query(
@@ -2016,8 +2017,10 @@ export async function isAssignmentConfirmedSourceCanonical(
          AND s.confirmed_snapshot #>> '{source,sourceFingerprintScheme}' = b.source_fingerprint_scheme
          AND s.confirmed_snapshot #>> '{source,sourceFingerprint}' = b.source_fingerprint
          AND (s.confirmed_snapshot #>> '{source,recordingId}')::uuid = b.recording_id
-         AND (s.confirmed_snapshot #>> '{source,transcriptId}')::uuid = b.transcript_id`,
-      [sessionId, userId],
+         AND (s.confirmed_snapshot #>> '{source,transcriptId}')::uuid = b.transcript_id
+         AND ($3::uuid IS NULL OR b.recording_id = $3)
+         AND ($4::uuid IS NULL OR b.transcript_id = $4)`,
+      [sessionId, userId, lineage?.recordingId ?? null, lineage?.transcriptId ?? null],
     );
     return Boolean(result.rows[0]);
   });

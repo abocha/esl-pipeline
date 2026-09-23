@@ -674,7 +674,8 @@ CREATE TABLE public.prompt_packages (
     selected_homework_memory_ids uuid[] DEFAULT ARRAY[]::uuid[] NOT NULL,
     retrieval_policy_version text,
     lesson_id uuid,
-    request_envelope jsonb
+    request_envelope jsonb,
+    assignment_session_id uuid
 );
 
 CREATE TABLE public.recording_upload_operation_attempts (
@@ -1829,6 +1830,9 @@ ALTER TABLE ONLY public.profiles
     ADD CONSTRAINT profiles_active_revision_id_fkey FOREIGN KEY (active_revision_id) REFERENCES public.profile_revisions(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.prompt_packages
+    ADD CONSTRAINT prompt_packages_assignment_session_id_fkey FOREIGN KEY (assignment_session_id) REFERENCES public.assignment_sessions(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.prompt_packages
     ADD CONSTRAINT prompt_packages_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.prompt_packages
@@ -2172,5 +2176,6 @@ VALUES
   ('0051_recording_upload_operations', '7353b778b5e973f4dc05774676ff0657062f31eb9966f1459e84dbc3edce03cb', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0052_recording_upload_candidate_cleanup_schedule', '34891f5ed3494026d41d58a9d901f2f31e5ce7802dcf706cb2f5468175080890', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0053_recording_audio_cleanup_backfill', '7d4e11f27d14a035f15d9b629ec00bdfcc641882dbb7eaf0ad16d87692f2440f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0054_canonical_assignment_source_ownership', '4d4f6b8b4a79148e23a0aca45a91b4d6496927f6a9adf41f5eaa0148bdccdc16', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0054_canonical_assignment_source_ownership', '4d4f6b8b4a79148e23a0aca45a91b4d6496927f6a9adf41f5eaa0148bdccdc16', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0055_prompt_package_assignment_provenance', '36c5acb4a15ffaca1880066070ad624b73f1f390891b3d51d732d66b5a9ecd81', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
