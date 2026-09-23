@@ -1468,6 +1468,14 @@ export function registerRecordingRoutes(
           });
         }
 
+        if (error instanceof PromptPackageAssignmentError) {
+          return reply.code(409).send({
+            error: 'conflict',
+            message: error.message,
+            code: error.code,
+          });
+        }
+
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
