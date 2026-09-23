@@ -11,12 +11,16 @@ import {
   updateAssignmentShareJobDraftLink,
   updateJobDraftLink,
 } from '../domain/job-repository.js';
-import { getPromptPackageById } from '../domain/prompt-package-repository.js';
+import {
+  getPromptPackageById,
+  isPromptPackageSourceCanonical,
+} from '../domain/prompt-package-repository.js';
 import { createStorageConfigService } from '../infrastructure/storage-config.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import { approveJobForPipeline } from './approve-job.js';
 import { createApprovalJobFromDraft } from './create-approval-job.js';
+import { PromptPackageAssignmentError } from './create-prompt-package.js';
 
 export interface MaterializeDraftParams {
   draftId: string;
@@ -41,6 +45,7 @@ export interface MaterializeDraftDependencies {
   };
   promptPackages: {
     getById: typeof getPromptPackageById;
+    isSourceCanonical: typeof isPromptPackageSourceCanonical;
   };
   createApprovalJob: typeof createApprovalJobFromDraft;
   jobs: {
@@ -66,6 +71,7 @@ export async function materializeDraft(
   };
   const promptPackages = overrides?.promptPackages ?? {
     getById: getPromptPackageById,
+    isSourceCanonical: isPromptPackageSourceCanonical,
   };
   const createApprovalJob = overrides?.createApprovalJob ?? createApprovalJobFromDraft;
   const jobs = overrides?.jobs ?? {
@@ -88,6 +94,12 @@ export async function materializeDraft(
   if (!draft) return null;
   const promptPackage = await promptPackages.getById(draft.promptPackageId);
   if (!promptPackage) return null;
+  if (!(await promptPackages.isSourceCanonical(promptPackage.id))) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+      'Assignment source is no longer canonical',
+    );
+  }
 
   if (resolvedJobId && jobs.getById) {
     const targetJob = await jobs.getById(resolvedJobId);

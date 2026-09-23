@@ -166,12 +166,14 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   temporarily makes memory unavailable until its automatic replacement succeeds.
 - Assignment prompt creation reads confirmed Source and Context and requires the current confirmed
   source binding. Prompt packages retain their assignment session ID so later draft creation and
-  provider generation recheck that same binding after replacement or operator remap. Standalone
-  prompt packages have no assignment session and retain their existing generation path. Preview and
-  Share read confirmed Create content, so newer autosaved recovery cannot silently enter downstream
-  output.
+  provider generation, and draft materialization recheck that same binding after replacement or
+  operator remap. Standalone prompt packages have no assignment session and retain their existing
+  generation and materialization paths. Preview and Share read confirmed Create content, so newer
+  autosaved recovery cannot silently enter downstream output.
   Migration backfills only unique direct session references; ambiguous historical references stay
-  unclassified and cannot pass the fresh-generation check.
+  unclassified and cannot pass the fresh-generation check. A draft-only session reference is not
+  valid historical assignment provenance: migration 0044 discarded earlier editor state, and the
+  current recovery/confirmation contracts require a prompt package whenever a draft is linked.
 - Share reserves one existing job row with a stable database/BullMQ ID. Retry and ambiguous-response
   reconciliation reuse that identity. An unpublished failed/queued root is lineage-validated and
   made runnable in PostgreSQL before its matching retained BullMQ job is reactivated in place;

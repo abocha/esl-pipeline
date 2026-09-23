@@ -401,6 +401,33 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('POST /drafts/:id/materialize maps lost assignment source authority to 409', async () => {
+      const { PromptPackageAssignmentError } = await import(
+        '../src/application/create-prompt-package.js'
+      );
+      const materializeDraft = vi.spyOn(materializeDraftModule, 'materializeDraft');
+      materializeDraft.mockClear();
+      materializeDraft.mockRejectedValue(
+        new PromptPackageAssignmentError(
+          'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+          'Assignment source is no longer canonical',
+        ),
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/drafts/draft-stale/materialize',
+        payload: { jobOverrides: { autoPublish: true } },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        error: 'conflict',
+        message: 'Assignment source is no longer canonical',
+        code: 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+      });
+    });
+
     it('POST /drafts/:id/materialize returns 404 when missing', async () => {
       const materializeDraft = vi.spyOn(materializeDraftModule, 'materializeDraft');
       materializeDraft.mockClear();
