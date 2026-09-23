@@ -20,6 +20,7 @@ import { MinimalAssignment } from './MinimalAssignment';
 
 vi.mock('../../utils/api', () => ({
   activateProfileRevision: vi.fn(),
+  attachAssignmentSource: vi.fn(),
   AssignmentSessionConflictApiError: class AssignmentSessionConflictApiError extends Error {
     constructor(public readonly latestSession: api.AssignmentSession) {
       super('Newer saved assignment work was found. Review it before confirming again.');
@@ -857,6 +858,53 @@ export function setupMinimalAssignmentTest() {
   });
   let currentSession = makeAssignmentSession();
 
+  const findListedSession = async (sessionId: string): Promise<api.AssignmentSession | null> => {
+    const listSessionsMock = vi.mocked(api.listAssignmentSessions);
+    for (let index = listSessionsMock.mock.results.length - 1; index >= 0; index -= 1) {
+      const result = listSessionsMock.mock.results[index];
+      if (result?.type !== 'return') continue;
+
+      try {
+        const listed = await result.value;
+        const session = listed.sessions.find((candidate) => candidate.id === sessionId);
+        if (session) return session;
+      } catch {
+        // An unsuccessful earlier list response does not replace active server state.
+      }
+    }
+    return null;
+  };
+
+  const findFetchedSession = async (sessionId: string): Promise<api.AssignmentSession | null> => {
+    const fetchSessionMock = vi.mocked(api.fetchAssignmentSession);
+    for (let index = fetchSessionMock.mock.results.length - 1; index >= 0; index -= 1) {
+      if (fetchSessionMock.mock.calls[index]?.[0] !== sessionId) continue;
+      const result = fetchSessionMock.mock.results[index];
+      if (result?.type !== 'return') continue;
+
+      try {
+        const session = await result.value;
+        if (session.id === sessionId) return session;
+      } catch {
+        // A failed fetch does not replace active server state.
+      }
+    }
+    return null;
+  };
+
+  const synchronizeCurrentSession = async (sessionId: string) => {
+    if (currentSession.id === sessionId) return;
+
+    const fetchedSession = await findFetchedSession(sessionId);
+    if (fetchedSession) {
+      currentSession = fetchedSession;
+      return;
+    }
+
+    const listedSession = await findListedSession(sessionId);
+    if (listedSession) currentSession = listedSession;
+  };
+
   vi.mocked(api.fetchPromptOptions).mockResolvedValue({
     templates: [{ id: 'tpl-default', label: 'Default Template' }],
     profiles: [{ id: 'profile-default', label: 'Default Profile' }],
@@ -971,15 +1019,29 @@ export function setupMinimalAssignmentTest() {
       displayName: 'Pasted lesson transcript',
     }),
   );
-  vi.mocked(api.updateAssignmentSessionRecovery).mockImplementation(async (_id, request) => {
+  vi.mocked(api.updateAssignmentSessionRecovery).mockImplementation(async (id, request) => {
+    await synchronizeCurrentSession(id);
     currentSession = makeAssignmentSession({
       ...currentSession,
+      id,
       ...request.patch,
       revision: request.expectedRevision + 1,
     });
     return currentSession;
   });
-  vi.mocked(api.confirmAssignmentSessionStep).mockImplementation(async (_id, request) => {
+  vi.mocked(api.attachAssignmentSource).mockImplementation(async (id, request) => {
+    await synchronizeCurrentSession(id);
+    currentSession = makeAssignmentSession({
+      ...currentSession,
+      id,
+      recordingId: request.recordingId,
+      transcriptId: request.transcriptId,
+      revision: request.expectedRevision + 1,
+    });
+    return { outcome: 'source_attached', session: currentSession };
+  });
+  vi.mocked(api.confirmAssignmentSessionStep).mockImplementation(async (id, request) => {
+    await synchronizeCurrentSession(id);
     const base = currentSession;
     if (request.step === 'source') {
       currentSession = makeAssignmentSession({
@@ -1043,9 +1105,11 @@ export function setupMinimalAssignmentTest() {
     });
     return { session: currentSession, invalidated: [] };
   });
-  vi.mocked(api.shareAssignmentSession).mockImplementation(async (_id, request) => {
+  vi.mocked(api.shareAssignmentSession).mockImplementation(async (id, request) => {
+    await synchronizeCurrentSession(id);
     currentSession = makeAssignmentSession({
       ...currentSession,
+      id,
       confirmedStep: 'share',
       shareJobId: request.requestId,
       revision: request.expectedRevision + 2,
@@ -1055,7 +1119,13 @@ export function setupMinimalAssignmentTest() {
       job: makeJobStatus({ jobId: request.requestId, state: 'queued' }),
     };
   });
-  vi.mocked(api.fetchAssignmentSession).mockImplementation(async () => currentSession);
+  vi.mocked(api.fetchAssignmentSession).mockImplementation(async (id) => {
+    if (currentSession.id !== id) {
+      const listedSession = await findListedSession(id);
+      if (listedSession) currentSession = listedSession;
+    }
+    return currentSession;
+  });
   vi.mocked(api.listProfileContents).mockResolvedValue({
     profiles: [
       { id: 'profiles/alex.md', label: 'Alex Profile' },

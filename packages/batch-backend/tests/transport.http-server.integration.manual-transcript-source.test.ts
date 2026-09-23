@@ -5,7 +5,16 @@ import { describeHttpServerIntegrationSuite } from './transport.http-server.inte
 
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [manual-transcript-source]',
-  ({ app, authMiddlewareModule, expect, getRecordingModule, it, rateLimitMocks, vi }) => {
+  ({
+    app,
+    assignmentSessionRepositoryModule,
+    authMiddlewareModule,
+    expect,
+    getRecordingModule,
+    it,
+    rateLimitMocks,
+    vi,
+  }) => {
     it('POST /recordings/transcript-source requires authentication', async () => {
       vi.mocked(authMiddlewareModule.authenticate).mockImplementationOnce(
         (_request: FastifyRequest, reply: FastifyReply) => {
@@ -155,6 +164,67 @@ describeHttpServerIntegrationSuite(
       expect(getRecordingModule.getRecording).toHaveBeenCalledWith(
         '22222222-2222-4222-8222-222222222222',
         '00000000-0000-4000-8000-000000000001',
+      );
+    });
+
+    it('POST /recordings/transcript-source resumes an existing canonical owner without artifacts', async () => {
+      vi.mocked(
+        assignmentSessionRepositoryModule.getCanonicalAssignmentSessionBySourceIdentity,
+      ).mockResolvedValueOnce({
+        id: '44444444-4444-4444-8444-444444444444',
+        userId: 'test-user-id',
+        studentId: '11111111-1111-4111-8111-111111111111',
+        lessonId: null,
+        recordingId: '22222222-2222-4222-8222-222222222222',
+        transcriptId: '33333333-3333-4333-8333-333333333333',
+        promptPackageId: null,
+        draftId: null,
+        revision: 3,
+        confirmedStep: 'source',
+        confirmed: { source: null, context: null, create: null },
+        creationRequestId: '55555555-5555-4555-8555-555555555555',
+        publishTarget: null,
+        selectedTtsProvider: null,
+        selectedTtsStrategy: null,
+        selectedTtsModel: null,
+        selectedPreset: null,
+        selectedGenerationProvider: null,
+        selectedGenerationModel: null,
+        teacherNotes: null,
+        selectedProfileId: null,
+        selectedProfileRevisionId: null,
+        selectedProfileRevisionHash: null,
+        shareJobId: null,
+        createdAt: new Date('2026-09-23T00:00:00.000Z'),
+        updatedAt: new Date('2026-09-23T00:00:00.000Z'),
+      });
+      const ingest = vi.spyOn(ingestManualTranscriptSourceModule, 'ingestManualTranscriptSource');
+      ingest.mockClear();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/recordings/transcript-source',
+        payload: {
+          studentId: '11111111-1111-4111-8111-111111111111',
+          text: '  Tutor supplied transcript\r\n  ',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        outcome: 'existing_assignment_resumed',
+        session: { id: '44444444-4444-4444-8444-444444444444' },
+      });
+      expect(ingest).not.toHaveBeenCalled();
+      expect(
+        assignmentSessionRepositoryModule.getCanonicalAssignmentSessionBySourceIdentity,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'test-user-id',
+          studentId: '11111111-1111-4111-8111-111111111111',
+          sourceIdentityKind: 'manual_transcript',
+          sourceFingerprintScheme: 'manual-transcript-nfc-lf-v1',
+        }),
       );
     });
   },

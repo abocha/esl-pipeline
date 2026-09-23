@@ -40,6 +40,7 @@ describe('application/request-lesson-memory-generation', () => {
       config: { generation: {} } as never,
       params: {
         studentId: 'student-1',
+        assignmentSessionId: 'assignment-session-1',
         transcriptId: 'transcript-1',
         recordingId: 'recording-1',
         sourceStorageUri: 's3://transcripts/content/a.txt',
@@ -61,6 +62,7 @@ describe('application/request-lesson-memory-generation', () => {
       config: { generation: {} } as never,
       params: {
         studentId: 'student-1',
+        assignmentSessionId: 'assignment-session-1',
         transcriptId: 'transcript-1',
         recordingId: 'recording-1',
         lessonId: 'lesson-1',

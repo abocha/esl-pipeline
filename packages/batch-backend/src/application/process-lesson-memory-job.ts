@@ -30,6 +30,7 @@ export interface ProcessLessonMemoryJobPayload {
   kind: 'lesson-memory-generate';
   transcriptId: string;
   recordingId: string;
+  assignmentSessionId?: string | null;
   studentId: string;
   sourceStorageUri: string;
   sourceContentHash: string;
@@ -85,7 +86,8 @@ export async function processLessonMemoryJob(args: {
 
   if (
     pendingEntry.sourceStorageUri !== args.payload.sourceStorageUri ||
-    pendingEntry.sourceContentHash !== args.payload.sourceContentHash
+    pendingEntry.sourceContentHash !== args.payload.sourceContentHash ||
+    (pendingEntry.assignmentSessionId ?? null) !== (args.payload.assignmentSessionId ?? null)
   ) {
     return;
   }

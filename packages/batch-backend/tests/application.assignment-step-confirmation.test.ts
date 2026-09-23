@@ -12,6 +12,7 @@ vi.mock('../src/application/generation-policy.js', () => ({
 
 import { confirmAssignmentSessionStep } from '../src/application/confirm-assignment-session-step.js';
 import {
+  attachAssignmentSourceCandidate,
   confirmAssignmentSessionStepPersistence,
   confirmStudentAssignmentSession,
   updateAssignmentSessionRecovery,
@@ -204,8 +205,10 @@ describe('application/confirm-assignment-session-step transactional persistence'
         [studentId, userId],
       );
       await client.query(
-        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
-         VALUES ($1, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed')`,
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint)
+         VALUES ($1::uuid, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed', 'audio',
+           'prepared-media-sha256-v1', replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''))`,
         [recordingId, studentId],
       );
       await client.query(
@@ -229,12 +232,20 @@ describe('application/confirm-assignment-session-step transactional persistence'
       studentId,
       lessonId: null,
     });
+    const attachedFirst = await attachAssignmentSourceCandidate({
+      id: firstSession.id,
+      userId,
+      expectedRevision: firstSession.revision,
+      recordingId,
+      transcriptId,
+    });
+    expect(attachedFirst.outcome).toBe('source_attached');
     const confirmedA = await confirmAssignmentSessionStepPersistence({
       id: firstSession.id,
       userId,
       request: {
         step: 'source',
-        expectedRevision: firstSession.revision,
+        expectedRevision: attachedFirst.session.revision,
         lessonId: null,
         recordingId,
         transcriptId,
@@ -286,18 +297,16 @@ describe('application/confirm-assignment-session-step transactional persistence'
       studentId,
       lessonId: null,
     });
-    const confirmedB = await confirmAssignmentSessionStepPersistence({
+    const resumed = await attachAssignmentSourceCandidate({
       id: secondSession.id,
       userId,
-      request: {
-        step: 'source',
-        expectedRevision: secondSession.revision,
-        lessonId: null,
-        recordingId,
-        transcriptId,
-        transcriptWorkingVersion: 2,
-      },
-      lessonMemory: { ...memory, requestedAt: new Date('2026-07-19T00:01:00Z') },
+      expectedRevision: secondSession.revision,
+      recordingId,
+      transcriptId,
+    });
+    expect(resumed).toMatchObject({
+      outcome: 'existing_assignment_resumed',
+      session: { id: firstSession.id, confirmedStep: 'share' },
     });
 
     const authority = await withPgClientSessionContext({ rlsBypass: true }, async (client) => ({
@@ -312,11 +321,9 @@ describe('application/confirm-assignment-session-step transactional persistence'
       ),
     }));
     expect(authority.memories.rows).toEqual([
-      { source_content_hash: sourceAHash, status: 'superseded' },
-      { source_content_hash: sourceBHash, status: 'pending' },
+      { source_content_hash: sourceAHash, status: 'ready' },
     ]);
-    expect(authority.snapshot.rows[0]?.status).toBe('superseded');
-    expect(confirmedB.lessonMemoryIntent).toMatchObject({ outcome: 'created' });
+    expect(authority.snapshot.rows[0]?.status).toBe('ready');
   });
 
   it('captures exact Source provenance, replays idempotently, and supersedes A when B is confirmed', async () => {
@@ -341,8 +348,10 @@ describe('application/confirm-assignment-session-step transactional persistence'
         [studentId, userId],
       );
       await client.query(
-        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
-         VALUES ($1, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed')`,
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint)
+         VALUES ($1::uuid, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed', 'audio',
+           'prepared-media-sha256-v1', replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''))`,
         [recordingId, studentId],
       );
       await client.query(
@@ -360,6 +369,13 @@ describe('application/confirm-assignment-session-step transactional persistence'
       studentId,
       lessonId: null,
     });
+    const attached = await attachAssignmentSourceCandidate({
+      id: student.id,
+      userId,
+      expectedRevision: student.revision,
+      recordingId,
+      transcriptId,
+    });
     const memory = {
       schemaVersion: 'lesson-memory.v1',
       provider: 'openai',
@@ -368,7 +384,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
     };
     const sourceRequest = {
       step: 'source' as const,
-      expectedRevision: 1,
+      expectedRevision: attached.session.revision,
       lessonId: null,
       recordingId,
       transcriptId,
@@ -382,7 +398,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
       lessonMemory: memory,
     });
     expect(confirmedA.session).toMatchObject({
-      revision: 2,
+      revision: 3,
       confirmedStep: 'source',
       confirmed: {
         source: {
@@ -400,7 +416,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
       request: sourceRequest,
       lessonMemory: memory,
     });
-    expect(replay.session.revision).toBe(2);
+    expect(replay.session.revision).toBe(3);
     expect(replay.invalidated).toEqual([]);
     expect(replay.lessonMemoryIntent).toMatchObject({ outcome: 'pending_exists' });
     const readySnapshotId = randomUUID();
@@ -435,11 +451,15 @@ describe('application/confirm-assignment-session-step transactional persistence'
     const confirmedB = await confirmAssignmentSessionStepPersistence({
       id: student.id,
       userId,
-      request: { ...sourceRequest, expectedRevision: 2, transcriptWorkingVersion: 2 },
+      request: {
+        ...sourceRequest,
+        expectedRevision: confirmedA.session.revision,
+        transcriptWorkingVersion: 2,
+      },
       lessonMemory: { ...memory, requestedAt: new Date('2026-07-19T00:01:00Z') },
     });
     expect(confirmedB.session).toMatchObject({
-      revision: 3,
+      revision: 4,
       confirmed: {
         source: {
           transcriptWorkingVersion: 2,
@@ -497,8 +517,10 @@ describe('application/confirm-assignment-session-step transactional persistence'
     const readyBSnapshotId = randomUUID();
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
-        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
-         VALUES ($1, 'upload', $2, 's3://recordings/c.mp3', 1, 'transcribed')`,
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint)
+         VALUES ($1::uuid, 'upload', $2, 's3://recordings/c.mp3', 1, 'transcribed', 'audio',
+           'prepared-media-sha256-v1', replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''))`,
         [recordingCId, studentId],
       );
       await client.query(
@@ -517,12 +539,19 @@ describe('application/confirm-assignment-session-step transactional persistence'
         [readyBSnapshotId, studentId, [confirmedB.lessonMemoryIntent!.entryId]],
       );
     });
+    const attachedC = await attachAssignmentSourceCandidate({
+      id: student.id,
+      userId,
+      expectedRevision: confirmedB.session.revision,
+      recordingId: recordingCId,
+      transcriptId: transcriptCId,
+    });
     const confirmedC = await confirmAssignmentSessionStepPersistence({
       id: student.id,
       userId,
       request: {
         step: 'source',
-        expectedRevision: confirmedB.session.revision,
+        expectedRevision: attachedC.session.revision,
         lessonId: null,
         recordingId: recordingCId,
         transcriptId: transcriptCId,
@@ -634,8 +663,10 @@ describe('application/confirm-assignment-session-step transactional persistence'
         [studentId, userId],
       );
       await client.query(
-        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
-         VALUES ($1, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed')`,
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status,
+           source_identity_kind, source_fingerprint_scheme, source_fingerprint)
+         VALUES ($1::uuid, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed', 'audio',
+           'prepared-media-sha256-v1', replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''))`,
         [recordingId, studentId],
       );
       await client.query(
@@ -675,12 +706,20 @@ describe('application/confirm-assignment-session-step transactional persistence'
       }),
     ).rejects.toMatchObject({ code: 'ASSIGNMENT_STEP_PREREQUISITE_MISSING' });
 
+    const attached = await attachAssignmentSourceCandidate({
+      id: session.id,
+      userId,
+      expectedRevision: session.revision,
+      recordingId,
+      transcriptId,
+    });
+
     const source = await confirmAssignmentSessionStepPersistence({
       id: session.id,
       userId,
       request: {
         step: 'source',
-        expectedRevision: 1,
+        expectedRevision: attached.session.revision,
         lessonId: null,
         recordingId,
         transcriptId,

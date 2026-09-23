@@ -18,6 +18,7 @@ import {
   StudentMemorySnapshotStatusSchema,
   type StudentMemoryUnresolvedIssue,
 } from './student-memory-snapshot-model.js';
+import { buildCanonicalLessonMemoryAuthoritySqlPredicate } from './lesson-memory-repository.js';
 
 interface StudentMemorySnapshotRow {
   id: string;
@@ -136,6 +137,7 @@ export function buildEligibleStudentMemorySnapshotLineageSqlPredicate(
     throw new Error('Invalid student-memory snapshot SQL alias');
   }
 
+  const canonicalLesson = buildCanonicalLessonMemoryAuthoritySqlPredicate('eligible_lesson');
   return `NOT EXISTS (
     SELECT 1
     FROM unnest(${snapshotAlias}.lesson_memory_entry_ids) AS source(lesson_memory_entry_id)
@@ -144,6 +146,7 @@ export function buildEligibleStudentMemorySnapshotLineageSqlPredicate(
      AND eligible_lesson.student_id = ${snapshotAlias}.student_id
      AND eligible_lesson.status = 'ready'
      AND eligible_lesson.source_content_hash IS NOT NULL
+     AND ${canonicalLesson}
     WHERE eligible_lesson.id IS NULL
   )`;
 }
@@ -478,9 +481,12 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
       const requestedLessonIds = [...new Set(params.lessonMemoryEntryIds ?? [])];
       if (requestedLessonIds.length > 0) {
         const readyLessonResult = await client.query<{ id: string }>(
-          `SELECT id FROM lesson_memory_entries
-           WHERE student_id = $1 AND id = ANY($2::uuid[])
-             AND status = 'ready' AND source_content_hash IS NOT NULL
+          `SELECT lesson_memory_entries.id FROM lesson_memory_entries
+           WHERE lesson_memory_entries.student_id = $1
+             AND lesson_memory_entries.id = ANY($2::uuid[])
+             AND lesson_memory_entries.status = 'ready'
+             AND lesson_memory_entries.source_content_hash IS NOT NULL
+             AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
            FOR SHARE`,
           [params.studentId, requestedLessonIds],
         );

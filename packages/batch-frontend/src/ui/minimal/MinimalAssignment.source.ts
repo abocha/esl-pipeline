@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
+  AssignmentSession,
   AudioInputTopology,
   JobEvent,
   RecordingListItem,
@@ -138,6 +139,8 @@ interface UseMinimalAssignmentSourceControllerParams {
 }
 
 export interface SourceController extends SourceHydrationSnapshot {
+  canonicalAssignmentResume: AssignmentSession | null;
+  consumeCanonicalAssignmentResume: () => void;
   uploading: boolean;
   canRetryUpload: boolean;
   replacingAudio: boolean;
@@ -191,6 +194,8 @@ export function useMinimalAssignmentSourceController({
   onBeforeUploadReset,
 }: UseMinimalAssignmentSourceControllerParams): SourceController {
   const [recording, setRecording] = useState<RecordingListItem | null>(null);
+  const [canonicalAssignmentResume, setCanonicalAssignmentResume] =
+    useState<AssignmentSession | null>(null);
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -278,9 +283,15 @@ export function useMinimalAssignmentSourceController({
     const reconciliationOwner = { ...pending };
     void getRecordingUploadOperation(reconciliationOwner.id)
       .then((resolved) => {
-        if (!resolved || !('source' in resolved)) return;
+        if (!resolved) return;
         // The result belongs to the captured workflow, student, and operation.
         // A reset, resume, student change, or replacement invalidates it.
+        if ('outcome' in resolved) {
+          if (!clearPendingUploadOperation(reconciliationOwner)) return;
+          setCanonicalAssignmentResume(resolved.session);
+          return;
+        }
+        if (!('source' in resolved)) return;
         if (!clearPendingUploadOperation(reconciliationOwner)) return;
         latestRecordingRef.current = resolved;
         setRecording(resolved);
@@ -369,6 +380,7 @@ export function useMinimalAssignmentSourceController({
         setSelectedStudentId(initialSelectedStudentId ?? '');
       }
       setRecording(null);
+      setCanonicalAssignmentResume(null);
       latestRecordingRef.current = null;
       setRecordingStatus(null);
       setRecordingError(null);
@@ -392,6 +404,7 @@ export function useMinimalAssignmentSourceController({
   );
 
   const applyHydratedSnapshot = useCallback((snapshot: SourceHydrationSnapshot) => {
+    setCanonicalAssignmentResume(null);
     latestRecordingRef.current = snapshot.recording;
     latestTranscriptIdRef.current = snapshot.transcript?.transcriptId ?? null;
     latestTranscriptRef.current = snapshot.transcript;
@@ -539,6 +552,12 @@ export function useMinimalAssignmentSourceController({
         // the media bytes themselves.
         if (sameLogicalUpload) {
           const resolved = await getRecordingUploadOperation(operation.id);
+          if (resolved && 'outcome' in resolved) {
+            if (!clearPendingUploadOperation(operation)) return;
+            setCanonicalAssignmentResume(resolved.session);
+            setReplacingAudio(false);
+            return;
+          }
           if (resolved && 'source' in resolved) {
             if (!clearPendingUploadOperation(operation)) return;
             latestRecordingRef.current = resolved;
@@ -571,6 +590,12 @@ export function useMinimalAssignmentSourceController({
           onProgress: (progress) => setUploadProgress(progress),
         });
         if (!ownsPendingUploadOperation(operation)) return;
+        if ('outcome' in response) {
+          clearPendingUploadOperation(operation);
+          setCanonicalAssignmentResume(response.session);
+          setReplacingAudio(false);
+          return;
+        }
         latestRecordingRef.current = response;
         if (replacingCurrentAudio) {
           latestTranscriptIdRef.current = null;
@@ -1002,6 +1027,10 @@ export function useMinimalAssignmentSourceController({
           text: normalizedText,
           displayName,
         });
+        if ('outcome' in created) {
+          setCanonicalAssignmentResume(created.session);
+          return;
+        }
         latestRecordingRef.current = created;
         setRecording(created);
         setRecordingStatus(created.status);
@@ -1024,6 +1053,11 @@ export function useMinimalAssignmentSourceController({
       }
     },
     [onBeforeUploadReset, selectedStudentId],
+  );
+
+  const consumeCanonicalAssignmentResume = useCallback(
+    () => setCanonicalAssignmentResume(null),
+    [],
   );
 
   useEffect(() => {
@@ -1049,6 +1083,8 @@ export function useMinimalAssignmentSourceController({
   }, [defaultSttProvider, selectedSttProvider, sttProviders]);
 
   return {
+    canonicalAssignmentResume,
+    consumeCanonicalAssignmentResume,
     recording,
     recordingStatus,
     recordingError,

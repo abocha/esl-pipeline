@@ -67,6 +67,7 @@ export async function confirmAssignmentSessionStep(args: {
       sourceStorageUri: result.lessonMemoryIntent.sourceStorageUri,
       sourceContentHash: result.lessonMemoryIntent.sourceContentHash,
       pendingEntryId: result.lessonMemoryIntent.entryId,
+      assignmentSessionId: result.session.id,
       provider: result.lessonMemoryIntent.provider as never,
       model: result.lessonMemoryIntent.model,
     });

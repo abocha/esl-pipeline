@@ -9,10 +9,12 @@ import type { BatchBackendConfig } from '../config/env.js';
 import type { AssignmentSessionRecord } from '../domain/assignment-session-model.js';
 import {
   AssignmentSessionRepositoryError,
+  attachAssignmentSourceCandidate,
   confirmStudentAssignmentSession,
   countAssignmentSessionsForUser,
-  getActiveAssignmentSessionByRecording,
   getAssignmentSessionByIdForUser,
+  getCanonicalAssignmentSessionBySourceRecording,
+  isAssignmentConfirmedSourceCanonical,
   listAssignmentSessionsForUser,
   updateAssignmentSessionRecovery,
 } from '../domain/assignment-session-repository.js';
@@ -64,6 +66,21 @@ export async function updateAssignmentSessionRecoveryForUser(
   const workspaceId = await resolvePrimaryWorkspaceIdForUser(userId);
   await completeLinkedElapsedLessonForHomework(userId, workspaceId, session);
   return toAssignmentSessionDto(session);
+}
+
+export async function attachAssignmentSourceForUser(
+  userId: string,
+  sessionId: string,
+  request: import('@esl-pipeline/contracts').AttachAssignmentSourceRequest,
+): Promise<import('@esl-pipeline/contracts').AttachAssignmentSourceResponse> {
+  const result = await attachAssignmentSourceCandidate({
+    id: sessionId,
+    userId,
+    expectedRevision: request.expectedRevision,
+    recordingId: request.recordingId,
+    transcriptId: request.transcriptId,
+  });
+  return { outcome: result.outcome, session: toAssignmentSessionDto(result.session) };
 }
 
 export async function getAssignmentSessionForUser(
@@ -170,7 +187,11 @@ async function resolveCanonicalSourceSession(
   const workspaceId = await resolvePrimaryWorkspaceIdForUser(userId);
   const transcript = await getTranscriptByIdForWorkspace(transcriptId, workspaceId);
   if (!transcript) return session;
-  const canonical = await getActiveAssignmentSessionByRecording(userId, transcript.recordingId);
+  const canonical = await getCanonicalAssignmentSessionBySourceRecording({
+    userId,
+    studentId: session.studentId,
+    recordingId: transcript.recordingId,
+  });
   if (!canonical || canonical.id === session.id || canonical.studentId !== session.studentId) {
     return session;
   }
@@ -190,6 +211,7 @@ async function reconcileConfirmedSourceMemory(
 ): Promise<void> {
   const source = session.confirmed.source;
   if (!source) return;
+  if (!(await isAssignmentConfirmedSourceCanonical(session.id, session.userId))) return;
   try {
     await requestLessonMemoryGeneration({
       config,
@@ -201,6 +223,7 @@ async function reconcileConfirmedSourceMemory(
         sourceStorageUri: source.transcriptStorageUri,
         sourceContentHash: source.transcriptHash,
         trigger: 'replay',
+        assignmentSessionId: session.id,
       },
     });
   } catch (error) {

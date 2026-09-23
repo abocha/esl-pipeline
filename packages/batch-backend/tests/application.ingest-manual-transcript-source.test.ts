@@ -21,6 +21,21 @@ describe('application/ingest-manual-transcript-source', () => {
     deleteStored.mockResolvedValue(undefined);
   });
 
+  it('canonicalizes only Unicode form, line endings, and outer whitespace', async () => {
+    const { canonicalizeManualTranscriptSource } = await import(
+      '../src/application/ingest-manual-transcript-source.js'
+    );
+    expect(canonicalizeManualTranscriptSource('  Cafe\u0301\r\nTutor:  Hello!  ')).toBe(
+      'Caf\u00e9\nTutor:  Hello!',
+    );
+    expect(canonicalizeManualTranscriptSource('Tutor: Hello')).not.toBe(
+      canonicalizeManualTranscriptSource('tutor: hello'),
+    );
+    expect(canonicalizeManualTranscriptSource('Tutor: Hello')).not.toBe(
+      canonicalizeManualTranscriptSource('Tutor:  Hello'),
+    );
+  });
+
   it('stores trimmed text and persists manual provenance', async () => {
     const persist = vi.fn(async (params) => ({
       recording: {
@@ -85,6 +100,7 @@ describe('application/ingest-manual-transcript-source', () => {
       bytes: Buffer.byteLength('Tutor supplied transcript', 'utf8'),
       workingVersion: 1,
       contentHash: 'transcript-sha',
+      sourceFingerprint: '4c8d66a42114cd5a66b6e251cb4a647dee6d0bf14d4f1db162158a176eebb721',
     });
     expect(result.recording.source).toBe('manual_transcript');
     expect(result.transcript).toMatchObject({

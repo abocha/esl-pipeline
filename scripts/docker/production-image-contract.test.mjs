@@ -45,11 +45,19 @@ test('production builders fetch from the lockfile before copying package sources
     assert.notEqual(fetchIndex, -1, `${name}: fetch`);
     assert.notEqual(packageCopyIndex, -1, `${name}: package copy`);
     assert.ok(fetchIndex < packageCopyIndex, `${name}: fetch precedes package source copy`);
-    assert.match(
-      dockerfile,
-      /--mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11/u,
-      name,
-    );
+    if (name === 'backend') {
+      assert.doesNotMatch(
+        dockerfile,
+        /--mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11/u,
+        name,
+      );
+    } else {
+      assert.match(
+        dockerfile,
+        /--mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11/u,
+        name,
+      );
+    }
     assert.match(dockerfile, /install --offline --frozen-lockfile/u, name);
   }
 });
@@ -79,21 +87,32 @@ test('production deploys use dedicated lockfiles instead of legacy mode', () => 
   }
 });
 
-test('portable deployments reuse the cached store without persisting it', () => {
-  for (const name of ['backend', 'bot']) {
-    const dockerfile = dockerfiles.get(name);
-    assert.match(
-      dockerfile,
-      /RUN --mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11 \\\n    pnpm -r [^\n]+ run build/u,
-      `${name}: deploy store cache mount`,
-    );
-    assert.match(
-      dockerfile,
-      /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --filter [^\n]+ deploy --prod \/app\/deployed/u,
-      name,
-    );
-    assert.doesNotMatch(dockerfile, /rm -rf \/app\/deployed\/\.pnpm-store/u, name);
-  }
+test('backend offline deploy uses layer-persisted fetched artifacts', () => {
+  const backend = dockerfiles.get('backend');
+  assert.match(backend, /RUN pnpm fetch --frozen-lockfile/u);
+  assert.match(backend, /install --offline --frozen-lockfile/u);
+  assert.match(
+    backend,
+    /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --filter [^\n]+ deploy --prod \/app\/deployed/u,
+  );
+  assert.doesNotMatch(
+    backend,
+    /--mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11/u,
+  );
+});
+
+test('bot portable deployment reuses its cached store without persisting it', () => {
+  const bot = dockerfiles.get('bot');
+  assert.match(
+    bot,
+    /RUN --mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11 \\\n    pnpm -r [^\n]+ run build/u,
+    'bot: deploy store cache mount',
+  );
+  assert.match(
+    bot,
+    /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --filter [^\n]+ deploy --prod \/app\/deployed/u,
+  );
+  assert.doesNotMatch(bot, /rm -rf \/app\/deployed\/\.pnpm-store/u);
 });
 
 test('backend deployment includes only runtime-owned package files', () => {

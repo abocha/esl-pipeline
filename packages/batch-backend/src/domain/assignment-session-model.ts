@@ -25,6 +25,12 @@ export const AssignmentConfirmedSnapshotSchema = z
         transcriptWorkingVersion: z.number().int().positive(),
         transcriptStorageUri: z.string().min(1),
         transcriptHash: z.string().regex(/^[0-9a-f]{64}$/),
+        sourceIdentityKind: z.enum(['audio', 'manual_transcript']).optional(),
+        sourceFingerprintScheme: z.string().min(1).optional(),
+        sourceFingerprint: z
+          .string()
+          .regex(/^[0-9a-f]{64}$/)
+          .optional(),
       })
       .strict()
       .nullable(),

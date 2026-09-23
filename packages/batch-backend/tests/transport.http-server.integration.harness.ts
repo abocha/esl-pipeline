@@ -48,6 +48,7 @@ import * as workspaceContextModule from '../src/application/workspace-context.js
 import { publishJobEvent } from '../src/domain/job-events.js';
 import * as jobRepositoryModule from '../src/domain/job-repository.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
+import * as assignmentSessionRepositoryModule from '../src/domain/assignment-session-repository.js';
 import * as recordingRepositoryModule from '../src/domain/recording-repository.js';
 import * as settingsRepositoryModule from '../src/domain/settings-repository.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
@@ -110,6 +111,16 @@ vi.mock('../src/infrastructure/logger', async () => {
         warn: vi.fn(),
       }),
     },
+  };
+});
+
+vi.mock('../src/domain/assignment-session-repository.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../src/domain/assignment-session-repository.js')
+  >('../src/domain/assignment-session-repository.js');
+  return {
+    ...actual,
+    getCanonicalAssignmentSessionBySourceIdentity: vi.fn().mockResolvedValue(null),
   };
 });
 
@@ -570,12 +581,16 @@ export function describeHttpServerIntegrationSuite(
     );
     const mockGetJobProvenance = vi.mocked(getJobProvenanceModule.getJobProvenance);
     const mockGetJobWorkspaceAuthority = vi.spyOn(jobRepositoryModule, 'getJobWorkspaceAuthority');
+    const mockGetCanonicalAssignmentSessionBySourceIdentity = vi.mocked(
+      assignmentSessionRepositoryModule.getCanonicalAssignmentSessionBySourceIdentity,
+    );
 
     beforeAll(async () => {
       vi.clearAllMocks();
       mockResolvePrimaryWorkspaceIdForUser.mockResolvedValue(
         '00000000-0000-4000-8000-000000000001',
       );
+      mockGetCanonicalAssignmentSessionBySourceIdentity.mockResolvedValue(null);
       mockGetJobWorkspaceAuthority.mockImplementation(async (jobId) =>
         jobId.includes('foreign') || jobId.includes('missing')
           ? null
@@ -1381,6 +1396,7 @@ export function describeHttpServerIntegrationSuite(
       CONTRACT_VERSIONS,
       DB_MIGRATION_HEAD,
       assignmentSessionsModule,
+      assignmentSessionRepositoryModule,
       confirmAssignmentSessionStepModule,
       shareAssignmentSessionModule,
       publishAssignmentCorrectionModule,

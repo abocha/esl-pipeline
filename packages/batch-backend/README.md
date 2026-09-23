@@ -149,25 +149,39 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   Transcript and draft autosaves use independent working-version compare-and-swap, server hashes,
   and content-addressed storage. Source/Create confirmation copy the exact immutable URI, hash, and
   working version into the session snapshot; there are no transcript/draft revision tables.
-- Active lesson-source ownership conflicts return the owning canonical assignment instead of a
-  generic server error. A narrowly identifiable partial session shell (Student confirmed,
-  transcript known, recording missing, no downstream work) resolves to that canonical assignment
-  on read. Recovery also rejects any prompt/draft pair whose draft does not belong to the selected
-  prompt and student.
-- Source confirmation is the only assignment-flow lesson-memory trigger. Its durable intent and
-  BullMQ identity are keyed by transcript plus confirmed hash, and the worker reads the confirmed
-  URI from its payload rather than the transcript's mutable working pointer. Changed confirmed
-  content temporarily makes memory unavailable until its automatic replacement succeeds.
-- Prompt generation reads confirmed Source and Context inputs. Preview and Share read confirmed
-  Create content, so newer autosaved recovery cannot silently enter downstream output.
+- `POST /assignment-sessions/:id/source-attachment` is the explicit ownership boundary. In one
+  PostgreSQL transaction it claims the classified source fingerprint and updates session recovery
+  pointers, or returns `existing_assignment_resumed` with the current owner. Confirmed ownership
+  remains until a different attached source confirms successfully; cancellation preserves the old
+  owner, while confirmation releases it. Direct reuse of artifact lineage previously confirmed by
+  another assignment is cloned to fresh recording/transcript IDs with the same fingerprint.
+- Source confirmation checks binding authority before replay. Historical nonowners and unclassified
+  historical sources remain readable but cannot reconfirm, regenerate downstream assignment state,
+  enqueue canonical lesson memory, or begin a new Share transition from that source. Recovery also
+  rejects any prompt/draft pair whose draft does not belong to the selected prompt and student.
+- Source confirmation is the only assignment-flow lesson-memory trigger. New intents record the
+  authorizing assignment session as well as transcript/hash lineage. Worker publication and
+  canonical lesson/student-memory reads revalidate the current confirmed source binding, so a late
+  worker or historical nonowner cannot restore superseded memory. Changed confirmed content
+  temporarily makes memory unavailable until its automatic replacement succeeds.
+- Assignment prompt creation reads confirmed Source and Context and requires the current confirmed
+  source binding. Prompt packages retain their assignment session ID so later draft creation and
+  provider generation, and draft materialization recheck that same binding after replacement or
+  operator remap. Standalone prompt packages have no assignment session and retain their existing
+  generation and materialization paths. Preview and Share read confirmed Create content, so newer
+  autosaved recovery cannot silently enter downstream output.
+  Migration backfills only unique direct session references; ambiguous historical references stay
+  unclassified and cannot pass the fresh-generation check. A draft-only session reference is not
+  valid historical assignment provenance: migration 0044 discarded earlier editor state, and the
+  current recovery/confirmation contracts require a prompt package whenever a draft is linked.
 - Share reserves one existing job row with a stable database/BullMQ ID. Retry and ambiguous-response
   reconciliation reuse that identity. An unpublished failed/queued root is lineage-validated and
   made runnable in PostgreSQL before its matching retained BullMQ job is reactivated in place;
   generic queue reconciliation remains strict. An intentional rerun remains a new `source_job_id`
   child.
 - `confirmedStep = 'share'` is the sole completed predicate. Completed sessions remain immutable
-  provenance for their historical jobs/handouts, are not resumable or in progress, and do not block
-  a new assignment for the same recording. Job status DTOs expose the optional retained
+  provenance for their historical jobs/handouts, are not resumable or in progress, and retain their
+  canonical source binding. Job status DTOs expose the optional retained
   `assignmentSessionId` through rerun ancestry so post-cutover history can reopen confirmed inputs;
   pre-cutover jobs return no link. There is no assignment archival or archive-retry state.
 - `POST /jobs/:publishedJobId/publish-correction` is the distinct post-Share correction command. It
@@ -243,6 +257,7 @@ Student-memory operator workflows:
   `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false`; it must not be used as a substitute for fresh
   paced worker generation.
 - student lesson artifact export: `pnpm --filter @esl-pipeline/batch-backend student-artifacts:export -- --student-id <student-id> [--out tmp/student-artifacts/<student-id>.zip]`
+- reviewed historical source-owner remap: `pnpm --filter @esl-pipeline/batch-backend assignment-source:remap -- --apply --user-id <user-id> --target-session-id <session-id> --reason <reviewed-reason>`; the target's stored confirmed provenance must match the classified source and every change is audited
 - focused runbook: [`docs/operations/student-memory-replay-backfill.md`](../../docs/operations/student-memory-replay-backfill.md)
 
 ## Validation

@@ -13,6 +13,25 @@ import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js'
 import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
 
 describe('application/draft', () => {
+  it('does not create fresh draft lineage from a prompt whose assignment lost its source', async () => {
+    const putDraft = vi.fn();
+    const insert = vi.fn();
+    await expect(
+      createDraft(
+        { promptPackageId: 'prompt-1', text: 'DRAFT TEXT' },
+        {
+          storage: createStorageStub({ putDraft }),
+          promptPackages: {
+            getById: async () => ({ id: 'prompt-1' }) as PromptPackageRecord,
+            isSourceCanonical: async () => false,
+          },
+          drafts: { insert },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL' });
+    expect(putDraft).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
   it('creates a draft for a prompt package', async () => {
     const promptPackage: PromptPackageRecord = {
       id: 'prompt-1',
@@ -43,6 +62,7 @@ describe('application/draft', () => {
       {
         storage,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: async () => promptPackage,
         },
         drafts: {
@@ -115,6 +135,7 @@ describe('application/draft', () => {
       {
         storage,
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: async () => null,
         },
         drafts: {
@@ -125,6 +146,120 @@ describe('application/draft', () => {
 
     expect(draft).toBeNull();
     expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale assignment materialization before a new job or auto-publish', async () => {
+    const draft = {
+      id: 'draft-stale',
+      promptPackageId: 'prompt-stale',
+      storageUri: 'local://drafts/stale.md',
+    } as DraftRecord;
+    const promptPackage = {
+      id: 'prompt-stale',
+      assignmentSessionId: 'session-stale',
+    } as PromptPackageRecord;
+    const createApprovalJob = vi.fn();
+    const approveForPipeline = vi.fn();
+    const updateDraftLink = vi.fn();
+    const getText = vi.fn();
+
+    await expect(
+      materializeDraft(
+        { draftId: draft.id, jobOverrides: { autoPublish: true } },
+        {
+          drafts: { getById: async () => draft },
+          promptPackages: {
+            getById: async () => promptPackage,
+            isSourceCanonical: async () => false,
+          },
+          createApprovalJob,
+          approvals: { approveForPipeline },
+          jobs: { updateDraftLink },
+          storage: createStorageStub({ getText }),
+          localExport: false,
+          uploadDir: '/tmp',
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL' });
+    expect(createApprovalJob).not.toHaveBeenCalled();
+    expect(updateDraftLink).not.toHaveBeenCalled();
+    expect(approveForPipeline).not.toHaveBeenCalled();
+    expect(getText).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['canonical assignment', 'session-current'],
+    ['standalone prompt', null],
+  ])('materializes a %s into a new approval job', async (_label, assignmentSessionId) => {
+    const draft = {
+      id: 'draft-current',
+      promptPackageId: 'prompt-current',
+      storageUri: 'local://drafts/current.md',
+    } as DraftRecord;
+    const promptPackage = {
+      id: 'prompt-current',
+      assignmentSessionId,
+    } as PromptPackageRecord;
+    const createApprovalJob = vi.fn().mockResolvedValue({ id: 'job-current' });
+    const updateDraftLink = vi.fn().mockResolvedValue({ id: 'job-current' });
+    const isSourceCanonical = vi.fn().mockResolvedValue(true);
+    const result = await materializeDraft(
+      { draftId: draft.id },
+      {
+        drafts: { getById: async () => draft },
+        promptPackages: { getById: async () => promptPackage, isSourceCanonical },
+        createApprovalJob,
+        jobs: { updateDraftLink },
+        storage: createStorageStub({ getText: async () => '# Draft' }),
+        localExport: false,
+        uploadDir: '/tmp',
+      },
+    );
+    expect(isSourceCanonical).toHaveBeenCalledWith(promptPackage.id);
+    expect(createApprovalJob).toHaveBeenCalledTimes(1);
+    expect(result?.jobId).toBe('job-current');
+  });
+
+  it('materializes the current owner through its reserved Share job', async () => {
+    const draft = {
+      id: 'draft-share',
+      promptPackageId: 'prompt-share',
+      storageUri: 'local://drafts/share.md',
+    } as DraftRecord;
+    const promptPackage = {
+      id: 'prompt-share',
+      assignmentSessionId: 'session-share',
+    } as PromptPackageRecord;
+    const createApprovalJob = vi.fn();
+    const updateAssignmentShareDraftLink = vi.fn().mockResolvedValue({ id: 'job-share' });
+    const result = await materializeDraft(
+      {
+        draftId: draft.id,
+        jobId: 'job-share',
+        assignmentShare: { sessionId: 'session-share', userId: 'user-share' },
+      },
+      {
+        drafts: { getById: async () => draft },
+        promptPackages: {
+          getById: async () => promptPackage,
+          isSourceCanonical: async () => true,
+        },
+        createApprovalJob,
+        jobs: {
+          getById: async () => ({ id: 'job-share', state: 'awaiting_approval' }) as never,
+          updateDraftLink: vi.fn(),
+          updateAssignmentShareDraftLink,
+        },
+        storage: createStorageStub({ getText: async () => '# Draft' }),
+        localExport: false,
+        uploadDir: '/tmp',
+      },
+    );
+    expect(result?.jobId).toBe('job-share');
+    expect(createApprovalJob).not.toHaveBeenCalled();
+    expect(updateAssignmentShareDraftLink).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-share', id: 'job-share' }),
+    );
   });
 
   it('materializes a draft and updates the job', async () => {
@@ -183,6 +318,7 @@ describe('application/draft', () => {
           getById: async () => draft,
         },
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: async () => promptPackage,
         },
         jobs: {
@@ -271,6 +407,7 @@ describe('application/draft', () => {
           getById: async () => draft,
         },
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: async () => promptPackage,
         },
         createApprovalJob,
@@ -352,6 +489,7 @@ describe('application/draft', () => {
           getById: async () => draft,
         },
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: async () => promptPackage,
         },
         createApprovalJob,
@@ -429,6 +567,7 @@ describe('application/draft', () => {
           getById: async () => draft,
         },
         promptPackages: {
+          isSourceCanonical: async () => true,
           getById: async () => promptPackage,
         },
         createApprovalJob,
@@ -466,7 +605,7 @@ describe('application/draft', () => {
 
   it('materializes a draft and auto-publishes if requested', async () => {
     const drafts = { getById: vi.fn() };
-    const promptPackages = { getById: vi.fn() };
+    const promptPackages = { getById: vi.fn(), isSourceCanonical: vi.fn().mockResolvedValue(true) };
     const createApprovalJob = vi.fn();
     const jobs = { updateDraftLink: vi.fn() };
     const approvals = { approveForPipeline: vi.fn() };

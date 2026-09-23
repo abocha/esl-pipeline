@@ -30,6 +30,7 @@ async function truncateLessonMemoryTables() {
 }
 
 interface LessonMemoryFixture {
+  assignmentSessionId: string;
   studentId: string;
   recordingId: string;
   transcriptId: string;
@@ -39,6 +40,8 @@ async function createLessonMemoryFixture(student = 'Ari'): Promise<LessonMemoryF
   const studentId = randomUUID();
   const recordingId = randomUUID();
   const transcriptId = randomUUID();
+  const assignmentSessionId = randomUUID();
+  const userId = randomUUID();
 
   await withPgClient(async (client) => {
     await client.query(
@@ -46,9 +49,21 @@ async function createLessonMemoryFixture(student = 'Ari'): Promise<LessonMemoryF
       [studentId, student],
     );
     await client.query(
+      `INSERT INTO users (id, email, password_hash, role)
+       VALUES ($1, $2, 'hash', 'user')`,
+      [userId, `${userId}@example.test`],
+    );
+    await client.query(
+      `INSERT INTO workspace_memberships (workspace_id, user_id, role)
+       SELECT workspace_id, $2, 'owner' FROM students WHERE id = $1`,
+      [studentId, userId],
+    );
+    await client.query(
       `
-      INSERT INTO recordings (id, source, student_id, source_path, storage_uri, bytes, status, created_at, updated_at)
-      VALUES ($1, 'upload', $2, 'lesson.wav', 'local://recordings/lesson.wav', 100, 'ingested', NOW(), NOW())
+      INSERT INTO recordings (id, source, student_id, source_path, storage_uri, bytes, status,
+        source_identity_kind, source_fingerprint_scheme, source_fingerprint, created_at, updated_at)
+      VALUES ($1::uuid, 'upload', $2, 'lesson.wav', 'local://recordings/lesson.wav', 100, 'ingested',
+        'audio', 'prepared-media-sha256-v1', replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''), NOW(), NOW())
       `,
       [recordingId, studentId],
     );
@@ -61,9 +76,52 @@ async function createLessonMemoryFixture(student = 'Ari'): Promise<LessonMemoryF
       `,
       [transcriptId, recordingId],
     );
+    const source = {
+      lessonId: null,
+      recordingId,
+      transcriptId,
+      transcriptWorkingVersion: 1,
+      transcriptStorageUri: 'local://transcripts/lesson-a.txt',
+      transcriptHash: 'a'.repeat(64),
+      sourceIdentityKind: 'audio',
+      sourceFingerprintScheme: 'prepared-media-sha256-v1',
+      sourceFingerprint: recordingId.replaceAll('-', '').repeat(2),
+    };
+    await client.query(
+      `INSERT INTO assignment_sessions (
+         id, user_id, student_id, recording_id, transcript_id, revision,
+         confirmed_step, confirmed_snapshot
+       ) VALUES ($1, $2, $3, $4, $5, 2, 'source', $6::jsonb)`,
+      [
+        assignmentSessionId,
+        userId,
+        studentId,
+        recordingId,
+        transcriptId,
+        JSON.stringify({
+          student: { studentId },
+          source,
+          context: null,
+          create: null,
+        }),
+      ],
+    );
+    await client.query(
+      `INSERT INTO assignment_source_bindings (
+         id, workspace_id, user_id, student_id, assignment_session_id,
+         source_identity_kind, source_fingerprint_scheme, source_fingerprint,
+         binding_role, recording_id, transcript_id
+       )
+       SELECT $1::uuid, s.workspace_id, $2::uuid, $3::uuid, $4::uuid, 'audio',
+         'prepared-media-sha256-v1',
+         replace(($5::uuid)::text, '-', '') || replace(($5::uuid)::text, '-', ''),
+         'confirmed', $5::uuid, $6::uuid
+       FROM students s WHERE s.id = $3`,
+      [randomUUID(), userId, studentId, assignmentSessionId, recordingId, transcriptId],
+    );
   });
 
-  return { studentId, recordingId, transcriptId };
+  return { assignmentSessionId, studentId, recordingId, transcriptId };
 }
 
 function pendingParams(
@@ -74,6 +132,7 @@ function pendingParams(
     studentId: fixture.studentId,
     transcriptId: fixture.transcriptId,
     recordingId: fixture.recordingId,
+    assignmentSessionId: fixture.assignmentSessionId,
     schemaVersion: 'lesson-memory.v1',
     generatedAt: new Date('2026-03-20T10:00:00.000Z'),
     provider: 'openai',
@@ -89,6 +148,17 @@ async function publishPendingEntry(
   entryId: string,
   params: Parameters<typeof ensurePendingLessonMemoryEntry>[0],
 ) {
+  await withPgClient(async (client) => {
+    await client.query(
+      `UPDATE assignment_sessions
+       SET confirmed_snapshot = jsonb_set(
+         jsonb_set(confirmed_snapshot, '{source,transcriptStorageUri}', to_jsonb($2::text)),
+         '{source,transcriptHash}', to_jsonb($3::text)
+       )
+       WHERE id = $1`,
+      [params.assignmentSessionId, params.sourceStorageUri, params.sourceContentHash],
+    );
+  });
   return publishConfirmedLessonMemoryEntry({
     ...params,
     id: entryId,
@@ -308,6 +378,46 @@ describeIfPg('domain/lesson-memory-repository', () => {
       },
     });
     expect(entries).toHaveLength(1);
+  });
+
+  it('reassigns an exact pending intent when an operator remap changes canonical authority', async () => {
+    const fixture = await createLessonMemoryFixture();
+    const original = await ensurePendingLessonMemoryEntry(pendingParams(fixture));
+    const targetAssignmentSessionId = randomUUID();
+    await withPgClient(async (client) => {
+      await client.query(
+        `INSERT INTO assignment_sessions (
+           id, user_id, student_id, recording_id, transcript_id, revision,
+           confirmed_step, confirmed_snapshot
+         )
+         SELECT $2, user_id, student_id, recording_id, transcript_id, revision,
+                confirmed_step, confirmed_snapshot
+         FROM assignment_sessions WHERE id = $1`,
+        [fixture.assignmentSessionId, targetAssignmentSessionId],
+      );
+      await client.query(
+        `UPDATE assignment_source_bindings
+         SET assignment_session_id = $2, updated_at = NOW()
+         WHERE assignment_session_id = $1`,
+        [fixture.assignmentSessionId, targetAssignmentSessionId],
+      );
+    });
+
+    const reassigned = await ensurePendingLessonMemoryEntry(
+      pendingParams(fixture, {
+        assignmentSessionId: targetAssignmentSessionId,
+        generatedAt: new Date('2026-03-20T11:00:00.000Z'),
+      }),
+    );
+
+    expect(reassigned).toMatchObject({
+      outcome: 'pending_exists',
+      entry: {
+        id: original.entry.id,
+        assignmentSessionId: targetAssignmentSessionId,
+        status: 'pending',
+      },
+    });
   });
 
   it('preserves the ready-to-pending supersession chain when confirmed content changes again', async () => {
