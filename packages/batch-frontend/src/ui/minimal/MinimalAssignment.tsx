@@ -390,6 +390,12 @@ export const MinimalAssignment: React.FC = () => {
   const assignmentSessionMutationSequenceRef = useRef(0);
   const activeAssignmentSessionIdRef = useRef<string | null>(null);
   const activeAssignmentSessionRef = useRef<AssignmentSession | null>(null);
+  const sourceAttachmentInFlightRef = useRef<{
+    sessionId: string;
+    hydrationId: number;
+    key: string;
+    promise: Promise<boolean>;
+  } | null>(null);
   const studentConfirmationRequestRef = useRef<{
     studentId: string;
     requestId: string;
@@ -1252,6 +1258,101 @@ export const MinimalAssignment: React.FC = () => {
     teacherNotes,
   ]);
 
+  const ensureAssignmentSourceAttached = useCallback(
+    async (recordingId: string, transcriptId: string): Promise<boolean> => {
+      while (true) {
+        const current = activeAssignmentSessionRef.current;
+        if (!current) return false;
+        if (current.recordingId === recordingId && current.transcriptId === transcriptId) {
+          return true;
+        }
+
+        const hydrationAtStart = hydrationIdRef.current;
+        const key = `${current.id}:${recordingId}:${transcriptId}`;
+        const inFlight = sourceAttachmentInFlightRef.current;
+        if (inFlight?.sessionId === current.id && inFlight.hydrationId === hydrationAtStart) {
+          if (inFlight.key === key) return inFlight.promise;
+          if (!(await inFlight.promise)) return false;
+          continue;
+        }
+
+        setAssignmentSaveState('saving');
+        const promise = (async (): Promise<boolean> => {
+          try {
+            let session = current;
+            let result: Awaited<ReturnType<typeof attachAssignmentSource>>;
+            try {
+              result = await attachAssignmentSource(session.id, {
+                expectedRevision: session.revision,
+                recordingId,
+                transcriptId,
+              });
+            } catch (error) {
+              if (!(error instanceof AssignmentSessionConflictApiError)) throw error;
+              session = error.latestSession;
+              activeAssignmentSessionRef.current = session;
+              setActiveAssignmentSession(session);
+              result = await attachAssignmentSource(session.id, {
+                expectedRevision: session.revision,
+                recordingId,
+                transcriptId,
+              });
+            }
+            if (hydrationIdRef.current !== hydrationAtStart) return false;
+
+            if (result.outcome === 'existing_assignment_resumed') {
+              const opened = await openAssignmentSession(result.session.id);
+              if (!opened.ok) throw new Error('The canonical assignment could not be reopened.');
+              setActiveStep(opened.destination);
+              setAssignmentRecoveryNotice('This lesson already has an assignment. We reopened it.');
+            } else if (
+              result.session.recordingId !== recordingId ||
+              result.session.transcriptId !== transcriptId
+            ) {
+              const opened = await openAssignmentSession(result.session.id);
+              if (!opened.ok) throw new Error('The attached lesson source could not be reopened.');
+              setActiveStep(opened.destination);
+              setAssignmentRecoveryNotice(null);
+            } else {
+              activeAssignmentSessionRef.current = result.session;
+              setActiveAssignmentSession(result.session);
+              assignmentSessionMilestoneRef.current.recordingId = recordingId;
+              assignmentSessionMilestoneRef.current.transcriptId = transcriptId;
+              setAssignmentRecoveryNotice(null);
+            }
+            setAssignmentRecoveryError(null);
+            setAssignmentSaveState('saved');
+            return (
+              result.outcome === 'source_attached' &&
+              result.session.recordingId === recordingId &&
+              result.session.transcriptId === transcriptId
+            );
+          } catch (error) {
+            if (hydrationIdRef.current !== hydrationAtStart) return false;
+            console.warn('Unable to attach assignment source', error);
+            setAssignmentSaveState('error');
+            setAssignmentRecoveryNotice(null);
+            setAssignmentRecoveryError(
+              error instanceof Error
+                ? `Could not attach this lesson source: ${error.message}`
+                : 'Could not attach this lesson source. Try again.',
+            );
+            return false;
+          }
+        })();
+        const entry = { sessionId: current.id, hydrationId: hydrationAtStart, key, promise };
+        sourceAttachmentInFlightRef.current = entry;
+        void promise.finally(() => {
+          if (sourceAttachmentInFlightRef.current === entry) {
+            sourceAttachmentInFlightRef.current = null;
+          }
+        });
+        return promise;
+      }
+    },
+    [openAssignmentSession, setActiveAssignmentSession],
+  );
+
   useEffect(() => {
     const recordingId = source.recording?.recordingId ?? '';
     const transcriptId = source.transcript?.transcriptId ?? '';
@@ -1268,67 +1369,10 @@ export const MinimalAssignment: React.FC = () => {
     if (!assignmentSessionWritesAllowed()) return;
     const session = activeAssignmentSessionRef.current;
     if (!session || session.confirmedStep === 'share') return;
-    const hydrationAtStart = hydrationIdRef.current;
-    setAssignmentSaveState('saving');
-    void (async () => {
-      try {
-        let current = activeAssignmentSessionRef.current;
-        if (!current) return;
-        let result;
-        try {
-          result = await attachAssignmentSource(current.id, {
-            expectedRevision: current.revision,
-            recordingId,
-            transcriptId,
-          });
-        } catch (error) {
-          if (!(error instanceof AssignmentSessionConflictApiError)) throw error;
-          current = error.latestSession;
-          activeAssignmentSessionRef.current = current;
-          setActiveAssignmentSession(current);
-          result = await attachAssignmentSource(current.id, {
-            expectedRevision: current.revision,
-            recordingId,
-            transcriptId,
-          });
-        }
-        if (hydrationIdRef.current !== hydrationAtStart) return;
-        if (result.outcome === 'existing_assignment_resumed') {
-          const opened = await openAssignmentSession(result.session.id);
-          if (!opened.ok) throw new Error('The canonical assignment could not be reopened.');
-          setActiveStep(opened.destination);
-          setAssignmentRecoveryNotice('This lesson already has an assignment. We reopened it.');
-        } else if (
-          result.session.recordingId !== recordingId ||
-          result.session.transcriptId !== transcriptId
-        ) {
-          const opened = await openAssignmentSession(result.session.id);
-          if (!opened.ok) throw new Error('The attached lesson source could not be reopened.');
-          setActiveStep(opened.destination);
-          setAssignmentRecoveryNotice(null);
-        } else {
-          activeAssignmentSessionRef.current = result.session;
-          setActiveAssignmentSession(result.session);
-          setAssignmentRecoveryNotice(null);
-        }
-        setAssignmentRecoveryError(null);
-        setAssignmentSaveState('saved');
-      } catch (error) {
-        if (hydrationIdRef.current !== hydrationAtStart) return;
-        console.warn('Unable to attach assignment source', error);
-        setAssignmentSaveState('error');
-        setAssignmentRecoveryNotice(null);
-        setAssignmentRecoveryError(
-          error instanceof Error
-            ? `Could not attach this lesson source: ${error.message}`
-            : 'Could not attach this lesson source. Try again.',
-        );
-      }
-    })();
+    void ensureAssignmentSourceAttached(recordingId, transcriptId);
   }, [
-    openAssignmentSession,
     assignmentSessionWritesAllowed,
-    setActiveAssignmentSession,
+    ensureAssignmentSourceAttached,
     source.recording?.recordingId,
     source.transcript?.transcriptId,
     source.transcriptStatus,
@@ -2148,12 +2192,15 @@ export const MinimalAssignment: React.FC = () => {
           ? await source.handleSaveTranscript(speakerRoleMapping)
           : source.transcript;
       if (!recordingId || !transcript?.transcriptId || !transcript.workingVersion) return;
-      const recovered = await saveAssignmentSessionProgress({
-        lessonId: linkedLessonId || null,
-        recordingId,
-        transcriptId: transcript.transcriptId,
-      });
-      if (!recovered) return;
+      if (!(await ensureAssignmentSourceAttached(recordingId, transcript.transcriptId))) return;
+      const recovered = await saveAssignmentSessionProgress({ lessonId: linkedLessonId || null });
+      if (
+        !recovered ||
+        recovered.recordingId !== recordingId ||
+        recovered.transcriptId !== transcript.transcriptId
+      ) {
+        return;
+      }
       const confirmed = await confirmAssignmentStep((session) => ({
         step: 'source',
         expectedRevision: session.revision,
@@ -2218,6 +2265,7 @@ export const MinimalAssignment: React.FC = () => {
     commitTeacherNotes,
     completedReferenceMode,
     confirmAssignmentStep,
+    ensureAssignmentSourceAttached,
     linkedLessonId,
     refreshFirstProfileLessonMemory,
     saveAssignmentSessionProgress,

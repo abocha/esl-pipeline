@@ -119,6 +119,9 @@ Canonical behavior and current status live in:
   reopens backend authority, and explains `This lesson already has an assignment. We reopened it.`
   If the backend materializes fresh released-source lineage, the UI rehydrates that returned session
   rather than continuing with stale candidate IDs.
+- Source Continue waits for the canonical attachment result, persists a linked lesson through
+  ordinary session recovery separately, and confirms the attached recording/transcript through the
+  Source confirmation endpoint. Generic recovery never reattaches source IDs.
 - Prompt and draft recovery is lineage-safe: a generated draft is created against the exact prompt
   returned by that generation operation, prompt/draft IDs recover as a compatible pair, and Create
   navigation plus draft editing stays locked while prompt or draft generation is in flight.
