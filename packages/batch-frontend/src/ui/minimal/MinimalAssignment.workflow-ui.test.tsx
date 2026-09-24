@@ -1348,6 +1348,22 @@ describe('MinimalAssignment - staged workflow UI', () => {
           expect.objectContaining({ step: 'source', transcriptId: 'tx-1' }),
         ),
       );
+      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+        'session-1',
+        expect.objectContaining({ patch: { lessonId: null } }),
+      );
+      expect(
+        vi
+          .mocked(api.updateAssignmentSessionRecovery)
+          .mock.calls.every(
+            ([, request]) =>
+              !Object.hasOwn(request.patch, 'recordingId') &&
+              !Object.hasOwn(request.patch, 'transcriptId'),
+          ),
+      ).toBe(true);
+      expect(vi.mocked(api.attachAssignmentSource).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(api.confirmAssignmentSessionStep).mock.invocationCallOrder[0]!,
+      );
       expect(await screen.findByText(/Building lesson memory/i)).toBeTruthy();
       await waitFor(() => {
         expect(api.getStudentMemoryHealth).toHaveBeenCalledWith('student-cora');
@@ -1356,7 +1372,49 @@ describe('MinimalAssignment - staged workflow UI', () => {
     INTEGRATION_TEST_TIMEOUT_MS,
   );
 
-  it('reopens the canonical assignment when source attachment loses the ownership race', async () => {
+  it('waits for in-flight source attachment when Continue is clicked quickly', async () => {
+    const user = createMinimalUser();
+    const recording = makeRecording({ status: 'transcribed', transcriptId: 'tx-1' });
+    vi.mocked(api.uploadRecording).mockResolvedValue(recording);
+    vi.mocked(api.getRecording).mockResolvedValue(recording);
+    const attachSource = vi.mocked(api.attachAssignmentSource).getMockImplementation();
+    expect(attachSource).toBeDefined();
+    let releaseAttachment: (() => void) | null = null;
+    const attachmentGate = new Promise<void>((resolve) => {
+      releaseAttachment = resolve;
+    });
+    vi.mocked(api.attachAssignmentSource).mockImplementationOnce(async (...args) => {
+      await attachmentGate;
+      return attachSource!(...args);
+    });
+
+    renderMinimalAssignment();
+    await startNewAssignmentForLearner(user);
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+    await screen.findByDisplayValue('Student transcript text');
+    await waitFor(() => expect(api.attachAssignmentSource).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    expect(api.confirmAssignmentSessionStep).not.toHaveBeenCalled();
+
+    releaseAttachment!();
+    await waitFor(() =>
+      expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+        'session-1',
+        expect.objectContaining({
+          step: 'source',
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+        }),
+      ),
+    );
+    expect(api.attachAssignmentSource).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.attachAssignmentSource).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(api.confirmAssignmentSessionStep).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('reopens the canonical assignment when fast Continue loses the source ownership race', async () => {
     const user = createMinimalUser();
     const recording = makeRecording({ status: 'transcribed', transcriptId: 'tx-1' });
     const canonical = makeAssignmentSession({
@@ -1369,9 +1427,13 @@ describe('MinimalAssignment - staged workflow UI', () => {
     });
     vi.mocked(api.uploadRecording).mockResolvedValue(recording);
     vi.mocked(api.getRecording).mockResolvedValue(recording);
-    vi.mocked(api.attachAssignmentSource).mockResolvedValueOnce({
-      outcome: 'existing_assignment_resumed',
-      session: canonical,
+    let releaseAttachment: (() => void) | null = null;
+    const attachmentGate = new Promise<void>((resolve) => {
+      releaseAttachment = resolve;
+    });
+    vi.mocked(api.attachAssignmentSource).mockImplementationOnce(async () => {
+      await attachmentGate;
+      return { outcome: 'existing_assignment_resumed', session: canonical };
     });
     vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(canonical);
 
@@ -1384,11 +1446,17 @@ describe('MinimalAssignment - staged workflow UI', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+    await screen.findByDisplayValue('Student transcript text');
+    await waitFor(() => expect(api.attachAssignmentSource).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    expect(api.confirmAssignmentSessionStep).not.toHaveBeenCalled();
+    releaseAttachment!();
 
     await waitFor(() =>
       expect(api.fetchAssignmentSession).toHaveBeenCalledWith('session-canonical'),
     );
     expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+    expect(api.confirmAssignmentSessionStep).not.toHaveBeenCalled();
   });
 
   it('reopens the durable canonical assignment returned by audio acquisition', async () => {
@@ -1717,6 +1785,36 @@ describe('MinimalAssignment - staged workflow UI', () => {
           }),
         ),
       );
+      const replacementAttachmentIndex = vi
+        .mocked(api.attachAssignmentSource)
+        .mock.calls.findIndex(([, request]) => request.recordingId === 'rec-b');
+      expect(replacementAttachmentIndex).toBeGreaterThanOrEqual(0);
+      const replacementAttachmentOrder = vi.mocked(api.attachAssignmentSource).mock
+        .invocationCallOrder[replacementAttachmentIndex]!;
+      const sourceConfirmationOrder = vi
+        .mocked(api.confirmAssignmentSessionStep)
+        .mock.invocationCallOrder.at(-1)!;
+      expect(
+        vi
+          .mocked(api.updateAssignmentSessionRecovery)
+          .mock.calls.some(
+            ([, request], index) =>
+              request.patch.lessonId === 'lesson-linked' &&
+              vi.mocked(api.updateAssignmentSessionRecovery).mock.invocationCallOrder[index]! >
+                replacementAttachmentOrder &&
+              vi.mocked(api.updateAssignmentSessionRecovery).mock.invocationCallOrder[index]! <
+                sourceConfirmationOrder,
+          ),
+      ).toBe(true);
+      expect(
+        vi
+          .mocked(api.updateAssignmentSessionRecovery)
+          .mock.calls.every(
+            ([, request]) =>
+              !Object.hasOwn(request.patch, 'recordingId') &&
+              !Object.hasOwn(request.patch, 'transcriptId'),
+          ),
+      ).toBe(true);
       expect(
         (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
       ).toBe('Keep this teaching note.');

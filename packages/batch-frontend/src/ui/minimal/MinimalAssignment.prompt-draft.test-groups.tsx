@@ -1353,16 +1353,19 @@ export function registerPromptStudentSelectionTests() {
         expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
           'session-linked',
           expect.objectContaining({
-            patch: expect.objectContaining({
-              recordingId: 'rec-1',
-              lessonId: 'lesson-resume-1',
-            }),
+            patch: { lessonId: 'lesson-resume-1' },
           }),
         );
+        expect(
+          vi.mocked(api.updateAssignmentSessionRecovery).mock.calls.every(([, request]) =>
+            !Object.hasOwn(request.patch, 'recordingId') &&
+            !Object.hasOwn(request.patch, 'transcriptId'),
+          ),
+        ).toBe(true);
         expect(api.createPromptPackage).toHaveBeenCalledWith(
           'rec-1',
           expect.objectContaining({
-            assignmentSessionId: expect.any(String),
+            assignmentSessionId: 'session-linked',
             templateId: 'tpl-default',
           }),
         );
