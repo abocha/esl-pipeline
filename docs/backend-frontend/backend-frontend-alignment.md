@@ -62,7 +62,9 @@ Provider/model detail stays in
   immutable URI, hash, and working version directly; no content-revision tables exist.
 - Canonical lesson-source ownership is keyed by tutor, student, source kind, fingerprint scheme, and
   fingerprint rather than recording, transcript, job, or output IDs. Attachment and recovery
-  pointers commit together. Successful replacement confirmation releases the old fingerprint;
+  pointers commit together, while generic session recovery cannot mutate source ownership. Source
+  confirmation uses the attached recording/transcript IDs, and lesson linking remains an ordinary
+  recovery field. Successful replacement confirmation releases the old fingerprint;
   released-source reuse receives fresh recording/transcript lineage. Historical nonowners and
   unclassified historical sources remain readable but cannot perform new canonical mutations.
 - Confirmed Source exclusively drives transcript-hash-keyed lesson memory from its immutable URI.
