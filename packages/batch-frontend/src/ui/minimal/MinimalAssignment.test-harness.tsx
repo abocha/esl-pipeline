@@ -1020,6 +1020,16 @@ export function setupMinimalAssignmentTest() {
     }),
   );
   vi.mocked(api.updateAssignmentSessionRecovery).mockImplementation(async (id, request) => {
+    const recoveryFields = Object.entries(request.patch).filter(([, value]) => value !== undefined);
+    const touchesSource = recoveryFields.some(
+      ([field]) => field === 'recordingId' || field === 'transcriptId',
+    );
+    if (
+      touchesSource &&
+      recoveryFields.some(([field]) => field !== 'recordingId' && field !== 'transcriptId')
+    ) {
+      throw new Error('HTTP 409: assignment_recovery_lineage_invalid');
+    }
     await synchronizeCurrentSession(id);
     currentSession = makeAssignmentSession({
       ...currentSession,
@@ -1044,6 +1054,9 @@ export function setupMinimalAssignmentTest() {
     await synchronizeCurrentSession(id);
     const base = currentSession;
     if (request.step === 'source') {
+      if (base.recordingId !== request.recordingId || base.transcriptId !== request.transcriptId) {
+        throw new Error('HTTP 400: assignment_step_source_not_attached');
+      }
       currentSession = makeAssignmentSession({
         ...base,
         revision: request.expectedRevision + 1,
