@@ -2886,8 +2886,7 @@ export const MinimalAssignment: React.FC = () => {
                 source.recording?.source === 'upload' &&
                   activeAssignmentSession &&
                   activeAssignmentSession.confirmedStep !== 'share' &&
-                  !activeAssignmentSession.shareJobId &&
-                  assignmentSessionWritesAllowed(),
+                  !activeAssignmentSession.shareJobId,
               )}
               selectedFileName={source.selectedFileName}
               uploadProgress={source.uploadProgress}
@@ -2895,7 +2894,10 @@ export const MinimalAssignment: React.FC = () => {
                 markAssignmentUserEdit();
                 handleFiles(files);
               }}
-              onBeginAudioReplacement={source.beginAudioReplacement}
+              onBeginAudioReplacement={() => {
+                markAssignmentUserEdit();
+                source.beginAudioReplacement();
+              }}
               onCancelAudioReplacement={source.cancelAudioReplacement}
               onCancelUpload={handleCancelUpload}
               canRetryUpload={source.canRetryUpload}

@@ -67,6 +67,9 @@ Provider/model detail stays in
   recovery field. Successful replacement confirmation releases the old fingerprint;
   released-source reuse receives fresh recording/transcript lineage. Historical nonowners and
   unclassified historical sources remain readable but cannot perform new canonical mutations.
+- An eligible uploaded recording remains replaceable after an unfinished assignment resumes.
+  Passive rehydration suppresses session writes until an explicit edit, including opening Replace
+  audio; completed or Share-reserved sessions remain ineligible.
 - Confirmed Source exclusively drives transcript-hash-keyed lesson memory from its immutable URI.
   Prompt generation consumes confirmed Source/Context; Preview and Share consume confirmed Create.
 - For a `tutor_only` profile, Source confirmation durably starts one automatic initial enrichment
