@@ -15,7 +15,8 @@ import { ProviderExecutionError } from './generation-providers.js';
 export type StudentMemoryGenerationWorkload =
   | 'lesson_memory'
   | 'homework_memory'
-  | 'student_memory_snapshot';
+  | 'student_memory_snapshot'
+  | 'profile_initial_enrichment';
 
 export type StudentMemoryPacingReason =
   | 'budget_rpm_minute'
@@ -64,6 +65,7 @@ export interface StudentMemoryGenerationPacer {
     model: string;
     prompt: string;
     maxOutputTokens?: number;
+    recordUsage?: boolean;
     execute: () => Promise<T>;
   }): Promise<T>;
 }
@@ -181,6 +183,7 @@ export function createStudentMemoryGenerationPacer(
       model: string;
       prompt: string;
       maxOutputTokens?: number;
+      recordUsage?: boolean;
       execute: () => Promise<T>;
     }): Promise<T> {
       const attemptedAt = now();
@@ -251,17 +254,19 @@ export function createStudentMemoryGenerationPacer(
       }
 
       const actualTokens = result.usage?.totalTokens;
-      try {
-        await recordGenerationBudgetUsageAfterSuccess({
-          config,
-          provider: args.provider,
-          model: args.model,
-          usageTotalTokens: actualTokens,
-          now: now(),
-          repository,
-        });
-      } catch {
-        metrics.increment('student_memory_generation_actual_usage_record_failure_total', 1, tags);
+      if (args.recordUsage !== false) {
+        try {
+          await recordGenerationBudgetUsageAfterSuccess({
+            config,
+            provider: args.provider,
+            model: args.model,
+            usageTotalTokens: actualTokens,
+            now: now(),
+            repository,
+          });
+        } catch {
+          metrics.increment('student_memory_generation_actual_usage_record_failure_total', 1, tags);
+        }
       }
       metrics.increment('student_memory_generation_completed_tokens', actualTokens ?? 0, tags);
       return result;

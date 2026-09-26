@@ -469,37 +469,13 @@ describeHttpServerIntegrationSuite(
       });
     });
 
-    it('POST /students/:id/profile-drafts/populate-first-from-lesson creates the initial structured draft', async () => {
+    it('does not expose the removed first-profile population command', async () => {
       const response = await app.inject({
         method: 'POST',
         url: `/students/${deriveStudentId('Anna')}/profile-drafts/populate-first-from-lesson`,
       });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({
-        draftRevisionId: 'profile-revision-first-draft',
-        profileId: 'profiles/anna.md',
-        snapshotId: 'snapshot-1',
-        lessonMemoryIds: ['lesson-1'],
-        homeworkMemoryIds: [],
-        draftRevision: {
-          id: 'profile-revision-first-draft',
-          profileId: 'profiles/anna.md',
-          contentHash: 'profile-first-draft-hash',
-          source: 'lesson_population',
-          status: 'draft',
-          versionNumber: 1,
-          versionLabel: 'v1',
-          activatedAt: null,
-          deprecatedAt: null,
-          createdAt: '2024-01-01T00:00:00.000Z',
-          createdBy: 'test-user-id',
-          restoredFromRevisionId: null,
-          content: '# Foundational Profile',
-        },
-      });
+      expect(response.statusCode).toBe(404);
     });
-
     it('POST /students/:id/profile-drafts/initialize creates an empty canonical draft', async () => {
       const response = await app.inject({
         method: 'POST',
@@ -661,6 +637,35 @@ describeHttpServerIntegrationSuite(
         'profile.md',
         'Updated profile content',
         { createdBy: 'test-user-id' },
+        null,
+      );
+    });
+
+    it('PUT /profiles/:id accepts structured ordinary edits for direct activation', async () => {
+      mockUpsertProfileContent.mockClear();
+      const structuredContent = {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: 'B1',
+        primaryGoals: ['Speak clearly'],
+        communicationContexts: [],
+        interestsAndUsefulThemes: [],
+        stableStrengths: [],
+        persistentChallenges: [],
+        studyPreferences: [],
+        durableConstraints: [],
+        teacherNotes: null,
+      };
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/profiles/profile.md',
+        payload: { structuredContent },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(mockUpsertProfileContent).toHaveBeenCalledWith(
+        'profile.md',
+        expect.stringContaining('Speak clearly'),
+        { createdBy: 'test-user-id' },
+        structuredContent,
       );
     });
 

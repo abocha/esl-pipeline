@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
 
 import type {
   ProfileContentResponse,
@@ -24,11 +23,11 @@ import {
   listProfileRevisions,
   listStudentProfileBindings,
   listStudentProfileCandidates,
-  populateFirstProfileFromLesson,
   refreshProfileDraftFromApprovedCandidates,
   rejectStudentProfileCandidate,
   restoreProfileRevision,
   saveProfileDraftRevision,
+  upsertProfileContent,
 } from '../../utils/api';
 import { ProfileCandidatesPanel } from './ProfileCandidatesPanel';
 import { useStudentAreaContext } from './StudentAreaContext';
@@ -617,18 +616,9 @@ function formatDraftDiffChangeType(changeType: ProfileDraftDiffItem['changeType'
 export const StudentLearningPage: React.FC = () => {
   const { student, studentId, studentLoading, studentError, refreshStudent } =
     useStudentAreaContext();
-  const location = useLocation();
   const latestPageLoadRequestRef = useRef(0);
   const [bootstrapProfileId, setBootstrapProfileId] = useState<string | null>(null);
-  const profileDraftHandoff = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    const handoffProfileId = params.get('profileId')?.trim() || null;
-    const draftRevisionId = params.get('draftRevisionId')?.trim() || null;
-    return handoffProfileId && draftRevisionId
-      ? { profileId: handoffProfileId, draftRevisionId }
-      : { profileId: null, draftRevisionId: null };
-  }, [location.search]);
-  const profileId = student?.profileId ?? bootstrapProfileId ?? profileDraftHandoff.profileId ?? '';
+  const profileId = student?.profileId ?? bootstrapProfileId ?? '';
 
   const [profileForm, setProfileForm] = useState<FoundationalProfileFormState>(
     INITIAL_FOUNDATIONAL_PROFILE_FORM,
@@ -1051,47 +1041,6 @@ export const StudentLearningPage: React.FC = () => {
           setProfileLegacyNotice(null);
         }
 
-        if (profileDraftHandoff.profileId && profileDraftHandoff.draftRevisionId) {
-          try {
-            setBootstrapProfileId(profileDraftHandoff.profileId);
-            const [handoffRevision, handoffRevisions] = await Promise.all([
-              getProfileRevision(
-                profileDraftHandoff.profileId,
-                profileDraftHandoff.draftRevisionId,
-              ),
-              listProfileRevisions(profileDraftHandoff.profileId, {
-                limit: 25,
-                offset: 0,
-                order: 'desc',
-              }),
-            ]);
-            if (!isCurrentPageLoadRequest(requestId)) {
-              return;
-            }
-            const form = foundationalProfileToFormState(handoffRevision.structuredContent);
-            setCurrentRevision(handoffRevision);
-            setProfileForm(form);
-            setLoadedProfileForm(form);
-            setProfileDraftDiffBase(null);
-            setProfileRevisions(handoffRevisions.items ?? []);
-            setProfileLegacyNotice(getLegacyProfileNotice(handoffRevision));
-            setProfileSuccess(
-              handoffRevision.status === 'draft'
-                ? 'Profile draft opened from the assignment flow. Review, edit, save, then activate it.'
-                : 'Profile from the assignment flow is active and ready to use.',
-            );
-          } catch (error) {
-            if (!isCurrentPageLoadRequest(requestId)) {
-              return;
-            }
-            const message =
-              error instanceof Error
-                ? error.message
-                : 'Unable to open the profile draft from the assignment flow.';
-            setProfileError(message);
-          }
-        }
-
         setMemoryOverview(surface.memory);
         setMemoryHealth(surface.memoryHealth ?? null);
         setMemoryHealthDetailsOpen(false);
@@ -1123,13 +1072,7 @@ export const StudentLearningPage: React.FC = () => {
     return () => {
       latestPageLoadRequestRef.current += 1;
     };
-  }, [
-    clearLoadedLearningSurface,
-    isCurrentPageLoadRequest,
-    profileDraftHandoff.draftRevisionId,
-    profileDraftHandoff.profileId,
-    studentId,
-  ]);
+  }, [clearLoadedLearningSurface, isCurrentPageLoadRequest, studentId]);
 
   const handleProfileFieldChange = useCallback(
     (field: keyof FoundationalProfileFormState, value: string) => {
@@ -1176,39 +1119,46 @@ export const StudentLearningPage: React.FC = () => {
     }
   };
 
+  const handleSaveProfile = async () => {
+    if (!profileId) return;
+    setProfileBusy('saving');
+    setProfileError(null);
+    setProfileSuccess(null);
+    try {
+      await upsertProfileContent(
+        profileId,
+        null,
+        foundationalProfileFormToStructuredContent(profileForm),
+      );
+      await reloadCurrentLearningSurface();
+      setProfileSuccess('Learner profile saved.');
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Unable to save learner profile.');
+    } finally {
+      setProfileBusy(null);
+    }
+  };
+
   const handleStartEmptyProfile = async () => {
     setProfileBusy('saving');
     setProfileError(null);
     setProfileSuccess(null);
     try {
       const response = await initializeStudentProfileDraft(studentId);
+      const activated = await activateProfileRevision(
+        response.profileId,
+        response.draftRevision.id,
+      );
       setBootstrapProfileId(response.profileId);
-      const form = foundationalProfileToFormState(response.draftRevision.structuredContent);
-      setCurrentRevision(response.draftRevision);
+      const form = foundationalProfileToFormState(activated.structuredContent);
+      setCurrentRevision(activated);
       setProfileForm(form);
       setLoadedProfileForm(form);
       setProfileDraftDiffBase(null);
       setProfileLegacyNotice(null);
-      setProfileRevisions([
-        {
-          id: response.draftRevision.id,
-          profileId: response.draftRevision.profileId,
-          contentHash: response.draftRevision.contentHash,
-          source: response.draftRevision.source,
-          status: response.draftRevision.status,
-          versionNumber: response.draftRevision.versionNumber,
-          versionLabel: response.draftRevision.versionLabel,
-          activatedAt: response.draftRevision.activatedAt,
-          deprecatedAt: response.draftRevision.deprecatedAt,
-          createdAt: response.draftRevision.createdAt,
-          createdBy: response.draftRevision.createdBy,
-          restoredFromRevisionId: response.draftRevision.restoredFromRevisionId,
-        },
-      ]);
+      setProfileRevisions([{ ...activated }]);
       await refreshStudent();
-      setProfileSuccess(
-        'Empty draft created. Add the durable learner context, then save when ready.',
-      );
+      setProfileSuccess('Learner profile created. Add context and save when ready.');
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to start the learner profile.';
@@ -1271,41 +1221,6 @@ export const StudentLearningPage: React.FC = () => {
       setProfileSuccess('Revision restored into the editor.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to restore the revision.';
-      setProfileError(message);
-    } finally {
-      setProfileBusy(null);
-    }
-  };
-
-  const handlePopulateFirstProfile = async () => {
-    setProfileBusy('populating');
-    setProfileError(null);
-    setProfileSuccess(null);
-    try {
-      const response = await populateFirstProfileFromLesson(studentId);
-      setBootstrapProfileId(response.profileId);
-      const revision =
-        response.draftRevision ??
-        (await loadProfileRevisionIntoEditor(response.profileId, response.draftRevisionId));
-      if (response.draftRevision) {
-        const form = foundationalProfileToFormState(revision.structuredContent);
-        setCurrentRevision(revision);
-        setProfileForm(form);
-        setLoadedProfileForm(form);
-        setProfileDraftDiffBase(null);
-        setProfileLegacyNotice(getLegacyProfileNotice(revision));
-      }
-      const revisions = await listProfileRevisions(response.profileId, {
-        limit: 25,
-        offset: 0,
-        order: 'desc',
-      });
-      setProfileRevisions(revisions.items ?? []);
-      await refreshStudent();
-      setProfileSuccess('Draft profile populated from the latest lesson memory.');
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to populate the first profile draft.';
       setProfileError(message);
     } finally {
       setProfileBusy(null);
@@ -1462,62 +1377,31 @@ export const StudentLearningPage: React.FC = () => {
   const unresolvedIssues = latestSnapshot?.unresolvedIssues ?? [];
   const recentLessons = memoryOverview?.recentReadyLessonMemory ?? [];
   const recentHomework = memoryOverview?.recentReadyHomeworkMemory ?? [];
-  const readyLessonMemoryCount = memoryHealth?.memoryCounts.lesson.ready.count ?? 0;
-  const canPopulateFirstProfileFromLesson = recentLessons.length > 0 || readyLessonMemoryCount > 0;
-  const populateFirstProfileDisabled = profileBusy !== null || !canPopulateFirstProfileFromLesson;
-  const populateFirstProfileHint =
-    'Upload and process first lesson audio before populating the profile from lesson evidence.';
-
   if (!profileId) {
     return (
       <section className="student-learning-layout student-area-theme student-learning-bootstrap">
         <div className="student-learning-bootstrap-copy">
           <span className="student-learning-eyebrow">Learning</span>
-          <h2>Build the first foundational profile</h2>
+          <h2>Create a learner profile</h2>
           <p>
-            {student.student} does not have an active learner profile yet. Start an empty structured
-            profile or bootstrap one from lesson evidence here.
+            {student.student} does not have a learner profile yet. Create one to add what you
+            already know about the learner.
           </p>
         </div>
 
         <div className="student-learning-bootstrap-grid">
           <article className="student-learning-bootstrap-card">
-            <span className="student-learning-card-eyebrow">Manual Start</span>
-            <h3>Start Empty Profile</h3>
-            <p>
-              Open a clean structured draft when you already know the learner well and want direct
-              control.
-            </p>
+            <span className="student-learning-card-eyebrow">Learner profile</span>
+            <h3>Create learner profile</h3>
+            <p>Begin with an empty profile and add learner context when you have it.</p>
             <button
               type="button"
               className="workspace-primary-btn"
               onClick={() => void handleStartEmptyProfile()}
               disabled={profileBusy !== null}
             >
-              {profileBusy === 'saving' ? 'Starting…' : 'Start Empty Profile'}
+              {profileBusy === 'saving' ? 'Creating…' : 'Create learner profile'}
             </button>
-          </article>
-
-          <article className="student-learning-bootstrap-card">
-            <span className="student-learning-card-eyebrow">Guided Start</span>
-            <h3>Populate First Profile From Lesson</h3>
-            <p>
-              Draft a first profile from lesson evidence and student memory, then review it before
-              activation.
-            </p>
-            <button
-              type="button"
-              className="workspace-secondary-btn"
-              onClick={() => void handlePopulateFirstProfile()}
-              disabled={populateFirstProfileDisabled}
-            >
-              {profileBusy === 'populating' ? 'Populating…' : 'Populate First Profile From Lesson'}
-            </button>
-            {!canPopulateFirstProfileFromLesson ? (
-              <p className="workspace-muted" aria-live="polite">
-                {populateFirstProfileHint}
-              </p>
-            ) : null}
           </article>
         </div>
 
@@ -1572,14 +1456,6 @@ export const StudentLearningPage: React.FC = () => {
           <button
             type="button"
             className="workspace-secondary-btn"
-            onClick={() => void handlePopulateFirstProfile()}
-            disabled={populateFirstProfileDisabled}
-          >
-            {profileBusy === 'populating' ? 'Populating…' : 'Populate First Profile From Lesson'}
-          </button>
-          <button
-            type="button"
-            className="workspace-secondary-btn"
             onClick={() =>
               void handleRefreshDraftFromCandidates(
                 approvedCandidatesReadyForPromotion.map((candidate) => candidate.id),
@@ -1589,29 +1465,36 @@ export const StudentLearningPage: React.FC = () => {
           >
             {profileBusy === 'promoting' ? 'Refreshing…' : 'Refresh Draft From Approved Candidates'}
           </button>
-          <button
-            type="button"
-            className="workspace-primary-btn"
-            onClick={() => void handleSaveDraft()}
-            disabled={profileBusy !== null || !profileDirty}
-          >
-            {profileBusy === 'saving' ? 'Saving…' : 'Save Draft'}
-          </button>
-          <button
-            type="button"
-            className="workspace-primary-btn"
-            onClick={() => void handleActivateDraft()}
-            disabled={profileBusy !== null || !canActivateDraft}
-          >
-            {profileBusy === 'activating' ? 'Activating…' : 'Activate Draft'}
-          </button>
+          {canActivateDraft ? (
+            <>
+              <button
+                type="button"
+                className="workspace-primary-btn"
+                onClick={() => void handleSaveDraft()}
+                disabled={profileBusy !== null || !profileDirty}
+              >
+                {profileBusy === 'saving' ? 'Saving…' : 'Save Draft'}
+              </button>
+              <button
+                type="button"
+                className="workspace-primary-btn"
+                onClick={() => void handleActivateDraft()}
+                disabled={profileBusy !== null}
+              >
+                {profileBusy === 'activating' ? 'Activating…' : 'Activate Draft'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="workspace-primary-btn"
+              onClick={() => void handleSaveProfile()}
+              disabled={profileBusy !== null || !profileDirty}
+            >
+              {profileBusy === 'saving' ? 'Saving…' : 'Save learner profile'}
+            </button>
+          )}
         </div>
-
-        {!canPopulateFirstProfileFromLesson ? (
-          <p className="workspace-muted" aria-live="polite">
-            {populateFirstProfileHint}
-          </p>
-        ) : null}
 
         {profileError ? (
           <p className="workspace-error" aria-live="polite">

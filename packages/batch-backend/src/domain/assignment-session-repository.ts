@@ -32,6 +32,7 @@ import {
   insertJob,
   resetFailedAssignmentCorrectionJob,
 } from './job-repository.js';
+import { reconcileInitialEnrichmentIntent } from './profile-initial-enrichment-repository.js';
 import { getTranscriptByIdForUpdateForUser } from './transcript-repository.js';
 
 export const ACTIVE_ASSIGNMENT_SESSION_SQL = `confirmed_step <> 'share'`;
@@ -276,7 +277,9 @@ export class AssignmentSessionConfirmationError extends Error {
       | 'ASSIGNMENT_STEP_LINEAGE_INVALID'
       | 'ASSIGNMENT_STEP_SPEAKER_ROLE_MAPPING_REQUIRED'
       | 'ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND'
-      | 'ASSIGNMENT_STEP_SOURCE_NOT_ATTACHED',
+      | 'ASSIGNMENT_STEP_SOURCE_NOT_ATTACHED'
+      | 'ASSIGNMENT_STEP_PROFILE_STALE'
+      | 'ASSIGNMENT_STEP_PROFILE_PREPARING',
   ) {
     super(code);
     this.name = 'AssignmentSessionConfirmationError';
@@ -479,6 +482,7 @@ async function confirmLockedSource(
       source,
       params,
     );
+    await reconcileInitialEnrichmentIntent(client, current);
     return { session: current, invalidated: [], lessonMemoryIntent: intent };
   }
   assertExpectedRevision(current, request.expectedRevision);
@@ -527,6 +531,7 @@ async function confirmLockedSource(
     source,
     params,
   );
+  await reconcileInitialEnrichmentIntent(client, updated);
   return {
     session: updated,
     invalidated: ['prompt', 'draft', 'preview'],
@@ -554,6 +559,68 @@ async function confirmLockedContext(
   ) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
   }
+  const context = {
+    teacherNotes: request.teacherNotes,
+    profileId: request.profileId,
+    profileRevisionId: request.profileRevisionId,
+    profileRevisionHash: request.profileRevisionHash,
+  };
+  if (JSON.stringify(current.confirmed.context) === JSON.stringify(context)) {
+    return { session: current, invalidated: [], lessonMemoryIntent: null };
+  }
+  assertExpectedRevision(current, request.expectedRevision);
+  const pendingOnboarding = await client.query(
+    `SELECT 1 FROM profile_initial_enrichment_operations op
+     WHERE op.assignment_session_id = $1 AND op.student_id = $2
+       AND op.recording_id = $3 AND op.transcript_id = $4 AND op.transcript_hash = $5
+       AND op.state IN ('waiting_evidence', 'queued', 'submitting', 'result_ready')
+     UNION ALL
+     SELECT 1 FROM student_profile_bindings b
+     JOIN profiles p ON p.id = b.profile_id
+     WHERE b.student_id = $2 AND b.effective_to IS NULL
+       AND p.provenance = 'tutor_only'
+       AND NOT EXISTS (
+         SELECT 1 FROM profile_initial_enrichment_operations exact_op
+         WHERE exact_op.profile_id = p.id AND exact_op.assignment_session_id = $1
+           AND exact_op.recording_id = $3 AND exact_op.transcript_id = $4
+           AND exact_op.transcript_hash = $5
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM profile_initial_enrichment_operations old_op
+         WHERE old_op.profile_id = p.id AND old_op.state = 'uncertain'
+       )
+     LIMIT 1`,
+    [
+      current.id,
+      current.studentId,
+      current.confirmed.source.recordingId,
+      current.confirmed.source.transcriptId,
+      current.confirmed.source.transcriptHash,
+    ],
+  );
+  if (pendingOnboarding.rows[0]) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PROFILE_PREPARING');
+  }
+  const active = await client.query<{
+    profile_id: string;
+    active_revision_id: string | null;
+    content_hash: string | null;
+  }>(
+    `SELECT p.id AS profile_id, p.active_revision_id, pr.content_hash
+     FROM student_profile_bindings b JOIN profiles p ON p.id = b.profile_id
+     LEFT JOIN profile_revisions pr ON pr.id = p.active_revision_id
+     WHERE b.student_id = $1 AND b.effective_to IS NULL
+     FOR UPDATE OF p`,
+    [current.studentId],
+  );
+  const authoritative = active.rows[0];
+  if (
+    (authoritative?.active_revision_id ?? null) !== request.profileRevisionId ||
+    (authoritative?.active_revision_id ? authoritative.profile_id : null) !== request.profileId ||
+    (authoritative?.content_hash ?? null) !== request.profileRevisionHash
+  ) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PROFILE_STALE');
+  }
   if (request.profileId && request.profileRevisionId && request.profileRevisionHash) {
     const profile = await client.query(
       `SELECT 1 FROM profile_revisions
@@ -572,16 +639,6 @@ async function confirmLockedContext(
       throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
     }
   }
-  const context = {
-    teacherNotes: request.teacherNotes,
-    profileId: request.profileId,
-    profileRevisionId: request.profileRevisionId,
-    profileRevisionHash: request.profileRevisionHash,
-  };
-  if (JSON.stringify(current.confirmed.context) === JSON.stringify(context)) {
-    return { session: current, invalidated: [], lessonMemoryIntent: null };
-  }
-  assertExpectedRevision(current, request.expectedRevision);
   const confirmed = { ...current.confirmed, context, create: null };
   const updated = await updateConfirmedSession(client, current, {
     confirmedStep: 'context',
@@ -1925,17 +1982,17 @@ function shareJobMatchesSession(job: JobRecord, session: AssignmentSessionRecord
   const create = session.confirmed.create;
   return Boolean(
     source &&
-    create &&
-    job.id === session.shareJobId &&
-    job.userId === session.userId &&
-    job.studentId === session.studentId &&
-    job.recordingId === source.recordingId &&
-    job.transcriptId === source.transcriptId &&
-    job.promptPackageId === create.promptPackageId &&
-    job.draftId === create.draftId &&
-    job.lessonId === source.lessonId &&
-    job.mdStorageUri === create.draftStorageUri &&
-    job.sourceJobId === null,
+      create &&
+      job.id === session.shareJobId &&
+      job.userId === session.userId &&
+      job.studentId === session.studentId &&
+      job.recordingId === source.recordingId &&
+      job.transcriptId === source.transcriptId &&
+      job.promptPackageId === create.promptPackageId &&
+      job.draftId === create.draftId &&
+      job.lessonId === source.lessonId &&
+      job.mdStorageUri === create.draftStorageUri &&
+      job.sourceJobId === null,
   );
 }
 
@@ -1945,6 +2002,72 @@ export async function getAssignmentSessionByIdForUser(
 ): Promise<AssignmentSessionRecord | null> {
   const row = await withPgClient((client) => findOwnedById(client, id, userId));
   return row ? mapRow(row) : null;
+}
+
+/** Recover a Source confirmation that waited for an older provider submission to settle. */
+export async function reconcileDeferredInitialEnrichmentIntents(): Promise<void> {
+  const candidates = await withPgClient(async (client) => {
+    const result = await client.query<AssignmentSessionRow>(
+      `SELECT a.*
+       FROM assignment_sessions a
+       JOIN students s ON s.id = a.student_id
+       JOIN profiles p ON p.id = s.profile_id
+       JOIN assignment_source_bindings b ON b.assignment_session_id = a.id
+         AND b.binding_role = 'confirmed'
+       WHERE p.provenance = 'tutor_only'
+         AND a.confirmed_snapshot->'source' <> 'null'::jsonb
+         AND a.confirmed_step <> 'share'
+         AND a.confirmed_snapshot->'context' = 'null'::jsonb
+         AND a.id = (
+           SELECT a2.id FROM assignment_sessions a2
+           JOIN assignment_source_bindings b2 ON b2.assignment_session_id = a2.id
+             AND b2.binding_role = 'confirmed'
+           WHERE a2.student_id = a.student_id AND a2.confirmed_step <> 'share'
+           ORDER BY a2.updated_at DESC, a2.id DESC LIMIT 1
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM profile_initial_enrichment_operations op
+           WHERE op.profile_id = p.id AND op.state IN
+             ('waiting_evidence', 'queued', 'submitting', 'result_ready', 'uncertain', 'succeeded')
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM profile_initial_enrichment_operations op
+           WHERE op.profile_id = p.id AND op.assignment_session_id = a.id
+             AND op.transcript_id = (a.confirmed_snapshot->'source'->>'transcriptId')::uuid
+             AND op.transcript_hash = a.confirmed_snapshot->'source'->>'transcriptHash'
+         )
+       ORDER BY a.updated_at DESC LIMIT 50`,
+    );
+    return result.rows.map(mapRow);
+  });
+  const seenProfiles = new Set<string>();
+  for (const candidate of candidates) {
+    const profileId = await withPgClient(async (client) => {
+      const result = await client.query<{ profile_id: string | null }>(
+        'SELECT profile_id FROM students WHERE id = $1',
+        [candidate.studentId],
+      );
+      return result.rows[0]?.profile_id ?? null;
+    });
+    if (!profileId || seenProfiles.has(profileId)) continue;
+    seenProfiles.add(profileId);
+    await withPgClient(async (client) => {
+      await client.query('BEGIN');
+      try {
+        const lockedResult = await client.query<AssignmentSessionRow>(
+          `SELECT ${RETURNING_COLUMNS} FROM assignment_sessions
+           WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+          [candidate.id, candidate.userId],
+        );
+        const locked = lockedResult.rows[0];
+        if (locked) await reconcileInitialEnrichmentIntent(client, mapRow(locked));
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
+    });
+  }
 }
 
 export async function getCanonicalAssignmentSessionBySourceIdentity(params: {

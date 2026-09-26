@@ -18,12 +18,12 @@ const apiMocks = vi.hoisted(() => ({
   listProfileRevisions: vi.fn(),
   listStudentProfileBindings: vi.fn(),
   listStudentProfileCandidates: vi.fn(),
-  populateFirstProfileFromLesson: vi.fn(),
   promoteStudentProfileCandidates: vi.fn(),
   refreshProfileDraftFromApprovedCandidates: vi.fn(),
   rejectStudentProfileCandidate: vi.fn(),
   restoreProfileRevision: vi.fn(),
   saveProfileDraftRevision: vi.fn(),
+  upsertProfileContent: vi.fn(),
 }));
 
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
@@ -254,41 +254,6 @@ function seedLearningPageMocks() {
     };
   });
 
-  apiMocks.populateFirstProfileFromLesson.mockResolvedValue({
-    draftRevisionId: 'revision-draft-2',
-    profileId: 'profiles/students/alex.md',
-    snapshotId: 'snapshot-1',
-    lessonMemoryIds: ['lesson-1'],
-    homeworkMemoryIds: [],
-    draftRevision: {
-      id: 'revision-draft-2',
-      profileId: 'profiles/students/alex.md',
-      contentHash: 'hash-2',
-      source: 'lesson_population',
-      status: 'draft',
-      versionNumber: 2,
-      versionLabel: 'v2',
-      activatedAt: null,
-      deprecatedAt: null,
-      createdAt: NOW,
-      createdBy: 'teacher-1',
-      restoredFromRevisionId: null,
-      content: '# Foundational Profile',
-      structuredContent: {
-        schemaVersion: 'foundational_profile_v1',
-        overallLevel: 'B2',
-        primaryGoals: ['Present roadmap updates with confidence.'],
-        communicationContexts: ['Stakeholder meetings'],
-        interestsAndUsefulThemes: ['Product strategy'],
-        stableStrengths: ['Fast comprehension'],
-        persistentChallenges: ['Spoken transitions'],
-        studyPreferences: ['Short repeatable homework'],
-        durableConstraints: ['Busy release weeks'],
-        teacherNotes: 'Derived from latest lesson memory.',
-      },
-    },
-  });
-
   apiMocks.initializeStudentProfileDraft.mockResolvedValue({
     draftRevisionId: 'revision-draft-empty-1',
     profileId: 'profiles/students/alex.md',
@@ -318,6 +283,33 @@ function seedLearningPageMocks() {
         durableConstraints: [],
         teacherNotes: null,
       },
+    },
+  });
+  apiMocks.activateProfileRevision.mockResolvedValue({
+    id: 'revision-draft-empty-1',
+    profileId: 'profiles/students/alex.md',
+    contentHash: 'hash-empty-1',
+    source: 'create',
+    status: 'active',
+    versionNumber: 1,
+    versionLabel: 'v1',
+    activatedAt: NOW,
+    deprecatedAt: null,
+    createdAt: NOW,
+    createdBy: 'teacher-1',
+    restoredFromRevisionId: null,
+    content: '# Foundational Profile',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: null,
+      primaryGoals: [],
+      communicationContexts: [],
+      interestsAndUsefulThemes: [],
+      stableStrengths: [],
+      persistentChallenges: [],
+      studyPreferences: [],
+      durableConstraints: [],
+      teacherNotes: null,
     },
   });
 }
@@ -517,10 +509,10 @@ describe('StudentLearningPage', () => {
 
     renderLearningPage();
 
-    expect(await screen.findByText(/does not have an active learner profile yet/i)).toBeTruthy();
+    expect(await screen.findByText(/does not have a learner profile yet/i)).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Open legacy workspace/i })).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: /Start Empty Profile/i }));
+    await user.click(screen.getByRole('button', { name: /Create learner profile/i }));
 
     await waitFor(() => {
       expect(apiMocks.initializeStudentProfileDraft).toHaveBeenCalledWith('student-alex');
@@ -528,170 +520,10 @@ describe('StudentLearningPage', () => {
     await waitFor(() => {
       expect(refreshStudent).toHaveBeenCalled();
     });
+    expect(apiMocks.activateProfileRevision).toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: /Foundational Profile/i })).toBeTruthy();
-    expect(screen.getByText(/Empty draft created/i)).toBeTruthy();
-  });
-
-  it('opens an assignment-flow profile draft handoff in the editor', async () => {
-    const user = userEvent.setup();
-
-    useStudentAreaContextMock.mockReturnValue({
-      student: {
-        id: 'student-alex',
-        student: 'Alex',
-        profileId: null,
-      },
-      studentId: 'student-alex',
-      studentLoading: false,
-      studentError: null,
-      refreshStudent: vi.fn(async () => {}),
-    });
-    apiMocks.getProfileRevision.mockResolvedValueOnce({
-      id: 'revision-draft-2',
-      profileId: 'profiles/students/alex.md',
-      contentHash: 'hash-2',
-      source: 'lesson_population',
-      status: 'draft',
-      versionNumber: 2,
-      versionLabel: 'v2',
-      activatedAt: null,
-      deprecatedAt: null,
-      createdAt: NOW,
-      createdBy: 'teacher-1',
-      restoredFromRevisionId: null,
-      content: '# Foundational Profile',
-      structuredContent: {
-        schemaVersion: 'foundational_profile_v1',
-        overallLevel: 'B2',
-        primaryGoals: ['Present roadmap updates with confidence.'],
-        communicationContexts: ['Stakeholder meetings'],
-        interestsAndUsefulThemes: ['Product strategy'],
-        stableStrengths: ['Fast comprehension'],
-        persistentChallenges: ['Spoken transitions'],
-        studyPreferences: ['Short repeatable homework'],
-        durableConstraints: ['Busy release weeks'],
-        teacherNotes: 'Derived from latest lesson memory.',
-      },
-    });
-
-    renderLearningPage(
-      '/students/student-alex/learning?profileId=profiles%2Fstudents%2Falex.md&draftRevisionId=revision-draft-2',
-    );
-
-    await waitFor(() => {
-      expect(apiMocks.getProfileRevision).toHaveBeenCalledWith(
-        'profiles/students/alex.md',
-        'revision-draft-2',
-      );
-    });
-    expect(await screen.findByDisplayValue('B2')).toBeTruthy();
-    expect(screen.getByDisplayValue('Present roadmap updates with confidence.')).toBeTruthy();
-    expect(screen.getByText(/Profile draft opened from the assignment flow/i)).toBeTruthy();
-    expect(
-      (screen.getByRole('button', { name: /Activate Draft/i }) as HTMLButtonElement).disabled,
-    ).toBe(false);
-
-    const saveButton = screen.getByRole('button', { name: /Save Draft/i }) as HTMLButtonElement;
-    expect(saveButton.disabled).toBe(true);
-    await user.type(screen.getByLabelText(/Current Level/i), ' plus');
-    expect(saveButton.disabled).toBe(false);
-  });
-
-  it('does not describe an already-active assignment handoff revision as an editable draft', async () => {
-    useStudentAreaContextMock.mockReturnValue({
-      student: {
-        id: 'student-alex',
-        student: 'Alex',
-        profileId: 'profiles/students/alex.md',
-      },
-      studentId: 'student-alex',
-      studentLoading: false,
-      studentError: null,
-      refreshStudent: vi.fn(async () => {}),
-    });
-    apiMocks.getProfileRevision.mockResolvedValueOnce({
-      id: 'revision-active-1',
-      profileId: 'profiles/students/alex.md',
-      contentHash: 'hash-1',
-      source: 'lesson_population',
-      status: 'active',
-      versionNumber: 1,
-      versionLabel: 'v1',
-      activatedAt: NOW,
-      deprecatedAt: null,
-      createdAt: NOW,
-      createdBy: 'teacher-1',
-      restoredFromRevisionId: null,
-      content: '# Foundational Profile',
-      structuredContent: {
-        schemaVersion: 'foundational_profile_v1',
-        overallLevel: 'B1',
-        primaryGoals: ['Lead project updates clearly.'],
-        communicationContexts: ['Weekly team syncs.'],
-        interestsAndUsefulThemes: ['Travel and films.'],
-        stableStrengths: ['Strong listening comprehension.'],
-        persistentChallenges: ['Needs more confident spoken transitions.'],
-        studyPreferences: ['Prefers concise, practical homework.'],
-        durableConstraints: [],
-        teacherNotes: 'Keep examples grounded in real workplace situations.',
-      },
-    });
-
-    renderLearningPage(
-      '/students/student-alex/learning?profileId=profiles%2Fstudents%2Falex.md&draftRevisionId=revision-active-1',
-    );
-
-    await waitFor(() => {
-      expect(apiMocks.getProfileRevision).toHaveBeenCalledWith(
-        'profiles/students/alex.md',
-        'revision-active-1',
-      );
-    });
-    expect(await screen.findByDisplayValue('B1')).toBeTruthy();
-    expect(
-      screen.getByText(/Profile from the assignment flow is active and ready to use/i),
-    ).toBeTruthy();
-    expect(screen.queryByText(/Review, edit, save, then activate it/i)).toBeNull();
-    expect(
-      (screen.getByRole('button', { name: /Activate Draft/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-  });
-
-  it('opens the structured populate-from-lesson draft in the editor', async () => {
-    const user = userEvent.setup();
-
-    renderLearningPage();
-
-    expect(await screen.findByDisplayValue('B1')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: /Pedagogical Home/i })).toBeNull();
-    expect(screen.queryByText('Revision State')).toBeNull();
-    expect(screen.getByText('Profile coverage')).toBeTruthy();
-    expect(screen.queryByText('Profile Readiness')).toBeNull();
-    expect(screen.getByText('Strong coverage')).toBeTruthy();
-    expect(screen.getByText('9/9 durable fields populated')).toBeTruthy();
-    expect(screen.getByText('Pending Candidates')).toBeTruthy();
-    expect(screen.getByText('Promotion Queue')).toBeTruthy();
-    expect(
-      screen.queryByText(/Review the learner profile, student memory, and candidate facts/i),
-    ).toBeNull();
-    expect(screen.queryByText('Profile helpers')).toBeNull();
-    expect(screen.queryByText('Profile actions')).toBeNull();
-    expect(screen.queryByText(/Structured edits here shape future assignments/i)).toBeNull();
-    expect(screen.queryByText(/Use automated memory evidence/i)).toBeNull();
-    expect(screen.queryByText(/Open earlier versions when you need to compare/i)).toBeNull();
-    expect(screen.queryByText(/Use the most useful working label/i)).toBeNull();
-    expect(screen.queryAllByText('Support details')).toHaveLength(0);
-
-    await user.click(
-      await screen.findByRole('button', { name: /Populate First Profile From Lesson/i }),
-    );
-
-    await waitFor(() => {
-      expect(apiMocks.populateFirstProfileFromLesson).toHaveBeenCalledWith('student-alex');
-    });
-    expect(await screen.findByDisplayValue('B2')).toBeTruthy();
-    expect(screen.getByDisplayValue('Present roadmap updates with confidence.')).toBeTruthy();
-    expect(screen.getByText(/Draft profile populated from the latest lesson memory/i)).toBeTruthy();
+    expect(screen.getByText(/Learner profile created/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Activate Draft/i })).toBeNull();
   });
 
   it('bounds an empty open-thread state to the latest memory snapshot', async () => {
@@ -699,49 +531,6 @@ describe('StudentLearningPage', () => {
 
     expect(await screen.findByText('No open threads in the latest memory snapshot.')).toBeTruthy();
     expect(screen.queryByText('No unresolved teaching threads surfaced.')).toBeNull();
-  });
-
-  it('keeps populate-from-lesson unavailable until lesson memory is ready', async () => {
-    const user = userEvent.setup();
-    apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
-      makeLearningSurface({
-        memory: {
-          studentId: 'student-alex',
-          latestReadyStudentMemorySnapshot: null,
-          recentReadyLessonMemory: [],
-          recentReadyHomeworkMemory: [],
-          unresolvedIssues: [],
-        },
-        memoryHealth: makeMemoryHealth({
-          memoryCounts: {
-            lesson: {
-              ready: { count: 0, capped: false, limit: 500 },
-              pending: { count: 1, capped: false, limit: 500 },
-              failed: { count: 0, capped: false, limit: 500 },
-            },
-            homework: {
-              ready: { count: 0, capped: false, limit: 500 },
-              pending: { count: 0, capped: false, limit: 500 },
-              failed: { count: 0, capped: false, limit: 500 },
-            },
-          },
-        }),
-      }),
-    );
-
-    renderLearningPage();
-
-    const button = await screen.findByRole('button', {
-      name: /Populate First Profile From Lesson/i,
-    });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
-    expect(
-      screen.getByText(/Upload and process first lesson audio before populating/i),
-    ).toBeTruthy();
-
-    await user.click(button);
-
-    expect(apiMocks.populateFirstProfileFromLesson).not.toHaveBeenCalled();
   });
 
   it('keeps operator memory health details collapsed until opened', async () => {
@@ -944,65 +733,39 @@ describe('StudentLearningPage', () => {
     expect(screen.queryByRole('button', { name: /^Restore$/i })).toBeNull();
   });
 
-  it('does not show a draft activation success beside a failed profile reload', async () => {
+  it('saves ordinary learner edits as an active profile revision without draft controls', async () => {
     const user = userEvent.setup();
-    const refreshStudent = vi.fn(async () => {});
+    renderLearningPage();
+    await screen.findByDisplayValue('B1');
+    expect(screen.queryByRole('button', { name: /Save Draft/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Activate Draft/i })).toBeNull();
+    await user.type(screen.getByLabelText(/Current Level/i), ' plus');
+    await user.click(screen.getByRole('button', { name: /Save learner profile/i }));
+    await waitFor(() =>
+      expect(apiMocks.upsertProfileContent).toHaveBeenCalledWith(
+        'profiles/students/alex.md',
+        null,
+        expect.objectContaining({ overallLevel: 'B1 plus' }),
+      ),
+    );
+    expect(apiMocks.saveProfileDraftRevision).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed initial profile activation without a success message', async () => {
+    const user = userEvent.setup();
     useStudentAreaContextMock.mockReturnValue({
-      student: {
-        id: 'student-alex',
-        student: 'Alex',
-        profileId: null,
-      },
+      student: { id: 'student-alex', student: 'Alex', profileId: null },
       studentId: 'student-alex',
       studentLoading: false,
       studentError: null,
-      refreshStudent,
+      refreshStudent: vi.fn(async () => {}),
     });
-    apiMocks.activateProfileRevision.mockResolvedValueOnce({
-      id: 'revision-draft-empty-1',
-      profileId: 'profiles/students/alex.md',
-      contentHash: 'hash-empty-1',
-      source: 'create',
-      status: 'active',
-      versionNumber: 1,
-      versionLabel: 'v1',
-      activatedAt: NOW,
-      deprecatedAt: null,
-      createdAt: NOW,
-      createdBy: 'teacher-1',
-      restoredFromRevisionId: null,
-      content: '# Foundational Profile',
-      structuredContent: {
-        schemaVersion: 'foundational_profile_v1',
-        overallLevel: null,
-        primaryGoals: [],
-        communicationContexts: [],
-        interestsAndUsefulThemes: [],
-        stableStrengths: [],
-        persistentChallenges: [],
-        studyPreferences: [],
-        durableConstraints: [],
-        teacherNotes: null,
-      },
-    });
-    apiMocks.getProfileContent.mockRejectedValueOnce(
-      new Error('not_found This learner profile has not been structured yet.'),
-    );
-
+    apiMocks.activateProfileRevision.mockRejectedValueOnce(new Error('Activation failed'));
     renderLearningPage();
-
-    await user.click(await screen.findByRole('button', { name: /Start Empty Profile/i }));
-    await screen.findByText(/Empty draft created/i);
-
-    await user.click(await screen.findByRole('button', { name: /Activate Draft/i }));
-
-    expect(await screen.findByText('Draft activated.')).toBeTruthy();
-    expect(apiMocks.listStudentProfileCandidates).toHaveBeenCalledTimes(2);
-    expect(
-      screen.queryByText('not_found This learner profile has not been structured yet.'),
-    ).toBeNull();
+    await user.click(await screen.findByRole('button', { name: /Create learner profile/i }));
+    expect(await screen.findByText('Activation failed')).toBeTruthy();
+    expect(screen.queryByText(/Learner profile created/i)).toBeNull();
   });
-
   it('ignores stale profile, memory, binding, and candidate responses after switching students', async () => {
     const studentAProfile = createDeferred<{
       id: string;

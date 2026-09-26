@@ -30,12 +30,12 @@ export async function upsertProfile(params: UpsertProfileParams): Promise<Profil
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
-      INSERT INTO profiles (id, label, active_revision_id)
-      VALUES ($1, $2, $3)
+      INSERT INTO profiles (id, label, active_revision_id, provenance)
+      VALUES ($1, $2, $3, 'tutor_only')
       ON CONFLICT (id) DO UPDATE
       SET
         label = EXCLUDED.label,
-        active_revision_id = COALESCE(EXCLUDED.active_revision_id, profiles.active_revision_id)
+        active_revision_id = profiles.active_revision_id
       RETURNING
         id,
         label,

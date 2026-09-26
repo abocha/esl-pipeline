@@ -199,6 +199,31 @@ describe('infrastructure/student-memory-queue', () => {
     expect(getMockStorage().queueAdd).toHaveBeenCalledOnce();
   });
 
+  it('requeues a completed initial-enrichment job while durable intent remains actionable', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    getMockStorage().queueGetJob!.mockResolvedValue({
+      getState: vi.fn().mockResolvedValue('completed'),
+      remove,
+    });
+    const { reconcile } = createStudentMemoryQueue();
+    const payload = {
+      kind: 'profile-initial-enrichment' as const,
+      operationId: 'operation-1',
+    };
+
+    await reconcile(payload, {
+      jobId: 'profile-initial-enrichment-operation-1',
+      requeueCompleted: true,
+    });
+
+    expect(remove).toHaveBeenCalledOnce();
+    expect(getMockStorage().queueAdd).toHaveBeenCalledWith(
+      payload.kind,
+      payload,
+      expect.objectContaining({ jobId: 'profile-initial-enrichment-operation-1' }),
+    );
+  });
+
   it.each(['waiting', 'active', 'completed'])(
     'leaves an existing %s stable job unchanged',
     async (state) => {

@@ -6,6 +6,7 @@ import { CONTRACT_VERSIONS, DB_MIGRATION_HEAD } from '@esl-pipeline/contracts';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import * as approveJobModule from '../src/application/approve-job.js';
+import * as assignmentLearnerContextModule from '../src/application/assignment-learner-context.js';
 import * as assignmentSessionsModule from '../src/application/assignment-sessions.js';
 import * as confirmAssignmentSessionStepModule from '../src/application/confirm-assignment-session-step.js';
 import * as createDraftModule from '../src/application/create-draft.js';
@@ -22,7 +23,6 @@ import * as jobSummaryModule from '../src/application/job-summary.js';
 import * as listJobsModule from '../src/application/list-jobs.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
-import * as populateFirstProfileModule from '../src/application/populate-first-profile-from-lesson.js';
 import * as profileCandidatePromotionModule from '../src/application/profile-candidate-promotion.js';
 import * as profileContentModule from '../src/application/profile-content.js';
 import * as profileDraftRefreshModule from '../src/application/profile-draft-refresh.js';
@@ -45,10 +45,10 @@ import * as updateDraftModule from '../src/application/update-draft.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { getVersionMeta } from '../src/application/version-meta.js';
 import * as workspaceContextModule from '../src/application/workspace-context.js';
+import * as assignmentSessionRepositoryModule from '../src/domain/assignment-session-repository.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
 import * as jobRepositoryModule from '../src/domain/job-repository.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
-import * as assignmentSessionRepositoryModule from '../src/domain/assignment-session-repository.js';
 import * as recordingRepositoryModule from '../src/domain/recording-repository.js';
 import * as settingsRepositoryModule from '../src/domain/settings-repository.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
@@ -353,21 +353,9 @@ vi.mock('../src/application/profile-draft-refresh', () => {
   };
 });
 
-vi.mock('../src/application/populate-first-profile-from-lesson', () => {
-  return {
-    populateFirstProfileFromLesson: vi.fn(),
-    PopulateFirstProfileFromLessonError: class PopulateFirstProfileFromLessonError extends Error {
-      code: string;
-      status: number;
-
-      constructor(message: string, code = 'populate_first_profile_error', status = 400) {
-        super(message);
-        this.code = code;
-        this.status = status;
-      }
-    },
-  };
-});
+vi.mock('../src/application/assignment-learner-context', () => ({
+  getAssignmentLearnerContext: vi.fn(),
+}));
 
 vi.mock('../src/application/initialize-student-profile-draft', () => {
   return {
@@ -534,9 +522,6 @@ export function describeHttpServerIntegrationSuite(
     const mockRefreshProfileDraftFromApprovedCandidates = vi.mocked(
       profileDraftRefreshModule.refreshProfileDraftFromApprovedCandidates,
     );
-    const mockPopulateFirstProfileFromLesson = vi.mocked(
-      populateFirstProfileModule.populateFirstProfileFromLesson,
-    );
     const mockInitializeStudentProfileDraft = vi.mocked(
       initializeStudentProfileDraftModule.initializeStudentProfileDraft,
     );
@@ -587,6 +572,7 @@ export function describeHttpServerIntegrationSuite(
 
     beforeAll(async () => {
       vi.clearAllMocks();
+      vi.mocked(assignmentLearnerContextModule.getAssignmentLearnerContext).mockResolvedValue(null);
       mockResolvePrimaryWorkspaceIdForUser.mockResolvedValue(
         '00000000-0000-4000-8000-000000000001',
       );
@@ -1117,31 +1103,6 @@ export function describeHttpServerIntegrationSuite(
         provider: 'google_ai_studio',
         model: 'gemini-3-flash-preview',
       });
-      mockPopulateFirstProfileFromLesson.mockResolvedValue({
-        studentId: deriveStudentId('Anna'),
-        profileId: 'profiles/anna.md',
-        baseRevisionId: 'profile-revision-active',
-        snapshotId: 'snapshot-1',
-        lessonMemoryIds: ['lesson-1'],
-        homeworkMemoryIds: [],
-        draftRevision: {
-          id: 'profile-revision-first-draft',
-          profileId: 'profiles/anna.md',
-          contentHash: 'profile-first-draft-hash',
-          source: 'lesson_population',
-          status: 'draft',
-          versionNumber: 1,
-          versionLabel: 'v1',
-          activatedAt: null,
-          deprecatedAt: null,
-          createdAt: '2024-01-01T00:00:00.000Z',
-          createdBy: 'test-user-id',
-          restoredFromRevisionId: null,
-          content: '# Foundational Profile',
-        },
-        provider: 'google_ai_studio',
-        model: 'gemini-3-flash-preview',
-      });
       mockInitializeStudentProfileDraft.mockResolvedValue({
         studentId: deriveStudentId('Anna'),
         profileId: 'profiles/anna.md',
@@ -1396,6 +1357,7 @@ export function describeHttpServerIntegrationSuite(
       CONTRACT_VERSIONS,
       DB_MIGRATION_HEAD,
       assignmentSessionsModule,
+      assignmentLearnerContextModule,
       assignmentSessionRepositoryModule,
       confirmAssignmentSessionStepModule,
       shareAssignmentSessionModule,
@@ -1475,7 +1437,6 @@ export function describeHttpServerIntegrationSuite(
       mockDeferStudentProfileCandidate,
       mockPromoteStudentProfileCandidates,
       mockRefreshProfileDraftFromApprovedCandidates,
-      mockPopulateFirstProfileFromLesson,
       mockInitializeStudentProfileDraft,
       mockListStudentProfileBindingsForStudent,
       mockGetActiveStudentProfileBindingForStudent,

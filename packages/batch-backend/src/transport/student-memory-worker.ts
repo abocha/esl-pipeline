@@ -3,9 +3,11 @@ import { DelayedError, type Job } from 'bullmq';
 
 import type { StudentMemoryQueuePayload } from '../application/process-student-memory-job.js';
 import { processStudentMemoryJob } from '../application/process-student-memory-job.js';
+import { enqueuePendingProfileInitialEnrichments } from '../application/profile-initial-enrichment.js';
 import { isStudentMemoryPacingDeferredError } from '../application/student-memory-generation-pacing.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
+import { reconcileDeferredInitialEnrichmentIntents } from '../domain/assignment-session-repository.js';
 import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { createStudentMemoryWorker } from '../infrastructure/student-memory-queue.js';
 
@@ -70,6 +72,34 @@ export async function startStudentMemoryWorker(): Promise<void> {
   });
   await runMigrationsIfConfigured();
 
+  // The operation table is recoverable intent. This bounded dispatcher runs in
+  // the existing student-memory service and repairs lost delivery after restart.
+  let reconciling = false;
+  const reconcile = async () => {
+    if (reconciling) return;
+    reconciling = true;
+    try {
+      await enqueuePendingProfileInitialEnrichments();
+      await reconcileDeferredInitialEnrichmentIntents();
+    } finally {
+      reconciling = false;
+    }
+  };
+  const reconciliationTimer = setInterval(() => {
+    void reconcile().catch((error) =>
+      logger.error(error as Error, {
+        component: 'student-memory-worker',
+        message: 'Initial profile reconciliation failed',
+      }),
+    );
+  }, 5_000);
+  void reconcile().catch((error) =>
+    logger.error(error as Error, {
+      component: 'student-memory-worker',
+      message: 'Initial profile reconciliation failed',
+    }),
+  );
+
   const worker = createStudentMemoryWorker(async (bullJob) => {
     await processStudentMemoryBullJob({
       bullJob,
@@ -85,6 +115,7 @@ export async function startStudentMemoryWorker(): Promise<void> {
   });
 
   const shutdown = async (signal: string) => {
+    clearInterval(reconciliationTimer);
     logger.info(`Shutting down student-memory worker (${signal})`, {
       component: 'student-memory-worker',
     });

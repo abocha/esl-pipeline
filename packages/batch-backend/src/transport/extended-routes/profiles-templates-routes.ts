@@ -156,16 +156,30 @@ export function registerProfileTemplateRoutes(
       const paramsSchema = z.object({
         id: z.string().min(1),
       });
-      const schema = z.object({
-        content: z.string(),
-      });
+      const schema = z
+        .object({
+          content: z.string().optional(),
+          structuredContent: foundationalProfileSchema.optional(),
+        })
+        .refine((body) => typeof body.content === 'string' || body.structuredContent, {
+          message: 'Either content or structuredContent is required.',
+          path: ['content'],
+        });
 
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const body = schema.parse(request.body ?? {});
-        const updated = await upsertProfileContent(params.id, body.content, {
-          createdBy: getAuthenticatedUser(request)?.id ?? null,
-        });
+        const content =
+          body.content ??
+          (body.structuredContent ? renderFoundationalProfileContent(body.structuredContent) : '');
+        const updated = await upsertProfileContent(
+          params.id,
+          content,
+          {
+            createdBy: getAuthenticatedUser(request)?.id ?? null,
+          },
+          body.structuredContent ?? null,
+        );
 
         logger.info('HTTP request handled', {
           event: 'http_request',

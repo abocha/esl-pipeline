@@ -71,7 +71,7 @@ function compactTeacherNote(note: string | null): string | null {
   return trimmed;
 }
 
-function buildProfilePreview(
+export function buildProfilePreview(
   profileId: string,
   profile: Pick<ProfileContentResponse, 'structuredContent' | 'updatedAt'>,
 ): LearnerProfilePreview | null {
