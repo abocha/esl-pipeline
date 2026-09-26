@@ -5,6 +5,7 @@ describeHttpServerIntegrationSuite(
   ({
     app,
     assignmentSessionsModule,
+    assignmentLearnerContextModule,
     confirmAssignmentSessionStepModule,
     publishAssignmentCorrectionModule,
     shareAssignmentSessionModule,
@@ -44,6 +45,31 @@ describeHttpServerIntegrationSuite(
       createdAt: '2026-07-19T00:00:00.000Z',
       updatedAt: '2026-07-19T00:00:00.000Z',
     };
+
+    it('returns authenticated assignment-scoped learner authority', async () => {
+      const projection = {
+        assignmentSessionId: session.id,
+        studentId: session.studentId,
+        source: null,
+        eligibility: 'no_confirmed_source',
+        state: 'not_applicable',
+        operationState: null,
+        profile: null,
+        pinned: null,
+        confirmationAvailable: false,
+        warning: null,
+      };
+      const read = vi
+        .spyOn(assignmentLearnerContextModule, 'getAssignmentLearnerContext')
+        .mockResolvedValue(projection);
+      const response = await app.inject({
+        method: 'GET',
+        url: `/assignment-sessions/${session.id}/learner-context`,
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual(projection);
+      expect(read).toHaveBeenCalledWith('test-user-id', session.id);
+    });
 
     it('confirms Student and updates recovery through revisioned routes', async () => {
       const confirmStudent = vi

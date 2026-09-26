@@ -164,6 +164,14 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   canonical lesson/student-memory reads revalidate the current confirmed source binding, so a late
   worker or historical nonowner cannot restore superseded memory. Changed confirmed content
   temporarily makes memory unavailable until its automatic replacement succeeds.
+- Source confirmation also records a one-time initial profile enrichment operation for a
+  `tutor_only` profile. The student-memory worker reconciles that durable operation when exact
+  canonical lesson evidence becomes ready. A reserved provider submission is never repeated after
+  an ambiguous outcome; successful activation atomically updates the revision, active pointer,
+  provenance, and operation. Assignment learner context is read through
+  `GET /assignment-sessions/:id/learner-context`.
+- Ordinary structured tutor edits use `PUT /profiles/:id` and activate an active revision
+  atomically; candidate-derived drafts retain their explicit review flow.
 - Assignment prompt creation reads confirmed Source and Context and requires the current confirmed
   source binding. Prompt packages retain their assignment session ID so later draft creation and
   provider generation, and draft materialization recheck that same binding after replacement or

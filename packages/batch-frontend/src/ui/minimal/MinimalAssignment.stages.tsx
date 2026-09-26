@@ -163,35 +163,10 @@ interface ContextStageSectionProps {
     updatedAt: string | null;
   } | null;
   profileRevisionError: string | null;
-  firstProfileAssist: FirstProfileAssistProps;
+  learnerContext: import('../../utils/api').AssignmentLearnerContext | null;
   teacherNotes: string;
   onTeacherNotesChange: (value: string) => void;
   readOnly?: boolean;
-}
-
-interface FirstProfileAssistProps {
-  visible: boolean;
-  sourceConfirmed: boolean;
-  lessonMemoryStatus: 'checking' | 'building' | 'ready';
-  draftProfileId: string | null;
-  draftRevisionId: string | null;
-  draftPreview: FirstProfileDraftPreview | null;
-  busy: 'drafting' | 'approving' | null;
-  approved: boolean;
-  error: string | null;
-  onPopulate: () => void;
-  onApprove: () => void;
-  onRetry: () => void;
-}
-
-interface FirstProfileDraftPreview {
-  overallLevel: string | null;
-  primaryGoals: string[];
-  communicationContexts: string[];
-  stableStrengths: string[];
-  persistentChallenges: string[];
-  studyPreferences: string[];
-  teacherNotes: string | null;
 }
 
 interface ProfileDossierSection {
@@ -284,56 +259,6 @@ function buildCurrentProfileDossierSections(
       title: 'Teacher note',
       icon: NotebookText,
       body: profilePreview.teacherNoteSnippet,
-    },
-  ];
-}
-
-function buildDraftProfileDossierSections(
-  draft: FirstProfileDraftPreview,
-): ProfileDossierSection[] {
-  return [
-    {
-      id: 'level',
-      title: 'Level',
-      icon: BarChart3,
-      body: draft.overallLevel ? 'Estimated from the first lesson memory.' : 'Not set yet',
-      badge: draft.overallLevel ?? 'Not set',
-    },
-    {
-      id: 'goals',
-      title: 'Goals',
-      icon: Target,
-      items: compactDossierItems(draft.primaryGoals),
-    },
-    {
-      id: 'communication-contexts',
-      title: 'Communication contexts',
-      icon: MessageSquareText,
-      items: compactDossierItems(draft.communicationContexts),
-    },
-    {
-      id: 'strengths',
-      title: 'Strengths',
-      icon: Star,
-      items: compactDossierItems(draft.stableStrengths),
-    },
-    {
-      id: 'challenges',
-      title: 'Challenges',
-      icon: TrendingUp,
-      items: compactDossierItems(draft.persistentChallenges),
-    },
-    {
-      id: 'study-preferences',
-      title: 'Study preferences',
-      icon: BookOpenText,
-      items: compactDossierItems(draft.studyPreferences),
-    },
-    {
-      id: 'teacher-note',
-      title: 'Teacher note',
-      icon: NotebookText,
-      body: draft.teacherNotes,
     },
   ];
 }
@@ -1168,7 +1093,7 @@ export function ContextStageSection({
   selectedProfileId,
   profilePreview,
   profileRevisionError,
-  firstProfileAssist,
+  learnerContext,
   teacherNotes,
   onTeacherNotesChange,
   readOnly = false,
@@ -1248,7 +1173,6 @@ export function ContextStageSection({
                       ]
                     : []),
                 ]}
-                actions={renderLearningPageLink('Open Learning page')}
               />
               <details className="minimal-details">
                 <summary>More learner context</summary>
@@ -1259,7 +1183,6 @@ export function ContextStageSection({
                   studentName={studentName}
                   studentDetail="Structured learner profile"
                   sections={learnerContextSections}
-                  actions={renderLearningPageLink('Open Learning page')}
                 />
               </details>
             </>
@@ -1275,138 +1198,26 @@ export function ContextStageSection({
               assignment, add lesson guidance here, or update the student's Learning page later.
             </p>
           ) : null}
-          {firstProfileAssist.visible ? (
-            <div className="minimal-first-profile-assist" aria-live="polite">
-              {!firstProfileAssist.draftRevisionId ? (
-                <div className="minimal-first-profile-assist-header">
-                  <div>
-                    <h4>
-                      {firstProfileAssist.approved ? 'First profile ready' : 'First profile setup'}
-                    </h4>
-                    <p>
-                      {firstProfileAssist.approved
-                        ? 'The approved profile is selected for this assignment.'
-                        : !firstProfileAssist.sourceConfirmed
-                          ? 'Confirm Lesson source to start learner memory automatically.'
-                          : firstProfileAssist.lessonMemoryStatus === 'ready'
-                            ? 'Lesson memory is ready. Create the first structured profile before generating the assignment.'
-                            : 'Building learner memory from the confirmed transcript.'}
-                    </p>
-                  </div>
-                  <span
-                    className={`minimal-first-profile-pill ${
-                      firstProfileAssist.approved ? 'minimal-first-profile-pill-ready' : ''
-                    }`}
-                  >
-                    {firstProfileAssist.approved
-                      ? 'Approved'
-                      : !firstProfileAssist.sourceConfirmed
-                        ? 'Source not confirmed'
-                        : firstProfileAssist.lessonMemoryStatus === 'ready'
-                          ? 'Memory ready'
-                          : 'Building memory'}
-                  </span>
-                </div>
-              ) : null}
-              {firstProfileAssist.approved ? (
-                <p className="minimal-success">Profile approved and ready for this assignment.</p>
-              ) : firstProfileAssist.draftRevisionId ? (
-                firstProfileAssist.draftPreview ? (
-                  <ProfileDossier
-                    title="First profile draft"
-                    description="Review what will be saved before approving."
-                    statusLabel="Draft ready"
-                    studentName={studentName}
-                    studentDetail="No prior profile"
-                    sections={buildDraftProfileDossierSections(firstProfileAssist.draftPreview)}
-                    provenance={[
-                      { icon: Database, label: 'Built from first lesson memory' },
-                      { icon: CheckCircle2, label: 'Transcript ready' },
-                    ]}
-                    actions={
-                      <>
-                        <button
-                          type="button"
-                          className="minimal-primary"
-                          onClick={firstProfileAssist.onApprove}
-                          disabled={readOnly || firstProfileAssist.busy === 'approving'}
-                        >
-                          {firstProfileAssist.busy === 'approving'
-                            ? 'Approving...'
-                            : 'Approve profile draft'}
-                        </button>
-                        {renderLearningPageLink('Edit in Learning page', undefined, {
-                          profileId: firstProfileAssist.draftProfileId,
-                          draftRevisionId: firstProfileAssist.draftRevisionId,
-                        })}
-                      </>
-                    }
-                  />
-                ) : (
-                  <p className="minimal-muted">
-                    The draft was created, but no structured preview was returned.
-                  </p>
-                )
-              ) : !firstProfileAssist.sourceConfirmed ? (
-                <p className="minimal-muted">
-                  Return to Lesson source and confirm it before creating the first profile.
-                </p>
-              ) : firstProfileAssist.lessonMemoryStatus === 'ready' ? (
-                <div className="minimal-inline minimal-first-profile-actions">
-                  <button
-                    type="button"
-                    className="minimal-primary"
-                    onClick={firstProfileAssist.onPopulate}
-                    disabled={readOnly || firstProfileAssist.busy === 'drafting'}
-                  >
-                    {firstProfileAssist.busy === 'drafting'
-                      ? 'Populating...'
-                      : 'Populate first profile from lesson'}
-                  </button>
-                  {renderLearningPageLink('Open Learning page')}
-                </div>
-              ) : (
-                <>
-                  <div className="minimal-memory-progress" role="status">
-                    <span className="minimal-memory-spinner" aria-hidden="true" />
-                    <span>
-                      {firstProfileAssist.lessonMemoryStatus === 'checking'
-                        ? 'Checking lesson memory'
-                        : 'Building lesson memory'}{' '}
-                      <span className="minimal-memory-estimate">(1-2 minutes)</span>
-                    </span>
-                  </div>
-                  <div className="minimal-inline minimal-first-profile-actions">
-                    {renderLearningPageLink('Open Learning page')}
-                  </div>
-                </>
-              )}
-              {firstProfileAssist.error ? (
-                <div className="minimal-block">
-                  <p className="minimal-error">{firstProfileAssist.error}</p>
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={firstProfileAssist.onRetry}
-                    disabled={readOnly}
-                  >
-                    Retry status check
-                  </button>
-                </div>
-              ) : null}
-            </div>
+          {learnerContext?.state === 'preparing' ? (
+            <p className="minimal-muted" role="status">
+              Preparing learner context from this lesson...
+            </p>
           ) : null}
-          {!firstProfileAssist.visible ? (
-            <div className="minimal-inline">
-              {studentId && !(selectedProfileId && profilePreview) ? (
-                renderLearningPageLink('Open Learning page', 'minimal-primary minimal-link-button')
-              ) : !studentId ? (
-                <span className="minimal-primary minimal-link-button" aria-disabled="true">
-                  Open Learning page
-                </span>
-              ) : null}
-            </div>
+          {learnerContext?.state === 'completed' ? (
+            <p className="minimal-success" role="status">
+              Learner context updated from this lesson. Review it below, or continue if everything
+              looks right.
+            </p>
           ) : null}
+          {learnerContext?.state === 'failed' ? (
+            <p className="minimal-error" role="status">
+              Learner context could not be prepared from this lesson. You can continue with the
+              available context.
+            </p>
+          ) : null}
+          <div className="minimal-inline">
+            {studentId ? renderLearningPageLink('Edit learner profile') : null}
+          </div>
         </div>
       </div>
     </StageSection>

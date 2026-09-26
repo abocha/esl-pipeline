@@ -570,6 +570,36 @@ export function registerPromptEditorTests() {
 
     it('shows a read-only learner profile preview and deep link instead of inline editing', async () => {
       const user = createMinimalUser();
+      vi.mocked(api.fetchAssignmentLearnerContext).mockResolvedValue({
+        assignmentSessionId: 'session-1',
+        studentId: 'student-alex',
+        source: { recordingId: 'rec-1', transcriptId: 'tx-1', transcriptHash: 'a'.repeat(64) },
+        eligibility: 'already_enriched',
+        state: 'not_applicable',
+        operationState: null,
+        profile: {
+          profileId: 'profiles/alex.md',
+          revisionId: 'revision-1',
+          revisionHash: 'a'.repeat(64),
+          content: 'PROFILE CONTENT',
+          structuredContent: {
+            schemaVersion: 'foundational_profile_v1',
+            overallLevel: 'B1',
+            primaryGoals: ['Lead project updates clearly.'],
+            communicationContexts: ['Weekly team syncs.'],
+            interestsAndUsefulThemes: ['Travel and films.'],
+            stableStrengths: ['Strong listening comprehension.'],
+            persistentChallenges: ['Needs more confident spoken transitions.'],
+            studyPreferences: ['Prefers concise, practical homework.'],
+            durableConstraints: [],
+            teacherNotes: 'Use workplace examples.',
+          },
+          updatedAt: '2026-02-05T00:00:00.000Z',
+        },
+        pinned: null,
+        confirmationAvailable: true,
+        warning: null,
+      });
       renderMinimalAssignment();
 
       await startNewAssignmentForLearner(user);
@@ -581,7 +611,7 @@ export function registerPromptEditorTests() {
       expect(screen.queryByRole('textbox', { name: /Profile content/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /Save profile/i })).toBeNull();
       expect(screen.queryByText(/profiles\/alex\.md/i)).toBeNull();
-      expect(screen.getAllByText(/^Student Learning page$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^Edit learner profile$/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/^Current$/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/^Goals$/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/^Communication contexts$/i).length).toBeGreaterThan(0);
@@ -591,7 +621,7 @@ export function registerPromptEditorTests() {
       expect(screen.getAllByText(/Lead project updates clearly\./i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/Strong listening comprehension\./i).length).toBeGreaterThan(0);
       expect(
-        screen.getAllByRole('link', { name: /Open Learning page/i })[0]?.getAttribute('href'),
+        screen.getAllByRole('link', { name: /Edit learner profile/i })[0]?.getAttribute('href'),
       ).toBe('/students/student-alex/learning');
     });
 
@@ -628,7 +658,6 @@ export function registerPromptEditorTests() {
           { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
         ],
       });
-      vi.mocked(api.getProfileContent).mockRejectedValueOnce(new Error('not_found'));
 
       renderMinimalAssignment();
 
@@ -637,7 +666,7 @@ export function registerPromptEditorTests() {
       await screen.findByDisplayValue('Student transcript text');
       await advanceSourceToTeachingContext(user);
 
-      await screen.findByText(/Learning page context has not been structured yet/i);
+      await screen.findByText(/No structured Learning page context is available yet/i);
       expect(screen.queryByText(/^not_found$/i)).toBeNull();
       expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
 
@@ -664,7 +693,7 @@ export function registerPromptEditorTests() {
           { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
         ],
       });
-      vi.mocked(api.getProfileContent).mockRejectedValueOnce(
+      vi.mocked(api.fetchAssignmentLearnerContext).mockRejectedValue(
         new Error('Profile service is temporarily unavailable'),
       );
 
@@ -681,382 +710,6 @@ export function registerPromptEditorTests() {
           name: /Use this transcript for Alex's learner context/i,
         }),
       ).toBeNull();
-    });
-
-    it('offers first-profile drafting and approval after lesson memory is ready', async () => {
-      const user = createMinimalUser();
-      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
-        students: [
-          { id: 'student-alex', name: 'Alex', profileId: null },
-          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
-        ],
-      });
-      vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
-        studentId: 'student-alex',
-        latestSnapshot: null,
-        memoryCounts: {
-          lesson: {
-            ready: { count: 1, capped: false, limit: 20 },
-            pending: { count: 0, capped: false, limit: 20 },
-            failed: { count: 0, capped: false, limit: 20 },
-          },
-          homework: {
-            ready: { count: 0, capped: false, limit: 20 },
-            pending: { count: 0, capped: false, limit: 20 },
-            failed: { count: 0, capped: false, limit: 20 },
-          },
-        },
-        latestFailedReason: null,
-        profileCandidateCounts: {
-          pending: 0,
-          approved: 0,
-          rejected: 0,
-          deferred: 0,
-        },
-      });
-
-      renderMinimalAssignment();
-
-      await startNewAssignmentForLearner(user);
-      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-      await screen.findByDisplayValue('Student transcript text');
-      await advanceSourceToTeachingContext(user);
-      expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
-
-      const populateButton = await screen.findByRole('button', {
-        name: /Populate first profile from lesson/i,
-      });
-      await user.click(populateButton);
-
-      await waitFor(() => {
-        expect(api.populateFirstProfileFromLesson).toHaveBeenCalledWith('student-alex');
-      });
-      expect(await screen.findByText(/^First profile draft$/i)).toBeTruthy();
-      expect(screen.getByText(/^Draft ready$/i)).toBeTruthy();
-      expect(screen.getByText(/^Goals$/i)).toBeTruthy();
-      expect(screen.getByText(/^Communication contexts$/i)).toBeTruthy();
-      expect(screen.getByText(/^Strengths$/i)).toBeTruthy();
-      expect(screen.getByText(/^Challenges$/i)).toBeTruthy();
-      expect(screen.getByText(/^Study preferences$/i)).toBeTruthy();
-      expect(screen.getByText(/^Built from first lesson memory$/i)).toBeTruthy();
-      expect(screen.getByText(/^Transcript ready$/i)).toBeTruthy();
-      expect(screen.getByText(/Lead project updates clearly\./i)).toBeTruthy();
-      expect(screen.getByText(/Strong listening comprehension\./i)).toBeTruthy();
-      expect(
-        screen.getByText(/Keep examples grounded in real workplace situations\./i),
-      ).toBeTruthy();
-      expect(
-        screen.getByRole('link', { name: /Edit in Learning page/i }).getAttribute('href'),
-      ).toBe(
-        '/students/student-alex/learning?profileId=profiles%2Falex.md&draftRevisionId=revision-draft-1',
-      );
-
-      const activatedRevision = await api.activateProfileRevision(
-        'profiles/alex.md',
-        'revision-draft-1',
-      );
-      vi.mocked(api.activateProfileRevision).mockClear();
-      let resolveActivation!: (revision: typeof activatedRevision) => void;
-      vi.mocked(api.activateProfileRevision).mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveActivation = resolve;
-          }),
-      );
-      const approveButton = await screen.findByRole('button', { name: /Approve profile draft/i });
-      fireEvent.click(approveButton);
-      const continueButton = screen.getByRole('button', { name: /Confirm and continue/i });
-      expect((continueButton as HTMLButtonElement).disabled).toBe(true);
-
-      await act(async () => {
-        resolveActivation(activatedRevision);
-        await Promise.resolve();
-      });
-
-      await waitFor(() => {
-        expect(api.activateProfileRevision).toHaveBeenCalledWith(
-          'profiles/alex.md',
-          'revision-draft-1',
-        );
-      });
-      await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false));
-
-      await user.click(continueButton);
-      await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
-      expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          step: 'context',
-          profileId: 'profiles/alex.md',
-          profileRevisionId: 'revision-draft-1',
-          profileRevisionHash: 'hash-draft-1',
-        }),
-      );
-      await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
-
-      await waitFor(() => {
-        expect(api.createPromptPackage).toHaveBeenCalledWith(
-          'rec-1',
-          expect.objectContaining({
-            assignmentSessionId: expect.any(String),
-            templateId: 'tpl-default',
-          }),
-        );
-      });
-    });
-
-    it('does not replay Context profile recovery queued before confirmation after Create', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      const user = createTimerAwareMinimalUser();
-      let navigationGuard: (() => Promise<boolean>) | null = null;
-      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
-        students: [{ id: 'student-alex', name: 'Alex', profileId: null }],
-      });
-      vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
-        studentId: 'student-alex',
-        latestSnapshot: null,
-        memoryCounts: {
-          lesson: {
-            ready: { count: 1, capped: false, limit: 20 },
-            pending: { count: 0, capped: false, limit: 20 },
-            failed: { count: 0, capped: false, limit: 20 },
-          },
-          homework: {
-            ready: { count: 0, capped: false, limit: 20 },
-            pending: { count: 0, capped: false, limit: 20 },
-            failed: { count: 0, capped: false, limit: 20 },
-          },
-        },
-        latestFailedReason: null,
-        profileCandidateCounts: { pending: 0, approved: 0, rejected: 0, deferred: 0 },
-      });
-      renderMinimalAssignmentWithNavigationGuard((guard) => {
-        navigationGuard = guard;
-      });
-
-      await startNewAssignmentForLearner(user);
-      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-      await screen.findByDisplayValue('Student transcript text');
-      await advanceSourceToTeachingContext(user);
-      await user.click(
-        await screen.findByRole('button', { name: /Populate first profile from lesson/i }),
-      );
-      await user.click(await screen.findByRole('button', { name: /Approve profile draft/i }));
-      const continueButton = screen.getByRole('button', { name: /Confirm and continue/i });
-      await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false));
-
-      await waitFor(() => {
-        const pendingContext = new Event('beforeunload', { cancelable: true });
-        globalThis.dispatchEvent(pendingContext);
-        expect(pendingContext.defaultPrevented).toBe(true);
-      });
-
-      await user.click(continueButton);
-      await user.click(
-        await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i }),
-      );
-      await screen.findByDisplayValue('# Generated assignment draft');
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
-      await screen.findByRole('heading', { name: /Review and share/i });
-      const recoveryCallsAfterCreate = vi.mocked(api.updateAssignmentSessionRecovery).mock.calls
-        .length;
-
-      const guard = navigationGuard as unknown as () => Promise<boolean>;
-      await expect(guard()).resolves.toBe(true);
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1_500);
-      });
-
-      const laterRecoveryPatches = vi
-        .mocked(api.updateAssignmentSessionRecovery)
-        .mock.calls.slice(recoveryCallsAfterCreate)
-        .map(([, request]) => request.patch);
-      expect(laterRecoveryPatches.some((patch) => Object.hasOwn(patch, 'selectedProfileId'))).toBe(
-        false,
-      );
-      expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          step: 'context',
-          profileId: 'profiles/alex.md',
-          profileRevisionId: 'revision-draft-1',
-          profileRevisionHash: 'hash-draft-1',
-        }),
-      );
-      vi.useRealTimers();
-    });
-
-    it('ignores a first-profile draft response from audio that was replaced before activation', async () => {
-      const user = createMinimalUser();
-      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
-        students: [{ id: 'student-alex', name: 'Alex', profileId: null }],
-      });
-      vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
-        studentId: 'student-alex',
-        latestSnapshot: null,
-        memoryCounts: {
-          lesson: {
-            ready: { count: 1, capped: false, limit: 20 },
-            pending: { count: 0, capped: false, limit: 20 },
-            failed: { count: 0, capped: false, limit: 20 },
-          },
-          homework: {
-            ready: { count: 0, capped: false, limit: 20 },
-            pending: { count: 0, capped: false, limit: 20 },
-            failed: { count: 0, capped: false, limit: 20 },
-          },
-        },
-        latestFailedReason: null,
-        profileCandidateCounts: { pending: 0, approved: 0, rejected: 0, deferred: 0 },
-      });
-      const staleResponse = await api.populateFirstProfileFromLesson('student-alex');
-      vi.mocked(api.populateFirstProfileFromLesson).mockClear();
-      let resolvePopulation!: (value: typeof staleResponse) => void;
-      vi.mocked(api.populateFirstProfileFromLesson).mockImplementationOnce(
-        () => new Promise((resolve) => (resolvePopulation = resolve)),
-      );
-      const recordingA = makeRecording({
-        recordingId: 'rec-a',
-        studentId: 'student-alex',
-        status: 'transcribed',
-        transcriptId: 'tx-a',
-        displayName: 'wrong-lesson.mp3',
-      });
-      const recordingB = makeRecording({
-        recordingId: 'rec-b',
-        studentId: 'student-alex',
-        status: 'transcribed',
-        transcriptId: 'tx-b',
-        displayName: 'correct-lesson.mp3',
-      });
-      vi.mocked(api.uploadRecording)
-        .mockResolvedValueOnce(recordingA)
-        .mockResolvedValueOnce(recordingB);
-      vi.mocked(api.getRecording).mockImplementation(async (recordingId) =>
-        recordingId === 'rec-b' ? recordingB : recordingA,
-      );
-      vi.mocked(api.fetchRecordingTranscript).mockImplementation(async (recordingId) =>
-        makeTranscript(
-          recordingId === 'rec-b'
-            ? {
-                recordingId: 'rec-b',
-                transcriptId: 'tx-b',
-                text: 'Correct lesson transcript',
-                contentHash: 'b'.repeat(64),
-              }
-            : { recordingId: 'rec-a', transcriptId: 'tx-a' },
-        ),
-      );
-
-      renderMinimalAssignment();
-      await startNewAssignmentForLearner(user);
-      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-      await screen.findByDisplayValue('Student transcript text');
-      await advanceSourceToTeachingContext(user);
-      await user.click(
-        await screen.findByRole('button', { name: /Populate first profile from lesson/i }),
-      );
-      await waitFor(() => expect(api.populateFirstProfileFromLesson).toHaveBeenCalledTimes(1));
-
-      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
-      await user.click(screen.getByRole('button', { name: /Replace audio/i }));
-      await user.click(screen.getByRole('button', { name: /Drop replacement audio/i }));
-      await screen.findByDisplayValue('Correct lesson transcript');
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
-      await screen.findByRole('heading', { name: /Learner context/i });
-
-      await act(async () => resolvePopulation(staleResponse));
-
-      await waitFor(() =>
-        expect(screen.queryByRole('button', { name: /Approve profile draft/i })).toBeNull(),
-      );
-      expect(
-        screen.getByRole('button', { name: /Populate first profile from lesson/i }),
-      ).toBeTruthy();
-    });
-
-    it('reloads an already-selected draft-only profile after approving the first draft', async () => {
-      const user = createMinimalUser();
-      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
-        students: [
-          { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
-          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
-        ],
-      });
-      vi.mocked(api.getProfileContent)
-        .mockRejectedValueOnce(new Error('not_found'))
-        .mockResolvedValueOnce({
-          id: 'profiles/alex.md',
-          label: 'Alex Profile',
-          content: 'PROFILE CONTENT',
-          structuredContent: {
-            schemaVersion: 'foundational_profile_v1',
-            overallLevel: 'B1',
-            primaryGoals: ['Lead project updates clearly.'],
-            communicationContexts: ['Weekly team syncs.'],
-            interestsAndUsefulThemes: ['Travel and films.'],
-            stableStrengths: ['Strong listening comprehension.'],
-            persistentChallenges: ['Needs more confident spoken transitions.'],
-            studyPreferences: ['Prefers concise, practical homework.'],
-            durableConstraints: [],
-            teacherNotes: 'Keep examples grounded in real workplace situations.',
-          },
-          currentRevisionId: 'revision-draft-1',
-          updatedAt: now,
-        });
-      vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
-        studentId: 'student-alex',
-        latestSnapshot: null,
-        memoryCounts: {
-          lesson: {
-            ready: { count: 1, capped: false, limit: 20 },
-            pending: { count: 0, capped: false, limit: 20 },
-            failed: { count: 0, capped: false, limit: 20 },
-          },
-          homework: {
-            ready: { count: 0, capped: false, limit: 20 },
-            pending: { count: 0, capped: false, limit: 20 },
-            failed: { count: 0, capped: false, limit: 20 },
-          },
-        },
-        latestFailedReason: null,
-        profileCandidateCounts: {
-          pending: 0,
-          approved: 0,
-          rejected: 0,
-          deferred: 0,
-        },
-      });
-
-      renderMinimalAssignment();
-
-      await startNewAssignmentForLearner(user);
-      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-      await screen.findByDisplayValue('Student transcript text');
-      await advanceSourceToTeachingContext(user);
-      expect(
-        await screen.findByText(/Learning page context has not been structured yet/i),
-      ).toBeTruthy();
-      expect(screen.queryByText(/^not_found$/i)).toBeNull();
-
-      expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
-      const populateButton = await screen.findByRole('button', {
-        name: /Populate first profile from lesson/i,
-      });
-      await user.click(populateButton);
-      await screen.findByText(/^First profile draft$/i);
-
-      await user.click(await screen.findByRole('button', { name: /Approve profile draft/i }));
-
-      await waitFor(() => {
-        expect(api.getProfileContent).toHaveBeenCalledTimes(2);
-      });
-      expect((await screen.findAllByText(/^Student Learning page$/i)).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/^Current$/i).length).toBeGreaterThan(0);
-      expect(screen.queryByText(/^not_found$/i)).toBeNull();
-      expect(
-        (await screen.findAllByText(/Lead project updates clearly\./i)).length,
-      ).toBeGreaterThan(0);
     });
 
     it('generates a prompt after transcript is ready', async () => {
@@ -1357,10 +1010,13 @@ export function registerPromptStudentSelectionTests() {
           }),
         );
         expect(
-          vi.mocked(api.updateAssignmentSessionRecovery).mock.calls.every(([, request]) =>
-            !Object.hasOwn(request.patch, 'recordingId') &&
-            !Object.hasOwn(request.patch, 'transcriptId'),
-          ),
+          vi
+            .mocked(api.updateAssignmentSessionRecovery)
+            .mock.calls.every(
+              ([, request]) =>
+                !Object.hasOwn(request.patch, 'recordingId') &&
+                !Object.hasOwn(request.patch, 'transcriptId'),
+            ),
         ).toBe(true);
         expect(api.createPromptPackage).toHaveBeenCalledWith(
           'rec-1',

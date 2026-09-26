@@ -8,11 +8,7 @@ import { getPromptOptions } from '../application/prompt-options.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import { loadConfig } from '../config/env.js';
-import {
-  getProfileById,
-  setProfileActiveRevision,
-  upsertProfile,
-} from '../domain/profile-repository.js';
+import { getProfileById, upsertProfile } from '../domain/profile-repository.js';
 import {
   activateProfileRevision,
   getLatestProfileRevisionByHash,
@@ -323,7 +319,6 @@ async function importProfiles(
       stats.activatedRevisions += 1;
       if (!dryRun) {
         await activateProfileRevision(asset.id, revisionId);
-        await setProfileActiveRevision(asset.id, revisionId);
       }
     }
   }

@@ -1,7 +1,7 @@
 import './support/bootstrap-pg-test-env.js';
 
 import { randomUUID } from 'node:crypto';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
@@ -175,6 +175,668 @@ async function confirmMixedSource(
 describe('domain/assignment-session-repository persistence contract', () => {
   beforeEach(async () => {
     await resetTables();
+  });
+
+  it('creates one source-bound onboarding intent and atomically activates one evidence revision', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const first = await confirmMixedSource(repository, fixture);
+    await confirmMixedSource(repository, fixture);
+    const before = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const operations = await client.query<{ id: string; profile_id: string; state: string }>(
+        `SELECT id, profile_id, state FROM profile_initial_enrichment_operations
+         WHERE assignment_session_id = $1`,
+        [fixture.sessionId],
+      );
+      const profile = await client.query<{ provenance: string }>(
+        'SELECT provenance FROM profiles WHERE id = $1',
+        [operations.rows[0]?.profile_id],
+      );
+      await client.query(
+        `UPDATE lesson_memory_entries SET status = 'ready'
+         WHERE id = $1`,
+        [first.lessonMemoryIntent?.entryId],
+      );
+      return { operations: operations.rows, provenance: profile.rows[0]?.provenance };
+    });
+    expect(before.operations).toHaveLength(1);
+    expect(before.operations[0]?.state).toBe('waiting_evidence');
+    expect(before.provenance).toBe('tutor_only');
+    const { loadConfig } = await import('../src/config/env.js');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    const generate = async () => ({
+      structuredProfile: {
+        schemaVersion: 'foundational_profile_v1' as const,
+        overallLevel: 'B1',
+        primaryGoals: ['Practise clear updates'],
+        communicationContexts: [],
+        interestsAndUsefulThemes: [],
+        stableStrengths: [],
+        persistentChallenges: [],
+        studyPreferences: [],
+        durableConstraints: [],
+        teacherNotes: null,
+      },
+      rawOutput: {},
+      rawText: '{}',
+      provider: 'openai' as const,
+      model: 'test-model',
+    });
+    await reconcileProfileInitialEnrichmentOperation(
+      before.operations[0]!.id,
+      loadConfig(),
+      generate,
+    );
+    await reconcileProfileInitialEnrichmentOperation(
+      before.operations[0]!.id,
+      loadConfig(),
+      generate,
+    );
+    const after = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const operations = await client.query<{ state: string; result_revision_id: string }>(
+        'SELECT state, result_revision_id FROM profile_initial_enrichment_operations WHERE id = $1',
+        [before.operations[0]!.id],
+      );
+      const profile = await client.query<{ provenance: string; active_revision_id: string }>(
+        'SELECT provenance, active_revision_id FROM profiles WHERE id = $1',
+        [before.operations[0]!.profile_id],
+      );
+      const revisions = await client.query<{ id: string; status: string }>(
+        'SELECT id, status FROM profile_revisions WHERE profile_id = $1',
+        [before.operations[0]!.profile_id],
+      );
+      return { operation: operations.rows[0], profile: profile.rows[0], revisions: revisions.rows };
+    });
+    expect(after.operation?.state).toBe('succeeded');
+    expect(after.profile?.provenance).toBe('evidence_enriched');
+    expect(after.profile?.active_revision_id).toBe(after.operation?.result_revision_id);
+    expect(after.revisions).toEqual([
+      { id: after.operation?.result_revision_id, status: 'active' },
+    ]);
+    const { getAssignmentLearnerContext } = await import(
+      '../src/application/assignment-learner-context.js'
+    );
+    const learnerContext = await getAssignmentLearnerContext(fixture.userId, fixture.sessionId);
+    expect(learnerContext?.state).toBe('completed');
+    expect(learnerContext?.profile?.revisionId).toBe(after.operation?.result_revision_id);
+    await expect(
+      repository.confirmAssignmentSessionStepPersistence({
+        id: fixture.sessionId,
+        userId: fixture.userId,
+        request: {
+          step: 'context',
+          expectedRevision: first.session.revision,
+          teacherNotes: null,
+          profileId: null,
+          profileRevisionId: null,
+          profileRevisionHash: null,
+        },
+      }),
+    ).rejects.toThrow('ASSIGNMENT_STEP_PROFILE_STALE');
+  });
+
+  it('does not resubmit an ambiguous reserved provider call after duplicate delivery', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const confirmed = await confirmMixedSource(repository, fixture);
+    const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query('UPDATE lesson_memory_entries SET status = $2 WHERE id = $1', [
+        confirmed.lessonMemoryIntent?.entryId,
+        'ready',
+      ]);
+      const rows = await client.query<{ id: string }>(
+        'SELECT id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+      return rows.rows[0]!;
+    });
+    const { loadConfig } = await import('../src/config/env.js');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    let enter!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    let rejectProvider!: (reason: Error) => void;
+    const provider = new Promise<never>((_resolve, reject) => {
+      rejectProvider = reject;
+    });
+    const generate = vi.fn(async () => {
+      enter();
+      return provider;
+    });
+    const first = reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), generate);
+    await entered;
+    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), generate);
+    expect(generate).toHaveBeenCalledTimes(1);
+    rejectProvider(new Error('provider timeout after submission'));
+    await first;
+    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), generate);
+    expect(generate).toHaveBeenCalledTimes(1);
+    const state = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
+      client.query<{ state: string; submission_id: string }>(
+        'SELECT state, submission_id FROM profile_initial_enrichment_operations WHERE id = $1',
+        [op.id],
+      ),
+    );
+    expect(state.rows[0]?.state).toBe('uncertain');
+    expect(state.rows[0]?.submission_id).toBeTruthy();
+  });
+
+  it('expires an unresolved reserved submission without making another provider call', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    await confirmMixedSource(repository, fixture);
+    const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const result = await client.query<{ id: string }>(
+        'SELECT id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+      await client.query(
+        `UPDATE profile_initial_enrichment_operations
+         SET state = 'submitting', submission_id = $2,
+           submission_reserved_at = NOW() - INTERVAL '16 minutes' WHERE id = $1`,
+        [result.rows[0]!.id, randomUUID()],
+      );
+      await client.query('UPDATE transcripts SET content_hash = $2 WHERE id = $1', [
+        fixture.transcriptId,
+        'b'.repeat(64),
+      ]);
+      return result.rows[0]!;
+    });
+    const { loadConfig } = await import('../src/config/env.js');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    const generate = vi.fn();
+    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), generate);
+    const result = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
+      client.query<{ state: string; failure_code: string }>(
+        'SELECT state, failure_code FROM profile_initial_enrichment_operations WHERE id = $1',
+        [op.id],
+      ),
+    );
+    expect(result.rows[0]).toEqual({
+      state: 'uncertain',
+      failure_code: 'submission_unresolved',
+    });
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('preserves a Context confirmation committed before asynchronous activation', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const confirmedSource = await confirmMixedSource(repository, fixture);
+    const confirmedContext = await repository.confirmAssignmentSessionStepPersistence({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      request: {
+        step: 'context',
+        expectedRevision: confirmedSource.session.revision,
+        teacherNotes: 'Practice introductions',
+        profileId: null,
+        profileRevisionId: null,
+        profileRevisionHash: null,
+      },
+    });
+    const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query('UPDATE lesson_memory_entries SET status = $2 WHERE id = $1', [
+        confirmedSource.lessonMemoryIntent?.entryId,
+        'ready',
+      ]);
+      const result = await client.query<{ id: string }>(
+        'SELECT id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+      return result.rows[0]!;
+    });
+    const { loadConfig } = await import('../src/config/env.js');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), async () => ({
+      structuredProfile: {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: 'B1',
+        primaryGoals: ['Generated goal'],
+        communicationContexts: [],
+        interestsAndUsefulThemes: [],
+        stableStrengths: [],
+        persistentChallenges: [],
+        studyPreferences: [],
+        durableConstraints: [],
+        teacherNotes: null,
+      },
+      rawOutput: {},
+      rawText: '{}',
+      provider: 'openai',
+      model: 'test-model',
+    }));
+    const replay = await repository.confirmAssignmentSessionStepPersistence({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      request: {
+        step: 'context',
+        expectedRevision: confirmedSource.session.revision,
+        teacherNotes: 'Practice introductions',
+        profileId: null,
+        profileRevisionId: null,
+        profileRevisionHash: null,
+      },
+    });
+    expect(replay.session.confirmed.context).toEqual(confirmedContext.session.confirmed.context);
+    expect(replay.session.revision).toBe(confirmedContext.session.revision);
+  });
+
+  it('preserves a tutor revision activated while generation is in flight', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const confirmed = await confirmMixedSource(repository, fixture);
+    const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query('UPDATE lesson_memory_entries SET status = $2 WHERE id = $1', [
+        confirmed.lessonMemoryIntent?.entryId,
+        'ready',
+      ]);
+      const result = await client.query<{ id: string; profile_id: string }>(
+        'SELECT id, profile_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+      return result.rows[0]!;
+    });
+    const { loadConfig } = await import('../src/config/env.js');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    let enter!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    let resolveProvider!: (value: any) => void;
+    const provider = new Promise<any>((resolve) => {
+      resolveProvider = resolve;
+    });
+    const first = reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), async () => {
+      enter();
+      return provider;
+    });
+    await entered;
+    const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
+    const tutor = await insertProfileRevision({
+      profileId: op.profile_id,
+      content: '# Tutor edit',
+      contentHash: 'b'.repeat(64),
+      source: 'update',
+      status: 'active',
+    });
+    resolveProvider({
+      structuredProfile: {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: 'B1',
+        primaryGoals: ['Generated goal'],
+        communicationContexts: [],
+        interestsAndUsefulThemes: [],
+        stableStrengths: [],
+        persistentChallenges: [],
+        studyPreferences: [],
+        durableConstraints: [],
+        teacherNotes: null,
+      },
+    });
+    await first;
+    const result = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const operation = await client.query<{ state: string }>(
+        'SELECT state FROM profile_initial_enrichment_operations WHERE id = $1',
+        [op.id],
+      );
+      const profile = await client.query<{ active_revision_id: string; provenance: string }>(
+        'SELECT active_revision_id, provenance FROM profiles WHERE id = $1',
+        [op.profile_id],
+      );
+      return { operation: operation.rows[0], profile: profile.rows[0] };
+    });
+    expect(result.operation?.state).toBe('superseded');
+    expect(result.profile).toEqual({ active_revision_id: tutor.id, provenance: 'tutor_only' });
+  });
+
+  it('rolls back active revision deprecation and pointer change when insertion fails', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    await confirmMixedSource(repository, fixture);
+    const profileId = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const result = await client.query<{ profile_id: string }>(
+        'SELECT profile_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+      return result.rows[0]!.profile_id;
+    });
+    const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
+    const original = await insertProfileRevision({
+      profileId,
+      content: '# Tutor seed',
+      contentHash: 'b'.repeat(64),
+      source: 'create',
+      status: 'active',
+    });
+    await expect(
+      insertProfileRevision({
+        id: original.id,
+        profileId,
+        content: '# Conflicting revision',
+        contentHash: 'c'.repeat(64),
+        source: 'update',
+        status: 'active',
+      }),
+    ).rejects.toBeTruthy();
+    const rows = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const profile = await client.query<{ active_revision_id: string }>(
+        'SELECT active_revision_id FROM profiles WHERE id = $1',
+        [profileId],
+      );
+      const revisions = await client.query<{ id: string; status: string }>(
+        'SELECT id, status FROM profile_revisions WHERE profile_id = $1',
+        [profileId],
+      );
+      return { profile: profile.rows[0], revisions: revisions.rows };
+    });
+    expect(rows.profile?.active_revision_id).toBe(original.id);
+    expect(rows.revisions).toEqual([{ id: original.id, status: 'active' }]);
+  });
+
+  it('recovers a lost Source onboarding intent without creating a second operation', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    await confirmMixedSource(repository, fixture);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        'DELETE FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+    });
+    await repository.reconcileDeferredInitialEnrichmentIntents();
+    await repository.reconcileDeferredInitialEnrichmentIntents();
+    const operations = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
+      client.query<{ state: string }>(
+        'SELECT state FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      ),
+    );
+    expect(operations.rows).toEqual([{ state: 'waiting_evidence' }]);
+  });
+
+  it('does not recover a lost intent from a stale confirmed transcript', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    await confirmMixedSource(repository, fixture);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        'DELETE FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+      await client.query(
+        'UPDATE transcripts SET working_version = working_version + 1 WHERE id = $1',
+        [fixture.transcriptId],
+      );
+    });
+    await repository.reconcileDeferredInitialEnrichmentIntents();
+    const operations = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
+      client.query(
+        'SELECT id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      ),
+    );
+    expect(operations.rows).toEqual([]);
+  });
+
+  it('replays the same confirmed source without restarting a terminal operation', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    await confirmMixedSource(repository, fixture);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `UPDATE profile_initial_enrichment_operations SET state = 'failed',
+         failure_code = 'model_unavailable' WHERE assignment_session_id = $1`,
+        [fixture.sessionId],
+      );
+    });
+    await confirmMixedSource(repository, fixture);
+    const rows = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
+      client.query<{ state: string }>(
+        'SELECT state FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      ),
+    );
+    expect(rows.rows).toEqual([{ state: 'failed' }]);
+  });
+
+  it('discards a persisted result when canonical Source ownership has changed', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    await confirmMixedSource(repository, fixture);
+    const { renderFoundationalProfileContent } = await import(
+      '../src/application/foundational-profile.js'
+    );
+    const profileResult = {
+      schemaVersion: 'foundational_profile_v1' as const,
+      overallLevel: 'B1',
+      primaryGoals: ['Generated goal'],
+      communicationContexts: [],
+      interestsAndUsefulThemes: [],
+      stableStrengths: [],
+      persistentChallenges: [],
+      studyPreferences: [],
+      durableConstraints: [],
+      teacherNotes: null,
+    };
+    const content = renderFoundationalProfileContent(profileResult);
+    const { createHash } = await import('node:crypto');
+    const resultHash = createHash('sha256').update(content, 'utf8').digest('hex');
+    const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const result = await client.query<{ id: string; profile_id: string }>(
+        'SELECT id, profile_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+      await client.query(
+        `UPDATE profile_initial_enrichment_operations
+         SET state = 'result_ready', validated_result = $2::jsonb, result_hash = $3
+         WHERE id = $1`,
+        [result.rows[0]!.id, JSON.stringify(profileResult), resultHash],
+      );
+      await client.query(
+        `UPDATE assignment_source_bindings SET binding_role = 'working'
+         WHERE assignment_session_id = $1`,
+        [fixture.sessionId],
+      );
+      return result.rows[0]!;
+    });
+    const { loadConfig } = await import('../src/config/env.js');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig());
+    const result = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const operation = await client.query<{ state: string }>(
+        'SELECT state FROM profile_initial_enrichment_operations WHERE id = $1',
+        [op.id],
+      );
+      const profile = await client.query<{ active_revision_id: string | null; provenance: string }>(
+        'SELECT active_revision_id, provenance FROM profiles WHERE id = $1',
+        [op.profile_id],
+      );
+      return { operation: operation.rows[0], profile: profile.rows[0] };
+    });
+    expect(result.operation?.state).toBe('superseded');
+    expect(result.profile).toEqual({ active_revision_id: null, provenance: 'tutor_only' });
+  });
+
+  it('commits a persisted result after worker restart without provider regeneration', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    await confirmMixedSource(repository, fixture);
+    const { renderFoundationalProfileContent } = await import(
+      '../src/application/foundational-profile.js'
+    );
+    const profileResult = {
+      schemaVersion: 'foundational_profile_v1' as const,
+      overallLevel: 'B1',
+      primaryGoals: ['Generated goal'],
+      communicationContexts: [],
+      interestsAndUsefulThemes: [],
+      stableStrengths: [],
+      persistentChallenges: [],
+      studyPreferences: [],
+      durableConstraints: [],
+      teacherNotes: null,
+    };
+    const { createHash } = await import('node:crypto');
+    const resultHash = createHash('sha256')
+      .update(renderFoundationalProfileContent(profileResult), 'utf8')
+      .digest('hex');
+    const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const result = await client.query<{ id: string; profile_id: string }>(
+        'SELECT id, profile_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+      await client.query(
+        `UPDATE profile_initial_enrichment_operations
+         SET state = 'result_ready', validated_result = $2::jsonb, result_hash = $3
+         WHERE id = $1`,
+        [result.rows[0]!.id, JSON.stringify(profileResult), resultHash],
+      );
+      return result.rows[0]!;
+    });
+    const { loadConfig } = await import('../src/config/env.js');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    const generate = vi.fn();
+    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), generate);
+    expect(generate).not.toHaveBeenCalled();
+    const result = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const operation = await client.query<{ state: string; result_revision_id: string }>(
+        'SELECT state, result_revision_id FROM profile_initial_enrichment_operations WHERE id = $1',
+        [op.id],
+      );
+      const profile = await client.query<{ active_revision_id: string; provenance: string }>(
+        'SELECT active_revision_id, provenance FROM profiles WHERE id = $1',
+        [op.profile_id],
+      );
+      return { operation: operation.rows[0], profile: profile.rows[0] };
+    });
+    expect(result.operation?.state).toBe('succeeded');
+    expect(result.profile).toEqual({
+      active_revision_id: result.operation?.result_revision_id,
+      provenance: 'evidence_enriched',
+    });
+  });
+
+  it('keeps a validated provider result when post-response accounting fails', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const confirmed = await confirmMixedSource(repository, fixture);
+    const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query('UPDATE lesson_memory_entries SET status = $2 WHERE id = $1', [
+        confirmed.lessonMemoryIntent?.entryId,
+        'ready',
+      ]);
+      const result = await client.query<{ id: string }>(
+        'SELECT id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+        [fixture.sessionId],
+      );
+      return result.rows[0]!;
+    });
+    const { loadConfig } = await import('../src/config/env.js');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    const generator: typeof import('../src/application/profile-revision-drafting.js').generateProfileRevisionDraft =
+      vi.fn(async ({ request }) => {
+        await request.onValidatedResponse!({
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Generated goal'],
+          communicationContexts: [],
+          interestsAndUsefulThemes: [],
+          stableStrengths: [],
+          persistentChallenges: [],
+          studyPreferences: [],
+          durableConstraints: [],
+          teacherNotes: null,
+        });
+        throw new Error('budget usage database write failed');
+      });
+    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), generator);
+    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), generator);
+    expect(generator).toHaveBeenCalledTimes(1);
+    const operation = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
+      client.query<{ state: string }>(
+        'SELECT state FROM profile_initial_enrichment_operations WHERE id = $1',
+        [op.id],
+      ),
+    );
+    expect(operation.rows[0]?.state).toBe('succeeded');
   });
 
   it('requires the first persisted row to contain a confirmed Student snapshot', async () => {

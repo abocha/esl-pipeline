@@ -145,6 +145,13 @@ export async function insertProfileRevision(
         ],
       );
 
+      if (status === 'active') {
+        await client.query(
+          'UPDATE profiles SET active_revision_id = $2, updated_at = NOW() WHERE id = $1',
+          [params.profileId, id],
+        );
+      }
+
       await client.query('COMMIT');
       return result.rows[0] as ProfileRevisionRow;
     } catch (error) {
@@ -285,6 +292,7 @@ export async function activateProfileRevision(
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
+      await client.query('SELECT id FROM profiles WHERE id = $1 FOR UPDATE', [profileId]);
       const existsResult = await client.query(
         'SELECT 1 FROM profile_revisions WHERE profile_id = $1 AND id = $2',
         [profileId, revisionId],
@@ -319,6 +327,11 @@ export async function activateProfileRevision(
         [profileId, revisionId],
       );
 
+      await client.query(
+        'UPDATE profiles SET active_revision_id = $2, updated_at = NOW() WHERE id = $1',
+        [profileId, revisionId],
+      );
+
       await client.query('COMMIT');
       return result.rows[0] as ProfileRevisionRow | undefined;
     } catch (error) {
@@ -332,18 +345,30 @@ export async function activateProfileRevision(
 
 export async function deprecateActiveProfileRevision(profileId: string): Promise<number> {
   const updated = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
-      UPDATE profile_revisions
-      SET
-        status = 'deprecated',
-        deprecated_at = COALESCE(deprecated_at, NOW()),
-        activated_at = NULL
-      WHERE profile_id = $1 AND status = 'active'
-      `,
-      [profileId],
-    );
-    return result.rowCount ?? 0;
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM profiles WHERE id = $1 FOR UPDATE', [profileId]);
+      const result = await client.query(
+        `
+        UPDATE profile_revisions
+        SET
+          status = 'deprecated',
+          deprecated_at = COALESCE(deprecated_at, NOW()),
+          activated_at = NULL
+        WHERE profile_id = $1 AND status = 'active'
+        `,
+        [profileId],
+      );
+      await client.query(
+        'UPDATE profiles SET active_revision_id = NULL, updated_at = NOW() WHERE id = $1',
+        [profileId],
+      );
+      await client.query('COMMIT');
+      return result.rowCount ?? 0;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
 
   return updated;

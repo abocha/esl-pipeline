@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Accept } from 'react-dropzone';
 
 import type {
+  AssignmentLearnerContext,
   AssignmentSession,
   ConfirmAssignmentSessionStepRequest,
   FoundationalProfile,
@@ -19,17 +20,15 @@ import {
   AssignmentSessionConflictApiError,
   AssignmentSourceOwnershipApiError,
   AssignmentSpeakerRoleMappingRequiredApiError,
-  activateProfileRevision,
   attachAssignmentSource,
   confirmAssignmentSessionStep,
   confirmStudentAssignmentSession,
+  fetchAssignmentLearnerContext,
   fetchAssignmentSession,
   fetchJobOptions,
   fetchPromptOptions,
   getJobStatus,
-  getStudentMemoryHealth,
   getStudentScheduleBillingSurface,
-  populateFirstProfileFromLesson,
   publishAssignmentCorrection,
   shareAssignmentSession,
   subscribeToJobEvents,
@@ -63,7 +62,10 @@ import {
   isAssignmentConfirmationApplied,
   shouldGuardAssignmentExit,
 } from './MinimalAssignment.confirmation';
-import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
+import {
+  buildProfilePreview,
+  useMinimalAssignmentContextController,
+} from './MinimalAssignment.context';
 import {
   buildAssignmentCorrectionRequest,
   canRetryAssignmentPublication,
@@ -152,7 +154,7 @@ const FALLBACK_ELEVENLABS_MODELS = [
   'eleven_flash_v2',
 ] as const;
 const RECENT_LESSON_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
-const FIRST_PROFILE_HEALTH_POLL_MS = 10_000;
+const LEARNER_CONTEXT_POLL_MS = 5_000;
 
 type UiTtsProvider = (typeof FALLBACK_TTS_PROVIDERS)[number];
 type UiPronunciationChunkTtsProvider = (typeof FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS)[number];
@@ -352,21 +354,8 @@ export const MinimalAssignment: React.FC = () => {
   const [startingAssignment, setStartingAssignment] = useState(false);
   const [sharingAssignment, setSharingAssignment] = useState(false);
   const [assignmentShareError, setAssignmentShareError] = useState<string | null>(null);
-  const [firstProfileLessonMemoryStatus, setFirstProfileLessonMemoryStatus] = useState<
-    'checking' | 'building' | 'ready'
-  >('checking');
-  const [firstProfileLessonMemoryReadyCount, setFirstProfileLessonMemoryReadyCount] = useState(0);
-  const [firstProfileDraft, setFirstProfileDraft] = useState<{
-    profileId: string;
-    draftRevisionId: string;
-    structuredContent: FoundationalProfile | null;
-    sourceAuthorityKey: string;
-  } | null>(null);
-  const [firstProfileAssistBusy, setFirstProfileAssistBusy] = useState<
-    'drafting' | 'approving' | null
-  >(null);
-  const [firstProfileAssistApproved, setFirstProfileAssistApproved] = useState(false);
-  const [firstProfileAssistError, setFirstProfileAssistError] = useState<string | null>(null);
+  const [learnerContext, setLearnerContext] = useState<AssignmentLearnerContext | null>(null);
+  const [learnerContextError, setLearnerContextError] = useState<string | null>(null);
 
   const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
     useState<PronunciationMode | null>(null);
@@ -431,7 +420,6 @@ export const MinimalAssignment: React.FC = () => {
   const assignmentSessionPersistenceSuppressedRef = useRef(false);
   const assignmentSessionUserEditedRef = useRef(false);
   const committedTeacherNotesRef = useRef('');
-  const firstProfileSourceAuthorityKeyRef = useRef<string | null>(null);
 
   const generationOptions = jobOptions?.generation ?? null;
   const ttsProviders = useMemo<UiTtsProvider[]>(() => {
@@ -590,21 +578,6 @@ export const MinimalAssignment: React.FC = () => {
     resolveBoundProfileId: source.resolveBoundProfileId,
     boundProfileResolutionReady: source.studentOptionsResolved,
   });
-  const durableProfileLineage = useMemo(
-    () => ({
-      selectedProfileId:
-        context.selectedProfileRevisionId && context.selectedProfileRevisionHash
-          ? context.selectedProfileId || null
-          : null,
-      selectedProfileRevisionId: context.selectedProfileRevisionId,
-      selectedProfileRevisionHash: context.selectedProfileRevisionHash,
-    }),
-    [
-      context.selectedProfileId,
-      context.selectedProfileRevisionHash,
-      context.selectedProfileRevisionId,
-    ],
-  );
   const {
     resetSourceFlow,
     applyHydratedSnapshot: applySourceHydration,
@@ -834,6 +807,26 @@ export const MinimalAssignment: React.FC = () => {
   const activeAssignmentSession = resume.activeAssignmentSession;
   const setActiveAssignmentSession = resume.setActiveAssignmentSession;
   const openAssignmentSession = resume.openAssignmentSession;
+  const currentLearnerProfile =
+    learnerContext?.assignmentSessionId === activeAssignmentSession?.id &&
+    learnerContext?.source?.transcriptId ===
+      activeAssignmentSession?.confirmed.source?.transcriptId &&
+    learnerContext?.source?.transcriptHash ===
+      activeAssignmentSession?.confirmed.source?.transcriptHash
+      ? (learnerContext?.profile ?? null)
+      : null;
+  const durableProfileLineage = useMemo(
+    () => ({
+      selectedProfileId: currentLearnerProfile?.profileId ?? null,
+      selectedProfileRevisionId: currentLearnerProfile?.revisionId ?? null,
+      selectedProfileRevisionHash: currentLearnerProfile?.revisionHash ?? null,
+    }),
+    [
+      currentLearnerProfile?.profileId,
+      currentLearnerProfile?.revisionId,
+      currentLearnerProfile?.revisionHash,
+    ],
+  );
   activeAssignmentSessionIdRef.current = activeAssignmentSession?.id ?? null;
   activeAssignmentSessionRef.current = activeAssignmentSession;
 
@@ -1209,13 +1202,13 @@ export const MinimalAssignment: React.FC = () => {
     const repairingPartialProfileLineage = Boolean(
       session.selectedProfileId &&
         (!session.selectedProfileRevisionId || !session.selectedProfileRevisionHash) &&
-        context.profileLineageReady &&
+        learnerContext?.confirmationAvailable &&
         durableProfileLineage.selectedProfileId === session.selectedProfileId,
     );
     if (!assignmentSessionWritesAllowed() && !repairingPartialProfileLineage) return;
     const recovery: UpdateAssignmentSessionRecoveryRequest['patch'] = {
       teacherNotes: teacherNotes.trim() || null,
-      ...(context.profileLineageReady ? durableProfileLineage : {}),
+      ...(learnerContext?.confirmationAvailable ? durableProfileLineage : {}),
     };
     const recoveryKey = JSON.stringify(recovery);
     if (assignmentContextConflictKeyRef.current === recoveryKey) {
@@ -1248,7 +1241,7 @@ export const MinimalAssignment: React.FC = () => {
     };
   }, [
     assignmentSessionWritesAllowed,
-    context.profileLineageReady,
+    learnerContext?.confirmationAvailable,
     context.selectedProfileId,
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
@@ -1731,178 +1724,57 @@ export const MinimalAssignment: React.FC = () => {
   }, [jobStatus, resumeSetSelectedResumeJobId, setAuthoringPublishError]);
 
   const transcriptReady = source.transcriptReady;
-  const firstProfileSourceAuthorityKey =
+  const learnerContextSourceKey =
     source.replacingAudio || source.uploading
       ? null
       : buildFirstProfileSourceAuthorityKey(
           activeAssignmentSession,
-          source.recording?.recordingId,
-          source.transcript?.transcriptId,
+          activeAssignmentSession?.confirmed.source?.recordingId,
+          activeAssignmentSession?.confirmed.source?.transcriptId,
         );
-  firstProfileSourceAuthorityKeyRef.current = firstProfileSourceAuthorityKey;
-  const firstProfileAssistVisible = Boolean(
-    source.selectedStudentId &&
-      context.profileAuthorityResolved &&
-      transcriptReady &&
-      !source.replacingAudio &&
-      !source.uploading &&
-      (context.profilePreviewStatus === 'none' || context.profilePreviewStatus === 'unstructured'),
-  );
-  const firstProfileLessonMemoryConfirmed = Boolean(
-    activeAssignmentSession?.confirmed.source &&
-      activeAssignmentSession.confirmed.source.recordingId === source.recording?.recordingId &&
-      activeAssignmentSession.confirmed.source.transcriptId === source.transcript?.transcriptId &&
-      activeAssignmentSession.confirmed.source.transcriptHash === source.transcript?.contentHash &&
-      !source.transcriptDirty,
-  );
-
-  const refreshFirstProfileLessonMemory = useCallback(async () => {
-    if (
-      !source.selectedStudentId ||
-      !transcriptReady ||
-      context.profilePreviewStatus === 'ready' ||
-      !firstProfileLessonMemoryConfirmed
-    ) {
-      return null;
-    }
-
-    setFirstProfileLessonMemoryStatus((current) => (current === 'ready' ? current : 'checking'));
-    setFirstProfileAssistError(null);
-    try {
-      const health = await getStudentMemoryHealth(source.selectedStudentId);
-      const readyCount = health.memoryCounts.lesson.ready.count;
-      setFirstProfileLessonMemoryReadyCount(readyCount);
-      setFirstProfileLessonMemoryStatus(readyCount > 0 ? 'ready' : 'building');
-      if (
-        readyCount === 0 &&
-        health.memoryCounts.lesson.failed.count > 0 &&
-        health.latestFailedReason?.source === 'lesson'
-      ) {
-        setFirstProfileAssistError(
-          health.latestFailedReason.message ||
-            'Lesson memory processing failed. Try refreshing after the transcript is available.',
-        );
-      }
-      return readyCount;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to check lesson memory readiness.';
-      setFirstProfileAssistError(message);
-      setFirstProfileLessonMemoryStatus('building');
-      return null;
-    }
-  }, [
-    context.profilePreviewStatus,
-    firstProfileLessonMemoryConfirmed,
-    source.selectedStudentId,
-    transcriptReady,
-  ]);
-
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
-
-    if (
-      !firstProfileAssistVisible ||
-      !firstProfileLessonMemoryConfirmed ||
-      firstProfileDraft ||
-      firstProfileAssistApproved
-    ) {
-      setFirstProfileLessonMemoryReadyCount(0);
-      setFirstProfileLessonMemoryStatus('checking');
-      setFirstProfileAssistError(null);
-      return;
-    }
-
-    const poll = async () => {
-      const readyCount = await refreshFirstProfileLessonMemory();
-      if (!active) return;
-      if (readyCount === 0) {
-        timer = setTimeout(() => void poll(), FIRST_PROFILE_HEALTH_POLL_MS);
-      }
-    };
-
-    void poll();
-
-    return () => {
-      active = false;
+    let refreshSequence = 0;
+    if (!learnerContextSourceKey || !activeAssignmentSession?.id) return;
+    const sessionId = activeAssignmentSession.id;
+    const refresh = async () => {
+      const sequence = ++refreshSequence;
       if (timer) {
         clearTimeout(timer);
+        timer = null;
+      }
+      try {
+        const result = await fetchAssignmentLearnerContext(sessionId);
+        if (!active || sequence !== refreshSequence || result.assignmentSessionId !== sessionId)
+          return;
+        setLearnerContext(result);
+        setLearnerContextError(null);
+        if (result.state === 'preparing') {
+          timer = setTimeout(() => void refresh(), LEARNER_CONTEXT_POLL_MS);
+        }
+      } catch (error) {
+        if (!active || sequence !== refreshSequence) return;
+        setLearnerContextError(
+          error instanceof Error ? error.message : 'Unable to load learner context.',
+        );
       }
     };
-  }, [
-    firstProfileAssistApproved,
-    firstProfileAssistVisible,
-    firstProfileLessonMemoryConfirmed,
-    firstProfileDraft,
-    refreshFirstProfileLessonMemory,
-  ]);
-
+    const onFocus = () => {
+      if (active && document.visibilityState === 'visible') void refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    void refresh();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [learnerContextSourceKey, activeAssignmentSession?.id, activeStep]);
   useEffect(() => {
-    setFirstProfileDraft(null);
-    setFirstProfileAssistApproved(false);
-    setFirstProfileAssistBusy(null);
-    setFirstProfileAssistError(null);
-    setFirstProfileLessonMemoryReadyCount(0);
-    setFirstProfileLessonMemoryStatus('checking');
-  }, [source.selectedStudentId, source.recording?.recordingId]);
-
-  const handlePopulateFirstProfile = useCallback(async () => {
-    const sourceAuthorityKey = firstProfileSourceAuthorityKeyRef.current;
-    if (!source.selectedStudentId || !sourceAuthorityKey) return;
-    markAssignmentUserEdit();
-    setFirstProfileAssistBusy('drafting');
-    setFirstProfileAssistError(null);
-    try {
-      const response = await populateFirstProfileFromLesson(source.selectedStudentId);
-      if (firstProfileSourceAuthorityKeyRef.current !== sourceAuthorityKey) return;
-      setFirstProfileDraft({
-        profileId: response.profileId,
-        draftRevisionId: response.draftRevisionId,
-        structuredContent: response.draftRevision.structuredContent ?? null,
-        sourceAuthorityKey,
-      });
-      setFirstProfileLessonMemoryReadyCount(response.lessonMemoryIds.length);
-      setFirstProfileLessonMemoryStatus('ready');
-    } catch (error) {
-      if (firstProfileSourceAuthorityKeyRef.current !== sourceAuthorityKey) return;
-      const message =
-        error instanceof Error ? error.message : 'Unable to populate the first profile draft.';
-      setFirstProfileAssistError(message);
-    } finally {
-      setFirstProfileAssistBusy(null);
-    }
-  }, [markAssignmentUserEdit, source.selectedStudentId]);
-
-  const handleApproveFirstProfileDraft = useCallback(async () => {
-    if (!firstProfileDraft) return;
-    if (firstProfileDraft.sourceAuthorityKey !== firstProfileSourceAuthorityKeyRef.current) {
-      setFirstProfileDraft(null);
-      return;
-    }
-    markAssignmentUserEdit();
-    setFirstProfileAssistBusy('approving');
-    setFirstProfileAssistError(null);
-    try {
-      const activatedRevision = await activateProfileRevision(
-        firstProfileDraft.profileId,
-        firstProfileDraft.draftRevisionId,
-      );
-      source.bindStudentProfile(source.selectedStudentId, firstProfileDraft.profileId);
-      context.selectProfileId(firstProfileDraft.profileId, {
-        id: activatedRevision.id,
-        contentHash: activatedRevision.contentHash,
-      });
-      setFirstProfileAssistApproved(true);
-      setFirstProfileDraft(null);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to approve the profile draft.';
-      setFirstProfileAssistError(message);
-    } finally {
-      setFirstProfileAssistBusy(null);
-    }
-  }, [context, firstProfileDraft, markAssignmentUserEdit, source]);
+    setLearnerContext(null);
+    setLearnerContextError(null);
+  }, [learnerContextSourceKey]);
 
   const jobReady = Boolean(jobStatus?.jobId);
   const hasPublishedHandout =
@@ -2072,7 +1944,7 @@ export const MinimalAssignment: React.FC = () => {
   const activeStepIndex = FOCUSED_STEP_ORDER.indexOf(activeStep);
   const authoringOperationBusy = authoring.promptLoading || authoring.generatingDraft;
   const commitTeacherNotes = useCallback(async (): Promise<TeacherNotesCommitResult> => {
-    if (!context.profileLineageReady) return null;
+    if (!learnerContext?.confirmationAvailable) return null;
     const normalizedTeacherNotes = teacherNotes.trim();
     const committedRecovery = {
       teacherNotes: normalizedTeacherNotes || null,
@@ -2113,7 +1985,7 @@ export const MinimalAssignment: React.FC = () => {
     return hadDownstream ? 'invalidated' : 'committed';
   }, [
     confirmAssignmentStep,
-    context.profileLineageReady,
+    learnerContext?.confirmationAvailable,
     durableProfileLineage,
     refreshDebouncedRecoveryPendingState,
     saveAssignmentSessionProgress,
@@ -2210,8 +2082,6 @@ export const MinimalAssignment: React.FC = () => {
         transcriptWorkingVersion: transcript.workingVersion,
       }));
       if (!confirmed) return;
-      setFirstProfileLessonMemoryStatus('building');
-      void refreshFirstProfileLessonMemory();
       setActiveStep('context');
       return;
     }
@@ -2267,7 +2137,6 @@ export const MinimalAssignment: React.FC = () => {
     confirmAssignmentStep,
     ensureAssignmentSourceAttached,
     linkedLessonId,
-    refreshFirstProfileLessonMemory,
     saveAssignmentSessionProgress,
     source,
     mixedSpeakerRoles,
@@ -2401,7 +2270,7 @@ export const MinimalAssignment: React.FC = () => {
         ? !transcriptReady ||
           (mixedSpeakerRoles.length > 0 && mixedSpeakerRoles.some((item) => !item.role))
         : activeStep === 'context'
-          ? !context.profileLineageReady || firstProfileAssistBusy === 'approving'
+          ? !learnerContext?.confirmationAvailable
           : activeStep === 'assignment'
             ? !hasAssignmentContent || authoringOperationBusy
             : false;
@@ -2869,8 +2738,7 @@ export const MinimalAssignment: React.FC = () => {
               continueLabel: 'Confirm and continue',
               continueDisabled,
               continueFeedback:
-                activeStep === 'context' &&
-                (!context.profileLineageReady || firstProfileAssistBusy === 'approving') ? (
+                activeStep === 'context' && !learnerContext?.confirmationAvailable ? (
                   <span role="status">Preparing learner context…</span>
                 ) : assignmentConfirmationError ? (
                   <span role="alert">{assignmentConfirmationError}</span>
@@ -3062,24 +2930,18 @@ export const MinimalAssignment: React.FC = () => {
               headingRef={contextHeadingRef}
               studentId={source.selectedStudentId}
               studentName={source.selectedStudent?.name ?? null}
-              selectedProfileId={context.selectedProfileId}
-              profilePreview={context.profilePreview}
-              profileRevisionError={context.profileRevisionError}
-              firstProfileAssist={{
-                visible: firstProfileAssistVisible,
-                sourceConfirmed: firstProfileLessonMemoryConfirmed,
-                lessonMemoryStatus:
-                  firstProfileLessonMemoryReadyCount > 0 ? 'ready' : firstProfileLessonMemoryStatus,
-                draftProfileId: firstProfileDraft?.profileId ?? null,
-                draftRevisionId: firstProfileDraft?.draftRevisionId ?? null,
-                draftPreview: firstProfileDraft?.structuredContent ?? null,
-                busy: firstProfileAssistBusy,
-                approved: firstProfileAssistApproved,
-                error: firstProfileAssistError,
-                onPopulate: handlePopulateFirstProfile,
-                onApprove: handleApproveFirstProfileDraft,
-                onRetry: () => void refreshFirstProfileLessonMemory(),
-              }}
+              selectedProfileId={learnerContext?.profile?.profileId ?? ''}
+              profilePreview={
+                learnerContext?.profile
+                  ? buildProfilePreview(learnerContext.profile.profileId, {
+                      structuredContent: learnerContext.profile
+                        .structuredContent as FoundationalProfile | null,
+                      updatedAt: learnerContext.profile.updatedAt,
+                    })
+                  : null
+              }
+              profileRevisionError={learnerContextError}
+              learnerContext={learnerContext}
               teacherNotes={teacherNotes}
               readOnly={completedReferenceMode}
               onTeacherNotesChange={(value) => {

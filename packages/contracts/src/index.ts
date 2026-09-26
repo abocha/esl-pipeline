@@ -281,6 +281,40 @@ export interface AssignmentSessionDto {
   updatedAt: string;
 }
 
+/** Backend-owned Context authority for one assignment and its confirmed source. */
+export interface AssignmentLearnerContextDto {
+  assignmentSessionId: string;
+  studentId: string;
+  source: { recordingId: string; transcriptId: string; transcriptHash: string } | null;
+  eligibility: 'eligible' | 'unknown_provenance' | 'already_enriched' | 'no_confirmed_source';
+  state: 'not_applicable' | 'preparing' | 'completed' | 'failed';
+  operationState:
+    | 'waiting_evidence'
+    | 'queued'
+    | 'submitting'
+    | 'result_ready'
+    | 'succeeded'
+    | 'failed'
+    | 'uncertain'
+    | 'superseded'
+    | null;
+  profile: {
+    profileId: string;
+    revisionId: string;
+    revisionHash: string;
+    content: string;
+    structuredContent: unknown | null;
+    updatedAt: string;
+  } | null;
+  pinned: {
+    profileId: string | null;
+    revisionId: string | null;
+    revisionHash: string | null;
+  } | null;
+  confirmationAvailable: boolean;
+  warning: 'enrichment_failed' | 'enrichment_uncertain' | null;
+}
+
 export interface AssignmentSessionListResponse {
   sessions: AssignmentSessionDto[];
   total: number;

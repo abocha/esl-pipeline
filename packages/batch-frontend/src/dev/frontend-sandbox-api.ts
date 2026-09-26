@@ -1358,6 +1358,43 @@ export function createFrontendSandboxApiAdapter(
       );
     }
 
+    if (method === 'get' && path.endsWith('/learner-context')) {
+      const assignmentSessionId = path.split('/')[2] ?? 'session-sandbox';
+      const firstProfile = assignmentSessionId === 'session-cora';
+      const source = firstProfile
+        ? {
+            recordingId: sandboxFirstProfileRecordingId,
+            transcriptId: sandboxFirstProfileTranscriptId,
+            transcriptHash: 'a'.repeat(64),
+          }
+        : {
+            recordingId: 'recording-sandbox',
+            transcriptId: 'transcript-sandbox',
+            transcriptHash: 'a'.repeat(64),
+          };
+      return responseFor(config, {
+        assignmentSessionId,
+        studentId: firstProfile ? sandboxFirstProfileStudentId : 'student-alex',
+        source,
+        eligibility: firstProfile ? 'eligible' : 'unknown_provenance',
+        state: firstProfile ? 'preparing' : 'not_applicable',
+        operationState: firstProfile ? 'waiting_evidence' : null,
+        profile: firstProfile
+          ? null
+          : {
+              profileId: profileContent().id,
+              revisionId: 'profile-revision-sandbox',
+              revisionHash: 'profile-hash-sandbox',
+              content: profileContent().content,
+              structuredContent: profileContent().structuredContent,
+              updatedAt: now,
+            },
+        pinned: null,
+        confirmationAvailable: true,
+        warning: null,
+      });
+    }
+
     if (method === 'patch' && path === '/assignment-sessions/session-sandbox/recovery') {
       const body = readRequestBody(config.data);
       const patch =
@@ -1605,6 +1642,20 @@ export function createFrontendSandboxApiAdapter(
 
     if (method === 'get' && path === '/profiles/profiles%2Fcora.md') {
       return responseFor(config, firstProfileContent());
+    }
+
+    if (method === 'put' && path.startsWith('/profiles/profiles%2F')) {
+      const body = readRequestBody(config.data);
+      const existing = path.includes('cora.md') ? firstProfileContent() : profileContent();
+      return responseFor(config, {
+        ...existing,
+        content: typeof body.content === 'string' ? body.content : existing.content,
+        structuredContent:
+          body.structuredContent && typeof body.structuredContent === 'object'
+            ? body.structuredContent
+            : existing.structuredContent,
+        updatedAt: now,
+      });
     }
 
     if (method === 'get' && path === '/profiles/revisions') {
