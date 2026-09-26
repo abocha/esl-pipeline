@@ -1,7 +1,7 @@
-name = "sol_reviewer"
+name = "exceptional_risk_reviewer"
 description = "High-capability read-only reviewer reserved for security, authorization, privacy, data integrity, concurrency, retry or idempotency, dangerous migrations, and other exceptional-risk changes."
 
-model = "gpt-5.6-sol"
+model = "gpt-6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 

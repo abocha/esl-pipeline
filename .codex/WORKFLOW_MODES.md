@@ -6,11 +6,11 @@ Choose the control loop before choosing agents.
 
 Use the lightest mode that can produce the next useful evidence-backed result.
 
-| Mode | Use when | Default control loop |
-| --- | --- | --- |
-| **Atomic task** | One bounded question, investigation, edit, or report can produce the useful result. | One coherent task -> one result. |
-| **Exploratory campaign** | Several related questions share an umbrella, but each result determines what is worth investigating or changing next. | Maintainer + ChatGPT steer; Codex owns bounded probes or consequences. |
-| **Goal execution** | The desired outcome and acceptance boundary are stable enough, and several dependent implementation boundaries need coordination. | Approved handoff -> primary orchestration -> coherent implementation/review boundaries -> integration. |
+| Mode                     | Use when                                                                                                                          | Default control loop                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Atomic task**          | One bounded question, investigation, edit, or report can produce the useful result.                                               | One coherent task -> one result.                                                                       |
+| **Exploratory campaign** | Several related questions share an umbrella, but each result determines what is worth investigating or changing next.             | Maintainer + ChatGPT steer; Codex owns bounded probes or consequences.                                 |
+| **Goal execution**       | The desired outcome and acceptance boundary are stable enough, and several dependent implementation boundaries need coordination. | Approved handoff -> primary orchestration -> coherent implementation/review boundaries -> integration. |
 
 `PLANNING_HANDOFF.md` and `ORCHESTRATION.md` primarily govern Goal execution.
 
@@ -20,20 +20,17 @@ Do not manufacture a plan, durable goal, primary orchestrator, delegation, or re
 
 Model selection is a revisable operating default, not an ownership or authorization rule.
 
-Keep ChatGPT Sol High as the default discussion and planning environment when it fits the maintainer's access and quota.
+Use GPT-6 Sol as the ordinary capable model for discussion and planning when it fits the maintainer's access and quota. Select reasoning effort for the uncertainty and consequence of the decision.
 
-Keep Codex Sol Medium as the ordinary coordination default, with the registered Luna/Terra implementation roles and Terra/Sol review roles.
+Use GPT-6 Sol for ordinary Codex coordination and repository or integration judgment. Start with medium effort for a typical coherent task; use low for clear, bounded coordination, and high or higher for tangled evidence, coupled contracts, or consequential decisions. Reassess effort as the work changes rather than fixing one level for the entire run.
 
-Use Codex Astra selectively for difficult repository-grounded decisions, contradictory evidence, elusive bugs, or consequential design questions requiring repeated local inspection.
+The registered `bounded_implementer` uses GPT-6 Luna at xhigh effort for specified, pattern-following work. Its effort may be adjusted when the bounded task warrants it; route work that needs repository or integration judgment to Sol. The explorer, integration workhorse, and reviewers use Sol at efforts suited to their assigned risk. The role configuration holds portable launch defaults; target repositories may deliberately adapt them.
 
-Trial defaults:
+Use Codex GPT-6 Astra selectively for difficult repository-grounded decisions, contradictory evidence, elusive bugs, or consequential design questions requiring repeated local inspection.
 
-- Astra Low for bounded difficult assessments;
-- Astra Medium for difficult interacting-component investigations.
+Choose Astra effort proportionately: low or medium may fit a contained difficult assessment, while interacting-component investigations or consequential design decisions may warrant high or higher. These are operating defaults, not measured rankings or quota guarantees. Do not require a cheaper failed attempt before using Astra on an already clearly difficult problem, and do not create a mandatory Astra review layer.
 
-These are operating defaults, not measured rankings or quota guarantees. Do not require a cheaper failed attempt before using Astra on an already clearly difficult problem, and do not create a mandatory Astra review layer.
-
-Once difficult uncertainty is resolved, routine implementation and tool execution can normally move to cheaper registered roles. Keep Astra active when continued high-level judgment, changing evidence, or preservation of expensive decision state materially justifies that context.
+Once difficult uncertainty is resolved, routine implementation and tool execution can normally move to Sol or the bounded Luna role. Keep Astra active when continued high-level judgment, changing evidence, or preservation of expensive decision state materially justifies that context.
 
 Planning may happen where the evidence is. Return to ChatGPT when discussion, synthesis, prioritization, or approval benefits from it. Routine execution needs no mandatory round trip.
 

@@ -1,7 +1,7 @@
-name = "luna_implementer"
+name = "bounded_implementer"
 description = "Economical workspace-writing implementer for well-specified, pattern-following low-risk changes or bounded implementation steps with explicit acceptance criteria and targeted validation."
 
-model = "gpt-5.6-luna"
+model = "gpt-6-luna"
 model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"
 
@@ -31,5 +31,5 @@ additional investigation, review, decomposition, or another specialist, return t
 parent.
 
 Report exact files changed, focused commands and results, any assumptions, and any reason the task
-should be escalated to Terra or Sol.
+should be escalated to the parent for integration judgment or a different specialist.
 """
