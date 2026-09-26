@@ -61,6 +61,7 @@ interface GenerationInput {
   studentName: string;
   seed: FoundationalProfile | null;
   seedContent: string | null;
+  seedIsStructured: boolean;
   lessonEvidence: unknown;
   prompt: string;
   maxOutputTokens: number;
@@ -206,6 +207,7 @@ async function supersede(client: PoolClient, op: OperationRow, code: string): Pr
 function preserveSeed(
   seed: FoundationalProfile | null,
   seedContent: string | null,
+  seedIsStructured: boolean,
   generated: FoundationalProfile,
 ): FoundationalProfile {
   const merged = { ...generated, overallLevel: seed?.overallLevel ?? generated.overallLevel };
@@ -224,7 +226,9 @@ function preserveSeed(
     [
       seed?.teacherNotes,
       generated.teacherNotes,
-      seedContent?.trim() ? `Original tutor-authored profile (verbatim):\n${seedContent}` : null,
+      !seedIsStructured && seedContent?.trim()
+        ? `Original tutor-authored profile (verbatim):\n${seedContent}`
+        : null,
     ]
       .filter(Boolean)
       .join('\n\n') || null;
@@ -379,6 +383,7 @@ async function prepareOrCommit(
         studentName: student.rows[0]?.student ?? '',
         seed: seedProfile,
         seedContent: seed?.rows[0]?.content ?? null,
+        seedIsStructured: seed?.rows[0]?.structured_content != null,
         lessonEvidence: evidence.rows[0].evidence,
         prompt: [
           'Create a foundational ESL learner profile from only this canonical lesson evidence.',
@@ -452,7 +457,12 @@ export async function reconcileProfileInitialEnrichmentOperation(
   let reserved = initial;
   let persisted = false;
   const persistResult = async (generatedProfile: FoundationalProfile): Promise<void> => {
-    const result = preserveSeed(reserved.input.seed, reserved.input.seedContent, generatedProfile);
+    const result = preserveSeed(
+      reserved.input.seed,
+      reserved.input.seedContent,
+      reserved.input.seedIsStructured,
+      generatedProfile,
+    );
     const content = renderFoundationalProfileContent(result);
     const hash = createHash('sha256').update(content, 'utf8').digest('hex');
     // Keep the validated response in this process through transient database failures.
