@@ -86,7 +86,7 @@ If expensive repository discovery has already produced a useful map, the handoff
 
 Model, reasoning effort, root fresh-versus-continued context, quota considerations, and similar launcher settings are operator/runtime decisions, not implementation-plan semantics.
 
-Do not put launcher instructions such as `use Terra/high`, `use Astra/medium`, `start fresh`, or `continue this thread` into the implementation plan or runnable root prompt unless the executing agent itself must act on that information.
+Do not put launcher instructions such as `use Sol/high`, `use Astra/medium`, `start fresh`, or `continue this thread` into the implementation plan or runnable root prompt unless the executing agent itself must act on that information.
 
 Likewise, do not pre-script child or reviewer topology merely because roles exist. Record a genuine independence or ownership requirement when one is part of the task; otherwise let `ORCHESTRATION.md` govern dispatch.
 

@@ -78,7 +78,7 @@ test('maintenance-only paths accept release:none', () => {
     '.github/workflows/ci.yml',
     '.impeccable/critique/local.md',
     '.codex/ORCHESTRATION.md',
-    '.codex/agents/terra_explorer.toml',
+    '.codex/agents/explorer.toml',
     'AGENTS.md',
     'docs/reference/VERSIONING_MODEL.md',
     'docs/prompt-gallery/retired.md',

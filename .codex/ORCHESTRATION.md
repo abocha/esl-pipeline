@@ -84,7 +84,7 @@ Conversely, do not use a more expensive integration role merely because a task c
 
 Use the registered explorer for discovery, not as a mandatory prelude to implementation.
 
-Current model and effort defaults belong in `WORKFLOW_MODES.md` and registered role configuration.
+Current model and effort defaults belong in `WORKFLOW_MODES.md` and registered role configuration. The configured effort is a launch default; choose a supported different effort when the assigned uncertainty and consequence warrant it, without treating a role name as a model constraint.
 
 ### Complexity discipline
 
