@@ -448,9 +448,19 @@
 
 .minimal-primary:disabled,
 .minimal-secondary:disabled {
-  opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+.minimal-primary:disabled {
+  background: var(--color-primary-200);
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-900);
+  opacity: 1;
+}
+
+.minimal-secondary:disabled {
+  opacity: 0.6;
 }
 
 .minimal-secondary {
@@ -469,7 +479,7 @@
     linear-gradient(180deg, var(--minimal-primary-tint-soft), transparent), var(--bg-secondary);
 }
 
-.minimal-preview-attention {
+.minimal-preview-attention:not(:disabled) {
   border-color: var(--minimal-primary-border);
   box-shadow: 0 0 0 0 var(--minimal-primary-focus);
   animation: minimal-preview-pulse 1.8s ease-out infinite;
@@ -1433,7 +1443,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .minimal-preview-attention {
+  .minimal-preview-attention:not(:disabled) {
     animation: none;
     box-shadow: 0 0 0 4px var(--minimal-primary-focus);
   }
