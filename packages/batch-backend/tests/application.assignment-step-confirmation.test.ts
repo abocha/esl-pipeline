@@ -798,7 +798,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
           profileRevisionHash: otherProfileHash,
         },
       }),
-    ).rejects.toMatchObject({ code: 'ASSIGNMENT_STEP_LINEAGE_INVALID' });
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_STEP_PROFILE_STALE' });
     const confirmedProfileId = `profiles/${randomUUID()}.md`;
     const confirmedProfileRevisionId = randomUUID();
     const confirmedProfileRawHash = 'e'.repeat(64);
@@ -814,6 +814,18 @@ describe('application/confirm-assignment-session-step transactional persistence'
          VALUES ($1, $2, 'raw structured source', $3, 'create', 'active', 1, 'v1', NOW(), NOW())`,
         [confirmedProfileRevisionId, confirmedProfileId, confirmedProfileRawHash],
       );
+      await client.query('UPDATE profiles SET active_revision_id = $2 WHERE id = $1', [
+        confirmedProfileId,
+        confirmedProfileRevisionId,
+      ]);
+      await client.query(
+        'UPDATE student_profile_bindings SET effective_to = NOW() WHERE student_id = $1 AND effective_to IS NULL',
+        [studentId],
+      );
+      await client.query('UPDATE students SET profile_id = $2 WHERE id = $1', [
+        studentId,
+        confirmedProfileId,
+      ]);
       await client.query(
         `INSERT INTO student_profile_bindings
            (id, student_id, profile_id, effective_from, reason, changed_by)

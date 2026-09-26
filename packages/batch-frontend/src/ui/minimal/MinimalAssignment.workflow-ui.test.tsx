@@ -858,6 +858,33 @@ describe('MinimalAssignment - staged workflow UI', () => {
       restoredFromRevisionId: null,
       content: 'NEWER PROFILE CONTENT',
     });
+    vi.mocked(api.fetchAssignmentLearnerContext).mockResolvedValue({
+      assignmentSessionId: durable.id,
+      studentId: durable.studentId,
+      source: {
+        recordingId: durable.confirmed.source!.recordingId,
+        transcriptId: durable.confirmed.source!.transcriptId,
+        transcriptHash: durable.confirmed.source!.transcriptHash,
+      },
+      eligibility: 'already_enriched',
+      state: 'not_applicable',
+      operationState: null,
+      profile: {
+        profileId: 'profiles/alex.md',
+        revisionId: 'revision-2',
+        revisionHash: 'b'.repeat(64),
+        content: 'NEWER PROFILE CONTENT',
+        structuredContent: null,
+        updatedAt: '2026-07-19T00:02:00.000Z',
+      },
+      pinned: {
+        profileId: 'profiles/alex.md',
+        revisionId: 'revision-1',
+        revisionHash: 'a'.repeat(64),
+      },
+      confirmationAvailable: true,
+      warning: null,
+    });
 
     await act(async () => {
       globalThis.dispatchEvent(new Event('focus'));
@@ -882,8 +909,8 @@ describe('MinimalAssignment - staged workflow UI', () => {
           step: 'context',
           expectedRevision: latest.revision + 1,
           teacherNotes: 'Remote saved note',
-          profileRevisionId: 'revision-1',
-          profileRevisionHash: 'a'.repeat(64),
+          profileRevisionId: 'revision-2',
+          profileRevisionHash: 'b'.repeat(64),
         }),
       ),
     );
@@ -1309,7 +1336,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
   );
 
   it(
-    'confirms Source and starts first-profile lesson memory without a separate tutor action',
+    'confirms Source and reads preparing learner context without a tutor action',
     async () => {
       const user = createMinimalUser();
       vi.mocked(api.fetchStudentOptions).mockResolvedValue({
@@ -1321,6 +1348,18 @@ describe('MinimalAssignment - staged workflow UI', () => {
       vi.mocked(api.getRecording).mockResolvedValue(
         makeRecording({ studentId: 'student-cora', status: 'transcribed', transcriptId: 'tx-1' }),
       );
+      vi.mocked(api.fetchAssignmentLearnerContext).mockResolvedValue({
+        assignmentSessionId: 'session-1',
+        studentId: 'student-cora',
+        source: { recordingId: 'rec-1', transcriptId: 'tx-1', transcriptHash: 'a'.repeat(64) },
+        eligibility: 'eligible',
+        state: 'preparing',
+        operationState: 'waiting_evidence',
+        profile: null,
+        pinned: null,
+        confirmationAvailable: true,
+        warning: null,
+      });
 
       renderMinimalAssignment();
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
@@ -1364,10 +1403,12 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(vi.mocked(api.attachAssignmentSource).mock.invocationCallOrder[0]).toBeLessThan(
         vi.mocked(api.confirmAssignmentSessionStep).mock.invocationCallOrder[0]!,
       );
-      expect(await screen.findByText(/Building lesson memory/i)).toBeTruthy();
-      await waitFor(() => {
-        expect(api.getStudentMemoryHealth).toHaveBeenCalledWith('student-cora');
-      });
+      expect(await screen.findByText(/Preparing learner context from this lesson/i)).toBeTruthy();
+      expect(api.fetchAssignmentLearnerContext).toHaveBeenCalledWith('session-1');
+      expect(screen.queryByRole('button', { name: /Populate|Approve/i })).toBeNull();
+      expect(
+        (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).readOnly,
+      ).toBe(false);
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );

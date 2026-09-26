@@ -36,6 +36,7 @@ import type {
   BusinessSettingsDto,
   BusinessStatsSurfaceResponse,
   ArtifactWorkingContentDto as ContractArtifactWorkingContentDto,
+  AssignmentLearnerContextDto as ContractAssignmentLearnerContextDto,
   AssignmentSessionDto as ContractAssignmentSessionDto,
   AssignmentSessionListResponse as ContractAssignmentSessionListResponse,
   AttachAssignmentSourceRequest as ContractAttachAssignmentSourceRequest,
@@ -897,15 +898,6 @@ export interface StudentProfileCandidatePromotionResponse {
   excludedCandidateIds: string[];
   contentHash?: string | null;
   draftRevision?: ProfileRevisionDetailResponse;
-}
-
-export interface PopulateFirstProfileFromLessonResponse {
-  draftRevisionId: string;
-  profileId: string;
-  snapshotId: string | null;
-  lessonMemoryIds: string[];
-  homeworkMemoryIds: string[];
-  draftRevision: ProfileRevisionDetailResponse;
 }
 
 export interface InitializeStudentProfileDraftResponse {
@@ -2302,12 +2294,16 @@ export async function getProfileContent(profileId: string): Promise<ProfileConte
 
 export async function upsertProfileContent(
   profileId: string,
-  content: string,
+  content: string | null,
+  structuredContent?: FoundationalProfile,
 ): Promise<ProfileContentResponse> {
   try {
     const response = await apiClient.put(
       buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}`),
-      { content },
+      {
+        ...(content !== null ? { content } : {}),
+        ...(structuredContent ? { structuredContent } : {}),
+      },
     );
     return response.data;
   } catch (error: unknown) {
@@ -3185,27 +3181,6 @@ export async function refreshProfileDraftFromApprovedCandidates(
   }
 }
 
-export async function populateFirstProfileFromLesson(
-  studentId: string,
-  payload: { reviewerNote?: string } = {},
-): Promise<PopulateFirstProfileFromLessonResponse> {
-  try {
-    const response = await apiClient.post(
-      buildApiProxyPath(
-        `/students/${encodeURIComponent(studentId)}/profile-drafts/populate-first-from-lesson`,
-      ),
-      payload,
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to populate the learner profile.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
 export async function initializeStudentProfileDraft(
   studentId: string,
 ): Promise<InitializeStudentProfileDraftResponse> {
@@ -3508,6 +3483,22 @@ export async function fetchAssignmentSession(sessionId: string): Promise<Assignm
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to resume assignment progress.');
     }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export type AssignmentLearnerContext = ContractAssignmentLearnerContextDto;
+
+export async function fetchAssignmentLearnerContext(
+  sessionId: string,
+): Promise<AssignmentLearnerContext> {
+  try {
+    const response = await apiClient.get<AssignmentLearnerContext>(
+      buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/learner-context`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }

@@ -117,8 +117,10 @@ export interface GenerateProfileRevisionDraftRequest {
   providerOverride?: GenerationProvider;
   modelOverride?: string;
   includeProviderFallbacks?: boolean;
+  retryMaxOverride?: number;
   responseSchema?: ProviderStructuredExecutionRequest['responseSchema'];
   validateOutput?: (output: unknown) => FoundationalProfile | ProfileCandidatePatch;
+  onValidatedResponse?: (profile: FoundationalProfile | ProfileCandidatePatch) => Promise<void>;
 }
 
 export interface GenerateProfileRevisionDraftResult {
@@ -214,6 +216,13 @@ export async function generateProfileRevisionDraft(args: {
         },
       });
 
+      if (args.request.onValidatedResponse) {
+        const validated = args.request.validateOutput
+          ? args.request.validateOutput(result.output)
+          : validateFoundationalProfileOutput(result.output);
+        await args.request.onValidatedResponse(validated);
+      }
+
       await recordGenerationBudgetUsageAfterSuccess({
         config,
         provider: candidate.provider,
@@ -241,7 +250,8 @@ export async function generateProfileRevisionDraft(args: {
     isFailFastError: (mappedError) =>
       mappedError.category === 'provider_contract_error' ||
       mappedError.category === 'budget_exceeded',
-    getRetryMax: (candidate) => retryMaxForProvider(config.generation, candidate.provider),
+    getRetryMax: (candidate) =>
+      args.request.retryMaxOverride ?? retryMaxForProvider(config.generation, candidate.provider),
     getRetryBackoffMs: (candidate) =>
       retryBackoffForProvider(config.generation, candidate.provider),
     sleep,

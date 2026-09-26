@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { AssignmentSessionDto, JobState } from '@esl-pipeline/contracts';
 
 import { AlphaInviteError, registerInvitedUser } from '../../application/alpha-invites.js';
+import { getAssignmentLearnerContext } from '../../application/assignment-learner-context.js';
 import {
   attachAssignmentSourceForUser,
   confirmStudentAssignmentSessionForUser,
@@ -983,6 +984,29 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     },
   );
 
+  app.get(
+    '/assignment-sessions/:id/learner-context',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+      try {
+        const params = z.object({ id: z.string().uuid() }).parse(request.params ?? {});
+        const context = await getAssignmentLearnerContext(authenticatedUser.id, params.id);
+        if (!context) return reply.code(404).send({ error: 'not_found' });
+        return reply.code(200).send(context);
+      } catch (error) {
+        if (error instanceof z.ZodError)
+          return reply.code(400).send({ error: 'validation_failed' });
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'get_assignment_learner_context_failed',
+          userId: authenticatedUser.id,
+        });
+        return reply.code(500).send({ error: 'internal_error' });
+      }
+    },
+  );
+
   app.get('/assignment-sessions/:id', { preHandler: authenticate }, async (request, reply) => {
     const authenticatedUser = getAuthenticatedUser(request);
     if (!authenticatedUser) {
@@ -1065,6 +1089,9 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         }
         if (code === 'SOURCE_IDENTITY_REQUIRED') {
           return reply.code(409).send({ code: 'source_identity_required' });
+        }
+        if (code === 'ASSIGNMENT_STEP_PROFILE_STALE') {
+          return reply.code(409).send({ code: 'assignment_step_profile_stale' });
         }
         if (isArtifactWorkingConflict(error)) {
           return reply.code(409).send({
