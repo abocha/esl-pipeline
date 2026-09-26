@@ -165,11 +165,14 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   worker or historical nonowner cannot restore superseded memory. Changed confirmed content
   temporarily makes memory unavailable until its automatic replacement succeeds.
 - Source confirmation also records a one-time initial profile enrichment operation for a
-  `tutor_only` profile. The student-memory worker reconciles that durable operation when exact
-  canonical lesson evidence becomes ready. A reserved provider submission is never repeated after
-  an ambiguous outcome; successful activation atomically updates the revision, active pointer,
-  provenance, and operation. Assignment learner context is read through
-  `GET /assignment-sessions/:id/learner-context`.
+  `tutor_only` profile. The student-memory worker reconciles that durable operation into its
+  existing BullMQ queue when exact canonical lesson evidence becomes ready. Definitively failed
+  evidence or evidence still unavailable after 24 hours ends onboarding with a controlled failure.
+  Generation uses student-memory pacing and preserves the exact tutor-authored seed. A reserved
+  provider submission is never repeated after an ambiguous outcome; successful activation
+  atomically updates the revision, active pointer, provenance, and operation. Assignment learner
+  context is read through `GET /assignment-sessions/:id/learner-context`. Context confirmation
+  remains unavailable until the operation succeeds or reaches a controlled terminal outcome.
 - Ordinary structured tutor edits use `PUT /profiles/:id` and activate an active revision
   atomically; candidate-derived drafts retain their explicit review flow.
 - Assignment prompt creation reads confirmed Source and Context and requires the current confirmed

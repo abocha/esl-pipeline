@@ -5,16 +5,24 @@ import type { BatchBackendConfig } from '../config/env.js';
 import { buildCanonicalLessonMemoryAuthoritySqlPredicate } from '../domain/lesson-memory-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import {
   deriveFoundationalProfileFromMarkdown,
   type FoundationalProfile,
   normalizeFoundationalProfile,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
+import { GenerationBudgetExceededError } from './generation-budget-guard.js';
 import {
   generateProfileRevisionDraft,
   ProfileRevisionDraftingError,
 } from './profile-revision-drafting.js';
+import {
+  createStudentMemoryGenerationPacer,
+  isStudentMemoryPacingDeferredError,
+  type StudentMemoryGenerationPacer,
+  StudentMemoryPacingDeferredError,
+} from './student-memory-generation-pacing.js';
 
 type OperationState =
   | 'waiting_evidence'
@@ -52,12 +60,23 @@ interface OperationRow {
 interface GenerationInput {
   studentName: string;
   seed: FoundationalProfile | null;
+  seedContent: string | null;
   lessonEvidence: unknown;
   prompt: string;
   maxOutputTokens: number;
 }
 
 const SUBMISSION_UNCERTAIN_AFTER_MINUTES = 15;
+const EVIDENCE_EXHAUSTED_AFTER_HOURS = 24;
+
+export interface ProcessProfileInitialEnrichmentJobPayload {
+  kind: 'profile-initial-enrichment';
+  operationId: string;
+}
+
+export function initialEnrichmentJobId(operationId: string): string {
+  return `profile-initial-enrichment-${operationId}`;
+}
 
 async function withTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
   return withPgClient(async (client) => {
@@ -186,10 +205,10 @@ async function supersede(client: PoolClient, op: OperationRow, code: string): Pr
 
 function preserveSeed(
   seed: FoundationalProfile | null,
+  seedContent: string | null,
   generated: FoundationalProfile,
 ): FoundationalProfile {
-  if (!seed) return normalizeFoundationalProfile(generated);
-  const merged = { ...generated, overallLevel: seed.overallLevel ?? generated.overallLevel };
+  const merged = { ...generated, overallLevel: seed?.overallLevel ?? generated.overallLevel };
   for (const key of [
     'primaryGoals',
     'communicationContexts',
@@ -199,10 +218,16 @@ function preserveSeed(
     'studyPreferences',
     'durableConstraints',
   ] as const) {
-    merged[key] = [...new Set([...seed[key], ...generated[key]])];
+    merged[key] = [...new Set([...(seed?.[key] ?? []), ...generated[key]])];
   }
   merged.teacherNotes =
-    [seed.teacherNotes, generated.teacherNotes].filter(Boolean).join('\n\n') || null;
+    [
+      seed?.teacherNotes,
+      generated.teacherNotes,
+      seedContent?.trim() ? `Original tutor-authored profile (verbatim):\n${seedContent}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n\n') || null;
   return normalizeFoundationalProfile(merged);
 }
 
@@ -254,8 +279,9 @@ async function publishReadyResult(client: PoolClient, op: OperationRow): Promise
 async function prepareOrCommit(
   id: string,
   config: BatchBackendConfig,
+  reserveSubmission = true,
 ): Promise<{
-  submissionId: string;
+  submissionId: string | null;
   input: GenerationInput;
   provider: string;
   model: string;
@@ -301,7 +327,41 @@ async function prepareOrCommit(
           op.transcript_hash,
         ],
       );
-      if (!evidence.rows[0]) return null;
+      if (!evidence.rows[0]) {
+        const evidenceState = await client.query<{ status: string }>(
+          `SELECT status FROM lesson_memory_entries
+           WHERE assignment_session_id = $1 AND student_id = $2
+             AND recording_id = $3 AND transcript_id = $4
+             AND source_storage_uri = $5 AND source_content_hash = $6
+           ORDER BY created_at DESC, id DESC LIMIT 1`,
+          [
+            op.assignment_session_id,
+            op.student_id,
+            op.recording_id,
+            op.transcript_id,
+            op.transcript_storage_uri,
+            op.transcript_hash,
+          ],
+        );
+        const expired = await client.query<{ expired: boolean }>(
+          `SELECT created_at < NOW() - INTERVAL '${EVIDENCE_EXHAUSTED_AFTER_HOURS} hours' AS expired
+           FROM profile_initial_enrichment_operations WHERE id = $1`,
+          [op.id],
+        );
+        if (evidenceState.rows[0]?.status === 'failed' || expired.rows[0]?.expired) {
+          await client.query(
+            `UPDATE profile_initial_enrichment_operations
+             SET state = 'failed', failure_code = $2, updated_at = NOW() WHERE id = $1`,
+            [
+              op.id,
+              evidenceState.rows[0]?.status === 'failed'
+                ? 'lesson_evidence_failed'
+                : 'lesson_evidence_timeout',
+            ],
+          );
+        }
+        return null;
+      }
       const seed = op.seed_revision_id
         ? await client.query<{ content: string; structured_content: FoundationalProfile | null }>(
             'SELECT content, structured_content FROM profile_revisions WHERE id = $1 AND profile_id = $2',
@@ -318,12 +378,14 @@ async function prepareOrCommit(
       const input: GenerationInput = {
         studentName: student.rows[0]?.student ?? '',
         seed: seedProfile,
+        seedContent: seed?.rows[0]?.content ?? null,
         lessonEvidence: evidence.rows[0].evidence,
         prompt: [
           'Create a foundational ESL learner profile from only this canonical lesson evidence.',
           'Preserve every tutor-authored seed fact. Omit unsupported claims. Return schema JSON.',
           `Student: ${student.rows[0]?.student ?? ''}`,
           `Tutor seed: ${JSON.stringify(seedProfile)}`,
+          `Original tutor-authored profile: ${seed?.rows[0]?.content ?? ''}`,
           `Confirmed lesson evidence: ${JSON.stringify(evidence.rows[0].evidence)}`,
         ].join('\n'),
         maxOutputTokens: 2800,
@@ -351,6 +413,14 @@ async function prepareOrCommit(
       op.generation_model = model;
     }
     if (!op.generation_input || !op.generation_provider || !op.generation_model) return null;
+    if (!reserveSubmission) {
+      return {
+        submissionId: null,
+        input: op.generation_input,
+        provider: op.generation_provider,
+        model: op.generation_model,
+      };
+    }
     const submissionId = randomUUID();
     await client.query(
       `UPDATE profile_initial_enrichment_operations SET state = 'submitting',
@@ -370,12 +440,19 @@ export async function reconcileProfileInitialEnrichmentOperation(
   id: string,
   config: BatchBackendConfig,
   generator: typeof generateProfileRevisionDraft = generateProfileRevisionDraft,
+  pacingOverride?: StudentMemoryGenerationPacer,
 ): Promise<void> {
-  const reserved = await prepareOrCommit(id, config);
-  if (!reserved) return;
+  const pacer =
+    pacingOverride ??
+    (generator === generateProfileRevisionDraft
+      ? createStudentMemoryGenerationPacer(config)
+      : null);
+  const initial = await prepareOrCommit(id, config, !pacer);
+  if (!initial) return;
+  let reserved = initial;
   let persisted = false;
   const persistResult = async (generatedProfile: FoundationalProfile): Promise<void> => {
-    const result = preserveSeed(reserved.input.seed, generatedProfile);
+    const result = preserveSeed(reserved.input.seed, reserved.input.seedContent, generatedProfile);
     const content = renderFoundationalProfileContent(result);
     const hash = createHash('sha256').update(content, 'utf8').digest('hex');
     // Keep the validated response in this process through transient database failures.
@@ -409,33 +486,104 @@ export async function reconcileProfileInitialEnrichmentOperation(
     }
   };
   try {
-    const generated = await generator({
-      request: {
-        prompt: reserved.input.prompt,
-        operation: 'lesson_population',
-        providerOverride: 'openai',
-        modelOverride: reserved.model,
-        includeProviderFallbacks: false,
-        retryMaxOverride: 0,
-        maxOutputTokens: reserved.input.maxOutputTokens,
-        onValidatedResponse: async (profile) => {
-          if (!('schemaVersion' in profile)) throw new Error('Invalid profile result');
-          await persistResult(profile);
+    const generate = () =>
+      generator({
+        request: {
+          prompt: reserved.input.prompt,
+          operation: 'lesson_population',
+          providerOverride: 'openai',
+          modelOverride: reserved.model,
+          includeProviderFallbacks: false,
+          retryMaxOverride: 0,
+          exactCandidateOnly: true,
+          budgetReservationAlreadyMade: Boolean(pacer),
+          maxOutputTokens: reserved.input.maxOutputTokens,
+          onValidatedResponse: async (profile) => {
+            if (!('schemaVersion' in profile)) throw new Error('Invalid profile result');
+            await persistResult(profile);
+          },
         },
-      },
-      overrides: { config },
-    });
+        overrides: { config },
+      });
+    const dispatch = async () => {
+      if (!reserved.submissionId) {
+        const claimed = await prepareOrCommit(id, config);
+        if (!claimed) return { skipped: true as const, usage: undefined };
+        reserved = claimed;
+      }
+      return generate();
+    };
+    const generated = pacer
+      ? await pacer.run({
+          workload: 'profile_initial_enrichment',
+          provider: 'openai',
+          model: reserved.model,
+          prompt: reserved.input.prompt,
+          maxOutputTokens: reserved.input.maxOutputTokens,
+          recordUsage: false,
+          execute: dispatch,
+        })
+      : await dispatch();
+    if ('skipped' in generated) return;
     if (!('schemaVersion' in generated.structuredProfile))
       throw new Error('Invalid profile result');
     if (!persisted) await persistResult(generated.structuredProfile);
   } catch (error) {
+    if (!reserved.submissionId) {
+      // A permanent preflight rejection has not reached the provider. Resolve it
+      // durably so the queue does not retry an impossible request forever.
+      if (error instanceof GenerationBudgetExceededError) {
+        await withTransaction(async (client) => {
+          const op = await lockOperation(client, id);
+          if (op?.state !== 'queued') return;
+          await client.query(
+            `UPDATE profile_initial_enrichment_operations
+             SET state = 'failed', failure_code = 'budget_unavailable', updated_at = NOW()
+             WHERE id = $1`,
+            [id],
+          );
+        });
+        return;
+      }
+      // Transient pacing and database preflight failures remain retryable.
+      throw error;
+    }
     if (persisted) {
       await prepareOrCommit(id, config);
       return;
     }
+    const rateLimitRejection =
+      error instanceof ProfileRevisionDraftingError &&
+      error.rejectedBeforeExecution &&
+      error.providerStatus === 429;
+    const deferred = isStudentMemoryPacingDeferredError(error)
+      ? error
+      : rateLimitRejection
+        ? new StudentMemoryPacingDeferredError({
+            reason: 'provider_rate_limit',
+            provider: 'openai',
+            model: reserved.model,
+            notBefore: new Date(
+              Math.max(
+                (Math.floor(Date.now() / 60_000) + 1) * 60_000,
+                Date.now() + (error.retryAfterMs ?? 0),
+              ),
+            ),
+            estimatedTokens: 0,
+            ...(typeof error.retryAfterMs === 'number' ? { retryAfterMs: error.retryAfterMs } : {}),
+          })
+        : null;
     const safelyBeforeExecution =
-      error instanceof ProfileRevisionDraftingError && error.category === 'budget_exceeded';
-    // Once reserved, any other provider exception may mean the model executed.
+      deferred !== null ||
+      error instanceof GenerationBudgetExceededError ||
+      (error instanceof ProfileRevisionDraftingError &&
+        (error.category === 'budget_exceeded' || error.rejectedBeforeExecution));
+    const terminalRejection =
+      error instanceof ProfileRevisionDraftingError &&
+      error.rejectedBeforeExecution &&
+      error.category !== 'provider_rate_limit' &&
+      error.category !== 'budget_exceeded';
+    // Only outcomes that may have executed without a recoverable result are uncertain.
     await withTransaction(async (client) => {
       const op = await lockOperation(client, id);
       if (!op || op.submission_id !== reserved.submissionId || op.state !== 'submitting') return;
@@ -446,43 +594,85 @@ export async function reconcileProfileInitialEnrichmentOperation(
            failure_code = $4, updated_at = NOW() WHERE id = $1`,
         [
           id,
-          safelyBeforeExecution ? 'queued' : 'uncertain',
+          terminalRejection ? 'failed' : safelyBeforeExecution ? 'queued' : 'uncertain',
           safelyBeforeExecution,
-          safelyBeforeExecution ? 'budget_unavailable' : 'provider_outcome_ambiguous',
+          terminalRejection
+            ? 'provider_rejected'
+            : deferred
+              ? 'generation_deferred'
+              : safelyBeforeExecution
+                ? 'budget_unavailable'
+                : 'provider_outcome_ambiguous',
         ],
       );
     });
     logger.warn('Initial profile enrichment attempt did not complete', {
-      event: safelyBeforeExecution
-        ? 'profile_initial_enrichment_deferred'
-        : 'profile_initial_enrichment_uncertain',
+      event: terminalRejection
+        ? 'profile_initial_enrichment_failed'
+        : safelyBeforeExecution
+          ? 'profile_initial_enrichment_deferred'
+          : 'profile_initial_enrichment_uncertain',
       operationId: id,
       category: error instanceof Error ? error.name : 'unknown',
     });
+    if (deferred) throw deferred;
     return;
   }
   await prepareOrCommit(id, config);
 }
 
-export async function reconcilePendingProfileInitialEnrichments(
-  config: BatchBackendConfig,
+export async function enqueuePendingProfileInitialEnrichments(
+  queue: Pick<
+    ReturnType<typeof createStudentMemoryQueue>,
+    'reconcile'
+  > = createStudentMemoryQueue(),
 ): Promise<void> {
   const ids = await withPgClient(async (client) => {
     const result = await client.query<{ id: string }>(
-      `SELECT id FROM profile_initial_enrichment_operations
-       WHERE state IN ('waiting_evidence', 'result_ready')
-          OR (state = 'queued' AND updated_at < NOW() - INTERVAL '1 minute')
-          OR (state = 'submitting' AND submission_reserved_at < NOW() - INTERVAL '15 minutes')
-       ORDER BY updated_at ASC LIMIT 50`,
+      `SELECT op.id FROM profile_initial_enrichment_operations op
+       WHERE op.state = 'result_ready'
+          OR (op.state = 'queued' AND op.updated_at < NOW() - INTERVAL '1 minute')
+          OR (op.state = 'submitting' AND op.submission_reserved_at < NOW() - INTERVAL '15 minutes')
+          OR (op.state = 'waiting_evidence' AND (
+            op.created_at < NOW() - INTERVAL '24 hours'
+            OR NOT EXISTS (
+              SELECT 1 FROM profiles p
+              JOIN student_profile_bindings b ON b.profile_id = p.id
+              WHERE p.id = op.profile_id AND b.student_id = op.student_id
+                AND b.effective_to IS NULL AND p.provenance = 'tutor_only'
+                AND p.active_revision_id IS NOT DISTINCT FROM op.seed_revision_id
+            )
+            OR EXISTS (
+              SELECT 1 FROM lesson_memory_entries e
+              WHERE e.assignment_session_id = op.assignment_session_id
+                AND e.student_id = op.student_id AND e.recording_id = op.recording_id
+                AND e.transcript_id = op.transcript_id
+                AND e.source_storage_uri = op.transcript_storage_uri
+                AND e.source_content_hash = op.transcript_hash AND e.status = 'ready'
+            )
+            OR (
+              SELECT e.status FROM lesson_memory_entries e
+              WHERE e.assignment_session_id = op.assignment_session_id
+                AND e.student_id = op.student_id AND e.recording_id = op.recording_id
+                AND e.transcript_id = op.transcript_id
+                AND e.source_storage_uri = op.transcript_storage_uri
+                AND e.source_content_hash = op.transcript_hash
+              ORDER BY e.created_at DESC, e.id DESC LIMIT 1
+            ) = 'failed'
+          ))
+       ORDER BY op.created_at DESC LIMIT 50`,
     );
     return result.rows.map((row) => row.id);
   });
   for (const id of ids) {
     try {
-      await reconcileProfileInitialEnrichmentOperation(id, config);
+      await queue.reconcile(
+        { kind: 'profile-initial-enrichment', operationId: id },
+        { jobId: initialEnrichmentJobId(id), requeueCompleted: true },
+      );
     } catch (error) {
       logger.error(error instanceof Error ? error : String(error), {
-        event: 'profile_initial_enrichment_reconcile_failed',
+        event: 'profile_initial_enrichment_enqueue_failed',
         operationId: id,
       });
     }

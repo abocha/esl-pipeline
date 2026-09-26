@@ -1736,6 +1736,8 @@ export const MinimalAssignment: React.FC = () => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let refreshSequence = 0;
+    let successfulRead = false;
+    let preparing = false;
     if (!learnerContextSourceKey || !activeAssignmentSession?.id) return;
     const sessionId = activeAssignmentSession.id;
     const refresh = async () => {
@@ -1748,9 +1750,11 @@ export const MinimalAssignment: React.FC = () => {
         const result = await fetchAssignmentLearnerContext(sessionId);
         if (!active || sequence !== refreshSequence || result.assignmentSessionId !== sessionId)
           return;
+        successfulRead = true;
+        preparing = result.state === 'preparing';
         setLearnerContext(result);
         setLearnerContextError(null);
-        if (result.state === 'preparing') {
+        if (preparing) {
           timer = setTimeout(() => void refresh(), LEARNER_CONTEXT_POLL_MS);
         }
       } catch (error) {
@@ -1758,6 +1762,9 @@ export const MinimalAssignment: React.FC = () => {
         setLearnerContextError(
           error instanceof Error ? error.message : 'Unable to load learner context.',
         );
+        if (!successfulRead || preparing) {
+          timer = setTimeout(() => void refresh(), LEARNER_CONTEXT_POLL_MS);
+        }
       }
     };
     const onFocus = () => {

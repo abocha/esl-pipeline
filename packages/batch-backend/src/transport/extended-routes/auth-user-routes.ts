@@ -1093,6 +1093,9 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         if (code === 'ASSIGNMENT_STEP_PROFILE_STALE') {
           return reply.code(409).send({ code: 'assignment_step_profile_stale' });
         }
+        if (code === 'ASSIGNMENT_STEP_PROFILE_PREPARING') {
+          return reply.code(409).send({ code: 'assignment_step_profile_preparing' });
+        }
         if (isArtifactWorkingConflict(error)) {
           return reply.code(409).send({
             code: 'artifact_working_conflict',

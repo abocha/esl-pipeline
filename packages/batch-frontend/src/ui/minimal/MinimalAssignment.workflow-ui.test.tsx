@@ -1357,7 +1357,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
         operationState: 'waiting_evidence',
         profile: null,
         pinned: null,
-        confirmationAvailable: true,
+        confirmationAvailable: false,
         warning: null,
       });
 
@@ -1404,11 +1404,38 @@ describe('MinimalAssignment - staged workflow UI', () => {
         vi.mocked(api.confirmAssignmentSessionStep).mock.invocationCallOrder[0]!,
       );
       expect(await screen.findByText(/Preparing learner context from this lesson/i)).toBeTruthy();
+      expect(
+        (screen.getByRole('button', { name: /Confirm and continue/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
       expect(api.fetchAssignmentLearnerContext).toHaveBeenCalledWith('session-1');
       expect(screen.queryByRole('button', { name: /Populate|Approve/i })).toBeNull();
       expect(
         (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).readOnly,
       ).toBe(false);
+      vi.mocked(api.fetchAssignmentLearnerContext)
+        .mockRejectedValueOnce(new Error('Temporary learner-context read failure'))
+        .mockResolvedValue({
+          assignmentSessionId: 'session-1',
+          studentId: 'student-cora',
+          source: { recordingId: 'rec-1', transcriptId: 'tx-1', transcriptHash: 'a'.repeat(64) },
+          eligibility: 'eligible',
+          state: 'failed',
+          operationState: 'failed',
+          profile: null,
+          pinned: null,
+          confirmationAvailable: true,
+          warning: 'enrichment_failed',
+        });
+      await waitFor(
+        () =>
+          expect(
+            (screen.getByRole('button', { name: /Confirm and continue/i }) as HTMLButtonElement)
+              .disabled,
+          ).toBe(false),
+        { timeout: 15_000 },
+      );
+      expect(api.fetchAssignmentLearnerContext).toHaveBeenCalledTimes(3);
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );

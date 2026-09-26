@@ -9,7 +9,7 @@ export async function reconcileInitialEnrichmentIntent(
   session: AssignmentSessionRecord,
 ): Promise<void> {
   const source = session.confirmed.source;
-  if (!source) return;
+  if (!source || session.confirmed.context) return;
 
   const canonical = await client.query(
     `SELECT 1 FROM assignment_source_bindings b
