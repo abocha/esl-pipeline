@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LessonSourceStep } from './LessonSourceStep';
 
 describe('LessonSourceStep', () => {
-  it('offers OPUS upload and a durable existing-transcript path', async () => {
+  it('offers supported recording upload and a durable existing-transcript path', async () => {
     const onCreateManualTranscript = vi.fn().mockResolvedValue(undefined);
     render(
       <LessonSourceStep
@@ -19,8 +19,14 @@ describe('LessonSourceStep', () => {
       </LessonSourceStep>,
     );
 
-    expect(screen.getAllByText(/OPUS audio only during the alpha/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole('button', { name: /Upload lesson recording.*Audio or video recording/i }),
+    ).toBeTruthy();
+    expect(screen.getByText('Upload controls')).toBeTruthy();
+    expect(screen.queryByText(/OPUS audio only/i)).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: /Use an existing transcript/i }));
+    expect(screen.queryByText('Upload controls')).toBeNull();
+    expect(screen.getByText(/No audio transcription is started/i)).toBeTruthy();
     await userEvent.type(
       screen.getByRole('textbox', { name: /Existing lesson transcript/i }),
       'Existing lesson transcript',
@@ -46,7 +52,7 @@ describe('LessonSourceStep', () => {
       </LessonSourceStep>,
     );
 
-    expect(screen.queryByRole('button', { name: /Upload lesson audio/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Upload lesson recording/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Use an existing transcript/i })).toBeNull();
     expect(screen.getByText('Prepared source summary')).toBeTruthy();
   });
@@ -69,6 +75,8 @@ describe('LessonSourceStep', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /Change lesson source/i }));
+    expect(screen.getByRole('button', { name: /Upload lesson recording/i })).toBeTruthy();
+    expect(screen.queryByText(/OPUS audio only/i)).toBeNull();
     expect(screen.getByRole('button', { name: /Use an existing transcript/i })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: /Keep current source/i }));
     expect(screen.queryByRole('button', { name: /Use an existing transcript/i })).toBeNull();
