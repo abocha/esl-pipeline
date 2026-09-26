@@ -45,11 +45,11 @@ skills-lock.json
 !.codex/PROJECT.md
 !.codex/agents/
 .codex/agents/**
-!.codex/agents/luna_implementer.toml
-!.codex/agents/terra_workhorse.toml
-!.codex/agents/terra_explorer.toml
-!.codex/agents/terra_reviewer.toml
-!.codex/agents/sol_reviewer.toml
+!.codex/agents/bounded_implementer.toml
+!.codex/agents/explorer.toml
+!.codex/agents/integration_workhorse.toml
+!.codex/agents/ordinary_reviewer.toml
+!.codex/agents/exceptional_risk_reviewer.toml
 .artifacts
 .superpowers/
 .impeccable/

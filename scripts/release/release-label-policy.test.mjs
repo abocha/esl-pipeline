@@ -78,7 +78,7 @@ test('maintenance-only paths accept release:none', () => {
     '.github/workflows/ci.yml',
     '.impeccable/critique/local.md',
     '.codex/ORCHESTRATION.md',
-    '.codex/agents/terra_explorer.toml',
+    '.codex/agents/explorer.toml',
     'AGENTS.md',
     'docs/reference/VERSIONING_MODEL.md',
     'docs/prompt-gallery/retired.md',
@@ -89,6 +89,8 @@ test('maintenance-only paths accept release:none', () => {
     'scripts/docker/run-hadolint.test.mjs',
     'scripts/git/pr-style-summary.sh',
     'scripts/release/production-image-scope.test.mjs',
+    'scripts/release/production-image-scope.mjs',
+    'scripts/release/release-label-policy.mjs',
     ...allowedRootFiles,
   ];
 
@@ -101,6 +103,33 @@ test('maintenance-only paths accept release:none', () => {
       releaseRequired: false,
     },
   );
+});
+
+test('the complete PR #274 follow-up file set, including renamed role paths, accepts release:none', () => {
+  const files = [
+    file('.codex/ORCHESTRATION.md'),
+    file('.codex/PLANNING_HANDOFF.md'),
+    file('.codex/WORKFLOW_MODES.md'),
+    file('.codex/agents/bounded_implementer.toml', '.codex/agents/luna_implementer.toml'),
+    file('.codex/agents/exceptional_risk_reviewer.toml', '.codex/agents/sol_reviewer.toml'),
+    file('.codex/agents/explorer.toml', '.codex/agents/terra_explorer.toml'),
+    file('.codex/agents/integration_workhorse.toml', '.codex/agents/terra_workhorse.toml'),
+    file('.codex/agents/ordinary_reviewer.toml', '.codex/agents/terra_reviewer.toml'),
+    file('.gitignore'),
+    file('docs/reference/TESTING_GUIDELINES.md'),
+    file('docs/reference/VERSIONING_MODEL.md'),
+    file('scripts/check/workspace-change-scope.mjs'),
+    file('scripts/check/workspace-change-scope.test.mjs'),
+    file('scripts/release/production-image-scope.mjs'),
+    file('scripts/release/production-image-scope.test.mjs'),
+    file('scripts/release/release-label-policy.mjs'),
+    file('scripts/release/release-label-policy.test.mjs'),
+  ];
+  assert.deepEqual(resolveReleaseSelection(['release:none'], changed(...files)), {
+    label: 'release:none',
+    bump: null,
+    releaseRequired: false,
+  });
 });
 
 test('runtime, dependency, deployment, prompt, and unknown paths require a release', () => {
@@ -119,7 +148,8 @@ test('runtime, dependency, deployment, prompt, and unknown paths require a relea
     'scripts/audio-benchmark/tests/core.test.ts',
     'scripts/deploy/deploy-prod-images.sh',
     'scripts/docker/prod-compose.mjs',
-    'scripts/release/release-label-policy.mjs',
+    'scripts/release/resolve-production-image-scope.mjs',
+    'scripts/release/resolve-release-bump-from-pr.mjs',
     'scripts/smoke/run-telegram-ops-compose-smoke.sh',
     'unknown-root-file.txt',
   ]) {

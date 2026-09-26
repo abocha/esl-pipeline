@@ -53,6 +53,7 @@ function owningPackage(path, workspacePackages) {
 
 function isSafeNonImagePath(path) {
   if (SAFE_ROOT_FILES.has(path) || /^[^/]+\.md$/u.test(path)) return true;
+  if (path.startsWith('.agents/skills/') || path.startsWith('.codex/')) return true;
   if (path.startsWith('.github/') || path.startsWith('.impeccable/')) return true;
   if (path.startsWith('deploy/') || path.startsWith('scripts/')) return true;
   if (path.startsWith('docs/')) return true;
