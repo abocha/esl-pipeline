@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.0.1] - 2026-09-26
+
+### Changed
+
+- Automated release from PR #273: feat(profiles): add historical provenance backfill tool (https://github.com/abocha/esl-pipeline/pull/273)
+
 ## [11.0.0] - 2026-09-26
 
 ### Changed
