@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { DB_MIGRATION_HEAD } from '../../contracts/src/contract-versions.js';
 
 describe('contracts/db contract version', () => {
-  it('publishes the first-profile onboarding migration head', () => {
-    expect(DB_MIGRATION_HEAD).toBe('0056_first_profile_onboarding');
+  it('publishes the historical provenance migration head', () => {
+    expect(DB_MIGRATION_HEAD).toBe('0057_historical_profile_provenance_timestamp');
   });
 
   it('tracks the latest backend migration head', async () => {

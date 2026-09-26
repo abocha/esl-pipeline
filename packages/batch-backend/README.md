@@ -135,6 +135,11 @@ Useful indexes:
   the same student, remains ready, and carries confirmed-source provenance. Snapshot source-ID
   columns own coverage lineage; matching `generation_notes` arrays are diagnostics only.
 - Schema changes belong in versioned migrations; runtime legacy patching is emergency-only.
+- Historical learner-profile provenance classification uses the dry-run-first
+  [`profile:provenance-backfill` maintenance tool](../../docs/operations/historical-profile-provenance-backfill.md).
+  Only profiles created before migration 0056 are in scope. Historical `unknown` remains unknown
+  without positive completed-enrichment proof; the tool never
+  infers `tutor_only`. Production apply requires separate authorization and a reviewed fingerprint.
 - Fresh database bootstrap uses the generated `schema.sql` baseline; existing databases upgrade through versioned migrations.
 - Extended API and ops-control surfaces are additive and must be explicitly enabled.
 
