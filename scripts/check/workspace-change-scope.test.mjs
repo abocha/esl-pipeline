@@ -87,6 +87,7 @@ for (const [name, changedFileRecords, expected] of ciScopeCases) {
 
 test('hosted scope classifies only explicit repository-maintenance paths', () => {
   for (const file of [
+    '.gitignore',
     '.agents/skills/esl-pipeline-validation-evidence/SKILL.md',
     '.agents/skills/telegram-ops/SKILL.md',
     'scripts/git/pr-style-summary.sh',
@@ -114,6 +115,64 @@ test('hosted scope classifies only explicit repository-maintenance paths', () =>
   assert.equal(docsOnly.maintenance_only, false);
 });
 
+test('PR #274 workflow maintenance paths, including both sides of role renames, select no application lanes', () => {
+  const changedFileRecords = [
+    ...records('M', '.codex/ORCHESTRATION.md'),
+    ...records('M', '.codex/PLANNING_HANDOFF.md'),
+    ...records('M', '.codex/WORKFLOW_MODES.md'),
+    {
+      status: 'R093',
+      paths: ['.codex/agents/luna_implementer.toml', '.codex/agents/bounded_implementer.toml'],
+    },
+    {
+      status: 'R096',
+      paths: ['.codex/agents/sol_reviewer.toml', '.codex/agents/exceptional_risk_reviewer.toml'],
+    },
+    { status: 'R095', paths: ['.codex/agents/terra_explorer.toml', '.codex/agents/explorer.toml'] },
+    {
+      status: 'R097',
+      paths: ['.codex/agents/terra_workhorse.toml', '.codex/agents/integration_workhorse.toml'],
+    },
+    {
+      status: 'R088',
+      paths: ['.codex/agents/terra_reviewer.toml', '.codex/agents/ordinary_reviewer.toml'],
+    },
+    ...records('M', '.gitignore'),
+    ...records('M', 'scripts/release/release-label-policy.test.mjs'),
+  ];
+  const decision = buildCiScopeDecision({ changedFileRecords, workspacePackages });
+  assert.equal(decision.maintenance_only, true);
+  assert.equal(decision.docs_only, false);
+  assert.deepEqual(scopeFlags(decision), [false, false, false, false, false]);
+  assert.equal(decision.changedFiles.length, 15);
+  assert.ok(decision.changedFiles.includes('.codex/agents/luna_implementer.toml'));
+  assert.ok(decision.changedFiles.includes('.codex/agents/bounded_implementer.toml'));
+});
+
+test('.gitignore alone is maintenance, while root toolchain inputs still select every application lane', () => {
+  const gitignore = buildCiScopeDecision({
+    changedFileRecords: records('M', '.gitignore'),
+    workspacePackages,
+  });
+  assert.equal(gitignore.maintenance_only, true);
+  assert.deepEqual(scopeFlags(gitignore), [false, false, false, false, false]);
+  for (const file of [
+    '.nvmrc',
+    'package.json',
+    'pnpm-lock.yaml',
+    'tsconfig.base.json',
+    '.github/workflows/ci.yml',
+    'scripts/check/run-ci-scope.mjs',
+  ]) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', file),
+      workspacePackages,
+    });
+    assert.equal(decision.maintenance_only, false, file);
+    assert.deepEqual(scopeFlags(decision), [true, true, true, true, false], file);
+  }
+});
+
 test('hosted scope keeps maintenance classification narrow and fail-closed', () => {
   for (const file of [
     '.agents/README.md',
@@ -137,6 +196,7 @@ test('hosted scope treats maintenance plus runtime changes like the runtime chan
   });
   const mixed = buildCiScopeDecision({
     changedFileRecords: [
+      ...records('M', '.gitignore'),
       ...records('M', '.agents/skills/esl-pipeline-validation-evidence/SKILL.md'),
       ...records('M', 'packages/batch-frontend/src/main.tsx'),
     ],
