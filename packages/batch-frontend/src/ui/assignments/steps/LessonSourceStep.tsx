@@ -51,8 +51,8 @@ export function LessonSourceStep({
             >
               <AudioLines aria-hidden="true" />
               <span className="assignment-source-choice__copy">
-                <strong>Upload lesson audio</strong>
-                <small>OPUS audio only during the alpha</small>
+                <strong>Upload lesson recording</strong>
+                <small>Audio or video recording</small>
               </span>
             </button>
             <button
@@ -72,10 +72,7 @@ export function LessonSourceStep({
       ) : null}
 
       {showChooser && mode === 'audio' ? (
-        <div className="assignment-source-pane">
-          <p className="assignment-source-pane__hint">OPUS audio only during the alpha.</p>
-          {children}
-        </div>
+        <div className="assignment-source-pane">{children}</div>
       ) : showChooser ? (
         <div className="assignment-source-pane assignment-source-pane--manual">
           <label htmlFor="manual-lesson-transcript">Existing lesson transcript</label>
