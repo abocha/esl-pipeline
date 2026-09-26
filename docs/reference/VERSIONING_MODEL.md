@@ -72,7 +72,8 @@ The dedicated `Release Label Guard` workflow fails if none or multiple are prese
 only when the complete, count-validated PR file set is inside the repository's conservative
 maintenance-only allowlist: GitHub metadata, non-runtime documentation, selected repository test
 and documentation tooling, project-local Codex maintainer configuration under `.codex/**`, the
-Hadolint runner, and explicitly named lint/editor configuration.
+Hadolint runner, the exact CI/release-selection classifier modules, and explicitly named lint/editor
+configuration.
 Unknown or mixed paths require a normal release label.
 `packages/batch-backend/prompt-assets/**` is runtime content copied into the backend image and always
 requires a normal release.

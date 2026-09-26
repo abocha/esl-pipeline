@@ -20,6 +20,8 @@ const MAINTENANCE_ONLY_ROOT_FILES = new Set([
 const MAINTENANCE_ONLY_EXACT_PATHS = new Set([
   'scripts/docker/run-hadolint.mjs',
   'scripts/docker/run-hadolint.test.mjs',
+  'scripts/release/production-image-scope.mjs',
+  'scripts/release/release-label-policy.mjs',
 ]);
 
 export const RELEASE_LABELS = Object.freeze(Array.from(RELEASE_LABEL_TO_BUMP.keys()));

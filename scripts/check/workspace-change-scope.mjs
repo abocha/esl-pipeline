@@ -2,7 +2,6 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const sharedImageAndToolchainFiles = new Set([
-  '.gitignore',
   '.nvmrc',
   'biome.json',
   'package.json',
@@ -256,6 +255,7 @@ function isCiDocsPath(file) {
 function isCiMaintenanceOnlyPath(file) {
   return (
     isCiDocsPath(file) ||
+    file === '.gitignore' ||
     file.startsWith('.agents/skills/') ||
     file.startsWith('scripts/git/') ||
     /^scripts\/release\/release-label-policy(?:\.test)?\.mjs$/u.test(file)
