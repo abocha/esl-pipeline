@@ -426,6 +426,88 @@ export function registerResumeBasicTests() {
       expect(api.getJobStatus).not.toHaveBeenCalled();
     });
 
+    it('offers replacement after a failed upload resumes and keeps passive hydration write-free', async () => {
+      const session = makeAssignmentSession({
+        id: 'session-failed-upload',
+        studentId: 'student-alex',
+        recordingId: 'rec-failed',
+        confirmedStep: 'student',
+      });
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
+      const failed = makeRecording({
+        recordingId: 'rec-failed',
+        studentId: 'student-alex',
+        displayName: 'failed.mp3',
+        status: 'failed',
+      });
+      const replacement = makeRecording({
+        recordingId: 'rec-replacement',
+        studentId: 'student-alex',
+        displayName: 'replacement.mp3',
+        status: 'transcribed',
+        transcriptId: 'tx-replacement',
+      });
+      vi.mocked(api.uploadRecording).mockResolvedValue(replacement);
+      vi.mocked(api.getRecording).mockImplementation(async (id) =>
+        id === replacement.recordingId ? replacement : failed,
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+        makeTranscript({ recordingId: replacement.recordingId, transcriptId: 'tx-replacement' }),
+      );
+
+      const user = createMinimalUser();
+      globalThis.history.replaceState(null, '', '/?sessionId=session-failed-upload');
+      renderMinimalAssignment();
+
+      expect(await screen.findByText(/Recording: failed\.mp3/i)).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Replace audio/i })).toBeTruthy();
+      vi.useFakeTimers();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1600);
+      });
+      expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
+      expect(api.attachAssignmentSource).not.toHaveBeenCalled();
+      vi.useRealTimers();
+
+      await user.click(screen.getByRole('button', { name: /Replace audio/i }));
+      expect(screen.getByRole('button', { name: /Drop replacement audio/i })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: /Drop replacement audio/i }));
+      await waitFor(() =>
+        expect(api.attachAssignmentSource).toHaveBeenCalledWith(
+          'session-failed-upload',
+          expect.objectContaining({
+            recordingId: 'rec-replacement',
+            transcriptId: 'tx-replacement',
+          }),
+        ),
+      );
+    });
+
+    it('does not offer replacement after Share reserves an unfinished session', async () => {
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValue(
+        makeAssignmentSession({
+          id: 'session-sharing',
+          studentId: 'student-alex',
+          recordingId: 'rec-failed',
+          confirmedStep: 'student',
+          shareJobId: 'job-sharing',
+        }),
+      );
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({
+          recordingId: 'rec-failed',
+          studentId: 'student-alex',
+          status: 'failed',
+        }),
+      );
+
+      globalThis.history.replaceState(null, '', '/?sessionId=session-sharing');
+      renderMinimalAssignment();
+
+      expect(await screen.findByText(/Recording: lesson\.mp3/i)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Replace audio/i })).toBeNull();
+    });
+
     it('rehydrates trusted split topology and the persisted Deepgram transcript engine', async () => {
       const session = makeAssignmentSession({
         id: 'session-trusted-source',
