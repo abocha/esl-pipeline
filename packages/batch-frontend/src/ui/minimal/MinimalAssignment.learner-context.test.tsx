@@ -17,7 +17,7 @@ const baseContext: AssignmentLearnerContext = {
   operationState: 'waiting_evidence',
   profile: null,
   pinned: null,
-  confirmationAvailable: true,
+  confirmationAvailable: false,
   warning: null,
 };
 

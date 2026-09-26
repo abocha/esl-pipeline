@@ -760,6 +760,14 @@ describe('application/confirm-assignment-session-step transactional persistence'
       },
       lessonMemory: memory,
     });
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE profile_initial_enrichment_operations SET state = 'failed',
+         failure_code = 'lesson_evidence_failed'
+         WHERE assignment_session_id = $1 AND state = 'waiting_evidence'`,
+        [session.id],
+      ),
+    );
     const otherStudentId = randomUUID();
     const otherProfileId = `profiles/${randomUUID()}.md`;
     const otherProfileRevisionId = randomUUID();

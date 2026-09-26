@@ -291,6 +291,22 @@ describeHttpServerIntegrationSuite(
       expect(speakerMappingRequired.json()).toEqual({
         code: 'assignment_step_speaker_role_mapping_required',
       });
+
+      confirm.mockRejectedValueOnce({ code: 'ASSIGNMENT_STEP_PROFILE_PREPARING' });
+      const pending = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/confirm`,
+        payload: {
+          step: 'context',
+          expectedRevision: 2,
+          teacherNotes: 'Editable guidance',
+          profileId: null,
+          profileRevisionId: null,
+          profileRevisionHash: null,
+        },
+      });
+      expect(pending.statusCode).toBe(409);
+      expect(pending.json()).toEqual({ code: 'assignment_step_profile_preparing' });
     });
 
     it('returns conflict when a Student request ID is reused with different input', async () => {

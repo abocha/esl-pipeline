@@ -77,6 +77,9 @@ export class ProfileRevisionDraftingError extends Error {
   readonly limit?: number;
   readonly used?: number;
   readonly window?: string;
+  readonly rejectedBeforeExecution: boolean;
+  readonly providerStatus?: number;
+  readonly retryAfterMs?: number;
 
   constructor(args: {
     category: GenerationErrorCategory;
@@ -87,6 +90,9 @@ export class ProfileRevisionDraftingError extends Error {
     limit?: number;
     used?: number;
     window?: string;
+    rejectedBeforeExecution?: boolean;
+    providerStatus?: number;
+    retryAfterMs?: number;
   }) {
     super(args.message);
     this.name = 'ProfileRevisionDraftingError';
@@ -98,6 +104,9 @@ export class ProfileRevisionDraftingError extends Error {
     this.limit = args.limit;
     this.used = args.used;
     this.window = args.window;
+    this.rejectedBeforeExecution = args.rejectedBeforeExecution ?? false;
+    this.providerStatus = args.providerStatus;
+    this.retryAfterMs = args.retryAfterMs;
   }
 }
 
@@ -118,6 +127,8 @@ export interface GenerateProfileRevisionDraftRequest {
   modelOverride?: string;
   includeProviderFallbacks?: boolean;
   retryMaxOverride?: number;
+  exactCandidateOnly?: boolean;
+  budgetReservationAlreadyMade?: boolean;
   responseSchema?: ProviderStructuredExecutionRequest['responseSchema'];
   validateOutput?: (output: unknown) => FoundationalProfile | ProfileCandidatePatch;
   onValidatedResponse?: (profile: FoundationalProfile | ProfileCandidatePatch) => Promise<void>;
@@ -151,13 +162,16 @@ export async function generateProfileRevisionDraft(args: {
   const sleep =
     args.overrides?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
 
-  const candidates = resolveGenerationCandidates({
+  const resolvedCandidates = resolveGenerationCandidates({
     config: config.generation,
     workload: 'profile_revision_drafting',
     providerOverride: args.request.providerOverride,
     modelOverride: args.request.modelOverride,
     includeProviderFallbacks: args.request.includeProviderFallbacks,
   });
+  const candidates = args.request.exactCandidateOnly
+    ? resolvedCandidates.slice(0, 1)
+    : resolvedCandidates;
 
   if (candidates.length === 0) {
     throw new ProfileRevisionDraftingError({
@@ -166,6 +180,7 @@ export async function generateProfileRevisionDraft(args: {
       model: args.request.modelOverride ?? 'unspecified',
       message:
         'No generation candidates are available for the current provider/model configuration.',
+      rejectedBeforeExecution: true,
     });
   }
 
@@ -180,15 +195,17 @@ export async function generateProfileRevisionDraft(args: {
   >({
     candidates,
     runCandidate: async (candidate) => {
-      await enforceGenerationBudgetBeforeAttempt({
-        config,
-        provider: candidate.provider,
-        model: candidate.model,
-        prompt: args.request.prompt,
-        maxOutputTokens: args.request.maxOutputTokens,
-        now: now(),
-        repository: budgetRepository,
-      });
+      if (!args.request.budgetReservationAlreadyMade) {
+        await enforceGenerationBudgetBeforeAttempt({
+          config,
+          provider: candidate.provider,
+          model: candidate.model,
+          prompt: args.request.prompt,
+          maxOutputTokens: args.request.maxOutputTokens,
+          now: now(),
+          repository: budgetRepository,
+        });
+      }
 
       const executor = executors[candidate.provider];
       if (!executor) {
@@ -197,6 +214,7 @@ export async function generateProfileRevisionDraft(args: {
           provider: candidate.provider,
           model: candidate.model,
           message: `No generation executor configured for provider: ${candidate.provider}`,
+          rejectedBeforeExecution: true,
         });
       }
 
@@ -385,6 +403,13 @@ function mapProviderError(args: {
     provider: args.provider,
     model: args.model,
     message: details.message,
+    providerStatus: details.status,
+    retryAfterMs:
+      args.error instanceof ProviderExecutionError ? args.error.retryAfterMs : undefined,
+    rejectedBeforeExecution:
+      args.error instanceof ProviderExecutionError &&
+      typeof details.status === 'number' &&
+      [400, 401, 403, 404, 422, 429].includes(details.status),
   });
 }
 

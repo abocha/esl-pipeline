@@ -104,6 +104,16 @@ export async function getAssignmentLearnerContext(
             )
           : null;
       const operationState = operation?.rows[0]?.state ?? null;
+      const priorSubmission =
+        !operationState && profileRow?.provenance === 'tutor_only'
+          ? await client.query<{ state: 'submitting' | 'uncertain' }>(
+              `SELECT state FROM profile_initial_enrichment_operations
+               WHERE profile_id = $1 AND state IN ('submitting', 'uncertain')
+               ORDER BY created_at DESC LIMIT 1`,
+              [profileRow.profile_id],
+            )
+          : null;
+      const priorSubmissionState = priorSubmission?.rows[0]?.state ?? null;
       const eligibility: AssignmentLearnerContextDto['eligibility'] = !canonicalSource
         ? 'no_confirmed_source'
         : profileRow?.provenance === 'evidence_enriched'
@@ -114,12 +124,15 @@ export async function getAssignmentLearnerContext(
       const state: AssignmentLearnerContextDto['state'] =
         operationState === 'succeeded'
           ? 'completed'
-          : operationState === 'failed' || operationState === 'uncertain'
+          : operationState === 'failed' ||
+              operationState === 'uncertain' ||
+              priorSubmissionState === 'uncertain'
             ? 'failed'
             : canonicalSource &&
-                ['waiting_evidence', 'queued', 'submitting', 'result_ready'].includes(
-                  operationState ?? '',
-                )
+                ((profileRow?.provenance === 'tutor_only' && !operationState) ||
+                  ['waiting_evidence', 'queued', 'submitting', 'result_ready'].includes(
+                    operationState ?? '',
+                  ))
               ? 'preparing'
               : 'not_applicable';
       const result: AssignmentLearnerContextDto = {
@@ -153,9 +166,9 @@ export async function getAssignmentLearnerContext(
               revisionHash: pinned.profileRevisionHash,
             }
           : null,
-        confirmationAvailable: canonicalSource,
+        confirmationAvailable: canonicalSource && state !== 'preparing',
         warning:
-          operationState === 'uncertain'
+          operationState === 'uncertain' || priorSubmissionState === 'uncertain'
             ? 'enrichment_uncertain'
             : operationState === 'failed'
               ? 'enrichment_failed'

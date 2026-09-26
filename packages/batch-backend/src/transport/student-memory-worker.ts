@@ -3,7 +3,7 @@ import { DelayedError, type Job } from 'bullmq';
 
 import type { StudentMemoryQueuePayload } from '../application/process-student-memory-job.js';
 import { processStudentMemoryJob } from '../application/process-student-memory-job.js';
-import { reconcilePendingProfileInitialEnrichments } from '../application/profile-initial-enrichment.js';
+import { enqueuePendingProfileInitialEnrichments } from '../application/profile-initial-enrichment.js';
 import { isStudentMemoryPacingDeferredError } from '../application/student-memory-generation-pacing.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
@@ -79,7 +79,7 @@ export async function startStudentMemoryWorker(): Promise<void> {
     if (reconciling) return;
     reconciling = true;
     try {
-      await reconcilePendingProfileInitialEnrichments(config);
+      await enqueuePendingProfileInitialEnrichments();
       await reconcileDeferredInitialEnrichmentIntents();
     } finally {
       reconciling = false;

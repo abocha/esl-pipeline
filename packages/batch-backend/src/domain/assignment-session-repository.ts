@@ -278,7 +278,8 @@ export class AssignmentSessionConfirmationError extends Error {
       | 'ASSIGNMENT_STEP_SPEAKER_ROLE_MAPPING_REQUIRED'
       | 'ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND'
       | 'ASSIGNMENT_STEP_SOURCE_NOT_ATTACHED'
-      | 'ASSIGNMENT_STEP_PROFILE_STALE',
+      | 'ASSIGNMENT_STEP_PROFILE_STALE'
+      | 'ASSIGNMENT_STEP_PROFILE_PREPARING',
   ) {
     super(code);
     this.name = 'AssignmentSessionConfirmationError';
@@ -567,6 +568,39 @@ async function confirmLockedContext(
   if (JSON.stringify(current.confirmed.context) === JSON.stringify(context)) {
     return { session: current, invalidated: [], lessonMemoryIntent: null };
   }
+  assertExpectedRevision(current, request.expectedRevision);
+  const pendingOnboarding = await client.query(
+    `SELECT 1 FROM profile_initial_enrichment_operations op
+     WHERE op.assignment_session_id = $1 AND op.student_id = $2
+       AND op.recording_id = $3 AND op.transcript_id = $4 AND op.transcript_hash = $5
+       AND op.state IN ('waiting_evidence', 'queued', 'submitting', 'result_ready')
+     UNION ALL
+     SELECT 1 FROM student_profile_bindings b
+     JOIN profiles p ON p.id = b.profile_id
+     WHERE b.student_id = $2 AND b.effective_to IS NULL
+       AND p.provenance = 'tutor_only'
+       AND NOT EXISTS (
+         SELECT 1 FROM profile_initial_enrichment_operations exact_op
+         WHERE exact_op.profile_id = p.id AND exact_op.assignment_session_id = $1
+           AND exact_op.recording_id = $3 AND exact_op.transcript_id = $4
+           AND exact_op.transcript_hash = $5
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM profile_initial_enrichment_operations old_op
+         WHERE old_op.profile_id = p.id AND old_op.state = 'uncertain'
+       )
+     LIMIT 1`,
+    [
+      current.id,
+      current.studentId,
+      current.confirmed.source.recordingId,
+      current.confirmed.source.transcriptId,
+      current.confirmed.source.transcriptHash,
+    ],
+  );
+  if (pendingOnboarding.rows[0]) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PROFILE_PREPARING');
+  }
   const active = await client.query<{
     profile_id: string;
     active_revision_id: string | null;
@@ -605,7 +639,6 @@ async function confirmLockedContext(
       throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
     }
   }
-  assertExpectedRevision(current, request.expectedRevision);
   const confirmed = { ...current.confirmed, context, create: null };
   const updated = await updateConfirmedSession(client, current, {
     confirmedStep: 'context',
@@ -1984,6 +2017,7 @@ export async function reconcileDeferredInitialEnrichmentIntents(): Promise<void>
        WHERE p.provenance = 'tutor_only'
          AND a.confirmed_snapshot->'source' <> 'null'::jsonb
          AND a.confirmed_step <> 'share'
+         AND a.confirmed_snapshot->'context' = 'null'::jsonb
          AND a.id = (
            SELECT a2.id FROM assignment_sessions a2
            JOIN assignment_source_bindings b2 ON b2.assignment_session_id = a2.id
