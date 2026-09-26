@@ -617,6 +617,41 @@ CREATE TABLE public.ops_actions (
     CONSTRAINT ops_actions_state_check CHECK ((state = ANY (ARRAY['queued'::text, 'running'::text, 'succeeded'::text, 'failed'::text])))
 );
 
+CREATE TABLE public.profile_initial_enrichment_operations (
+    id uuid NOT NULL,
+    profile_id text NOT NULL,
+    student_id uuid NOT NULL,
+    assignment_session_id uuid CONSTRAINT profile_initial_enrichment_opera_assignment_session_id_not_null NOT NULL,
+    recording_id uuid NOT NULL,
+    transcript_id uuid NOT NULL,
+    transcript_storage_uri text CONSTRAINT profile_initial_enrichment_oper_transcript_storage_uri_not_null NOT NULL,
+    transcript_hash text NOT NULL,
+    source_identity_kind text CONSTRAINT profile_initial_enrichment_operat_source_identity_kind_not_null NOT NULL,
+    source_fingerprint_scheme text CONSTRAINT profile_initial_enrichment_o_source_fingerprint_scheme_not_null NOT NULL,
+    source_fingerprint text CONSTRAINT profile_initial_enrichment_operatio_source_fingerprint_not_null NOT NULL,
+    lesson_memory_entry_id uuid,
+    seed_revision_id uuid,
+    seed_revision_hash text,
+    generation_input jsonb,
+    generation_provider text,
+    generation_model text,
+    state text DEFAULT 'waiting_evidence'::text NOT NULL,
+    submission_id uuid,
+    submission_reserved_at timestamp with time zone,
+    validated_result jsonb,
+    result_hash text,
+    result_revision_id uuid,
+    failure_code text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT profile_initial_enrichment_result_check CHECK (((validated_result IS NULL) = (result_hash IS NULL))),
+    CONSTRAINT profile_initial_enrichment_seed_pair_check CHECK (((seed_revision_id IS NULL) = (seed_revision_hash IS NULL))),
+    CONSTRAINT profile_initial_enrichment_source_hash_check CHECK ((transcript_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT profile_initial_enrichment_state_check CHECK ((state = ANY (ARRAY['waiting_evidence'::text, 'queued'::text, 'submitting'::text, 'result_ready'::text, 'succeeded'::text, 'failed'::text, 'uncertain'::text, 'superseded'::text]))),
+    CONSTRAINT profile_initial_enrichment_submission_check CHECK (((submission_id IS NULL) = (submission_reserved_at IS NULL))),
+    CONSTRAINT profile_initial_enrichment_success_check CHECK (((state <> 'succeeded'::text) OR (result_revision_id IS NOT NULL)))
+);
+
 CREATE TABLE public.profile_revisions (
     id uuid NOT NULL,
     profile_id text NOT NULL,
@@ -642,7 +677,11 @@ CREATE TABLE public.profiles (
     label text NOT NULL,
     active_revision_id uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    provenance text DEFAULT 'unknown'::text NOT NULL,
+    initial_enrichment_completed_at timestamp with time zone,
+    CONSTRAINT profiles_enrichment_completion_check CHECK (((provenance = 'evidence_enriched'::text) = (initial_enrichment_completed_at IS NOT NULL))),
+    CONSTRAINT profiles_provenance_check CHECK ((provenance = ANY (ARRAY['unknown'::text, 'tutor_only'::text, 'evidence_enriched'::text])))
 );
 
 CREATE TABLE public.prompt_packages (
@@ -1274,6 +1313,9 @@ ALTER TABLE ONLY public.lesson_memory_entries
 ALTER TABLE ONLY public.ops_actions
     ADD CONSTRAINT ops_actions_pkey PRIMARY KEY (operation_id);
 
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_operations_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.profile_revisions
     ADD CONSTRAINT profile_revisions_pkey PRIMARY KEY (id);
 
@@ -1655,6 +1697,14 @@ CREATE INDEX idx_users_role ON public.users USING btree (role);
 
 CREATE INDEX idx_workspace_memberships_user_id ON public.workspace_memberships USING btree (user_id);
 
+CREATE UNIQUE INDEX profile_initial_enrichment_exact_source_idx ON public.profile_initial_enrichment_operations USING btree (profile_id, assignment_session_id, transcript_id, transcript_hash);
+
+CREATE UNIQUE INDEX profile_initial_enrichment_live_profile_idx ON public.profile_initial_enrichment_operations USING btree (profile_id) WHERE (state = ANY (ARRAY['waiting_evidence'::text, 'queued'::text, 'submitting'::text, 'result_ready'::text, 'uncertain'::text]));
+
+CREATE INDEX profile_initial_enrichment_reconcile_idx ON public.profile_initial_enrichment_operations USING btree (state, updated_at) WHERE (state = ANY (ARRAY['waiting_evidence'::text, 'queued'::text, 'submitting'::text, 'result_ready'::text]));
+
+CREATE UNIQUE INDEX profile_initial_enrichment_success_profile_idx ON public.profile_initial_enrichment_operations USING btree (profile_id) WHERE (state = 'succeeded'::text);
+
 CREATE TRIGGER assignment_sessions_confirmed_source_audio_deletion AFTER INSERT OR UPDATE OF confirmed_snapshot, recording_id, student_id ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.request_confirmed_source_audio_deletion();
 
 CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
@@ -1816,6 +1866,30 @@ ALTER TABLE ONLY public.lesson_memory_entries
 
 ALTER TABLE ONLY public.lesson_memory_entries
     ADD CONSTRAINT lesson_memory_entries_transcript_id_fkey FOREIGN KEY (transcript_id) REFERENCES public.transcripts(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_operatio_lesson_memory_entry_id_fkey FOREIGN KEY (lesson_memory_entry_id) REFERENCES public.lesson_memory_entries(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_operation_assignment_session_id_fkey FOREIGN KEY (assignment_session_id) REFERENCES public.assignment_sessions(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_operations_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_operations_recording_id_fkey FOREIGN KEY (recording_id) REFERENCES public.recordings(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_operations_result_revision_id_fkey FOREIGN KEY (result_revision_id) REFERENCES public.profile_revisions(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_operations_seed_revision_id_fkey FOREIGN KEY (seed_revision_id) REFERENCES public.profile_revisions(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_operations_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_operations_transcript_id_fkey FOREIGN KEY (transcript_id) REFERENCES public.transcripts(id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY public.profile_revisions
     ADD CONSTRAINT profile_revisions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
@@ -2177,5 +2251,6 @@ VALUES
   ('0052_recording_upload_candidate_cleanup_schedule', '34891f5ed3494026d41d58a9d901f2f31e5ce7802dcf706cb2f5468175080890', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0053_recording_audio_cleanup_backfill', '7d4e11f27d14a035f15d9b629ec00bdfcc641882dbb7eaf0ad16d87692f2440f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0054_canonical_assignment_source_ownership', '4d4f6b8b4a79148e23a0aca45a91b4d6496927f6a9adf41f5eaa0148bdccdc16', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0055_prompt_package_assignment_provenance', '36c5acb4a15ffaca1880066070ad624b73f1f390891b3d51d732d66b5a9ecd81', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0055_prompt_package_assignment_provenance', '36c5acb4a15ffaca1880066070ad624b73f1f390891b3d51d732d66b5a9ecd81', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0056_first_profile_onboarding', '2c0fbc74c1f9ea8d6e2cf65d48e0a3e15177f9f3af7d5b581b2a0e04fa61f3ea', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

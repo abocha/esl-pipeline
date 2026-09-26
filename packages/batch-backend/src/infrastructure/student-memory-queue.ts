@@ -27,6 +27,7 @@ export async function closeStudentMemoryQueue(): Promise<void> {
 export interface EnqueueStudentMemoryOptions {
   jobId?: string;
   attempts?: number;
+  requeueCompleted?: boolean;
 }
 
 function buildStudentMemoryJobOptions(options: EnqueueStudentMemoryOptions): JobsOptions {
@@ -91,6 +92,11 @@ export function createStudentMemoryQueue() {
       const jobId = sanitizeStudentMemoryJobId(options.jobId);
       const existing = await queueSingleton!.getJob(jobId);
       if (!existing) {
+        await queueSingleton!.add(payload.kind, payload, buildStudentMemoryJobOptions(options));
+        return;
+      }
+      if (options.requeueCompleted && (await existing.getState()) === 'completed') {
+        await existing.remove();
         await queueSingleton!.add(payload.kind, payload, buildStudentMemoryJobOptions(options));
         return;
       }

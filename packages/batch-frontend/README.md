@@ -91,6 +91,8 @@ Canonical behavior and current status live in:
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
 - The Learning page can read `/students/:id/memory/health` for collapsed operator support details;
   manual full snapshot rebuild remains outside the frontend and CLI-only for v1.1.
+- Ordinary Learning page profile edits save directly as active revisions. Draft review controls
+  remain available for candidate-derived drafts.
 - Approved-candidate draft refresh opens a review-mediated profile draft and shows a standalone
   deterministic diff table against the active editor baseline. The table uses shared
   current/proposed headers, field-level change pills, and line-level addition/removal highlights;
@@ -125,9 +127,10 @@ Canonical behavior and current status live in:
 - Prompt and draft recovery is lineage-safe: a generated draft is created against the exact prompt
   returned by that generation operation, prompt/draft IDs recover as a compatible pair, and Create
   navigation plus draft editing stays locked while prompt or draft generation is in flight.
-- During resume, complete assignment-session profile lineage outranks the asynchronous learner list.
-  Empty profile state is not ready until learner-profile discovery succeeds, so first-profile
-  assistance stays hidden and recovery cannot persist null lineage during that loading interval.
+- Teaching context reads assignment-scoped learner authority from the backend on entry, resume,
+  return from Student Learning, and focus. Initial profile enrichment runs automatically after
+  confirmed Source; the tutor can edit guidance while it prepares and confirm Context against the
+  visible profile revision. The assignment has no profile draft or approval controls.
 - Cross-tab session and artifact conflicts retain the tutor's local buffer, adopt the newest server
   revision only as a compare-and-swap base, and suppress automatic overwrite until the tutor
   explicitly reconciles the visible value.
@@ -136,8 +139,8 @@ Canonical behavior and current status live in:
   produce a data-loss warning. Pending debounced recovery is flushed and fully drained before SPA
   navigation proceeds, including edits made while an earlier recovery request is in flight.
 - Stable assignment/session, learner, and profile data refresh on entry, focus return, or directly
-  related mutation completion. Only genuinely asynchronous recording and job states poll, and they
-  stop at terminal state.
+  related mutation completion. Recording, job, and pending initial profile enrichment states poll
+  only while asynchronous work remains and stop at terminal state.
 - Share uses one stable request/job ID across automatic retry, remount, focus reconciliation, and
   lost responses. Share is enabled only when confirmed recovery and current artifacts are clean,
   and it drains pending session recovery before reservation; if authoritative recovery is dirty,

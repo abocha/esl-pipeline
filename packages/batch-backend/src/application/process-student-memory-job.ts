@@ -15,12 +15,17 @@ import {
   type ProcessStudentProfileCandidateRefreshJobPayload,
   processStudentProfileCandidateRefreshJob,
 } from './process-student-profile-candidate-refresh-job.js';
+import {
+  type ProcessProfileInitialEnrichmentJobPayload,
+  reconcileProfileInitialEnrichmentOperation,
+} from './profile-initial-enrichment.js';
 
 export type StudentMemoryQueuePayload =
   | ProcessLessonMemoryJobPayload
   | ProcessHomeworkMemoryJobPayload
   | ProcessStudentMemorySnapshotJobPayload
-  | ProcessStudentProfileCandidateRefreshJobPayload;
+  | ProcessStudentProfileCandidateRefreshJobPayload
+  | ProcessProfileInitialEnrichmentJobPayload;
 
 export async function processStudentMemoryJob(args: {
   config: BatchBackendConfig;
@@ -28,6 +33,10 @@ export async function processStudentMemoryJob(args: {
   attemptsMade?: number;
   maxAttempts?: number;
 }): Promise<void> {
+  if (args.payload.kind === 'profile-initial-enrichment') {
+    await reconcileProfileInitialEnrichmentOperation(args.payload.operationId, args.config);
+    return;
+  }
   if (args.payload.kind === 'lesson-memory-generate') {
     await processLessonMemoryJob({
       config: args.config,

@@ -60,6 +60,7 @@ vi.mock('../../utils/api', () => ({
   createPromptPackage: vi.fn(),
   fetchDraft: vi.fn(),
   fetchAssignmentSession: vi.fn(),
+  fetchAssignmentLearnerContext: vi.fn(),
   fetchJobProvenance: vi.fn(),
   fetchJobOptions: vi.fn(),
   fetchPromptPackage: vi.fn(),
@@ -105,7 +106,6 @@ vi.mock('../../utils/api', () => ({
   listProfileContents: vi.fn(),
   listProfileRevisions: vi.fn(),
   materializeDraft: vi.fn(),
-  populateFirstProfileFromLesson: vi.fn(),
   publishAssignmentCorrection: vi.fn(),
   restoreProfileRevision: vi.fn(),
   shareAssignmentSession: vi.fn(),
@@ -487,7 +487,11 @@ export async function advanceSourceToTeachingContext(user: ReturnType<typeof use
 
 export async function advanceSourceToCreate(user: ReturnType<typeof userEvent.setup>) {
   await advanceSourceToTeachingContext(user);
-  await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+  const continueButton = screen.getByRole('button', { name: /Confirm and continue/i });
+  await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false), {
+    timeout: UI_WAIT_TIMEOUT_MS,
+  });
+  await user.click(continueButton);
   await screen.findByRole(
     'button',
     { name: /^(Generate assignment|Regenerate)$/i },
@@ -1139,6 +1143,53 @@ export function setupMinimalAssignmentTest() {
     }
     return currentSession;
   });
+  vi.mocked(api.fetchAssignmentLearnerContext).mockImplementation(async (id) => {
+    const projectionSession =
+      currentSession.id === id ? currentSession : ((await findListedSession(id)) ?? currentSession);
+    const source = projectionSession.confirmed.source;
+    const profileId =
+      projectionSession.selectedProfileId ?? projectionSession.confirmed.context?.profileId;
+    const revisionId =
+      projectionSession.selectedProfileRevisionId ??
+      projectionSession.confirmed.context?.profileRevisionId;
+    const revisionHash =
+      projectionSession.selectedProfileRevisionHash ??
+      projectionSession.confirmed.context?.profileRevisionHash;
+    return {
+      assignmentSessionId: id,
+      studentId: projectionSession.studentId,
+      source: source
+        ? {
+            recordingId: source.recordingId,
+            transcriptId: source.transcriptId,
+            transcriptHash: source.transcriptHash,
+          }
+        : null,
+      eligibility: 'unknown_provenance',
+      state: 'not_applicable',
+      operationState: null,
+      profile:
+        profileId && revisionId && revisionHash
+          ? {
+              profileId,
+              revisionId,
+              revisionHash,
+              content: 'PROFILE CONTENT',
+              structuredContent: null,
+              updatedAt: now,
+            }
+          : null,
+      pinned: projectionSession.confirmed.context
+        ? {
+            profileId: projectionSession.confirmed.context.profileId,
+            revisionId: projectionSession.confirmed.context.profileRevisionId,
+            revisionHash: projectionSession.confirmed.context.profileRevisionHash,
+          }
+        : null,
+      confirmationAvailable: Boolean(source),
+      warning: null,
+    };
+  });
   vi.mocked(api.listProfileContents).mockResolvedValue({
     profiles: [
       { id: 'profiles/alex.md', label: 'Alex Profile' },
@@ -1226,39 +1277,6 @@ export function setupMinimalAssignmentTest() {
       approved: 0,
       rejected: 0,
       deferred: 0,
-    },
-  });
-  vi.mocked(api.populateFirstProfileFromLesson).mockResolvedValue({
-    draftRevisionId: 'revision-draft-1',
-    profileId: 'profiles/alex.md',
-    snapshotId: 'snapshot-1',
-    lessonMemoryIds: ['lesson-memory-1'],
-    homeworkMemoryIds: [],
-    draftRevision: {
-      id: 'revision-draft-1',
-      profileId: 'profiles/alex.md',
-      contentHash: 'hash-draft-1',
-      source: 'lesson_population',
-      status: 'draft',
-      versionNumber: 2,
-      activatedAt: null,
-      deprecatedAt: null,
-      createdAt: now,
-      createdBy: null,
-      restoredFromRevisionId: null,
-      content: 'PROFILE CONTENT',
-      structuredContent: {
-        schemaVersion: 'foundational_profile_v1',
-        overallLevel: 'B1',
-        primaryGoals: ['Lead project updates clearly.'],
-        communicationContexts: ['Weekly team syncs.'],
-        interestsAndUsefulThemes: ['Travel and films.'],
-        stableStrengths: ['Strong listening comprehension.'],
-        persistentChallenges: ['Needs more confident spoken transitions.'],
-        studyPreferences: ['Prefers concise, practical homework.'],
-        durableConstraints: [],
-        teacherNotes: 'Keep examples grounded in real workplace situations.',
-      },
     },
   });
   vi.mocked(api.activateProfileRevision).mockResolvedValue({

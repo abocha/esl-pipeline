@@ -173,6 +173,32 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(definition).toContain('legacy_normalization');
     expect(definition).toContain('lesson_population');
 
+    const historicalProfileId = `profiles/migration-${randomUUID()}.md`;
+    const provenance = await pool.query<{ provenance: string }>(
+      `INSERT INTO profiles (id, label) VALUES ($1, 'Migration fixture')
+       RETURNING provenance`,
+      [historicalProfileId],
+    );
+    expect(provenance.rows[0]?.provenance).toBe('unknown');
+    await pool.query('DELETE FROM profiles WHERE id = $1', [historicalProfileId]);
+    await expect(
+      pool.query(
+        `INSERT INTO profiles (id, label, provenance)
+       VALUES ($1, 'Invalid provenance fixture', 'evidence_enriched')`,
+        [`profiles/migration-invalid-${randomUUID()}.md`],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+    const onboardingIndexes = await pool.query<{ indexname: string }>(
+      `SELECT indexname FROM pg_indexes WHERE schemaname = 'public'
+         AND tablename = 'profile_initial_enrichment_operations'`,
+    );
+    expect(onboardingIndexes.rows.map((row) => row.indexname)).toContain(
+      'profile_initial_enrichment_live_profile_idx',
+    );
+    expect(onboardingIndexes.rows.map((row) => row.indexname)).toContain(
+      'profile_initial_enrichment_success_profile_idx',
+    );
+
     const actionTypeConstraint = await pool.query<{ definition: string }>(
       `
       SELECT pg_get_constraintdef(oid) AS definition

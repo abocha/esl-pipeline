@@ -329,11 +329,11 @@ async function saveProfileRevision(
     });
   }
 
-  if (status === 'active') {
-    await Promise.all([
-      dependencies.revisions.activate(normalizedProfileId, revision.id),
-      dependencies.profiles.setActive(normalizedProfileId, revision.id),
-    ]);
+  if (status === 'active' && (existingRevision || overrides?.revisions || overrides?.profiles)) {
+    await dependencies.revisions.activate(normalizedProfileId, revision.id);
+    if (overrides?.revisions || overrides?.profiles) {
+      await dependencies.profiles.setActive(normalizedProfileId, revision.id);
+    }
   }
 
   return {
@@ -381,11 +381,13 @@ export async function upsertProfileContent(
   profileId: string,
   content: string,
   overrides?: Partial<ProfileContentDependencies & { createdBy: string | null }>,
+  structuredContent?: FoundationalProfile | null,
 ): Promise<ProfileContentResponse> {
   return upsertProfileContentWithRevision(profileId, content, overrides, {
     source: undefined,
     createdBy: overrides?.createdBy ?? null,
     restoredFromRevisionId: null,
+    structuredContent: structuredContent ?? null,
   });
 }
 
@@ -407,10 +409,10 @@ export async function deleteProfileContent(
   const profile = await dependencies.profiles.getById(normalizedProfileId);
   if (!profile?.activeRevisionId) return false;
 
-  await Promise.all([
-    dependencies.revisions.deprecateActive(normalizedProfileId),
-    dependencies.profiles.setActive(normalizedProfileId, null),
-  ]);
+  await dependencies.revisions.deprecateActive(normalizedProfileId);
+  if (overrides?.revisions || overrides?.profiles) {
+    await dependencies.profiles.setActive(normalizedProfileId, null);
+  }
 
   return true;
 }
@@ -499,7 +501,9 @@ export async function activateProfileRevisionForProfile(
   const activated = await dependencies.revisions.activate(normalizedProfileId, revisionId);
   if (!activated) return null;
 
-  await dependencies.profiles.setActive(normalizedProfileId, activated.id);
+  if (overrides?.revisions || overrides?.profiles) {
+    await dependencies.profiles.setActive(normalizedProfileId, activated.id);
+  }
   await dependencies.candidates.markPromotedByRevision(activated.id);
 
   return {
