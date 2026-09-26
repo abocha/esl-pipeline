@@ -79,6 +79,57 @@ test('deployment, workflow, scripts, and ordinary docs changes rebuild no images
   assert.deepEqual(flags(result), { backend: false, frontend: false, bot: false });
 });
 
+test('portable maintainer workflow paths do not select production images', () => {
+  for (const filename of [
+    '.codex/ORCHESTRATION.md',
+    '.codex/agents/explorer.toml',
+    '.agents/skills/esl-pipeline-validation-evidence/SKILL.md',
+  ]) {
+    const result = buildProductionImageScope({
+      changedFilePayload: payload({ filename }),
+      workspacePackages,
+    });
+    assert.deepEqual(flags(result), { backend: false, frontend: false, bot: false }, filename);
+  }
+});
+
+test('PR #274 workflow maintenance diff, including role renames, selects no production images', () => {
+  const result = buildProductionImageScopeFromChangedFileRecords({
+    changedFileRecords: [
+      { status: 'M', paths: ['.codex/ORCHESTRATION.md'] },
+      { status: 'M', paths: ['.codex/PLANNING_HANDOFF.md'] },
+      { status: 'M', paths: ['.codex/WORKFLOW_MODES.md'] },
+      {
+        status: 'R093',
+        paths: ['.codex/agents/luna_implementer.toml', '.codex/agents/bounded_implementer.toml'],
+      },
+      {
+        status: 'R096',
+        paths: ['.codex/agents/sol_reviewer.toml', '.codex/agents/exceptional_risk_reviewer.toml'],
+      },
+      {
+        status: 'R095',
+        paths: ['.codex/agents/terra_explorer.toml', '.codex/agents/explorer.toml'],
+      },
+      {
+        status: 'R097',
+        paths: ['.codex/agents/terra_workhorse.toml', '.codex/agents/integration_workhorse.toml'],
+      },
+      {
+        status: 'R088',
+        paths: ['.codex/agents/terra_reviewer.toml', '.codex/agents/ordinary_reviewer.toml'],
+      },
+      { status: 'M', paths: ['.gitignore'] },
+      { status: 'M', paths: ['scripts/release/release-label-policy.test.mjs'] },
+    ],
+    workspacePackages,
+  });
+  assert.deepEqual(flags(result), { backend: false, frontend: false, bot: false });
+  assert.equal(result.changedFiles.length, 15);
+  assert.ok(result.changedFiles.includes('.codex/agents/terra_explorer.toml'));
+  assert.ok(result.changedFiles.includes('.codex/agents/explorer.toml'));
+});
+
 test('root dependency inputs rebuild every production image', () => {
   for (const filename of ['pnpm-lock.yaml', 'docker-compose.prod.yml']) {
     const result = buildProductionImageScope({
@@ -120,12 +171,18 @@ test('git name-status records preserve production image scope for PR CI', () => 
 });
 
 test('unknown root paths fail closed to all images', () => {
-  const result = buildProductionImageScope({
-    changedFilePayload: payload({ filename: 'mystery-runtime.conf' }),
-    workspacePackages,
-  });
-  assert.deepEqual(flags(result), { backend: true, frontend: true, bot: true });
-  assert.match(result.reasons.join('\n'), /fail-closed/u);
+  for (const filename of [
+    'mystery-runtime.conf',
+    '.agents/runtime-config.json',
+    '.unknown/config.json',
+  ]) {
+    const result = buildProductionImageScope({
+      changedFilePayload: payload({ filename }),
+      workspacePackages,
+    });
+    assert.deepEqual(flags(result), { backend: true, frontend: true, bot: true }, filename);
+    assert.match(result.reasons.join('\n'), /fail-closed/u, filename);
+  }
 });
 
 test('empty or malformed changed-file payloads fail closed to all images', () => {
