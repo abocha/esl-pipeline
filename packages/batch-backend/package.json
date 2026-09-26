@@ -12,6 +12,7 @@
     "schema.sql"
   ],
   "scripts": {
+    "assignment-source:remap": "tsx --tsconfig tsconfig.json src/tools/remap-assignment-source.ts",
     "build": "tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "db:generate-baseline": "tsx --tsconfig tsconfig.json src/tools/migrate-db.ts generate-baseline",
@@ -20,7 +21,6 @@
     "db:status": "tsx --tsconfig tsconfig.json src/tools/migrate-db.ts status",
     "db:verify": "tsx --tsconfig tsconfig.json src/tools/migrate-db.ts verify",
     "db:verify-baseline": "tsx --tsconfig tsconfig.json src/tools/migrate-db.ts verify-baseline",
-    "assignment-source:remap": "tsx --tsconfig tsconfig.json src/tools/remap-assignment-source.ts",
     "dev:api": "tsx watch --tsconfig tsconfig.json src/transport/http-server.ts",
     "dev:student-memory-worker": "tsx watch --tsconfig tsconfig.json src/transport/student-memory-worker.ts",
     "dev:transcribe-worker": "tsx watch --tsconfig tsconfig.json src/transport/transcribe-worker.ts",
@@ -33,6 +33,7 @@
     "lesson-memory:refresh:dry": "tsx --tsconfig tsconfig.json src/tools/refresh-student-lesson-history.ts --dry-run",
     "lint": "pnpm exec biome lint .",
     "profile:migrate-legacy": "tsx --tsconfig tsconfig.json src/tools/migrate-legacy-profiles.ts",
+    "profile:provenance-backfill": "tsx --tsconfig tsconfig.json src/tools/historical-profile-provenance.ts",
     "prompt-assets:bootstrap": "tsx --tsconfig tsconfig.json src/tools/bootstrap-prompt-assets.ts",
     "prompt-assets:bootstrap:dry": "tsx --tsconfig tsconfig.json src/tools/bootstrap-prompt-assets.ts --dry-run",
     "speech-planner:eval": "tsx --tsconfig tsconfig.json src/tools/eval-speech-planner.ts",
