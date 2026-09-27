@@ -601,6 +601,29 @@ CREATE TABLE public.lesson_memory_entries (
     CONSTRAINT lesson_memory_entries_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text, 'superseded'::text])))
 );
 
+CREATE TABLE public.mcp_oauth_artifacts (
+    kind text NOT NULL,
+    id_hash text NOT NULL,
+    payload jsonb NOT NULL,
+    grant_id text,
+    uid text,
+    expires_at timestamp with time zone NOT NULL,
+    consumed_at timestamp with time zone
+);
+
+CREATE TABLE public.mcp_oauth_grants (
+    id text NOT NULL,
+    user_id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    client_id text NOT NULL,
+    resource text NOT NULL,
+    scope text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT mcp_oauth_grants_scope_check CHECK ((scope = 'teaching_context.read'::text))
+);
+
 CREATE TABLE public.ops_actions (
     operation_id text NOT NULL,
     action text NOT NULL,
@@ -1319,6 +1342,12 @@ ALTER TABLE ONLY public.jobs
 ALTER TABLE ONLY public.lesson_memory_entries
     ADD CONSTRAINT lesson_memory_entries_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.mcp_oauth_artifacts
+    ADD CONSTRAINT mcp_oauth_artifacts_pkey PRIMARY KEY (kind, id_hash);
+
+ALTER TABLE ONLY public.mcp_oauth_grants
+    ADD CONSTRAINT mcp_oauth_grants_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.ops_actions
     ADD CONSTRAINT ops_actions_pkey PRIMARY KEY (operation_id);
 
@@ -1706,6 +1735,14 @@ CREATE INDEX idx_users_role ON public.users USING btree (role);
 
 CREATE INDEX idx_workspace_memberships_user_id ON public.workspace_memberships USING btree (user_id);
 
+CREATE INDEX mcp_oauth_artifacts_expiry_idx ON public.mcp_oauth_artifacts USING btree (expires_at);
+
+CREATE INDEX mcp_oauth_artifacts_grant_idx ON public.mcp_oauth_artifacts USING btree (kind, grant_id);
+
+CREATE INDEX mcp_oauth_artifacts_uid_idx ON public.mcp_oauth_artifacts USING btree (kind, uid) WHERE (uid IS NOT NULL);
+
+CREATE INDEX mcp_oauth_grants_user_idx ON public.mcp_oauth_grants USING btree (user_id);
+
 CREATE UNIQUE INDEX profile_initial_enrichment_exact_source_idx ON public.profile_initial_enrichment_operations USING btree (profile_id, assignment_session_id, transcript_id, transcript_hash);
 
 CREATE UNIQUE INDEX profile_initial_enrichment_live_profile_idx ON public.profile_initial_enrichment_operations USING btree (profile_id) WHERE (state = ANY (ARRAY['waiting_evidence'::text, 'queued'::text, 'submitting'::text, 'result_ready'::text, 'uncertain'::text]));
@@ -1875,6 +1912,12 @@ ALTER TABLE ONLY public.lesson_memory_entries
 
 ALTER TABLE ONLY public.lesson_memory_entries
     ADD CONSTRAINT lesson_memory_entries_transcript_id_fkey FOREIGN KEY (transcript_id) REFERENCES public.transcripts(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.mcp_oauth_grants
+    ADD CONSTRAINT mcp_oauth_grants_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.mcp_oauth_grants
+    ADD CONSTRAINT mcp_oauth_grants_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
     ADD CONSTRAINT profile_initial_enrichment_operatio_lesson_memory_entry_id_fkey FOREIGN KEY (lesson_memory_entry_id) REFERENCES public.lesson_memory_entries(id) ON DELETE RESTRICT;
@@ -2262,5 +2305,6 @@ VALUES
   ('0054_canonical_assignment_source_ownership', '4d4f6b8b4a79148e23a0aca45a91b4d6496927f6a9adf41f5eaa0148bdccdc16', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0055_prompt_package_assignment_provenance', '36c5acb4a15ffaca1880066070ad624b73f1f390891b3d51d732d66b5a9ecd81', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0056_first_profile_onboarding', '2c0fbc74c1f9ea8d6e2cf65d48e0a3e15177f9f3af7d5b581b2a0e04fa61f3ea', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0057_historical_profile_provenance_timestamp', 'e203033eb30c1456a4df56bbf1b784d0d842cf28a4dcc1a510fd87217e7a7e09', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0057_historical_profile_provenance_timestamp', 'e203033eb30c1456a4df56bbf1b784d0d842cf28a4dcc1a510fd87217e7a7e09', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0058_mcp_oauth_foundation', '4c4d181b4f150b453c447f3d2fb652b990f479dcd5ddb5ab2a89089f0cfb1cc0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

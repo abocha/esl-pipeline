@@ -138,6 +138,13 @@ Primary groups:
     for migrations 0049-0053, run/reservation inspection, media-runtime verification, and rollback.
 - Auth/security/uploads:
   - `JWT_*`, `REFRESH_*`, `ENABLE_*`, `CORS_*`, upload limits
+  - `MCP_OAUTH_ENABLED` defaults to `false`. When set to `true`, the extended authentication API
+    must be enabled and `MCP_OAUTH_ISSUER`, `MCP_OAUTH_RESOURCE`, `MCP_OAUTH_COOKIE_KEYS`, and
+    `MCP_OAUTH_JWKS` are required. The issuer and resource must share an HTTPS origin and have
+    exact paths `/api/oauth` and `/api/mcp`. Cookie keys are a JSON array of random secrets of
+    at least 32 characters each. JWKS is a private signing JWK Set in JSON; keep it and the cookie
+    keys secret, separate from the REST JWT secret. Retain keys across restarts; rotate with overlap.
+    The `/api/mcp` URL is an audience identifier in this slice; there is no MCP transport yet.
 
 Read next:
 

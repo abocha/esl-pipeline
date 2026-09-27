@@ -37,6 +37,7 @@ import { authenticate, configureAuthMiddleware } from './auth-middleware.js';
 import { registerCoreRoutes } from './core-routes.js';
 import { registerErrorHandler } from './error-handler.js';
 import { registerExtendedRoutes } from './extended-routes.js';
+import { loadMcpOAuthConfig, registerMcpOAuthRoutes } from './mcp-oauth.js';
 import {
   createRateLimiterService,
   createUploadRateLimitMiddleware,
@@ -120,6 +121,8 @@ export async function createHttpServer(): Promise<FastifyInstance> {
   });
 
   if (extendedApiEnabled) {
+    const mcpOAuthConfig = loadMcpOAuthConfig(config.auth.refreshCookieName);
+    if (mcpOAuthConfig) registerMcpOAuthRoutes(app, mcpOAuthConfig, authService);
     const fileValidationService: FileValidationService | null = config.security.enableFileValidation
       ? createFileValidationService()
       : null;
@@ -152,6 +155,9 @@ export async function createHttpServer(): Promise<FastifyInstance> {
       fileStorageService,
     });
   } else {
+    if (process.env.MCP_OAUTH_ENABLED === 'true') {
+      throw new Error('MCP OAuth requires the extended authentication API');
+    }
     const logger = await getLogger();
     logger.info('Extended API disabled; skipping uploads/auth/admin routes');
   }

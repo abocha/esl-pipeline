@@ -11,6 +11,7 @@
 
 | Method | Path | Source |
 | --- | --- | --- |
+| GET | `/.well-known/oauth-protected-resource` | `packages/batch-backend/src/transport/mcp-oauth.ts` |
 | GET | `/admin/jobs` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | DELETE | `/admin/jobs/:jobId` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/admin/jobs/summary` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
@@ -18,6 +19,7 @@
 | GET | `/admin/users` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/assignment-sessions/:id` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/assignment-sessions/:id/confirm` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
+| GET | `/assignment-sessions/:id/learner-context` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | PATCH | `/assignment-sessions/:id/recovery` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/assignment-sessions/:id/share` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/assignment-sessions/:id/source-attachment` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
@@ -108,7 +110,6 @@
 | POST | `/students/:id/profile-candidates/:candidateId/reject` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-candidates/promote` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-drafts/initialize` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
-| POST | `/students/:id/profile-drafts/populate-first-from-lesson` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-drafts/refresh-from-approved-candidates` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/restore` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/surfaces/history` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |

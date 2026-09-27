@@ -13,6 +13,7 @@ const deterministicHttpFiles = discoveredFiles.filter((file) =>
 const postgresMigrationsFiles = ['integration.migrations.test.ts'];
 
 const postgresFiles = [
+  'transport.mcp-oauth.postgres.test.ts',
   'domain.job-repository.test.ts',
   'domain.revision-repository.test.ts',
   'domain.lesson-memory-repository.test.ts',

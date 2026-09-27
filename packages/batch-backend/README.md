@@ -248,6 +248,7 @@ High-signal env groups for this package:
 - service runtime: `BATCH_BACKEND_*`
 - infra: `PG_*`, `REDIS_*`
 - auth/security/upload controls: `JWT_*`, `REFRESH_*`, `ENABLE_*`
+- optional ChatGPT OAuth foundation: `MCP_OAUTH_*` (see below)
 - optional ops control: `BATCH_BACKEND_OPS_CONTROL_*`
 - generation: assignments use `gpt-5.6-sol` at medium reasoning; memory/profile workloads use
   `gpt-5.6-luna` at medium or high reasoning according to the versioned request envelope
@@ -268,6 +269,43 @@ planner.
 All local, Compose, and production application settings come from the repository-root `.env`.
 Validate it with `pnpm env:validate -- --profile=development`; use the production profile before a
 VPS deployment. Mounted `.secrets/` files and generated deploy image-state files are separate.
+
+### ChatGPT MCP OAuth foundation
+
+This optional, disabled-by-default boundary uses `oidc-provider` 9.12.2 for the OAuth protocol,
+with the existing Pipeline user and refresh-cookie login as the resource-owner identity. The
+provider supplies authorization-code + PKCE S256, discovery, Client ID Metadata Documents (CIMD),
+refresh rotation, token revocation, and exact redirect validation. We selected it because it
+supports a custom PostgreSQL adapter, existing-user lookup, Pipeline-owned interaction pages, and
+resource indicators without introducing another user directory or hosted identity provider.
+
+Set the `MCP_OAUTH_*` variables described in [`docs/reference/env.md`](../../docs/reference/env.md)
+to activate it. Public URLs use the existing `/api` proxy. Available surfaces are:
+
+- `/api/.well-known/oauth-protected-resource`: metadata for the future `/api/mcp` resource.
+- `/api/oauth/.well-known/openid-configuration`: authorization-server discovery, including the
+  authorization, token, revocation, and JWKS URLs under `/api/oauth`.
+- `/api/oauth/interaction/:uid`: existing Pipeline login continuation and explicit authorization;
+  multiple memberships require choosing one workspace. The consent page states the read scope.
+- `POST /api/oauth/grants/:grantId/revoke`: Pipeline REST-authenticated grant revocation.
+
+Only ChatGPT's published CIMD client IDs and their matching redirect URI are accepted. The sole
+initial scope is `teaching_context.read`. The authorization and token requests must name the exact
+`/api/mcp` resource. PostgreSQL stores provider artifacts by hashed identifier and stores a separate
+grant bound to one immutable Pipeline user and workspace. Authorization denies zero memberships,
+automatically binds one, and requires a selection for multiple. Credential verification checks the
+opaque access token, fixed resource and scope, current active user, current workspace membership,
+grant expiry, and revocation. REST JWTs and OAuth credentials cannot cross the two verifier paths.
+Codes live 60 seconds, access tokens 15 minutes, and grants/refresh tokens 14 days.
+
+The current [OpenAI MCP authentication guidance](https://developers.openai.com/plugins/build/auth)
+requires OAuth 2.1 authorization code with PKCE S256, protected-resource and authorization-server
+discovery, and resource-bound tokens; it prefers CIMD when supported. The
+[MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
+shaped the path-aware discovery and audience handling. This slice deliberately has no `/api/mcp`
+handler or tool schemas. The future resource handler must challenge unauthenticated requests with
+the protected-resource metadata URL and call `verifyMcpOAuthCredential` before reading any learner
+data. Production activation and end-to-end ChatGPT connection testing belong to that later slice.
 
 Student-memory operator workflows:
 

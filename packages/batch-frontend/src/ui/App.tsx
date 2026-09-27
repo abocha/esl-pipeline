@@ -88,6 +88,13 @@ function extractInviteTokenFromLocation(location: Location): string | null {
   return null;
 }
 
+function oauthContinuation(location: Location): string | null {
+  const candidate = new URLSearchParams(location.search).get('oauth_continue');
+  return candidate && /^\/api\/oauth\/interaction\/[A-Za-z0-9_-]+$/.test(candidate)
+    ? candidate
+    : null;
+}
+
 export const App: React.FC = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
@@ -95,6 +102,16 @@ export const App: React.FC = () => {
   const [inviteToken, setInviteToken] = useState<string | null>(() =>
     extractInviteTokenFromLocation(window.location),
   );
+
+  useEffect(() => {
+    const continuation = oauthContinuation(window.location);
+    if (!continuation || isLoading) return;
+    if (isAuthenticated) {
+      window.location.assign(continuation);
+    } else {
+      setAuthMode('login');
+    }
+  }, [isAuthenticated, isLoading]);
 
   useEffect(() => {
     const syncInviteToken = () => {
