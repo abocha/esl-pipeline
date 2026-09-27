@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import type { Adapter, AdapterPayload } from 'oidc-provider';
+import { errors, type Adapter, type AdapterPayload } from 'oidc-provider';
+import type { PoolClient } from 'pg';
 
 import { withPgClient } from './db.js';
 
@@ -9,11 +10,50 @@ function digest(value: string): string {
 
 type ArtifactRow = { payload: AdapterPayload; consumed_at: Date | null };
 
+async function inTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const result = await fn(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+async function lockLiveGrant(client: PoolClient, grantId: string): Promise<boolean> {
+  const result = await client.query(
+    `SELECT id FROM mcp_oauth_grants
+     WHERE id = $1 AND revoked_at IS NULL AND expires_at > NOW()
+     FOR UPDATE`,
+    [grantId],
+  );
+  return result.rowCount === 1;
+}
+
+async function revokeFamily(client: PoolClient, grantId: string): Promise<void> {
+  await client.query(
+    'UPDATE mcp_oauth_grants SET revoked_at = COALESCE(revoked_at, NOW()) WHERE id = $1',
+    [grantId],
+  );
+  await client.query('DELETE FROM mcp_oauth_artifacts WHERE grant_id = $1', [grantId]);
+  await client.query("DELETE FROM mcp_oauth_artifacts WHERE kind = 'Grant' AND id_hash = $1", [
+    digest(grantId),
+  ]);
+}
+
 export class McpOAuthAdapter implements Adapter {
   constructor(private readonly kind: string) {}
 
   private get bearerArtifact(): boolean {
     return ['AccessToken', 'RefreshToken', 'AuthorizationCode'].includes(this.kind);
+  }
+
+  private get grantBoundArtifact(): boolean {
+    return this.bearerArtifact;
   }
 
   async upsert(id: string, payload: AdapterPayload, expiresIn?: number): Promise<void> {
@@ -22,7 +62,13 @@ export class McpOAuthAdapter implements Adapter {
     }
     const storedPayload = { ...payload };
     if (this.bearerArtifact) delete storedPayload.jti;
-    await withPgClient(async (client) => {
+    if (this.grantBoundArtifact && typeof payload.grantId !== 'string') {
+      throw new errors.InvalidGrant('OAuth token has no Pipeline grant');
+    }
+    const saved = await inTransaction(async (client) => {
+      if (this.grantBoundArtifact) {
+        if (!(await lockLiveGrant(client, payload.grantId as string))) return false;
+      }
       await client.query(
         `INSERT INTO mcp_oauth_artifacts (kind, id_hash, payload, grant_id, uid, expires_at)
          VALUES ($1, $2, $3::jsonb, $4, $5, NOW() + $6 * INTERVAL '1 second')
@@ -40,7 +86,9 @@ export class McpOAuthAdapter implements Adapter {
           expiresIn,
         ],
       );
+      return true;
     });
+    if (!saved) throw new errors.InvalidGrant('OAuth grant is revoked or expired');
   }
 
   async find(id: string): Promise<AdapterPayload | undefined> {
@@ -71,20 +119,35 @@ export class McpOAuthAdapter implements Adapter {
   }
 
   async consume(id: string): Promise<void> {
-    const changed = await withPgClient(async (client) => {
+    const consumed = await inTransaction(async (client) => {
+      const idHash = digest(id);
+      const row = await client.query<{ grant_id: string | null }>(
+        'SELECT grant_id FROM mcp_oauth_artifacts WHERE kind = $1 AND id_hash = $2',
+        [this.kind, idHash],
+      );
+      const grantId = row.rows[0]?.grant_id;
+      if (this.grantBoundArtifact) {
+        if (!grantId || !(await lockLiveGrant(client, grantId))) return false;
+      }
       const result = await client.query(
         `UPDATE mcp_oauth_artifacts SET consumed_at = NOW()
          WHERE kind = $1 AND id_hash = $2 AND consumed_at IS NULL AND expires_at > NOW()`,
-        [this.kind, digest(id)],
+        [this.kind, idHash],
       );
-      return result.rowCount;
+      if (result.rowCount !== 1) {
+        if (grantId) await revokeFamily(client, grantId);
+        return false;
+      }
+      return true;
     });
-    // The provider reads before consuming; reject a concurrent second exchange.
-    if (changed !== 1) throw new Error('OAuth artifact already consumed or expired');
+    // The conflict commits family revocation before the OAuth error is raised.
+    // A concurrent issuer must take the same grant row lock before saving tokens.
+    if (!consumed) throw new errors.InvalidGrant('OAuth credential was already consumed');
   }
 
   async destroy(id: string): Promise<void> {
-    await withPgClient(async (client) => {
+    await inTransaction(async (client) => {
+      if (this.kind === 'Grant') await revokeFamily(client, id);
       await client.query('DELETE FROM mcp_oauth_artifacts WHERE kind = $1 AND id_hash = $2', [
         this.kind,
         digest(id),
@@ -93,11 +156,6 @@ export class McpOAuthAdapter implements Adapter {
   }
 
   async revokeByGrantId(grantId: string): Promise<void> {
-    await withPgClient(async (client) => {
-      await client.query('DELETE FROM mcp_oauth_artifacts WHERE kind = $1 AND grant_id = $2', [
-        this.kind,
-        grantId,
-      ]);
-    });
+    await inTransaction(async (client) => revokeFamily(client, grantId));
   }
 }

@@ -116,8 +116,12 @@ function escapeHtml(value: string): string {
   );
 }
 
-function consentCsrf(key: string, uid: string, refreshToken: string, userId: string): string {
-  return createHmac('sha256', key).update(`${uid}\0${refreshToken}\0${userId}`).digest('hex');
+function consentCsrf(
+  key: string, uid: string, refreshToken: string, userId: string, offeredWorkspaceIds: string,
+): string {
+  return createHmac('sha256', key)
+    .update(`${uid}\0${refreshToken}\0${userId}\0${offeredWorkspaceIds}`)
+    .digest('hex');
 }
 
 function csrfMatches(actual: string, expected: string): boolean {
@@ -126,12 +130,15 @@ function csrfMatches(actual: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-function publicResumePath(returnTo: string): string {
-  const parsed = new URL(returnTo, 'http://localhost');
-  if (!/^\/auth\/[A-Za-z0-9_-]+$/.test(parsed.pathname)) {
+function publicResumePath(returnTo: string, issuer: string): string {
+  const parsed = new URL(returnTo, issuer);
+  if (
+    parsed.origin !== new URL(issuer).origin ||
+    !/^\/api\/oauth\/auth\/[A-Za-z0-9_-]+$/.test(parsed.pathname)
+  ) {
     throw new Error('Unexpected OAuth interaction resume path');
   }
-  return `/api/oauth${parsed.pathname}${parsed.search}`;
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 async function pipelineUserFromCookie(
@@ -175,11 +182,12 @@ export function createMcpOAuthProvider(config: McpOAuthConfig, authService: Auth
       ),
     );
 
-  return new Provider(config.issuer, {
+  const provider = new Provider(config.issuer, {
     adapter: (name) => new McpOAuthAdapter(name),
     clients: config.clients,
     fetch: config.fetch,
     clientAuthMethods: ['none', 'private_key_jwt'],
+    scopes: [MCP_READ_SCOPE],
     cookies: {
       keys: config.cookieKeys,
       names: {
@@ -208,6 +216,8 @@ export function createMcpOAuthProvider(config: McpOAuthConfig, authService: Auth
     },
     features: {
       devInteractions: { enabled: false },
+      dPoP: { enabled: false },
+      userinfo: { enabled: false },
       clientIdMetadataDocument: {
         enabled: true,
         ack: 'draft-02',
@@ -232,7 +242,10 @@ export function createMcpOAuthProvider(config: McpOAuthConfig, authService: Auth
           };
         },
       },
-      revocation: { enabled: true },
+      revocation: {
+        enabled: true,
+        allowedPolicy: (_ctx, client, token) => token.clientId === client.clientId,
+      },
     },
     pkce: { required: () => true },
     responseTypes: ['code'],
@@ -266,6 +279,19 @@ export function createMcpOAuthProvider(config: McpOAuthConfig, authService: Auth
       return undefined;
     },
   });
+  // oidc-provider always includes its built-in `openid` claim scope in
+  // discovery. This OAuth-only integration does not offer an OIDC identity
+  // scope; consent accepts only the resource's read scope.
+  provider.use(async (ctx, next) => {
+    await next();
+    if (ctx.oidc?.route === 'discovery' && ctx.body && typeof ctx.body === 'object') {
+      (ctx.body as Record<string, unknown>).scopes_supported = [MCP_READ_SCOPE];
+    }
+  });
+  // Only this provider trusts the nginx-forwarded scheme. Fastify REST routes
+  // retain their existing proxy policy; nginx overwrites forwarded host/IP.
+  provider.proxy = true;
+  return provider;
 }
 
 export async function verifyMcpOAuthCredential(
@@ -281,6 +307,8 @@ export async function verifyMcpOAuthCredential(
       !token.isValid ||
       token.isExpired ||
       token.aud !== config.resource ||
+      token.jkt ||
+      token['x5t#S256'] ||
       !token.scopes.has(MCP_READ_SCOPE)
     )
       return null;
@@ -311,8 +339,8 @@ export function registerMcpOAuthRoutes(
     (_request, body, done) => done(null, Object.fromEntries(new URLSearchParams(body as string))),
   );
 
-  // The existing same-origin /api proxy strips /api before forwarding to Fastify.
-  // oidc-provider is mounted under /oauth and expects paths relative to that mount.
+  // nginx strips /api before forwarding. Present the external originalUrl and
+  // the provider-relative url as documented by oidc-provider's mount API.
   app.addHook('onRequest', async (request, reply) => {
     if (
       !request.raw.url?.startsWith('/oauth/') ||
@@ -321,6 +349,8 @@ export function registerMcpOAuthRoutes(
     )
       return;
     reply.hijack();
+    const externalUrl = `/api${request.raw.url}`;
+    (request.raw as typeof request.raw & { originalUrl: string }).originalUrl = externalUrl;
     request.raw.url = request.raw.url.slice('/oauth'.length);
     callback(request.raw, reply.raw);
   });
@@ -362,7 +392,7 @@ export function registerMcpOAuthRoutes(
         { login: { accountId: user.id } },
         { mergeWithLastSubmission: false },
       );
-      return reply.code(303).redirect(publicResumePath(returnTo));
+      return reply.code(303).redirect(publicResumePath(returnTo, config.issuer));
     }
     if (
       details.prompt.name !== 'consent' ||
@@ -375,10 +405,14 @@ export function registerMcpOAuthRoutes(
     }
     const workspaces = await listOAuthWorkspaces(user.id);
     if (workspaces.length === 0) return reply.code(403).send({ error: 'workspace_required' });
-    const csrf = consentCsrf(config.cookieKeys[0]!, details.uid, user.refreshToken, user.id);
+    const offeredWorkspaceIds = workspaces.map((workspace) => workspace.id).join(',');
+    const csrf = consentCsrf(
+      config.cookieKeys[0]!, details.uid, user.refreshToken, user.id, offeredWorkspaceIds,
+    );
     const choices =
       workspaces.length === 1
-        ? `<p>Workspace: <strong>${escapeHtml(workspaces[0]!.name)}</strong></p>`
+        ? `<p>Workspace: <strong>${escapeHtml(workspaces[0]!.name)}</strong></p>
+           <input type="hidden" name="workspaceId" value="${workspaces[0]!.id}">`
         : `<label for="workspace">Workspace</label><select id="workspace" name="workspaceId" required>
            <option value="">Choose a workspace</option>${workspaces
              .map((w) => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.name)}</option>`)
@@ -394,11 +428,13 @@ export function registerMcpOAuthRoutes(
        <style>body{font:16px system-ui;max-width:34rem;margin:8vh auto;padding:1rem;line-height:1.5}select,button{font:inherit;padding:.5rem;margin:.4rem 0}button{cursor:pointer}</style>
        <h1>Connect ChatGPT</h1><p>ChatGPT will receive read access to teaching context in one ESL Pipeline workspace. It cannot change learner state.</p>
        <form method="post" action="/api/oauth/interaction/${encodeURIComponent(details.uid)}/confirm">
-       <input type="hidden" name="csrf" value="${csrf}">${choices}<p><button type="submit">Authorize read access</button></p></form></html>`,
+       <input type="hidden" name="csrf" value="${csrf}">
+       <input type="hidden" name="offeredWorkspaceIds" value="${offeredWorkspaceIds}">
+       ${choices}<p><button type="submit">Authorize read access</button></p></form></html>`,
       );
   });
 
-  app.post<{ Params: { uid: string }; Body: { csrf?: string; workspaceId?: string } }>(
+  app.post<{ Params: { uid: string }; Body: { csrf?: string; workspaceId?: string; offeredWorkspaceIds?: string } }>(
     '/oauth/interaction/:uid/confirm',
     async (request, reply) => {
       reply.header('cache-control', 'no-store');
@@ -415,17 +451,24 @@ export function registerMcpOAuthRoutes(
       ) {
         return reply.code(403).send({ error: 'authorization_denied' });
       }
-      const expected = consentCsrf(config.cookieKeys[0]!, details.uid, user.refreshToken, user.id);
-      if (!request.body?.csrf || !csrfMatches(request.body.csrf, expected)) {
+      const offeredWorkspaceIds = request.body?.offeredWorkspaceIds;
+      const expected = consentCsrf(
+        config.cookieKeys[0]!, details.uid, user.refreshToken, user.id,
+        offeredWorkspaceIds ?? '',
+      );
+      if (!request.body?.csrf || !offeredWorkspaceIds ||
+          !csrfMatches(request.body.csrf, expected)) {
         return reply.code(403).send({ error: 'invalid_csrf' });
       }
       const workspaces = await listOAuthWorkspaces(user.id);
-      const selected =
-        workspaces.length === 1
-          ? workspaces[0]
-          : workspaces.find((workspace) => workspace.id === request.body.workspaceId);
+      const selected = offeredWorkspaceIds.split(',').includes(request.body.workspaceId ?? '')
+        ? workspaces.find((workspace) => workspace.id === request.body.workspaceId)
+        : undefined;
       if (!selected) return reply.code(403).send({ error: 'workspace_required' });
       const grant = new provider.Grant({ accountId: user.id, clientId: details.params.client_id });
+      // oidc-provider tracks advertised static scopes separately from resource
+      // scopes. Cover its static-scope consent check without enabling OIDC identity.
+      grant.addOIDCScope(MCP_READ_SCOPE);
       grant.addResourceScope(config.resource, MCP_READ_SCOPE);
       const grantId = await grant.save();
       const bound = await bindOAuthGrant(
@@ -454,7 +497,7 @@ export function registerMcpOAuthRoutes(
         { consent: { grantId } },
         { mergeWithLastSubmission: true },
       );
-      return reply.code(303).redirect(publicResumePath(returnTo));
+      return reply.code(303).redirect(publicResumePath(returnTo, config.issuer));
     },
   );
 

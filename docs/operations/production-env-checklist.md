@@ -161,6 +161,12 @@ browser -> Caddy :80/:443 -> batch-frontend nginx :8080 -> /api/* -> batch-backe
 
 Do not configure Caddy to proxy the backend directly.
 
+For the optional MCP OAuth foundation, Caddy forwards the original HTTPS scheme to frontend nginx,
+and nginx preserves it on the private `/api/*` backend hop. The provider alone trusts this forwarded
+scheme so it can issue Secure interaction cookies and advertise HTTPS discovery endpoints under
+`/api/oauth`. Keep the backend and frontend service ports on their existing loopback/private-network
+boundaries; do not expose the backend directly to untrusted clients supplying forwarded headers.
+
 ## AWS S3 Object Storage
 
 Keep existing AWS S3.

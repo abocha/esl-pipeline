@@ -4,5 +4,7 @@
 
 {$CADDY_PUBLIC_HOSTNAME} {
 	encode zstd gzip
-	reverse_proxy batch-frontend:8080
+	reverse_proxy batch-frontend:8080 {
+		header_up X-Forwarded-Proto {scheme}
+	}
 }
