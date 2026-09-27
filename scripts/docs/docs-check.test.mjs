@@ -55,6 +55,58 @@ test('PR docs checks do not block on untouched non-core age-only staleness', () 
   assert.match(result.warnings.join('\n'), /stale-doc-age-only.*example\.md/u);
 });
 
+test('PR docs checks do not couple stale operations documents to changed siblings', () => {
+  const staleDoc = 'docs/operations/a.md';
+  const repoRoot = makeRepo({
+    [staleDoc]: documentation(staleDate),
+    'docs/operations/b.md': documentation(staleDate),
+  });
+  const config = {
+    ...baseConfig,
+    active_ops_docs: [staleDoc],
+    meta_required_docs: [staleDoc],
+    freshness_days: { ops: 45 },
+  };
+
+  const result = runDocsChecks('ops', {
+    repoRoot,
+    config,
+    freshnessMode: 'pr',
+    changedFiles: ['docs/operations/b.md'],
+    now,
+  });
+
+  assert.deepEqual(result.errors, []);
+  assert.match(result.warnings.join('\n'), /stale-doc-age-only.*docs\/operations\/a\.md/u);
+});
+
+test('checker implementation changes leave unrelated age-only staleness as a warning', () => {
+  const repoRoot = makeRepo({ 'docs/reference/example.md': documentation(staleDate) });
+  const result = runDocsChecks('non_core', {
+    repoRoot,
+    config: baseConfig,
+    freshnessMode: 'pr',
+    changedFiles: ['scripts/docs/docs-check-lib.mjs'],
+    now,
+  });
+
+  assert.deepEqual(result.errors, []);
+  assert.match(result.warnings.join('\n'), /stale-doc-age-only.*example\.md/u);
+});
+
+test('freshness policy configuration changes recheck configured document ages', () => {
+  const repoRoot = makeRepo({ 'docs/reference/example.md': documentation(staleDate) });
+  const result = runDocsChecks('non_core', {
+    repoRoot,
+    config: baseConfig,
+    freshnessMode: 'pr',
+    changedFiles: ['scripts/docs/docs-check.config.json'],
+    now,
+  });
+
+  assert.match(result.errors.join('\n'), /stale-doc.*example\.md/u);
+});
+
 test('PR docs checks block stale documentation touched by the PR', () => {
   const repoRoot = makeRepo({ 'docs/reference/example.md': documentation(staleDate) });
 
