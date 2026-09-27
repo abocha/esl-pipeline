@@ -2,7 +2,7 @@ import { request as httpRequest } from 'node:http';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { CONTRACT_VERSIONS, DB_MIGRATION_HEAD } from '@esl-pipeline/contracts';
+import { CONTRACT_VERSIONS } from '@esl-pipeline/contracts';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import * as approveJobModule from '../src/application/approve-job.js';
@@ -1355,7 +1355,6 @@ export function describeHttpServerIntegrationSuite(
       Readable,
       validateMarkdown,
       CONTRACT_VERSIONS,
-      DB_MIGRATION_HEAD,
       assignmentSessionsModule,
       assignmentLearnerContextModule,
       assignmentSessionRepositoryModule,

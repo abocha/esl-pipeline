@@ -150,6 +150,8 @@ Useful indexes:
   without positive completed-enrichment proof; the tool never
   infers `tutor_only`. Production apply requires separate authorization and a reviewed fingerprint.
 - Fresh database bootstrap uses the generated `schema.sql` baseline; existing databases upgrade through versioned migrations.
+- `/meta/version` reports the release's expected migration head, derived from the backend's packaged
+  `migrations/*.sql` files. The shared DB contract version is a separate semantic compatibility signal.
 - Extended API and ops-control surfaces are additive and must be explicitly enabled.
 
 ## Assignment Confirmation Contract
