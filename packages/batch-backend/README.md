@@ -283,10 +283,14 @@ Set the `MCP_OAUTH_*` variables described in [`docs/reference/env.md`](../../doc
 to activate it. Public URLs use the existing `/api` proxy. Available surfaces are:
 
 - `/api/.well-known/oauth-protected-resource`: metadata for the future `/api/mcp` resource.
-- `/api/oauth/.well-known/openid-configuration`: authorization-server discovery, including the
-  authorization, token, revocation, and JWKS URLs under `/api/oauth`.
+- `/api/oauth/.well-known/oauth-authorization-server` (and the provider's OIDC discovery alias):
+  authorization-server discovery, including authorization, token, revocation, and JWKS URLs under
+  `/api/oauth`. Discovery advertises only `teaching_context.read`; OIDC identity and DPoP are not
+  offered by this integration.
 - `/api/oauth/interaction/:uid`: existing Pipeline login continuation and explicit authorization;
   multiple memberships require choosing one workspace. The consent page states the read scope.
+- `POST /api/oauth/token/revocation`: OAuth client token revocation. A revoked provider token
+  invalidates its entire Pipeline grant and token family.
 - `POST /api/oauth/grants/:grantId/revoke`: Pipeline REST-authenticated grant revocation.
 
 Only ChatGPT's published CIMD client IDs and their matching redirect URI are accepted. The sole
@@ -297,6 +301,10 @@ automatically binds one, and requires a selection for multiple. Credential verif
 opaque access token, fixed resource and scope, current active user, current workspace membership,
 grant expiry, and revocation. REST JWTs and OAuth credentials cannot cross the two verifier paths.
 Codes live 60 seconds, access tokens 15 minutes, and grants/refresh tokens 14 days.
+Consent submits the exact displayed workspace and rechecks its membership on confirmation. Provider
+artifact writes and family revocation serialize on the Pipeline grant row, so replay or revocation
+cannot leave an overlapping token valid. OAuth cookies use the external `/api/oauth` path and stay
+Secure on HTTPS through the Caddy to nginx proxy chain.
 
 The current [OpenAI MCP authentication guidance](https://developers.openai.com/plugins/build/auth)
 requires OAuth 2.1 authorization code with PKCE S256, protected-resource and authorization-server
