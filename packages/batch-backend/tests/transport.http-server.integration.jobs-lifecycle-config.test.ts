@@ -1,4 +1,15 @@
+import { readdirSync } from 'node:fs';
+
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
+
+const latestPackagedMigration = readdirSync(new URL('../migrations/', import.meta.url), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isFile() && /^\d{4}_[a-z0-9_]+\.sql$/.test(entry.name))
+  .map((entry) => entry.name)
+  .sort((left, right) => left.localeCompare(right))
+  .at(-1)
+  ?.replace(/\.sql$/, '');
 
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [jobs-config-students-content]',
@@ -7,7 +18,6 @@ describeHttpServerIntegrationSuite(
     approveJobModule,
     CONTRACT_VERSIONS,
     createHttpServer,
-    DB_MIGRATION_HEAD,
     deriveStudentId,
     expect,
     getJobOptions,
@@ -539,7 +549,7 @@ describeHttpServerIntegrationSuite(
         repoVersion: expectedVersionMeta.repoVersion,
         contracts: {
           ...CONTRACT_VERSIONS,
-          dbMigrationHead: DB_MIGRATION_HEAD,
+          dbMigrationHead: latestPackagedMigration,
         },
       });
     });
@@ -561,7 +571,7 @@ describeHttpServerIntegrationSuite(
           repoVersion: expectedVersionMeta.repoVersion,
           contracts: {
             ...CONTRACT_VERSIONS,
-            dbMigrationHead: DB_MIGRATION_HEAD,
+            dbMigrationHead: latestPackagedMigration,
           },
         });
       } finally {

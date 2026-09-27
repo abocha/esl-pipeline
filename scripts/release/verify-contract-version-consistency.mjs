@@ -37,7 +37,6 @@ function main() {
   const prompt = readConstString(source, 'PROMPT_SCHEMA_VERSION');
   const validator = readConstString(source, 'VALIDATOR_CONTRACT_VERSION');
   const db = readConstString(source, 'DB_CONTRACT_VERSION');
-  const dbMigrationHead = readConstString(source, 'DB_MIGRATION_HEAD');
 
   assertSemver('API_CONTRACT_VERSION', api);
   assertSemver('MANIFEST_CONTRACT_VERSION', manifest);
@@ -45,12 +44,14 @@ function main() {
   assertSemver('VALIDATOR_CONTRACT_VERSION', validator);
   assertSemver('DB_CONTRACT_VERSION', db);
 
-  if (!dbMigrationHead) {
-    die('DB_MIGRATION_HEAD must be defined in contract-versions.ts');
+  const sqlFiles = readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.sql'))
+    .map((entry) => entry.name);
+  const invalidFiles = sqlFiles.filter((file) => !/^\d{4}_[a-z0-9_]+\.sql$/.test(file));
+  if (invalidFiles.length > 0) {
+    die(`Invalid backend migration filenames: ${invalidFiles.join(', ')}`);
   }
-
-  const migrationFiles = readdirSync(migrationsDir)
-    .filter((file) => /^\d+_.+\.sql$/.test(file))
+  const migrationFiles = sqlFiles
     .sort((a, b) => a.localeCompare(b));
 
   if (migrationFiles.length === 0) {
@@ -58,10 +59,6 @@ function main() {
   }
 
   const latestMigration = migrationFiles[migrationFiles.length - 1].replace(/\.sql$/, '');
-  if (dbMigrationHead !== latestMigration) {
-    die(`DB_MIGRATION_HEAD (${dbMigrationHead}) must match latest migration (${latestMigration})`);
-  }
-
   console.log('[verify-contract-version-consistency] OK');
   console.log(`- latest migration: ${latestMigration}`);
   console.log(`- api: ${api}`);
