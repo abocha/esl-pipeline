@@ -263,7 +263,10 @@ function validateFreshness({
 
 function isFreshnessRelevant({ relPath, content, changedFiles }) {
   if (changedFiles.includes(relPath)) return true;
-  if (changedFiles.some(isDocsHarnessPath)) return true;
+  // Configuration changes can alter freshness thresholds or enforced doc lists.
+  // Checker implementation changes still run structural checks, but do not
+  // make unrelated age-only staleness block the PR that changes the checker.
+  if (changedFiles.includes('scripts/docs/docs-check.config.json')) return true;
   if (changedFiles.some((file) => referencesChangedPackage({ content, file }))) return true;
 
   if (relPath.startsWith('packages/')) {
@@ -271,11 +274,7 @@ function isFreshnessRelevant({ relPath, content, changedFiles }) {
     return changedFiles.some((file) => file === packageRoot || file.startsWith(`${packageRoot}/`));
   }
 
-  const docsOwnerRoot = getDocsOwnerRoot(relPath);
-  return (
-    docsOwnerRoot !== null &&
-    changedFiles.some((file) => file === docsOwnerRoot || file.startsWith(`${docsOwnerRoot}/`))
-  );
+  return false;
 }
 
 function referencesChangedPackage({ content, file }) {
@@ -284,22 +283,6 @@ function referencesChangedPackage({ content, file }) {
 
   const packageRoot = `packages/${match[1]}`;
   return content.includes(packageRoot) || content.includes(`@esl-pipeline/${match[1]}`);
-}
-
-function isDocsHarnessPath(file) {
-  return (
-    file.startsWith('scripts/docs/') ||
-    file === '.github/workflows/ci.yml' ||
-    file === '.github/workflows/docs-gardening.yml'
-  );
-}
-
-function getDocsOwnerRoot(relPath) {
-  if (relPath === 'AGENTS.md') return null;
-  if (!relPath.startsWith('docs/')) return null;
-
-  const parts = relPath.split('/');
-  return parts.length >= 3 ? parts.slice(0, 2).join('/') : 'docs';
 }
 
 function validateRouteHints({ repoRoot, config, errors }) {
