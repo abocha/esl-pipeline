@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and API usage guide.
-- Last Verified Against: 2026-08-12 repo state.
+- Last Verified Against: 2026-09-27 repository state.
 - Owner: orchestrator maintainers + automation agents.
 - Review Cadence: monthly or after major API/runtime changes.
 - Status: `active`.
@@ -24,7 +24,8 @@ Library-only ESL pipeline engine for the monorepo.
 - add-audio
 - manifest
 
-Operational execution belongs to `@esl-pipeline/batch-backend`.
+Operational execution and workspace-scoped teaching-context reads belong to
+`@esl-pipeline/batch-backend`.
 
 ## Public API
 
