@@ -152,6 +152,28 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /Create account/i })).toBeTruthy();
   });
 
+  it('opens the existing login dialog for an OAuth continuation', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?oauth_continue=%2Fapi%2Foauth%2Finteraction%2Fuid_123',
+    );
+    useAuthMock.mockReturnValue(createAuthState());
+
+    renderApp();
+
+    expect(await screen.findByRole('heading', { name: /Welcome back/i })).toBeTruthy();
+  });
+
+  it('ignores an OAuth continuation outside the fixed interaction path', () => {
+    window.history.replaceState(null, '', '/?oauth_continue=https%3A%2F%2Fexample.test%2F');
+    useAuthMock.mockReturnValue(createAuthState());
+
+    renderApp();
+
+    expect(screen.queryByRole('heading', { name: /Welcome back/i })).toBeNull();
+  });
+
   it('opens auth as a labelled modal, traps focus, and restores focus on close', async () => {
     const user = userEvent.setup();
     useAuthMock.mockReturnValue(createAuthState());

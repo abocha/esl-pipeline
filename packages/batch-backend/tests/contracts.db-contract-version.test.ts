@@ -2,22 +2,20 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { DB_MIGRATION_HEAD } from '../../contracts/src/contract-versions.js';
+import { getVersionMeta } from '../src/application/version-meta.js';
 
 describe('contracts/db contract version', () => {
-  it('publishes the historical provenance migration head', () => {
-    expect(DB_MIGRATION_HEAD).toBe('0057_historical_profile_provenance_timestamp');
-  });
-
-  it('tracks the latest backend migration head', async () => {
+  it('publishes the latest packaged backend migration as the expected release head', async () => {
     const migrationsDir = path.resolve(import.meta.dirname, '../migrations');
-    const entries = await fs.readdir(migrationsDir);
+    const entries = await fs.readdir(migrationsDir, { withFileTypes: true });
     const latestMigrationId = entries
-      .filter((entry) => /^\d{4}_.+\.sql$/.test(entry))
+      .filter((entry) => entry.isFile() && /^\d{4}_[a-z0-9_]+\.sql$/.test(entry.name))
+      .map((entry) => entry.name)
       .sort((left, right) => left.localeCompare(right))
       .at(-1)
       ?.replace(/\.sql$/, '');
 
-    expect(latestMigrationId).toBe(DB_MIGRATION_HEAD);
+    expect(latestMigrationId).toBeTruthy();
+    expect(getVersionMeta().contracts.dbMigrationHead).toBe(latestMigrationId);
   });
 });

@@ -29,6 +29,11 @@ This repository is private-only. npm publishing is not part of the release proce
 
 - [`packages/contracts/src/contract-versions.ts`](../../packages/contracts/src/contract-versions.ts).
 
+3. Backend release migration head:
+
+- [`packages/batch-backend/migrations`](../../packages/batch-backend/migrations), derived at runtime
+  from the migration files packaged with the backend.
+
 ## Contract Version Registry
 
 Canonical contract keys:
@@ -39,9 +44,10 @@ Canonical contract keys:
 4. `validator`
 5. `db`
 
-Additional DB release context: `DB_MIGRATION_HEAD` in the registry records the latest required
-migration ID. Do not copy that volatile value into this policy; the registry and migration
-directory are the source of truth when the head advances.
+The backend derives the expected migration head for `/meta/version` from its packaged
+`migrations/*.sql` files. It is release metadata owned by the backend, not another semantic
+contract version in this registry. `DB_CONTRACT_VERSION` remains a deliberate compatibility signal;
+adding a migration does not automatically bump it.
 
 ## Bump Policy (Contract-First SemVer)
 
@@ -125,7 +131,9 @@ pnpm release:verify:contracts
 This validates:
 
 1. Contract versions are valid semver.
-2. `DB_MIGRATION_HEAD` matches latest migration in `packages/batch-backend/migrations`.
+2. Backend migration filenames are valid and at least one migration exists. The backend derives
+   its published migration head from that same packaged directory; a focused test checks that
+   `/meta/version` reports the latest migration.
 
 Pre-PR rule when migrations or schema baselines change:
 

@@ -180,6 +180,11 @@
 | `MAX_CONCURRENT_FFMPEG` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `MAX_FILE_SIZE` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `MAX_MULTIPART_SIZE` | `.env.example` | misc | `docs/reference/env.md` |
+| `MCP_OAUTH_COOKIE_KEYS` | `.env.example` | misc | `docs/reference/env.md` |
+| `MCP_OAUTH_ENABLED` | `.env.example` | misc | `docs/reference/env.md` |
+| `MCP_OAUTH_ISSUER` | `.env.example` | misc | `docs/reference/env.md` |
+| `MCP_OAUTH_JWKS` | `.env.example` | misc | `docs/reference/env.md` |
+| `MCP_OAUTH_RESOURCE` | `.env.example` | misc | `docs/reference/env.md` |
 | `NODE_ENV` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `OPENAI_API_KEY` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `OPENROUTER_API_KEY` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
