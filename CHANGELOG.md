@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.0.4] - 2026-09-27
+
+### Changed
+
+- Automated release from PR #282: feat(batch-backend): add MCP OAuth foundation (https://github.com/abocha/esl-pipeline/pull/282)
+
 ## [11.0.3] - 2026-09-27
 
 ### Changed
