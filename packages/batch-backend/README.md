@@ -127,6 +127,15 @@ Useful indexes:
 - Prompt-package lineage is the canonical assignment-level student-memory provenance surface. When
   canonical memory lookup is unavailable, prompt packages carry explicit unavailable memory text
   instead of treating the layer as empty.
+- `getStudentTeachingContext({ workspaceId, studentId })` is an internal, read-only application query
+  for future interactive clients. It resolves the student in the supplied authenticated workspace
+  before reading profile or memory state, then returns `teaching_context.v1` from the active profile,
+  latest eligible ready snapshot, and up to three ready lessons and two ready homework entries. Active
+  legacy Markdown uses the same structured derivation as existing profile reads; unparseable content
+  stays unavailable. A separate provenance section names the active profile/revision, selected memory
+  entries, and content origin without exposing storage or provider metadata. Missing layers stay null
+  or empty; personal facts and transcript evidence are omitted. No HTTP or shared-contract surface
+  exists for this query yet.
 - Lesson-linked homework lineage is nullable and explicit across assignment sessions, prompt packages, drafts, jobs, and homework-memory entries; schedule surfaces summarize that state for teacher follow-ups.
 - Student-memory snapshot refresh is incremental and budget-guarded for normal lesson/homework
   triggers; replay/backfill is source-truth driven and version 1 repair uses regenerate workflows
