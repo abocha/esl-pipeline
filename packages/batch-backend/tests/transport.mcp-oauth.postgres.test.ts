@@ -16,6 +16,7 @@ import { McpOAuthAdapter } from '../src/infrastructure/mcp-oauth-adapter.js';
 import { runMigrations } from '../src/infrastructure/migrations.js';
 import { authenticate, configureAuthMiddleware } from '../src/transport/auth-middleware.js';
 import {
+  getProtectedResourceMetadataUrl,
   type McpOAuthConfig,
   registerMcpOAuthRoutes,
   verifyMcpOAuthCredential,
@@ -27,6 +28,7 @@ requirePgTestEnv();
 
 const issuer = 'http://127.0.0.1:3000/api/oauth';
 const resource = 'http://127.0.0.1:3000/api/mcp';
+const canonicalResourceMetadataUrl = getProtectedResourceMetadataUrl(resource);
 const clientId = 'test-chatgpt';
 const redirectUri = 'http://127.0.0.1:3000/callback';
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -605,14 +607,14 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     const linking = await anonymous.callTool({ name: 'find_student', arguments: { name: 'Anna' } });
     expect(linking.isError).toBe(true);
     expect(linking._meta?.['mcp/www_authenticate']).toEqual([
-      expect.stringContaining('resource_metadata='),
+      expect.stringContaining(`resource_metadata="${canonicalResourceMetadataUrl}"`),
     ]);
     const contextLinking = await anonymous.callTool({
       name: 'get_student_teaching_context', arguments: { studentId: students[0]!.id },
     });
     expect(contextLinking.isError).toBe(true);
     expect(contextLinking._meta?.['mcp/www_authenticate']).toEqual([
-      expect.stringContaining('resource_metadata='),
+      expect.stringContaining(`resource_metadata="${canonicalResourceMetadataUrl}"`),
     ]);
     const rpc = async (
       authorization: string,
@@ -641,11 +643,16 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
         const denied = await rpc(`Bearer ${credential}`, name);
         expect(denied.statusCode).toBe(401);
         expect(denied.headers['www-authenticate']).toContain('scope="teaching_context.read"');
+        expect(denied.headers['www-authenticate']).toContain(
+          `resource_metadata="${canonicalResourceMetadataUrl}"`,
+        );
       }
     }
     const getChallenge = await testApp.app.inject('/mcp');
     expect(getChallenge.statusCode).toBe(401);
-    expect(getChallenge.headers['www-authenticate']).toContain('resource_metadata=');
+    expect(getChallenge.headers['www-authenticate']).toContain(
+      `resource_metadata="${canonicalResourceMetadataUrl}"`,
+    );
     expect((await testApp.app.inject({
       method: 'GET', url: '/mcp', headers: { authorization: `Bearer ${tokenOne}` },
     })).statusCode).toBe(405);
@@ -777,12 +784,27 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
   });
 
   it('publishes discovery and keeps bearer secrets out of persisted artifact keys', async () => {
-    const resourceMetadata = await testApp.app.inject('/.well-known/oauth-protected-resource');
-    expect(resourceMetadata.json()).toMatchObject({
+    expect(
+      getProtectedResourceMetadataUrl('https://esl-pipeline.run.place/api/mcp'),
+    ).toBe(
+      'https://esl-pipeline.run.place/.well-known/oauth-protected-resource/api/mcp',
+    );
+    const canonicalMetadata = await testApp.app.inject(
+      new URL(canonicalResourceMetadataUrl).pathname,
+    );
+    expect(canonicalMetadata.statusCode).toBe(200);
+    expect(canonicalMetadata.headers['content-type']).toContain('application/json');
+    expect(canonicalMetadata.json()).toEqual({
       resource,
       authorization_servers: [issuer],
       scopes_supported: ['teaching_context.read'],
     });
+    const compatibilityMetadata = await testApp.app.inject(
+      '/.well-known/oauth-protected-resource',
+    );
+    expect(compatibilityMetadata.statusCode).toBe(200);
+    expect(compatibilityMetadata.headers['content-type']).toContain('application/json');
+    expect(compatibilityMetadata.json()).toEqual(canonicalMetadata.json());
     const discovery = await new Browser(testApp.app).request('GET', `${issuer}/.well-known/oauth-authorization-server`);
     expect(discovery.statusCode).toBe(200);
     expect(discovery.json()).toMatchObject({
@@ -1129,6 +1151,22 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     const caddy = readFileSync(new URL('../../../deploy/caddy/Caddyfile', import.meta.url), 'utf8');
     const nginx = readFileSync(new URL('../../batch-frontend/nginx.conf', import.meta.url), 'utf8');
     expect(caddy).toContain('header_up X-Forwarded-Proto {scheme}');
+    const canonicalMetadataRoute =
+      /location = \/\.well-known\/oauth-protected-resource\/api\/mcp \{([\s\S]*?)\n {2}\}/u.exec(
+        nginx,
+      )?.[1];
+    expect(canonicalMetadataRoute).toBeDefined();
+    expect(canonicalMetadataRoute).toContain(
+      'proxy_pass http://batch-backend:8080$request_uri;',
+    );
+    expect(canonicalMetadataRoute).toContain(
+      'proxy_set_header X-Forwarded-Proto $pipeline_external_proto;',
+    );
+    expect(canonicalMetadataRoute).toContain('proxy_set_header Host $host;');
+    expect(canonicalMetadataRoute).toContain('proxy_set_header X-Forwarded-Host $host;');
+    expect(canonicalMetadataRoute).not.toContain('try_files');
+    expect(nginx).toContain('location /api/ {');
+    expect(nginx).toContain('proxy_pass http://batch-backend:8080$backend_request_uri;');
     expect(nginx).toContain('proxy_set_header X-Forwarded-Proto $pipeline_external_proto;');
     expect(nginx).toContain('https https;');
     expect(nginx).toContain('proxy_set_header X-Forwarded-Host $host;');
