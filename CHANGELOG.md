@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.1.0] - 2026-09-28
+
+### Changed
+
+- Automated release from PR #283: feat(batch-backend): add read-only MCP learner tools (https://github.com/abocha/esl-pipeline/pull/283)
+
 ## [11.0.4] - 2026-09-27
 
 ### Changed
