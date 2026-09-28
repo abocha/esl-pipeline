@@ -849,6 +849,120 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     }
   });
 
+  it('accepts the exact Codex desktop CIMD client only with its constrained loopback callback', async () => {
+    const desktopClientId = 'https://chatgpt.com/oauth/codex/client.json';
+    const webClientId = 'https://chatgpt.com/oauth/client.json';
+    const callbackClientId = 'https://chatgpt.com/oauth/callback-42/client.json';
+    const arbitraryClientId = 'https://chatgpt.com/oauth/codex-copy/client.json';
+    const desktopMetadata = {
+      client_id: desktopClientId,
+      client_name: 'Codex',
+      application_type: 'native',
+      redirect_uris: ['http://127.0.0.1/callback', 'http://localhost/callback'],
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+      token_endpoint_auth_methods_supported: ['none'],
+    };
+    const clientMetadata = new Map<string, Record<string, unknown>>([
+      [desktopClientId, desktopMetadata],
+      [webClientId, {
+        client_id: webClientId,
+        client_name: 'ChatGPT',
+        redirect_uris: ['https://chatgpt.com/connector_platform_oauth_redirect'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'none',
+      }],
+      [callbackClientId, {
+        client_id: callbackClientId,
+        client_name: 'ChatGPT connector',
+        redirect_uris: ['https://chatgpt.com/connector/oauth/callback-42'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'none',
+      }],
+      [arbitraryClientId, {
+        ...desktopMetadata,
+        client_id: arbitraryClientId,
+        redirect_uris: ['http://127.0.0.1/callback'],
+      }],
+    ]);
+    const fetched: string[] = [];
+    const cimdApp = await makeApp({
+      ...oauthConfig,
+      clients: undefined,
+      fetch: async (input) => {
+        const clientId = String(input);
+        fetched.push(clientId);
+        const metadata = clientMetadata.get(clientId);
+        return metadata
+          ? new Response(JSON.stringify(metadata), {
+            headers: { 'content-type': 'application/json' },
+          })
+          : new Response('Not found', { status: 404 });
+      },
+    });
+    try {
+      const user = await seedUser();
+      const requestAuthorization = (clientId: string, redirectUri: string) =>
+        new Browser(cimdApp.app, user.refreshCookie).request(
+          'GET',
+          authorizeUrl({ client_id: clientId, redirect_uri: redirectUri }),
+        );
+
+      for (const redirectUri of [
+        'http://127.0.0.1:57549/callback',
+        'http://127.0.0.1:49152/callback',
+      ]) {
+        const response = await requestAuthorization(desktopClientId, redirectUri);
+        expect(response.statusCode).toBe(303);
+        expect(response.headers.location).toMatch(/^\/api\/oauth\/interaction\//);
+      }
+
+      for (const redirectUri of [
+        'http://127.0.0.2:57549/callback',
+        'http://localhost:57549/callback',
+        'http://[::1]:57549/callback',
+        'https://127.0.0.1:57549/callback',
+        'http://127.0.0.1/callback',
+        'http://127.0.0.1:not-a-port/callback',
+        'http://127.0.0.1:0/callback',
+        'http://127.0.0.1:65536/callback',
+        'http://127.0.0.1:57549/other',
+        'http://127.0.0.1:57549/callback?next=https://attacker.example',
+        'http://127.0.0.1:57549/callback#fragment',
+        'http://user:password@127.0.0.1:57549/callback',
+        'https://chatgpt.com/connector_platform_oauth_redirect',
+      ]) {
+        const response = await requestAuthorization(desktopClientId, redirectUri);
+        expect(response.statusCode).toBe(400);
+      }
+
+      for (const [clientId, redirectUri] of [
+        [webClientId, 'http://127.0.0.1:57549/callback'],
+        [callbackClientId, 'http://127.0.0.1:57549/callback'],
+        [arbitraryClientId, 'http://127.0.0.1:57549/callback'],
+        [desktopClientId, 'https://chatgpt.com/connector/oauth/callback-42'],
+      ]) {
+        const response = await requestAuthorization(clientId!, redirectUri!);
+        expect(response.statusCode).toBe(400);
+      }
+
+      const callbackResponse = await requestAuthorization(
+        callbackClientId,
+        'https://chatgpt.com/connector/oauth/callback-42',
+      );
+      expect(callbackResponse.statusCode).toBe(303);
+      expect(fetched).toContain(desktopClientId);
+      expect(fetched).toContain(webClientId);
+      expect(fetched).toContain(callbackClientId);
+      expect(fetched).toContain(arbitraryClientId);
+    } finally {
+      await cimdApp.app.close();
+    }
+  });
+
   it('uses the externally mounted interaction path for browser cookies and discovery-driven scope', async () => {
     const user = await seedUser();
     const browser = new Browser(testApp.app, user.refreshCookie);
