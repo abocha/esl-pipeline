@@ -48,6 +48,8 @@
 | GET | `/jobs/:jobId/provenance` | `packages/batch-backend/src/transport/core-routes.ts` |
 | POST | `/jobs/:publishedJobId/publish-correction` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/jobs/events` | `packages/batch-backend/src/transport/core-routes.ts` |
+| GET | `/mcp` | `packages/batch-backend/src/transport/mcp-server.ts` |
+| POST | `/mcp` | `packages/batch-backend/src/transport/mcp-server.ts` |
 | GET | `/meta/version` | `packages/batch-backend/src/transport/core-routes.ts` |
 | GET | `/metrics/readiness` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/ops/actions` | `packages/batch-backend/src/transport/extended-routes/ops-routes.ts` |

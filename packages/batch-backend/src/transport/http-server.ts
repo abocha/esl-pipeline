@@ -38,6 +38,7 @@ import { registerCoreRoutes } from './core-routes.js';
 import { registerErrorHandler } from './error-handler.js';
 import { registerExtendedRoutes } from './extended-routes.js';
 import { loadMcpOAuthConfig, registerMcpOAuthRoutes } from './mcp-oauth.js';
+import { registerMcpServer } from './mcp-server.js';
 import {
   createRateLimiterService,
   createUploadRateLimitMiddleware,
@@ -122,7 +123,10 @@ export async function createHttpServer(): Promise<FastifyInstance> {
 
   if (extendedApiEnabled) {
     const mcpOAuthConfig = loadMcpOAuthConfig(config.auth.refreshCookieName);
-    if (mcpOAuthConfig) registerMcpOAuthRoutes(app, mcpOAuthConfig, authService);
+    if (mcpOAuthConfig) {
+      const provider = registerMcpOAuthRoutes(app, mcpOAuthConfig, authService);
+      registerMcpServer(app, provider, mcpOAuthConfig);
+    }
     const fileValidationService: FileValidationService | null = config.security.enableFileValidation
       ? createFileValidationService()
       : null;
