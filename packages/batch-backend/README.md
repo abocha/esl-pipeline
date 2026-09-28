@@ -284,7 +284,9 @@ resource indicators without introducing another user directory or hosted identit
 Set the `MCP_OAUTH_*` variables described in [`docs/reference/env.md`](../../docs/reference/env.md)
 to activate it. Public URLs use the existing `/api` proxy. Available surfaces are:
 
-- `/api/.well-known/oauth-protected-resource`: metadata for the future `/api/mcp` resource.
+- `/api/.well-known/oauth-protected-resource`: metadata for the `/api/mcp` resource.
+- `/api/mcp`: stateless Streamable HTTP MCP endpoint. Discovery exposes two read-only tools without
+  learner data; execution requires the workspace-bound MCP OAuth credential.
 - `/api/oauth/.well-known/oauth-authorization-server` (and the provider's OIDC discovery alias):
   authorization-server discovery, including authorization, token, revocation, and JWKS URLs under
   `/api/oauth`. Discovery advertises only `teaching_context.read`; OIDC identity and DPoP are not
@@ -312,10 +314,19 @@ The current [OpenAI MCP authentication guidance](https://developers.openai.com/p
 requires OAuth 2.1 authorization code with PKCE S256, protected-resource and authorization-server
 discovery, and resource-bound tokens; it prefers CIMD when supported. The
 [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
-shaped the path-aware discovery and audience handling. This slice deliberately has no `/api/mcp`
-handler or tool schemas. The future resource handler must challenge unauthenticated requests with
-the protected-resource metadata URL and call `verifyMcpOAuthCredential` before reading any learner
-data. Production activation and end-to-end ChatGPT connection testing belong to that later slice.
+shaped the path-aware discovery and audience handling. The endpoint uses the official TypeScript
+MCP SDK 2.1.0 with stateless request/response handling for the current 2026-07-28 protocol and
+stateless legacy initialize compatibility. It publishes `find_student` and
+`get_student_teaching_context`, each with `teaching_context.read` OAuth metadata and read-only
+annotations. Missing credentials receive a tool-level linking challenge; invalid credentials
+receive HTTP 401 with protected-resource discovery. The latter tool calls the canonical internal
+teaching-context query and returns the independently versioned `mcp_teaching_context.v1` allowlist
+without internal provenance or personal facts. The MCP layer does not cache learner context.
+The MCP routes accept browser `Origin` only when it exactly matches the configured
+`MCP_OAUTH_RESOURCE` origin; non-browser clients may omit it. MCP request database failures log
+only a safe event and SQLSTATE code, without exception text or stack.
+`MCP_OAUTH_ENABLED` remains false by default; production activation and ChatGPT connection testing
+belong to a later slice.
 
 Student-memory operator workflows:
 

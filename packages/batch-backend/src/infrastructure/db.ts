@@ -3,6 +3,7 @@
 // - Uses env from config/env.
 // - Optional: only required if PG_ENABLED=true.
 // - Exposed helpers are minimal and easy to swap if your platform provides its own client.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Pool, PoolClient } from 'pg';
 
 import { loadConfig } from '../config/env.js';
@@ -11,6 +12,17 @@ import { logger } from './logger.js';
 let pool: Pool | null = null;
 let schemaReadyPromise: Promise<void> | null = null;
 let legacySchemaPatchWarningLogged = false;
+const sanitizedPgLogging = new AsyncLocalStorage<boolean>();
+
+/** Keep database diagnostics free of exception details for sensitive request paths. */
+export function withSanitizedPgLogging<T>(operation: () => Promise<T>): Promise<T> {
+  return sanitizedPgLogging.run(true, operation);
+}
+
+function safePgErrorCode(error: unknown): string {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+  return typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : 'unclassified';
+}
 
 const LEGACY_SCHEMA_PATCH_OVERRIDE_ENV = 'PG_ENABLE_LEGACY_SCHEMA_PATCHES';
 
@@ -1549,20 +1561,38 @@ export async function withPgClient<T>(
   } catch (error) {
     if (attempt < 5 && isRetryablePgError(error)) {
       const delay = 500 * attempt;
-      logger.warn('Postgres operation failed with transient error; retrying', {
-        component: 'pg',
-        attempt,
-        delay,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      if (sanitizedPgLogging.getStore()) {
+        logger.warn('Sensitive Postgres operation retrying', {
+          component: 'pg',
+          event: 'sensitive_pg_retry',
+          code: safePgErrorCode(error),
+          attempt,
+          delay,
+        });
+      } else {
+        logger.warn('Postgres operation failed with transient error; retrying', {
+          component: 'pg',
+          attempt,
+          delay,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       await new Promise((resolve) => setTimeout(resolve, delay));
       return withPgClient(fn, attempt + 1);
     }
 
-    logger.error(error instanceof Error ? error : String(error), {
-      component: 'pg',
-      message: 'Postgres operation failed',
-    });
+    if (sanitizedPgLogging.getStore()) {
+      logger.error('Sensitive Postgres operation failed', {
+        component: 'pg',
+        event: 'sensitive_pg_failed',
+        code: safePgErrorCode(error),
+      });
+    } else {
+      logger.error(error instanceof Error ? error : String(error), {
+        component: 'pg',
+        message: 'Postgres operation failed',
+      });
+    }
     throw error;
   }
 }

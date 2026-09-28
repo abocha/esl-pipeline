@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createEmptyFoundationalProfile } from '../src/application/foundational-profile.js';
 import {
+  mcpTeachingContextSchema,
+  projectMcpTeachingContext,
+} from '../src/application/mcp-teaching-context.js';
+import {
   getStudentTeachingContext,
   TEACHING_CONTEXT_SCHEMA_VERSION,
 } from '../src/application/student-teaching-context.js';
@@ -164,6 +168,36 @@ describe('getStudentTeachingContext', () => {
     ]) {
       expect(serialized).not.toContain(sensitive);
     }
+    const external = projectMcpTeachingContext(context!);
+    expect(mcpTeachingContextSchema.safeParse(external).success).toBe(true);
+    expect(external).toMatchObject({
+      contractVersion: 'mcp_teaching_context.v1',
+      student: { studentId, name: 'Maya' },
+      profile: { level: 'B1', goals: ['Speak more confidently'] },
+      memory: { recurringIssues: [{ label: 'Articles', note: 'Often omitted' }] },
+      recentLessons: [{ title: 'At the airport' }],
+      recentHomework: [{ topic: 'Travel' }],
+    });
+    const externalWire = JSON.stringify(external);
+    for (const sensitive of [
+      '"schemaVersion":"teaching_context.v1"',
+      'provenance',
+      'profileId',
+      'revisionId',
+      'snapshotId',
+      'workspaceId',
+      'userId',
+      'teacherNotes',
+      'durableConstraints',
+      'personalFacts',
+      'studentFacts',
+      'Raw transcript',
+      's3://private',
+      'job-1',
+      'https://private.example',
+      'Private markdown profile',
+    ])
+      expect(externalWire).not.toContain(sensitive);
   });
 
   it('bounds recent selection and each structured memory section', async () => {
