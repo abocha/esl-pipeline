@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import Provider, { type Configuration, errors, interactionPolicy } from 'oidc-provider';
 
 import {
@@ -20,6 +20,7 @@ const GRANT_TTL_SECONDS = 14 * 24 * 60 * 60;
 const CHATGPT_CLIENT = 'https://chatgpt.com/oauth/client.json';
 const CHATGPT_CODEX_CLIENT = 'https://chatgpt.com/oauth/codex/client.json';
 const CALLBACK_CLIENT = /^https:\/\/chatgpt\.com\/oauth\/([A-Za-z0-9_-]+)\/client\.json$/;
+const PROTECTED_RESOURCE_METADATA_PATH = '/.well-known/oauth-protected-resource';
 // Pin Codex metadata to its current published redirect set. The request
 // validator below deliberately accepts only its observed IPv4 callback.
 const CHATGPT_CODEX_METADATA_REDIRECTS = new Set([
@@ -36,6 +37,12 @@ export interface McpOAuthConfig {
   allowHttpForTests?: boolean;
   clients?: Configuration['clients'];
   fetch?: Configuration['fetch'];
+}
+
+export function getProtectedResourceMetadataUrl(resource: string): string {
+  const resourceUrl = new URL(resource);
+  const resourcePath = resourceUrl.pathname === '/' ? '' : resourceUrl.pathname;
+  return new URL(`${PROTECTED_RESOURCE_METADATA_PATH}${resourcePath}`, resourceUrl.origin).href;
 }
 
 export function loadMcpOAuthConfig(refreshCookieName: string): McpOAuthConfig | null {
@@ -445,13 +452,17 @@ export function registerMcpOAuthRoutes(
   // routes below remain Fastify-owned; protocol routes are provider-owned.
   app.all('/oauth/*', async (_request, reply) => reply.code(404).send());
 
-  app.get('/.well-known/oauth-protected-resource', async (_request, reply) =>
+  const sendProtectedResourceMetadata = (_request: FastifyRequest, reply: FastifyReply) =>
     reply.header('cache-control', 'public, max-age=300').send({
       resource: config.resource,
       authorization_servers: [config.issuer],
       scopes_supported: [MCP_READ_SCOPE],
-    }),
-  );
+    });
+  const metadataPaths = new Set([
+    '/.well-known/oauth-protected-resource',
+    new URL(getProtectedResourceMetadataUrl(config.resource)).pathname,
+  ]);
+  for (const metadataPath of metadataPaths) app.get(metadataPath, sendProtectedResourceMetadata);
 
   const requirePipelineUser = async (
     request: FastifyRequest,
