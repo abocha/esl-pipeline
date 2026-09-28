@@ -4,10 +4,14 @@ import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import cookie from '@fastify/cookie';
 import Fastify from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { Client as PgClient } from 'pg';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAuthService } from '../src/infrastructure/auth-service.js';
+import { insertStudent } from '../src/domain/student-repository.js';
 import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
+import { logger } from '../src/infrastructure/logger.js';
 import { McpOAuthAdapter } from '../src/infrastructure/mcp-oauth-adapter.js';
 import { runMigrations } from '../src/infrastructure/migrations.js';
 import { authenticate, configureAuthMiddleware } from '../src/transport/auth-middleware.js';
@@ -16,6 +20,7 @@ import {
   registerMcpOAuthRoutes,
   verifyMcpOAuthCredential,
 } from '../src/transport/mcp-oauth.js';
+import { registerMcpServer } from '../src/transport/mcp-server.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 requirePgTestEnv();
@@ -59,6 +64,7 @@ async function makeApp(config = oauthConfig) {
   await app.register(cookie);
   configureAuthMiddleware(authService);
   const provider = registerMcpOAuthRoutes(app, config, authService);
+  registerMcpServer(app, provider, config);
   app.get('/rest-protected', { preHandler: authenticate }, async () => ({ ok: true }));
   await app.ready();
   return { app, provider };
@@ -460,6 +466,314 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     expect(
       await verifyMcpOAuthCredential(testApp.provider, issued.access_token, oauthConfig),
     ).toBeNull();
+  });
+
+  it('serves two read-only tools through stateless Streamable HTTP with workspace-bound OAuth', async () => {
+    const user = await seedUser();
+    const otherUser = await seedUser();
+    const tokenOne = (await issue(new Browser(testApp.app, user.refreshCookie))).access_token;
+    const tokenTwo = (await issue(new Browser(testApp.app, otherUser.refreshCookie))).access_token;
+    const students = await Promise.all(
+      Array.from({ length: 7 }, (_, index) =>
+        insertStudent({ student: `Anna ${index + 1}`, workspaceId: user.workspaceIds[0] }),
+      ),
+    );
+    const foreign = await insertStudent({
+      student: 'Foreign Learner',
+      workspaceId: otherUser.workspaceIds[0],
+    });
+
+    const url = await testApp.app.listen({ host: '127.0.0.1', port: 0 });
+    const connect = async (token?: string, modern = false) => {
+      const client = new Client(
+        { name: 'mcp-test-client', version: '1.0.0' },
+        modern ? { versionNegotiation: { mode: 'auto' } } : {},
+      );
+      const transport = new StreamableHTTPClientTransport(new URL(`${url}/mcp`), {
+        requestInit: token ? { headers: { authorization: `Bearer ${token}` } } : undefined,
+      });
+      await client.connect(transport);
+      return client;
+    };
+    const client = await connect(tokenOne);
+    const rawDiscovery = await testApp.app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+      },
+      payload: { jsonrpc: '2.0', id: 21, method: 'tools/list', params: {} },
+    });
+    expect(rawDiscovery.statusCode).toBe(200);
+    const wireDiscovery = JSON.parse(
+      rawDiscovery.body.startsWith('{')
+        ? rawDiscovery.body
+        : /^data: (.+)$/m.exec(rawDiscovery.body)![1]!,
+    );
+    expect(
+      wireDiscovery.result.tools.map((tool: { securitySchemes: unknown }) => tool.securitySchemes),
+    ).toEqual(Array(2).fill([{ type: 'oauth2', scopes: ['teaching_context.read'] }]));
+    expect(rawDiscovery.body).not.toContain('Anna 1');
+    const tools = (await client.listTools()).tools;
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'find_student',
+      'get_student_teaching_context',
+    ]);
+    expect(Object.keys(tools[0]!.inputSchema.properties ?? {})).toEqual(['name']);
+    expect(Object.keys(tools[1]!.inputSchema.properties ?? {})).toEqual(['studentId']);
+    for (const tool of tools) {
+      expect(tool.annotations).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      });
+      expect(tool._meta?.securitySchemes).toEqual([
+        { type: 'oauth2', scopes: ['teaching_context.read'] },
+      ]);
+      expect(tool.outputSchema).toBeTruthy();
+    }
+    const matches = await client.callTool({ name: 'find_student', arguments: { name: 'Anna' } });
+    expect(matches.structuredContent).toMatchObject({
+      status: 'ambiguous',
+      hasMore: true,
+      candidates: expect.arrayContaining([{ studentId: students[0]!.id, name: 'Anna 1' }]),
+    });
+    expect((matches.structuredContent as { candidates: unknown[] }).candidates).toHaveLength(5);
+    const context = await client.callTool({
+      name: 'get_student_teaching_context',
+      arguments: { studentId: students[0]!.id },
+    });
+    expect(context.structuredContent).toMatchObject({
+      context: {
+        contractVersion: 'mcp_teaching_context.v1',
+        student: { studentId: students[0]!.id, name: 'Anna 1' },
+        profile: null,
+        memory: null,
+        recentLessons: [],
+        recentHomework: [],
+      },
+    });
+    expect(JSON.stringify(context)).not.toMatch(
+      /workspaceId|userId|provenance|profileId|snapshotId|revisionId/,
+    );
+    const foreignResult = await client.callTool({
+      name: 'get_student_teaching_context',
+      arguments: { studentId: foreign.id },
+    });
+    const missingResult = await client.callTool({
+      name: 'get_student_teaching_context',
+      arguments: { studentId: randomUUID() },
+    });
+    expect(foreignResult).toEqual(missingResult);
+    expect(
+      (await client.callTool({ name: 'find_student', arguments: { name: 'Foreign' } }))
+        .structuredContent,
+    ).toMatchObject({ status: 'none', candidates: [], hasMore: false });
+
+    const second = await connect(tokenTwo, true);
+    expect(second.getProtocolEra()).toBe('modern');
+    expect(
+      (await second.callTool({ name: 'find_student', arguments: { name: 'Anna' } }))
+        .structuredContent,
+    ).toMatchObject({ status: 'none', candidates: [], hasMore: false });
+    expect(
+      (await second.callTool({ name: 'find_student', arguments: { name: 'Foreign' } }))
+        .structuredContent,
+    ).toMatchObject({
+      status: 'single', candidates: [{ studentId: foreign.id, name: 'Foreign Learner' }], hasMore: false,
+    });
+    expect(
+      (
+        await second.callTool({
+          name: 'get_student_teaching_context',
+          arguments: { studentId: foreign.id },
+        })
+      ).structuredContent,
+    ).toMatchObject({ context: { student: { studentId: foreign.id, name: 'Foreign Learner' } } });
+    expect(
+      (
+        await second.callTool({
+          name: 'get_student_teaching_context',
+          arguments: { studentId: students[0]!.id },
+        })
+      ).isError,
+    ).toBe(true);
+
+    const anonymous = await connect();
+    expect((await anonymous.listTools()).tools).toHaveLength(2);
+    const linking = await anonymous.callTool({ name: 'find_student', arguments: { name: 'Anna' } });
+    expect(linking.isError).toBe(true);
+    expect(linking._meta?.['mcp/www_authenticate']).toEqual([
+      expect.stringContaining('resource_metadata='),
+    ]);
+    const contextLinking = await anonymous.callTool({
+      name: 'get_student_teaching_context', arguments: { studentId: students[0]!.id },
+    });
+    expect(contextLinking.isError).toBe(true);
+    expect(contextLinking._meta?.['mcp/www_authenticate']).toEqual([
+      expect.stringContaining('resource_metadata='),
+    ]);
+    const rpc = async (
+      authorization: string,
+      name: 'find_student' | 'get_student_teaching_context',
+    ) =>
+      testApp.app.inject({
+        method: 'POST',
+        url: '/mcp',
+        headers: {
+          authorization,
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+        },
+        payload: {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: {
+            name,
+            arguments: name === 'find_student' ? { name: 'Anna' } : { studentId: students[0]!.id },
+          },
+        },
+      });
+    for (const credential of [user.restToken, 'invalid']) {
+      for (const name of ['find_student', 'get_student_teaching_context'] as const) {
+        const denied = await rpc(`Bearer ${credential}`, name);
+        expect(denied.statusCode).toBe(401);
+        expect(denied.headers['www-authenticate']).toContain('scope="teaching_context.read"');
+      }
+    }
+    const getChallenge = await testApp.app.inject('/mcp');
+    expect(getChallenge.statusCode).toBe(401);
+    expect(getChallenge.headers['www-authenticate']).toContain('resource_metadata=');
+    expect((await testApp.app.inject({
+      method: 'GET', url: '/mcp', headers: { authorization: `Bearer ${tokenOne}` },
+    })).statusCode).toBe(405);
+    await withPgClient(async (db) =>
+      db.query('DELETE FROM workspace_memberships WHERE user_id = $1 AND workspace_id = $2', [
+        user.userId,
+        user.workspaceIds[0],
+      ]),
+    );
+    for (const name of ['find_student', 'get_student_teaching_context'] as const)
+      expect((await rpc(`Bearer ${tokenOne}`, name)).statusCode).toBe(401);
+    await withPgClient(async (db) =>
+      db.query('UPDATE mcp_oauth_grants SET revoked_at = NOW() WHERE workspace_id = $1', [
+        otherUser.workspaceIds[0],
+      ]),
+    );
+    for (const name of ['find_student', 'get_student_teaching_context'] as const)
+      expect((await rpc(`Bearer ${tokenTwo}`, name)).statusCode).toBe(401);
+    const expiringUser = await seedUser();
+    const expiringToken = (await issue(new Browser(testApp.app, expiringUser.refreshCookie)))
+      .access_token;
+    await withPgClient(async (db) =>
+      db.query(
+        "UPDATE mcp_oauth_artifacts SET expires_at = NOW() - INTERVAL '1 second' WHERE kind = 'AccessToken'",
+      ),
+    );
+    for (const name of ['find_student', 'get_student_teaching_context'] as const)
+      expect((await rpc(`Bearer ${expiringToken}`, name)).statusCode).toBe(401);
+    await Promise.all([client.close(), second.close(), anonymous.close()]);
+  });
+
+  it('validates browser Origin before MCP discovery or authenticated execution', async () => {
+    const user = await seedUser();
+    const token = (await issue(new Browser(testApp.app, user.refreshCookie))).access_token;
+    const student = await insertStudent({ student: 'Origin Learner', workspaceId: user.workspaceIds[0] });
+    const post = (origin: string | undefined, method: 'tools/list' | 'tools/call') =>
+      testApp.app.inject({
+        method: 'POST', url: '/mcp',
+        headers: {
+          ...(origin === undefined ? {} : { origin }),
+          authorization: `Bearer ${token}`,
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+        },
+        payload: {
+          jsonrpc: '2.0', id: 1, method,
+          params: method === 'tools/list' ? {} : {
+            name: 'get_student_teaching_context', arguments: { studentId: student.id },
+          },
+        },
+      });
+
+    for (const allowed of [undefined, new URL(resource).origin]) {
+      expect((await post(allowed, 'tools/list')).statusCode).toBe(200);
+      expect((await post(allowed, 'tools/call')).statusCode).toBe(200);
+    }
+    for (const rejected of [
+      'https://attacker.example', 'null', 'not-an-origin',
+      'http://127.0.0.1:3000/path', 'http://127.0.0.1:3000, https://attacker.example',
+    ]) {
+      for (const method of ['tools/list', 'tools/call'] as const) {
+        const response = await post(rejected, method);
+        expect(response.statusCode).toBe(403);
+        expect(response.headers['www-authenticate']).toBeUndefined();
+      }
+      expect((await testApp.app.inject({ method: 'GET', url: '/mcp', headers: {
+        origin: rejected, authorization: `Bearer ${token}`,
+      } })).statusCode).toBe(403);
+    }
+    expect((await testApp.app.inject({ method: 'GET', url: '/mcp', headers: {
+      origin: new URL(resource).origin, authorization: `Bearer ${token}`,
+    } })).statusCode).toBe(405);
+    expect((await testApp.app.inject({ method: 'GET', url: '/mcp', headers: {
+      origin: 'https://attacker.example', 'x-forwarded-host': 'attacker.example',
+      'x-forwarded-proto': 'https', authorization: `Bearer ${token}`,
+    } })).statusCode).toBe(403);
+  });
+
+  it('logs only safe database failure codes for both tools and credential verification', async () => {
+    const user = await seedUser();
+    const token = (await issue(new Browser(testApp.app, user.refreshCookie))).access_token;
+    const student = await insertStudent({ student: 'Private Learner', workspaceId: user.workspaceIds[0] });
+    const originalQuery = PgClient.prototype.query;
+    const querySpy = vi.spyOn(PgClient.prototype, 'query');
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const failure = Object.assign(new Error('permission denied for table students; Private Learner'), {
+      code: '42501',
+    });
+    failure.stack = 'private SQL and learner data in database exception stack';
+    let failingTable = 'students';
+    querySpy.mockImplementation(function (this: PgClient, ...args) {
+      if (typeof args[0] === 'string' && args[0].includes(`FROM ${failingTable}`)) {
+        return Promise.reject(failure);
+      }
+      return Reflect.apply(originalQuery, this, args);
+    });
+    const call = (name: string, args: Record<string, string>) => testApp.app.inject({
+      method: 'POST', url: '/mcp',
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json, text/event-stream',
+        'content-type': 'application/json' },
+      payload: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+    });
+    try {
+      for (const [name, args] of [
+        ['find_student', { name: 'Private Learner' }],
+        ['get_student_teaching_context', { studentId: student.id }],
+      ] as const) {
+        const response = await call(name, args);
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toContain('Teaching context unavailable.');
+      }
+      failingTable = 'mcp_oauth_artifacts';
+      const denied = await call('find_student', { name: 'Private Learner' });
+      expect(denied.statusCode).toBe(401);
+      expect(denied.headers['www-authenticate']).toContain('resource_metadata=');
+      expect(errorSpy).toHaveBeenCalledTimes(3);
+      for (const [message, fields] of errorSpy.mock.calls) {
+        expect(message).toBe('Sensitive Postgres operation failed');
+        expect(fields).toEqual({ component: 'pg', event: 'sensitive_pg_failed', code: '42501' });
+      }
+      expect(JSON.stringify([errorSpy.mock.calls, warnSpy.mock.calls, denied.body]))
+        .not.toMatch(/permission denied|Private Learner|private SQL|SELECT|stack/i);
+    } finally {
+      querySpy.mockRestore();
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
   });
 
   it('publishes discovery and keeps bearer secrets out of persisted artifact keys', async () => {
