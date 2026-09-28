@@ -1,6 +1,6 @@
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { createMcpHandler, McpServer, type Tool } from '@modelcontextprotocol/server';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type Provider from 'oidc-provider';
 import { z } from 'zod';
 
@@ -16,6 +16,7 @@ import {
 } from '../application/mcp-teaching-context.js';
 import { getStudentTeachingContext } from '../application/student-teaching-context.js';
 import { type BoundOAuthGrant, MCP_READ_SCOPE } from '../domain/mcp-oauth-grants.js';
+import { withSanitizedPgLogging } from '../infrastructure/db.js';
 import { type McpOAuthConfig, verifyMcpOAuthCredential } from './mcp-oauth.js';
 
 const authSchemes = [{ type: 'oauth2', scopes: [MCP_READ_SCOPE] }] as const;
@@ -160,37 +161,50 @@ export function registerMcpServer(
   provider: Provider,
   config: McpOAuthConfig,
 ): void {
+  // The OAuth resource URL is canonical and configured at startup; request host and
+  // forwarded headers are not authority for browser-origin validation.
+  const trustedOrigin = new URL(config.resource).origin;
+  const validateOrigin = async (request: FastifyRequest, reply: FastifyReply) => {
+    const origin = request.headers.origin;
+    if (origin !== undefined && origin !== trustedOrigin) {
+      return reply.code(403).send({ error: 'forbidden' });
+    }
+  };
   const handler = createMcpHandler(async ({ requestInfo }) => {
     const bearer = requestInfo?.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
     const grant = bearer ? await verifyMcpOAuthCredential(provider, bearer, config) : null;
     return createServer(config, grant);
   });
   const nodeHandler = toNodeHandler(handler);
-  app.get('/mcp', async (request, reply) => {
-    reply.header('cache-control', 'no-store');
-    const bearer = request.headers.authorization?.match(/^Bearer ([^\s]+)$/i)?.[1];
-    if (!bearer || !(await verifyMcpOAuthCredential(provider, bearer, config))) {
-      return reply
-        .code(401)
-        .header('www-authenticate', challenge(config))
-        .send({ error: 'unauthorized' });
-    }
-    return reply.code(405).header('allow', 'POST').send({ error: 'method_not_allowed' });
-  });
-  app.post('/mcp', async (request, reply) => {
-    reply.header('cache-control', 'no-store');
-    const authorization = request.headers.authorization;
-    if (
-      (authorization && !/^Bearer ([^\s]+)$/i.test(authorization)) ||
-      (authorization && !(await verifyMcpOAuthCredential(provider, authorization.slice(7), config)))
-    ) {
-      return reply
-        .code(401)
-        .header('www-authenticate', challenge(config))
-        .send({ error: 'unauthorized' });
-    }
-    reply.hijack();
-    reply.raw.setHeader('cache-control', 'no-store');
-    await nodeHandler(request.raw, reply.raw, request.body);
-  });
+  app.get('/mcp', { onRequest: validateOrigin }, (request, reply) =>
+    withSanitizedPgLogging(async () => {
+      reply.header('cache-control', 'no-store');
+      const bearer = request.headers.authorization?.match(/^Bearer ([^\s]+)$/i)?.[1];
+      if (!bearer || !(await verifyMcpOAuthCredential(provider, bearer, config))) {
+        return reply
+          .code(401)
+          .header('www-authenticate', challenge(config))
+          .send({ error: 'unauthorized' });
+      }
+      return reply.code(405).header('allow', 'POST').send({ error: 'method_not_allowed' });
+    }),
+  );
+  app.post('/mcp', { onRequest: validateOrigin }, (request, reply) =>
+    withSanitizedPgLogging(async () => {
+      reply.header('cache-control', 'no-store');
+      const authorization = request.headers.authorization;
+      if (
+        (authorization && !/^Bearer ([^\s]+)$/i.test(authorization)) ||
+        (authorization && !(await verifyMcpOAuthCredential(provider, authorization.slice(7), config)))
+      ) {
+        return reply
+          .code(401)
+          .header('www-authenticate', challenge(config))
+          .send({ error: 'unauthorized' });
+      }
+      reply.hijack();
+      reply.raw.setHeader('cache-control', 'no-store');
+      await nodeHandler(request.raw, reply.raw, request.body);
+    }),
+  );
 }

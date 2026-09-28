@@ -322,6 +322,9 @@ annotations. Missing credentials receive a tool-level linking challenge; invalid
 receive HTTP 401 with protected-resource discovery. The latter tool calls the canonical internal
 teaching-context query and returns the independently versioned `mcp_teaching_context.v1` allowlist
 without internal provenance or personal facts. The MCP layer does not cache learner context.
+The MCP routes accept browser `Origin` only when it exactly matches the configured
+`MCP_OAUTH_RESOURCE` origin; non-browser clients may omit it. MCP request database failures log
+only a safe event and SQLSTATE code, without exception text or stack.
 `MCP_OAUTH_ENABLED` remains false by default; production activation and ChatGPT connection testing
 belong to a later slice.
 
