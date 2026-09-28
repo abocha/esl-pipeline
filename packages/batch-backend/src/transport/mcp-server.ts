@@ -17,7 +17,11 @@ import {
 import { getStudentTeachingContext } from '../application/student-teaching-context.js';
 import { type BoundOAuthGrant, MCP_READ_SCOPE } from '../domain/mcp-oauth-grants.js';
 import { withSanitizedPgLogging } from '../infrastructure/db.js';
-import { type McpOAuthConfig, verifyMcpOAuthCredential } from './mcp-oauth.js';
+import {
+  getProtectedResourceMetadataUrl,
+  type McpOAuthConfig,
+  verifyMcpOAuthCredential,
+} from './mcp-oauth.js';
 
 const authSchemes = [{ type: 'oauth2', scopes: [MCP_READ_SCOPE] }] as const;
 const annotations = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
@@ -37,7 +41,7 @@ const findResultSchema = z
 const contextResultSchema = z.object({ context: mcpTeachingContextSchema }).strict();
 
 function challenge(config: McpOAuthConfig) {
-  const metadata = new URL('/api/.well-known/oauth-protected-resource', config.resource).href;
+  const metadata = getProtectedResourceMetadataUrl(config.resource);
   return `Bearer resource_metadata="${metadata}", scope="${MCP_READ_SCOPE}", error="invalid_token", error_description="Connect an ESL Pipeline account with teaching context read access"`;
 }
 
