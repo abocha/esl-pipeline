@@ -297,8 +297,10 @@ to activate it. Public URLs use the existing `/api` proxy. Available surfaces ar
   invalidates its entire Pipeline grant and token family.
 - `POST /api/oauth/grants/:grantId/revoke`: Pipeline REST-authenticated grant revocation.
 
-Only ChatGPT's published CIMD client IDs and their matching redirect URI are accepted. The sole
-initial scope is `teaching_context.read`. The authorization and token requests must name the exact
+Only ChatGPT's published CIMD client IDs and their matching redirect URI are accepted. This
+includes the exact Codex desktop client ID, whose callback is restricted to HTTP on
+`127.0.0.1`, a valid client-selected port, and `/callback`. The sole initial scope is
+`teaching_context.read`. The authorization and token requests must name the exact
 `/api/mcp` resource. PostgreSQL stores provider artifacts by hashed identifier and stores a separate
 grant bound to one immutable Pipeline user and workspace. Authorization denies zero memberships,
 automatically binds one, and requires a selection for multiple. Credential verification checks the
