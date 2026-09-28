@@ -144,7 +144,8 @@ Primary groups:
     exact paths `/api/oauth` and `/api/mcp`. Cookie keys are a JSON array of random secrets of
     at least 32 characters each. JWKS is a private signing JWK Set in JSON; keep it and the cookie
     keys secret, separate from the REST JWT secret. Retain keys across restarts; rotate with overlap.
-    The `/api/mcp` URL is an audience identifier in this slice; there is no MCP transport yet.
+    The `/api/mcp` URL is both the OAuth audience and the stateless Streamable HTTP resource.
+    This setting remains false by default; production activation is a separate step.
 
 Read next:
 

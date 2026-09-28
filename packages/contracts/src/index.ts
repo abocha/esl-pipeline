@@ -1,5 +1,13 @@
 import type { ContractVersionRegistry } from './contract-versions.js';
 
+export {
+  type FindStudentResultDto,
+  type GetStudentTeachingContextResultDto,
+  MCP_TEACHING_CONTEXT_VERSION,
+  type McpTeachingContextDto,
+  type McpTeachingNoteDto,
+} from './mcp-teaching-context.js';
+
 export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed';
 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';

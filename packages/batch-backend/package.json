@@ -88,6 +88,8 @@
     "@esl-pipeline/tts-provider-inworld": "workspace:*",
     "@fastify/cookie": "^11.1.2",
     "@fastify/multipart": "^10.1.1",
+    "@modelcontextprotocol/node": "2.1.0",
+    "@modelcontextprotocol/server": "2.1.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^6.3.4",
     "fastify": "^5.12.4",
@@ -101,6 +103,7 @@
     "zod": "^4.6.4"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.1.0",
     "@types/bcrypt": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mime-types": "^3.0.1",
