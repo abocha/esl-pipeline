@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.1.1] - 2026-09-28
+
+### Changed
+
+- Automated release from PR #284: fix(batch-backend): support ChatGPT desktop OAuth client (https://github.com/abocha/esl-pipeline/pull/284)
+
 ## [11.1.0] - 2026-09-28
 
 ### Changed
