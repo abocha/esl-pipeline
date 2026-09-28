@@ -18,7 +18,14 @@ import { authenticate, getAuthenticatedUser } from './auth-middleware.js';
 
 const GRANT_TTL_SECONDS = 14 * 24 * 60 * 60;
 const CHATGPT_CLIENT = 'https://chatgpt.com/oauth/client.json';
+const CHATGPT_CODEX_CLIENT = 'https://chatgpt.com/oauth/codex/client.json';
 const CALLBACK_CLIENT = /^https:\/\/chatgpt\.com\/oauth\/([A-Za-z0-9_-]+)\/client\.json$/;
+// Pin Codex metadata to its current published redirect set. The request
+// validator below deliberately accepts only its observed IPv4 callback.
+const CHATGPT_CODEX_METADATA_REDIRECTS = new Set([
+  'http://127.0.0.1/callback',
+  'http://localhost/callback',
+]);
 
 export interface McpOAuthConfig {
   issuer: string;
@@ -92,12 +99,71 @@ export function validateMcpOAuthConfig(config: McpOAuthConfig): McpOAuthConfig {
 }
 
 function expectedRedirect(clientId: string): string | null {
+  if (clientId === CHATGPT_CODEX_CLIENT) return null;
   if (clientId === CHATGPT_CLIENT) return 'https://chatgpt.com/connector_platform_oauth_redirect';
   const match = CALLBACK_CLIENT.exec(clientId);
   return match ? `https://chatgpt.com/connector/oauth/${match[1]}` : null;
 }
 
-function isAllowedClient(clientId: string, redirectUris?: readonly string[]): boolean {
+function isAllowedCodexRedirect(redirectUri: string | null): boolean {
+  if (!redirectUri) return false;
+
+  let redirect: URL;
+  try {
+    redirect = new URL(redirectUri);
+  } catch {
+    return false;
+  }
+
+  if (
+    redirect.protocol !== 'http:' ||
+    redirect.hostname !== '127.0.0.1' ||
+    redirect.username ||
+    redirect.password ||
+    redirect.pathname !== '/callback' ||
+    redirect.search ||
+    redirect.hash
+  ) {
+    return false;
+  }
+
+  // URL normalizes the default HTTP port away, so read the explicit port from
+  // the parsed URL's authority and then require its canonical serialization.
+  const authorityStart = redirectUri.indexOf('://') + 3;
+  const authorityEndOffset = redirectUri.slice(authorityStart).search(/[/?#]/u);
+  const authorityEnd =
+    authorityEndOffset === -1 ? redirectUri.length : authorityStart + authorityEndOffset;
+  const authority = redirectUri.slice(authorityStart, authorityEnd);
+  if (authority.includes('@')) return false;
+  const portSeparator = authority.lastIndexOf(':');
+  if (portSeparator === -1 || authority.slice(0, portSeparator) !== redirect.hostname) {
+    return false;
+  }
+  const portText = authority.slice(portSeparator + 1);
+  if (!/^\d+$/u.test(portText)) return false;
+  const port = Number(portText);
+  return (
+    Number.isInteger(port) &&
+    port >= 1 &&
+    port <= 65_535 &&
+    redirectUri === `http://${redirect.hostname}:${port}/callback`
+  );
+}
+
+function isAllowedClient(
+  clientId: string,
+  redirectUris?: readonly string[],
+  applicationType?: string,
+): boolean {
+  if (clientId === CHATGPT_CODEX_CLIENT) {
+    return (
+      applicationType === 'native' &&
+      !!redirectUris &&
+      redirectUris.length === CHATGPT_CODEX_METADATA_REDIRECTS.size &&
+      new Set(redirectUris).size === CHATGPT_CODEX_METADATA_REDIRECTS.size &&
+      redirectUris.every((redirect) => CHATGPT_CODEX_METADATA_REDIRECTS.has(redirect))
+    );
+  }
   const redirect = expectedRedirect(clientId);
   return !!redirect && !!redirectUris && redirectUris.length === 1 && redirectUris[0] === redirect;
 }
@@ -221,8 +287,10 @@ export function createMcpOAuthProvider(config: McpOAuthConfig, authService: Auth
       clientIdMetadataDocument: {
         enabled: true,
         ack: 'draft-02',
-        allowFetch: (_ctx, clientId) => !!expectedRedirect(clientId),
-        allowClient: (_ctx, client) => isAllowedClient(client.clientId, client.redirectUris),
+        allowFetch: (_ctx, clientId) =>
+          clientId === CHATGPT_CODEX_CLIENT || !!expectedRedirect(clientId),
+        allowClient: (_ctx, client) =>
+          isAllowedClient(client.clientId, client.redirectUris, client.applicationType),
       },
       resourceIndicators: {
         enabled: true,
@@ -348,6 +416,24 @@ export function registerMcpOAuthRoutes(
       request.raw.url.startsWith('/oauth/grants/')
     )
       return;
+    const authorizationUrl = new URL(request.raw.url, config.issuer);
+    let authorizationPath = authorizationUrl.pathname;
+    try {
+      authorizationPath = decodeURIComponent(authorizationPath);
+    } catch {
+      // Leave malformed paths for oidc-provider to reject.
+    }
+    const clientIds = authorizationUrl.searchParams.getAll('client_id');
+    if (
+      authorizationPath === '/oauth/auth' &&
+      clientIds.includes(CHATGPT_CODEX_CLIENT) &&
+      (clientIds.length !== 1 ||
+        clientIds[0] !== CHATGPT_CODEX_CLIENT ||
+        authorizationUrl.searchParams.getAll('redirect_uri').length !== 1 ||
+        !isAllowedCodexRedirect(authorizationUrl.searchParams.get('redirect_uri')))
+    ) {
+      return reply.code(400).send({ error: 'invalid_request' });
+    }
     reply.hijack();
     const externalUrl = `/api${request.raw.url}`;
     (request.raw as typeof request.raw & { originalUrl: string }).originalUrl = externalUrl;
