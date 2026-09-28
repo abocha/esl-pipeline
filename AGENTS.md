@@ -33,6 +33,9 @@ Use the smallest current route that answers the task.
   applicable.
 - Invoke project skills only when their narrow trigger applies. Do not load adjacent skills merely
   because they exist.
+- Explicit current task instructions take precedence over optional skill guidance unless a
+  controlling repository contract requires otherwise. If a skill or workflow rule would pause or
+  leave requested work unfinished, identify the controlling requirement and explain why it applies.
 
 Current code/configuration and live Git/CI/GitHub state outrank dated plans, evidence records, and
 archive material for facts that can change.
@@ -59,15 +62,15 @@ architecture, contract, security/privacy, persistence, concurrency, migration, o
 decisions require the approval expected by the current workflow. Goal-backed orchestration is
 explicit opt-in.
 
-Do not create worktrees, commits, branches, pushes, pull requests, releases, deployments, destructive
-operations, production mutations, or other external mutations unless the user/task authorization
-covers that action and scope. Authorization persists while its action and scope remain unchanged; it
-does not expand through delegation or broad OS/tool access.
+An authorized implementation outcome includes ordinary local repository operations reasonably needed
+to complete it, within the task scope and repository restrictions. Consequential external or
+destructive mutations still require the authorization specified by task and repository policy.
+Authorization persists within its scope; delegation and broad OS/tool access do not expand it.
 
 ## Execution and delegation
 
-The primary agent owns repository accountability, integration, validation decisions, authorized Git
-mutations, and the final result.
+The primary agent owns integration, validation decisions, and the final result. It remains
+accountable for repository state and authorized mutations performed by workers.
 
 Delegation is optional. Delegate by coherent ownership boundary when it materially helps; do not
 spawn agents per checklist item or merely to create independence. Use registered project roles and

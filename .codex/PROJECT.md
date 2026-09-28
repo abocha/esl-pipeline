@@ -36,8 +36,9 @@ triggered repository skill.
 ### Focused local evidence
 
 Use the narrowest reliable route owned by `docs/reference/TESTING_GUIDELINES.md` and the affected
-package or tool: typically one focused test, `vitest related --run`, or the owning package's test,
-typecheck, lint, or build command. Docs-only work uses the repository-owned documentation lane:
+package or tool: a focused test when it protects a plausible regression, `vitest related --run`, or
+the owning package's test, typecheck, lint, or build command. Reversible, low-impact changes do not
+need tests that merely mirror the edit. Docs-only work uses the repository-owned documentation lane:
 
 ```text
 pnpm docs:generate:indexes
@@ -108,8 +109,8 @@ second review choreography.
 ## Mutation and operational boundaries
 
 - Root `AGENTS.md` controls repository and external mutation authorization. Preserve dirty or
-  unrelated user work; ordinary local-edit permission does not authorize Git, GitHub, release,
-  deployment, destructive, or production actions.
+  unrelated user work; complete ordinary local repository operations within the authorized task
+  scope while keeping consequential external and destructive actions within their separate boundaries.
 - The developer laptop is the normal edit, debug, test, integration, and migration-test
   environment. Git commits plus required hosted CI are the source of deployable code.
 - The AWS Lightsail VPS is production runtime, not a normal development/full-test environment.

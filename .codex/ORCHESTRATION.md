@@ -10,7 +10,8 @@ For plan-backed execution, the approved implementation plan is the scope and acc
 
 This document owns delegation boundaries, role routing, context economy, review routing, and primary-agent integration. Repository-specific validation, contracts, mutation policy, and operational procedure belong to the target repository and its adapter.
 
-The primary agent owns decomposition, integration, repository accountability, validation decisions, authorized mutations, and the final result.
+The primary agent owns decomposition, integration, validation decisions, and the final result. It
+remains accountable for repository state and authorized mutations performed by workers.
 
 ## 1. Goal-backed execution
 
@@ -50,7 +51,7 @@ A child assignment should normally provide:
 - relevant files or surfaces when useful;
 - targeted validation expected from that child;
 - stop or escalation conditions;
-- any mutation authority the child actually needs.
+- task scope and any consequential mutation boundary the child needs to know.
 
 Adjacent plan items may share one worker when they materially share subsystem, files, contracts, and implementation context.
 
@@ -103,6 +104,9 @@ Newly discovered work must remain traceable to the approved outcome, a necessary
 Give workers enough information to own their deliverable without scripting every keystroke.
 
 State outcomes, boundaries, relevant invariants, acceptance criteria, validation, and stop conditions. Let the worker discover ordinary repository mechanics from the active instruction chain and authoritative local sources.
+
+An authorized worker may complete ordinary local repository operations reasonably needed for its
+assigned outcome within repository and task restrictions; the parent need not enumerate each step.
 
 Do not turn a simple implementation into repeated micro-instructions such as edit one value, run one check, edit another value, rerun the same check.
 
