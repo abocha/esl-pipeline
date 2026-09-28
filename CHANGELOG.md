@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.1.2] - 2026-09-28
+
+### Changed
+
+- Automated release from PR #285: fix(batch-backend): expose canonical MCP OAuth metadata (https://github.com/abocha/esl-pipeline/pull/285)
+
 ## [11.1.1] - 2026-09-28
 
 ### Changed
