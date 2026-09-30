@@ -158,8 +158,9 @@ sudo systemctl enable --now \
 systemctl list-timers --all 'esl-postgres-*' --no-pager
 ```
 
-The installer requires root, only accepts `/opt/esl-pipeline`, and reloads systemd if it copied any
-changed files. The oneshot scripts read `/opt/esl-pipeline/.env`; set
+The installer requires root, only accepts `/opt/esl-pipeline`, and reloads systemd on every
+successful pass, including when unit files already match. Enabling timers remains a separate
+operator action. The oneshot scripts read `/opt/esl-pipeline/.env`; set
 `PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops` there. Backup and restore operations require
 Docker access; all operations that query or upload S3 require the configured least-privilege S3/KMS
 credentials. Do not put credentials in unit files.
@@ -171,8 +172,10 @@ sudo systemctl show esl-postgres-ops-alert.service -p Result -p ExecMainStatus -
 sudo journalctl -u esl-postgres-ops-alert.service
 ```
 
-An alert service exit status of 1 can mean a degraded/critical health result even when the
-corresponding Telegram message was delivered.
+The alert service exit status reflects PostgreSQL ops health, not Telegram delivery: it exits 1 for a
+degraded/critical result even if the alert was delivered, and can exit 0 for a healthy recovery even
+if Telegram delivery failed. Failed transitions are retained for retry; inspect the alert log to
+distinguish health status from delivery status.
 The exact health signals are documented in [`postgres-ops-health.md`](postgres-ops-health.md).
 
 Retention knobs:

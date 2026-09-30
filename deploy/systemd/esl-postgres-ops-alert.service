@@ -2,10 +2,10 @@
 Description=ESL Pipeline production Postgres operations health and Telegram alerts
 Wants=network-online.target
 After=network-online.target
-ConditionPathExists=/opt/esl-pipeline/.env
 
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/esl-pipeline
+ExecStartPre=/usr/bin/test -f /opt/esl-pipeline/.env
 ExecStart=/usr/bin/bash /opt/esl-pipeline/scripts/docker/run-postgres-ops-alert.sh
 TimeoutStartSec=5min

@@ -99,8 +99,8 @@ the Telegram token/chat settings and S3 settings there, with `PG_BACKUP_HOST_STA
 
 Install or update the unit files from the deployed checkout. The installer requires root and refuses
 to run unless the checkout is `/opt/esl-pipeline`. It copies changed files and runs
-`systemctl daemon-reload` only when a unit changed; enabling timers remains a separate operator
-action:
+`systemctl daemon-reload` on every successful pass, including retries when files already match;
+enabling timers remains a separate operator action:
 
 ```bash
 cd /opt/esl-pipeline
@@ -114,10 +114,12 @@ systemctl list-timers --all 'esl-postgres-*' --no-pager
 ```
 
 The alert timer runs at 00:00, 06:00, 12:00, and 18:00 UTC. `Persistent=true` allows a missed
-calendar activation to run after the host returns. The oneshot alert service exits non-zero when
-the health state is degraded or critical; inspect its journal and the alert log before treating a
-non-zero result as a delivery failure, because a critical state is intentionally reported with a
-non-zero exit even when Telegram delivery succeeds.
+calendar activation to run after the host returns. The alert service checks that `/opt/esl-pipeline/.env`
+exists before running; absence causes an explicit service failure rather than a skipped unit. The
+oneshot service exit status reflects PostgreSQL ops health: it exits non-zero when health is degraded
+or critical, even if Telegram delivery succeeds. Conversely, a healthy recovery run exits zero even
+if Telegram delivery fails; the transition remains pending and is retried on a later run. Inspect its
+journal and alert log to distinguish health status from delivery status.
 
 The alert sender treats HTTP errors and timeouts as delivery failures. It retains the preceding
 transition state after a failed send or while Telegram is missing/disabled, so a later scheduled run
