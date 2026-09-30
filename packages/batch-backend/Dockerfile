@@ -17,7 +17,6 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
-COPY .env.example ./.env.example
 
 # Keep fetched artifacts in the layer cache so a restored fetch layer also restores its store.
 RUN pnpm fetch --frozen-lockfile
