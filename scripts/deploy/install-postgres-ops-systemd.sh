@@ -29,8 +29,6 @@ units=(
   esl-postgres-ops-alert.service
   esl-postgres-ops-alert.timer
 )
-changed=false
-
 for unit in "${units[@]}"; do
   source_path="${UNIT_SOURCE_DIR}/${unit}"
   target_path="${UNIT_TARGET_DIR}/${unit}"
@@ -39,13 +37,8 @@ for unit in "${units[@]}"; do
   if ! cmp -s "${source_path}" "${target_path}"; then
     install -m 0644 "${source_path}" "${target_path}"
     echo "Installed ${unit}"
-    changed=true
   fi
 done
 
-if [[ "${changed}" == "true" ]]; then
-  systemctl daemon-reload
-  echo "systemd manager reloaded"
-else
-  echo "systemd unit files already match the repository; no reload needed"
-fi
+systemctl daemon-reload
+echo "systemd manager reloaded"
