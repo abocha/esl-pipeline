@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.1.5] - 2026-09-30
+
+### Changed
+
+- Automated release from PR #291: feat(postgres): manage production ops jobs with systemd (https://github.com/abocha/esl-pipeline/pull/291)
+
 ## [11.1.4] - 2026-09-30
 
 ### Changed
