@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.1.7] - 2026-09-30
+
+### Changed
+
+- Automated release from PR #293: fix(auth): scope student-owned reads to workspace (https://github.com/abocha/esl-pipeline/pull/293)
+
 ## [11.1.6] - 2026-09-30
 
 ### Changed
