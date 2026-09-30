@@ -21,9 +21,6 @@ export function runDocsChecks(scope, options = {}) {
   if (!['full', 'pr'].includes(freshnessMode)) {
     throw new Error(`Unsupported docs freshness mode: ${freshnessMode}`);
   }
-  if (freshnessMode === 'pr' && !Array.isArray(options.changedFiles)) {
-    throw new Error('PR-scoped docs checks require changedFiles');
-  }
   const docs = resolveDocsForScope(scope, config);
   const errors = [];
   const warnings = [];
@@ -45,7 +42,6 @@ export function runDocsChecks(scope, options = {}) {
       config,
       scope,
       freshnessMode,
-      changedFiles: options.changedFiles,
       now: options.now,
       errors,
       warnings,
@@ -215,7 +211,6 @@ function validateFreshness({
   config,
   scope,
   freshnessMode,
-  changedFiles = [],
   now = new Date(),
   errors,
   warnings,
@@ -245,7 +240,7 @@ function validateFreshness({
           ? config.freshness_days?.non_core
           : undefined;
   if (typeof threshold === 'number' && daysOld > threshold) {
-    if (freshnessMode === 'pr' && !isFreshnessRelevant({ relPath, content, changedFiles })) {
+    if (freshnessMode === 'pr') {
       warnings.push(`[stale-doc-age-only] ${relPath} is ${daysOld} days old (max ${threshold})`);
       return;
     }
@@ -259,30 +254,6 @@ function validateFreshness({
       warnings.push(`[stale-warning] ${relPath} is ${daysOld} days old (warn > ${warnThreshold})`);
     }
   }
-}
-
-function isFreshnessRelevant({ relPath, content, changedFiles }) {
-  if (changedFiles.includes(relPath)) return true;
-  // Configuration changes can alter freshness thresholds or enforced doc lists.
-  // Checker implementation changes still run structural checks, but do not
-  // make unrelated age-only staleness block the PR that changes the checker.
-  if (changedFiles.includes('scripts/docs/docs-check.config.json')) return true;
-  if (changedFiles.some((file) => referencesChangedPackage({ content, file }))) return true;
-
-  if (relPath.startsWith('packages/')) {
-    const packageRoot = relPath.split('/').slice(0, 2).join('/');
-    return changedFiles.some((file) => file === packageRoot || file.startsWith(`${packageRoot}/`));
-  }
-
-  return false;
-}
-
-function referencesChangedPackage({ content, file }) {
-  const match = /^packages\/([^/]+)(?:\/|$)/u.exec(file);
-  if (!match) return false;
-
-  const packageRoot = `packages/${match[1]}`;
-  return content.includes(packageRoot) || content.includes(`@esl-pipeline/${match[1]}`);
 }
 
 function validateRouteHints({ repoRoot, config, errors }) {

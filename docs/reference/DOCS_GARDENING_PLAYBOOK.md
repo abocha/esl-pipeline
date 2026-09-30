@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents curating docs quality.
 - Read Time: 5 minutes.
 - Authority Level: operational playbook.
-- Last Verified Against: 2026-07-15 docs-gardening scripts and workflow.
+- Last Verified Against: 2026-09-30 docs-gardening scripts and workflow.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: weekly.
 - Status: `reference`.
@@ -28,7 +28,7 @@
 ## What Each Artifact Is For
 
 - `docs:garden`: single harness entrypoint for the weekly gardening run.
-- `docs:check:pr`: PR hard gate with ownership-scoped freshness age and full structural checks.
+- `docs:check:pr`: PR hard gate for structural validity; age-only freshness is always advisory.
 - `docs:check`: full configured-scope hard check, including repository-wide freshness age.
 - `tmp/docs-gardening.json`: canonical structured snapshot for the run.
 - `tmp/docs-gardening-issue.json` / `.md`: rolling issue payload generated from the snapshot.
@@ -46,9 +46,9 @@ the single gardening issue.
 ### Fix now
 
 - Broken links.
-- Missing or invalid metadata/freshness, and relevant-document freshness violations.
-- Repository-wide age-only freshness findings are scheduled-gardening work unless the document or
-  its ownership surface is relevant to the PR.
+- Missing or invalid metadata/freshness.
+- Age-only freshness is advisory in PR checks; scheduled/full gardening retains repository-wide
+  age enforcement.
 - Route hints or governance requirements that are mechanically failing.
 - Active plan lifecycle violations: completed/superseded plans under `docs/plans/`, missing exit
   triggers or current focus on routed active plans, non-editable active statuses, non-editable router
