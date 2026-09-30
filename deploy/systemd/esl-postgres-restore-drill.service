@@ -1,0 +1,13 @@
+[Unit]
+Description=ESL Pipeline production Postgres restore drill
+Wants=network-online.target
+After=docker.service network-online.target
+ConditionPathExists=/opt/esl-pipeline/.env
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/esl-pipeline
+ExecStart=/usr/bin/bash /opt/esl-pipeline/scripts/docker/postgres-prod-restore-drill.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h

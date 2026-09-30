@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ESL Pipeline production Postgres restore drill monthly
+
+[Timer]
+OnCalendar=*-*-01 03:00:00 UTC
+Persistent=true
+AccuracySec=5m
+Unit=esl-postgres-restore-drill.service
+
+[Install]
+WantedBy=timers.target

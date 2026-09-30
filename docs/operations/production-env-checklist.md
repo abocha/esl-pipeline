@@ -360,6 +360,9 @@ On the Ubuntu 24.04 VPS:
 - `uploads/` host path exists if compose bind mount requires it.
 - Docker volumes exist for Postgres and Redis.
 - Backups can be uploaded to S3.
+- Repository-owned production backup, integrity, restore-drill, and ops-alert systemd units are
+  installed and their timers are enabled; see
+  [`postgres-ops-health.md`](postgres-ops-health.md#production-systemd-units).
 - Logs can be viewed through Docker Compose.
 - Container log rotation is configured at the Docker daemon or service level.
 - `batch-worker`, `transcribe-worker`, and `student-memory-worker` are running; recording uploads
