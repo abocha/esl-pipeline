@@ -252,7 +252,8 @@ High-signal env groups for this package:
 - auth/security/upload controls: `JWT_*`, `REFRESH_*`, `ENABLE_*`
 - optional ChatGPT OAuth foundation: `MCP_OAUTH_*` (see below)
 - optional ops control: `BATCH_BACKEND_OPS_CONTROL_*`
-- generation: assignments use `gpt-5.6-sol` at medium reasoning; memory/profile workloads use
+- generation: assignments use `gpt-6.1-sol` at medium reasoning
+  (`GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY`); memory/profile workloads use
   `gpt-5.6-luna` at medium or high reasoning according to the versioned request envelope
 
 The speech-planner evaluation CLI is database-free and fail-closed. Its fixed live baseline counts

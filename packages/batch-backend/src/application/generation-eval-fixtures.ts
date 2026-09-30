@@ -79,7 +79,7 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
   {
     id: 'assignment-v1',
     workload: 'assignment_draft',
-    model: 'gpt-5.6-sol',
+    model: 'gpt-6.1-sol',
     instructions: GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.content,
     templateBaseline: {
       path: GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.path,

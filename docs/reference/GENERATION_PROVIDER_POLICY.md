@@ -26,16 +26,16 @@
 ### OpenAI
 
 - Built-in workload policy:
-  - assignment creation: `gpt-5.6-sol` with `medium` reasoning and `medium` text verbosity
+  - assignment creation: `gpt-6.1-sol` with `medium` reasoning and `medium` text verbosity
   - lesson memory and homework memory: `gpt-5.6-luna` with `medium` reasoning and `low` text verbosity
   - student-memory snapshot: `gpt-5.6-luna` with `high` reasoning and `low` text verbosity
   - profile revision and the closed `apply`/`no_change` candidate-patch decision: `gpt-5.6-luna`
     with `medium` reasoning and `low` text verbosity
 - `GEN_OPENAI_TARGET_MODELS_ENABLED` remains a compatibility and operator-observability signal. Both
-  flag states now resolve to the GPT-5.6 built-in policy; explicit `GEN_OPENAI_MODEL_*` overrides
+  flag states resolve to the same built-in workload policy; explicit `GEN_OPENAI_MODEL_*` overrides
   remain authoritative. The flag is not a paywall or user-plan control.
 - direct draft generation:
-  - primary: `gpt-5.6-sol`
+  - primary: `gpt-6.1-sol` (`GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY`)
   - fallback: `gpt-5.6-luna`
 - student-memory extraction:
   - primary: `gpt-5.6-luna`
@@ -46,9 +46,20 @@
   - tertiary fallback: `gpt-5.6-luna`
 
 The prompt baseline follows the current
-[GPT-5.6 model guide](https://developers.openai.com/api/docs/guides/latest-model): preserve explicit
+[OpenAI model guide](https://developers.openai.com/api/docs/guides/latest-model): preserve explicit
 outcomes, constraints, evidence rules, success criteria, and output contracts; change working
 prompts only for a measured failure or concrete contradiction.
+
+The generic `GEN_OPENAI_MODEL_PRIMARY` remains `gpt-5.6-sol`; it does not control assignment
+drafts. The implicitly allowlisted assignment primary is excluded from incidental fallback candidates
+for unrelated workloads; explicit operator allowlists are preserved. Assignment model metadata in
+`/config/job-options` uses the draft ladder. Explicit model
+and provider overrides, fallback behavior, and strict allowlist enforcement remain available. An
+explicit `GEN_ALLOWED_MODELS_OPENAI` override must include `gpt-6.1-sol` to permit that selection.
+
+ABO-6 changes the shipped homework model/prompt contract. Production still requires explicit
+prompt-assets bootstrap followed by admin activation; deployment alone does not activate the new
+prompt.
 
 ### Google AI Studio
 
@@ -177,9 +188,10 @@ Additional rules:
 - preset semantics and provider semantics must stay decoupled
 - student-memory extraction capability is governed separately by
   [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
-- generation changes require the versioned offline fixture command before merging:
+- Evaluators are optional diagnostic/evaluation tooling, not merge or activation gates.
+  Offline fixtures can be inspected with:
   `pnpm --filter @esl-pipeline/batch-backend generation:eval`
-- target-default activation additionally requires a successful, retained report from
+- Optional live evaluation requires explicit paid-provider authorization and the opt-in flag:
   `GENERATION_LIVE_EVAL_ENABLED=true pnpm --filter @esl-pipeline/batch-backend generation:eval:live`
 
 ## Detailed Provider References

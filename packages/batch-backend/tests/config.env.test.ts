@@ -157,39 +157,50 @@ describe('config/env - OpenAI target-model gate', () => {
     vi.resetModules();
   });
 
-  it('uses GPT-5.6 family defaults while preserving the disabled compatibility gate', async () => {
+  it('uses workload defaults while preserving the disabled compatibility gate', async () => {
     await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'false' }, async () => {
       const cfg = await loadConfigFresh();
       expect(cfg.generation.models.openai.targetModelsEnabled).toBe(false);
       expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
+      expect(cfg.generation.models.openai.assignmentDraftPrimary).toBe('gpt-6.1-sol');
       expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.allowed).toEqual(['gpt-5.6-sol', 'gpt-5.6-luna']);
+      expect(cfg.generation.models.openai.allowed).toEqual([
+        'gpt-5.6-sol',
+        'gpt-5.6-luna',
+        'gpt-6.1-sol',
+      ]);
     });
   });
 
-  it('uses the same GPT-5.6 family defaults when the compatibility gate is enabled', async () => {
+  it('uses the same workload defaults when the compatibility gate is enabled', async () => {
     await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'true' }, async () => {
       const cfg = await loadConfigFresh();
       expect(cfg.generation.models.openai.targetModelsEnabled).toBe(true);
       expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
+      expect(cfg.generation.models.openai.assignmentDraftPrimary).toBe('gpt-6.1-sol');
       expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.6-luna');
       expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.allowed).toEqual(['gpt-5.6-sol', 'gpt-5.6-luna']);
+      expect(cfg.generation.models.openai.allowed).toEqual([
+        'gpt-5.6-sol',
+        'gpt-5.6-luna',
+        'gpt-6.1-sol',
+      ]);
     });
   });
 
   it('allows every default OpenAI workload model when the target ladder is enabled', async () => {
     await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'true' }, async () => {
       delete process.env.GEN_OPENAI_MODEL_PRIMARY;
+      delete process.env.GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY;
       delete process.env.GEN_OPENAI_MODEL_FALLBACK;
       delete process.env.GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY;
       delete process.env.GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK;
@@ -203,6 +214,7 @@ describe('config/env - OpenAI target-model gate', () => {
       expect(cfg.generation.models.openai.allowed).toEqual(
         expect.arrayContaining([
           cfg.generation.models.openai.primary,
+          cfg.generation.models.openai.assignmentDraftPrimary,
           cfg.generation.models.openai.fallback,
           cfg.generation.models.openai.studentMemoryPrimary,
           cfg.generation.models.openai.studentMemoryFallback,
@@ -597,6 +609,7 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.maxOutputTokensHard).toBe(12000);
         expect(cfg.generation.budgetEmergencyOverride).toBe(false);
         expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
+        expect(cfg.generation.models.openai.assignmentDraftPrimary).toBe('gpt-6.1-sol');
         expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');
         expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.6-luna');
         expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.6-luna');
@@ -625,6 +638,7 @@ describe('config/env - generation provider mapping', () => {
         GEN_STRICT_NO_PAID: 'false',
         GEN_MAX_OUTPUT_TOKENS_HARD: '900',
         GEN_OPENAI_MODEL_PRIMARY: 'gpt-test',
+        GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY: 'gpt-assignment-test',
         GEN_OPENAI_MODEL_FALLBACK: 'gpt-small',
         GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY: 'gpt-memory',
         GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK: 'gpt-memory-fallback',
@@ -646,6 +660,7 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.strictNoPaid).toBe(false);
         expect(cfg.generation.maxOutputTokensHard).toBe(900);
         expect(cfg.generation.models.openai.primary).toBe('gpt-test');
+        expect(cfg.generation.models.openai.assignmentDraftPrimary).toBe('gpt-assignment-test');
         expect(cfg.generation.models.openai.fallback).toBe('gpt-small');
         expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-memory');
         expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-memory-fallback');
