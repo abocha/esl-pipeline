@@ -47,7 +47,6 @@ test('PR docs checks do not block on untouched non-core age-only staleness', () 
     repoRoot,
     config: baseConfig,
     freshnessMode: 'pr',
-    changedFiles: ['packages/unrelated/src/index.ts'],
     now,
   });
 
@@ -55,61 +54,8 @@ test('PR docs checks do not block on untouched non-core age-only staleness', () 
   assert.match(result.warnings.join('\n'), /stale-doc-age-only.*example\.md/u);
 });
 
-test('PR docs checks do not couple stale operations documents to changed siblings', () => {
-  const staleDoc = 'docs/operations/a.md';
-  const repoRoot = makeRepo({
-    [staleDoc]: documentation(staleDate),
-    'docs/operations/b.md': documentation(staleDate),
-  });
-  const config = {
-    ...baseConfig,
-    active_ops_docs: [staleDoc],
-    meta_required_docs: [staleDoc],
-    freshness_days: { ops: 45 },
-  };
-
-  const result = runDocsChecks('ops', {
-    repoRoot,
-    config,
-    freshnessMode: 'pr',
-    changedFiles: ['docs/operations/b.md'],
-    now,
-  });
-
-  assert.deepEqual(result.errors, []);
-  assert.match(result.warnings.join('\n'), /stale-doc-age-only.*docs\/operations\/a\.md/u);
-});
-
-test('checker implementation changes leave unrelated age-only staleness as a warning', () => {
+test('PR docs checks warn when the PR directly changes an old document', () => {
   const repoRoot = makeRepo({ 'docs/reference/example.md': documentation(staleDate) });
-  const result = runDocsChecks('non_core', {
-    repoRoot,
-    config: baseConfig,
-    freshnessMode: 'pr',
-    changedFiles: ['scripts/docs/docs-check-lib.mjs'],
-    now,
-  });
-
-  assert.deepEqual(result.errors, []);
-  assert.match(result.warnings.join('\n'), /stale-doc-age-only.*example\.md/u);
-});
-
-test('freshness policy configuration changes recheck configured document ages', () => {
-  const repoRoot = makeRepo({ 'docs/reference/example.md': documentation(staleDate) });
-  const result = runDocsChecks('non_core', {
-    repoRoot,
-    config: baseConfig,
-    freshnessMode: 'pr',
-    changedFiles: ['scripts/docs/docs-check.config.json'],
-    now,
-  });
-
-  assert.match(result.errors.join('\n'), /stale-doc.*example\.md/u);
-});
-
-test('PR docs checks block stale documentation touched by the PR', () => {
-  const repoRoot = makeRepo({ 'docs/reference/example.md': documentation(staleDate) });
-
   const result = runDocsChecks('non_core', {
     repoRoot,
     config: baseConfig,
@@ -118,30 +64,11 @@ test('PR docs checks block stale documentation touched by the PR', () => {
     now,
   });
 
-  assert.match(result.errors.join('\n'), /stale-doc.*example\.md/u);
-  assert.doesNotMatch(result.warnings.join('\n'), /stale-doc-age-only/u);
+  assert.deepEqual(result.errors, []);
+  assert.match(result.warnings.join('\n'), /stale-doc-age-only.*example\.md/u);
 });
 
-test('PR docs checks treat a changed package as the ownership surface for its README', () => {
-  const config = {
-    ...baseConfig,
-    non_core_docs: ['packages/example/README.md'],
-    meta_required_docs: ['packages/example/README.md'],
-  };
-  const repoRoot = makeRepo({ 'packages/example/README.md': documentation(staleDate) });
-
-  const result = runDocsChecks('non_core', {
-    repoRoot,
-    config,
-    freshnessMode: 'pr',
-    changedFiles: ['packages/example/src/index.js'],
-    now,
-  });
-
-  assert.match(result.errors.join('\n'), /stale-doc.*packages\/example\/README\.md/u);
-});
-
-test('PR docs checks treat an explicit package reference as an ownership surface', () => {
+test('PR docs checks warn when an old document references a changed package', () => {
   const repoRoot = makeRepo({
     'docs/reference/example.md': documentation(staleDate, 'Owned by `@esl-pipeline/example`.'),
   });
@@ -154,34 +81,71 @@ test('PR docs checks treat an explicit package reference as an ownership surface
     now,
   });
 
-  assert.match(result.errors.join('\n'), /stale-doc.*example\.md/u);
+  assert.deepEqual(result.errors, []);
+  assert.match(result.warnings.join('\n'), /stale-doc-age-only.*example\.md/u);
 });
 
-test('structural documentation failures remain blocking when age-only staleness is scoped', () => {
+test('structural documentation failures remain blocking alongside PR age warnings', () => {
   const repoRoot = makeRepo({
-    'docs/reference/example.md': documentation(staleDate, '[missing](does-not-exist.md)'),
+    'docs/reference/example.md': documentation(
+      staleDate,
+      '[missing](does-not-exist.md) contains forbidden wording',
+    ),
+  });
+  const config = { ...baseConfig, banned_literals: ['forbidden wording'] };
+
+  const result = runDocsChecks('non_core', {
+    repoRoot,
+    config,
+    freshnessMode: 'pr',
+    now,
+  });
+
+  assert.match(result.errors.join('\n'), /broken-link.*does-not-exist\.md/u);
+  assert.match(result.errors.join('\n'), /banned-pattern.*forbidden wording/u);
+  assert.match(result.warnings.join('\n'), /stale-doc-age-only/u);
+});
+
+test('missing freshness metadata remains blocking in PR mode', () => {
+  const repoRoot = makeRepo({
+    'docs/reference/example.md': documentation(staleDate).replace(
+      '- Last Verified Against: 2026-01-01\n',
+      '',
+    ),
   });
 
   const result = runDocsChecks('non_core', {
     repoRoot,
     config: baseConfig,
     freshnessMode: 'pr',
-    changedFiles: ['packages/unrelated/src/index.ts'],
     now,
   });
 
-  assert.match(result.errors.join('\n'), /broken-link.*does-not-exist\.md/u);
-  assert.match(result.warnings.join('\n'), /stale-doc-age-only/u);
+  assert.match(result.errors.join('\n'), /missing-freshness.*Last Verified Against/u);
 });
 
-test('invalid freshness metadata remains blocking when age-only staleness is scoped', () => {
+test('missing required metadata remains blocking in PR mode', () => {
+  const repoRoot = makeRepo({
+    'docs/reference/example.md': documentation(staleDate).replace('- Owner: test\n', ''),
+  });
+
+  const result = runDocsChecks('non_core', {
+    repoRoot,
+    config: baseConfig,
+    freshnessMode: 'pr',
+    now,
+  });
+
+  assert.match(result.errors.join('\n'), /missing-meta.*Owner/u);
+});
+
+test('invalid freshness metadata remains blocking in PR mode', () => {
   const repoRoot = makeRepo({ 'docs/reference/example.md': documentation('2026-13-01') });
 
   const result = runDocsChecks('non_core', {
     repoRoot,
     config: baseConfig,
     freshnessMode: 'pr',
-    changedFiles: ['packages/unrelated/src/index.ts'],
     now,
   });
 
