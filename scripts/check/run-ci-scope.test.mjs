@@ -6,21 +6,21 @@ import { formatCiScopeGithubOutputs, formatCiScopeSummary } from './workspace-ch
 test('GitHub outputs are single-line lowercase booleans only', () => {
   assert.equal(
     formatCiScopeGithubOutputs({
-      runtime: true,
+      build_unit: true,
       integration: false,
       backend_db_worker: false,
       telegram: false,
       docs_only: false,
       maintenance_only: true,
     }),
-    'runtime=true\nintegration=false\nbackend_db_worker=false\ntelegram=false\ndocs_only=false\nmaintenance_only=true\n',
+    'build_unit=true\nmedia=false\nintegration=false\nbackend_db_worker=false\ntelegram=false\ndocs_only=false\nmaintenance_only=true\n',
   );
 });
 
 test('scope summary renders structured reasons without exporting prose', () => {
   assert.match(
     formatCiScopeSummary({
-      runtime: true,
+      build_unit: true,
       integration: true,
       backend_db_worker: false,
       telegram: false,
@@ -31,7 +31,7 @@ test('scope summary renders structured reasons without exporting prose', () => {
       reasons: [
         {
           code: 'affected-package',
-          scope: 'runtime',
+          scope: 'build_unit',
           subject: '@esl-pipeline/batch-frontend',
         },
       ],

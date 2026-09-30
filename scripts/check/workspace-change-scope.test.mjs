@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { BACKEND_TEST_PROJECT_FILES } from '../../packages/batch-backend/vitest.projects.mjs';
+import { buildProductionImageScopeFromChangedFileRecords } from '../release/production-image-scope.mjs';
 import {
   buildCiScopeDecision,
   expandTransitiveDependents,
   flattenChangedFileRecords,
   formatCiScopeGithubOutputs,
   parseNameStatusZ,
+  readWorkspacePackages,
 } from './workspace-change-scope.mjs';
 
 const workspacePackages = [
@@ -40,26 +43,26 @@ const ciScopeCases = [
   [
     'frontend',
     records('M', 'packages/batch-frontend/src/main.tsx'),
-    [true, true, true, false, false],
+    [true, false, false, false, false],
   ],
   [
     'deleted migration',
     records('D', 'packages/batch-backend/migrations/0042.sql'),
-    [true, true, true, false, false],
+    [true, false, true, false, false],
   ],
   [
     'backend repository test',
     records('M', 'packages/batch-backend/tests/domain.job-repository.test.ts'),
-    [true, true, true, false, false],
+    [true, false, true, false, false],
   ],
   [
     'worker fixture',
     records('M', 'packages/batch-backend/tests/transport.worker-runner.integration.test.ts'),
-    [true, true, true, false, false],
+    [true, false, true, false, false],
   ],
-  ['contracts', records('M', 'packages/contracts/src/index.ts'), [true, true, true, true, false]],
+  ['contracts', records('M', 'packages/contracts/src/index.ts'), [true, true, false, true, false]],
   [
-    'shared infrastructure',
+    'shared infrastructure bootstrap exports',
     records('M', 'packages/shared-infrastructure/src/index.ts'),
     [true, true, true, true, false],
   ],
@@ -189,8 +192,8 @@ test('hosted scope keeps maintenance classification narrow and fail-closed', () 
   }
 });
 
-test('hosted scope treats maintenance plus runtime changes like the runtime change', () => {
-  const runtime = buildCiScopeDecision({
+test('hosted scope treats maintenance plus build_unit changes like the build_unit change', () => {
+  const build_unit = buildCiScopeDecision({
     changedFileRecords: records('M', 'packages/batch-frontend/src/main.tsx'),
     workspacePackages,
   });
@@ -202,7 +205,7 @@ test('hosted scope treats maintenance plus runtime changes like the runtime chan
     ],
     workspacePackages,
   });
-  assert.deepEqual(scopeFlags(mixed), scopeFlags(runtime));
+  assert.deepEqual(scopeFlags(mixed), scopeFlags(build_unit));
   assert.equal(mixed.maintenance_only, false);
 });
 
@@ -232,13 +235,13 @@ test('hosted scope fails open for empty records', () => {
 test('hosted scope fails closed for discovered workspaces without trustworthy names', () => {
   for (const name of [undefined, '']) {
     const decision = buildCiScopeDecision({
-      changedFileRecords: records('M', 'packages/unowned-runtime/src/index.ts'),
-      workspacePackages: [...workspacePackages, pkg(name, 'packages/unowned-runtime', [])],
+      changedFileRecords: records('M', 'packages/unowned-build_unit/src/index.ts'),
+      workspacePackages: [...workspacePackages, pkg(name, 'packages/unowned-build_unit', [])],
     });
     assert.deepEqual(scopeFlags(decision), [true, true, true, true, false]);
     assert.equal(
       formatCiScopeGithubOutputs(decision),
-      'runtime=true\nintegration=true\nbackend_db_worker=true\ntelegram=true\ndocs_only=false\nmaintenance_only=false\n',
+      'build_unit=true\nmedia=true\nintegration=true\nbackend_db_worker=true\ntelegram=true\ndocs_only=false\nmaintenance_only=false\n',
     );
     assert.equal(
       decision.reasons.some((reason) => reason.code === 'untrusted-workspace-metadata'),
@@ -248,7 +251,7 @@ test('hosted scope fails closed for discovered workspaces without trustworthy na
 });
 
 test('hosted scope treats every path of a rename as relevant', () => {
-  const runtimeToDocs = buildCiScopeDecision({
+  const build_unitToDocs = buildCiScopeDecision({
     changedFileRecords: [
       { status: 'R100', paths: ['packages/batch-frontend/src/old.tsx', 'docs/new.md'] },
     ],
@@ -260,8 +263,8 @@ test('hosted scope treats every path of a rename as relevant', () => {
     ],
     workspacePackages,
   });
-  assert.deepEqual(scopeFlags(runtimeToDocs), [true, true, true, false, false]);
-  assert.deepEqual(scopeFlags(docsToRuntime), [true, true, true, false, false]);
+  assert.deepEqual(scopeFlags(build_unitToDocs), [true, false, false, false, false]);
+  assert.deepEqual(scopeFlags(docsToRuntime), [true, false, false, false, false]);
 });
 
 test('hosted scope normalizes separators, duplicates, and input order', () => {
@@ -291,8 +294,8 @@ test('hosted scope keeps docs-only exclusive and blocking scopes monotonic', () 
     workspacePackages,
   });
   assert.equal(mixed.docs_only, false);
-  for (const scope of ['runtime', 'integration', 'backend_db_worker', 'telegram']) {
-    if (base[scope]) assert.equal(mixed[scope], true, `${scope} must remain enabled`);
+  for (const scope of ['build_unit', 'integration', 'backend_db_worker', 'telegram']) {
+    assert.ok(!base[scope] || mixed[scope], `${scope} must remain enabled`);
   }
 });
 
@@ -329,21 +332,20 @@ test('hosted scope selects service evidence for backend repository implementatio
   }
 });
 
-test('hosted scope requires core service evidence for ordinary application runtime changes', () => {
+test('durable application execution selects service evidence without generic integration', () => {
   for (const file of [
-    'packages/batch-backend/src/application/transcription-execution.ts',
-    'packages/batch-backend/src/application/reconcile-transcription-delivery.ts',
-    'packages/batch-backend/src/application/confirm-assignment-session-step.ts',
+    'transcription-execution',
+    'reconcile-transcription-delivery',
+    'confirm-assignment-session-step',
   ]) {
     const decision = buildCiScopeDecision({
-      changedFileRecords: records('M', file),
+      changedFileRecords: records('M', `packages/batch-backend/src/application/${file}.ts`),
       workspacePackages,
     });
-    assert.deepEqual(scopeFlags(decision), [true, true, true, false, false]);
-    assert.equal(
-      formatCiScopeGithubOutputs(decision),
-      'runtime=true\nintegration=true\nbackend_db_worker=true\ntelegram=false\ndocs_only=false\nmaintenance_only=false\n',
-    );
+    assert.equal(decision.build_unit, true);
+    assert.equal(decision.backend_db_worker, true);
+    assert.equal(decision.integration, false);
+    assert.equal(decision.telegram, false);
   }
 });
 
@@ -406,7 +408,7 @@ function records(status, ...paths) {
 
 function scopeFlags(decision) {
   return [
-    decision.runtime,
+    decision.build_unit,
     decision.integration,
     decision.backend_db_worker,
     decision.telegram,
@@ -417,3 +419,182 @@ function scopeFlags(decision) {
 function pkg(name, dir, dependencies) {
   return { name, dir, dependencies };
 }
+
+// Full lane vectors protect the risk boundaries (including production packaging)
+// against the actual discovered graph, rather than a hand-maintained mock graph.
+const liveWorkspacePackages = readWorkspacePackages(
+  fileURLToPath(new URL('../..', import.meta.url)),
+);
+const lanes = ['build_unit', 'integration', 'backend_db_worker', 'telegram', 'media'];
+for (const [name, files, selected, packaging] of [
+  [
+    'docs tooling',
+    ['scripts/docs/docs-check-lib.mjs', 'docs/reference/DOCS_GOVERNANCE.md'],
+    [],
+    false,
+  ],
+  ['frontend source', ['packages/batch-frontend/src/main.tsx'], ['build_unit'], false],
+  [
+    'backend generation policy',
+    ['packages/batch-backend/src/application/generation-policy.ts'],
+    ['build_unit'],
+    true,
+  ],
+  [
+    'backend prompt',
+    ['packages/batch-backend/src/application/speech-performance-prompt.ts'],
+    ['build_unit'],
+    true,
+  ],
+  [
+    'repository',
+    ['packages/batch-backend/src/domain/job-repository.ts'],
+    ['build_unit', 'backend_db_worker'],
+    true,
+  ],
+  [
+    'worker',
+    ['packages/batch-backend/src/transport/worker-runner.ts'],
+    ['build_unit', 'backend_db_worker'],
+    true,
+  ],
+  ['Telegram', ['packages/telegram-ops-bot/src/index.ts'], ['build_unit', 'telegram'], false],
+  [
+    'contracts barrel',
+    ['packages/contracts/src/index.ts'],
+    ['build_unit', 'integration', 'telegram', 'media'],
+    true,
+  ],
+  [
+    'shared storage',
+    ['packages/shared-infrastructure/src/storage/config.ts'],
+    ['build_unit', 'integration', 'telegram'],
+    true,
+  ],
+  [
+    'recording preparation',
+    ['packages/batch-backend/src/infrastructure/recording-media.ts'],
+    ['build_unit', 'media'],
+    true,
+  ],
+  [
+    'STT provider',
+    ['packages/stt-provider-elevenlabs/src/index.ts'],
+    ['build_unit', 'media'],
+    true,
+  ],
+  [
+    'HTTP boundary',
+    ['packages/batch-backend/src/transport/extended-routes/business-routes.ts'],
+    ['build_unit', 'integration'],
+    true,
+  ],
+  ['unknown runtime', ['unexpected-new-runtime-system/foo.ts'], lanes, true],
+  ['classifier bootstrap', ['scripts/check/workspace-change-scope.mjs'], lanes, false],
+  [
+    'mixed',
+    [
+      'scripts/docs/docs-check-lib.mjs',
+      'packages/batch-frontend/src/main.tsx',
+      'packages/batch-backend/migrations/0042.sql',
+      'packages/batch-backend/src/infrastructure/recording-media.ts',
+    ],
+    ['build_unit', 'backend_db_worker', 'media'],
+    true,
+  ],
+]) {
+  test(`affected risk boundary: ${name}`, () => {
+    const changedFileRecords = files.map((file) => ({ status: 'M', paths: [file] }));
+    const decision = buildCiScopeDecision({
+      changedFileRecords,
+      workspacePackages: liveWorkspacePackages,
+    });
+    assert.deepEqual(
+      lanes.filter((lane) => decision[lane]),
+      selected,
+    );
+    assert.equal(
+      buildProductionImageScopeFromChangedFileRecords({
+        changedFileRecords,
+        workspacePackages: liveWorkspacePackages,
+      }).backend,
+      packaging,
+    );
+    for (const lane of selected) {
+      assert.ok(
+        decision.reasons.some((reason) => reason.scope === lane || reason.scope === 'all'),
+        `${name}: ${lane} needs an explanation`,
+      );
+    }
+  });
+}
+
+test('mixed diffs are a monotonic union of independent lane ownership', () => {
+  const files = [
+    'packages/batch-frontend/src/main.tsx',
+    'packages/batch-backend/src/domain/job-repository.ts',
+    'packages/batch-backend/src/infrastructure/recording-media.ts',
+    'packages/telegram-ops-bot/src/index.ts',
+    'scripts/docs/docs-check-lib.mjs',
+  ];
+  const project = (paths) =>
+    buildCiScopeDecision({
+      changedFileRecords: paths.map((file) => ({ status: 'M', paths: [file] })),
+      workspacePackages: liveWorkspacePackages,
+    });
+  const combined = project(files);
+  for (const lane of lanes)
+    assert.equal(
+      combined[lane],
+      files.some((file) => project([file])[lane]),
+    );
+});
+
+test('copy into an unknown surface retains both paths and full fallback', () => {
+  const changedFileRecords = parseNameStatusZ(
+    'C100\0docs/guide.md\0unexpected-new-runtime-system/foo.ts\0',
+  );
+  const decision = buildCiScopeDecision({ changedFileRecords, workspacePackages });
+  assert.ok(lanes.every((lane) => decision[lane]));
+  assert.ok(
+    decision.reasons.some(
+      (reason) =>
+        reason.code === 'unknown-path' && reason.subject === 'unexpected-new-runtime-system/foo.ts',
+    ),
+  );
+});
+
+test('schema inputs and persisted OAuth behavior require their owning DB evidence', () => {
+  for (const file of [
+    'schema.sql',
+    'tests/fixtures/pg-legacy-schema.sql',
+    'src/infrastructure/mcp-oauth-adapter.ts',
+    'src/domain/mcp-oauth-grants.ts',
+    'src/domain/job-model.ts',
+    'src/application/teacher-business-dashboard.ts',
+  ]) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', `packages/batch-backend/${file}`),
+      workspacePackages: liveWorkspacePackages,
+    });
+    assert.equal(decision.backend_db_worker, true, file);
+    assert.equal(decision.telegram, false, file);
+  }
+});
+
+test('owned backend HTTP and media tests select only their independent prerequisite lanes', () => {
+  for (const [project, lane] of [
+    ['http', 'integration'],
+    ['media', 'media'],
+  ]) {
+    for (const file of BACKEND_TEST_PROJECT_FILES[project]) {
+      const decision = buildCiScopeDecision({
+        changedFileRecords: records('M', `packages/batch-backend/tests/${file}`),
+        workspacePackages: liveWorkspacePackages,
+      });
+      assert.equal(decision[lane], true, file);
+      assert.equal(decision.backend_db_worker, false, file);
+      assert.equal(decision.telegram, false, file);
+    }
+  }
+});

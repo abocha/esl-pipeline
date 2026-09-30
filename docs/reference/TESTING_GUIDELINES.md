@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents.
 - Authority Level: active test methodology guide.
-- Last Verified Against: 2026-09-14 repo state.
+- Last Verified Against: 2026-09-30 repo state.
 - Owner: founder-maintainer + automation agents.
 - Status: `active`.
 
@@ -14,12 +14,26 @@ Use the smallest reliable local evidence for the change in progress. Hosted PR C
 comprehensive merge gate. Local commands do not emulate the hosted gate and are not a substitute
 for a successful `CI gate`.
 
-Hosted scope distinguishes docs-only, explicit repository-maintenance-only, and application/runtime
-changes. Repository-maintenance-only currently covers `.gitignore`, `.agents/skills/**`,
-`scripts/git/**`, and the `scripts/release/release-label-policy.mjs` module and its `.test.mjs` test;
-it still runs the unconditional repository policy job while skipping application runtime, integration/media,
-PostgreSQL/Redis worker, and Telegram jobs. This classification is independent of `release:none`;
-workflow, root toolchain, deployment/runtime, and unknown paths remain conservative and fail closed.
+Hosted CI selects evidence by changed risk surface using deterministic ownership rules in
+`scripts/check/workspace-change-scope.mjs`. The workspace graph and transitive dependents drive
+ordinary build/unit impact. Those two hosted jobs currently execute workspace-wide; package impact
+does not automatically select specialized evidence:
+
+- deterministic integration: HTTP/API transport boundaries, pipeline/provider packages and their
+  owned support/tests;
+- backend DB/worker: migrations, PostgreSQL repositories/infrastructure, queues/workers, durable
+  execution entrypoints and service-project tests/support;
+- media: recording preparation, audio/STT processing and owned tests/support, in a separate FFmpeg job;
+- Telegram: the bot package, its transitive workspace dependencies, Compose and Telegram smoke inputs.
+
+Repository policy always runs, including tooling tests and docs checks. `docs/**`, `scripts/docs/**`,
+`AGENTS.md` and `.codex/**` are docs/tooling scope. Explicit maintenance scope additionally covers
+`.gitignore`, `.agents/skills/**`, `scripts/git/**` and the release-label policy module/tests. These
+paths alone skip application lanes and production packaging. Do not extend that allowlist to arbitrary
+maintenance-looking paths. Unknown paths or untrusted workspace ownership select all application lanes.
+Classifier (`scripts/check/**`), workflow and root toolchain changes retain an independent bootstrap
+`force_all` safeguard: a routing PR itself receives broad hosted evidence. Each selected lane has
+path/rule reasons in the CI summary. Production packaging remains an independent projection.
 
 If hosted CI fails, inspect that job's logs and retained manifest, then reproduce the job's actual
 command, configuration, and prerequisites. Do not replace a failing hosted job with a repository-wide
@@ -59,8 +73,8 @@ validation and records actionable logs/manifests. Reproduce the failing job dire
 - build and code quality: `pnpm build`, `pnpm typecheck`, or `pnpm lint`;
 - unit and component: the hosted recursive package command and its explicit workspace/Vitest
   resource settings from the job log;
-- deterministic integration and media: `pnpm test:integration` and
-  `pnpm --filter @esl-pipeline/batch-backend test:media`, with FFmpeg installed for media;
+- deterministic integration: `pnpm test:integration`;
+- recording media: `pnpm --filter @esl-pipeline/batch-backend test:media`, with FFmpeg installed;
 - backend DB and worker: isolated PostgreSQL 18 and Redis 8, explicit test URLs, the `_test`
   database safeguard, and the exact migration/PostgreSQL/worker commands from the job;
 - Telegram: `bash scripts/smoke/run-telegram-ops-compose-smoke.sh` plus the Telegram-specific
