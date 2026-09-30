@@ -1,5 +1,9 @@
 # GPT-5.6 Model Family Migration Implementation Plan
 
+> Historical July migration record. Current model/reasoning policy is owned by
+> [Generation Provider Policy](../../reference/GENERATION_PROVIDER_POLICY.md). ABO-6 supersedes
+> the assignment model default; generation evals are optional, not merge or activation gates.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Route assignments to `gpt-5.6-sol` and every other active OpenAI generation workload to `gpt-5.6-luna` with workload-calibrated reasoning effort.

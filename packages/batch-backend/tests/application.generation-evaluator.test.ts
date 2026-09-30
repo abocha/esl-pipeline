@@ -23,7 +23,7 @@ import { stitchPromptEnvelope } from '../src/application/prompt-assembly.js';
 describe('application/generation-evaluator', () => {
   it('routes assignment evals to Sol and every other OpenAI eval to Luna', () => {
     expect(GENERATION_EVAL_FIXTURES.map(({ id, model }) => ({ id, model }))).toEqual([
-      { id: 'assignment-v1', model: 'gpt-5.6-sol' },
+      { id: 'assignment-v1', model: 'gpt-6.1-sol' },
       { id: 'lesson-memory-v1', model: 'gpt-5.6-luna' },
       { id: 'homework-memory-v1', model: 'gpt-5.6-luna' },
       { id: 'snapshot-v1', model: 'gpt-5.6-luna' },

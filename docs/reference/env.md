@@ -161,9 +161,11 @@ Primary groups:
 - Model selection and fallbacks:
   - `GEN_PROVIDER_*`, `GEN_*_MODEL_*`
   - `GEN_OPENAI_TARGET_MODELS_ENABLED` (defaults to `false`; retained as a compatibility and
-    operator-observability signal, while both states use the built-in GPT-5.6 Sol/Luna policy)
-  - built-in OpenAI defaults: assignment `gpt-5.6-sol`; memory and profile workloads
-    `gpt-5.6-luna`; explicit `GEN_OPENAI_MODEL_*` values override those defaults
+    operator-observability signal, while both states use the built-in workload policy)
+  - built-in OpenAI defaults: assignment `gpt-6.1-sol`; memory and profile workloads
+    `gpt-5.6-luna`; `GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY` controls assignment drafts,
+    while generic `GEN_OPENAI_MODEL_PRIMARY` remains `gpt-5.6-sol`; explicit workload overrides
+    remain authoritative. Explicit OpenAI allowlists must permit the selected assignment model
 - Safety and budgets:
   - `GEN_SAFETY_MODE`, `GEN_STRICT_NO_PAID`, `GEN_ALLOW_PAID_SPEND`, `GEN_*_BUDGET`
 - Disabled Batch replay:

@@ -502,6 +502,7 @@ describe('application/generate-draft', () => {
 
   it('repairs an invalid envelope-backed assignment exactly once', async () => {
     const config = createConfig();
+    config.generation.models.openai = loadConfig().generation.models.openai;
     const openAi = vi
       .fn()
       .mockResolvedValueOnce({ text: '# Broken draft', usage: { totalTokens: 12 } })
@@ -537,7 +538,12 @@ describe('application/generate-draft', () => {
     );
 
     expect(result?.text).toBe('# Repaired draft');
+    expect(result?.model).toBe('gpt-6.1-sol');
     expect(openAi).toHaveBeenCalledTimes(2);
+    for (const [call] of openAi.mock.calls) {
+      expect(call.request.model).toBe('gpt-6.1-sol');
+      expect(call.request.envelope.settings.reasoningEffort).toBe('medium');
+    }
     expect(validator).toHaveBeenCalledTimes(2);
     const repairRequest = openAi.mock.calls[1]?.[0]?.request;
     expect(repairRequest?.envelope?.instructions).toContain('Repair the assignment markdown');

@@ -13,8 +13,8 @@ describe('canonical homework bootstrap template', () => {
         template.indexOf('## **📦 Definitive Homework Output Template**'),
       );
 
-      expect(outputTemplate).not.toContain('Homework Roadmap');
-      expect(outputTemplate).not.toContain(':::toc');
+      expect(template).not.toContain('Homework Roadmap');
+      expect(template).not.toContain(':::toc');
 
       const expectedHeadings = [
         "## 1. 🎯 This Week's Mission Briefing",
@@ -36,6 +36,15 @@ describe('canonical homework bootstrap template', () => {
       expect(outputTemplate.indexOf('### 🤔 Comprehension Check')).toBeLessThan(
         outputTemplate.indexOf('## 3. 🛠️ Language Toolkit: Useful Language'),
       );
+      const studyTextRegions = [
+        ...outputTemplate.matchAll(/^:::study-text Transcript\n[\s\S]*?^:::[ \t]*$/gm),
+      ];
+      const lastStudyText = studyTextRegions.at(-1);
+      expect(lastStudyText).toBeDefined();
+      const afterStudyText = outputTemplate
+        .slice(lastStudyText!.index + lastStudyText![0].length)
+        .trimStart();
+      expect(afterStudyText.startsWith('### 🤔 Comprehension Check\n')).toBe(true);
       expect(outputTemplate).toContain('### A. 🔩 Controlled Practice');
       expect(outputTemplate).toContain('### B. 🎙️ Pronunciation Micro-Focus (≈1 min)');
       expect(outputTemplate).not.toContain('### C. 🎙️ Pronunciation Micro-Focus');

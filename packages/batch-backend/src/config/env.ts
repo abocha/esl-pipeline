@@ -183,8 +183,10 @@ export interface BatchBackendConfig {
       openai: {
         targetModelsEnabled?: boolean;
         primary: string;
+        assignmentDraftPrimary?: string;
         fallback: string;
         allowed: string[];
+        allowedFromDefaults?: boolean;
         studentMemoryPrimary?: string;
         studentMemoryFallback?: string;
         profileDraftPrimary?: string;
@@ -734,11 +736,15 @@ export function loadConfig(): BatchBackendConfig {
   const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 12000);
   const generationAllowPaidSpend = readBool('GEN_ALLOW_PAID_SPEND', false);
   const generationBudgetEmergencyOverride = generationAllowPaidSpend;
-  // Retained as an operator-visible compatibility gate while every built-in default
-  // uses the evaluated GPT-5.6 family. Explicit model overrides remain authoritative.
+  // Retained as an operator-visible compatibility signal; workload defaults do not
+  // depend on this flag. Explicit model overrides remain authoritative.
   const generationOpenAiTargetModelsEnabled = readBool('GEN_OPENAI_TARGET_MODELS_ENABLED', false);
 
   const generationOpenAiModelPrimary = readString('GEN_OPENAI_MODEL_PRIMARY', 'gpt-5.6-sol')!;
+  const generationOpenAiAssignmentDraftModelPrimary = readString(
+    'GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY',
+    'gpt-6.1-sol',
+  )!;
   const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5.6-luna')!;
   const generationOpenAiMemoryModelPrimary = readString(
     'GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY',
@@ -765,6 +771,7 @@ export function loadConfig(): BatchBackendConfig {
     uniqueStringList([
       generationOpenAiModelPrimary,
       generationOpenAiModelFallback,
+      generationOpenAiAssignmentDraftModelPrimary,
       generationOpenAiMemoryModelPrimary,
       generationOpenAiMemoryModelFallback,
       generationOpenAiProfileDraftModelPrimary,
@@ -1013,8 +1020,10 @@ export function loadConfig(): BatchBackendConfig {
         openai: {
           targetModelsEnabled: generationOpenAiTargetModelsEnabled,
           primary: generationOpenAiModelPrimary,
+          assignmentDraftPrimary: generationOpenAiAssignmentDraftModelPrimary,
           fallback: generationOpenAiModelFallback,
           allowed: generationOpenAiAllowedModels,
+          allowedFromDefaults: !readString('GEN_ALLOWED_MODELS_OPENAI'),
           studentMemoryPrimary: generationOpenAiMemoryModelPrimary,
           studentMemoryFallback: generationOpenAiMemoryModelFallback,
           profileDraftPrimary: generationOpenAiProfileDraftModelPrimary,

@@ -1,5 +1,9 @@
 # GPT-5.6 Model Family Migration Design
 
+> Historical July migration record. Current model/reasoning policy is owned by
+> [Generation Provider Policy](../../reference/GENERATION_PROVIDER_POLICY.md). ABO-6 supersedes
+> the assignment model default; generation evals are optional, not merge or activation gates.
+
 ## Goal
 
 Consolidate every active OpenAI generation workload onto the GPT-5.6 family while preserving the
