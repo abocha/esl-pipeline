@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { BACKEND_TEST_PROJECT_FILES } from '../../packages/batch-backend/vitest.projects.mjs';
+
 const sharedImageAndToolchainFiles = new Set([
   '.nvmrc',
   'biome.json',
@@ -42,9 +44,10 @@ export function buildCiScopeDecision({ changedFileRecords, workspacePackages }) 
   const changedFiles = flattenChangedFileRecords(changedFileRecords);
   const reasons = [];
   const addReason = (code, scope, subject) => reasons.push({ code, scope, subject });
-  const blockingScopes = ['runtime', 'integration', 'backend_db_worker', 'telegram'];
+  const blockingScopes = ['build_unit', 'integration', 'backend_db_worker', 'telegram', 'media'];
   const decision = {
-    runtime: false,
+    build_unit: false,
+    media: false,
     integration: false,
     backend_db_worker: false,
     telegram: false,
@@ -77,51 +80,53 @@ export function buildCiScopeDecision({ changedFileRecords, workspacePackages }) 
   }
 
   const changedPackages = new Set();
-  let conservativeFallback = false;
   for (const file of changedFiles) {
     const matchedPackage = findPackageForFile(file, workspacePackages);
     if (matchedPackage?.name) {
       changedPackages.add(matchedPackage.name);
+      decision.build_unit = true;
+      addReason('workspace-package', 'build_unit', `${file} -> ${matchedPackage.name}`);
     } else if (matchedPackage) {
       enableAll('untrusted-workspace-metadata', file);
-      conservativeFallback = true;
       continue;
     }
 
     if (isCiRootToolchainPath(file)) {
       enableAll('root-toolchain', file);
-      conservativeFallback = true;
     } else if (!matchedPackage && !isKnownCiNonPackagePath(file)) {
       enableAll('unknown-path', file);
-      conservativeFallback = true;
+    }
+
+    // Each selector owns its evidence independently; package impact alone must
+    // never promote a backend/frontend edit to every service lane.
+    for (const [scope, selects] of [
+      ['integration', isCiIntegrationPath],
+      ['backend_db_worker', isCiBackendDbWorkerPath],
+      ['media', isCiMediaPath],
+      ['telegram', isCiTelegramPath],
+    ]) {
+      if (selects(file)) {
+        decision[scope] = true;
+        addReason('owned-surface', scope, file);
+      }
     }
   }
 
-  const affectedPackages = expandTransitiveDependents({
+  decision.affectedPackages = expandTransitiveDependents({
     packageNames: [...changedPackages],
     workspacePackages,
   });
-  decision.affectedPackages = affectedPackages;
-
-  if (
-    !conservativeFallback &&
-    (affectedPackages.length > 0 || changedFiles.some(isCiRuntimePath))
-  ) {
-    decision.runtime = true;
-    decision.integration = true;
-    decision.backend_db_worker = true;
-    addReason('runtime-change', 'runtime', changedFiles.join(','));
-    addReason('runtime-implies-integration', 'integration', 'runtime');
-    addReason('runtime-implies-backend-db-worker', 'backend_db_worker', 'runtime');
-  }
-
-  if (
-    !conservativeFallback &&
-    (affectedPackages.includes('@esl-pipeline/telegram-ops-bot') ||
-      changedFiles.some(isCiTelegramPath))
-  ) {
+  if (decision.affectedPackages.includes('@esl-pipeline/telegram-ops-bot')) {
     decision.telegram = true;
-    addReason('telegram-change', 'telegram', changedFiles.join(','));
+    for (const name of changedPackages) {
+      if (
+        expandTransitiveDependents({ packageNames: [name], workspacePackages }).includes(
+          '@esl-pipeline/telegram-ops-bot',
+        )
+      ) {
+        addReason('telegram-dependency', 'telegram', name);
+      }
+    }
   }
 
   return stableCiDecision(decision);
@@ -183,7 +188,8 @@ export function readWorkspacePackages(repoRoot) {
 
 export function formatCiScopeGithubOutputs(decision) {
   return [
-    'runtime',
+    'build_unit',
+    'media',
     'integration',
     'backend_db_worker',
     'telegram',
@@ -197,7 +203,8 @@ export function formatCiScopeGithubOutputs(decision) {
 
 export function formatCiScopeSummary(decision) {
   const scopes = [
-    'runtime',
+    'build_unit',
+    'media',
     'integration',
     'backend_db_worker',
     'telegram',
@@ -248,6 +255,7 @@ function isCiDocsPath(file) {
     file === 'AGENTS.md' ||
     file.startsWith('.codex/') ||
     file.startsWith('docs/') ||
+    file.startsWith('scripts/docs/') ||
     file === '.github/pull_request_template.md'
   );
 }
@@ -262,27 +270,151 @@ function isCiMaintenanceOnlyPath(file) {
   );
 }
 
-function isCiRuntimePath(file) {
+// Ownership rules follow the commands in ci.yml: HTTP + pipeline/provider
+// integration, PostgreSQL + Redis, and FFmpeg recording evidence. Keep changes
+// here bootstrap-full (scripts/check/**), including changes to the ownership map.
+const backendRoot = 'packages/batch-backend/';
+const backendTests = (projects) =>
+  new Set(
+    projects.flatMap((project) =>
+      BACKEND_TEST_PROJECT_FILES[project].map((file) => `${backendRoot}tests/${file}`),
+    ),
+  );
+const dbWorkerTests = backendTests(['migrations', 'postgres', 'worker']);
+const httpTests = backendTests(['http']);
+const mediaTests = backendTests(['media']);
+
+// DB-backed application boundaries exercised by the service projects, plus
+// durable execution entrypoints. Pure generation/prompt policy is deliberately
+// absent. This is ownership, not import/diff analysis.
+const dbApplications = new Set([
+  'assignment-sessions',
+  'confirm-assignment-session-step',
+  'share-assignment-session',
+  'homework-memory-source',
+  'student-timeline',
+  'student-schedule-billing',
+  'alpha-invites',
+  'student-memory-openai-batch-importer',
+  'student-memory-openai-batch-operations',
+  'student-memory-openai-batch-run-reconcile',
+  'student-memory-generation-pacing',
+  'submit-job',
+  'approve-job',
+  'create-approval-job',
+  'get-job-status',
+  'ops-control',
+  'transcription-execution',
+  'reconcile-transcription-delivery',
+  'reconcile-upload-candidates',
+  'ingest-recording-upload',
+  'retry-recording-transcription',
+  'sweep-recording-audio',
+  'teacher-business-dashboard',
+  'workspace-context',
+  'assignment-learner-context',
+  'create-prompt-package',
+  'find-student',
+  'get-job-provenance',
+  'homework-memory-backfill',
+  'ingest-manual-transcript-source',
+  'profile-initial-enrichment',
+  'student-lesson-history',
+  'student-memory-snapshot-backfill',
+]);
+
+function isCiBackendDbWorkerPath(file) {
+  if (dbWorkerTests.has(file)) return true;
+  if (/^packages\/shared-infrastructure\/src\/(?:env\/|index\.ts$)/u.test(file)) return true;
+  if (file === 'packages/contracts/src/job-actions.ts') return true;
+  if (/^scripts\/test\/run-backend-db-worker-check(?:\.test)?\.mjs$/u.test(file)) return true;
+  if (!file.startsWith(backendRoot)) return false;
+  const local = file.slice(backendRoot.length);
   return (
-    /^(?:Dockerfile|docker-compose(?:\.[^/]+)?\.ya?ml)$/u.test(file) ||
-    /^(?:docker|scripts\/deploy|scripts\/smoke)\//u.test(file)
+    /^(?:migrations|docker-entrypoint-initdb\.d)\//u.test(local) ||
+    /^src\/domain\/[^/]*(?:repository|model)\.ts$/u.test(local) ||
+    /^src\/domain\/(?:mcp-oauth-grants|student-memory-openai-batch-import|student-utils|job-events|job-actions)\.ts$/u.test(
+      local,
+    ) ||
+    /^src\/infrastructure\/(?:db|redis|migrations|migration-verify|schema-baseline|rls-readiness-audit|ffmpeg-semaphore|mcp-oauth-adapter|auth-service|.*queue.*|.*worker.*|.*redis-bridge|job-cancellation|orchestrator-service)\.ts$/u.test(
+      local,
+    ) ||
+    /^src\/transport\/[^/]*worker[^/]*\.ts$/u.test(local) ||
+    /^src\/transport\/(?:auth-middleware|mcp-oauth|mcp-server|core-routes|rate-limit-middleware)\.ts$/u.test(
+      local,
+    ) ||
+    /^src\/bootstrap\/pg-[^/]*\.ts$/u.test(local) ||
+    /^src\/application\/(?:process-.*-job|request-.*(?:generation|refresh)|retry-student-profile-candidate-refresh)\.ts$/u.test(
+      local,
+    ) ||
+    local.startsWith('src/application/job-actions/') ||
+    (local.startsWith('src/application/') &&
+      dbApplications.has(path.posix.basename(local, '.ts'))) ||
+    /^src\/tools\/(?:migrate-db|historical-profile-provenance)\.ts$/u.test(local) ||
+    /^(?:vitest(?:\.[^/]+)?\.(?:mjs|ts)|src\/(?:config\/env|bootstrap\/env)\.ts)$/u.test(local) ||
+    /^tests\/(?:support|setup)\//u.test(local) ||
+    local === 'package.json' ||
+    local === 'schema.sql' ||
+    local.startsWith('tests/fixtures/pg-')
+  );
+}
+
+function isCiIntegrationPath(file) {
+  return (
+    httpTests.has(file) ||
+    /^packages\/batch-backend\/src\/transport\/(?!.*worker).*\.ts$/u.test(file) ||
+    /^packages\/batch-backend\/(?:src\/(?:config\/env|bootstrap\/env|infrastructure\/orchestrator-service)\.ts|tests\/transport\.http-server\.integration\.[^/]+|tests\/(?:setup\/http\.mjs|support\/)|vitest[^/]*|package\.json)/u.test(
+      file,
+    ) ||
+    /^packages\/(?:contracts|orchestrator|tts-provider-elevenlabs)\//u.test(file) ||
+    // The pipeline integration consumes these workspace dependencies.
+    /^packages\/(?:md-validator|pmd|tts-core|tts-provider-inworld|tts-provider-google|provider-runtime|storage-uploader|html-publisher|shared-infrastructure)\//u.test(
+      file,
+    )
+  );
+}
+
+function isCiMediaPath(file) {
+  return (
+    mediaTests.has(file) ||
+    file === 'packages/contracts/src/index.ts' ||
+    /^packages\/provider-runtime\//u.test(file) ||
+    /^packages\/shared-infrastructure\/src\/(?:env\/|index\.ts$)/u.test(file) ||
+    /^packages\/batch-backend\/src\/(?:infrastructure\/(?:recording-media|ffmpeg-semaphore|transcription-storage)|application\/(?:.*transcri.*|process-transcribe-job|ingest-recording-upload|reconcile-upload-candidates|sweep-recording-audio)|transport\/extended-routes\/(?:recordings-routes|recording-provider-cache)|domain\/recording-model)\.ts$/u.test(
+      file,
+    ) ||
+    /^packages\/batch-backend\/(?:tests\/setup\/media\.mjs|tests\/support\/|src\/(?:config\/env|bootstrap\/env)\.ts|vitest[^/]*|package\.json)/u.test(
+      file,
+    ) ||
+    /^packages\/stt-[^/]+\//u.test(file) ||
+    file.startsWith('scripts/audio-benchmark/')
   );
 }
 
 function isCiTelegramPath(file) {
   return (
     file.startsWith('packages/telegram-ops-bot/') ||
-    /^(?:docker-compose(?:\.[^/]+)?\.ya?ml|docker\/|scripts\/deploy\/)/u.test(file) ||
-    /(?:^|\/)(?:telegram[^/]*smoke|smoke[^/]*telegram)(?:\.|\/|-)/u.test(file)
+    /^(?:docker-compose(?:\.[^/]+)?\.ya?ml)$/u.test(file) ||
+    /^docker\/telegram-ops-bot\//u.test(file) ||
+    /(?:^|\/)(?:telegram[^/]*smoke|smoke[^/]*telegram)(?:\.|\/|-)/u.test(file) ||
+    /^scripts\/smoke\/.*telegram/u.test(file)
+  );
+}
+
+function isCiPackagingPath(file) {
+  return (
+    /^(?:Dockerfile|docker-compose(?:\.[^/]+)?\.ya?ml)$/u.test(file) ||
+    /^(?:docker|scripts\/deploy)\//u.test(file)
   );
 }
 
 function isKnownCiNonPackagePath(file) {
   return (
-    isCiDocsPath(file) ||
     isCiMaintenanceOnlyPath(file) ||
-    isCiRuntimePath(file) ||
-    isCiTelegramPath(file)
+    isCiPackagingPath(file) ||
+    isCiTelegramPath(file) ||
+    isCiBackendDbWorkerPath(file) ||
+    isCiMediaPath(file)
   );
 }
 

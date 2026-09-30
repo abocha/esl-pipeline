@@ -189,7 +189,10 @@ Required repo checks for behavior changes:
   path/package classification, transitive workspace-dependent projection, and hosted CI output and
   summary formatting. It represents explicit repository-maintenance-only paths separately from
   docs-only paths; those paths require repository-policy evidence but do not select application
-  runtime lanes. This classification is independent of release labels, and unknown or ambiguous
+  evidence lanes. Package impact selects build/unit; explicit ownership independently selects
+  integration, DB/worker, Telegram and media. Docs tooling under `scripts/docs/**` stays in repository
+  policy. Classifier/workflow/root toolchain changes bootstrap full application evidence independently
+  of the edited classifier. This classification is independent of release labels, and unknown or ambiguous
   paths remain fail-closed. The production-image selector shares workspace/dependency impact logic
   and retains transitive dependent coverage. It does not collect local working-tree scope or plan
   local lanes.
@@ -218,7 +221,7 @@ Required repo checks for behavior changes:
 
 Canonical blocking PR check names are `CI gate`, `repository policy (node 24.x)`,
 `build + code quality (node 24.x)`, `unit + component (node 24.x)`,
-`deterministic integration + media (blocking)`, `backend db + worker integration (blocking)`, and
+`deterministic integration (blocking)`, `recording media (blocking)`, `backend db + worker integration (blocking)`, and
 `telegram command-loop compose smoke`; the conditional packaging check is
 `production backend packaging`. `CI gate` is the aggregate result and should become the
 single branch-protection requirement when repository plan capabilities permit. Every selected job

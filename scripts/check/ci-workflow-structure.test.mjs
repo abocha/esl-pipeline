@@ -12,9 +12,10 @@ test('PR CI exposes scoped evidence jobs and an always-running aggregate gate', 
   assert.doesNotMatch(ci, /if: \$\{\{ needs\.change-scope\.outputs\.[a-z_]+ \}\}/u);
 
   for (const [job, scope] of [
-    ['build-code-quality', 'runtime'],
-    ['unit-component', 'runtime'],
-    ['deterministic-integration-media', 'integration'],
+    ['build-code-quality', 'build_unit'],
+    ['unit-component', 'build_unit'],
+    ['deterministic-integration', 'integration'],
+    ['recording-media', 'media'],
     ['backend-db-integration', 'backend_db_worker'],
     ['telegram-compose-smoke', 'telegram'],
     ['production-backend-packaging', 'production_backend'],
@@ -64,6 +65,11 @@ test('CI keeps one manifest-guarded PostgreSQL and Redis service job', () => {
 
 for (const lane of [
   {
+    job: 'recording-media',
+    directory: 'tmp/ci-logs/recording-media',
+    artifact: 'recording-media-logs',
+  },
+  {
     job: 'repository-policy',
     directory: 'tmp/ci-logs/repository-policy',
     artifact: 'repository-policy-logs',
@@ -79,9 +85,9 @@ for (const lane of [
     artifact: 'unit-component-logs',
   },
   {
-    job: 'deterministic-integration-media',
-    directory: 'tmp/ci-logs/deterministic-integration-media',
-    artifact: 'deterministic-integration-media-logs',
+    job: 'deterministic-integration',
+    directory: 'tmp/ci-logs/deterministic-integration',
+    artifact: 'deterministic-integration-logs',
   },
 ]) {
   test(`${lane.artifact} retains actionable logs and a manifest`, () => {
@@ -131,14 +137,16 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     'repository-policy': 'success',
     'build-code-quality': 'success',
     'unit-component': 'success',
-    'deterministic-integration-media': 'success',
+    'deterministic-integration': 'success',
+    'recording-media': 'success',
     'backend-db-integration': 'success',
     'telegram-compose-smoke': 'success',
     'production-backend-packaging': 'success',
   };
   const allSelected = {
-    runtime: 'true',
+    build_unit: 'true',
     integration: 'true',
+    media: 'true',
     backend_db_worker: 'true',
     telegram: 'true',
     production_backend: 'true',
@@ -164,7 +172,7 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
   assert.notEqual(
     runEvaluator(
       evaluator,
-      { ...baseResults, 'deterministic-integration-media': 'failure' },
+      { ...baseResults, 'deterministic-integration': 'failure' },
       allSelected,
     ),
     0,
@@ -172,7 +180,7 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
   assert.notEqual(
     runEvaluator(
       evaluator,
-      { ...baseResults, 'deterministic-integration-media': 'skipped' },
+      { ...baseResults, 'deterministic-integration': 'skipped' },
       allSelected,
     ),
     0,
@@ -180,7 +188,7 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
   assert.equal(
     runEvaluator(
       evaluator,
-      { ...baseResults, 'deterministic-integration-media': 'skipped' },
+      { ...baseResults, 'deterministic-integration': 'skipped' },
       { ...allSelected, integration: 'false' },
     ),
     0,
@@ -189,7 +197,7 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     runEvaluator(
       evaluator,
       { ...baseResults, 'build-code-quality': 'skipped', 'unit-component': 'skipped' },
-      { ...allSelected, runtime: 'false' },
+      { ...allSelected, build_unit: 'false' },
     ),
     0,
   );
@@ -207,8 +215,9 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
   );
 
   const backendOnlySelected = {
-    runtime: 'false',
+    build_unit: 'false',
     integration: 'false',
+    media: 'false',
     backend_db_worker: 'true',
     telegram: 'false',
     production_backend: 'false',
@@ -217,7 +226,8 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     ...baseResults,
     'build-code-quality': 'skipped',
     'unit-component': 'skipped',
-    'deterministic-integration-media': 'skipped',
+    'deterministic-integration': 'skipped',
+    'recording-media': 'skipped',
     'telegram-compose-smoke': 'skipped',
     'production-backend-packaging': 'skipped',
   };
@@ -252,8 +262,9 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
   );
 
   const maintenanceOnlySelected = {
-    runtime: 'false',
+    build_unit: 'false',
     integration: 'false',
+    media: 'false',
     backend_db_worker: 'false',
     telegram: 'false',
     production_backend: 'false',
@@ -262,7 +273,8 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     ...baseResults,
     'build-code-quality': 'skipped',
     'unit-component': 'skipped',
-    'deterministic-integration-media': 'skipped',
+    'deterministic-integration': 'skipped',
+    'recording-media': 'skipped',
     'backend-db-integration': 'skipped',
     'telegram-compose-smoke': 'skipped',
     'production-backend-packaging': 'skipped',
@@ -295,23 +307,14 @@ test('unit/component lane keeps a conservative worker budget and measurement evi
   assert.match(unit, /unit-resource-usage\.txt/u);
 });
 
-test('integration/media lane installs FFmpeg and runs backend media coverage', () => {
-  const media = jobBlock('deterministic-integration-media');
-  assert.match(media, /apt-get update/u);
+test('media is independently selectable and integration does not install FFmpeg', () => {
+  const media = jobBlock('recording-media');
   assert.match(media, /apt-get install --yes --no-install-recommends ffmpeg/u);
-  assert.match(media, /pnpm test:integration/u);
   assert.match(media, /pnpm --filter @esl-pipeline\/batch-backend test:media/u);
-  const stepNames = [...media.matchAll(/^ {6}- name: (.+)$/gmu)].map((match) => match[1]);
-  const integrationIndex = stepNames.indexOf('Integration tests');
-  assert.deepEqual(
-    stepNames.slice(integrationIndex, integrationIndex + 3),
-    [
-      'Integration tests',
-      'Install FFmpeg for recording media tests',
-      'Backend recording media tests',
-    ],
-    'FFmpeg installation must run after deterministic integration and immediately before media',
-  );
+  assert.doesNotMatch(media, /pnpm test:integration/u);
+  assert.match(media, /pnpm --filter @esl-pipeline\/batch-backend\.\.\. run build/u);
+  assert.match(jobBlock('deterministic-integration'), /pnpm test:integration/u);
+  assert.doesNotMatch(jobBlock('deterministic-integration'), /ffmpeg|test:media/u);
 });
 
 test('production backend packaging matches the release build path', () => {
@@ -324,7 +327,7 @@ test('production backend packaging matches the release build path', () => {
   assert.match(packaging, /push: false/u);
 });
 
-test('runtime lanes keep duplicated builds without sharding or matrix fanout', () => {
+test('build_unit lanes keep duplicated builds without sharding or matrix fanout', () => {
   assert.match(jobBlock('build-code-quality'), /pnpm build/u);
   assert.match(jobBlock('unit-component'), /pnpm build/u);
   assert.doesNotMatch(ci, /^\s+matrix:/mu);
@@ -485,3 +488,73 @@ function runEvaluator(script, results, scopes) {
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
+
+test('aggregate gate treats each specialized lane independently', () => {
+  const evaluator = markedScript('ci-gate-evaluator');
+  const jobs = {
+    'build-code-quality': 'build_unit',
+    'unit-component': 'build_unit',
+    'deterministic-integration': 'integration',
+    'recording-media': 'media',
+    'backend-db-integration': 'backend_db_worker',
+    'telegram-compose-smoke': 'telegram',
+    'production-backend-packaging': 'production_backend',
+  };
+  const results = {
+    'change-scope': 'success',
+    'repository-policy': 'success',
+    ...Object.fromEntries(Object.keys(jobs).map((job) => [job, 'skipped'])),
+  };
+  const scopes = Object.fromEntries(Object.values(jobs).map((scope) => [scope, 'false']));
+  assert.equal(runEvaluator(evaluator, results, scopes), 0);
+  for (const [job, scope] of Object.entries(jobs)) {
+    const selectedScopes = { ...scopes, [scope]: 'true' };
+    const selectedResults = {
+      ...results,
+      ...Object.fromEntries(
+        Object.entries(jobs)
+          .filter(([, owner]) => owner === scope)
+          .map(([selectedJob]) => [selectedJob, 'success']),
+      ),
+    };
+    assert.equal(runEvaluator(evaluator, selectedResults, selectedScopes), 0, job);
+    for (const outcome of ['skipped', 'failure', 'cancelled', undefined])
+      assert.notEqual(
+        runEvaluator(evaluator, { ...selectedResults, [job]: outcome }, selectedScopes),
+        0,
+        `${job}:${outcome}`,
+      );
+  }
+});
+
+test('bootstrap forces all application lanes even if the edited projection says skip', () => {
+  const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
+  for (const payload of [
+    'M\t.github/workflows/ci.yml\t',
+    'M\tpackage.json\t',
+    'R100\tscripts/check/old.mjs\tdocs/new.md\t',
+    'C100\tdocs/old.md\tscripts/check/new.mjs\t',
+  ]) {
+    const script = `git() { printf '%b' "$DIFF_PAYLOAD" | tr '\\t' '\\0'; }\nforce_all=false\n${markedScript('ci-bootstrap')}\nFORCE_ALL=$force_all\n${namedStep(jobBlock('change-scope'), 'Combine bootstrap and projection').split('run: |')[1]}`;
+    const result = spawnSync(bash, [], {
+      input: script.replaceAll(' >> "$GITHUB_OUTPUT"', ''),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        DIFF_PAYLOAD: payload,
+        GITHUB_OUTPUT: '/dev/stdout',
+        GITHUB_STEP_SUMMARY: '/dev/null',
+        BUILD_UNIT: 'false',
+        INTEGRATION: 'false',
+        MEDIA: 'false',
+        BACKEND_DB_WORKER: 'false',
+        TELEGRAM: 'false',
+        DOCS_ONLY: 'true',
+        MAINTENANCE_ONLY: 'true',
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    for (const scope of ['build_unit', 'integration', 'media', 'backend_db_worker', 'telegram'])
+      assert.match(result.stdout, new RegExp(`${scope}=true`, 'u'), payload);
+  }
+});
