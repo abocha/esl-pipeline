@@ -130,6 +130,7 @@
 | `GEN_MAX_OUTPUT_TOKENS_HARD` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_DAILY_REQUEST_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_DAILY_TOKEN_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_MODEL_FALLBACK` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_MODEL_PRIMARY` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |

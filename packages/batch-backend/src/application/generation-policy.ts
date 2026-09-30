@@ -52,6 +52,22 @@ export function getModelLadderForProvider(
   workload: GenerationWorkload = 'default',
 ): string[] {
   if (provider === 'openai') {
+    // Exclude only the implicitly added assignment default from other workloads;
+    // preserve explicit operator allowlists.
+    const allowed = config.models.openai.allowed.filter(
+      (model) =>
+        workload === 'draft_generation' ||
+        !config.models.openai.allowedFromDefaults ||
+        model !== config.models.openai.assignmentDraftPrimary,
+    );
+    if (workload === 'draft_generation') {
+      return uniqueNonEmpty([
+        config.models.openai.assignmentDraftPrimary ?? config.models.openai.primary,
+        config.models.openai.fallback,
+        config.models.openai.primary,
+        ...allowed,
+      ]);
+    }
     if (workload === 'student_memory_extraction') {
       // Intentionally cross-referenced defaults: bulk extraction prefers the
       // cheaper/smaller model first, so studentMemoryPrimary falls back to the
@@ -62,7 +78,7 @@ export function getModelLadderForProvider(
         config.models.openai.studentMemoryFallback ?? config.models.openai.primary,
         config.models.openai.primary,
         config.models.openai.fallback,
-        ...config.models.openai.allowed,
+        ...allowed,
       ]);
     }
     if (workload === 'profile_revision_drafting') {
@@ -76,13 +92,13 @@ export function getModelLadderForProvider(
         config.models.openai.profileDraftTertiary,
         config.models.openai.primary,
         config.models.openai.fallback,
-        ...config.models.openai.allowed,
+        ...allowed,
       ]);
     }
     return uniqueNonEmpty([
       config.models.openai.primary,
       config.models.openai.fallback,
-      ...config.models.openai.allowed,
+      ...allowed,
     ]);
   }
   if (provider === 'google_ai_studio') {
@@ -270,7 +286,7 @@ export function buildGenerationOptionsPayload(args: {
   >();
 
   for (const provider of providers) {
-    const models = getModelLadderForProvider(args.config, provider);
+    const models = getModelLadderForProvider(args.config, provider, 'draft_generation');
     for (const [index, model] of models.entries()) {
       metadataByProviderModel.set(`${provider}:${model}`, {
         tier: toTier(index),
@@ -279,7 +295,10 @@ export function buildGenerationOptionsPayload(args: {
     }
   }
 
-  for (const candidate of resolveGenerationCandidates({ config: args.config })) {
+  for (const candidate of resolveGenerationCandidates({
+    config: args.config,
+    workload: 'draft_generation',
+  })) {
     const metadata = metadataByProviderModel.get(`${candidate.provider}:${candidate.model}`);
     if (!metadata) {
       continue;
@@ -296,7 +315,7 @@ export function buildGenerationOptionsPayload(args: {
 
   const defaultModelByProvider: Partial<Record<GenerationProvider, string>> = {};
   for (const provider of providers) {
-    const first = getModelLadderForProvider(args.config, provider)[0];
+    const first = getModelLadderForProvider(args.config, provider, 'draft_generation')[0];
     if (first) {
       defaultModelByProvider[provider] = first;
     }

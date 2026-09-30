@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildGenerationOptionsPayload,
   resolveGenerationCandidates,
 } from '../src/application/generation-policy.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
+import { loadConfig } from '../src/config/env.js';
 
 function buildConfig(
   overrides: Partial<BatchBackendConfig['generation']> = {},
@@ -70,6 +71,64 @@ function buildConfig(
 }
 
 describe('application/generation-policy', () => {
+  it('isolates the assignment default and exposes it in job options', () => {
+    const config = loadConfig().generation;
+    const assignment = resolveGenerationCandidates({ config, workload: 'draft_generation' });
+    expect(assignment[0]).toMatchObject({ provider: 'openai', model: 'gpt-6.1-sol' });
+    expect(config.models.openai.allowed).toContain('gpt-6.1-sol');
+    const options = buildGenerationOptionsPayload({ config });
+    expect(options.defaultModelByProvider?.openai).toBe('gpt-6.1-sol');
+    expect(options.modelOptions.find((item) => item.id === 'gpt-6.1-sol')).toMatchObject({
+      defaultSelected: true,
+      tier: 'primary',
+    });
+
+    for (const workload of [
+      'default',
+      'student_memory_extraction',
+      'profile_revision_drafting',
+    ] as const) {
+      const models = resolveGenerationCandidates({ config, workload })
+        .filter((candidate) => candidate.provider === 'openai')
+        .map((candidate) => candidate.model);
+      expect(models[0]).toBe(workload === 'default' ? 'gpt-5.6-sol' : 'gpt-5.6-luna');
+      expect(models).not.toContain('gpt-6.1-sol');
+    }
+  });
+
+  it('preserves the assignment model in an explicit operator allowlist for unrelated workloads', () => {
+    vi.stubEnv('GEN_ALLOWED_MODELS_OPENAI', 'gpt-5.6-sol,gpt-5.6-luna,gpt-6.1-sol');
+    try {
+      const config = loadConfig().generation;
+      expect(config.models.openai.allowed).toEqual(['gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-6.1-sol']);
+      for (const workload of [
+        'default',
+        'student_memory_extraction',
+        'profile_revision_drafting',
+      ] as const) {
+        expect(
+          resolveGenerationCandidates({ config, workload }).some(
+            (candidate) => candidate.provider === 'openai' && candidate.model === 'gpt-6.1-sol',
+          ),
+        ).toBe(true);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('preserves explicit assignment model and provider overrides', () => {
+    const config = loadConfig().generation;
+    expect(
+      resolveGenerationCandidates({
+        config,
+        workload: 'draft_generation',
+        providerOverride: 'google_ai_studio',
+        modelOverride: 'custom-model',
+      })[0],
+    ).toMatchObject({ provider: 'google_ai_studio', model: 'custom-model' });
+  });
+
   it('uses global fallback ranks that match execution candidate order', () => {
     const config = buildConfig();
 

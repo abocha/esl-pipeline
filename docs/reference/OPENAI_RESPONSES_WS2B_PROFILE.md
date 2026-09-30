@@ -91,10 +91,12 @@ instructions, records the selected source manifest and a source-selection hash, 
 workload's reasoning/verbosity policy and optional strict schema. Non-OpenAI providers receive the
 same deterministic flattened representation.
 
-The active OpenAI workload mapping is assignment draft on `gpt-5.6-sol` at medium reasoning and
-medium verbosity; profile revision and student-memory snapshot on `gpt-5.6-luna` at medium
-reasoning and low verbosity; and lesson memory, homework memory, and profile candidate patch on
-`gpt-5.6-luna` at low reasoning and low verbosity. These single-turn structured workflows do not
+The shipped OpenAI workload mapping is assignment draft on `gpt-6.1-sol` at medium reasoning and
+medium verbosity; lesson memory, homework memory, profile revision, and profile candidate patch
+on `gpt-5.6-luna` at medium reasoning and low verbosity; and student-memory snapshot on
+`gpt-5.6-luna` at high reasoning and low verbosity. Speech performance plans use high reasoning
+and low verbosity, with model selection governed by the separate speech-planning policy.
+These single-turn structured workflows do not
 enable Pro mode, persisted reasoning, tools, explicit caching, Programmatic Tool Calling, or
 multi-agent execution.
 
