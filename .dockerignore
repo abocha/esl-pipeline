@@ -9,4 +9,3 @@ uploads
 .env
 .env.*
 **/*.tsbuildinfo
-!.env.example

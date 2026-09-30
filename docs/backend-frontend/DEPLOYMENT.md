@@ -143,6 +143,18 @@ Alpine-slim line; Caddy, PostgreSQL, and Redis remain on controlled official Alp
 the three production Dockerfiles and [`docker-compose.prod.yml`](../../docker-compose.prod.yml) for
 the current lines.
 
+All three production builders copy `pnpm-workspace.yaml`, root `package.json`, `pnpm-lock.yaml`,
+`tsconfig.base.json`, and the `packages` tree filtered by `.dockerignore`. The root files own pnpm
+resolution/install policy and shared TypeScript compilation; filtered workspace builds select each
+target and its dependencies. `.env.example` is repository-policy validation input, excluded from
+the Docker context and no longer copied by the orchestrator postbuild step.
+
+Backend and Telegram runtime stages copy their `pnpm deploy --prod` output. The backend deployment
+includes `dist`, `migrations`, and `schema.sql`, with prompt assets copied separately to
+`/app/packages/batch-backend/prompt-assets`. Frontend runtime copies the built `dist` tree plus
+`nginx-rootless.conf` and `nginx.conf`. The broad package-tree copy is intentional; production-image
+scope selection is a separate policy and does not enumerate every file in that build context.
+
 Changed-image release builds use `pull: true`, commit-pinned Docker actions, persistent per-image GHA
 build caches, and controlled major/minor plus distribution tags. GHA cache export is best-effort
 because it is only a build acceleration; image pushes and unchanged-image reuse remain fatal.
