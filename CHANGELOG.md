@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.1.6] - 2026-09-30
+
+### Changed
+
+- Automated release from PR #292: fix(release): select production images by build ownership (https://github.com/abocha/esl-pipeline/pull/292)
+
 ## [11.1.5] - 2026-09-30
 
 ### Changed
