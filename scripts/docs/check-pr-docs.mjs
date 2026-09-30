@@ -7,12 +7,11 @@ const repoRoot = process.cwd();
 try {
   const from = requireOption('--from');
   const to = requireOption('--to');
-  const changedFiles = readChangedFiles({ repoRoot, from, to });
+  readChangedFiles({ repoRoot, from, to });
   const results = ['core', 'ops', 'non_core'].map((scope) =>
     runDocsChecks(scope, {
       repoRoot,
       freshnessMode: 'pr',
-      changedFiles,
     }),
   );
   const output = results.map(formatCheckResult).join('\n\n');
