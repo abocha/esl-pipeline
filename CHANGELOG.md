@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.1.3] - 2026-09-30
+
+### Changed
+
+- Automated release from PR #287: fix(homework): migrate assignment drafts to GPT-6.1 Sol (ABO-6) (https://github.com/abocha/esl-pipeline/pull/287)
+
 ## [11.1.2] - 2026-09-28
 
 ### Changed
