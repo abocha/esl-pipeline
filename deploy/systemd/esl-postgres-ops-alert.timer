@@ -1,0 +1,11 @@
+[Unit]
+Description=Check ESL Pipeline production Postgres operations health every six hours
+
+[Timer]
+OnCalendar=*-*-* 00/6:00:00 UTC
+Persistent=true
+AccuracySec=5m
+Unit=esl-postgres-ops-alert.service
+
+[Install]
+WantedBy=timers.target

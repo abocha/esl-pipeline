@@ -51,7 +51,7 @@ can_send_telegram() {
 send_telegram() {
   local text="$1"
   local url="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
-  local args=(-sS -X POST "$url" -d "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${text}" -d "disable_web_page_preview=true")
+  local args=(--fail --silent --show-error --connect-timeout 10 --max-time 30 -X POST "$url" -d "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${text}" -d "disable_web_page_preview=true")
   if [[ -n "$TELEGRAM_THREAD_ID" ]]; then
     args+=(-d "message_thread_id=${TELEGRAM_THREAD_ID}")
   fi
@@ -91,17 +91,19 @@ try {
     Number.isInteger(state.lastSeverity) ? String(state.lastSeverity) : '0',
     Number.isInteger(state.lastSentEpoch) ? String(state.lastSentEpoch) : '0',
   ];
-  process.stdout.write(values.join('\t'));
+  process.stdout.write(values.join('|'));
 } catch {
-  process.stdout.write('\t0\t0');
+  process.stdout.write('|0|0');
 }
 NODE
   )"
-  read -r PREV_STATE PREV_SEVERITY PREV_LAST_SENT_EPOCH <<<"$PREV_VALUES"
+  IFS='|' read -r PREV_STATE PREV_SEVERITY PREV_LAST_SENT_EPOCH <<<"$PREV_VALUES"
 fi
 
 SHOULD_SEND="false"
 ALERT_KIND=""
+NEXT_STATE="$CURRENT_STATE"
+NEXT_SEVERITY="$CURRENT_SEVERITY"
 
 if [[ "$CURRENT_STATE" == "healthy" ]]; then
   if [[ -n "$PREV_STATE" && "$PREV_STATE" != "healthy" ]]; then
@@ -155,16 +157,22 @@ EOF
       PREV_LAST_SENT_EPOCH="$NOW_EPOCH"
     else
       log_line "WARN: failed to send Telegram alert (${ALERT_KIND}, state=${CURRENT_STATE})."
+      # Keep the previous transition state so a failed failure or recovery notification retries.
+      NEXT_STATE="$PREV_STATE"
+      NEXT_SEVERITY="$PREV_SEVERITY"
     fi
   else
     log_line "WARN: alert was triggered but Telegram config is missing/disabled."
+    # Keep the previous transition so a later run can send it after config is restored.
+    NEXT_STATE="$PREV_STATE"
+    NEXT_SEVERITY="$PREV_SEVERITY"
   fi
 fi
 
 cat >"$STATE_FILE" <<EOF
 {
-  "lastState": "${CURRENT_STATE}",
-  "lastSeverity": ${CURRENT_SEVERITY},
+  "lastState": "${NEXT_STATE}",
+  "lastSeverity": ${NEXT_SEVERITY},
   "lastSentEpoch": ${PREV_LAST_SENT_EPOCH},
   "checkedAtUtc": "${CHECKED_AT_UTC}"
 }

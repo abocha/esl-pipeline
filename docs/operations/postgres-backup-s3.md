@@ -4,7 +4,7 @@
 
 - Audience: maintainers and operators of backup archival.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-09-13 repo state.
+- Last Verified Against: 2026-09-30 repo and production unit state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after scheduler/environment changes.
 - Status: `runbook`.
@@ -138,17 +138,42 @@ invoke this production-targeted path.
 
 ## Scheduling and Retention
 
-Recommended production host jobs:
+The production schedules are defined in [`deploy/systemd`](../../deploy/systemd/):
 
-- daily: `scripts/docker/run-postgres-backup-s3.sh`
-- weekly: `pnpm docker:prod:db:artifact-integrity`
-- monthly: `pnpm docker:prod:db:restore-drill`
-- every 6 hours: `pnpm ops:alert:check`
+- daily at 00:00 UTC: `esl-postgres-backup.timer`
+- Sundays at 02:00 UTC: `esl-postgres-artifact-integrity.timer`
+- first day of each month at 03:00 UTC: `esl-postgres-restore-drill.timer`
+- every six hours at 00:00, 06:00, 12:00, and 18:00 UTC: `esl-postgres-ops-alert.timer`
 
-For a systemd service, use the deployed checkout as `WorkingDirectory`, load the host `.env`, and set
-`PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops`. The service user needs write access to that
-directory, Docker access for backup/drill operations, and least-privilege access to the configured
-S3/KMS objects.
+Install or update the units and enable the timers from the deployed checkout:
+
+```bash
+cd /opt/esl-pipeline
+sudo bash scripts/deploy/install-postgres-ops-systemd.sh
+sudo systemctl enable --now \
+  esl-postgres-backup.timer \
+  esl-postgres-artifact-integrity.timer \
+  esl-postgres-restore-drill.timer \
+  esl-postgres-ops-alert.timer
+systemctl list-timers --all 'esl-postgres-*' --no-pager
+```
+
+The installer requires root, only accepts `/opt/esl-pipeline`, and reloads systemd if it copied any
+changed files. The oneshot scripts read `/opt/esl-pipeline/.env`; set
+`PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops` there. Backup and restore operations require
+Docker access; all operations that query or upload S3 require the configured least-privilege S3/KMS
+credentials. Do not put credentials in unit files.
+
+For service results, inspect:
+
+```bash
+sudo systemctl show esl-postgres-ops-alert.service -p Result -p ExecMainStatus -p ExecMainExitTimestamp
+sudo journalctl -u esl-postgres-ops-alert.service
+```
+
+An alert service exit status of 1 can mean a degraded/critical health result even when the
+corresponding Telegram message was delivered.
+The exact health signals are documented in [`postgres-ops-health.md`](postgres-ops-health.md).
 
 Retention knobs:
 

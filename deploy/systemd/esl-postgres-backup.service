@@ -1,0 +1,16 @@
+[Unit]
+Description=ESL Pipeline production Postgres backup to S3
+Wants=network-online.target
+After=docker.service network-online.target
+ConditionPathExists=/opt/esl-pipeline/.env
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/esl-pipeline
+Environment=PG_COMPOSE_PROJECT=esl-pipeline-prod
+Environment=PG_COMPOSE_FILE=/opt/esl-pipeline/docker-compose.prod.yml
+Environment=PG_CONTAINER_NAME=esl-pipeline-prod-postgres-1
+ExecStart=/usr/bin/bash /opt/esl-pipeline/scripts/docker/run-postgres-backup-s3.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h

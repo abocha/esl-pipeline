@@ -4,7 +4,7 @@
 
 - Audience: maintainers and operators of PostgreSQL backup automation.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-09-13 repo state.
+- Last Verified Against: 2026-09-30 repo and production unit state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after backup, restore-drill, or alerting changes.
 - Status: `runbook`.
@@ -85,6 +85,46 @@ An empty S3 namespace, a stale report, a failed checksum, a failed restore/read 
 disposable cleanup is critical. Missing configuration or a missing/malformed report is degraded.
 `ops:alert:check` aggregates only these three states and retains the existing Telegram transition,
 escalation, recovery, cooldown, and non-zero-exit behavior.
+
+It does not inspect application availability, worker progress, container restart counts, or host
+resource pressure. Those signals remain outside this bounded PostgreSQL operations check.
+
+## Production systemd units
+
+The canonical production unit files are under [`deploy/systemd`](../../deploy/systemd/). They
+capture the existing backup, weekly artifact-integrity, and monthly restore-drill services and add
+the missing six-hour ops-alert service/timer. The host scripts source `/opt/esl-pipeline/.env`; keep
+the Telegram token/chat settings and S3 settings there, with `PG_BACKUP_HOST_STATE_DIR` set to
+`/var/lib/esl-pipeline/ops` and `PG_BACKUP_ALERT_TELEGRAM_DISABLE=false`.
+
+Install or update the unit files from the deployed checkout. The installer requires root and refuses
+to run unless the checkout is `/opt/esl-pipeline`. It copies changed files and runs
+`systemctl daemon-reload` only when a unit changed; enabling timers remains a separate operator
+action:
+
+```bash
+cd /opt/esl-pipeline
+sudo bash scripts/deploy/install-postgres-ops-systemd.sh
+sudo systemctl enable --now \
+  esl-postgres-backup.timer \
+  esl-postgres-artifact-integrity.timer \
+  esl-postgres-restore-drill.timer \
+  esl-postgres-ops-alert.timer
+systemctl list-timers --all 'esl-postgres-*' --no-pager
+```
+
+The alert timer runs at 00:00, 06:00, 12:00, and 18:00 UTC. `Persistent=true` allows a missed
+calendar activation to run after the host returns. The oneshot alert service exits non-zero when
+the health state is degraded or critical; inspect its journal and the alert log before treating a
+non-zero result as a delivery failure, because a critical state is intentionally reported with a
+non-zero exit even when Telegram delivery succeeds.
+
+The alert sender treats HTTP errors and timeouts as delivery failures. It retains the preceding
+transition state after a failed send or while Telegram is missing/disabled, so a later scheduled run
+retries the same failure or recovery notification when delivery is available. Offline transition
+tests use isolated temporary state and a fake status/Telegram transport; they do not contact Telegram
+or use production state. There is no live diagnostic mode that can prove Telegram delivery without
+sending a real message. Do not synthesize production state transitions for a test alert.
 
 ## What the Evidence Proves
 
