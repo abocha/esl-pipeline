@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.1.4] - 2026-09-30
+
+### Changed
+
+- Automated release from PR #290: build(docker): remove unnecessary production image inputs (https://github.com/abocha/esl-pipeline/pull/290)
+
 ## [11.1.3] - 2026-09-30
 
 ### Changed
