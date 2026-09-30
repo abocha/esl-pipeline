@@ -18,8 +18,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
-      runtime: ${{ steps.scope.outputs.runtime }}
+      build_unit: ${{ steps.scope.outputs.build_unit }}
       integration: ${{ steps.scope.outputs.integration }}
+      media: ${{ steps.scope.outputs.media }}
       backend_db_worker: ${{ steps.scope.outputs.backend_db_worker }}
       telegram: ${{ steps.scope.outputs.telegram }}
       docs_only: ${{ steps.scope.outputs.docs_only }}
@@ -58,6 +59,7 @@ jobs:
               case "$changed_path" in
                 .github/workflows/*|scripts/check/*|.nvmrc|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|biome.json|vitest.config.*|tsconfig*.json)
                   force_all=true
+                  printf '%s\n' "- bootstrap force_all [all application lanes]: $changed_path" >> "$GITHUB_STEP_SUMMARY"
                   ;;
               esac
             done
@@ -82,8 +84,9 @@ jobs:
         shell: bash
         env:
           FORCE_ALL: ${{ steps.bootstrap.outputs.force_all }}
-          RUNTIME: ${{ steps.projection.outputs.runtime }}
+          BUILD_UNIT: ${{ steps.projection.outputs.build_unit }}
           INTEGRATION: ${{ steps.projection.outputs.integration }}
+          MEDIA: ${{ steps.projection.outputs.media }}
           BACKEND_DB_WORKER: ${{ steps.projection.outputs.backend_db_worker }}
           TELEGRAM: ${{ steps.projection.outputs.telegram }}
           DOCS_ONLY: ${{ steps.projection.outputs.docs_only }}
@@ -91,11 +94,12 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$FORCE_ALL" == true ]]; then
-            printf '%s\n' runtime=true integration=true backend_db_worker=true telegram=true docs_only=false maintenance_only=false >> "$GITHUB_OUTPUT"
+            printf '%s\n' build_unit=true media=true integration=true backend_db_worker=true telegram=true docs_only=false maintenance_only=false >> "$GITHUB_OUTPUT"
           else
             printf '%s\n' \
-              "runtime=$RUNTIME" \
+              "build_unit=$BUILD_UNIT" \
               "integration=$INTEGRATION" \
+              "media=$MEDIA" \
               "backend_db_worker=$BACKEND_DB_WORKER" \
               "telegram=$TELEGRAM" \
               "docs_only=$DOCS_ONLY" \
@@ -266,7 +270,7 @@ jobs:
   build-code-quality:
     name: build + code quality (node 24.x)
     needs: change-scope
-    if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
+    if: ${{ fromJSON(needs.change-scope.outputs.build_unit) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -336,7 +340,7 @@ jobs:
   unit-component:
     name: unit + component (node 24.x)
     needs: change-scope
-    if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
+    if: ${{ fromJSON(needs.change-scope.outputs.build_unit) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -415,8 +419,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  deterministic-integration-media:
-    name: deterministic integration + media (blocking)
+  deterministic-integration:
+    name: deterministic integration (blocking)
     needs: change-scope
     if: ${{ fromJSON(needs.change-scope.outputs.integration) }}
     runs-on: ubuntu-24.04
@@ -442,15 +446,70 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Initialize deterministic integration and media logs
-        run: mkdir -p tmp/ci-logs/deterministic-integration-media
+      - name: Initialize deterministic-integration logs
+        run: mkdir -p tmp/ci-logs/deterministic-integration
 
       - name: Integration tests
         id: integration_tests
         shell: bash
         run: |
           set -o pipefail
-          pnpm test:integration 2>&1 | tee tmp/ci-logs/deterministic-integration-media/test-integration.log
+          pnpm test:integration 2>&1 | tee tmp/ci-logs/deterministic-integration/test-integration.log
+
+      - name: Write deterministic-integration log manifest
+        if: always()
+        env:
+          LANE_RESULTS: >-
+            [{"command":"pnpm test:integration","conclusion":"${{ steps.integration_tests.outcome }}","logPath":"tmp/ci-logs/deterministic-integration/test-integration.log"}]
+        run: |
+          mkdir -p tmp/ci-logs/deterministic-integration
+          node -e "require('node:fs').writeFileSync('tmp/ci-logs/deterministic-integration/manifest.json', JSON.stringify(JSON.parse(process.env.LANE_RESULTS), null, 2) + '\n')"
+
+      - name: Upload deterministic-integration logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: deterministic-integration-logs
+          path: tmp/ci-logs/deterministic-integration
+          if-no-files-found: warn
+          retention-days: 14
+
+  recording-media:
+    name: recording media (blocking)
+    needs: change-scope
+    if: ${{ fromJSON(needs.change-scope.outputs.media) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize recording-media logs
+        run: mkdir -p tmp/ci-logs/recording-media
+
+      - name: Build media test prerequisites
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter @esl-pipeline/batch-backend... run build 2>&1 | tee tmp/ci-logs/recording-media/build.log
 
       - name: Install FFmpeg for recording media tests
         run: |
@@ -462,23 +521,23 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          pnpm --filter @esl-pipeline/batch-backend test:media 2>&1 | tee tmp/ci-logs/deterministic-integration-media/test-media.log
+          pnpm --filter @esl-pipeline/batch-backend test:media 2>&1 | tee tmp/ci-logs/recording-media/test-media.log
 
-      - name: Write deterministic integration and media log manifest
+      - name: Write recording-media log manifest
         if: always()
         env:
-          INTEGRATION_RESULTS: >-
-            [{"command":"pnpm test:integration","conclusion":"${{ steps.integration_tests.outcome }}","logPath":"tmp/ci-logs/deterministic-integration-media/test-integration.log"},{"command":"pnpm --filter @esl-pipeline/batch-backend test:media","conclusion":"${{ steps.media_tests.outcome }}","logPath":"tmp/ci-logs/deterministic-integration-media/test-media.log"}]
+          LANE_RESULTS: >-
+            [{"command":"pnpm --filter @esl-pipeline/batch-backend... run build","conclusion":"${{ steps.build.outcome }}","logPath":"tmp/ci-logs/recording-media/build.log"},{"command":"pnpm --filter @esl-pipeline/batch-backend test:media","conclusion":"${{ steps.media_tests.outcome }}","logPath":"tmp/ci-logs/recording-media/test-media.log"}]
         run: |
-          mkdir -p tmp/ci-logs/deterministic-integration-media
-          node -e "require('node:fs').writeFileSync('tmp/ci-logs/deterministic-integration-media/manifest.json', JSON.stringify(JSON.parse(process.env.INTEGRATION_RESULTS), null, 2) + '\n')"
+          mkdir -p tmp/ci-logs/recording-media
+          node -e "require('node:fs').writeFileSync('tmp/ci-logs/recording-media/manifest.json', JSON.stringify(JSON.parse(process.env.LANE_RESULTS), null, 2) + '\n')"
 
-      - name: Upload deterministic integration and media logs
+      - name: Upload recording-media logs
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: deterministic-integration-media-logs
-          path: tmp/ci-logs/deterministic-integration-media
+          name: recording-media-logs
+          path: tmp/ci-logs/recording-media
           if-no-files-found: warn
           retention-days: 14
 
@@ -681,7 +740,8 @@ jobs:
       - repository-policy
       - build-code-quality
       - unit-component
-      - deterministic-integration-media
+      - deterministic-integration
+      - recording-media
       - backend-db-integration
       - telegram-compose-smoke
       - production-backend-packaging
@@ -691,9 +751,9 @@ jobs:
       - name: Evaluate required CI results
         env:
           CI_RESULTS: >-
-            {"change-scope":"${{ needs.change-scope.result }}","repository-policy":"${{ needs.repository-policy.result }}","build-code-quality":"${{ needs.build-code-quality.result }}","unit-component":"${{ needs.unit-component.result }}","deterministic-integration-media":"${{ needs.deterministic-integration-media.result }}","backend-db-integration":"${{ needs.backend-db-integration.result }}","telegram-compose-smoke":"${{ needs.telegram-compose-smoke.result }}","production-backend-packaging":"${{ needs.production-backend-packaging.result }}"}
+            {"change-scope":"${{ needs.change-scope.result }}","repository-policy":"${{ needs.repository-policy.result }}","build-code-quality":"${{ needs.build-code-quality.result }}","unit-component":"${{ needs.unit-component.result }}","deterministic-integration":"${{ needs.deterministic-integration.result }}","recording-media":"${{ needs.recording-media.result }}","backend-db-integration":"${{ needs.backend-db-integration.result }}","telegram-compose-smoke":"${{ needs.telegram-compose-smoke.result }}","production-backend-packaging":"${{ needs.production-backend-packaging.result }}"}
           CI_SCOPES: >-
-            {"runtime":"${{ needs.change-scope.outputs.runtime }}","integration":"${{ needs.change-scope.outputs.integration }}","backend_db_worker":"${{ needs.change-scope.outputs.backend_db_worker }}","telegram":"${{ needs.change-scope.outputs.telegram }}","production_backend":"${{ needs.change-scope.outputs.production_backend }}"}
+            {"build_unit":"${{ needs.change-scope.outputs.build_unit }}","integration":"${{ needs.change-scope.outputs.integration }}","media":"${{ needs.change-scope.outputs.media }}","backend_db_worker":"${{ needs.change-scope.outputs.backend_db_worker }}","telegram":"${{ needs.change-scope.outputs.telegram }}","production_backend":"${{ needs.change-scope.outputs.production_backend }}"}
         run: |
           node <<'NODE'
           // ci-gate-evaluator:start
@@ -701,9 +761,10 @@ jobs:
           const scopes = JSON.parse(process.env.CI_SCOPES);
           const required = ['change-scope', 'repository-policy'];
           const conditional = {
-            'build-code-quality': 'runtime',
-            'unit-component': 'runtime',
-            'deterministic-integration-media': 'integration',
+            'build-code-quality': 'build_unit',
+            'unit-component': 'build_unit',
+            'deterministic-integration': 'integration',
+            'recording-media': 'media',
             'backend-db-integration': 'backend_db_worker',
             'telegram-compose-smoke': 'telegram',
             'production-backend-packaging': 'production_backend',
