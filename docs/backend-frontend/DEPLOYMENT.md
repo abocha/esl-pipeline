@@ -153,7 +153,16 @@ Backend and Telegram runtime stages copy their `pnpm deploy --prod` output. The 
 includes `dist`, `migrations`, and `schema.sql`, with prompt assets copied separately to
 `/app/packages/batch-backend/prompt-assets`. Frontend runtime copies the built `dist` tree plus
 `nginx-rootless.conf` and `nginx.conf`. The broad package-tree copy is intentional; production-image
-scope selection is a separate policy and does not enumerate every file in that build context.
+scope follows semantic workspace dependencies rather than every file in that build context.
+`scripts/release/production-image-scope.mjs` unions changed-package transitive dependents into the
+backend, frontend and Telegram targets. Each package's Dockerfile and runtime assets select its
+own image through that same ownership. `.dockerignore` and the four shared root inputs above select
+all three images. `.env.example`, `.nvmrc`, Compose, docs and known repository/release tooling select
+no images: deployment importance does not imply image build ownership. Named release/host utilities
+are explicit non-image inputs; arbitrary new scripts are not exempt. Unknown paths or incomplete,
+malformed changed-file/workspace metadata fail closed to all images. The release summary retains
+every contributing reason, including mixed package/shared/unknown impacts. Unaffected images still
+reuse/retag the previous version.
 
 Changed-image release builds use `pull: true`, commit-pinned Docker actions, persistent per-image GHA
 build caches, and controlled major/minor plus distribution tags. GHA cache export is best-effort
