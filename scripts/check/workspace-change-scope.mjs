@@ -266,7 +266,9 @@ function isCiMaintenanceOnlyPath(file) {
     file === '.gitignore' ||
     file.startsWith('.agents/skills/') ||
     file.startsWith('scripts/git/') ||
-    /^scripts\/release\/release-label-policy(?:\.test)?\.mjs$/u.test(file)
+    /^scripts\/release\/(?:release-label-policy|production-image-scope)(?:\.test)?\.mjs$/u.test(
+      file,
+    )
   );
 }
 
@@ -403,6 +405,7 @@ function isCiTelegramPath(file) {
 
 function isCiPackagingPath(file) {
   return (
+    file === '.dockerignore' ||
     /^(?:Dockerfile|docker-compose(?:\.[^/]+)?\.ya?ml)$/u.test(file) ||
     /^(?:docker|scripts\/deploy)\//u.test(file)
   );

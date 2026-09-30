@@ -48,7 +48,9 @@ if (summaryPath) {
       `- Backend: ${result.backend ? 'build' : 'reuse'}`,
       `- Frontend: ${result.frontend ? 'build' : 'reuse'}`,
       `- Telegram bot: ${result.bot ? 'build' : 'reuse'}`,
-      `- Reasons: ${result.reasons.join('; ')}`,
+      '',
+      'Reasons:',
+      ...result.reasons.map((reason) => `- ${reason}`),
       '',
     ].join('\n'),
   );
