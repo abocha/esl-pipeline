@@ -12,17 +12,6 @@ async function copySharedConfigs() {
   }
 }
 
-async function copyEnvExample() {
-  const repoRoot = resolve(import.meta.dirname, '../../..');
-  const source = resolve(repoRoot, '.env.example');
-  const target = resolve(import.meta.dirname, '../dist/.env.example');
-  try {
-    await cp(source, target, { dereference: true });
-  } catch (error) {
-    console.warn(`[postbuild] warning: unable to copy ${source} -> ${target}`, error);
-  }
-}
-
 const SOURCE_MAP_REPLACEMENTS = [
   ['/markdown-it-anchor/permalink.js', '/markdown-it-anchor/dist/markdownItAnchor.mjs'],
   ['/markdown-it-anchor/index.js', '/markdown-it-anchor/dist/markdownItAnchor.mjs'],
@@ -104,9 +93,4 @@ async function stripBuiltSourcemapComments() {
   await stripSourcemapComment(resolve(import.meta.dirname, '../dist/index.js'));
 }
 
-await Promise.all([
-  copyEnvExample(),
-  copySharedConfigs(),
-  normalizeBuiltSourcemaps(),
-  stripBuiltSourcemapComments(),
-]);
+await Promise.all([copySharedConfigs(), normalizeBuiltSourcemaps(), stripBuiltSourcemapComments()]);
