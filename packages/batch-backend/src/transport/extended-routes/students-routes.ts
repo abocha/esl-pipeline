@@ -98,6 +98,34 @@ function workspaceContextErrorResponse(reply: FastifyReply, error: unknown) {
 
 export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRoutesContext): void {
   const { authenticate } = context;
+  // Student-owned handlers below may use unscoped internal helpers only after this
+  // boundary proves ownership in SQL. Keep this after authenticate and before
+  // any profile, binding, memory, candidate, draft, or timeline access.
+  async function authorizeStudent(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+    if (!params.success) {
+      errorResponse(reply, 'validation_failed', { message: 'Invalid student id' });
+      return;
+    }
+    try {
+      const workspaceId = await resolveWorkspaceIdForRequest(request);
+      const student = await getStudentProfileById(params.data.id, {
+        workspaceId,
+        config: context.config,
+      });
+      if (!student) errorResponse(reply, 'not_found');
+    } catch (error) {
+      if (workspaceContextErrorResponse(reply, error)) return;
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'http_request',
+        route: request.routeOptions.url,
+        statusCode: 500,
+        error: 'internal_error',
+      });
+      errorResponse(reply, 'internal_error');
+    }
+  }
+
   const starterProfileSchema = z.object({
     overallLevel: z.string().nullable().optional(),
     primaryGoals: z.string().nullable().optional(),
@@ -249,7 +277,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/surfaces/overview',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/surfaces/overview');
@@ -334,7 +362,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/surfaces/learning',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/surfaces/learning');
@@ -416,7 +444,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/surfaces/history',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/surfaces/history');
@@ -799,7 +827,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/profile-candidates',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/profile-candidates');
@@ -879,7 +907,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.post(
     '/students/:id/profile-candidates/:candidateId/approve',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(
@@ -948,7 +976,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.post(
     '/students/:id/profile-candidates/:candidateId/reject',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(
@@ -1014,7 +1042,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.post(
     '/students/:id/profile-candidates/:candidateId/defer',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(
@@ -1080,7 +1108,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.post(
     '/students/:id/profile-candidates/promote',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'POST /students/:id/profile-candidates/promote');
@@ -1158,7 +1186,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.post(
     '/students/:id/profile-drafts/refresh-from-approved-candidates',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(
@@ -1241,7 +1269,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.post(
     '/students/:id/profile-drafts/initialize',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'POST /students/:id/profile-drafts/initialize');
@@ -1479,7 +1507,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/memory',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/memory');
@@ -1537,7 +1565,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/memory/health',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/memory/health');
@@ -1588,7 +1616,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/lesson-memory',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/lesson-memory');
@@ -1658,7 +1686,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/homework-memory',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/homework-memory');
@@ -1728,7 +1756,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/memory-snapshots',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/memory-snapshots');
@@ -2140,7 +2168,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/bindings',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/bindings');
@@ -2195,7 +2223,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/bindings/active',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/bindings/active');
@@ -2254,7 +2282,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   app.get(
     '/students/:id/timeline',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, authorizeStudent],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /students/:id/timeline');
