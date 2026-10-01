@@ -1,4 +1,5 @@
 import { WorkspaceContextError } from '../src/application/workspace-context.js';
+import { MIGRATED_PROFILE_REVISION_ID } from './fixtures/migrated-profile-revision.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
@@ -641,6 +642,94 @@ describeHttpServerIntegrationSuite(
       });
       expect(mockSaveProfileRevisionContent).toHaveBeenCalled();
     });
+
+    it('accepts a migrated revision ID for draft candidate-link inheritance', async () => {
+      mockSaveProfileRevisionContent.mockClear();
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile/revisions`,
+        payload: {
+          content: 'Inherited draft',
+          inheritCandidateLinksFromRevisionId: MIGRATED_PROFILE_REVISION_ID,
+        },
+      });
+      expect(response.statusCode).toBe(201);
+      expect(mockSaveProfileRevisionContent).toHaveBeenCalledWith(
+        deriveStudentId('Anna'),
+        'Inherited draft',
+        expect.objectContaining({
+          inheritCandidateLinksFromRevisionId: MIGRATED_PROFILE_REVISION_ID,
+        }),
+      );
+    });
+
+    it.each(['', '/activate', '/restore'])(
+      'accepts a migrated revision ID for detail%s',
+      async (action: string) => {
+        if (action === '/activate')
+          mockActivateProfileRevisionForStudent.mockResolvedValueOnce({
+            id: MIGRATED_PROFILE_REVISION_ID,
+            studentId: deriveStudentId('Anna'),
+            contentHash: 'hash-1',
+            source: 'create',
+            status: 'active',
+            versionNumber: 1,
+            versionLabel: 'v1',
+            activatedAt: '2024-01-01T00:00:00.000Z',
+            deprecatedAt: null,
+            createdAt: '2024-01-01T00:00:00.000Z',
+            createdBy: null,
+            restoredFromRevisionId: null,
+          });
+        const operation =
+          action === '/activate'
+            ? mockActivateProfileRevisionForStudent
+            : action === '/restore'
+              ? mockRestoreProfileRevision
+              : mockGetProfileRevisionForStudent;
+        operation.mockClear();
+        const response = await app.inject({
+          method: action ? 'POST' : 'GET',
+          url: `/students/${deriveStudentId('Anna')}/profile/revisions/${MIGRATED_PROFILE_REVISION_ID}${action}`,
+        });
+        expect(response.statusCode).toBe(200);
+        const expectedArgs = [
+          deriveStudentId('Anna'),
+          MIGRATED_PROFILE_REVISION_ID,
+          ...(action === '/restore' ? [{ createdBy: 'test-user-id' }] : []),
+        ];
+        expect(operation).toHaveBeenCalledWith(...expectedArgs);
+      },
+    );
+
+    it.each(['', '/activate', '/restore', '/inherit'])(
+      'rejects malformed profile revision input%s before application access',
+      async (action: string) => {
+        for (const operation of [
+          mockGetProfileRevisionForStudent,
+          mockActivateProfileRevisionForStudent,
+          mockRestoreProfileRevision,
+          mockSaveProfileRevisionContent,
+        ])
+          operation.mockClear();
+        const inherit = action === '/inherit';
+        const response = await app.inject({
+          method: action ? 'POST' : 'GET',
+          url: `/students/${deriveStudentId('Anna')}/profile/revisions${inherit ? '' : `/not-a-uuid${action}`}`,
+          ...(inherit
+            ? { payload: { content: 'Draft', inheritCandidateLinksFromRevisionId: 'not-a-uuid' } }
+            : {}),
+        });
+        expect(response.statusCode).toBe(400);
+        for (const operation of [
+          mockGetProfileRevisionForStudent,
+          mockActivateProfileRevisionForStudent,
+          mockRestoreProfileRevision,
+          mockSaveProfileRevisionContent,
+        ])
+          expect(operation).not.toHaveBeenCalled();
+      },
+    );
 
     it('GET /students/:id/profile/revisions returns profile revision list', async () => {
       const response = await app.inject({

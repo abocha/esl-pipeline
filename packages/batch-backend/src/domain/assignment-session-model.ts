@@ -9,6 +9,8 @@ import type {
   TtsStrategy,
 } from '@esl-pipeline/contracts';
 
+import { postgresUuidSchema } from './postgres-uuid.js';
+
 const nullableHash = z
   .string()
   .regex(/^[0-9a-f]{64}$/)
@@ -39,7 +41,7 @@ export const AssignmentConfirmedSnapshotSchema = z
         teacherNotes: z.string().nullable(),
         // Accepted only when reading immutable legacy snapshots.
         profileId: z.string().nullable().optional(),
-        profileRevisionId: z.string().uuid().nullable(),
+        profileRevisionId: postgresUuidSchema.nullable(),
         profileRevisionHash: nullableHash,
       })
       .strict()
