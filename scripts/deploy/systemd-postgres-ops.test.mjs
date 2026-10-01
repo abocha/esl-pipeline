@@ -26,6 +26,8 @@ const unitFiles = [
   'esl-postgres-restore-drill.timer',
   'esl-postgres-ops-alert.service',
   'esl-postgres-ops-alert.timer',
+  'esl-host-runtime-health.service',
+  'esl-host-runtime-health.timer',
 ];
 const readUnit = (name) => readFileSync(`${unitDir}/${name}`, 'utf8');
 
@@ -119,6 +121,23 @@ test('systemd installer is root-only, checkout-pinned, and keeps activation sepa
   assert.match(installer, /systemctl daemon-reload/u);
   assert.doesNotMatch(installer, /systemctl enable|systemctl start/u);
   for (const file of unitFiles) assert.match(installer, new RegExp(file.replace('.', '\.'), 'u'));
+});
+
+test('host runtime unit is docker-ordered, credential-free, and scheduled every five minutes', () => {
+  const service = readUnit('esl-host-runtime-health.service');
+  const timer = readUnit('esl-host-runtime-health.timer');
+  assert.match(service, /Type=oneshot/u);
+  assert.match(service, /After=network-online\.target docker\.service/u);
+  assert.doesNotMatch(service, /Requires=docker\.service/u);
+  assert.match(service, /ExecStartPre=\/usr\/bin\/test -f \/opt\/esl-pipeline\/\.env/u);
+  assert.match(
+    service,
+    /ExecStart=\/usr\/bin\/bash \/opt\/esl-pipeline\/scripts\/docker\/run-host-runtime-health-alert\.sh/u,
+  );
+  assert.doesNotMatch(service, /Environment(File)?=.*(TOKEN|SECRET|PASSWORD)/iu);
+  assert.match(timer, /OnCalendar=\*-\*-\* \*:0\/5:00 UTC/u);
+  assert.match(timer, /Persistent=true/u);
+  assert.match(timer, /Unit=esl-host-runtime-health\.service/u);
 });
 
 test('installer retries daemon-reload after a failed first reload with unchanged unit files', (t) => {

@@ -1,0 +1,11 @@
+[Unit]
+Description=ESL Pipeline production host and runtime health checks with Telegram alerts
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/esl-pipeline
+ExecStartPre=/usr/bin/test -f /opt/esl-pipeline/.env
+ExecStart=/usr/bin/bash /opt/esl-pipeline/scripts/docker/run-host-runtime-health-alert.sh
+TimeoutStartSec=2min

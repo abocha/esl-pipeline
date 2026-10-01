@@ -450,8 +450,10 @@ possible, and periodically test restores in a non-production environment.
 
 Lightsail instances use burstable CPU performance. Short deployment spikes are acceptable, but do
 not spend burst capacity on development work, repeated image builds, or full test suites that can
-run locally or in CI. Monitor CPU utilization, remaining burst capacity, RAM/swap, disk, container
-health, and application health endpoints during and after deploys.
+run locally or in CI. The host/runtime timer reports local CPU and memory pressure, filesystem
+capacity, container state/restarts, and the public application routes from the VPS. It does not
+report Lightsail burst balance or prove availability when the VPS itself is unreachable; see
+[`host-runtime-health.md`](../operations/host-runtime-health.md).
 
 ## Redis Queue Runtime
 
