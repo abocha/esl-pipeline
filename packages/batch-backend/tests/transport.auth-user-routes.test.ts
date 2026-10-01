@@ -74,7 +74,6 @@ const user: UserRecord = {
 };
 
 const settings: UserSettingsRecord = {
-  id: 'settings-1',
   userId: user.id,
   elevenLabsKeyEncrypted: 'encrypted-api-key',
   ttsProvider: 'elevenlabs',

@@ -174,6 +174,15 @@ Useful indexes:
   storage. Historical `unknown` provenance stays unknown. The old profile-wide provenance backfill
   and student binding tools are retired; see the cutover runbook before any residual cleanup.
 - Fresh database bootstrap uses the generated `schema.sql` baseline; existing databases upgrade through versioned migrations.
+- User settings remain private child storage keyed by `user_id`, with unchanged sanitized API
+  output. Migration 0060 removes the unused surrogate ID and Notion token column, preserving
+  ElevenLabs ciphertext, preferences, timestamps, owner FK/cascade and user-scoped policy.
+  It refuses removal if any Notion value is non-NULL (including an empty string). Before a future
+  rollout, inventory only row counts; privately export any legacy values and obtain approved
+  disposition before clearing them. Never log secrets. The migration must run with compatible
+  settings writers; pre-0060 binaries still reference the removed ID. This local cleanup does
+  not authorize changes to the ongoing GitHub #298 v12.0.1 cutover.
+  Planning evidence: [ABO-13 canonical data-model audit, candidate 1](https://linear.app/abocha/document/abo-13-canonical-data-model-audit-repository-e2a6435-24ab79a60688).
 - `/meta/version` reports the release's expected migration head, derived from the backend's packaged
   `migrations/*.sql` files. The shared DB contract version is a separate semantic compatibility signal.
 - Extended API and ops-control surfaces are additive and must be explicitly enabled.

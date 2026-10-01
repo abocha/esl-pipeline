@@ -256,7 +256,6 @@ export async function registerInvitedUser(params: RegisterInvitedUserParams): Pr
 
       const userId = randomUUID();
       const workspaceId = randomUUID();
-      const settingsId = randomUUID();
       const now = new Date();
       const workspaceName = `${emailNormalized.split('@')[0] || 'Alpha'} workspace`;
       const defaultSettings = getDefaultSettings();
@@ -284,7 +283,6 @@ export async function registerInvitedUser(params: RegisterInvitedUserParams): Pr
       await client.query(
         `
         INSERT INTO user_settings (
-          id,
           user_id,
           elevenlabs_key_encrypted,
           tts_provider,
@@ -293,10 +291,9 @@ export async function registerInvitedUser(params: RegisterInvitedUserParams): Pr
           default_tts_strategy,
           enable_notifications
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         `,
         [
-          settingsId,
           userId,
           defaultSettings.elevenLabsKeyEncrypted,
           defaultSettings.ttsProvider,

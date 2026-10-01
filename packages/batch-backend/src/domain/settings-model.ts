@@ -16,7 +16,6 @@ export type UserTtsStrategy = TtsStrategy;
  * Database record representation of user settings
  */
 export interface UserSettingsRecord {
-  id: string;
   userId: string;
   // Encrypted API keys (raw encrypted values from DB)
   elevenLabsKeyEncrypted: string | null;
@@ -110,7 +109,7 @@ export function sanitizeSettings(record: UserSettingsRecord): UserSettingsOutput
  */
 export function getDefaultSettings(): Omit<
   UserSettingsRecord,
-  'id' | 'userId' | 'createdAt' | 'updatedAt'
+  'userId' | 'createdAt' | 'updatedAt'
 > {
   return {
     elevenLabsKeyEncrypted: null,
