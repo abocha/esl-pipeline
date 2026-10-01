@@ -15,6 +15,7 @@ import {
   saveProfileRevisionContent,
   upsertProfileContent,
 } from '../../application/profile-content.js';
+import { postgresUuidSchema } from '../../domain/postgres-uuid.js';
 import { logger } from '../../infrastructure/logger.js';
 import { getAuthenticatedUser } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
@@ -178,7 +179,7 @@ export function registerStudentProfileRoutes(
         .object({
           content: z.string().optional(),
           structuredContent: foundationalProfileSchema.optional(),
-          inheritCandidateLinksFromRevisionId: z.string().uuid().nullable().optional(),
+          inheritCandidateLinksFromRevisionId: postgresUuidSchema.nullable().optional(),
         })
         .refine((body) => typeof body.content === 'string' || body.structuredContent, {
           message: 'Either content or structuredContent is required.',
@@ -312,7 +313,7 @@ export function registerStudentProfileRoutes(
       );
       const paramsSchema = z.object({
         id: z.string().min(1),
-        revisionId: z.string().uuid(),
+        revisionId: postgresUuidSchema,
       });
 
       try {
@@ -371,7 +372,7 @@ export function registerStudentProfileRoutes(
       );
       const paramsSchema = z.object({
         id: z.string().min(1),
-        revisionId: z.string().uuid(),
+        revisionId: postgresUuidSchema,
       });
 
       try {
@@ -432,7 +433,7 @@ export function registerStudentProfileRoutes(
       );
       const paramsSchema = z.object({
         id: z.string().min(1),
-        revisionId: z.string().uuid(),
+        revisionId: postgresUuidSchema,
       });
 
       try {

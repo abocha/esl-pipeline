@@ -46,6 +46,10 @@ Core surfaces:
   active pointer, student binding or arbitrary rebinding exists. Live routes are
   `GET/PUT /students/:id/profile`, `GET/POST /students/:id/profile/revisions`, revision detail,
   and revision `activate`/`restore`. Old `/profiles` routes and query aliases are removed.
+  Profile revision inputs and confirmed assignment snapshots use `postgresUuidSchema` for
+  canonical hexadecimal PostgreSQL UUID strings, without RFC version/variant restrictions:
+  migration 0059's deterministic revision IDs must round-trip unchanged. Other RFC UUID
+  inputs retain their stricter validation.
   [ABO-12 reconciliation](../../docs/operations/student-profile-revision-cutover.md) explains
   the frozen legacy archive and exact historical IDs retained for assignments and prompt packages.
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
