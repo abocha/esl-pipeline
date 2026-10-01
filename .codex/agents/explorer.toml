@@ -1,7 +1,7 @@
 name = "explorer"
 description = "Read-only explorer for multi-file traces where the parent needs execution paths, ownership, contracts, tests, configuration, or active documentation before deciding or editing."
 
-model = "gpt-6-sol"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 
