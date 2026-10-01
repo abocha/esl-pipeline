@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [13.0.0] - 2026-10-01
+
+### Changed
+
+- Automated release from PR #305: refactor(generation)!: replace fallback ladders with explicit workload targets (https://github.com/abocha/esl-pipeline/pull/305)
+
 ## [12.0.2] - 2026-10-01
 
 ### Changed
