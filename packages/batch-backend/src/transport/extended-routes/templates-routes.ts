@@ -13,7 +13,10 @@ import {
   TemplateContentError,
   upsertTemplateContent,
 } from '../../application/template-content.js';
-import { listTemplateControlPlane } from '../../application/template-control-plane.js';
+import {
+  importAndActivateShippedTemplate,
+  listTemplateControlPlane,
+} from '../../application/template-control-plane.js';
 import { logger } from '../../infrastructure/logger.js';
 import { getAuthenticatedUser, requireRole } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
@@ -22,6 +25,39 @@ import type { ExtendedRoutesContext } from './context.js';
 export function registerTemplateRoutes(app: FastifyInstance, context: ExtendedRoutesContext): void {
   const { authenticate } = context;
   const templateManagementPreHandler = [authenticate, requireRole(['admin'])];
+
+  app.post(
+    '/templates/:id/import-and-activate',
+    { preHandler: templateManagementPreHandler },
+    async (request, reply) => {
+      try {
+        const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+        return reply.send(
+          await importAndActivateShippedTemplate(id, getAuthenticatedUser(request)?.id ?? null),
+        );
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError)
+          return reply
+            .code(400)
+            .send({ error: 'validation_failed', message: 'Invalid template id' });
+        if (error instanceof TemplateContentError) {
+          if (error.status >= 500)
+            logger.error(error, { route: 'POST /templates/:id/import-and-activate' });
+          return reply
+            .code(error.status)
+            .send({ error: error.code, code: error.code, message: error.message });
+        }
+        logger.error(error instanceof Error ? error : String(error), {
+          route: 'POST /templates/:id/import-and-activate',
+        });
+        return reply.code(500).send({
+          error: 'template_shipped_import_failed',
+          message:
+            'Import and activation could not be completed. Refresh the persisted state and retry the shipped action.',
+        });
+      }
+    },
+  );
 
   app.get(
     '/templates/control-plane',

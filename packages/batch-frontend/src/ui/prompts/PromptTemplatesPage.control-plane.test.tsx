@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   listTemplateControlPlane: vi.fn(),
   listTemplateRevisions: vi.fn(),
   activateTemplateRevision: vi.fn(),
+  importAndActivateShippedTemplate: vi.fn(),
   getTemplateRevision: vi.fn(),
   restoreTemplateRevision: vi.fn(),
   setDefaultTemplateContent: vi.fn(),
@@ -96,7 +97,7 @@ describe('prompt control plane workflow', () => {
     expect(screen.getByRole('heading', { name: 'Active v17' })).toBeTruthy();
   });
 
-  it('shows unimported shipped content without offering activation or creating revisions', async () => {
+  it('shows unimported shipped content with an explicit import action and no read mutations', async () => {
     state.shipped = {
       content: 'New content',
       contentHash: 'new-hash',
@@ -113,6 +114,84 @@ describe('prompt control plane workflow', () => {
     expect(api.listTemplateRevisions).not.toHaveBeenCalled();
     expect(api.activateTemplateRevision).not.toHaveBeenCalled();
     expect(api.upsertTemplateContent).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Import & activate' })).toBeTruthy();
+    expect(api.importAndActivateShippedTemplate).not.toHaveBeenCalled();
+  });
+
+  it('imports and activates in one click and refreshes shipped, active, and history', async () => {
+    const previous = state.active;
+    const imported = state.shipped!.matchingRevision!;
+    state.shipped!.matchingRevision = null;
+    state.shipped!.imported = false;
+    state.drift = 'shipped_not_imported';
+    let complete!: () => void;
+    api.importAndActivateShippedTemplate.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          complete = () => {
+            state.active = { ...imported, status: 'active' };
+            state.shipped!.matchingRevision = state.active;
+            state.shipped!.imported = true;
+            state.drift = 'in_sync';
+            api.listTemplateRevisions.mockResolvedValue({
+              items: [state.active, { ...previous, status: 'deprecated' }],
+              total: 2,
+            });
+            resolve();
+          };
+        }),
+    );
+    const user = userEvent.setup();
+    render(<PromptTemplatesPage />);
+    const button = await screen.findByRole('button', { name: 'Import & activate' });
+    await user.click(button);
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(api.importAndActivateShippedTemplate).toHaveBeenCalledExactlyOnceWith('template.md');
+    complete();
+    expect(await screen.findByText('Up to date')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Active v17' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Shipped v17' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Inspect v14' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Import & activate' })).toBeNull();
+  });
+
+  it('refreshes a partial import failure and offers activation without claiming success', async () => {
+    const imported = state.shipped!.matchingRevision!;
+    state.shipped!.matchingRevision = null;
+    state.drift = 'shipped_not_imported';
+    api.importAndActivateShippedTemplate.mockImplementation(async () => {
+      state.shipped!.matchingRevision = imported;
+      state.shipped!.imported = true;
+      state.drift = 'update_available';
+      throw new Error('Imported v17 but activation failed. Retry activation.');
+    });
+    const user = userEvent.setup();
+    render(<PromptTemplatesPage />);
+    await user.click(await screen.findByRole('button', { name: 'Import & activate' }));
+    expect(
+      await screen.findByText('Imported v17 but activation failed. Retry activation.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Activate shipped v17' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Active v14' })).toBeTruthy();
+    expect(screen.queryByText('Shipped template imported and activated.')).toBeNull();
+  });
+
+  it('does not claim success when the persisted state cannot be refreshed', async () => {
+    state.shipped!.matchingRevision = null;
+    state.drift = 'shipped_not_imported';
+    api.importAndActivateShippedTemplate.mockImplementation(async () => {
+      api.listTemplateControlPlane.mockRejectedValue(new Error('read unavailable'));
+    });
+    const user = userEvent.setup();
+    render(<PromptTemplatesPage />);
+    await user.click(await screen.findByRole('button', { name: 'Import & activate' }));
+    expect(
+      await screen.findByText(
+        'Import and activation completed, but persisted state could not be refreshed. Reload the page.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText('Shipped template imported and activated.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Import & activate' })).toBeNull();
   });
 
   it('inspects historical content against active content without changing activation', async () => {

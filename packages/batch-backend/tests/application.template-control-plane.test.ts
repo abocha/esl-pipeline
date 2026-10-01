@@ -1,12 +1,15 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { scanTemplateAssets } from '../src/application/template-assets.js';
 import { activateTemplateRevisionForTemplate } from '../src/application/template-content.js';
-import { listTemplateControlPlane } from '../src/application/template-control-plane.js';
+import {
+  importAndActivateShippedTemplate,
+  listTemplateControlPlane,
+} from '../src/application/template-control-plane.js';
 import type { TemplateRevisionRecord } from '../src/domain/template-revision-model.js';
 import { importTemplates } from '../src/tools/bootstrap-prompt-assets.js';
 
@@ -103,6 +106,89 @@ const project = () =>
   });
 
 describe('admin template control plane', () => {
+  it('imports exact deployed content as a draft with provenance, then uses normal activation', async () => {
+    const previous = { ...active! };
+    mocks.getLatestTemplateRevisionByHash.mockResolvedValue(null);
+    mocks.insertTemplateRevision.mockResolvedValue(shipped);
+    const result = await importAndActivateShippedTemplate('template.md', 'operator', {
+      templateRoot: root,
+    });
+    expect(mocks.insertTemplateRevision).toHaveBeenCalledExactlyOnceWith({
+      templateId: 'template.md',
+      content: shipped.content,
+      contentHash: shipped.contentHash,
+      source: 'update',
+      status: 'draft',
+      createdBy: 'operator',
+      restoredFromRevisionId: null,
+    });
+    expect(mocks.upsertTemplate).toHaveBeenCalledWith({
+      id: 'template.md',
+      label: 'Homework',
+      activeRevisionId: previous.id,
+    });
+    expect(mocks.activateTemplateRevision).toHaveBeenCalledWith('template.md', shipped.id);
+    expect(mocks.setTemplateActiveRevision).toHaveBeenCalledWith('template.md', shipped.id);
+    expect(result.status).toBe('active');
+    expect(previous.content).toBe('Old content');
+    expect(await readFile(path.join(root, 'template.md'), 'utf8')).toBe(shipped.content);
+  });
+
+  it('supports a shipped asset without a DB template and reuses a hash on retry', async () => {
+    mocks.getTemplateById.mockResolvedValueOnce(null);
+    mocks.getLatestTemplateRevisionByHash.mockResolvedValueOnce(null);
+    mocks.insertTemplateRevision.mockResolvedValue(shipped);
+    await importAndActivateShippedTemplate('template.md', 'operator', { templateRoot: root });
+    expect(mocks.insertTemplateRevision).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'create' }),
+    );
+    await importAndActivateShippedTemplate('template.md', 'operator', { templateRoot: root });
+    expect(mocks.insertTemplateRevision).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves an imported draft and reports failure when activation fails, then permits retry', async () => {
+    const previous = active;
+    mocks.getLatestTemplateRevisionByHash.mockResolvedValueOnce(null);
+    mocks.insertTemplateRevision.mockResolvedValue(shipped);
+    mocks.activateTemplateRevision.mockRejectedValueOnce(new Error('activation failed'));
+    await expect(
+      importAndActivateShippedTemplate('template.md', 'operator', { templateRoot: root }),
+    ).rejects.toMatchObject({ code: 'template_shipped_activation_failed' });
+    expect(active).toBe(previous);
+    expect(mocks.setTemplateActiveRevision).not.toHaveBeenCalled();
+    expect((await project()).items[0]).toMatchObject({
+      drift: 'update_available',
+      active: { id: 'old' },
+      shipped: { imported: true },
+    });
+    await importAndActivateShippedTemplate('template.md', 'operator', { templateRoot: root });
+    expect(mocks.insertTemplateRevision).toHaveBeenCalledTimes(1);
+    expect((await project()).items[0]?.drift).toBe('in_sync');
+  });
+
+  it('does not report success when activation returns no revision or pointer update fails', async () => {
+    mocks.activateTemplateRevision.mockResolvedValueOnce(null);
+    await expect(
+      importAndActivateShippedTemplate('template.md', 'operator', { templateRoot: root }),
+    ).rejects.toMatchObject({ code: 'template_shipped_activation_failed' });
+    mocks.setTemplateActiveRevision.mockRejectedValueOnce(new Error('pointer failed'));
+    await expect(
+      importAndActivateShippedTemplate('template.md', 'operator', { templateRoot: root }),
+    ).rejects.toMatchObject({ code: 'template_shipped_activation_failed' });
+  });
+
+  it('fails before activation on import failure or a non-shipped template', async () => {
+    await expect(
+      importAndActivateShippedTemplate('../template.md', 'operator', { templateRoot: root }),
+    ).rejects.toMatchObject({ code: 'template_not_shipped' });
+    expect(mocks.upsertTemplate).not.toHaveBeenCalled();
+    mocks.getLatestTemplateRevisionByHash.mockResolvedValue(null);
+    mocks.insertTemplateRevision.mockRejectedValueOnce(new Error('insert failed'));
+    await expect(
+      importAndActivateShippedTemplate('template.md', 'operator', { templateRoot: root }),
+    ).rejects.toThrow('insert failed');
+    expect(mocks.activateTemplateRevision).not.toHaveBeenCalled();
+  });
   it('matches the running asset hash even when a newer operator revision exists', async () => {
     const result = await project();
     expect(result.items[0]).toMatchObject({

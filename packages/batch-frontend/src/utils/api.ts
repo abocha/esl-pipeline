@@ -2530,6 +2530,17 @@ export async function activateTemplateRevision(
   }
 }
 
+export async function importAndActivateShippedTemplate(templateId: string): Promise<void> {
+  try {
+    await apiClient.post(
+      buildApiProxyPath(`/templates/${encodeURIComponent(templateId)}/import-and-activate`),
+    );
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function getStudentTimeline(
   studentId: string,
   params: {
