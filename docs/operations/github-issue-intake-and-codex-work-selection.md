@@ -82,25 +82,18 @@ before filing. Avoid unnecessary student personal information and raw lesson con
 summary or safely anonymized excerpt is enough. Preserve the minimum evidence needed to reproduce or
 assess the problem.
 
-## GitHub labels
+## Labels and metadata
 
-GitHub labels are repository classification aids, not the planning workflow state.
+For synchronized execution issues, Linear owns classification as well as status. Apply exactly one
+Type label and one primary Area label in Linear when the distinction is useful; let issue sync carry
+those labels to GitHub.
 
-Useful type labels include:
+Do not maintain a parallel GitHub-only classification scheme for synchronized issues. In particular,
+do not add `status:*` or `effort:*` labels, and do not duplicate synced Linear labels with legacy
+`type:*` / `area:*` variants.
 
-| Label                | Meaning                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| `type:bug`           | Confirmed incorrect behavior.                                                        |
-| `type:investigation` | Repository-native investigation whose execution/evidence belongs with the repo.       |
-| `type:improvement`   | Improve existing behavior, workflow, quality, or ergonomics.                         |
-| `type:experiment`    | A concrete repository experiment or evidence-gathering execution task.                |
-
-Area labels remain optional. Use only a natural existing fit such as `area:tts`,
-`area:generation`, `area:frontend`, `area:backend`, `area:infra`, or
-`area:student-memory`.
-
-Do not use GitHub `status:*` labels as workflow state and do not use `effort:*` labels for work
-selection. Planning status, priority, dependencies, and sizing belong in Linear.
+Grandfathered GitHub issues may keep existing type/area labels while they finish, but planning
+status, priority, dependencies, sizing, and future classification changes belong in Linear.
 
 ## Execution issue guidance
 
