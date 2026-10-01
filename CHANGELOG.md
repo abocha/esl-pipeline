@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [12.0.2] - 2026-10-01
+
+### Changed
+
+- Automated release from PR #302: refactor(backend): key private user settings by owner (https://github.com/abocha/esl-pipeline/pull/302)
+
 ## [12.0.1] - 2026-10-01
 
 ### Changed
