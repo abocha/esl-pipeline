@@ -11,7 +11,6 @@
 
 | Method | Path | Source |
 | --- | --- | --- |
-| GET | `/.well-known/oauth-protected-resource` | `packages/batch-backend/src/transport/mcp-oauth.ts` |
 | GET | `/admin/jobs` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | DELETE | `/admin/jobs/:jobId` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/admin/jobs/summary` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
@@ -129,6 +128,7 @@
 | GET | `/templates/:id/revisions/:revisionId` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
 | POST | `/templates/:id/revisions/:revisionId/activate` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
 | POST | `/templates/:id/revisions/:revisionId/restore` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
+| GET | `/templates/control-plane` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
 | POST | `/uploads` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | GET | `/user/assignment-sessions` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/user/files` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |

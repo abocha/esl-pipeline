@@ -267,6 +267,10 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
         </Route>
         <Route
           path="/prompts"
+          element={<Navigate to={user.role === 'admin' ? '/admin/prompts' : '/'} replace />}
+        />
+        <Route
+          path="/admin/prompts"
           element={
             user.role === 'admin' ? (
               <Suspense fallback={<RouteLoadingFallback />}>
