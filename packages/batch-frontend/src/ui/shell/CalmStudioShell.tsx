@@ -37,7 +37,6 @@ const workspaceLinks = [
   { to: '/', label: 'Assignments', icon: CalendarDays, end: true },
   { to: '/students', label: 'Students', icon: Users },
   { to: '/business', label: 'Business', icon: ChartNoAxesCombined },
-  { to: '/prompts', label: 'Assignment Templates', icon: FileText },
 ] as const;
 
 function AssignmentRouterNavigationBlocker({
@@ -85,10 +84,6 @@ export function CalmStudioShell({
     () => registerNavigationGuard,
     [registerNavigationGuard],
   );
-  const visibleWorkspaceLinks = workspaceLinks.filter(
-    ({ to }) => to !== '/prompts' || user.role === 'admin',
-  );
-
   const handleWorkspaceNavigation = useCallback(
     (event: MouseEvent<HTMLAnchorElement>, to: string) => {
       setMenuOpen(false);
@@ -170,7 +165,7 @@ export function CalmStudioShell({
           </div>
           <nav className="calm-shell__nav" aria-label="Workspace">
             <p className="calm-shell__nav-label">Workspace</p>
-            {visibleWorkspaceLinks.map(({ to, label, icon: Icon, ...linkProps }) => (
+            {workspaceLinks.map(({ to, label, icon: Icon, ...linkProps }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -185,6 +180,21 @@ export function CalmStudioShell({
               </NavLink>
             ))}
           </nav>
+          {user.role === 'admin' ? (
+            <nav className="calm-shell__nav" aria-label="Administration">
+              <p className="calm-shell__nav-label">Administration</p>
+              <NavLink
+                to="/admin/prompts"
+                className={({ isActive }) =>
+                  `calm-shell__nav-link${isActive ? ' calm-shell__nav-link--active' : ''}`
+                }
+                onClick={(event) => handleWorkspaceNavigation(event, '/admin/prompts')}
+              >
+                <FileText aria-hidden="true" />
+                <span>Prompts</span>
+              </NavLink>
+            </nav>
+          ) : null}
           <div className="calm-shell__rail-footer">
             {sandboxMode ? (
               <span className="calm-shell__sandbox" aria-label="Frontend sandbox mode">

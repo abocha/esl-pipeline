@@ -133,10 +133,18 @@ Useful indexes:
   the original reservation remains enforced. Minute RPM/TPM limits and provider 429 responses
   defer the same BullMQ job/provider/model until its safe timestamp; they do not consume a generic
   failure retry or silently fall back to another provider.
-- Prompt catalog runtime is DB-canonical.
+- Prompt runtime activation and revision history are DB-owned; deployed Git assets own shipped content.
 - Checked-in prompt assets seed/reference that catalog. Bootstrap imports changed content as a draft
   when an active revision already exists; service/admin activation is required before the changed
   revision becomes generation input in an existing environment.
+- Admin-only `GET /templates/control-plane` derives shipped content from the same deployed asset
+  scanner and exact UTF-8 hashes used by bootstrap. It relates those assets to active DB revisions and
+  matching imported revisions, including drafts. It exposes `in_sync`, `update_available`,
+  `shipped_not_imported`, and `not_shipped`; no shipped-state persistence or auto-activation is added.
+  Missing/unreadable asset roots fail the projection instead of claiming the deployment is healthy.
+  Ordinary `/config/prompts` consumption and generation continue resolving active DB revisions.
+- Manual template saves and restores retain immediate activation; shipped drafts require an explicit
+  admin activation. The UI lives at `/admin/prompts` inside the existing frontend.
 - Prompt-package lineage is the canonical assignment-level student-memory provenance surface. When
   canonical memory lookup is unavailable, prompt packages carry explicit unavailable memory text
   instead of treating the layer as empty.

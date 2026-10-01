@@ -13,6 +13,7 @@ import {
   TemplateContentError,
   upsertTemplateContent,
 } from '../../application/template-content.js';
+import { listTemplateControlPlane } from '../../application/template-control-plane.js';
 import { logger } from '../../infrastructure/logger.js';
 import { getAuthenticatedUser, requireRole } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
@@ -21,6 +22,21 @@ import type { ExtendedRoutesContext } from './context.js';
 export function registerTemplateRoutes(app: FastifyInstance, context: ExtendedRoutesContext): void {
   const { authenticate } = context;
   const templateManagementPreHandler = [authenticate, requireRole(['admin'])];
+
+  app.get(
+    '/templates/control-plane',
+    { preHandler: templateManagementPreHandler },
+    async (_request, reply) => {
+      try {
+        return reply.send(await listTemplateControlPlane());
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          route: 'GET /templates/control-plane',
+        });
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
 
   app.get(
     '/templates',

@@ -37,19 +37,20 @@ boundary.
 
 ## Operations
 
-| Task                                                  | Read first                                          | Then read                                                   |
-| ----------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- |
-| Find a current procedure or dated operations evidence | `docs/operations/README.md`                         | the named runbook or evidence record                        |
-| Deployment or local production Compose                | `docs/backend-frontend/DEPLOYMENT.md`               | `docs/operations/production-env-checklist.md`               |
-| Docker recovery, host paths, or pnpm hydration        | `docs/operations/docker-host-paths.md`              | `docs/operations/rollup-optional-binary-troubleshooting.md` |
-| Postgres backup or restore                            | `docs/operations/postgres-backup-restore.md`        | `docs/operations/postgres-backup-s3.md`                     |
-| Ops status, alerts, or key rotation                   | `docs/operations/postgres-ops-health.md`            | `docs/reference/env.md`                                     |
-| Telegram ops bot                                      | `docs/operations/telegram-ops-control-panel.md`     | `packages/telegram-ops-bot/README.md`                       |
-| Prompt asset runtime                                  | `docs/operations/prompt-gallery-bootstrap.md`       | `docs/reference/env.md`                                     |
-| Voice-alignment rollout                               | `docs/operations/voice-alignment-v2-runbook.md`     | `docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`           |
-| Speech-planner evaluation                             | `docs/operations/speech-planner-evaluation.md`      | its linked dated evidence                                   |
-| Student-memory replay or backfill                     | `docs/operations/student-memory-replay-backfill.md` | `packages/batch-backend/README.md`                          |
-| Legacy profile normalization                          | `docs/operations/legacy-profile-normalization.md`   | `docs/reference/STUDENT_SYSTEM_ROADMAP.md`                  |
+| Task                                                    | Read first                                          | Then read                                                   |
+| ------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- |
+| Find a current procedure or dated operations evidence   | `docs/operations/README.md`                         | the named runbook or evidence record                        |
+| Deployment or local production Compose                  | `docs/backend-frontend/DEPLOYMENT.md`               | `docs/operations/production-env-checklist.md`               |
+| Docker recovery, host paths, or pnpm hydration          | `docs/operations/docker-host-paths.md`              | `docs/operations/rollup-optional-binary-troubleshooting.md` |
+| Postgres backup or restore                              | `docs/operations/postgres-backup-restore.md`        | `docs/operations/postgres-backup-s3.md`                     |
+| PostgreSQL backup status or alerts                      | `docs/operations/postgres-ops-health.md`            | `docs/reference/env.md`                                     |
+| Production host, container, filesystem, or route health | `docs/operations/host-runtime-health.md`            | `docs/backend-frontend/DEPLOYMENT.md`                       |
+| Telegram ops bot                                        | `docs/operations/telegram-ops-control-panel.md`     | `packages/telegram-ops-bot/README.md`                       |
+| Prompt asset runtime                                    | `docs/operations/prompt-gallery-bootstrap.md`       | `docs/reference/env.md`                                     |
+| Voice-alignment rollout                                 | `docs/operations/voice-alignment-v2-runbook.md`     | `docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`           |
+| Speech-planner evaluation                               | `docs/operations/speech-planner-evaluation.md`      | its linked dated evidence                                   |
+| Student-memory replay or backfill                       | `docs/operations/student-memory-replay-backfill.md` | `packages/batch-backend/README.md`                          |
+| Legacy profile normalization                            | `docs/operations/legacy-profile-normalization.md`   | `docs/reference/STUDENT_SYSTEM_ROADMAP.md`                  |
 
 ## Product, Planning, and Task Artifacts
 

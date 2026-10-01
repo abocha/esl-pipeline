@@ -87,7 +87,9 @@ disposable cleanup is critical. Missing configuration or a missing/malformed rep
 escalation, recovery, cooldown, and non-zero-exit behavior.
 
 It does not inspect application availability, worker progress, container restart counts, or host
-resource pressure. Those signals remain outside this bounded PostgreSQL operations check.
+resource pressure. Those signals are covered separately by
+[`host-runtime-health.md`](host-runtime-health.md); worker job progress and off-host availability
+remain outside the current host/runtime check.
 
 ## Production systemd units
 

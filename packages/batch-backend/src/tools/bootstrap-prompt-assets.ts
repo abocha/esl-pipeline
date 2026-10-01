@@ -1,10 +1,9 @@
-import { createHash } from 'node:crypto';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { resolveRepoPath } from '../application/prompt-assembly.js';
 import { getPromptOptions } from '../application/prompt-options.js';
+import { scanTemplateAssets } from '../application/template-assets.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import { loadConfig } from '../config/env.js';
@@ -23,7 +22,6 @@ import {
 import { closePgPool } from '../infrastructure/db.js';
 
 const PROMPT_EXTENSIONS = new Set(['.md', '.txt']);
-const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
 
 interface CliOptions {
   dryRun: boolean;
@@ -63,16 +61,6 @@ function parseArgs(argv: string[]): CliOptions {
   return options;
 }
 
-function hashContent(content: string): string {
-  return createHash('sha256').update(content, 'utf8').digest('hex');
-}
-
-function formatLabel(id: string): string {
-  const base = path.basename(id, path.extname(id));
-  const normalized = base.replaceAll(/[_-]+/g, ' ').trim();
-  return normalized.length > 0 ? normalized : id;
-}
-
 function isWithinRoot(root: string, target: string): boolean {
   const relative = path.relative(root, target);
   if (!relative) return true;
@@ -99,7 +87,7 @@ function normalizePromptId(id: string): string {
   return normalized;
 }
 
-function resolveConfiguredRoot(configuredPath: string, type: 'template' | 'profile'): string {
+function resolveConfiguredRoot(configuredPath: string, type: 'template'): string {
   if (!configuredPath || configuredPath.trim().length === 0) {
     throw new Error(`PROMPT_${type.toUpperCase()}_PATH must be configured.`);
   }
@@ -111,7 +99,7 @@ function resolveConfiguredRoot(configuredPath: string, type: 'template' | 'profi
   return path.dirname(candidate);
 }
 
-function resolveConfiguredDefaultId(configuredPath: string, type: 'template' | 'profile'): string {
+function resolveConfiguredDefaultId(configuredPath: string, type: 'template'): string {
   if (!configuredPath || configuredPath.trim().length === 0) {
     throw new Error(`PROMPT_${type.toUpperCase()}_PATH must be configured.`);
   }
@@ -120,79 +108,15 @@ function resolveConfiguredDefaultId(configuredPath: string, type: 'template' | '
   return normalizePromptId(path.posix.basename(normalized));
 }
 
-async function collectPromptFiles(rootDir: string): Promise<string[]> {
-  const resolvedRoot = path.resolve(rootDir);
-  const stats = await fs.stat(resolvedRoot).catch(() => null);
-  if (!stats?.isDirectory()) {
-    throw new Error(`Prompt root does not exist: ${resolvedRoot}`);
-  }
-
-  const files: string[] = [];
-
-  async function visit(currentDir: string): Promise<void> {
-    const entries = await fs.readdir(currentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      const candidate = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        await visit(candidate);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      const ext = path.extname(entry.name).toLowerCase();
-      if (!PROMPT_EXTENSIONS.has(ext)) continue;
-      files.push(path.resolve(candidate));
-    }
-  }
-
-  await visit(resolvedRoot);
-  return files;
-}
-
-function assertNoLegacyTemplateMarker(content: string, assetPath: string): void {
-  if (!content.includes(LEGACY_PROFILE_MARKER)) {
-    return;
-  }
-
-  throw new Error(
-    `Template asset contains retired legacy marker ${LEGACY_PROFILE_MARKER}: ${assetPath}`,
-  );
-}
-
-async function scanAssetRoot(
-  rootDir: string,
-  kind: 'template' | 'profile',
-): Promise<ScannedAsset[]> {
-  const files = await collectPromptFiles(rootDir);
-  const assets: ScannedAsset[] = [];
-
-  for (const absolutePath of files.sort((a, b) => a.localeCompare(b))) {
-    const content = await fs.readFile(absolutePath, 'utf8');
-    if (kind === 'template') {
-      assertNoLegacyTemplateMarker(content, absolutePath);
-    }
-
-    const id = normalizePromptId(path.relative(rootDir, absolutePath).split(path.sep).join('/'));
-    assets.push({
-      id,
-      absolutePath,
-      content,
-      hash: hashContent(content),
-      label: formatLabel(id),
-    });
-  }
-
-  return assets;
-}
-
 export async function scanAssets(params: { templateRoot: string }): Promise<{
   templates: ScannedAsset[];
   scannedFiles: number;
 }> {
-  const templates = await scanAssetRoot(path.resolve(params.templateRoot), 'template');
+  const templates = await scanTemplateAssets(path.resolve(params.templateRoot));
   return { templates, scannedFiles: templates.length };
 }
 
-async function importTemplates(
+export async function importTemplates(
   assets: ScannedAsset[],
   dryRun: boolean,
   stats: BootstrapStats,

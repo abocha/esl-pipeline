@@ -71,7 +71,7 @@ Canonical behavior and current status live in:
   Older lineages are revealed progressively through the existing job and assignment-session APIs;
   this is a short recovery/reference surface, not a searchable assignment archive.
 - This visual overhaul currently covers the authenticated shell and assignment workflow. Student,
-  Business, and Assignment Templates routes remain operational on their existing content designs.
+  Business routes remain operational on their existing content designs.
 - Local UI iteration can use the Vite mock-auth sandbox without a backend:
   - PowerShell:
     ` $env:VITE_BATCH_FRONTEND_SANDBOX='mock-auth'; pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
@@ -167,6 +167,19 @@ Use these for deeper detail:
 - [`packages/batch-backend/README.md`](../batch-backend/README.md)
 - [`docs/design/CANONICAL_ASSIGNMENT_STATE.md`](../../docs/design/CANONICAL_ASSIGNMENT_STATE.md)
 - [`docs/reference/env.md`](../../docs/reference/env.md)
+
+## Admin prompt control plane
+
+Admins use Administration > Prompts at `/admin/prompts`; `/prompts` redirects there for admins.
+Users and viewers see only Workspace navigation and are redirected away from either prompt route.
+Backend admin authorization protects all template management APIs independently of frontend gating.
+
+The page shows the active DB revision beside the deployed template asset, matched by exact content
+hash rather than the newest DB revision. It highlights updates awaiting explicit activation and
+unimported shipped content. DB-only and archived templates remain inspectable without inventing a
+shipped version. An ordered line diff and revision inspection precede activation; revision history,
+restore/rollback, archive, and default selection remain available. The editor is collapsed and
+explains that saving a manual operator edit activates it immediately. Reads never import or activate.
 
 ## Validation
 
