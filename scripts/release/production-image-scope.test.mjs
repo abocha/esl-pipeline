@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   buildProductionImageScope,
@@ -131,9 +136,228 @@ test('PR #274 workflow maintenance diff, including role renames, selects no prod
 });
 
 test('root dependency inputs rebuild every production image', () => {
-  for (const filename of ['pnpm-lock.yaml', 'docker-compose.prod.yml']) {
+  for (const filename of [
+    '.dockerignore',
+    'package.json',
+    'pnpm-lock.yaml',
+    'pnpm-workspace.yaml',
+    'tsconfig.base.json',
+  ]) {
     const result = buildProductionImageScope({
       changedFilePayload: payload({ filename }),
+      workspacePackages,
+    });
+    assert.deepEqual(flags(result), { backend: true, frontend: true, bot: true });
+  }
+});
+
+test('known non-image inputs and maintenance tools rebuild no images', () => {
+  for (const filename of [
+    '.env.example',
+    '.nvmrc',
+    'docker-compose.prod.yml',
+    'turbo.json',
+    'scripts/docs/check-core-docs.mjs',
+    'scripts/git/pr-style-summary.sh',
+    'scripts/release/production-image-scope.mjs',
+    'scripts/release/production-image-scope.test.mjs',
+    'scripts/release/resolve-production-image-scope.mjs',
+    'scripts/release/compute-next-version.mjs',
+    'scripts/check/workspace-change-scope.mjs',
+  ]) {
+    const result = buildProductionImageScope({
+      changedFilePayload: payload({ filename }),
+      workspacePackages,
+    });
+    assert.deepEqual(flags(result), { backend: false, frontend: false, bot: false }, filename);
+    assert.ok(
+      result.reasons.some((reason) => reason.includes(filename)),
+      filename,
+    );
+  }
+});
+
+test('target-specific Dockerfiles, nginx configuration and Telegram source retain package ownership', () => {
+  for (const [filename, target] of [
+    ['packages/batch-backend/Dockerfile', 'backend'],
+    ['packages/batch-frontend/Dockerfile', 'frontend'],
+    ['packages/telegram-ops-bot/Dockerfile', 'bot'],
+    ['packages/batch-frontend/nginx.conf', 'frontend'],
+    ['packages/batch-frontend/nginx-rootless.conf', 'frontend'],
+    ['packages/telegram-ops-bot/src/main.ts', 'bot'],
+  ]) {
+    const result = buildProductionImageScope({
+      changedFilePayload: payload({ filename }),
+      workspacePackages,
+    });
+    assert.deepEqual(
+      flags(result),
+      { backend: target === 'backend', frontend: target === 'frontend', bot: target === 'bot' },
+      filename,
+    );
+    assert.ok(result.reasons.some((reason) => reason.includes(target)));
+  }
+});
+
+test('workspace dependencies select only transitive production consumers', () => {
+  const packages = workspacePackages.map((pkg) =>
+    pkg.name === '@esl-pipeline/contracts'
+      ? { ...pkg, dependencies: ['@esl-pipeline/html-publisher'] }
+      : pkg,
+  );
+  const result = buildProductionImageScope({
+    changedFilePayload: payload({ filename: 'packages/html-publisher/src/index.ts' }),
+    workspacePackages: packages,
+  });
+  assert.deepEqual(flags(result), { backend: true, frontend: true, bot: true });
+  assert.ok(
+    result.reasons.some(
+      (reason) =>
+        reason.includes('html-publisher') &&
+        reason.includes('backend') &&
+        reason.includes('frontend') &&
+        reason.includes('bot'),
+    ),
+  );
+  const unrelated = buildProductionImageScope({
+    changedFilePayload: payload({ filename: 'packages/html-publisher/src/index.ts' }),
+    workspacePackages,
+  });
+  assert.deepEqual(flags(unrelated), { backend: false, frontend: false, bot: false });
+});
+
+test('mixed paths union ownership and preserve explanations even when all images are selected', () => {
+  for (const [otherPath, expected] of [
+    ['docs/example.md', { backend: true, frontend: false, bot: false }],
+    ['packages/batch-frontend/src/App.tsx', { backend: true, frontend: true, bot: false }],
+    ['.dockerignore', { backend: true, frontend: true, bot: true }],
+    ['mystery-build-input.xyz', { backend: true, frontend: true, bot: true }],
+  ]) {
+    const result = buildProductionImageScope({
+      changedFilePayload: payload(
+        { filename: 'packages/batch-backend/src/main.ts' },
+        { filename: otherPath },
+      ),
+      workspacePackages,
+    });
+    assert.deepEqual(flags(result), expected);
+    assert.ok(result.reasons.some((reason) => reason.includes('@esl-pipeline/batch-backend')));
+    assert.ok(
+      result.reasons.some(
+        (reason) => reason.includes(otherPath) || reason.includes('@esl-pipeline/batch-frontend'),
+      ),
+    );
+    assert.ok(result.affectedPackages.includes('@esl-pipeline/batch-backend'));
+  }
+});
+
+test('copy records select both old and new package ownership', () => {
+  const result = buildProductionImageScopeFromChangedFileRecords({
+    changedFileRecords: [
+      {
+        status: 'C100',
+        paths: ['packages/batch-backend/src/old.ts', 'packages/batch-frontend/src/new.ts'],
+      },
+    ],
+    workspacePackages,
+  });
+  assert.deepEqual(flags(result), { backend: true, frontend: true, bot: false });
+});
+
+test('incomplete or untrusted workspace metadata fails closed', () => {
+  for (const packages of [
+    [],
+    undefined,
+    [null],
+    workspacePackages.slice(0, 2),
+    [...workspacePackages, workspacePackages[0]],
+    workspacePackages.map((pkg, index) =>
+      index === 0 ? { ...pkg, dependencies: ['missing'] } : pkg,
+    ),
+    workspacePackages.map((pkg, index) => (index === 0 ? { ...pkg, name: undefined } : pkg)),
+    workspacePackages.map((pkg, index) => (index === 0 ? { ...pkg, dir: 'packages/..' } : pkg)),
+  ]) {
+    const result = buildProductionImageScope({
+      changedFilePayload: payload({ filename: 'docs/example.md' }),
+      workspacePackages: packages,
+    });
+    assert.deepEqual(flags(result), { backend: true, frontend: true, bot: true });
+    assert.match(result.reasons.join('\n'), /fail-closed/u);
+  }
+});
+
+test('nested workspace packages retain the longest owning directory', () => {
+  const packages = [
+    ...workspacePackages,
+    {
+      name: '@esl-pipeline/backend-example',
+      dir: 'packages/batch-backend/examples/service',
+      dependencies: [],
+    },
+  ];
+  const result = buildProductionImageScope({
+    changedFilePayload: payload({ filename: 'packages/batch-backend/examples/service/main.ts' }),
+    workspacePackages: packages,
+  });
+  assert.deepEqual(flags(result), { backend: false, frontend: false, bot: false });
+  assert.deepEqual(result.affectedPackages, ['@esl-pipeline/backend-example']);
+});
+
+test('release CLI preserves boolean outputs and explains build/reuse with the live graph', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'image-scope-'));
+  try {
+    const input = path.join(directory, 'files.json');
+    const output = path.join(directory, 'output.txt');
+    const summary = path.join(directory, 'summary.md');
+    writeFileSync(
+      input,
+      JSON.stringify(
+        payload(
+          { filename: 'packages/batch-backend/src/main.ts' },
+          { filename: 'docs/example.md' },
+        ),
+      ),
+    );
+    const run = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./resolve-production-image-scope.mjs', import.meta.url)),
+        '--changed-files',
+        input,
+        '--github-output',
+        output,
+        '--summary',
+        summary,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(
+      readFileSync(output, 'utf8'),
+      'build_backend=true\nbuild_frontend=false\nbuild_bot=false\n',
+    );
+    const text = readFileSync(summary, 'utf8');
+    assert.match(text, /Backend: build/u);
+    assert.match(text, /Frontend: reuse/u);
+    assert.match(text, /Telegram bot: reuse/u);
+    assert.match(text, /workspace-package \[backend\]: @esl-pipeline\/batch-backend/u);
+    assert.match(text, /known-non-image: docs\/example.md/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('malformed git records fail closed rather than dropping paths', () => {
+  for (const changedFileRecords of [
+    undefined,
+    [],
+    [{ status: 'R100', paths: ['docs/a.md'] }],
+    [{ status: 'M', paths: ['docs/a.md', 'packages/batch-backend/src/main.ts'] }],
+    [{ status: 'C101', paths: ['docs/a.md', 'docs/b.md'] }],
+    [{ status: 'M', paths: [null] }],
+  ]) {
+    const result = buildProductionImageScopeFromChangedFileRecords({
+      changedFileRecords,
       workspacePackages,
     });
     assert.deepEqual(flags(result), { backend: true, frontend: true, bot: true });
@@ -175,6 +399,12 @@ test('unknown root paths fail closed to all images', () => {
     'mystery-runtime.conf',
     '.agents/runtime-config.json',
     '.unknown/config.json',
+    'scripts/mystery/build.mjs',
+    'scripts/release/new-image-builder.mjs',
+    'scripts/docker/new-image-builder.mjs',
+    'tsconfig.new-build.json',
+    'packages/new-package/src/main.ts',
+    'docs/../mystery-build-input.xyz',
   ]) {
     const result = buildProductionImageScope({
       changedFilePayload: payload({ filename }),
@@ -186,7 +416,13 @@ test('unknown root paths fail closed to all images', () => {
 });
 
 test('empty or malformed changed-file payloads fail closed to all images', () => {
-  for (const changedFilePayload of [undefined, { expectedFileCount: 0, files: [] }]) {
+  for (const changedFilePayload of [
+    undefined,
+    { expectedFileCount: 0, files: [] },
+    { expectedFileCount: 2, files: [{ filename: 'docs/a.md' }] },
+    payload({ filename: '' }),
+    payload({ filename: 'docs/a.md', previous_filename: '' }),
+  ]) {
     const result = buildProductionImageScope({ changedFilePayload, workspacePackages });
     assert.deepEqual(flags(result), { backend: true, frontend: true, bot: true });
   }

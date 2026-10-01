@@ -28,8 +28,10 @@ does not automatically select specialized evidence:
 
 Repository policy always runs, including tooling tests and docs checks. `docs/**`, `scripts/docs/**`,
 `AGENTS.md` and `.codex/**` are docs/tooling scope. Explicit maintenance scope additionally covers
-`.gitignore`, `.agents/skills/**`, `scripts/git/**` and the release-label policy module/tests. These
-paths alone skip application lanes and production packaging. Do not extend that allowlist to arbitrary
+`.gitignore`, `.agents/skills/**`, `scripts/git/**` and the release-label and production-image scope
+modules/tests. These paths alone skip application lanes and production packaging. `.dockerignore`
+is a known packaging input: it selects production images, but no application evidence lanes.
+Do not extend that allowlist to arbitrary
 maintenance-looking paths. Unknown paths or untrusted workspace ownership select all application lanes.
 Classifier (`scripts/check/**`), workflow and root toolchain changes retain an independent bootstrap
 `force_all` safeguard: a routing PR itself receives broad hosted evidence. Each selected lane has

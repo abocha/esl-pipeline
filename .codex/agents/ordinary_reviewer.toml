@@ -1,7 +1,7 @@
 name = "ordinary_reviewer"
 description = "Read-only reviewer for coherent ordinary implementation batches with meaningful correctness, integration, regression, or test risk that do not require exceptional-risk judgment."
 
-model = "gpt-6-sol"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 

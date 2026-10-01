@@ -96,6 +96,8 @@ test('hosted scope classifies only explicit repository-maintenance paths', () =>
     'scripts/git/pr-style-summary.sh',
     'scripts/release/release-label-policy.mjs',
     'scripts/release/release-label-policy.test.mjs',
+    'scripts/release/production-image-scope.mjs',
+    'scripts/release/production-image-scope.test.mjs',
   ]) {
     const decision = buildCiScopeDecision({
       changedFileRecords: records('M', file),
@@ -116,6 +118,32 @@ test('hosted scope classifies only explicit repository-maintenance paths', () =>
   });
   assert.equal(docsOnly.docs_only, true);
   assert.equal(docsOnly.maintenance_only, false);
+});
+
+test('packaging scope inputs do not select application lanes alone or widen a frontend change', () => {
+  for (const file of [
+    '.dockerignore',
+    'scripts/release/production-image-scope.mjs',
+    'scripts/release/production-image-scope.test.mjs',
+  ]) {
+    for (const mixed of [false, true]) {
+      const decision = buildCiScopeDecision({
+        changedFileRecords: [
+          ...records('M', file),
+          ...(mixed ? records('M', 'packages/batch-frontend/src/App.tsx') : []),
+        ],
+        workspacePackages,
+      });
+      assert.equal(decision.build_unit, mixed, file);
+      for (const scope of ['integration', 'backend_db_worker', 'media', 'telegram'])
+        assert.equal(decision[scope], false, `${file}: ${scope}`);
+      assert.equal(
+        decision.reasons.some((reason) => reason.code === 'unknown-path'),
+        false,
+        file,
+      );
+    }
+  }
 });
 
 test('PR #274 workflow maintenance paths, including both sides of role renames, select no application lanes', () => {
@@ -179,8 +207,7 @@ test('.gitignore alone is maintenance, while root toolchain inputs still select 
 test('hosted scope keeps maintenance classification narrow and fail-closed', () => {
   for (const file of [
     '.agents/README.md',
-    'scripts/release/production-image-scope.mjs',
-    'scripts/release/production-image-scope.test.mjs',
+    'scripts/release/unknown-image-builder.mjs',
     'package.json',
   ]) {
     const decision = buildCiScopeDecision({
