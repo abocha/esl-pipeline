@@ -29,7 +29,7 @@
     "src"
   ],
   "scripts": {
-    "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch src/index.ts",
     "test": "pnpm run test:unit",

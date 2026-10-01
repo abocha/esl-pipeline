@@ -239,6 +239,75 @@ describe('integration/migrations', () => {
   });
 
   it(
+    '0060 preserves user-owned settings and refuses undisposed legacy tokens',
+    async () => {
+      const userId = randomUUID();
+      const settingsId = randomUUID();
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0059_student_owned_profile_revisions');
+        await pool.query(
+          `INSERT INTO users (id, email, password_hash) VALUES ($1, 'settings@example.com', 'fixture')`,
+          [userId],
+        );
+        await pool.query(
+          `INSERT INTO user_settings
+         (id, user_id, elevenlabs_key_encrypted, notion_token_encrypted, tts_provider,
+          default_preset, default_voice_accent, default_tts_strategy, enable_notifications,
+          created_at, updated_at)
+         VALUES ($1, $2, 'fixture-ciphertext', 'fixture-legacy-token', 'inworld',
+                 'b2-intermediate', 'british', 'dialogue', FALSE,
+                 '2025-01-01T00:00:00Z', '2025-02-01T00:00:00Z')`,
+          [settingsId, userId],
+        );
+      });
+      await expect(runMigrations()).rejects.toThrow('legacy values require private export');
+      await withAdminClient(async (pool) => {
+        const before = await pool.query('SELECT * FROM user_settings WHERE user_id = $1', [userId]);
+        expect(before.rows[0].id).toBe(settingsId);
+        expect(before.rows[0].notion_token_encrypted).toBe('fixture-legacy-token');
+        const ledger = await pool.query(
+          "SELECT 1 FROM schema_migrations WHERE id = '0060_user_settings_owner_key'",
+        );
+        expect(ledger.rowCount).toBe(0);
+        // Empty stored values also require disposition; do not silently discard them.
+        await pool.query(
+          "UPDATE user_settings SET notion_token_encrypted = '' WHERE user_id = $1",
+          [userId],
+        );
+      });
+      await expect(runMigrations()).rejects.toThrow('legacy values require private export');
+      await withAdminClient(async (pool) => {
+        await pool.query(
+          'UPDATE user_settings SET notion_token_encrypted = NULL WHERE user_id = $1',
+          [userId],
+        );
+        // Capture after disposition because the existing update trigger advances updated_at.
+        const before = await pool.query('SELECT * FROM user_settings WHERE user_id = $1', [userId]);
+        const { id: _id, notion_token_encrypted: _token, ...retained } = before.rows[0];
+        await runMigrations();
+        const after = await pool.query('SELECT * FROM user_settings WHERE user_id = $1', [userId]);
+        expect(after.rows).toEqual([retained]);
+        const pk = await pool.query(
+          "SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid = 'user_settings'::regclass AND contype = 'p'",
+        );
+        expect(pk.rows).toEqual([{ definition: 'PRIMARY KEY (user_id)' }]);
+        await expect(
+          pool.query('INSERT INTO user_settings (user_id) VALUES ($1)', [userId]),
+        ).rejects.toMatchObject({ code: '23505' });
+        await expect(
+          pool.query('INSERT INTO user_settings (user_id) VALUES ($1)', [randomUUID()]),
+        ).rejects.toMatchObject({ code: '23503' });
+        await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+        expect(
+          (await pool.query('SELECT 1 FROM user_settings WHERE user_id = $1', [userId])).rowCount,
+        ).toBe(0);
+      });
+      await assertSchemaHealthy('settings-owner-key');
+    },
+    testTimeout,
+  );
+
+  it(
     'fresh bootstrap applies all migrations and verifies cleanly',
     async () => {
       await runMigrations();

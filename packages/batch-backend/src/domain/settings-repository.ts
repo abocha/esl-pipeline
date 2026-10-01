@@ -1,6 +1,5 @@
 // packages/batch-backend/src/domain/settings-repository.ts
 // PostgreSQL-backed repository for UserSettingsRecord.
-import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
@@ -19,7 +18,6 @@ import {
  * PostgreSQL row structure for user_settings table
  */
 interface UserSettingsRow {
-  id: string;
   user_id: string;
   elevenlabs_key_encrypted: string | null;
   tts_provider: string;
@@ -48,7 +46,6 @@ export function normalizeStoredTtsProvider(provider: string, userId: string): Tt
  */
 function mapRowToSettings(row: UserSettingsRow): UserSettingsRecord {
   return {
-    id: row.id,
     userId: row.user_id,
     elevenLabsKeyEncrypted: row.elevenlabs_key_encrypted,
     ttsProvider: normalizeStoredTtsProvider(row.tts_provider, row.user_id),
@@ -69,7 +66,7 @@ export async function getSettingsByUserId(userId: string): Promise<UserSettingsR
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query<UserSettingsRow>(
       `
-      SELECT id, user_id, elevenlabs_key_encrypted,
+      SELECT user_id, elevenlabs_key_encrypted,
              tts_provider, default_preset, default_voice_accent, default_tts_strategy,
              enable_notifications, created_at, updated_at
       FROM user_settings
@@ -88,7 +85,6 @@ export async function getSettingsByUserId(userId: string): Promise<UserSettingsR
  * Uses INSERT ON CONFLICT to safely handle concurrent requests.
  */
 export async function createDefaultSettings(userId: string): Promise<UserSettingsRecord> {
-  const id = randomUUID();
   const defaults = getDefaultSettings();
 
   const row = await withPgClient(async (client: PoolClient) => {
@@ -97,19 +93,18 @@ export async function createDefaultSettings(userId: string): Promise<UserSetting
     const result = await client.query<UserSettingsRow>(
       `
       INSERT INTO user_settings (
-        id, user_id, elevenlabs_key_encrypted,
+        user_id, elevenlabs_key_encrypted,
         tts_provider, default_preset, default_voice_accent, default_tts_strategy,
         enable_notifications
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (user_id) DO UPDATE SET
         updated_at = user_settings.updated_at  -- No-op update to return the row
-      RETURNING id, user_id, elevenlabs_key_encrypted,
+      RETURNING user_id, elevenlabs_key_encrypted,
                 tts_provider, default_preset, default_voice_accent, default_tts_strategy,
                 enable_notifications, created_at, updated_at
       `,
       [
-        id,
         userId,
         defaults.elevenLabsKeyEncrypted,
         defaults.ttsProvider,
@@ -150,8 +145,6 @@ export async function upsertSettings(
   }
 
   const row = await withPgClient(async (client: PoolClient) => {
-    const id = randomUUID();
-
     // Use INSERT ON CONFLICT to atomically create or update settings
     // COALESCE with EXCLUDED values handles partial updates:
     // - If a field is provided in input, use the new value
@@ -159,43 +152,42 @@ export async function upsertSettings(
     const result = await client.query<UserSettingsRow>(
       `
       INSERT INTO user_settings (
-        id, user_id, elevenlabs_key_encrypted,
+        user_id, elevenlabs_key_encrypted,
         tts_provider, default_preset, default_voice_accent, default_tts_strategy,
         enable_notifications
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (user_id) DO UPDATE SET
-        elevenlabs_key_encrypted = CASE 
-          WHEN $9 THEN EXCLUDED.elevenlabs_key_encrypted 
-          ELSE user_settings.elevenlabs_key_encrypted 
+        elevenlabs_key_encrypted = CASE
+          WHEN $8 THEN EXCLUDED.elevenlabs_key_encrypted
+          ELSE user_settings.elevenlabs_key_encrypted
         END,
-        tts_provider = CASE 
-          WHEN $10 THEN EXCLUDED.tts_provider 
-          ELSE user_settings.tts_provider 
+        tts_provider = CASE
+          WHEN $9 THEN EXCLUDED.tts_provider
+          ELSE user_settings.tts_provider
         END,
-        default_preset = CASE 
-          WHEN $11 THEN EXCLUDED.default_preset 
-          ELSE user_settings.default_preset 
+        default_preset = CASE
+          WHEN $10 THEN EXCLUDED.default_preset
+          ELSE user_settings.default_preset
         END,
-        default_voice_accent = CASE 
-          WHEN $12 THEN EXCLUDED.default_voice_accent 
-          ELSE user_settings.default_voice_accent 
+        default_voice_accent = CASE
+          WHEN $11 THEN EXCLUDED.default_voice_accent
+          ELSE user_settings.default_voice_accent
         END,
-        default_tts_strategy = CASE 
-          WHEN $13 THEN EXCLUDED.default_tts_strategy 
-          ELSE user_settings.default_tts_strategy 
+        default_tts_strategy = CASE
+          WHEN $12 THEN EXCLUDED.default_tts_strategy
+          ELSE user_settings.default_tts_strategy
         END,
-        enable_notifications = CASE 
-          WHEN $14 THEN EXCLUDED.enable_notifications 
-          ELSE user_settings.enable_notifications 
+        enable_notifications = CASE
+          WHEN $13 THEN EXCLUDED.enable_notifications
+          ELSE user_settings.enable_notifications
         END,
         updated_at = NOW()
-      RETURNING id, user_id, elevenlabs_key_encrypted,
+      RETURNING user_id, elevenlabs_key_encrypted,
                 tts_provider, default_preset, default_voice_accent, default_tts_strategy,
                 enable_notifications, created_at, updated_at
       `,
       [
-        id,
         userId,
         // Values for INSERT (use input if provided, else defaults)
         elevenLabsKeyEncrypted ?? defaults.elevenLabsKeyEncrypted,
