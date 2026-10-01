@@ -19,7 +19,7 @@ vi.mock('../src/domain/student-memory-openai-batch-repository.js', () => ({
 }));
 
 vi.mock('../src/application/generation-policy.js', () => ({
-  resolveGenerationCandidates: vi.fn(() => [{ provider: 'openai', model: 'gpt-5.2' }]),
+  resolveGenerationTarget: vi.fn(() => ({ provider: 'openai', model: 'gpt-5.2' })),
 }));
 
 vi.mock('../src/infrastructure/logger.js', () => ({

@@ -16,6 +16,8 @@ import {
 } from '@esl-pipeline/contracts';
 import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
 
+import type { GenerationTarget, GenerationWorkload } from '../application/generation-policy.js';
+
 export type GenerationSafetyMode = 'off' | 'warn' | 'hard_stop';
 
 export type NodeEnv = 'development' | 'test' | 'production';
@@ -172,38 +174,14 @@ export interface BatchBackendConfig {
     presignedUrlExpiresIn: number;
   };
   generation: {
-    defaultProvider: GenerationProvider;
-    fallbackProviders: GenerationProvider[];
+    targets: Record<GenerationWorkload, GenerationTarget>;
     quotaSourceMode: GenerationQuotaSource;
     safetyMode: GenerationSafetyMode;
-    strictNoPaid: boolean;
     maxOutputTokensHard: number;
-    budgetEmergencyOverride: boolean;
     models: {
-      openai: {
-        targetModelsEnabled?: boolean;
-        primary: string;
-        assignmentDraftPrimary?: string;
-        fallback: string;
-        allowed: string[];
-        allowedFromDefaults?: boolean;
-        studentMemoryPrimary?: string;
-        studentMemoryFallback?: string;
-        profileDraftPrimary?: string;
-        profileDraftFallback?: string;
-        profileDraftTertiary?: string;
-      };
-      googleAiStudio: {
-        primary: string;
-        fallback: string;
-        tertiary: string;
-        allowed: string[];
-      };
-      openrouter: {
-        primary?: string;
-        fallback?: string;
-        allowed: string[];
-      };
+      openai: { model: string; allowed: string[] };
+      googleAiStudio: { model: string; allowed: string[] };
+      openrouter: { model?: string; allowed: string[] };
     };
     providers: {
       openai: {
@@ -229,8 +207,7 @@ export interface BatchBackendConfig {
         httpReferer?: string;
         xTitle?: string;
         requestTimeoutMs: number;
-        retryMax: number;
-        retryBackoffMs: number;
+
         dailyTokenBudget?: number;
         dailyRequestBudget?: number;
         rpmBudget?: number;
@@ -332,15 +309,6 @@ function normalizeGenerationSafetyMode(value: string): GenerationSafetyMode {
     return normalized;
   }
   throw new Error('GEN_SAFETY_MODE must be one of: off, warn, hard_stop');
-}
-
-function parseGenerationProviders(value: string): GenerationProvider[] {
-  const tokens = value
-    .split(',')
-    .map((token) => token.trim())
-    .filter(Boolean);
-  if (tokens.length === 0) return [];
-  return [...new Set(tokens.map((token) => normalizeGenerationProvider(token)))];
 }
 
 const PG_BIGINT_MIN = -9_223_372_036_854_775_808n;
@@ -715,91 +683,60 @@ export function loadConfig(): BatchBackendConfig {
   const storagePathPrefix = readString('S3_PATH_PREFIX') || readString('STORAGE_PATH_PREFIX');
   const presignedUrlExpiresIn = readInt('PRESIGNED_URL_EXPIRES_IN', 3600);
 
-  const generationDefaultProvider = normalizeGenerationProvider(
-    readString('GEN_PROVIDER_DEFAULT', 'openai')!,
-  );
-  const generationFallbackProviders = parseGenerationProviders(
-    readString('GEN_PROVIDER_FALLBACKS', 'google_ai_studio,openrouter')!,
-  ).filter((provider) => provider !== generationDefaultProvider);
   const generationQuotaSourceMode = normalizeGenerationQuotaSource(
     readString('GEN_QUOTA_SOURCE_MODE', 'hybrid')!,
   );
   const generationSafetyMode = normalizeGenerationSafetyMode(
     readString('GEN_SAFETY_MODE', 'hard_stop')!,
   );
-  const generationStrictNoPaid = readBool('GEN_STRICT_NO_PAID', true);
   const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 12000);
-  const generationAllowPaidSpend = readBool('GEN_ALLOW_PAID_SPEND', false);
-  const generationBudgetEmergencyOverride = generationAllowPaidSpend;
-  // Retained as an operator-visible compatibility signal; workload defaults do not
-  // depend on this flag. Explicit model overrides remain authoritative.
-  const generationOpenAiTargetModelsEnabled = readBool('GEN_OPENAI_TARGET_MODELS_ENABLED', false);
-
-  const generationOpenAiModelPrimary = readString('GEN_OPENAI_MODEL_PRIMARY', 'gpt-5.6-sol')!;
-  const generationOpenAiAssignmentDraftModelPrimary = readString(
-    'GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY',
-    'gpt-6.1-sol',
-  )!;
-  const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5.6-luna')!;
-  const generationOpenAiMemoryModelPrimary = readString(
-    'GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY',
-    generationOpenAiModelFallback,
-  )!;
-  const generationOpenAiMemoryModelFallback = readString(
-    'GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK',
-    generationOpenAiModelFallback,
-  )!;
-  const generationOpenAiProfileDraftModelPrimary = readString(
-    'GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY',
-    generationOpenAiModelFallback,
-  )!;
-  const generationOpenAiProfileDraftModelFallback = readString(
-    'GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK',
-    generationOpenAiModelFallback,
-  )!;
-  const generationOpenAiProfileDraftModelTertiary = readString(
-    'GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY',
-    generationOpenAiModelFallback,
-  )!;
+  const generationOpenAiModel = readString('GEN_OPENAI_MODEL', 'gpt-5.6-luna')!;
+  const generationGoogleModel = readString('GEN_GOOGLE_MODEL', 'gemini-3-flash-preview')!;
+  const generationOpenRouterModel = readString('GEN_OPENROUTER_MODEL');
+  const target = (name: string, openAiModel: string): GenerationTarget => {
+    const provider = normalizeGenerationProvider(readString(`GEN_${name}_PROVIDER`, 'openai')!);
+    const defaultModel =
+      provider === 'openai'
+        ? openAiModel
+        : provider === 'google_ai_studio'
+          ? generationGoogleModel
+          : generationOpenRouterModel;
+    const model = readString(`GEN_${name}_MODEL`, defaultModel)?.trim();
+    if (!model) throw new Error(`GEN_${name}_MODEL is required for ${provider}`);
+    return { provider, model };
+  };
+  const generationTargets = {
+    draft_generation: target('ASSIGNMENT', 'gpt-6.1-sol'),
+    lesson_memory: target('LESSON_MEMORY', generationOpenAiModel),
+    homework_memory: target('HOMEWORK_MEMORY', generationOpenAiModel),
+    student_memory_snapshot: target('STUDENT_MEMORY_SNAPSHOT', generationOpenAiModel),
+    profile_revision_drafting: target('PROFILE_DRAFT', generationOpenAiModel),
+  };
+  // Explicit selection roster and Batch/planner access guard; never a fallback tail.
   const generationOpenAiAllowedModels = readStringList(
     'GEN_ALLOWED_MODELS_OPENAI',
     uniqueStringList([
-      generationOpenAiModelPrimary,
-      generationOpenAiModelFallback,
-      generationOpenAiAssignmentDraftModelPrimary,
-      generationOpenAiMemoryModelPrimary,
-      generationOpenAiMemoryModelFallback,
-      generationOpenAiProfileDraftModelPrimary,
-      generationOpenAiProfileDraftModelFallback,
-      generationOpenAiProfileDraftModelTertiary,
+      generationOpenAiModel,
+      ...Object.values(generationTargets)
+        .filter((t) => t.provider === 'openai')
+        .map((t) => t.model),
     ]).join(','),
   );
-  const generationGoogleModelPrimary = readString(
-    'GEN_GOOGLE_MODEL_PRIMARY',
-    'gemini-3-flash-preview',
-  )!;
-  const generationGoogleModelFallback = readString(
-    'GEN_GOOGLE_MODEL_FALLBACK',
-    'gemini-2.5-flash-lite',
-  )!;
-  const generationGoogleModelTertiary = readString('GEN_GOOGLE_MODEL_TERTIARY', 'gemini-2.5-pro')!;
   const generationGoogleAllowedModels = readStringList(
     'GEN_ALLOWED_MODELS_GOOGLE',
     [
+      generationGoogleModel,
       'gemini-3.1-pro-preview',
-      generationGoogleModelPrimary,
       'gemini-3.5-flash',
       'gemini-3.1-flash-lite',
       'gemini-3.5-flash-lite',
-      generationGoogleModelTertiary,
+      'gemini-2.5-pro',
       'gemini-2.5-flash',
-      generationGoogleModelFallback,
+      'gemini-2.5-flash-lite',
       'gemma-4-31b-it',
       'gemma-4-26b-a4b-it',
     ].join(','),
   );
-  const generationOpenRouterModelPrimary = readString('GEN_OPENROUTER_MODEL_PRIMARY');
-  const generationOpenRouterModelFallback = readString('GEN_OPENROUTER_MODEL_FALLBACK');
   const generationOpenRouterAllowedModels = readStringList('GEN_ALLOWED_MODELS_OPENROUTER', '');
 
   const generationOpenAiTimeoutMs = readInt('GEN_OPENAI_REQUEST_TIMEOUT_MS', 240_000);
@@ -813,8 +750,6 @@ export function loadConfig(): BatchBackendConfig {
   const generationGoogleRetryBackoffMs = readInt('GEN_GOOGLE_RETRY_BACKOFF_MS', 250);
   const generationGoogleRpmBudget = readInt('GEN_GOOGLE_RPM_BUDGET', 4);
   const generationOpenRouterTimeoutMs = readInt('GEN_OPENROUTER_REQUEST_TIMEOUT_MS', 240_000);
-  const generationOpenRouterRetryMax = readInt('GEN_OPENROUTER_RETRY_MAX', 1);
-  const generationOpenRouterRetryBackoffMs = readInt('GEN_OPENROUTER_RETRY_BACKOFF_MS', 250);
   const generationOpenRouterRpmBudget = readInt('GEN_OPENROUTER_RPM_BUDGET', 0);
   const generationOpenRouterDailyRequestBudget = readInt('GEN_OPENROUTER_DAILY_REQUEST_BUDGET', 0);
 
@@ -1004,40 +939,15 @@ export function loadConfig(): BatchBackendConfig {
       presignedUrlExpiresIn,
     },
     generation: {
-      defaultProvider: generationDefaultProvider,
-      fallbackProviders: generationFallbackProviders,
+      targets: generationTargets,
       quotaSourceMode: generationQuotaSourceMode,
       safetyMode: generationSafetyMode,
-      strictNoPaid: generationStrictNoPaid,
       maxOutputTokensHard: generationMaxOutputTokensHard,
-      budgetEmergencyOverride: generationBudgetEmergencyOverride,
       models: {
-        openai: {
-          targetModelsEnabled: generationOpenAiTargetModelsEnabled,
-          primary: generationOpenAiModelPrimary,
-          assignmentDraftPrimary: generationOpenAiAssignmentDraftModelPrimary,
-          fallback: generationOpenAiModelFallback,
-          allowed: generationOpenAiAllowedModels,
-          allowedFromDefaults: !readString('GEN_ALLOWED_MODELS_OPENAI'),
-          studentMemoryPrimary: generationOpenAiMemoryModelPrimary,
-          studentMemoryFallback: generationOpenAiMemoryModelFallback,
-          profileDraftPrimary: generationOpenAiProfileDraftModelPrimary,
-          profileDraftFallback: generationOpenAiProfileDraftModelFallback,
-          profileDraftTertiary: generationOpenAiProfileDraftModelTertiary,
-        },
-        googleAiStudio: {
-          primary: generationGoogleModelPrimary,
-          fallback: generationGoogleModelFallback,
-          tertiary: generationGoogleModelTertiary,
-          allowed: generationGoogleAllowedModels,
-        },
+        openai: { model: generationOpenAiModel, allowed: generationOpenAiAllowedModels },
+        googleAiStudio: { model: generationGoogleModel, allowed: generationGoogleAllowedModels },
         openrouter: {
-          ...(generationOpenRouterModelPrimary
-            ? { primary: generationOpenRouterModelPrimary }
-            : {}),
-          ...(generationOpenRouterModelFallback
-            ? { fallback: generationOpenRouterModelFallback }
-            : {}),
+          model: generationOpenRouterModel,
           allowed: generationOpenRouterAllowedModels,
         },
       },
@@ -1065,8 +975,7 @@ export function loadConfig(): BatchBackendConfig {
           httpReferer: openRouterHttpReferer,
           xTitle: openRouterXTitle,
           requestTimeoutMs: generationOpenRouterTimeoutMs,
-          retryMax: generationOpenRouterRetryMax,
-          retryBackoffMs: generationOpenRouterRetryBackoffMs,
+
           dailyTokenBudget: generationOpenRouterDailyTokenBudget,
           dailyRequestBudget: generationOpenRouterDailyRequestBudget,
           rpmBudget: generationOpenRouterRpmBudget,

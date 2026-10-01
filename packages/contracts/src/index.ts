@@ -115,8 +115,6 @@ export interface GenerationModelOption {
   provider: GenerationProvider;
   id: string;
   label?: string;
-  tier?: 'primary' | 'fallback' | 'tertiary' | 'custom';
-  fallbackRank?: number;
   defaultSelected?: boolean;
   enabled?: boolean;
 }

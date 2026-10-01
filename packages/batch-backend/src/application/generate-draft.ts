@@ -8,14 +8,12 @@ import { validateMarkdown } from '@esl-pipeline/md-validator';
 import {
   classifyProviderRuntimeFailure,
   type ProviderRuntimeClassificationRules,
-  runProviderFallbackLadder,
 } from '@esl-pipeline/provider-runtime';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
 import { isPromptPackageSourceCanonical } from '../domain/prompt-package-repository.js';
-import { logger } from '../infrastructure/logger.js';
 import { PromptPackageAssignmentError } from './create-prompt-package.js';
 import {
   enforceGenerationBudgetBeforeAttempt,
@@ -24,7 +22,7 @@ import {
   recordGenerationBudgetUsageAfterSuccess,
   resolveGenerationBudgetRepository,
 } from './generation-budget-guard.js';
-import { buildQuotaSnapshot, resolveGenerationCandidates } from './generation-policy.js';
+import { buildQuotaSnapshot, resolveGenerationTarget } from './generation-policy.js';
 import {
   executeGoogleGeneration,
   executeOpenAiGeneration,
@@ -110,7 +108,6 @@ export interface GenerateDraftDependencies {
   budget: GenerationBudgetGuardDependencies;
   validator: typeof validateMarkdown;
   now: () => Date;
-  sleep: (ms: number) => Promise<void>;
 }
 
 export async function generateDraft(
@@ -132,8 +129,6 @@ export async function generateDraft(
   });
   const validator = overrides?.validator ?? validateMarkdown;
   const now = overrides?.now ?? (() => new Date());
-  const sleep =
-    overrides?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
 
   const promptPackage = await promptPackages.getById(request.promptPackageId);
   if (!promptPackage) {
@@ -146,127 +141,74 @@ export async function generateDraft(
     );
   }
 
-  const candidates = resolveGenerationCandidates({
-    config: config.generation,
-    workload: 'draft_generation',
-    providerOverride: request.provider,
-    modelOverride: request.model,
-  });
-
-  if (candidates.length === 0) {
-    throw new GenerateDraftProviderError({
-      category: 'provider_contract_error',
-      provider: request.provider ?? config.generation.defaultProvider,
-      model: request.model ?? 'unspecified',
-      message:
-        'No generation candidates are available for the current provider/model configuration.',
+  let target = {
+    provider: request.provider ?? config.generation.targets.draft_generation.provider,
+    model: request.model ?? 'unspecified',
+  };
+  let execution: {
+    target: ReturnType<typeof resolveGenerationTarget>;
+    result: ProviderExecutionResult;
+    quotaUsage: GenerationBudgetUsage;
+  };
+  try {
+    target = resolveGenerationTarget({
+      config: config.generation,
+      workload: 'draft_generation',
+      providerOverride: request.provider,
+      modelOverride: request.model,
     });
-  }
+    await enforceGenerationBudgetBeforeAttempt({
+      config,
+      provider: target.provider,
+      model: target.model,
+      prompt: promptPackage.text,
+      maxOutputTokens: request.maxOutputTokens,
+      now: now(),
+      repository: budgetRepository,
+    });
 
-  const execution = await runProviderFallbackLadder<
-    (typeof candidates)[number],
-    {
-      candidate: (typeof candidates)[number];
-      result: ProviderExecutionResult;
-      quotaUsage: GenerationBudgetUsage;
-    },
-    GenerateDraftProviderError
-  >({
-    candidates,
-    runCandidate: async (candidate) => {
-      await enforceGenerationBudgetBeforeAttempt({
-        config,
-        provider: candidate.provider,
-        model: candidate.model,
+    const executor = executors[target.provider];
+    if (!executor) {
+      throw new GenerateDraftProviderError({
+        category: 'provider_contract_error',
+        provider: target.provider,
+        model: target.model,
+        message: `No generation executor configured for provider: ${target.provider}`,
+      });
+    }
+
+    const result = await executor({
+      config: config.generation,
+      request: {
+        model: target.model,
         prompt: promptPackage.text,
+        ...(isGenerationRequestEnvelope(promptPackage.requestEnvelope)
+          ? { envelope: promptPackage.requestEnvelope }
+          : {}),
         maxOutputTokens: request.maxOutputTokens,
-        now: now(),
-        repository: budgetRepository,
-      });
+        stream: false,
+      },
+    });
 
-      const executor = executors[candidate.provider];
-      if (!executor) {
-        throw new GenerateDraftProviderError({
-          category: 'provider_contract_error',
-          provider: candidate.provider,
-          model: candidate.model,
-          message: `No generation executor configured for provider: ${candidate.provider}`,
-        });
-      }
+    await recordGenerationBudgetUsageAfterSuccess({
+      config,
+      provider: target.provider,
+      model: target.model,
+      usageTotalTokens: result.usage?.totalTokens,
+      now: now(),
+      repository: budgetRepository,
+    });
 
-      const result = await executor({
-        config: config.generation,
-        request: {
-          model: candidate.model,
-          prompt: promptPackage.text,
-          ...(isGenerationRequestEnvelope(promptPackage.requestEnvelope)
-            ? { envelope: promptPackage.requestEnvelope }
-            : {}),
-          maxOutputTokens: request.maxOutputTokens,
-          stream: false,
-        },
-      });
+    const quotaUsage = await budgetRepository.getUsage({
+      provider: target.provider,
+      model: target.model,
+      now: now(),
+    });
 
-      await recordGenerationBudgetUsageAfterSuccess({
-        config,
-        provider: candidate.provider,
-        model: candidate.model,
-        usageTotalTokens: result.usage?.totalTokens,
-        now: now(),
-        repository: budgetRepository,
-      });
-
-      const quotaUsage = await budgetRepository.getUsage({
-        provider: candidate.provider,
-        model: candidate.model,
-        now: now(),
-      });
-
-      return { candidate, result, quotaUsage };
-    },
-    mapError: (candidate, error) =>
-      mapProviderError({
-        provider: candidate.provider,
-        model: candidate.model,
-        error,
-      }),
-    isTimeoutError: (mappedError) => mappedError.category === 'provider_timeout',
-    isFailFastError: (mappedError) =>
-      mappedError.category === 'provider_contract_error' ||
-      mappedError.category === 'budget_exceeded',
-    getRetryMax: (candidate) => retryMaxForProvider(config.generation, candidate.provider),
-    getRetryBackoffMs: (candidate) =>
-      retryBackoffForProvider(config.generation, candidate.provider),
-    sleep,
-    onAttempt: ({ candidate, retriesRemaining }) => {
-      logger.info('Attempting draft generation candidate', {
-        event: 'generation_candidate_attempt',
-        provider: candidate.provider,
-        model: candidate.model,
-        fallbackRank: candidate.fallbackRank,
-        retriesRemaining,
-      });
-    },
-    onRetry: ({ candidate, retriesRemaining, backoffMs, mappedError }) => {
-      logger.warn('Draft generation timed out; retrying candidate before fallback', {
-        event: 'generation_candidate_retry',
-        provider: candidate.provider,
-        model: candidate.model,
-        retriesRemaining,
-        backoffMs,
-        category: mappedError.category,
-      });
-    },
-    onFallback: ({ candidate, mappedError }) => {
-      logger.warn('Draft generation candidate failed; falling back to next candidate', {
-        event: 'generation_candidate_fallback',
-        provider: candidate.provider,
-        model: candidate.model,
-        category: mappedError.category,
-        statusCode: mappedError.statusCode,
-      });
-    },
-  });
+    execution = { target, result, quotaUsage };
+  } catch (error) {
+    throw mapProviderError({ provider: target.provider, model: target.model, error });
+  }
 
   const validated = await validateAssignmentDraftIfRequired({
     config,
@@ -281,12 +223,12 @@ export async function generateDraft(
 
   return {
     text: validated.result.text,
-    provider: execution.candidate.provider,
-    model: execution.candidate.model,
+    provider: execution.target.provider,
+    model: execution.target.model,
     quota: buildQuotaSnapshot({
       config: config.generation,
-      provider: execution.candidate.provider,
-      model: execution.candidate.model,
+      provider: execution.target.provider,
+      model: execution.target.model,
       usage: validated.quotaUsage,
       now: now(),
     }),
@@ -302,7 +244,7 @@ async function validateAssignmentDraftIfRequired(args: {
   promptPackage: Awaited<ReturnType<typeof getPromptPackage>> & {};
   request: GenerateDraftRequest;
   execution: {
-    candidate: ReturnType<typeof resolveGenerationCandidates>[number];
+    target: ReturnType<typeof resolveGenerationTarget>;
     result: ProviderExecutionResult;
     quotaUsage: GenerationBudgetUsage;
   };
@@ -321,13 +263,13 @@ async function validateAssignmentDraftIfRequired(args: {
     return { result: args.execution.result, quotaUsage: args.execution.quotaUsage };
   }
 
-  const executor = args.executors[args.execution.candidate.provider];
+  const executor = args.executors[args.execution.target.provider];
   if (!executor) {
     throw new GenerateDraftProviderError({
       category: 'provider_contract_error',
-      provider: args.execution.candidate.provider,
-      model: args.execution.candidate.model,
-      message: `No generation executor configured for provider: ${args.execution.candidate.provider}`,
+      provider: args.execution.target.provider,
+      model: args.execution.target.model,
+      message: `No generation executor configured for provider: ${args.execution.target.provider}`,
     });
   }
 
@@ -352,8 +294,8 @@ async function validateAssignmentDraftIfRequired(args: {
 
   await enforceGenerationBudgetBeforeAttempt({
     config: args.config,
-    provider: args.execution.candidate.provider,
-    model: args.execution.candidate.model,
+    provider: args.execution.target.provider,
+    model: args.execution.target.model,
     prompt: flattenGenerationRequestEnvelope(repairEnvelope),
     maxOutputTokens: args.request.maxOutputTokens,
     now: args.now(),
@@ -365,7 +307,7 @@ async function validateAssignmentDraftIfRequired(args: {
     repaired = await executor({
       config: args.config.generation,
       request: {
-        model: args.execution.candidate.model,
+        model: args.execution.target.model,
         prompt: flattenGenerationRequestEnvelope(repairEnvelope),
         envelope: repairEnvelope,
         maxOutputTokens: args.request.maxOutputTokens,
@@ -374,16 +316,16 @@ async function validateAssignmentDraftIfRequired(args: {
     });
   } catch (error) {
     throw mapProviderError({
-      provider: args.execution.candidate.provider,
-      model: args.execution.candidate.model,
+      provider: args.execution.target.provider,
+      model: args.execution.target.model,
       error,
     });
   }
 
   await recordGenerationBudgetUsageAfterSuccess({
     config: args.config,
-    provider: args.execution.candidate.provider,
-    model: args.execution.candidate.model,
+    provider: args.execution.target.provider,
+    model: args.execution.target.model,
     usageTotalTokens: repaired.usage?.totalTokens,
     now: args.now(),
     repository: args.budgetRepository,
@@ -393,37 +335,18 @@ async function validateAssignmentDraftIfRequired(args: {
   if (!repairValidation.ok) {
     throw new GenerateDraftProviderError({
       category: 'provider_contract_error',
-      provider: args.execution.candidate.provider,
-      model: args.execution.candidate.model,
+      provider: args.execution.target.provider,
+      model: args.execution.target.model,
       message: `Assignment markdown failed validation after one repair: ${repairValidation.errors.join('; ')}`,
     });
   }
 
   const quotaUsage = await args.budgetRepository.getUsage({
-    provider: args.execution.candidate.provider,
-    model: args.execution.candidate.model,
+    provider: args.execution.target.provider,
+    model: args.execution.target.model,
     now: args.now(),
   });
   return { result: repaired, quotaUsage };
-}
-
-function retryMaxForProvider(
-  config: BatchBackendConfig['generation'],
-  provider: GenerationProvider,
-): number {
-  if (provider === 'openai') return Math.max(0, config.providers.openai.retryMax);
-  if (provider === 'google_ai_studio') return Math.max(0, config.providers.googleAiStudio.retryMax);
-  return Math.max(0, config.providers.openrouter.retryMax);
-}
-
-function retryBackoffForProvider(
-  config: BatchBackendConfig['generation'],
-  provider: GenerationProvider,
-): number {
-  if (provider === 'openai') return Math.max(0, config.providers.openai.retryBackoffMs);
-  if (provider === 'google_ai_studio')
-    return Math.max(0, config.providers.googleAiStudio.retryBackoffMs);
-  return Math.max(0, config.providers.openrouter.retryBackoffMs);
 }
 
 function statusCodeForCategory(category: GenerationErrorCategory): number {

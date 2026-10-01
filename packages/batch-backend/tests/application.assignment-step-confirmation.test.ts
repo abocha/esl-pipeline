@@ -3,11 +3,11 @@ import './support/bootstrap-pg-test-env.js';
 import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { resolveGenerationCandidatesMock } = vi.hoisted(() => ({
-  resolveGenerationCandidatesMock: vi.fn(),
+const { resolveGenerationTargetMock } = vi.hoisted(() => ({
+  resolveGenerationTargetMock: vi.fn(),
 }));
 vi.mock('../src/application/generation-policy.js', () => ({
-  resolveGenerationCandidates: resolveGenerationCandidatesMock,
+  resolveGenerationTarget: resolveGenerationTargetMock,
 }));
 
 import { confirmAssignmentSessionStep } from '../src/application/confirm-assignment-session-step.js';
@@ -29,7 +29,7 @@ requirePgTestEnv();
 describe('application/confirm-assignment-session-step', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resolveGenerationCandidatesMock.mockReturnValue([{ provider: 'openai', model: 'gpt-5.2' }]);
+    resolveGenerationTargetMock.mockReturnValue({ provider: 'openai', model: 'gpt-5.2' });
   });
   const sessionRecord = {
     id: 'session-1',
@@ -161,7 +161,9 @@ describe('application/confirm-assignment-session-step', () => {
       draftWorkingVersion: 1,
     },
   ])('confirms $step without requiring lesson-memory generation configuration', async (request) => {
-    resolveGenerationCandidatesMock.mockReturnValue([]);
+    resolveGenerationTargetMock.mockImplementation(() => {
+      throw new Error('No generation target configured');
+    });
     const confirm = vi.fn().mockResolvedValue({
       session: { ...sessionRecord, confirmedStep: 'context' },
       invalidated: ['prompt', 'draft', 'preview'],
@@ -176,7 +178,7 @@ describe('application/confirm-assignment-session-step', () => {
       overrides: { confirmation: { confirm } } as never,
     });
 
-    expect(resolveGenerationCandidatesMock).not.toHaveBeenCalled();
+    expect(resolveGenerationTargetMock).not.toHaveBeenCalled();
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ lessonMemory: undefined }));
   });
 });
