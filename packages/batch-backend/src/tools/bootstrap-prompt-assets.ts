@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { resolveRepoPath } from '../application/prompt-assembly.js';
 import { getPromptOptions } from '../application/prompt-options.js';
+import { scanTemplateAssets } from '../application/template-assets.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import { loadConfig } from '../config/env.js';
@@ -213,7 +214,7 @@ export async function scanAssets(params: { templateRoot: string; profileRoot: st
 }> {
   assertDistinctRoots(params.templateRoot, params.profileRoot);
   const [templates, profiles] = await Promise.all([
-    scanAssetRoot(path.resolve(params.templateRoot), 'template'),
+    scanTemplateAssets(path.resolve(params.templateRoot)),
     scanAssetRoot(path.resolve(params.profileRoot), 'profile'),
   ]);
 
@@ -229,7 +230,7 @@ export async function scanAssets(params: { templateRoot: string; profileRoot: st
   };
 }
 
-async function importTemplates(
+export async function importTemplates(
   assets: ScannedAsset[],
   dryRun: boolean,
   stats: BootstrapStats,
