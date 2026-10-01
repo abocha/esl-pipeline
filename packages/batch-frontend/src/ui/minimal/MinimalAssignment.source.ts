@@ -179,8 +179,6 @@ export interface SourceController extends SourceHydrationSnapshot {
   createManualTranscript: (text: string, displayName?: string) => Promise<void>;
   resetSourceFlow: (options?: SourceResetOptions) => void;
   applyHydratedSnapshot: (snapshot: SourceHydrationSnapshot) => void;
-  resolveBoundProfileId: (studentId: string) => string;
-  bindStudentProfile: (studentId: string, profileId: string) => void;
 }
 
 function isSttProvider(value: string | null | undefined): value is SttProvider {
@@ -337,24 +335,6 @@ export function useMinimalAssignmentSourceController({
   }, [transcript?.text, transcriptText]);
 
   const transcriptReady = transcriptStatus === 'ready' && transcriptText.trim().length > 0;
-
-  const resolveBoundProfileId = useCallback(
-    (studentId: string): string =>
-      studentOptions.find((student) => student.id === studentId)?.profileId ?? '',
-    [studentOptions],
-  );
-
-  const bindStudentProfile = useCallback((studentId: string, profileId: string) => {
-    const trimmedStudentId = studentId.trim();
-    const trimmedProfileId = profileId.trim();
-    if (!trimmedStudentId || !trimmedProfileId) return;
-
-    setStudentOptions((current) =>
-      current.map((student) =>
-        student.id === trimmedStudentId ? { ...student, profileId: trimmedProfileId } : student,
-      ),
-    );
-  }, []);
 
   const resetSourceFlow = useCallback(
     (options?: SourceResetOptions) => {
@@ -1134,7 +1114,5 @@ export function useMinimalAssignmentSourceController({
     createManualTranscript,
     resetSourceFlow,
     applyHydratedSnapshot,
-    resolveBoundProfileId,
-    bindStudentProfile,
   };
 }

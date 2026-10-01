@@ -57,20 +57,16 @@ export async function getAssignmentLearnerContext(
             )
           : null;
       const canonicalSource = Boolean(source && (frozen || sourceIsCurrent?.rows[0]));
-      const binding = await client.query<{
-        profile_id: string;
-        provenance: string;
-        active_revision_id: string | null;
-      }>(
-        `SELECT p.id AS profile_id, p.provenance, p.active_revision_id
-         FROM student_profile_bindings b JOIN profiles p ON p.id = b.profile_id
-         WHERE b.student_id = $1 AND b.effective_to IS NULL
-         ORDER BY b.effective_from DESC LIMIT 1`,
+      const binding = await client.query<{ provenance: string; active_revision_id: string | null }>(
+        `SELECT s.profile_provenance AS provenance, pr.id AS active_revision_id
+         FROM students s LEFT JOIN student_profile_revisions pr
+           ON pr.student_id = s.id AND pr.status = 'active'
+         WHERE s.id = $1`,
         [row.student_id],
       );
       const profileRow = binding.rows[0];
       const usableId = frozen ? pinned?.profileRevisionId : profileRow?.active_revision_id;
-      const usableProfileId = frozen ? pinned?.profileId : profileRow?.profile_id;
+      const usableProfileId = row.student_id;
       const revision =
         usableId && usableProfileId
           ? await client.query<{
@@ -81,8 +77,9 @@ export async function getAssignmentLearnerContext(
               created_at: Date;
             }>(
               `SELECT id, content_hash, content, structured_content, created_at
-         FROM profile_revisions WHERE id = $1 AND profile_id = $2`,
-              [usableId, usableProfileId],
+         FROM student_profile_revisions WHERE (id = $1 OR legacy_revision_id = $1) AND student_id = $2
+           AND ($3::text IS NULL OR content_hash = $3)`,
+              [usableId, usableProfileId, frozen ? pinned?.profileRevisionHash : null],
             )
           : null;
       const active = revision?.rows[0];
@@ -92,15 +89,10 @@ export async function getAssignmentLearnerContext(
               state: AssignmentLearnerContextDto['operationState'];
             }>(
               `SELECT state FROM profile_initial_enrichment_operations
-         WHERE profile_id = $1 AND assignment_session_id = $2
+         WHERE student_id = $1 AND assignment_session_id = $2
            AND transcript_id = $3 AND transcript_hash = $4
          ORDER BY created_at DESC LIMIT 1`,
-              [
-                profileRow.profile_id,
-                assignmentSessionId,
-                source.transcriptId,
-                source.transcriptHash,
-              ],
+              [row.student_id, assignmentSessionId, source.transcriptId, source.transcriptHash],
             )
           : null;
       const operationState = operation?.rows[0]?.state ?? null;
@@ -108,9 +100,9 @@ export async function getAssignmentLearnerContext(
         !operationState && profileRow?.provenance === 'tutor_only'
           ? await client.query<{ state: 'submitting' | 'uncertain' }>(
               `SELECT state FROM profile_initial_enrichment_operations
-               WHERE profile_id = $1 AND state IN ('submitting', 'uncertain')
+               WHERE student_id = $1 AND state IN ('submitting', 'uncertain')
                ORDER BY created_at DESC LIMIT 1`,
-              [profileRow.profile_id],
+              [row.student_id],
             )
           : null;
       const priorSubmissionState = priorSubmission?.rows[0]?.state ?? null;
@@ -151,7 +143,7 @@ export async function getAssignmentLearnerContext(
         profile:
           active && usableProfileId
             ? {
-                profileId: usableProfileId,
+                studentId: usableProfileId,
                 revisionId: active.id,
                 revisionHash: active.content_hash,
                 content: active.content,
@@ -161,7 +153,7 @@ export async function getAssignmentLearnerContext(
             : null,
         pinned: pinned
           ? {
-              profileId: pinned.profileId,
+              profileId: pinned.profileId ?? null,
               revisionId: pinned.profileRevisionId,
               revisionHash: pinned.profileRevisionHash,
             }

@@ -5,7 +5,6 @@ import type {
   MemoryConfidence,
   StudentFactAuthority,
 } from '../domain/lesson-memory-model.js';
-import { getProfileById } from '../domain/profile-repository.js';
 import {
   getActiveProfileRevision,
   getProfileRevisionById,
@@ -57,7 +56,6 @@ export interface PromoteStudentProfileCandidatesRequest {
   studentId: string;
   candidateIds: string[];
   baseRevisionId?: string | null;
-  profileId?: string | null;
   reviewerId?: string | null;
   reviewerNote?: string | null;
   maxOutputTokens?: number;
@@ -65,7 +63,6 @@ export interface PromoteStudentProfileCandidatesRequest {
 
 export interface PromoteStudentProfileCandidatesResult {
   studentId: string;
-  profileId: string;
   baseRevisionId: string | null;
   draftRevision: ProfileRevisionDetailResponse;
   includedCandidateIds: string[];
@@ -80,9 +77,7 @@ interface ProfileCandidatePromotionDependencies {
   students: {
     getById: typeof getStudentProfileById;
   };
-  profiles: {
-    getById: typeof getProfileById;
-  };
+
   revisions: {
     getActive: typeof getActiveProfileRevision;
     getById: typeof getProfileRevisionById;
@@ -133,23 +128,9 @@ export async function promoteStudentProfileCandidates(args: {
     throw new ProfileCandidatePromotionError('Student not found', 'student_not_found', 404);
   }
 
-  const profileId = request.profileId ?? student.profileId;
-  if (!profileId) {
-    throw new ProfileCandidatePromotionError(
-      'Student does not have a bound profile for promotion',
-      'profile_not_bound',
-      409,
-    );
-  }
-
-  const profile = await dependencies.profiles.getById(profileId);
-  if (!profile) {
-    throw new ProfileCandidatePromotionError('Profile not found', 'profile_not_found', 404);
-  }
-
   const baseRevision = request.baseRevisionId
-    ? await dependencies.revisions.getById(profileId, request.baseRevisionId)
-    : await dependencies.revisions.getActive(profileId);
+    ? await dependencies.revisions.getById(request.studentId, request.baseRevisionId)
+    : await dependencies.revisions.getActive(request.studentId);
   if (request.baseRevisionId && !baseRevision) {
     throw new ProfileCandidatePromotionError(
       'Base profile revision was not found',
@@ -240,13 +221,17 @@ export async function promoteStudentProfileCandidates(args: {
   }
   const renderedDraft = renderFoundationalProfileContent(structuredDraft);
 
-  const draftRevision = await dependencies.profileContent.saveRevision(profileId, renderedDraft, {
-    source: 'candidate_promotion',
-    status: 'draft',
-    createdBy: request.reviewerId ?? null,
-    dedupeByHash: false,
-    structuredContent: structuredDraft,
-  });
+  const draftRevision = await dependencies.profileContent.saveRevision(
+    request.studentId,
+    renderedDraft,
+    {
+      source: 'candidate_promotion',
+      status: 'draft',
+      createdBy: request.reviewerId ?? null,
+      dedupeByHash: false,
+      structuredContent: structuredDraft,
+    },
+  );
 
   await dependencies.candidates.linkToDraft({
     studentId: request.studentId,
@@ -256,7 +241,6 @@ export async function promoteStudentProfileCandidates(args: {
 
   return {
     studentId: request.studentId,
-    profileId,
     baseRevisionId: baseRevision?.id ?? null,
     draftRevision,
     includedCandidateIds: selectedCandidates.map((candidate) => candidate.id),
@@ -275,9 +259,7 @@ function getDependencies(
     students: overrides?.students ?? {
       getById: getStudentProfileById,
     },
-    profiles: overrides?.profiles ?? {
-      getById: getProfileById,
-    },
+
     revisions: overrides?.revisions ?? {
       getActive: getActiveProfileRevision,
       getById: getProfileRevisionById,

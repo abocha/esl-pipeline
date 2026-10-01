@@ -9,7 +9,7 @@ import type {
 } from '../../minimal/MinimalAssignment.entry-state';
 import { AssignmentEntryStep } from './AssignmentEntryStep';
 
-const learners = [{ id: 'student-cora', name: 'Cora', profileId: 'profiles/cora.md' }];
+const learners = [{ id: 'student-cora', name: 'Cora' }];
 const publishedItem: RecentAssignmentItem = {
   id: 'job-published',
   kind: 'job',

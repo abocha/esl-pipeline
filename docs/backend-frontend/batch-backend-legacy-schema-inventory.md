@@ -27,13 +27,8 @@
 | `*_INDEX_PATCHES` for revision/profile/template/student/action/transcription surfaces                                                                                                        | `0005_indexes_and_triggers_unification.sql`, `0006_jobs_student_denorm_and_indexes.sql`                                                                                     | Covered |
 | `TRANSCRIPTION_TRIGGER_PATCHES`                                                                                                                                                              | `0005_indexes_and_triggers_unification.sql`                                                                                                                                 | Covered |
 
-## Temporary Exception
+## Retirement
 
-The runtime legacy patch catalog is retained only as emergency compatibility code
-behind explicit override:
-
-- `PG_ENABLE_LEGACY_SCHEMA_PATCHES=true`
-- Entry point: `ensureJobsSchema(...)`
-
-Default mode is migration-first (`db:migrate`, `db:status`, `db:verify`), and CI
-keeps the legacy patch catalog frozen to block new ad-hoc runtime schema changes.
+ABO-12 removes the old runtime DDL catalog because it recreates the retired profile/binding graph.
+`ensureJobsSchema` rejects calls even with the former override. This inventory records historical
+migration parity; current schema authority is the migration chain and generated baseline.

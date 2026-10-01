@@ -3,7 +3,6 @@ import { listStudentProfiles } from './student-profiles-store.js';
 export interface StudentOption {
   id: string;
   name: string;
-  profileId?: string | null;
 }
 
 export interface StudentProfilesResponse {
@@ -18,7 +17,6 @@ export async function getStudentProfiles(
     students: result.items.map((profile) => ({
       id: profile.id,
       name: profile.student,
-      profileId: profile.profileId ?? null,
     })),
   };
 }

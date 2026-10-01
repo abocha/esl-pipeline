@@ -1927,7 +1927,7 @@ describeHttpServerIntegrationSuite(
             updatedAt: '2024-01-01T00:00:00.000Z',
           },
           current: {
-            profileId: 'profile.md',
+            studentId: 'student-1',
             revisionId: 'revision-2',
             hash: 'hash-2',
             versionLabel: 'v2',

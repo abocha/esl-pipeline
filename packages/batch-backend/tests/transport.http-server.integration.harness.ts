@@ -26,13 +26,11 @@ import * as materializeDraftModule from '../src/application/materialize-draft.js
 import * as profileCandidatePromotionModule from '../src/application/profile-candidate-promotion.js';
 import * as profileContentModule from '../src/application/profile-content.js';
 import * as profileDraftRefreshModule from '../src/application/profile-draft-refresh.js';
-import { ProfilePathError } from '../src/application/profile-path.js';
 import * as publishAssignmentCorrectionModule from '../src/application/publish-assignment-correction.js';
 import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
 import * as shareAssignmentSessionModule from '../src/application/share-assignment-session.js';
 import * as studentMemoryInspectionModule from '../src/application/student-memory-inspection.js';
-import * as studentBindingsModule from '../src/application/student-profile-bindings.js';
 import * as studentProfileCandidatesModule from '../src/application/student-profile-candidates.js';
 import * as studentStoreModule from '../src/application/student-profiles-store.js';
 import * as studentScheduleBillingModule from '../src/application/student-schedule-billing.js';
@@ -248,7 +246,6 @@ vi.mock('../src/domain/student-repository', async () => {
       voices: {},
       manifestPreset: null,
       accentPreference: null,
-      profileId: null,
       archivedAt: null,
       archivedBy: null,
       archiveReason: null,
@@ -260,15 +257,13 @@ vi.mock('../src/domain/student-repository', async () => {
 
 vi.mock('../src/application/profile-content', () => {
   return {
-    listProfileContents: vi.fn(),
     getProfileContent: vi.fn(),
     upsertProfileContent: vi.fn(),
     saveProfileRevisionContent: vi.fn(),
-    deleteProfileContent: vi.fn(),
-    listProfileRevisionsForProfile: vi.fn(),
-    getProfileRevisionForProfile: vi.fn(),
+    listProfileRevisionsForStudent: vi.fn(),
+    getProfileRevisionForStudent: vi.fn(),
     restoreProfileRevision: vi.fn(),
-    activateProfileRevisionForProfile: vi.fn(),
+    activateProfileRevisionForStudent: vi.fn(),
   };
 });
 
@@ -373,14 +368,6 @@ vi.mock('../src/application/initialize-student-profile-draft', () => {
   };
 });
 
-vi.mock('../src/application/student-profile-bindings', () => {
-  return {
-    listStudentProfileBindingsForStudent: vi.fn(),
-    getActiveStudentProfileBindingForStudent: vi.fn(),
-    resolveStudentProfileBindingAt: vi.fn(),
-  };
-});
-
 vi.mock('../src/application/student-schedule-billing', () => {
   return {
     getStudentScheduleBillingSurface: vi.fn(),
@@ -435,8 +422,7 @@ vi.mock('../src/application/get-prompt-options.js', () => {
   return {
     getPromptOptions: vi.fn().mockResolvedValue({
       templates: [{ id: 'template.md', label: 'Template' }],
-      profiles: [{ id: 'profile.md', label: 'Profile' }],
-      defaults: { templateId: 'template.md', profileId: 'profile.md' },
+      defaults: { templateId: 'template.md' },
     }),
   };
 });
@@ -454,22 +440,20 @@ export function describeHttpServerIntegrationSuite(
     const mockDeleteStudentProfile = vi.mocked(studentStoreModule.deleteStudentProfile);
     const mockArchiveStudentProfile = vi.mocked(studentStoreModule.archiveStudentProfile);
     const mockRestoreStudentProfile = vi.mocked(studentStoreModule.restoreStudentProfile);
-    const mockListProfileContents = vi.mocked(profileContentModule.listProfileContents);
     const mockGetProfileContent = vi.mocked(profileContentModule.getProfileContent);
     const mockUpsertProfileContent = vi.mocked(profileContentModule.upsertProfileContent);
     const mockSaveProfileRevisionContent = vi.mocked(
       profileContentModule.saveProfileRevisionContent,
     );
-    const mockDeleteProfileContent = vi.mocked(profileContentModule.deleteProfileContent);
-    const mockListProfileRevisionsForProfile = vi.mocked(
-      profileContentModule.listProfileRevisionsForProfile,
+    const mockListProfileRevisionsForStudent = vi.mocked(
+      profileContentModule.listProfileRevisionsForStudent,
     );
-    const mockGetProfileRevisionForProfile = vi.mocked(
-      profileContentModule.getProfileRevisionForProfile,
+    const mockGetProfileRevisionForStudent = vi.mocked(
+      profileContentModule.getProfileRevisionForStudent,
     );
     const mockRestoreProfileRevision = vi.mocked(profileContentModule.restoreProfileRevision);
-    const mockActivateProfileRevisionForProfile = vi.mocked(
-      profileContentModule.activateProfileRevisionForProfile,
+    const mockActivateProfileRevisionForStudent = vi.mocked(
+      profileContentModule.activateProfileRevisionForStudent,
     );
     const mockListTemplateContents = vi.mocked(templateContentModule.listTemplateContents);
     const mockGetTemplateContent = vi.mocked(templateContentModule.getTemplateContent);
@@ -524,12 +508,6 @@ export function describeHttpServerIntegrationSuite(
     );
     const mockInitializeStudentProfileDraft = vi.mocked(
       initializeStudentProfileDraftModule.initializeStudentProfileDraft,
-    );
-    const mockListStudentProfileBindingsForStudent = vi.mocked(
-      studentBindingsModule.listStudentProfileBindingsForStudent,
-    );
-    const mockGetActiveStudentProfileBindingForStudent = vi.mocked(
-      studentBindingsModule.getActiveStudentProfileBindingForStudent,
     );
     const mockGetStudentScheduleBillingSurface = vi.mocked(
       studentScheduleBillingModule.getStudentScheduleBillingSurface,
@@ -593,7 +571,6 @@ export function describeHttpServerIntegrationSuite(
             accentPreference: null,
             voices: {},
             manifestPreset: null,
-            profileId: null,
           },
           {
             id: deriveStudentId('Bob'),
@@ -604,7 +581,6 @@ export function describeHttpServerIntegrationSuite(
             accentPreference: null,
             voices: {},
             manifestPreset: null,
-            profileId: null,
           },
         ],
         total: 2,
@@ -621,7 +597,6 @@ export function describeHttpServerIntegrationSuite(
         accentPreference: null,
         voices: {},
         manifestPreset: null,
-        profileId: null,
       });
       mockCreateStudentProfile.mockResolvedValue({
         id: deriveStudentId('New Student'),
@@ -632,7 +607,6 @@ export function describeHttpServerIntegrationSuite(
         accentPreference: null,
         voices: {},
         manifestPreset: null,
-        profileId: null,
       });
       mockUpdateStudentProfile.mockResolvedValue({
         id: deriveStudentId('Anna'),
@@ -643,7 +617,6 @@ export function describeHttpServerIntegrationSuite(
         accentPreference: null,
         voices: {},
         manifestPreset: null,
-        profileId: 'profile.md',
       });
       mockDeleteStudentProfile.mockResolvedValue(true);
       mockArchiveStudentProfile.mockResolvedValue({
@@ -655,7 +628,6 @@ export function describeHttpServerIntegrationSuite(
         accentPreference: null,
         voices: {},
         manifestPreset: null,
-        profileId: null,
         archivedAt: '2026-01-03T00:00:00.000Z',
         archivedBy: 'auth-user-1',
         archiveReason: 'Student paused lessons.',
@@ -669,17 +641,12 @@ export function describeHttpServerIntegrationSuite(
         accentPreference: null,
         voices: {},
         manifestPreset: null,
-        profileId: null,
         archivedAt: null,
         archivedBy: null,
         archiveReason: null,
       });
-      mockListProfileContents.mockResolvedValue({
-        profiles: [{ id: 'profile.md', label: 'Profile' }],
-      });
       mockGetProfileContent.mockResolvedValue({
-        id: 'profile.md',
-        label: 'Profile',
+        studentId: deriveStudentId('Anna'),
         content: 'Profile content',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -697,8 +664,7 @@ export function describeHttpServerIntegrationSuite(
         updatedAt: '2024-01-01T00:00:00.000Z',
       });
       mockUpsertProfileContent.mockResolvedValue({
-        id: 'profile.md',
-        label: 'Profile',
+        studentId: deriveStudentId('Anna'),
         content: 'Updated content',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -717,7 +683,7 @@ export function describeHttpServerIntegrationSuite(
       });
       mockSaveProfileRevisionContent.mockResolvedValue({
         id: 'revision-2',
-        profileId: 'profile.md',
+        studentId: deriveStudentId('Anna'),
         contentHash: 'hash-2',
         source: 'update',
         status: 'draft',
@@ -742,12 +708,11 @@ export function describeHttpServerIntegrationSuite(
           teacherNotes: 'Needs practical speaking rehearsal.',
         },
       });
-      mockDeleteProfileContent.mockResolvedValue(true);
-      mockListProfileRevisionsForProfile.mockResolvedValue({
+      mockListProfileRevisionsForStudent.mockResolvedValue({
         items: [
           {
             id: 'revision-1',
-            profileId: 'profile.md',
+            studentId: deriveStudentId('Anna'),
             contentHash: 'hash-1',
             source: 'create',
             status: 'active',
@@ -765,9 +730,9 @@ export function describeHttpServerIntegrationSuite(
         offset: 0,
         order: 'desc',
       });
-      mockGetProfileRevisionForProfile.mockResolvedValue({
+      mockGetProfileRevisionForStudent.mockResolvedValue({
         id: 'revision-1',
-        profileId: 'profile.md',
+        studentId: deriveStudentId('Anna'),
         contentHash: 'hash-1',
         source: 'create',
         status: 'active',
@@ -793,8 +758,7 @@ export function describeHttpServerIntegrationSuite(
         },
       });
       mockRestoreProfileRevision.mockResolvedValue({
-        id: 'profile.md',
-        label: 'Profile',
+        studentId: deriveStudentId('Anna'),
         content: 'Restored content',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -1059,11 +1023,10 @@ export function describeHttpServerIntegrationSuite(
       });
       mockPromoteStudentProfileCandidates.mockResolvedValue({
         studentId: deriveStudentId('Anna'),
-        profileId: 'profiles/anna.md',
         baseRevisionId: 'profile-revision-active',
         draftRevision: {
           id: 'profile-revision-draft',
-          profileId: 'profiles/anna.md',
+          studentId: deriveStudentId('Anna'),
           contentHash: 'profile-draft-hash',
           source: 'candidate_promotion',
           status: 'draft',
@@ -1082,11 +1045,10 @@ export function describeHttpServerIntegrationSuite(
       });
       mockRefreshProfileDraftFromApprovedCandidates.mockResolvedValue({
         studentId: deriveStudentId('Anna'),
-        profileId: 'profiles/anna.md',
         baseRevisionId: 'profile-revision-active',
         draftRevision: {
           id: 'profile-revision-refreshed-draft',
-          profileId: 'profiles/anna.md',
+          studentId: deriveStudentId('Anna'),
           contentHash: 'profile-refreshed-draft-hash',
           source: 'profile_revision_refresh',
           status: 'draft',
@@ -1105,10 +1067,9 @@ export function describeHttpServerIntegrationSuite(
       });
       mockInitializeStudentProfileDraft.mockResolvedValue({
         studentId: deriveStudentId('Anna'),
-        profileId: 'profiles/anna.md',
         draftRevision: {
           id: 'profile-revision-empty-draft',
-          profileId: 'profiles/anna.md',
+          studentId: deriveStudentId('Anna'),
           contentHash: 'profile-empty-draft-hash',
           source: 'create',
           status: 'draft',
@@ -1144,34 +1105,6 @@ export function describeHttpServerIntegrationSuite(
         pronunciationWarnings: [],
         lineage: null,
         actions: [],
-      });
-      mockListStudentProfileBindingsForStudent.mockResolvedValue({
-        items: [
-          {
-            id: 'binding-1',
-            studentId: deriveStudentId('Anna'),
-            profileId: 'profile.md',
-            effectiveFrom: '2024-01-01T00:00:00.000Z',
-            effectiveTo: null,
-            reason: 'sync_student_profile',
-            changedBy: null,
-            createdAt: '2024-01-01T00:00:00.000Z',
-          },
-        ],
-        total: 1,
-        limit: 50,
-        offset: 0,
-        order: 'desc',
-      });
-      mockGetActiveStudentProfileBindingForStudent.mockResolvedValue({
-        id: 'binding-1',
-        studentId: deriveStudentId('Anna'),
-        profileId: 'profile.md',
-        effectiveFrom: '2024-01-01T00:00:00.000Z',
-        effectiveTo: null,
-        reason: 'sync_student_profile',
-        changedBy: null,
-        createdAt: '2024-01-01T00:00:00.000Z',
       });
       mockGetStudentScheduleBillingSurface.mockResolvedValue({
         studentId: deriveStudentId('Anna'),
@@ -1380,10 +1313,8 @@ export function describeHttpServerIntegrationSuite(
       materializeDraftModule,
       readinessMetricsModule,
       getVersionMeta,
-      ProfilePathError,
       retryRecordingModule,
       studentStoreModule,
-      studentBindingsModule,
       studentSummaryModule,
       studentMemoryInspectionModule,
       studentTimelineModule,
@@ -1406,15 +1337,13 @@ export function describeHttpServerIntegrationSuite(
       mockDeleteStudentProfile,
       mockArchiveStudentProfile,
       mockRestoreStudentProfile,
-      mockListProfileContents,
       mockGetProfileContent,
       mockUpsertProfileContent,
       mockSaveProfileRevisionContent,
-      mockDeleteProfileContent,
-      mockListProfileRevisionsForProfile,
-      mockGetProfileRevisionForProfile,
+      mockListProfileRevisionsForStudent,
+      mockGetProfileRevisionForStudent,
       mockRestoreProfileRevision,
-      mockActivateProfileRevisionForProfile,
+      mockActivateProfileRevisionForStudent,
       mockListTemplateContents,
       mockGetTemplateContent,
       mockUpsertTemplateContent,
@@ -1437,8 +1366,6 @@ export function describeHttpServerIntegrationSuite(
       mockPromoteStudentProfileCandidates,
       mockRefreshProfileDraftFromApprovedCandidates,
       mockInitializeStudentProfileDraft,
-      mockListStudentProfileBindingsForStudent,
-      mockGetActiveStudentProfileBindingForStudent,
       mockGetStudentScheduleBillingSurface,
       mockHideStudentLessonFollowupReminder,
       mockUndoLatestHiddenStudentReminder,

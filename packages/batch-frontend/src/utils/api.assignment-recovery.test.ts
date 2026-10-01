@@ -218,7 +218,6 @@ describe('assignment recovery API', () => {
           step: 'context',
           expectedRevision: 2,
           teacherNotes: 'notes',
-          profileId: null,
           profileRevisionId: null,
           profileRevisionHash: null,
         }),

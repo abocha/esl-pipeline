@@ -11,7 +11,7 @@ import {
 } from '../../application/profile-candidate-promotion.js';
 import {
   getProfileContent,
-  listProfileRevisionsForProfile,
+  listProfileRevisionsForStudent,
 } from '../../application/profile-content.js';
 import {
   ProfileDraftRefreshError,
@@ -25,11 +25,6 @@ import {
   listStudentMemorySnapshotsForStudent,
   listStudentProfileCandidatesForStudent,
 } from '../../application/student-memory-inspection.js';
-import {
-  getActiveStudentProfileBindingForStudent,
-  listStudentProfileBindingsForStudent,
-  resolveStudentProfileBindingAt,
-} from '../../application/student-profile-bindings.js';
 import {
   approveStudentProfileCandidate,
   deferStudentProfileCandidate,
@@ -78,6 +73,7 @@ import { logger } from '../../infrastructure/logger.js';
 import { getAuthenticatedUser } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
 import type { ExtendedRoutesContext } from './context.js';
+import { registerStudentProfileRoutes } from './student-profile-routes.js';
 
 async function resolveWorkspaceIdForRequest(request: FastifyRequest): Promise<string> {
   const authenticatedUser = getAuthenticatedUser(request);
@@ -100,11 +96,11 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
   const { authenticate } = context;
   // Student-owned handlers below may use unscoped internal helpers only after this
   // boundary proves ownership in SQL. Keep this after authenticate and before
-  // any profile, binding, memory, candidate, draft, or timeline access.
+  // any profile revision, memory, candidate, draft, or timeline access.
   async function authorizeStudent(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+    const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
     if (!params.success) {
-      errorResponse(reply, 'validation_failed', { message: 'Invalid student id' });
+      errorResponse(reply, 'not_found');
       return;
     }
     try {
@@ -125,6 +121,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       errorResponse(reply, 'internal_error');
     }
   }
+
+  registerStudentProfileRoutes(app, context, authorizeStudent);
 
   const starterProfileSchema = z.object({
     overallLevel: z.string().nullable().optional(),
@@ -252,20 +250,9 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
     const student = await getStudentProfileById(studentId, { config: context.config });
     if (!student) return null;
 
-    const activeBinding = student.profileId
-      ? null
-      : await getActiveStudentProfileBindingForStudent(studentId);
-    const profileId = student.profileId ?? activeBinding?.profileId ?? null;
-    if (!profileId) {
-      return {
-        profile: null,
-        revisions: emptyProfileRevisions,
-      };
-    }
-
     const [profile, revisions] = await Promise.all([
-      getProfileContent(profileId),
-      listProfileRevisionsForProfile(profileId, { limit: 20, offset: 0, order: 'desc' }),
+      getProfileContent(student.id),
+      listProfileRevisionsForStudent(student.id, { limit: 20, offset: 0, order: 'desc' }),
     ]);
 
     return {
@@ -377,7 +364,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           return errorResponse(reply, 'not_found');
         }
 
-        const [memory, memoryHealth, bindings, candidates] = await Promise.all([
+        const [memory, memoryHealth, candidates] = await Promise.all([
           getStudentMemoryOverview({
             studentId: params.id,
             lessonLimit: 5,
@@ -387,11 +374,6 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           getStudentMemoryHealth({
             studentId: params.id,
             config: context.config,
-          }),
-          listStudentProfileBindingsForStudent(params.id, {
-            limit: 20,
-            offset: 0,
-            order: 'desc',
           }),
           listStudentProfileCandidatesForStudent({
             studentId: params.id,
@@ -417,7 +399,6 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           ...profilePayload,
           memory,
           memoryHealth,
-          bindings,
           candidates,
         });
       } catch (error: unknown) {
@@ -1147,7 +1128,6 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send({
           draftRevisionId: result.draftRevision.id,
-          profileId: result.profileId,
           includedCandidateIds: result.includedCandidateIds,
           excludedCandidateIds: body.candidateIds.filter(
             (candidateId) => !result.includedCandidateIds.includes(candidateId),
@@ -1228,7 +1208,6 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send({
           draftRevisionId: result.draftRevision.id,
-          profileId: result.profileId,
           baseRevisionId: result.baseRevisionId,
           includedCandidateIds: result.includedCandidateIds,
           contentHash: result.draftRevision.contentHash,
@@ -1299,7 +1278,6 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send({
           draftRevisionId: result.draftRevision.id,
-          profileId: result.profileId,
           draftRevision: result.draftRevision,
         });
       } catch (error: unknown) {
@@ -1835,8 +1813,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         dbId: z.string().nullable().optional(),
         pageParentId: z.string().nullable().optional(),
         voices: z.record(z.string(), z.string()).optional(),
-        profileId: z.string().nullable().optional(),
         starterProfile: starterProfileSchema.nullable().optional(),
+        profileId: z.never().optional(),
       });
 
       try {
@@ -1845,7 +1823,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const workspaceId = await resolveWorkspaceIdForRequest(request);
         const created = await createStudentProfile(body, {
           workspaceId,
-          bindingAudit: {
+          audit: {
             reason: 'student_create',
             changedBy: authenticatedUser?.id ?? null,
           },
@@ -1905,7 +1883,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           dbId: z.string().nullable().optional(),
           pageParentId: z.string().nullable().optional(),
           voices: z.record(z.string(), z.string()).optional(),
-          profileId: z.string().nullable().optional(),
+          profileId: z.never().optional(),
         })
         .partial();
 
@@ -1916,7 +1894,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const workspaceId = await resolveWorkspaceIdForRequest(request);
         const updated = await updateStudentProfile(params.id, body, {
           workspaceId,
-          bindingAudit: {
+          audit: {
             reason: 'student_update',
             changedBy: authenticatedUser?.id ?? null,
           },
@@ -2152,120 +2130,6 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         }
         const workspaceError = workspaceContextErrorResponse(reply, error);
         if (workspaceError) return workspaceError;
-
-        logger.error(error instanceof Error ? error : String(error), {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 500,
-          error: 'internal_error',
-        });
-
-        return errorResponse(reply, 'internal_error');
-      }
-    },
-  );
-
-  app.get(
-    '/students/:id/bindings',
-    {
-      preHandler: [authenticate, authorizeStudent],
-    },
-    async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'GET /students/:id/bindings');
-      const paramsSchema = z.object({
-        id: z.string().min(1),
-      });
-      const querySchema = z.object({
-        limit: z.coerce.number().int().min(1).max(500).optional(),
-        offset: z.coerce.number().int().min(0).optional(),
-        order: z.enum(['asc', 'desc']).optional(),
-      });
-
-      try {
-        const params = paramsSchema.parse(request.params ?? {});
-        const query = querySchema.parse(request.query ?? {});
-        const student = await getStudentProfileById(params.id);
-        if (!student) {
-          return errorResponse(reply, 'not_found');
-        }
-
-        const bindings = await listStudentProfileBindingsForStudent(params.id, query);
-
-        logger.info('HTTP request handled', {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 200,
-          studentId: params.id,
-        });
-
-        return reply.send(bindings);
-      } catch (error: unknown) {
-        if (error instanceof z.ZodError) {
-          return reply.code(400).send({
-            error: 'validation_failed',
-            message: 'Invalid request parameters',
-            details: error.issues,
-          });
-        }
-
-        logger.error(error instanceof Error ? error : String(error), {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 500,
-          error: 'internal_error',
-        });
-
-        return errorResponse(reply, 'internal_error');
-      }
-    },
-  );
-
-  app.get(
-    '/students/:id/bindings/active',
-    {
-      preHandler: [authenticate, authorizeStudent],
-    },
-    async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'GET /students/:id/bindings/active');
-      const paramsSchema = z.object({
-        id: z.string().min(1),
-      });
-      const querySchema = z.object({
-        at: z.string().datetime({ offset: true }).optional(),
-      });
-
-      try {
-        const params = paramsSchema.parse(request.params ?? {});
-        const query = querySchema.parse(request.query ?? {});
-        const student = await getStudentProfileById(params.id);
-        if (!student) {
-          return errorResponse(reply, 'not_found');
-        }
-
-        const binding = query.at
-          ? await resolveStudentProfileBindingAt(params.id, new Date(query.at))
-          : await getActiveStudentProfileBindingForStudent(params.id);
-        if (!binding) {
-          return errorResponse(reply, 'not_found');
-        }
-
-        logger.info('HTTP request handled', {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 200,
-          studentId: params.id,
-          ...(query.at ? { effectiveAt: query.at } : {}),
-        });
-
-        return reply.send(binding);
-      } catch (error: unknown) {
-        if (error instanceof z.ZodError) {
-          return reply.code(400).send({
-            error: 'validation_failed',
-            message: 'Invalid request parameters',
-            details: error.issues,
-          });
-        }
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',

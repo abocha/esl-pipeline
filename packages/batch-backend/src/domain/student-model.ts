@@ -8,7 +8,6 @@ export interface StudentRecord {
   voices: Record<string, string>;
   manifestPreset: string | null;
   accentPreference: string | null;
-  profileId: string | null;
   archivedAt: Date | null;
   archivedBy: string | null;
   archiveReason: string | null;

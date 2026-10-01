@@ -1729,7 +1729,6 @@ function createConfig(): BatchBackendConfig {
     },
     prompt: {
       templatePath: '',
-      defaultProfilePath: '',
     },
     drafts: {
       localExport: false,

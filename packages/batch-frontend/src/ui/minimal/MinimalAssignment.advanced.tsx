@@ -1045,20 +1045,6 @@ export function AssignmentDiagnostics({ jobStatus, controller }: AssignmentDiagn
               </span>
             </div>
           ) : null}
-          {controller.jobProvenance.lineage?.bindingAtCreation ? (
-            <div className="minimal-meta">
-              <span>
-                Learner profile at creation:{' '}
-                {controller.jobProvenance.lineage.bindingAtCreation.profileId}
-              </span>
-              <span>
-                Active from:{' '}
-                {new Date(
-                  controller.jobProvenance.lineage.bindingAtCreation.effectiveFrom,
-                ).toLocaleString()}
-              </span>
-            </div>
-          ) : null}
           {controller.jobProvenance.actions.length > 0 ? (
             <div className="minimal-list">
               {controller.jobProvenance.actions.slice(0, 6).map((event) => (

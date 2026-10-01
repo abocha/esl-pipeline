@@ -150,7 +150,6 @@ describe('application/confirm-assignment-session-step', () => {
       step: 'context' as const,
       expectedRevision: 2,
       teacherNotes: null,
-      profileId: null,
       profileRevisionId: null,
       profileRevisionHash: null,
     },
@@ -335,7 +334,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
     const sourceBHash = 'df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c';
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
-        'TRUNCATE TABLE assignment_sessions, lesson_memory_entries, student_profile_bindings, profile_revisions, profiles, transcripts, recordings, students, users RESTART IDENTITY CASCADE',
+        'TRUNCATE TABLE assignment_sessions, lesson_memory_entries, student_profile_revisions, transcripts, recordings, students, users RESTART IDENTITY CASCADE',
       );
       await client.query(
         `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'hash', 'user')`,
@@ -630,7 +629,6 @@ describe('application/confirm-assignment-session-step transactional persistence'
           step: 'context',
           expectedRevision: relinkedLesson.session.revision,
           teacherNotes: 'stale tab',
-          profileId: null,
           profileRevisionId: null,
           profileRevisionHash: null,
         },
@@ -650,7 +648,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
     const transcriptHash = 'a'.repeat(64);
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
-        'TRUNCATE TABLE assignment_sessions, lesson_memory_entries, student_profile_bindings, profile_revisions, profiles, transcripts, recordings, students, users RESTART IDENTITY CASCADE',
+        'TRUNCATE TABLE assignment_sessions, lesson_memory_entries, student_profile_revisions, transcripts, recordings, students, users RESTART IDENTITY CASCADE',
       );
       await client.query(
         `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'hash', 'user')`,
@@ -698,7 +696,6 @@ describe('application/confirm-assignment-session-step transactional persistence'
           step: 'context',
           expectedRevision: 1,
           teacherNotes: null,
-          profileId: null,
           profileRevisionId: null,
           profileRevisionHash: null,
         },
@@ -741,7 +738,6 @@ describe('application/confirm-assignment-session-step transactional persistence'
           step: 'context',
           expectedRevision: source.session.revision,
           teacherNotes: null,
-          profileId: null,
           profileRevisionId: null,
           profileRevisionHash: null,
         },
@@ -769,28 +765,18 @@ describe('application/confirm-assignment-session-step transactional persistence'
       ),
     );
     const otherStudentId = randomUUID();
-    const otherProfileId = `profiles/${randomUUID()}.md`;
     const otherProfileRevisionId = randomUUID();
     const otherProfileHash = 'profile-hash';
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(`INSERT INTO students (id, student) VALUES ($1, 'Other')`, [
         otherStudentId,
       ]);
-      await client.query(`INSERT INTO profiles (id, label) VALUES ($1, 'Other profile')`, [
-        otherProfileId,
-      ]);
       await client.query(
-        `INSERT INTO profile_revisions
-           (id, profile_id, content, content_hash, source, status, version_number,
+        `INSERT INTO student_profile_revisions
+           (id, student_id, content, content_hash, source, status, version_number,
             version_label, activated_at, created_at)
          VALUES ($1, $2, 'content', $3, 'create', 'active', 1, 'v1', NOW(), NOW())`,
-        [otherProfileRevisionId, otherProfileId, otherProfileHash],
-      );
-      await client.query(
-        `INSERT INTO student_profile_bindings
-           (id, student_id, profile_id, effective_from, reason, changed_by)
-         VALUES ($1, $2, $3, NOW(), 'student_update', $4)`,
-        [randomUUID(), otherStudentId, otherProfileId, userId],
+        [otherProfileRevisionId, otherStudentId, otherProfileHash],
       );
     });
     await expect(
@@ -801,44 +787,21 @@ describe('application/confirm-assignment-session-step transactional persistence'
           step: 'context',
           expectedRevision: refreshedSource.session.revision,
           teacherNotes: null,
-          profileId: otherProfileId,
           profileRevisionId: otherProfileRevisionId,
           profileRevisionHash: otherProfileHash,
         },
       }),
     ).rejects.toMatchObject({ code: 'ASSIGNMENT_STEP_PROFILE_STALE' });
-    const confirmedProfileId = `profiles/${randomUUID()}.md`;
     const confirmedProfileRevisionId = randomUUID();
     const confirmedProfileRawHash = 'e'.repeat(64);
     const renderedProfileHash = 'f'.repeat(64);
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      await client.query(`INSERT INTO profiles (id, label) VALUES ($1, 'Confirmed profile')`, [
-        confirmedProfileId,
-      ]);
       await client.query(
-        `INSERT INTO profile_revisions
-           (id, profile_id, content, content_hash, source, status, version_number,
+        `INSERT INTO student_profile_revisions
+           (id, student_id, content, content_hash, source, status, version_number,
             version_label, activated_at, created_at)
          VALUES ($1, $2, 'raw structured source', $3, 'create', 'active', 1, 'v1', NOW(), NOW())`,
-        [confirmedProfileRevisionId, confirmedProfileId, confirmedProfileRawHash],
-      );
-      await client.query('UPDATE profiles SET active_revision_id = $2 WHERE id = $1', [
-        confirmedProfileId,
-        confirmedProfileRevisionId,
-      ]);
-      await client.query(
-        'UPDATE student_profile_bindings SET effective_to = NOW() WHERE student_id = $1 AND effective_to IS NULL',
-        [studentId],
-      );
-      await client.query('UPDATE students SET profile_id = $2 WHERE id = $1', [
-        studentId,
-        confirmedProfileId,
-      ]);
-      await client.query(
-        `INSERT INTO student_profile_bindings
-           (id, student_id, profile_id, effective_from, reason, changed_by)
-         VALUES ($1, $2, $3, NOW(), 'student_update', $4)`,
-        [randomUUID(), studentId, confirmedProfileId, userId],
+        [confirmedProfileRevisionId, studentId, confirmedProfileRawHash],
       );
     });
     const context = await confirmAssignmentSessionStepPersistence({
@@ -848,7 +811,6 @@ describe('application/confirm-assignment-session-step transactional persistence'
         step: 'context',
         expectedRevision: refreshedSource.session.revision,
         teacherNotes: null,
-        profileId: confirmedProfileId,
         profileRevisionId: confirmedProfileRevisionId,
         profileRevisionHash: confirmedProfileRawHash,
       },
@@ -861,7 +823,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
       lessonId: null,
       templateVersion: 'template-v1',
       notes: null,
-      resolvedProfileId: confirmedProfileId,
+      resolvedProfileId: null,
       resolvedProfileRevisionId: confirmedProfileRevisionId,
       resolvedProfileHash: renderedProfileHash,
       storageUri: 's3://prompts/prompt.json',
@@ -888,7 +850,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
       lessonId: null,
       templateVersion: 'template-v2',
       notes: null,
-      resolvedProfileId: confirmedProfileId,
+      resolvedProfileId: null,
       resolvedProfileRevisionId: confirmedProfileRevisionId,
       resolvedProfileHash: renderedProfileHash,
       storageUri: 's3://prompts/replacement.json',

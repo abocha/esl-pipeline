@@ -5,7 +5,6 @@ import type {
   MemoryConfidence,
   StudentFactAuthority,
 } from '../domain/lesson-memory-model.js';
-import { getProfileById } from '../domain/profile-repository.js';
 import {
   getActiveProfileRevision,
   getProfileRevisionById,
@@ -63,7 +62,6 @@ export interface RefreshProfileDraftFromApprovedCandidatesRequest {
 
 export interface RefreshProfileDraftFromApprovedCandidatesResult {
   studentId: string;
-  profileId: string;
   baseRevisionId: string | null;
   draftRevision: ProfileRevisionDetailResponse;
   includedCandidateIds: string[];
@@ -78,9 +76,7 @@ interface ProfileDraftRefreshDependencies {
   students: {
     getById: typeof getStudentProfileById;
   };
-  profiles: {
-    getById: typeof getProfileById;
-  };
+
   revisions: {
     getActive: typeof getActiveProfileRevision;
     getById: typeof getProfileRevisionById;
@@ -134,24 +130,10 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
     throw new ProfileDraftRefreshError('Student not found', 'student_not_found', 404);
   }
 
-  const profileId = student.profileId;
-  if (!profileId) {
-    throw new ProfileDraftRefreshError(
-      'Student does not have a bound profile for draft refresh',
-      'profile_not_bound',
-      409,
-    );
-  }
-
-  const profile = await dependencies.profiles.getById(profileId);
-  if (!profile) {
-    throw new ProfileDraftRefreshError('Profile not found', 'profile_not_found', 404);
-  }
-
   const [baseRevision, selectedCandidates, memoryOverview] = await Promise.all([
     request.baseRevisionId
-      ? dependencies.revisions.getById(profileId, request.baseRevisionId)
-      : dependencies.revisions.getActive(profileId),
+      ? dependencies.revisions.getById(request.studentId, request.baseRevisionId)
+      : dependencies.revisions.getActive(request.studentId),
     dependencies.candidates.listByIds(request.studentId, request.candidateIds),
     dependencies.memory.getOverview({
       studentId: request.studentId,
@@ -217,7 +199,7 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
 
   const structuredDraft = drafting.structuredProfile;
   const draftRevision = await dependencies.profileContent.saveRevision(
-    profileId,
+    request.studentId,
     renderFoundationalProfileContent(structuredDraft),
     {
       source: 'profile_revision_refresh',
@@ -236,7 +218,6 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
 
   return {
     studentId: request.studentId,
-    profileId,
     baseRevisionId: baseRevision?.id ?? null,
     draftRevision,
     includedCandidateIds: selectedCandidates.map((candidate) => candidate.id),
@@ -255,9 +236,7 @@ function getDependencies(
     students: overrides?.students ?? {
       getById: getStudentProfileById,
     },
-    profiles: overrides?.profiles ?? {
-      getById: getProfileById,
-    },
+
     revisions: overrides?.revisions ?? {
       getActive: getActiveProfileRevision,
       getById: getProfileRevisionById,

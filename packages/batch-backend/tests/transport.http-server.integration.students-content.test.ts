@@ -10,14 +10,12 @@ describeHttpServerIntegrationSuite(
     deriveStudentId,
     expect,
     it,
-    mockActivateProfileRevisionForProfile,
+    mockActivateProfileRevisionForStudent,
     mockArchiveStudentProfile,
-    mockGetActiveStudentProfileBindingForStudent,
     mockGetStudentProfileById,
     mockGetStudentTimeline,
     mockGetStudentScheduleBillingSurface,
     mockHideStudentLessonFollowupReminder,
-    mockListStudentProfileBindingsForStudent,
     mockListStudentProfiles,
     mockResolvePrimaryWorkspaceIdForUser,
     mockUndoLatestHiddenStudentReminder,
@@ -28,10 +26,10 @@ describeHttpServerIntegrationSuite(
     mockAdjustStudentCredits,
     mockRecordStudentPayment,
     mockUpsertPrimaryStudentLessonRecurrence,
-    mockDeleteProfileContent,
     mockUpsertProfileContent,
-    mockGetProfileRevisionForProfile,
-    mockListProfileRevisionsForProfile,
+    mockGetProfileContent,
+    mockGetProfileRevisionForStudent,
+    mockListProfileRevisionsForStudent,
     mockRestoreProfileRevision,
     mockSaveProfileRevisionContent,
     mockDeleteTemplateContent,
@@ -59,7 +57,6 @@ describeHttpServerIntegrationSuite(
             accentPreference: null,
             voices: {},
             manifestPreset: null,
-            profileId: null,
           },
           {
             id: deriveStudentId('Bob'),
@@ -70,7 +67,6 @@ describeHttpServerIntegrationSuite(
             accentPreference: null,
             voices: {},
             manifestPreset: null,
-            profileId: null,
           },
         ],
         total: 2,
@@ -96,7 +92,6 @@ describeHttpServerIntegrationSuite(
         accentPreference: null,
         voices: {},
         manifestPreset: null,
-        profileId: null,
       });
     });
 
@@ -119,7 +114,6 @@ describeHttpServerIntegrationSuite(
         accentPreference: null,
         voices: {},
         manifestPreset: null,
-        profileId: null,
       });
     });
 
@@ -186,27 +180,29 @@ describeHttpServerIntegrationSuite(
       });
     });
 
-    it('PUT /students/:id updates a student profile', async () => {
+    it('rejects retired profile selection in student create and update', async () => {
+      for (const method of ['POST', 'PUT'] as const) {
+        const response = await app.inject({
+          method,
+          url: method === 'POST' ? '/students' : `/students/${deriveStudentId('Anna')}`,
+          payload: { student: 'Name', profileId: 'legacy.md' },
+        });
+        expect(response.statusCode).toBe(400);
+      }
+    });
+
+    it('PUT /students/:id updates the student name', async () => {
       const response = await app.inject({
         method: 'PUT',
         url: `/students/${deriveStudentId('Anna')}`,
-        payload: {
-          colorPreset: 'b1-default',
-          profileId: 'profile.md',
-        },
+        payload: { student: 'Anna Updated' },
       });
-
       expect(response.statusCode).toBe(200);
       expect(mockUpdateStudentProfile).toHaveBeenCalledWith(
         deriveStudentId('Anna'),
-        { profileId: 'profile.md' },
-        expect.objectContaining({
-          workspaceId: expect.any(String),
-        }),
+        { student: 'Anna Updated' },
+        expect.objectContaining({ workspaceId: expect.any(String) }),
       );
-      expect(response.json()).toMatchObject({
-        profileId: 'profile.md',
-      });
     });
 
     it('GET /students?status=archived returns archived student profiles', async () => {
@@ -411,13 +407,12 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
         draftRevisionId: 'profile-revision-draft',
-        profileId: 'profiles/anna.md',
         includedCandidateIds: ['candidate-1'],
         excludedCandidateIds: [],
         contentHash: 'profile-draft-hash',
         draftRevision: {
           id: 'profile-revision-draft',
-          profileId: 'profiles/anna.md',
+          studentId: deriveStudentId('Anna'),
           contentHash: 'profile-draft-hash',
           source: 'candidate_promotion',
           status: 'draft',
@@ -445,13 +440,12 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
         draftRevisionId: 'profile-revision-refreshed-draft',
-        profileId: 'profiles/anna.md',
         baseRevisionId: 'profile-revision-active',
         includedCandidateIds: ['candidate-1'],
         contentHash: 'profile-refreshed-draft-hash',
         draftRevision: {
           id: 'profile-revision-refreshed-draft',
-          profileId: 'profiles/anna.md',
+          studentId: deriveStudentId('Anna'),
           contentHash: 'profile-refreshed-draft-hash',
           source: 'profile_revision_refresh',
           status: 'draft',
@@ -485,10 +479,9 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
         draftRevisionId: 'profile-revision-empty-draft',
-        profileId: 'profiles/anna.md',
         draftRevision: {
           id: 'profile-revision-empty-draft',
-          profileId: 'profiles/anna.md',
+          studentId: deriveStudentId('Anna'),
           contentHash: 'profile-empty-draft-hash',
           source: 'create',
           status: 'draft',
@@ -504,100 +497,15 @@ describeHttpServerIntegrationSuite(
       });
     });
 
-    it('GET /students/:id/bindings returns binding history', async () => {
+    it('GET /students/:id/profile returns profile content', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: `/students/${deriveStudentId('Anna')}/bindings?limit=10&offset=0&order=desc`,
+        url: `/students/${deriveStudentId('Anna')}/profile`,
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
-        items: [
-          {
-            id: 'binding-1',
-            studentId: deriveStudentId('Anna'),
-            profileId: 'profile.md',
-            effectiveFrom: '2024-01-01T00:00:00.000Z',
-            effectiveTo: null,
-            reason: 'sync_student_profile',
-            changedBy: null,
-            createdAt: '2024-01-01T00:00:00.000Z',
-          },
-        ],
-        total: 1,
-        limit: 50,
-        offset: 0,
-        order: 'desc',
-      });
-    });
-
-    it('GET /students/:id/bindings hides archived or missing students', async () => {
-      mockGetStudentProfileById.mockResolvedValueOnce(null);
-      mockListStudentProfileBindingsForStudent.mockClear();
-
-      const response = await app.inject({
-        method: 'GET',
-        url: `/students/${deriveStudentId('Anna')}/bindings?limit=10&offset=0&order=desc`,
-      });
-
-      expect(response.statusCode).toBe(404);
-      expect(mockListStudentProfileBindingsForStudent).not.toHaveBeenCalled();
-    });
-
-    it('GET /students/:id/bindings/active returns active binding', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: `/students/${deriveStudentId('Anna')}/bindings/active`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({
-        id: 'binding-1',
         studentId: deriveStudentId('Anna'),
-        profileId: 'profile.md',
-        effectiveFrom: '2024-01-01T00:00:00.000Z',
-        effectiveTo: null,
-        reason: 'sync_student_profile',
-        changedBy: null,
-        createdAt: '2024-01-01T00:00:00.000Z',
-      });
-    });
-
-    it('GET /students/:id/bindings/active hides archived or missing students', async () => {
-      mockGetStudentProfileById.mockResolvedValueOnce(null);
-      mockGetActiveStudentProfileBindingForStudent.mockClear();
-
-      const response = await app.inject({
-        method: 'GET',
-        url: `/students/${deriveStudentId('Anna')}/bindings/active`,
-      });
-
-      expect(response.statusCode).toBe(404);
-      expect(mockGetActiveStudentProfileBindingForStudent).not.toHaveBeenCalled();
-    });
-
-    it('GET /profiles returns profile list', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/profiles',
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({
-        profiles: [{ id: 'profile.md', label: 'Profile' }],
-      });
-    });
-
-    it('GET /profiles/:id returns profile content', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/profiles/profile.md',
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({
-        id: 'profile.md',
-        label: 'Profile',
         content: 'Profile content',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -616,12 +524,12 @@ describeHttpServerIntegrationSuite(
       });
     });
 
-    it('PUT /profiles/:id saves profile content with the authenticated creator', async () => {
+    it('PUT /students/:id/profile saves profile content with the authenticated creator', async () => {
       mockUpsertProfileContent.mockClear();
 
       const response = await app.inject({
         method: 'PUT',
-        url: '/profiles/profile.md',
+        url: `/students/${deriveStudentId('Anna')}/profile`,
         payload: {
           content: 'Updated profile content',
         },
@@ -629,19 +537,19 @@ describeHttpServerIntegrationSuite(
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
-        id: 'profile.md',
+        studentId: deriveStudentId('Anna'),
         content: 'Updated content',
         currentRevisionId: 'revision-latest',
       });
       expect(mockUpsertProfileContent).toHaveBeenCalledWith(
-        'profile.md',
+        deriveStudentId('Anna'),
         'Updated profile content',
         { createdBy: 'test-user-id' },
         null,
       );
     });
 
-    it('PUT /profiles/:id accepts structured ordinary edits for direct activation', async () => {
+    it('PUT /students/:id/profile accepts structured ordinary edits for direct activation', async () => {
       mockUpsertProfileContent.mockClear();
       const structuredContent = {
         schemaVersion: 'foundational_profile_v1',
@@ -657,24 +565,24 @@ describeHttpServerIntegrationSuite(
       };
       const response = await app.inject({
         method: 'PUT',
-        url: '/profiles/profile.md',
+        url: `/students/${deriveStudentId('Anna')}/profile`,
         payload: { structuredContent },
       });
       expect(response.statusCode).toBe(200);
       expect(mockUpsertProfileContent).toHaveBeenCalledWith(
-        'profile.md',
+        deriveStudentId('Anna'),
         expect.stringContaining('Speak clearly'),
         { createdBy: 'test-user-id' },
         structuredContent,
       );
     });
 
-    it('PUT /profiles/:id rejects a missing content field', async () => {
+    it('PUT /students/:id/profile rejects a missing content field', async () => {
       mockUpsertProfileContent.mockClear();
 
       const response = await app.inject({
         method: 'PUT',
-        url: '/profiles/profile.md',
+        url: `/students/${deriveStudentId('Anna')}/profile`,
         payload: {},
       });
 
@@ -683,20 +591,10 @@ describeHttpServerIntegrationSuite(
       expect(mockUpsertProfileContent).not.toHaveBeenCalled();
     });
 
-    it('DELETE /profiles/:id archives profile content', async () => {
-      const response = await app.inject({
-        method: 'DELETE',
-        url: '/profiles/profile.md',
-      });
-
-      expect(response.statusCode).toBe(204);
-      expect(mockDeleteProfileContent).toHaveBeenCalledWith('profile.md');
-    });
-
-    it('POST /profiles/:id/revisions saves a structured draft revision', async () => {
+    it('POST /students/:id/profile/revisions saves a structured draft revision', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/profiles/profile.md/revisions',
+        url: `/students/${deriveStudentId('Anna')}/profile/revisions`,
         payload: {
           structuredContent: {
             schemaVersion: 'foundational_profile_v1',
@@ -716,7 +614,7 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(201);
       expect(response.json()).toEqual({
         id: 'revision-2',
-        profileId: 'profile.md',
+        studentId: deriveStudentId('Anna'),
         contentHash: 'hash-2',
         source: 'update',
         status: 'draft',
@@ -744,32 +642,10 @@ describeHttpServerIntegrationSuite(
       expect(mockSaveProfileRevisionContent).toHaveBeenCalled();
     });
 
-    it('POST /profiles/revisions saves a draft revision with profileId in the body', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/profiles/revisions',
-        payload: {
-          profileId: 'profiles/students/alex.md',
-          content: '# Profile',
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      expect(mockSaveProfileRevisionContent).toHaveBeenCalledWith(
-        'profiles/students/alex.md',
-        '# Profile',
-        expect.objectContaining({
-          source: 'update',
-          status: 'draft',
-          createdBy: 'test-user-id',
-        }),
-      );
-    });
-
-    it('GET /profiles/:id/revisions returns profile revision list', async () => {
+    it('GET /students/:id/profile/revisions returns profile revision list', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/profiles/profile.md/revisions?limit=10&offset=0&order=desc',
+        url: `/students/${deriveStudentId('Anna')}/profile/revisions?limit=10&offset=0&order=desc`,
       });
 
       expect(response.statusCode).toBe(200);
@@ -777,7 +653,7 @@ describeHttpServerIntegrationSuite(
         items: [
           {
             id: 'revision-1',
-            profileId: 'profile.md',
+            studentId: deriveStudentId('Anna'),
             contentHash: 'hash-1',
             source: 'create',
             status: 'active',
@@ -797,30 +673,16 @@ describeHttpServerIntegrationSuite(
       });
     });
 
-    it('GET /profiles/revisions returns profile revision list with profileId in the query', async () => {
+    it('GET /students/:id/profile/revisions/:revisionId returns revision detail', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/profiles/revisions?profileId=profiles%2Fstudents%2Falex.md&limit=10&offset=0&order=desc',
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(mockListProfileRevisionsForProfile).toHaveBeenCalledWith('profiles/students/alex.md', {
-        limit: 10,
-        offset: 0,
-        order: 'desc',
-      });
-    });
-
-    it('GET /profiles/:id/revisions/:revisionId returns revision detail', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/profiles/profile.md/revisions/11111111-1111-4111-8111-111111111111',
+        url: `/students/${deriveStudentId('Anna')}/profile/revisions/11111111-1111-4111-8111-111111111111`,
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
         id: 'revision-1',
-        profileId: 'profile.md',
+        studentId: deriveStudentId('Anna'),
         contentHash: 'hash-1',
         source: 'create',
         status: 'active',
@@ -847,29 +709,15 @@ describeHttpServerIntegrationSuite(
       });
     });
 
-    it('GET /profiles/revisions/:revisionId returns revision detail with profileId in the query', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/profiles/revisions/11111111-1111-4111-8111-111111111111?profileId=profiles%2Fstudents%2Falex.md',
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(mockGetProfileRevisionForProfile).toHaveBeenCalledWith(
-        'profiles/students/alex.md',
-        '11111111-1111-4111-8111-111111111111',
-      );
-    });
-
-    it('POST /profiles/:id/revisions/:revisionId/restore restores profile content', async () => {
+    it('POST /students/:id/profile/revisions/:revisionId/restore restores profile content', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/profiles/profile.md/revisions/11111111-1111-4111-8111-111111111111/restore',
+        url: `/students/${deriveStudentId('Anna')}/profile/revisions/11111111-1111-4111-8111-111111111111/restore`,
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
-        id: 'profile.md',
-        label: 'Profile',
+        studentId: deriveStudentId('Anna'),
         content: 'Restored content',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -888,29 +736,10 @@ describeHttpServerIntegrationSuite(
       });
     });
 
-    it('POST /profiles/revisions/:revisionId/restore restores profile content with profileId in the body', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/profiles/revisions/11111111-1111-4111-8111-111111111111/restore',
-        payload: {
-          profileId: 'profiles/students/alex.md',
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(mockRestoreProfileRevision).toHaveBeenCalledWith(
-        'profiles/students/alex.md',
-        '11111111-1111-4111-8111-111111111111',
-        expect.objectContaining({
-          createdBy: 'test-user-id',
-        }),
-      );
-    });
-
-    it('POST /profiles/:id/revisions/:revisionId/activate returns activated revision', async () => {
-      mockActivateProfileRevisionForProfile.mockResolvedValueOnce({
+    it('POST /students/:id/profile/revisions/:revisionId/activate returns activated revision', async () => {
+      mockActivateProfileRevisionForStudent.mockResolvedValueOnce({
         id: 'revision-1',
-        profileId: 'profile.md',
+        studentId: deriveStudentId('Anna'),
         contentHash: 'hash-1',
         source: 'create',
         status: 'active',
@@ -926,48 +755,68 @@ describeHttpServerIntegrationSuite(
 
       const response = await app.inject({
         method: 'POST',
-        url: '/profiles/profile.md/revisions/11111111-1111-4111-8111-111111111111/activate',
+        url: `/students/${deriveStudentId('Anna')}/profile/revisions/11111111-1111-4111-8111-111111111111/activate`,
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
         id: 'revision-1',
-        profileId: 'profile.md',
+        studentId: deriveStudentId('Anna'),
         status: 'active',
         versionLabel: 'v1',
       });
     });
 
-    it('POST /profiles/revisions/:revisionId/activate activates a revision with profileId in the body', async () => {
-      mockActivateProfileRevisionForProfile.mockResolvedValueOnce({
-        id: 'revision-1',
-        profileId: 'profiles/students/alex.md',
-        contentHash: 'hash-1',
-        source: 'create',
-        status: 'active',
-        versionNumber: 1,
-        versionLabel: 'v1',
-        activatedAt: '2024-01-01T00:00:00.000Z',
-        deprecatedAt: null,
-        createdAt: '2024-01-01T00:00:00.000Z',
-        createdBy: null,
-        restoredFromRevisionId: null,
-        content: 'Profile content',
-      });
+    it('keeps retired catalog and binding routes unavailable', async () => {
+      for (const url of [
+        '/profiles',
+        '/profiles/profile.md',
+        `/students/${deriveStudentId('Anna')}/bindings`,
+        `/students/${deriveStudentId('Anna')}/bindings/active`,
+      ]) {
+        const response = await app.inject({ method: 'GET', url });
+        expect(response.statusCode, url).toBe(404);
+      }
+    });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/profiles/revisions/11111111-1111-4111-8111-111111111111/activate',
-        payload: {
-          profileId: 'profiles/students/alex.md',
+    it('rejects an unavailable student before profile reads or mutations', async () => {
+      const priorStudentLookup = mockGetStudentProfileById.getMockImplementation();
+      const dependencies = [
+        mockGetProfileContent,
+        mockUpsertProfileContent,
+        mockListProfileRevisionsForStudent,
+        mockGetProfileRevisionForStudent,
+        mockSaveProfileRevisionContent,
+        mockRestoreProfileRevision,
+        mockActivateProfileRevisionForStudent,
+      ];
+      for (const dependency of dependencies) dependency.mockClear();
+      mockGetStudentProfileById.mockResolvedValue(null);
+      for (const route of [
+        { method: 'GET' as const, suffix: '' },
+        { method: 'PUT' as const, suffix: '', payload: { content: 'Updated' } },
+        { method: 'GET' as const, suffix: '/revisions' },
+        { method: 'POST' as const, suffix: '/revisions', payload: { content: 'Draft' } },
+        { method: 'GET' as const, suffix: '/revisions/11111111-1111-4111-8111-111111111111' },
+        {
+          method: 'POST' as const,
+          suffix: '/revisions/11111111-1111-4111-8111-111111111111/restore',
         },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(mockActivateProfileRevisionForProfile).toHaveBeenCalledWith(
-        'profiles/students/alex.md',
-        '11111111-1111-4111-8111-111111111111',
-      );
+        {
+          method: 'POST' as const,
+          suffix: '/revisions/11111111-1111-4111-8111-111111111111/activate',
+        },
+      ]) {
+        const response = await app.inject({
+          method: route.method,
+          url: `/students/${deriveStudentId('Anna')}/profile${route.suffix}`,
+          payload: 'payload' in route ? route.payload : undefined,
+        });
+        expect(response.statusCode, route.suffix).toBe(404);
+        expect(response.json()).toEqual({ error: 'not_found' });
+      }
+      for (const dependency of dependencies) expect(dependency).not.toHaveBeenCalled();
+      mockGetStudentProfileById.mockImplementation(priorStudentLookup);
     });
 
     it('GET /templates returns template list', async () => {

@@ -87,7 +87,6 @@ export interface AssignmentSessionRecoveryPatch {
   selectedGenerationProvider?: GenerationProvider | null;
   selectedGenerationModel?: string | null;
   teacherNotes?: string | null;
-  selectedProfileId?: string | null;
   selectedProfileRevisionId?: string | null;
   selectedProfileRevisionHash?: string | null;
 }
@@ -194,7 +193,6 @@ const RECOVERY_COLUMNS = {
   selectedGenerationProvider: 'selected_generation_provider',
   selectedGenerationModel: 'selected_generation_model',
   teacherNotes: 'teacher_notes',
-  selectedProfileId: 'selected_profile_id',
   selectedProfileRevisionId: 'selected_profile_revision_id',
   selectedProfileRevisionHash: 'selected_profile_revision_hash',
 } as const satisfies Record<keyof AssignmentSessionRecoveryPatch, string>;
@@ -552,7 +550,7 @@ async function confirmLockedContext(
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PREREQUISITE_MISSING');
   }
   await assertConfirmedSourceIsCurrent(client, current, params.userId);
-  const profileValues = [request.profileId, request.profileRevisionId, request.profileRevisionHash];
+  const profileValues = [request.profileRevisionId, request.profileRevisionHash];
   if (
     profileValues.some((value) => value !== null) &&
     profileValues.some((value) => value === null)
@@ -561,33 +559,39 @@ async function confirmLockedContext(
   }
   const context = {
     teacherNotes: request.teacherNotes,
-    profileId: request.profileId,
     profileRevisionId: request.profileRevisionId,
     profileRevisionHash: request.profileRevisionHash,
   };
-  if (JSON.stringify(current.confirmed.context) === JSON.stringify(context)) {
+  const previousContext = current.confirmed.context;
+  if (
+    previousContext &&
+    previousContext.teacherNotes === context.teacherNotes &&
+    previousContext.profileRevisionId === context.profileRevisionId &&
+    previousContext.profileRevisionHash === context.profileRevisionHash
+  ) {
     return { session: current, invalidated: [], lessonMemoryIntent: null };
   }
   assertExpectedRevision(current, request.expectedRevision);
+  // Acquire the ownership-root lock in a separate statement. A joined read
+  // waiting for this lock can retain a pre-wait revision snapshot under READ COMMITTED.
+  await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [current.studentId]);
   const pendingOnboarding = await client.query(
     `SELECT 1 FROM profile_initial_enrichment_operations op
      WHERE op.assignment_session_id = $1 AND op.student_id = $2
        AND op.recording_id = $3 AND op.transcript_id = $4 AND op.transcript_hash = $5
        AND op.state IN ('waiting_evidence', 'queued', 'submitting', 'result_ready')
      UNION ALL
-     SELECT 1 FROM student_profile_bindings b
-     JOIN profiles p ON p.id = b.profile_id
-     WHERE b.student_id = $2 AND b.effective_to IS NULL
-       AND p.provenance = 'tutor_only'
+     SELECT 1 FROM students p
+     WHERE p.id = $2 AND p.profile_provenance = 'tutor_only'
        AND NOT EXISTS (
          SELECT 1 FROM profile_initial_enrichment_operations exact_op
-         WHERE exact_op.profile_id = p.id AND exact_op.assignment_session_id = $1
+         WHERE exact_op.student_id = p.id AND exact_op.assignment_session_id = $1
            AND exact_op.recording_id = $3 AND exact_op.transcript_id = $4
            AND exact_op.transcript_hash = $5
        )
        AND NOT EXISTS (
          SELECT 1 FROM profile_initial_enrichment_operations old_op
-         WHERE old_op.profile_id = p.id AND old_op.state = 'uncertain'
+         WHERE old_op.student_id = p.id AND old_op.state = 'uncertain'
        )
      LIMIT 1`,
     [
@@ -602,42 +606,19 @@ async function confirmLockedContext(
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PROFILE_PREPARING');
   }
   const active = await client.query<{
-    profile_id: string;
     active_revision_id: string | null;
     content_hash: string | null;
   }>(
-    `SELECT p.id AS profile_id, p.active_revision_id, pr.content_hash
-     FROM student_profile_bindings b JOIN profiles p ON p.id = b.profile_id
-     LEFT JOIN profile_revisions pr ON pr.id = p.active_revision_id
-     WHERE b.student_id = $1 AND b.effective_to IS NULL
-     FOR UPDATE OF p`,
+    `SELECT id AS active_revision_id, content_hash
+     FROM student_profile_revisions WHERE student_id = $1 AND status = 'active'`,
     [current.studentId],
   );
   const authoritative = active.rows[0];
   if (
     (authoritative?.active_revision_id ?? null) !== request.profileRevisionId ||
-    (authoritative?.active_revision_id ? authoritative.profile_id : null) !== request.profileId ||
     (authoritative?.content_hash ?? null) !== request.profileRevisionHash
   ) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PROFILE_STALE');
-  }
-  if (request.profileId && request.profileRevisionId && request.profileRevisionHash) {
-    const profile = await client.query(
-      `SELECT 1 FROM profile_revisions
-       WHERE profile_id = $1 AND id = $2 AND content_hash = $3`,
-      [request.profileId, request.profileRevisionId, request.profileRevisionHash],
-    );
-    if (!profile.rows[0]) {
-      throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
-    }
-    const binding = await client.query(
-      `SELECT 1 FROM student_profile_bindings
-       WHERE student_id = $1 AND profile_id = $2 AND effective_to IS NULL`,
-      [current.studentId, request.profileId],
-    );
-    if (!binding.rows[0]) {
-      throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
-    }
   }
   const confirmed = { ...current.confirmed, context, create: null };
   const updated = await updateConfirmedSession(client, current, {
@@ -645,7 +626,7 @@ async function confirmLockedContext(
     confirmed,
     columns: {
       teacher_notes: request.teacherNotes,
-      selected_profile_id: request.profileId,
+      selected_profile_id: null,
       selected_profile_revision_id: request.profileRevisionId,
       selected_profile_revision_hash: request.profileRevisionHash,
       prompt_package_id: null,
@@ -676,7 +657,7 @@ async function confirmLockedCreate(
   const context = current.confirmed.context;
   if (
     current.teacherNotes !== context.teacherNotes ||
-    current.selectedProfileId !== context.profileId ||
+    current.selectedProfileId !== (context.profileId ?? null) ||
     current.selectedProfileRevisionId !== context.profileRevisionId ||
     current.selectedProfileRevisionHash !== context.profileRevisionHash
   ) {
@@ -703,9 +684,9 @@ async function confirmLockedCreate(
   }
   if (
     packageRow.notes !== context.teacherNotes ||
-    packageRow.resolved_profile_id !== context.profileId ||
+    packageRow.resolved_profile_id !== (context.profileId ?? null) ||
     packageRow.resolved_profile_revision_id !== context.profileRevisionId ||
-    (context.profileId === null
+    (context.profileRevisionId === null
       ? packageRow.resolved_profile_hash !== null
       : packageRow.resolved_profile_revision_content_hash !== context.profileRevisionHash)
   ) {
@@ -787,8 +768,8 @@ async function getAuthorizedCreateLineageForUpdate(
      JOIN recordings r ON r.id = pp.recording_id
      JOIN transcripts t ON t.id = pp.transcript_id AND t.recording_id = r.id
      JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id
-     LEFT JOIN profile_revisions pr
-       ON pr.id = pp.resolved_profile_revision_id AND pr.profile_id = pp.resolved_profile_id
+     LEFT JOIN student_profile_revisions pr
+       ON pr.student_id = pp.student_id AND (pr.id = pp.resolved_profile_revision_id OR pr.legacy_revision_id = pp.resolved_profile_revision_id)
      WHERE d.id = $1
        AND pp.id = $2
        AND wm.user_id = $3
@@ -1628,7 +1609,7 @@ export async function reserveAssignmentShare(
         current.recordingId !== source.recordingId ||
         current.transcriptId !== source.transcriptId ||
         current.teacherNotes !== context.teacherNotes ||
-        current.selectedProfileId !== context.profileId ||
+        current.selectedProfileId !== (context.profileId ?? null) ||
         current.selectedProfileRevisionId !== context.profileRevisionId ||
         current.selectedProfileRevisionHash !== context.profileRevisionHash ||
         current.promptPackageId !== create.promptPackageId ||
@@ -2011,10 +1992,9 @@ export async function reconcileDeferredInitialEnrichmentIntents(): Promise<void>
       `SELECT a.*
        FROM assignment_sessions a
        JOIN students s ON s.id = a.student_id
-       JOIN profiles p ON p.id = s.profile_id
        JOIN assignment_source_bindings b ON b.assignment_session_id = a.id
          AND b.binding_role = 'confirmed'
-       WHERE p.provenance = 'tutor_only'
+       WHERE s.profile_provenance = 'tutor_only'
          AND a.confirmed_snapshot->'source' <> 'null'::jsonb
          AND a.confirmed_step <> 'share'
          AND a.confirmed_snapshot->'context' = 'null'::jsonb
@@ -2027,12 +2007,12 @@ export async function reconcileDeferredInitialEnrichmentIntents(): Promise<void>
          )
          AND NOT EXISTS (
            SELECT 1 FROM profile_initial_enrichment_operations op
-           WHERE op.profile_id = p.id AND op.state IN
+           WHERE op.student_id = s.id AND op.state IN
              ('waiting_evidence', 'queued', 'submitting', 'result_ready', 'uncertain', 'succeeded')
          )
          AND NOT EXISTS (
            SELECT 1 FROM profile_initial_enrichment_operations op
-           WHERE op.profile_id = p.id AND op.assignment_session_id = a.id
+           WHERE op.student_id = s.id AND op.assignment_session_id = a.id
              AND op.transcript_id = (a.confirmed_snapshot->'source'->>'transcriptId')::uuid
              AND op.transcript_hash = a.confirmed_snapshot->'source'->>'transcriptHash'
          )
@@ -2040,17 +2020,10 @@ export async function reconcileDeferredInitialEnrichmentIntents(): Promise<void>
     );
     return result.rows.map(mapRow);
   });
-  const seenProfiles = new Set<string>();
+  const seenStudents = new Set<string>();
   for (const candidate of candidates) {
-    const profileId = await withPgClient(async (client) => {
-      const result = await client.query<{ profile_id: string | null }>(
-        'SELECT profile_id FROM students WHERE id = $1',
-        [candidate.studentId],
-      );
-      return result.rows[0]?.profile_id ?? null;
-    });
-    if (!profileId || seenProfiles.has(profileId)) continue;
-    seenProfiles.add(profileId);
+    if (seenStudents.has(candidate.studentId)) continue;
+    seenStudents.add(candidate.studentId);
     await withPgClient(async (client) => {
       await client.query('BEGIN');
       try {

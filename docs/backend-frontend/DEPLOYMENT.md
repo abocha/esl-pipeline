@@ -414,7 +414,7 @@ docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml
 
 The production backend image copies `packages/batch-backend/prompt-assets` into
 `/app/packages/batch-backend/prompt-assets`.
-Keep `PROMPT_TEMPLATE_PATH` and `PROMPT_PROFILE_PATH` relative to `/app` or explicitly under
+Keep `PROMPT_TEMPLATE_PATH` relative to `/app` or explicitly under
 `/app/packages/batch-backend/prompt-assets/...`; paths such as `/docs/...` point outside the runtime
 image and fail bootstrap.
 

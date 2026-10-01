@@ -29,8 +29,8 @@ describe('application/prompt-package', () => {
         recordingId: 'recording-1',
         transcriptId: 'transcript-1',
         studentId: 'student-1',
-        profilePath: '/profiles/p1.md',
-        resolvedProfileId: 'profile.md',
+        profilePath: null,
+        resolvedProfileId: null,
         resolvedProfileHash: snapshotHash,
         resolvedProfileRevisionId: 'revision-snapshot',
         resolvedProfileUpdatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -46,10 +46,11 @@ describe('application/prompt-package', () => {
       storage,
       promptPackages,
       profileRevisions: createProfileRevisionRepositoryStub({
-        getActive: async (_profileId) => {
+        getActive: async (studentId) => {
+          expect(studentId).toBe('student-1');
           return {
             id: 'revision-current',
-            profileId: 'profile.md',
+            studentId: 'student-1',
             content: 'CURRENT PROFILE',
             contentHash: currentHash,
             source: 'update',
@@ -67,6 +68,7 @@ describe('application/prompt-package', () => {
       templateRevisions: createTemplateRevisionRepositoryStub(),
     });
 
+    expect(result?.profileSnapshot?.resolvedProfileId).toBeNull();
     expect(result?.profileDrift).toEqual({
       detected: true,
       reason: 'profile_content_changed',
@@ -180,7 +182,7 @@ describe('application/prompt-package', () => {
       profileRevisions: createProfileRevisionRepositoryStub({
         getActive: async (_profileId) => ({
           id: 'revision-current',
-          profileId: 'profile.md',
+          studentId: 'student-1',
           content: '# Legacy markdown that re-renders to the same structured profile',
           contentHash: createHash('sha256')
             .update('# Legacy markdown that re-renders to the same structured profile', 'utf8')
@@ -242,7 +244,7 @@ describe('application/prompt-package', () => {
       profileRevisions: createProfileRevisionRepositoryStub({
         getActive: async () => ({
           id: 'profile-revision-v2',
-          profileId: 'profile.md',
+          studentId: 'student-1',
           content: 'CURRENT PROFILE',
           contentHash: currentProfileHash,
           source: 'update',
@@ -273,9 +275,6 @@ describe('application/prompt-package', () => {
           restoredFromRevisionId: null,
         }),
       }),
-      bindings: {
-        getAt: async () => null,
-      },
       storage: createStorageStub(),
     });
 
@@ -304,7 +303,7 @@ describe('application/prompt-package', () => {
     };
     const currentProfile = {
       id: 'profile-revision-v2',
-      profileId: 'profile.md',
+      studentId: 'student-1',
       content: '# Legacy markdown payload',
       contentHash: createHash('sha256').update('# Legacy markdown payload', 'utf8').digest('hex'),
       structuredContent: structuredProfile,
@@ -350,9 +349,6 @@ describe('application/prompt-package', () => {
         getActive: async () => currentProfile,
       }),
       templateRevisions: createTemplateRevisionRepositoryStub(),
-      bindings: {
-        getAt: async () => null,
-      },
       storage: createStorageStub(),
     });
 

@@ -9,7 +9,6 @@ export type StudentTimelineType =
   | 'draft_saved'
   | 'job_awaiting_approval'
   | 'job_completed'
-  | 'student_profile_binding_changed'
   | 'profile_revision_saved'
   | 'profile_revision_restored'
   | 'profile_revision_activated'
@@ -77,10 +76,6 @@ interface TimelineRow {
   source_path: string | null;
   storage_uri: string | null;
   error: string | null;
-  binding_id: string | null;
-  binding_profile_id: string | null;
-  binding_reason: string | null;
-  binding_changed_by: string | null;
   profile_revision_id: string | null;
   profile_id: string | null;
   profile_source: string | null;
@@ -144,10 +139,6 @@ const timelineQuery = `
            r.source_path,
            r.storage_uri,
            r.error,
-           NULL::uuid AS binding_id,
-           NULL::text AS binding_profile_id,
-           NULL::text AS binding_reason,
-           NULL::uuid AS binding_changed_by,
            NULL::uuid AS profile_revision_id,
            NULL::text AS profile_id,
            NULL::text AS profile_source,
@@ -180,10 +171,6 @@ const timelineQuery = `
            r.source_path,
            r.storage_uri,
            NULL::text AS error,
-           NULL::uuid AS binding_id,
-           NULL::text AS binding_profile_id,
-           NULL::text AS binding_reason,
-           NULL::uuid AS binding_changed_by,
            NULL::uuid AS profile_revision_id,
            NULL::text AS profile_id,
            NULL::text AS profile_source,
@@ -217,10 +204,6 @@ const timelineQuery = `
            r.source_path,
            r.storage_uri,
            NULL::text AS error,
-           NULL::uuid AS binding_id,
-           NULL::text AS binding_profile_id,
-           NULL::text AS binding_reason,
-           NULL::uuid AS binding_changed_by,
            NULL::uuid AS profile_revision_id,
            NULL::text AS profile_id,
            NULL::text AS profile_source,
@@ -254,10 +237,6 @@ const timelineQuery = `
            r.source_path,
            r.storage_uri,
            NULL::text AS error,
-           NULL::uuid AS binding_id,
-           NULL::text AS binding_profile_id,
-           NULL::text AS binding_reason,
-           NULL::uuid AS binding_changed_by,
            NULL::uuid AS profile_revision_id,
            NULL::text AS profile_id,
            NULL::text AS profile_source,
@@ -296,10 +275,6 @@ const timelineQuery = `
       COALESCE(r.source_path, rp.source_path, rd.source_path) AS source_path,
       COALESCE(r.storage_uri, rp.storage_uri, rd.storage_uri) AS storage_uri,
       j.error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -334,42 +309,6 @@ const timelineQuery = `
 
     UNION ALL
 
-    SELECT 'student_profile_binding_changed'::text AS type,
-           'binding_changed'::text AS status,
-           spb.created_at,
-           NULL::uuid AS recording_id,
-           NULL::uuid AS transcript_id,
-           NULL::uuid AS prompt_package_id,
-           NULL::uuid AS draft_id,
-           NULL::uuid AS job_id,
-           spb.profile_id AS source_path,
-           NULL::text AS storage_uri,
-           NULL::text AS error,
-           spb.id AS binding_id,
-           spb.profile_id AS binding_profile_id,
-           spb.reason AS binding_reason,
-           spb.changed_by AS binding_changed_by,
-           NULL::uuid AS profile_revision_id,
-           NULL::text AS profile_id,
-           NULL::text AS profile_source,
-           NULL::text AS profile_version_label,
-           NULL::uuid AS template_revision_id,
-           NULL::text AS template_id,
-           NULL::text AS template_source,
-           NULL::text AS template_version_label,
-           NULL::uuid AS action_id,
-           NULL::text AS action_type,
-           NULL::text AS action_message,
-           NULL::text AS action_error_code,
-           NULL::uuid AS action_requested_by,
-           NULL::uuid AS action_created_job_id,
-           NULL::text AS html_url,
-           NULL::jsonb AS details_json
-    FROM student_profile_bindings spb
-    WHERE spb.student_id = $1
-
-    UNION ALL
-
     SELECT
       CASE
         WHEN pr.source = 'restore' THEN 'profile_revision_restored'
@@ -382,15 +321,11 @@ const timelineQuery = `
       NULL::uuid AS prompt_package_id,
       NULL::uuid AS draft_id,
       NULL::uuid AS job_id,
-      pr.profile_id AS source_path,
+      NULL::text AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       pr.id AS profile_revision_id,
-      pr.profile_id,
+      pr.legacy_profile_id AS profile_id,
       pr.source AS profile_source,
       pr.version_label AS profile_version_label,
       NULL::uuid AS template_revision_id,
@@ -405,17 +340,8 @@ const timelineQuery = `
       NULL::uuid AS action_created_job_id,
       NULL::text AS html_url,
       NULL::jsonb AS details_json
-    FROM profile_revisions pr
-    WHERE EXISTS (
-      SELECT 1
-      FROM student_profile_bindings spb
-      WHERE spb.student_id = $1 AND spb.profile_id = pr.profile_id
-    )
-      OR EXISTS (
-        SELECT 1
-        FROM students s
-        WHERE s.id = $1 AND s.profile_id = pr.profile_id
-      )
+    FROM student_profile_revisions pr
+    WHERE pr.student_id = $1
 
     UNION ALL
 
@@ -428,15 +354,11 @@ const timelineQuery = `
       NULL::uuid AS prompt_package_id,
       NULL::uuid AS draft_id,
       NULL::uuid AS job_id,
-      pr.profile_id AS source_path,
+      NULL::text AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       pr.id AS profile_revision_id,
-      pr.profile_id,
+      pr.legacy_profile_id AS profile_id,
       pr.source AS profile_source,
       pr.version_label AS profile_version_label,
       NULL::uuid AS template_revision_id,
@@ -451,21 +373,8 @@ const timelineQuery = `
       NULL::uuid AS action_created_job_id,
       NULL::text AS html_url,
       NULL::jsonb AS details_json
-    FROM profile_revisions pr
-    WHERE pr.status = 'active'
-      AND pr.activated_at IS NOT NULL
-      AND (
-        EXISTS (
-          SELECT 1
-          FROM student_profile_bindings spb
-          WHERE spb.student_id = $1 AND spb.profile_id = pr.profile_id
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM students s
-          WHERE s.id = $1 AND s.profile_id = pr.profile_id
-        )
-      )
+    FROM student_profile_revisions pr
+    WHERE pr.status = 'active' AND pr.activated_at IS NOT NULL AND pr.student_id = $1
 
     UNION ALL
 
@@ -484,10 +393,6 @@ const timelineQuery = `
       tr.template_id AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -525,10 +430,6 @@ const timelineQuery = `
       tr.template_id AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -572,10 +473,6 @@ const timelineQuery = `
       COALESCE(r.source_path, rp.source_path, rd.source_path) AS source_path,
       COALESCE(r.storage_uri, rp.storage_uri, rd.storage_uri) AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -622,10 +519,6 @@ const timelineQuery = `
       COALESCE(sl.title, 'Lesson ' || sl.id::text) AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -675,10 +568,6 @@ const timelineQuery = `
       COALESCE(sl.title, 'Lesson ' || sl.id::text) AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -724,10 +613,6 @@ const timelineQuery = `
       'Lesson plan'::text AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -768,10 +653,6 @@ const timelineQuery = `
       'Lesson recurrence'::text AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -815,10 +696,6 @@ const timelineQuery = `
       'Credit event ' || sce.id::text AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -861,10 +738,6 @@ const timelineQuery = `
       'Payment ' || spr.id::text AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -907,10 +780,6 @@ const timelineQuery = `
       'Hidden lesson follow-up reminder'::text AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -949,10 +818,6 @@ const timelineQuery = `
       'Business settings'::text AS source_path,
       NULL::text AS storage_uri,
       NULL::text AS error,
-      NULL::uuid AS binding_id,
-      NULL::text AS binding_profile_id,
-      NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by,
       NULL::uuid AS profile_revision_id,
       NULL::text AS profile_id,
       NULL::text AS profile_source,
@@ -1039,10 +904,6 @@ export async function getStudentTimeline(
              source_path,
              storage_uri,
              error,
-             binding_id,
-             binding_profile_id,
-             binding_reason,
-             binding_changed_by,
              profile_revision_id,
              profile_id,
              profile_source,
@@ -1070,7 +931,6 @@ export async function getStudentTimeline(
           prompt_package_id::text,
           transcript_id::text,
           recording_id::text,
-          binding_id::text,
           profile_revision_id::text,
           template_revision_id::text,
           action_id::text,
@@ -1096,19 +956,13 @@ export async function getStudentTimeline(
     if (row.html_url) {
       details.htmlUrl = row.html_url;
     }
-    if (row.type === 'student_profile_binding_changed') {
-      details.bindingId = row.binding_id;
-      details.profileId = row.binding_profile_id;
-      details.reason = row.binding_reason;
-      details.changedBy = row.binding_changed_by;
-    }
     if (
       row.type === 'profile_revision_saved' ||
       row.type === 'profile_revision_restored' ||
       row.type === 'profile_revision_activated'
     ) {
       details.profileRevisionId = row.profile_revision_id;
-      details.profileId = row.profile_id;
+      details.legacyProfileId = row.profile_id;
       details.source = row.profile_source;
       details.versionLabel = row.profile_version_label;
     }
@@ -1152,7 +1006,6 @@ export async function getStudentTimeline(
           row.prompt_package_id ??
           row.transcript_id ??
           row.recording_id ??
-          row.binding_id ??
           studentId,
         sourcePath: row.source_path,
         storageUri: row.storage_uri,

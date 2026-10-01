@@ -42,10 +42,8 @@ describe('validateTranscriptionConfig', () => {
         storageConfig,
         promptOptionsLoader: async () => ({
           templates: [{ id: 'template.md', label: 'Template' }],
-          profiles: [{ id: 'profile.md', label: 'Profile' }],
           defaults: {
             templateId: 'template.md',
-            profileId: 'profile.md',
           },
         }),
       }),
@@ -72,10 +70,8 @@ describe('validateTranscriptionConfig', () => {
         storageConfig,
         promptOptionsLoader: async () => ({
           templates: [{ id: 'template.md', label: 'Template' }],
-          profiles: [{ id: 'profile.md', label: 'Profile' }],
           defaults: {
             templateId: null,
-            profileId: null,
           },
         }),
       }),
@@ -102,7 +98,7 @@ describe('validateTranscriptionConfig', () => {
         storageConfig,
         promptOptionsLoader: async () => {
           throw new PromptOptionError(
-            'profilePath must reference an allowlisted profile',
+            'templateId must reference an allowlisted template',
             'bad_path',
           );
         },
@@ -132,10 +128,8 @@ describe('validateTranscriptionConfig', () => {
         storageConfig,
         promptOptionsLoader: async () => ({
           templates: [{ id: 'template.md', label: 'Template' }],
-          profiles: [{ id: 'profile.md', label: 'Profile' }],
           defaults: {
             templateId: 'template.md',
-            profileId: 'profile.md',
           },
         }),
       }),
@@ -162,10 +156,8 @@ describe('validateTranscriptionConfig', () => {
         storageConfig,
         promptOptionsLoader: async () => ({
           templates: [{ id: 'template.md', label: 'Template' }],
-          profiles: [{ id: 'profile.md', label: 'Profile' }],
           defaults: {
             templateId: 'template.md',
-            profileId: 'profile.md',
           },
         }),
       }),
@@ -192,10 +184,8 @@ describe('validateTranscriptionConfig', () => {
         storageConfig,
         promptOptionsLoader: async () => ({
           templates: [{ id: 'template.md', label: 'Template' }],
-          profiles: [{ id: 'profile.md', label: 'Profile' }],
           defaults: {
             templateId: 'template.md',
-            profileId: 'profile.md',
           },
         }),
       }),
@@ -256,10 +246,8 @@ describe('validateTranscriptionConfig', () => {
 
 const activePromptOptions = async () => ({
   templates: [{ id: 'template.md', label: 'Template' }],
-  profiles: [{ id: 'profile.md', label: 'Profile' }],
   defaults: {
     templateId: 'template.md',
-    profileId: 'profile.md',
   },
 });
 

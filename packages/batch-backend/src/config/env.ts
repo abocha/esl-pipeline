@@ -256,7 +256,6 @@ export interface BatchBackendConfig {
   };
   prompt: {
     templatePath: string;
-    defaultProfilePath: string;
   };
   drafts: {
     localExport: boolean;
@@ -608,10 +607,6 @@ export function loadConfig(): BatchBackendConfig {
   const promptTemplatePath = readString(
     'PROMPT_TEMPLATE_PATH',
     'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md',
-  )!;
-  const promptProfilePath = readString(
-    'PROMPT_PROFILE_PATH',
-    'packages/batch-backend/prompt-assets/profiles/PROFILE_2025-11-16.md',
   )!;
   const draftLocalExport = readBool('DRAFT_LOCAL_EXPORT', nodeEnv === 'development');
   const jobOptionsAllowStaticFallback = readBool(
@@ -1097,7 +1092,6 @@ export function loadConfig(): BatchBackendConfig {
     },
     prompt: {
       templatePath: promptTemplatePath,
-      defaultProfilePath: promptProfilePath,
     },
     drafts: {
       localExport: draftLocalExport,

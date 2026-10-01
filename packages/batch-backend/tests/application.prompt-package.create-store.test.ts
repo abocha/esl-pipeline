@@ -10,7 +10,6 @@ import { getPromptPackage } from '../src/application/get-prompt-package.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
 import {
-  createBindingResolverStub,
   createConfig,
   createProfileRevisionRepositoryStub,
   createPromptOptionsStub,
@@ -146,7 +145,6 @@ describe('application/prompt-package', () => {
           workspaceId: 'workspace-1',
           notes: 'Some notes',
           templateId: 'template.md',
-          profileId: 'profile.md',
         },
         {
           config: createConfig(templatePath, profilePath),
@@ -174,12 +172,11 @@ describe('application/prompt-package', () => {
             }),
           },
           students: {
-            getById: async () => null,
+            getById: async () => ({ id: 'student-1', student: 'Student One' }),
           },
           promptPackages,
           profileRevisions,
           templateRevisions: createTemplateRevisionRepositoryStub(),
-          bindings: createBindingResolverStub(),
           promptOptions: createPromptOptionsStub(),
         },
       );
@@ -190,9 +187,9 @@ describe('application/prompt-package', () => {
       expect(result?.studentId).toBe('student-1');
       expect(result?.notes).toBe('Some notes');
       expect(result?.templateVersion).toBe('template.md');
-      expect(result?.profilePath).toBe('profile.md');
-      expect(result?.profileSnapshot?.resolvedProfileId).toBe('profile.md');
-      expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('active-profile.md');
+      expect(result?.profilePath).toBeNull();
+      expect(result?.profileSnapshot?.resolvedProfileId).toBeNull();
+      expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('active-student-1');
     } finally {
       if (previousCanonicalVoicesPath === undefined) {
         delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
@@ -266,7 +263,6 @@ describe('application/prompt-package', () => {
           recordingId: transcript.recordingId,
           workspaceId: 'workspace-1',
           templateId: 'hw_prompt_definitive.md',
-          profileId: 'profile.md',
         },
         {
           config: createConfig(templatePath, profilePath),
@@ -275,15 +271,14 @@ describe('application/prompt-package', () => {
             getByRecordingId: async () => transcript,
           },
           recordings: {
-            getById: async () => null,
+            getById: async () => ({ id: 'recording-1', studentId: 'student-1' }) as never,
           },
           students: {
-            getById: async () => null,
+            getById: async () => ({ id: 'student-1', student: 'Student One' }),
           },
           promptPackages: createPromptPackageRepositoryStub(),
           profileRevisions: createProfileRevisionRepositoryStub(),
           templateRevisions: createTemplateRevisionRepositoryStub(),
-          bindings: createBindingResolverStub(),
           promptOptions: createPromptOptionsStub(),
         },
       );
