@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.1.8] - 2026-10-01
+
+### Changed
+
+- Automated release from PR #295: feat(ops): add host runtime health monitoring (https://github.com/abocha/esl-pipeline/pull/295)
+
 ## [11.1.7] - 2026-09-30
 
 ### Changed
