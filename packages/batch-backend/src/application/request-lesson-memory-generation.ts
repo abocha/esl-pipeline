@@ -9,7 +9,7 @@ import { supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork } from '../domain/
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { LESSON_MEMORY_SCHEMA_VERSION } from './generate-lesson-memory-entry.js';
-import { resolveGenerationCandidates } from './generation-policy.js';
+import { resolveGenerationTarget } from './generation-policy.js';
 import type { ProcessLessonMemoryJobPayload } from './process-lesson-memory-job.js';
 
 export interface RequestLessonMemoryGenerationParams {
@@ -76,20 +76,12 @@ export async function requestLessonMemoryGeneration(args: {
   const queue = args.overrides?.queue ?? createStudentMemoryQueue();
   const now = args.overrides?.now ?? (() => new Date());
 
-  const defaultCandidate = resolveGenerationCandidates({
+  const target = resolveGenerationTarget({
     config: args.config.generation,
-    workload: 'student_memory_extraction',
-  })[0];
-  const candidate =
-    args.params.providerOverride && args.params.modelOverride
-      ? {
-          provider: args.params.providerOverride,
-          model: args.params.modelOverride,
-        }
-      : defaultCandidate;
-  if (!candidate) {
-    throw new Error('No generation candidate is available for lesson-memory extraction');
-  }
+    workload: 'lesson_memory',
+    providerOverride: args.params.providerOverride ?? undefined,
+    modelOverride: args.params.modelOverride ?? undefined,
+  });
 
   const requestedAt = now();
   const pending = await lessonMemory.ensurePending({
@@ -99,8 +91,8 @@ export async function requestLessonMemoryGeneration(args: {
     assignmentSessionId: args.params.assignmentSessionId,
     schemaVersion: LESSON_MEMORY_SCHEMA_VERSION,
     generatedAt: requestedAt,
-    provider: candidate.provider,
-    model: candidate.model,
+    provider: target.provider,
+    model: target.model,
     generationNotes: {
       trigger: args.params.trigger,
       lessonId: args.params.lessonId ?? null,
@@ -125,8 +117,8 @@ export async function requestLessonMemoryGeneration(args: {
       sourceContentHash: args.params.sourceContentHash,
       pendingEntryId: pending.entry.id,
       assignmentSessionId: args.params.assignmentSessionId,
-      provider: candidate.provider,
-      model: candidate.model,
+      provider: target.provider,
+      model: target.model,
     },
     {
       batchClaims,

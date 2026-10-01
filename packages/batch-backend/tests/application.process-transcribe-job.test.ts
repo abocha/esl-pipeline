@@ -1656,23 +1656,27 @@ function createConfig(): BatchBackendConfig {
       presignedUrlExpiresIn: 0,
     },
     generation: {
-      defaultProvider: 'openai',
-      fallbackProviders: ['google_ai_studio', 'openrouter'],
+      targets: {
+        draft_generation: { provider: 'openai', model: 'gpt-5.2' },
+        lesson_memory: { provider: 'openai', model: 'gpt-5.2' },
+        homework_memory: { provider: 'openai', model: 'gpt-5.2' },
+        student_memory_snapshot: { provider: 'openai', model: 'gpt-5.2' },
+        profile_revision_drafting: { provider: 'openai', model: 'gpt-5.2' },
+      },
       quotaSourceMode: 'hybrid',
       safetyMode: 'hard_stop',
-      strictNoPaid: true,
+
       maxOutputTokensHard: 1200,
-      budgetEmergencyOverride: false,
+
       models: {
         openai: {
-          primary: 'gpt-5.2',
-          fallback: 'gpt-5-mini',
+          model: 'gpt-5.2',
+
           allowed: ['gpt-5.2', 'gpt-5-mini'],
         },
         googleAiStudio: {
-          primary: 'gemini-3-flash-preview',
-          fallback: 'gemini-2.5-flash-lite',
-          tertiary: 'gemini-2.5-pro',
+          model: 'gemini-3-flash-preview',
+
           allowed: ['gemini-3-flash-preview', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'],
         },
         openrouter: {
@@ -1702,8 +1706,7 @@ function createConfig(): BatchBackendConfig {
           httpReferer: undefined,
           xTitle: undefined,
           requestTimeoutMs: 240_000,
-          retryMax: 1,
-          retryBackoffMs: 250,
+
           dailyTokenBudget: 0,
           dailyRequestBudget: 0,
           rpmBudget: 0,

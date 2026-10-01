@@ -8,7 +8,7 @@ import {
 } from '../domain/student-memory-snapshot-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
-import { resolveGenerationCandidates } from './generation-policy.js';
+import { resolveGenerationTarget } from './generation-policy.js';
 import { STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION } from './student-memory-snapshot-generation.js';
 import type { StudentMemorySnapshotRefreshStrategy } from './student-memory-snapshot-generation-notes.js';
 
@@ -68,15 +68,12 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     throw new Error('Student-memory snapshot refresh requires sourceEntryId');
   }
 
-  const candidate = resolveGenerationCandidates({
+  const target = resolveGenerationTarget({
     config: args.config.generation,
-    workload: 'student_memory_extraction',
+    workload: 'student_memory_snapshot',
     providerOverride: args.params.providerOverride,
     modelOverride: args.params.modelOverride,
-  })[0];
-  if (!candidate) {
-    throw new Error('No generation candidate is available for student-memory snapshot extraction');
-  }
+  });
 
   const requestedAt = now();
   const isAutomaticHomeworkRefresh = args.params.trigger === 'homework-memory-ready';
@@ -84,8 +81,8 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     studentId: args.params.studentId,
     schemaVersion: STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION,
     generatedAt: requestedAt,
-    provider: candidate.provider,
-    model: candidate.model,
+    provider: target.provider,
+    model: target.model,
     sourceEntryId,
     reuseReadyHomeworkSource: isAutomaticHomeworkRefresh,
     generationNotes: {
@@ -136,8 +133,8 @@ export async function requestStudentMemorySnapshotRefresh(args: {
       kind: 'student-memory-snapshot-refresh',
       studentId: args.params.studentId,
       pendingEntryId: pending.entry.id,
-      provider: candidate.provider,
-      model: candidate.model,
+      provider: target.provider,
+      model: target.model,
       trigger: args.params.trigger,
       sourceEntryId,
       strategy: args.params.strategy ?? null,

@@ -21,13 +21,11 @@ vi.mock('../src/domain/student-memory-openai-batch-repository.js', () => ({
 }));
 
 vi.mock('../src/application/generation-policy.js', () => ({
-  resolveGenerationCandidates: vi.fn(
-    (args?: { providerOverride?: string; modelOverride?: string }) => [
-      {
-        provider: args?.providerOverride ?? 'openai',
-        model: args?.modelOverride ?? 'gpt-5.2',
-      },
-    ],
+  resolveGenerationTarget: vi.fn(
+    (args?: { providerOverride?: string; modelOverride?: string }) => ({
+      provider: args?.providerOverride ?? 'openai',
+      model: args?.modelOverride ?? 'gpt-5.2',
+    }),
   ),
 }));
 

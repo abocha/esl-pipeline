@@ -8,158 +8,38 @@ import type {
 import type { BatchBackendConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
 
-export interface GenerationCandidate {
+export interface GenerationTarget {
   provider: GenerationProvider;
   model: string;
-  fallbackRank: number;
 }
 
 export type GenerationWorkload =
-  | 'default'
   | 'draft_generation'
-  | 'student_memory_extraction'
+  | 'lesson_memory'
+  | 'homework_memory'
+  | 'student_memory_snapshot'
   | 'profile_revision_drafting';
-
-const POLICY_PROVIDER_ORDER: readonly GenerationProvider[] = [
-  'openai',
-  'google_ai_studio',
-  'openrouter',
-];
 
 const GOOGLE_DASHBOARD_URL = 'https://ai.google.dev/gemini-api/docs/rate-limits';
 const OPENAI_DASHBOARD_URL =
   'https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai';
 const OPENROUTER_DASHBOARD_URL = 'https://openrouter.ai/docs/models';
 
-function uniqueNonEmpty(values: (string | undefined)[]): string[] {
-  return [...new Set(values.map((value) => value?.trim()).filter(Boolean) as string[])];
-}
-
-export function resolveGenerationProviderOrder(
-  config: BatchBackendConfig['generation'],
-): GenerationProvider[] {
-  const ordered = [
-    config.defaultProvider,
-    ...config.fallbackProviders,
-    ...POLICY_PROVIDER_ORDER,
-  ] as GenerationProvider[];
-  return [...new Set(ordered)];
-}
-
-export function getModelLadderForProvider(
-  config: BatchBackendConfig['generation'],
-  provider: GenerationProvider,
-  workload: GenerationWorkload = 'default',
-): string[] {
-  if (provider === 'openai') {
-    // Exclude only the implicitly added assignment default from other workloads;
-    // preserve explicit operator allowlists.
-    const allowed = config.models.openai.allowed.filter(
-      (model) =>
-        workload === 'draft_generation' ||
-        !config.models.openai.allowedFromDefaults ||
-        model !== config.models.openai.assignmentDraftPrimary,
-    );
-    if (workload === 'draft_generation') {
-      return uniqueNonEmpty([
-        config.models.openai.assignmentDraftPrimary ?? config.models.openai.primary,
-        config.models.openai.fallback,
-        config.models.openai.primary,
-        ...allowed,
-      ]);
-    }
-    if (workload === 'student_memory_extraction') {
-      // Intentionally cross-referenced defaults: bulk extraction prefers the
-      // cheaper/smaller model first, so studentMemoryPrimary falls back to the
-      // general `fallback` (nano-class), and studentMemoryFallback to `primary`.
-      // Set GEN_OPENAI_MODEL_STUDENT_MEMORY_{PRIMARY,FALLBACK} to override.
-      return uniqueNonEmpty([
-        config.models.openai.studentMemoryPrimary ?? config.models.openai.fallback,
-        config.models.openai.studentMemoryFallback ?? config.models.openai.primary,
-        config.models.openai.primary,
-        config.models.openai.fallback,
-        ...allowed,
-      ]);
-    }
-    if (workload === 'profile_revision_drafting') {
-      return uniqueNonEmpty([
-        config.models.openai.profileDraftPrimary ?? config.models.openai.primary,
-        config.models.openai.profileDraftFallback ?? config.models.openai.fallback,
-        // profileDraftTertiary defaults to the general fallback; uniqueNonEmpty
-        // will silently collapse it if it equals a prior rung. Set
-        // GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY to a distinct model to keep
-        // three separate rungs.
-        config.models.openai.profileDraftTertiary,
-        config.models.openai.primary,
-        config.models.openai.fallback,
-        ...allowed,
-      ]);
-    }
-    return uniqueNonEmpty([
-      config.models.openai.primary,
-      config.models.openai.fallback,
-      ...allowed,
-    ]);
-  }
-  if (provider === 'google_ai_studio') {
-    return uniqueNonEmpty([
-      config.models.googleAiStudio.primary,
-      config.models.googleAiStudio.fallback,
-      config.models.googleAiStudio.tertiary,
-      ...config.models.googleAiStudio.allowed,
-    ]);
-  }
-  return uniqueNonEmpty([
-    config.models.openrouter.primary,
-    config.models.openrouter.fallback,
-    ...config.models.openrouter.allowed,
-  ]);
-}
-
-export function resolveGenerationCandidates(args: {
+export function resolveGenerationTarget(args: {
   config: BatchBackendConfig['generation'];
-  workload?: GenerationWorkload;
+  workload: GenerationWorkload;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
-  includeProviderFallbacks?: boolean;
-}): GenerationCandidate[] {
-  const providerOrder = resolveGenerationProviderOrder(args.config);
-  const prioritizedProviders = args.providerOverride
-    ? args.includeProviderFallbacks === false
-      ? [args.providerOverride]
-      : [
-          args.providerOverride,
-          ...providerOrder.filter((provider) => provider !== args.providerOverride),
-        ]
-    : providerOrder;
-
-  const candidates: GenerationCandidate[] = [];
-  let fallbackRank = 0;
-
-  if (args.modelOverride && args.modelOverride.trim().length > 0) {
-    const overrideProvider =
-      args.providerOverride ?? prioritizedProviders[0] ?? args.config.defaultProvider;
-    candidates.push({
-      provider: overrideProvider,
-      model: args.modelOverride.trim(),
-      fallbackRank,
-    });
-    fallbackRank += 1;
-  }
-
-  for (const provider of prioritizedProviders) {
-    for (const model of getModelLadderForProvider(args.config, provider, args.workload)) {
-      if (
-        candidates.some((candidate) => candidate.provider === provider && candidate.model === model)
-      ) {
-        continue;
-      }
-      candidates.push({ provider, model, fallbackRank });
-      fallbackRank += 1;
-    }
-  }
-
-  return candidates;
+}): GenerationTarget {
+  const configured = args.config.targets[args.workload];
+  const provider = args.providerOverride ?? configured.provider;
+  const model =
+    args.modelOverride?.trim() ||
+    (provider === configured.provider
+      ? configured.model
+      : args.config.models[provider === 'google_ai_studio' ? 'googleAiStudio' : provider].model);
+  if (!model) throw new Error(`No explicit model configured for ${args.workload} (${provider})`);
+  return { provider, model };
 }
 
 function getGoogleQuotaBaseline(model: string): {
@@ -266,72 +146,47 @@ export function buildQuotaSnapshot(args: {
   };
 }
 
-function toTier(index: number): GenerationModelOption['tier'] {
-  if (index === 0) return 'primary';
-  if (index === 1) return 'fallback';
-  if (index === 2) return 'tertiary';
-  return 'custom';
-}
-
 export function buildGenerationOptionsPayload(args: {
   config: BatchBackendConfig['generation'];
   quotaUsage?: GenerationBudgetUsage;
   now?: Date;
 }): GenerationOptionsPayload {
-  const providers = resolveGenerationProviderOrder(args.config);
+  const target = resolveGenerationTarget({ config: args.config, workload: 'draft_generation' });
+  // Roster order is presentation only: none of these options are automatic fallbacks.
+  const providers: GenerationProvider[] = ['openai', 'google_ai_studio'];
+  if (
+    args.config.models.openrouter.model ||
+    args.config.models.openrouter.allowed.length ||
+    target.provider === 'openrouter'
+  )
+    providers.push('openrouter');
   const modelOptions: GenerationModelOption[] = [];
-  const metadataByProviderModel = new Map<
-    string,
-    Pick<GenerationModelOption, 'tier' | 'defaultSelected'>
-  >();
-
+  const defaultModelByProvider: Partial<Record<GenerationProvider, string>> = {};
   for (const provider of providers) {
-    const models = getModelLadderForProvider(args.config, provider, 'draft_generation');
-    for (const [index, model] of models.entries()) {
-      metadataByProviderModel.set(`${provider}:${model}`, {
-        tier: toTier(index),
-        defaultSelected: index === 0,
+    const roster =
+      args.config.models[provider === 'google_ai_studio' ? 'googleAiStudio' : provider];
+    const model = provider === target.provider ? target.model : roster.model;
+    if (model) defaultModelByProvider[provider] = model;
+    for (const id of new Set(
+      [model, ...roster.allowed].filter((id): id is string => Boolean(id)),
+    )) {
+      modelOptions.push({
+        provider,
+        id,
+        defaultSelected: provider === target.provider && id === target.model,
+        enabled: true,
       });
     }
   }
-
-  for (const candidate of resolveGenerationCandidates({
-    config: args.config,
-    workload: 'draft_generation',
-  })) {
-    const metadata = metadataByProviderModel.get(`${candidate.provider}:${candidate.model}`);
-    if (!metadata) {
-      continue;
-    }
-    modelOptions.push({
-      provider: candidate.provider,
-      id: candidate.model,
-      tier: metadata.tier,
-      fallbackRank: candidate.fallbackRank,
-      defaultSelected: metadata.defaultSelected,
-      enabled: true,
-    });
-  }
-
-  const defaultModelByProvider: Partial<Record<GenerationProvider, string>> = {};
-  for (const provider of providers) {
-    const first = getModelLadderForProvider(args.config, provider, 'draft_generation')[0];
-    if (first) {
-      defaultModelByProvider[provider] = first;
-    }
-  }
-
-  const defaultModel = defaultModelByProvider[args.config.defaultProvider] ?? '';
-
   return {
     providers,
-    defaultProvider: args.config.defaultProvider,
+    defaultProvider: target.provider,
     modelOptions,
     defaultModelByProvider,
     quota: buildQuotaSnapshot({
       config: args.config,
-      provider: args.config.defaultProvider,
-      model: defaultModel,
+      provider: target.provider,
+      model: target.model,
       usage: args.quotaUsage,
       now: args.now,
     }),

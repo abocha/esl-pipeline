@@ -158,21 +158,22 @@ Primary groups:
 
 - Provider credentials:
   - `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`
-- Model selection and fallbacks:
-  - `GEN_PROVIDER_*`, `GEN_*_MODEL_*`
-  - `GEN_OPENAI_TARGET_MODELS_ENABLED` (defaults to `false`; retained as a compatibility and
-    operator-observability signal, while both states use the built-in workload policy)
-  - built-in OpenAI defaults: assignment `gpt-6.1-sol`; memory and profile workloads
-    `gpt-5.6-luna`; `GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY` controls assignment drafts,
-    while generic `GEN_OPENAI_MODEL_PRIMARY` remains `gpt-5.6-sol`; explicit workload overrides
-    remain authoritative. Explicit OpenAI allowlists must permit the selected assignment model
-- Safety and budgets:
-  - `GEN_SAFETY_MODE`, `GEN_STRICT_NO_PAID`, `GEN_ALLOW_PAID_SPEND`, `GEN_*_BUDGET`
+- Explicit workload targets:
+  - `GEN_ASSIGNMENT_PROVIDER/MODEL`, `GEN_LESSON_MEMORY_PROVIDER/MODEL`,
+    `GEN_HOMEWORK_MEMORY_PROVIDER/MODEL`, `GEN_STUDENT_MEMORY_SNAPSHOT_PROVIDER/MODEL`,
+    `GEN_PROFILE_DRAFT_PROVIDER/MODEL` (each slash names two env variables)
+  - default provider is OpenAI; assignment defaults to Sol 6.1, memory/profile to Luna 5.6
+  - provider-only debug defaults: `GEN_OPENAI_MODEL`, `GEN_GOOGLE_MODEL`, `GEN_OPENROUTER_MODEL`
+  - `GEN_ALLOWED_MODELS_*` is an explicit selection roster and Batch/planner guard, never fallback
+- Output protection and budgets:
+  - `GEN_MAX_OUTPUT_TOKENS_HARD`, `GEN_SAFETY_MODE`, `GEN_*_BUDGET`
 - Disabled Batch replay:
-  - `STUDENT_MEMORY_OPENAI_BATCH_ENABLED` (defaults to `false`; gates every remote OpenAI Batch
-    action for historical student-memory replay and does not alter normal online generation)
+  - `STUDENT_MEMORY_OPENAI_BATCH_ENABLED` defaults to `false` and gates every remote Batch action
 - Timeouts/retries:
-  - `GEN_*_REQUEST_TIMEOUT_MS`, `GEN_*_RETRY_*`
+  - `GEN_*_REQUEST_TIMEOUT_MS`; speech planning alone uses `GEN_OPENAI_RETRY_*` / `GEN_GOOGLE_RETRY_*`
+  - assignment/profile provider failure is explicit; memory workers retain durable queue retries
+- Removed fallback and paid-spend variables are ignored. Use the linked target-policy rollout
+  procedure to translate existing env settings before deployment.
 
 Read next:
 
@@ -226,7 +227,6 @@ Read next:
 - Budget values of `0` are intentional hard stops, not “unset”.
 - Generation battle-testing defaults should stay fail-safe:
   - `GEN_SAFETY_MODE=hard_stop`
-  - `GEN_STRICT_NO_PAID=true`
   - `GEN_MAX_OUTPUT_TOKENS_HARD=12000`
 - Direct generation provider requests default to 240000 ms unless overridden per provider.
 - `GEN_OPENAI_TPM_BUDGET` defaults to `160000`; it is an operator capacity setting, not a billing or
