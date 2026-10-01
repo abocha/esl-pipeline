@@ -296,3 +296,51 @@
     flex-direction: column;
   }
 }
+
+.prompt-control-state {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.prompt-control-metadata {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+.prompt-control-metadata dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.prompt-control-comparison,
+.prompt-control-editor {
+  margin-block: 1rem;
+}
+.prompt-control-comparison summary,
+.prompt-control-editor summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.prompt-control-comparison pre {
+  max-height: 30rem;
+  overflow: auto;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.prompt-control-comparison pre span {
+  display: block;
+}
+.prompt-diff-added {
+  background: #e4f5e8;
+  color: #19592a;
+}
+.prompt-diff-removed {
+  background: #fde8e6;
+  color: #822c24;
+}
+@media (max-width: 700px) {
+  .prompt-control-state {
+    grid-template-columns: 1fr;
+  }
+}

@@ -248,7 +248,7 @@ describe('App', () => {
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
     expect(await screen.findByText('Minimal assignment content')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Business/i })).toBeTruthy();
-    expect(screen.queryByRole('link', { name: /Assignment Templates/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Prompts/i })).toBeNull();
     expect(document.querySelector('style')?.textContent ?? '').not.toContain('.app-shell::before');
 
     await user.click(screen.getByRole('link', { name: /Skip to main content/i }));
@@ -313,25 +313,30 @@ describe('App', () => {
 
     renderApp();
 
-    await user.click(screen.getByRole('link', { name: /Assignment Templates/i }));
+    await user.click(screen.getByRole('link', { name: /Prompts/i }));
 
     expect(await screen.findByText('Prompt templates content')).toBeTruthy();
   });
 
-  it('redirects a non-admin away from a manually opened prompt templates route', async () => {
+  it.each([
+    { role: 'user', route: '/admin/prompts' },
+    { role: 'viewer', route: '/admin/prompts' },
+    { role: 'user', route: '/prompts' },
+    { role: 'viewer', route: '/prompts' },
+  ] as const)('redirects $role away from $route', async ({ role, route }) => {
     useAuthMock.mockReturnValue(
       createAuthState({
         user: {
           id: 'user-1',
           email: 'teacher@example.com',
-          role: 'user',
+          role,
           isActive: true,
         },
         isAuthenticated: true,
       }),
     );
 
-    renderApp(['/prompts']);
+    renderApp([route]);
 
     expect(await screen.findByText('Minimal assignment content')).toBeTruthy();
     expect(screen.queryByText('Prompt templates content')).toBeNull();

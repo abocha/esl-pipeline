@@ -7,7 +7,7 @@ import {
 
 describe('manual transcript contract versions', () => {
   it('tracks the current contract versions', () => {
-    expect(API_CONTRACT_VERSION).toBe('5.0.0');
+    expect(API_CONTRACT_VERSION).toBe('5.1.0');
     expect(DB_CONTRACT_VERSION).toBe('0.32.0');
   });
 });
