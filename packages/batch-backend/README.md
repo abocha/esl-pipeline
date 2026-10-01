@@ -35,6 +35,23 @@ Core surfaces:
   provenance without enqueueing speech-to-text work
 - student archive/restore under `/students/:id/archive` and `/students/:id/restore`; archived students are hidden from default student reads without deleting history
 - student-area route payloads under `/students/:id/surfaces/overview`, `/students/:id/surfaces/learning`, and `/students/:id/surfaces/history`
+- Student-area surfaces, memory, bindings, timeline, candidate review/promotion, and draft
+  initialization/refresh run the shared `authorizeStudent` pre-handler after authentication.
+  It resolves the caller's workspace from membership and calls
+  `getStudentProfileById(id, { workspaceId })`, whose student query includes the workspace
+  predicate, before any downstream student-owned read or write. Missing, archived, and foreign
+  students receive the same `404 { error: 'not_found' }`. Internal helpers used by these handlers
+  rely on that established student boundary; candidate and revision queries additionally constrain
+  children to their student/profile. The separate `getStudentTeachingContext({ workspaceId,
+studentId })` application query retains its own scoped lookup before secondary reads.
+- Profile ownership remains an unresolved contract in [issue #280](https://github.com/abocha/esl-pipeline/issues/280).
+  Authenticated `/profiles` catalog/detail/revision routes (including query-form aliases and
+  mutations) currently have no workspace boundary. Profiles/revisions have no workspace column,
+  and existing bindings can reference the same profile from multiple students. The student-area
+  check does not authorize arbitrary profile IDs or make cross-workspace profile sharing safe.
+  A maintainer decision is required for standalone profiles, shared profiles, binding/rebinding,
+  and revision mutation authority before changing those APIs or migrating ownership; current global
+  visibility is not evidence of an intentional sharing policy.
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
 - tutor business dashboard and student schedule/billing routes resolve the active workspace from the
   authenticated tutor's membership before application reads or writes. Foreign students, lessons,

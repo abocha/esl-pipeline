@@ -143,6 +143,27 @@ Alpine-slim line; Caddy, PostgreSQL, and Redis remain on controlled official Alp
 the three production Dockerfiles and [`docker-compose.prod.yml`](../../docker-compose.prod.yml) for
 the current lines.
 
+All three production builders copy `pnpm-workspace.yaml`, root `package.json`, `pnpm-lock.yaml`,
+`tsconfig.base.json`, and the `packages` tree filtered by `.dockerignore`. The root files own pnpm
+resolution/install policy and shared TypeScript compilation; filtered workspace builds select each
+target and its dependencies. `.env.example` is repository-policy validation input, excluded from
+the Docker context and no longer copied by the orchestrator postbuild step.
+
+Backend and Telegram runtime stages copy their `pnpm deploy --prod` output. The backend deployment
+includes `dist`, `migrations`, and `schema.sql`, with prompt assets copied separately to
+`/app/packages/batch-backend/prompt-assets`. Frontend runtime copies the built `dist` tree plus
+`nginx-rootless.conf` and `nginx.conf`. The broad package-tree copy is intentional; production-image
+scope follows semantic workspace dependencies rather than every file in that build context.
+`scripts/release/production-image-scope.mjs` unions changed-package transitive dependents into the
+backend, frontend and Telegram targets. Each package's Dockerfile and runtime assets select its
+own image through that same ownership. `.dockerignore` and the four shared root inputs above select
+all three images. `.env.example`, `.nvmrc`, Compose, docs and known repository/release tooling select
+no images: deployment importance does not imply image build ownership. Named release/host utilities
+are explicit non-image inputs; arbitrary new scripts are not exempt. Unknown paths or incomplete,
+malformed changed-file/workspace metadata fail closed to all images. The release summary retains
+every contributing reason, including mixed package/shared/unknown impacts. Unaffected images still
+reuse/retag the previous version.
+
 Changed-image release builds use `pull: true`, commit-pinned Docker actions, persistent per-image GHA
 build caches, and controlled major/minor plus distribution tags. GHA cache export is best-effort
 because it is only a build acceleration; image pushes and unchanged-image reuse remain fatal.

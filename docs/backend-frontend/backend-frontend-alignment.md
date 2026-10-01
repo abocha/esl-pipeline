@@ -95,6 +95,13 @@ Provider/model detail stays in
 
 ## Update Rules
 
+Student-area surfaces, memory, bindings, timeline, and candidate/draft routes prove student ownership
+in the authenticated workspace before secondary reads or writes. The shared transport guard uses the
+existing workspace-scoped student query; teaching context retains its application-level guard.
+Profile catalog/detail/revision APIs and profile binding ownership remain unresolved in
+[issue #280](https://github.com/abocha/esl-pipeline/issues/280): their current global visibility is not
+an approved sharing contract. Student-ID containment does not close direct profile-ID access.
+
 - Update this file when a capability moves between planned, partial, and live or its ownership
   boundary changes.
 - Put route/env/payload detail in generated indexes, package READMEs, references, or runbooks.
