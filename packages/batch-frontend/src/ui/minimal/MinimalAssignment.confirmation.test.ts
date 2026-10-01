@@ -81,6 +81,13 @@ describe('assignment confirmation decisions', () => {
     expect(deriveResumeDestination(session(), cleanArtifacts)).toBe('review');
   });
 
+  it('ignores obsolete standalone profile identity when revision lineage is unchanged', () => {
+    const saved = session({ selectedProfileId: 'obsolete-other-profile' });
+    expect(deriveAssignmentDirtyState(saved, cleanArtifacts).context).toBe(false);
+    saved.selectedProfileRevisionHash = 'changed-revision-hash';
+    expect(deriveAssignmentDirtyState(saved, cleanArtifacts).context).toBe(true);
+  });
+
   it('resumes at the earliest dirty durable boundary', () => {
     const dirty = session({ lessonId: 'lesson-2', teacherNotes: 'New notes' });
     expect(deriveResumeDestination(dirty, cleanArtifacts)).toBe('source');

@@ -11,7 +11,6 @@
 
 | Method | Path | Source |
 | --- | --- | --- |
-| GET | `/.well-known/oauth-protected-resource` | `packages/batch-backend/src/transport/mcp-oauth.ts` |
 | GET | `/admin/jobs` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | DELETE | `/admin/jobs/:jobId` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/admin/jobs/summary` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
@@ -57,20 +56,6 @@
 | GET | `/ops/actions/:operationId` | `packages/batch-backend/src/transport/extended-routes/ops-routes.ts` |
 | GET | `/ops/status` | `packages/batch-backend/src/transport/extended-routes/ops-routes.ts` |
 | POST | `/preview/html` | `packages/batch-backend/src/transport/extended-routes/config-routes.ts` |
-| GET | `/profiles` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| DELETE | `/profiles/:id` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| GET | `/profiles/:id` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| PUT | `/profiles/:id` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| GET | `/profiles/:id/revisions` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| POST | `/profiles/:id/revisions` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| GET | `/profiles/:id/revisions/:revisionId` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| POST | `/profiles/:id/revisions/:revisionId/activate` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| POST | `/profiles/:id/revisions/:revisionId/restore` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| GET | `/profiles/revisions` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| POST | `/profiles/revisions` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| GET | `/profiles/revisions/:revisionId` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| POST | `/profiles/revisions/:revisionId/activate` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
-| POST | `/profiles/revisions/:revisionId/restore` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
 | GET | `/prompt-packages/:promptPackageId` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | POST | `/prompt-packages/:promptPackageId/draft` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | GET | `/prompt-packages/:promptPackageId/lineage` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
@@ -90,8 +75,6 @@
 | GET | `/students/:id` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | PUT | `/students/:id` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/archive` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
-| GET | `/students/:id/bindings` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
-| GET | `/students/:id/bindings/active` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/credits/adjustments` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/homework-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/lesson-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
@@ -106,6 +89,8 @@
 | PUT | `/students/:id/operations/reminders/lesson-followup/:lessonId/hide` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/packages` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/payments` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| GET | `/students/:id/profile` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
+| PUT | `/students/:id/profile` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
 | GET | `/students/:id/profile-candidates` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-candidates/:candidateId/approve` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-candidates/:candidateId/defer` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
@@ -113,6 +98,11 @@
 | POST | `/students/:id/profile-candidates/promote` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-drafts/initialize` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-drafts/refresh-from-approved-candidates` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| GET | `/students/:id/profile/revisions` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
+| POST | `/students/:id/profile/revisions` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
+| GET | `/students/:id/profile/revisions/:revisionId` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
+| POST | `/students/:id/profile/revisions/:revisionId/activate` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
+| POST | `/students/:id/profile/revisions/:revisionId/restore` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
 | POST | `/students/:id/restore` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/surfaces/history` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/surfaces/learning` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |

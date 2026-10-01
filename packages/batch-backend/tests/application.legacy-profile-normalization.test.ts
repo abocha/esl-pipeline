@@ -10,7 +10,7 @@ describe('application/legacy-profile-normalization', () => {
   it('creates a draft revision from active profile content and canonical memory', async () => {
     const saveRevision = vi.fn(async () => ({
       id: 'revision-draft-1',
-      profileId: 'profiles/students/tolik.md',
+      studentId: 'tolik',
       contentHash: 'hash',
       source: 'legacy_normalization' as const,
       status: 'draft' as const,
@@ -35,23 +35,13 @@ describe('application/legacy-profile-normalization', () => {
           getById: async () => ({
             id: 'tolik',
             student: 'Tolik',
-            profileId: 'profiles/students/tolik.md',
             voices: {},
-          }),
-        },
-        profiles: {
-          getById: async () => ({
-            id: 'profiles/students/tolik.md',
-            label: 'Tolik',
-            activeRevisionId: 'revision-active-1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
           }),
         },
         revisions: {
           getActive: async () => ({
             id: 'revision-active-1',
-            profileId: 'profiles/students/tolik.md',
+            studentId: 'tolik',
             content: '# Legacy profile',
             contentHash: 'hash-1',
             source: 'update',
@@ -125,7 +115,7 @@ describe('application/legacy-profile-normalization', () => {
     expect(result.snapshotId).toBe('snapshot-1');
     expect(result.draftRevision.status).toBe('draft');
     expect(saveRevision).toHaveBeenCalledWith(
-      'profiles/students/tolik.md',
+      'tolik',
       expect.stringContaining('# Foundational Profile'),
       expect.objectContaining({
         source: 'legacy_normalization',
@@ -150,17 +140,7 @@ describe('application/legacy-profile-normalization', () => {
             getById: async () => ({
               id: 'tolik',
               student: 'Tolik',
-              profileId: 'profiles/students/tolik.md',
               voices: {},
-            }),
-          },
-          profiles: {
-            getById: async () => ({
-              id: 'profiles/students/tolik.md',
-              label: 'Tolik',
-              activeRevisionId: null,
-              createdAt: new Date('2026-01-01T00:00:00.000Z'),
-              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
             }),
           },
           revisions: {

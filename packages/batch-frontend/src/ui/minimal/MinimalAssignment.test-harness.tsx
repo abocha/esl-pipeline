@@ -103,7 +103,6 @@ vi.mock('../../utils/api', () => ({
   getStudentScheduleBillingSurface: vi.fn(),
   listUserJobs: vi.fn(),
   listAssignmentSessions: vi.fn(),
-  listProfileContents: vi.fn(),
   listProfileRevisions: vi.fn(),
   materializeDraft: vi.fn(),
   publishAssignmentCorrection: vi.fn(),
@@ -911,10 +910,8 @@ export function setupMinimalAssignmentTest() {
 
   vi.mocked(api.fetchPromptOptions).mockResolvedValue({
     templates: [{ id: 'tpl-default', label: 'Default Template' }],
-    profiles: [{ id: 'profile-default', label: 'Default Profile' }],
     defaults: {
       templateId: 'tpl-default',
-      profileId: 'profile-default',
     },
   });
   vi.mocked(api.fetchJobOptions).mockResolvedValue({
@@ -989,8 +986,8 @@ export function setupMinimalAssignmentTest() {
   });
   vi.mocked(api.fetchStudentOptions).mockResolvedValue({
     students: [
-      { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
-      { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+      { id: 'student-alex', name: 'Alex' },
+      { id: 'student-bella', name: 'Bella' },
     ],
   });
   vi.mocked(api.getStudentScheduleBillingSurface).mockResolvedValue(makeScheduleBillingSurface());
@@ -1088,14 +1085,13 @@ export function setupMinimalAssignmentTest() {
         revision: request.expectedRevision + 1,
         confirmedStep: 'context',
         teacherNotes: request.teacherNotes,
-        selectedProfileId: request.profileId,
+        selectedProfileId: base.studentId,
         selectedProfileRevisionId: request.profileRevisionId,
         selectedProfileRevisionHash: request.profileRevisionHash,
         confirmed: {
           ...base.confirmed,
           context: {
             teacherNotes: request.teacherNotes,
-            profileId: request.profileId,
             profileRevisionId: request.profileRevisionId,
             profileRevisionHash: request.profileRevisionHash,
           },
@@ -1147,8 +1143,7 @@ export function setupMinimalAssignmentTest() {
     const projectionSession =
       currentSession.id === id ? currentSession : ((await findListedSession(id)) ?? currentSession);
     const source = projectionSession.confirmed.source;
-    const profileId =
-      projectionSession.selectedProfileId ?? projectionSession.confirmed.context?.profileId;
+    const profileId = projectionSession.studentId;
     const revisionId =
       projectionSession.selectedProfileRevisionId ??
       projectionSession.confirmed.context?.profileRevisionId;
@@ -1171,7 +1166,7 @@ export function setupMinimalAssignmentTest() {
       profile:
         profileId && revisionId && revisionHash
           ? {
-              profileId,
+              studentId: projectionSession.studentId,
               revisionId,
               revisionHash,
               content: 'PROFILE CONTENT',
@@ -1181,7 +1176,7 @@ export function setupMinimalAssignmentTest() {
           : null,
       pinned: projectionSession.confirmed.context
         ? {
-            profileId: projectionSession.confirmed.context.profileId,
+            profileId: projectionSession.confirmed.context.profileId ?? null,
             revisionId: projectionSession.confirmed.context.profileRevisionId,
             revisionHash: projectionSession.confirmed.context.profileRevisionHash,
           }
@@ -1190,15 +1185,8 @@ export function setupMinimalAssignmentTest() {
       warning: null,
     };
   });
-  vi.mocked(api.listProfileContents).mockResolvedValue({
-    profiles: [
-      { id: 'profiles/alex.md', label: 'Alex Profile' },
-      { id: 'profiles/bella.md', label: 'Bella Profile' },
-    ],
-  });
   vi.mocked(api.getProfileContent).mockResolvedValue({
-    id: 'profiles/alex.md',
-    label: 'Alex Profile',
+    studentId: 'student-alex',
     content: 'PROFILE CONTENT',
     structuredContent: {
       schemaVersion: 'foundational_profile_v1',
@@ -1217,7 +1205,7 @@ export function setupMinimalAssignmentTest() {
   });
   vi.mocked(api.getProfileRevision).mockResolvedValue({
     id: 'revision-1',
-    profileId: 'profiles/alex.md',
+    studentId: 'student-alex',
     contentHash: 'a'.repeat(64),
     source: 'create',
     createdAt: now,
@@ -1229,7 +1217,7 @@ export function setupMinimalAssignmentTest() {
     items: [
       {
         id: 'revision-1',
-        profileId: 'profiles/alex.md',
+        studentId: 'student-alex',
         contentHash: 'hash-1',
         source: 'create',
         createdAt: now,
@@ -1243,15 +1231,13 @@ export function setupMinimalAssignmentTest() {
     order: 'desc',
   });
   vi.mocked(api.upsertProfileContent).mockResolvedValue({
-    id: 'profiles/alex.md',
-    label: 'Alex Profile',
+    studentId: 'student-alex',
     content: 'PROFILE CONTENT',
     currentRevisionId: 'revision-1',
     updatedAt: now,
   });
   vi.mocked(api.restoreProfileRevision).mockResolvedValue({
-    id: 'profiles/alex.md',
-    label: 'Alex Profile',
+    studentId: 'student-alex',
     content: 'PROFILE CONTENT',
     currentRevisionId: 'revision-1',
     updatedAt: now,
@@ -1281,7 +1267,7 @@ export function setupMinimalAssignmentTest() {
   });
   vi.mocked(api.activateProfileRevision).mockResolvedValue({
     id: 'revision-draft-1',
-    profileId: 'profiles/alex.md',
+    studentId: 'student-alex',
     contentHash: 'hash-draft-1',
     source: 'lesson_population',
     status: 'active',

@@ -60,7 +60,6 @@ export function registerResumeBasicTests() {
       });
       expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
       expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
-      expect(api.listProfileContents).not.toHaveBeenCalled();
 
       expect(screen.queryByRole('heading', { name: /Add lesson source/i })).toBeNull();
       expect(screen.queryByRole('heading', { name: /Review and share/i })).toBeNull();
@@ -765,7 +764,7 @@ export function registerResumeBasicTests() {
           state: 'not_applicable',
           operationState: null,
           profile: {
-            profileId: 'profiles/alex.md',
+            studentId: 'student-alex',
             revisionId: 'revision-active',
             revisionHash: 'b'.repeat(64),
             content: 'PROFILE CONTENT',
@@ -784,7 +783,6 @@ export function registerResumeBasicTests() {
         expect.any(String),
         expect.objectContaining({
           step: 'context',
-          profileId: 'profiles/alex.md',
           profileRevisionId: 'revision-active',
           profileRevisionHash: 'b'.repeat(64),
         }),
@@ -835,8 +833,7 @@ export function registerResumeBasicTests() {
         }),
       );
       vi.mocked(api.getProfileContent).mockResolvedValueOnce({
-        id: confirmedProfile.profileId,
-        label: 'Alex Profile',
+        studentId: resumedSession.studentId,
         content: 'PROFILE CONTENT',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -859,7 +856,7 @@ export function registerResumeBasicTests() {
 
       await screen.findByRole('heading', { name: /Add teaching context/i });
       await waitFor(() =>
-        expect(api.getProfileContent).toHaveBeenCalledWith(confirmedProfile.profileId),
+        expect(api.getProfileContent).toHaveBeenCalledWith(resumedSession.studentId),
       );
       expect(
         screen.queryByRole('button', { name: /Populate first profile from lesson/i }),
@@ -882,7 +879,7 @@ export function registerResumeBasicTests() {
         'session-confirmed-profile-refresh',
         expect.objectContaining({
           patch: expect.objectContaining({
-            selectedProfileId: confirmedProfile.profileId,
+            selectedProfileId: resumedSession.studentId,
             selectedProfileRevisionId: confirmedProfile.profileRevisionId,
             selectedProfileRevisionHash: confirmedProfile.profileRevisionHash,
           }),
@@ -1251,14 +1248,6 @@ export function registerResumeBasicTests() {
 
     it('opens server job context as immutable historical output', async () => {
       const _user = createMinimalUser();
-      let resolveProfileOptions: (value: { profiles: { id: string; label: string }[] }) => void =
-        () => {};
-      vi.mocked(api.listProfileContents).mockImplementationOnce(
-        () =>
-          new Promise<{ profiles: { id: string; label: string }[] }>((resolve) => {
-            resolveProfileOptions = (value) => resolve(value);
-          }),
-      );
       vi.mocked(api.listUserJobs).mockResolvedValueOnce({
         jobs: [
           {
@@ -1382,7 +1371,6 @@ export function registerResumeBasicTests() {
       );
       expect(api.confirmStudentAssignmentSession).not.toHaveBeenCalled();
       expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
-      resolveProfileOptions({ profiles: [{ id: 'profile-default.md', label: 'Default Profile' }] });
       expect(screen.getAllByText(/fetch failed/i).length).toBeGreaterThan(0);
       expect(screen.queryByRole('button', { name: /^Generate assignment$/i })).toBeNull();
       expect(api.generateDraft).not.toHaveBeenCalled();

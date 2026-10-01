@@ -32,8 +32,8 @@ const EMPTY_OVERVIEW_DATA: OverviewData = {
   scheduleBilling: null,
 };
 
-function createOverviewKey(studentId: string, profileId?: string | null): string {
-  return `${studentId}:${profileId?.trim() ?? ''}`;
+function createOverviewKey(studentId: string): string {
+  return studentId;
 }
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
@@ -420,7 +420,7 @@ export const StudentOverviewPage: React.FC = () => {
   const [loadedOverviewKey, setLoadedOverviewKey] = useState<string | null>(null);
   const [overviewRetryCount, setOverviewRetryCount] = useState(0);
   const latestOverviewRequestRef = useRef(0);
-  const currentOverviewKey = createOverviewKey(studentId, student?.profileId);
+  const currentOverviewKey = createOverviewKey(studentId);
 
   useEffect(() => {
     const requestId = latestOverviewRequestRef.current + 1;
@@ -440,7 +440,7 @@ export const StudentOverviewPage: React.FC = () => {
       return undefined;
     }
 
-    const requestOverviewKey = createOverviewKey(studentId, student?.profileId);
+    const requestOverviewKey = createOverviewKey(studentId);
     setOverviewLoading(true);
     setOverviewError(null);
 
@@ -482,7 +482,7 @@ export const StudentOverviewPage: React.FC = () => {
     return () => {
       latestOverviewRequestRef.current += 1;
     };
-  }, [overviewRetryCount, student?.profileId, studentId, studentLoading]);
+  }, [overviewRetryCount, studentId, studentLoading]);
 
   const overviewReady = loadedOverviewKey === currentOverviewKey && !overviewLoading;
   const shellLoading = studentLoading || !overviewReady;

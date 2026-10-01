@@ -13,7 +13,7 @@ export type RevisionStatus = 'draft' | 'active' | 'deprecated';
 
 export interface ProfileRevisionRecord {
   id: string;
-  profileId: string;
+  studentId: string;
   content: string;
   structuredContent?: FoundationalProfile | null;
   contentHash: string;
@@ -26,6 +26,8 @@ export interface ProfileRevisionRecord {
   createdAt: Date;
   createdBy: string | null;
   restoredFromRevisionId: string | null;
+  /** Original version label for a migrated historical revision, never authority. */
+  legacyVersionLabel?: string | null;
 }
 
 export interface ProfileRevisionListResult {

@@ -1,14 +1,12 @@
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import { getProfileById } from '../domain/profile-repository.js';
-import { getProfileRevisionById } from '../domain/profile-revision-repository.js';
+import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import { listStudents } from '../domain/student-repository.js';
 import {
   deriveFoundationalProfileFromMarkdown,
   type FoundationalProfile,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
-import { getCuratedLegacyFoundationalProfile } from './legacy-profile-curation.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 
@@ -16,7 +14,7 @@ const PROFILE_PAGE_LIMIT = 200;
 
 export interface MigrateLegacyProfilesRequest {
   apply?: boolean;
-  profileId?: string | null;
+  studentId?: string | null;
   reviewerId?: string | null;
   status?: 'draft' | 'active';
   limit?: number;
@@ -25,7 +23,6 @@ export interface MigrateLegacyProfilesRequest {
 export interface LegacyProfileMigrationItem {
   studentId: string | null;
   studentName: string | null;
-  profileId: string;
   label: string;
   sourceRevisionId: string | null;
   originalMarkdown: string | null;
@@ -53,7 +50,7 @@ export interface LegacyProfileMigrationReportMetadata {
   generatedAt: string;
   mode: 'dry-run' | 'apply:draft' | 'apply:active';
   filters: {
-    profileId: string | null;
+    studentId: string | null;
     reviewerId: string | null;
     limit: number | null;
   };
@@ -75,11 +72,9 @@ interface LegacyProfileMigrationDependencies {
   students: {
     list: typeof listStudents;
   };
-  profiles: {
-    getById: typeof getProfileById;
-  };
+
   revisions: {
-    getById: typeof getProfileRevisionById;
+    getById: typeof getActiveProfileRevision;
   };
   profileContent: {
     saveRevision: typeof saveProfileRevisionContent;
@@ -94,11 +89,9 @@ function getDependencies(
     students: overrides?.students ?? {
       list: listStudents,
     },
-    profiles: overrides?.profiles ?? {
-      getById: getProfileById,
-    },
+
     revisions: overrides?.revisions ?? {
-      getById: getProfileRevisionById,
+      getById: getActiveProfileRevision,
     },
     profileContent: overrides?.profileContent ?? {
       saveRevision: saveProfileRevisionContent,
@@ -113,14 +106,12 @@ async function listMigrationCandidates(
   const items: {
     studentId: string;
     studentName: string;
-    profileId: string;
   }[] = [];
   let offset = 0;
   const requestedLimit =
     typeof request.limit === 'number' && request.limit > 0
       ? request.limit
       : Number.POSITIVE_INFINITY;
-  const seenProfileIds = new Set<string>();
 
   while (items.length < requestedLimit) {
     const page = await dependencies.students.list({
@@ -129,27 +120,14 @@ async function listMigrationCandidates(
       order: 'asc',
     });
     const nextItems = page.items
-      .filter((student) => Boolean(student.profileId))
-      .filter((student) => !request.profileId || student.profileId === request.profileId)
-      .filter((student) => {
-        const profileId = student.profileId;
-        if (!profileId || seenProfileIds.has(profileId)) {
-          return false;
-        }
-        seenProfileIds.add(profileId);
-        return true;
-      })
-      .map((student) => ({
-        studentId: student.id,
-        studentName: student.student,
-        profileId: student.profileId as string,
-      }));
+      .filter((student) => !request.studentId || student.id === request.studentId)
+      .map((student) => ({ studentId: student.id, studentName: student.student }));
     items.push(...nextItems);
 
     if (
       page.items.length === 0 ||
       offset + page.items.length >= page.total ||
-      (request.profileId && nextItems.length > 0)
+      (request.studentId && nextItems.length > 0)
     ) {
       break;
     }
@@ -196,7 +174,7 @@ export function createLegacyProfileMigrationReport(args: {
       generatedAt,
       mode: args.request.apply ? `apply:${status}` : 'dry-run',
       filters: {
-        profileId: args.request.profileId ?? null,
+        studentId: args.request.studentId ?? null,
         reviewerId: args.request.reviewerId ?? null,
         limit: typeof args.request.limit === 'number' ? args.request.limit : null,
       },
@@ -219,7 +197,7 @@ export function renderLegacyProfileMigrationSummaryMarkdown(
     '',
     `- Generated at: ${report.metadata.generatedAt}`,
     `- Mode: ${report.metadata.mode}`,
-    `- Target profile: ${report.metadata.filters.profileId ?? 'all student-bound profiles'}`,
+    `- Target profile: ${report.metadata.filters.studentId ?? 'all student-bound profiles'}`,
     `- Limit: ${report.metadata.filters.limit ?? 'none'}`,
     `- Reviewer: ${report.metadata.filters.reviewerId ?? 'none'}`,
     '',
@@ -241,7 +219,7 @@ export function renderLegacyProfileMigrationSummaryMarkdown(
 
   for (const item of report.items) {
     lines.push(
-      `- ${item.studentName ?? item.label} | \`${item.profileId}\` | action=${item.action} | sourceRevision=${item.sourceRevisionId ?? 'none'} | migratedRevision=${item.migratedRevision?.id ?? 'none'} | reason=${renderMigrationReason(item)}`,
+      `- ${item.studentName ?? item.label} | \`${item.studentId}\` | action=${item.action} | sourceRevision=${item.sourceRevisionId ?? 'none'} | migratedRevision=${item.migratedRevision?.id ?? 'none'} | reason=${renderMigrationReason(item)}`,
     );
   }
 
@@ -253,7 +231,7 @@ export function renderLegacyProfileMigrationItemMarkdown(item: LegacyProfileMigr
     `# ${item.label}`,
     '',
     `- Student: ${item.studentName ?? 'unknown'}${item.studentId ? ` (\`${item.studentId}\`)` : ''}`,
-    `- Profile ID: \`${item.profileId}\``,
+    `- Profile ID: \`${item.studentId}\``,
     `- Action: ${item.action}`,
     `- Source revision: ${item.sourceRevisionId ?? 'none'}`,
     `- Migrated revision: ${item.migratedRevision?.id ?? 'none'}`,
@@ -279,12 +257,11 @@ export async function migrateLegacyProfiles(args: {
   const items: LegacyProfileMigrationItem[] = [];
 
   for (const profile of profiles) {
-    const profileRecord = await dependencies.profiles.getById(profile.profileId);
-    if (!profileRecord?.activeRevisionId) {
+    const activeRevision = await dependencies.revisions.getById(profile.studentId);
+    if (!activeRevision) {
       items.push({
         studentId: profile.studentId,
         studentName: profile.studentName,
-        profileId: profile.profileId,
         label: profile.studentName,
         sourceRevisionId: null,
         originalMarkdown: null,
@@ -296,33 +273,10 @@ export async function migrateLegacyProfiles(args: {
       });
       continue;
     }
-
-    const activeRevision = await dependencies.revisions.getById(
-      profile.profileId,
-      profileRecord.activeRevisionId,
-    );
-    if (!activeRevision) {
-      items.push({
-        studentId: profile.studentId,
-        studentName: profile.studentName,
-        profileId: profile.profileId,
-        label: profile.studentName,
-        sourceRevisionId: profileRecord.activeRevisionId,
-        originalMarkdown: null,
-        structuredContent: null,
-        renderedContent: null,
-        action: 'skipped',
-        reason: 'missing_active_revision',
-        migratedRevision: null,
-      });
-      continue;
-    }
-
     if (activeRevision.structuredContent) {
       items.push({
         studentId: profile.studentId,
         studentName: profile.studentName,
-        profileId: profile.profileId,
         label: profile.studentName,
         sourceRevisionId: activeRevision.id,
         originalMarkdown: activeRevision.content,
@@ -339,7 +293,6 @@ export async function migrateLegacyProfiles(args: {
       items.push({
         studentId: profile.studentId,
         studentName: profile.studentName,
-        profileId: profile.profileId,
         label: profile.studentName,
         sourceRevisionId: activeRevision.id,
         originalMarkdown: activeRevision.content,
@@ -352,14 +305,11 @@ export async function migrateLegacyProfiles(args: {
       continue;
     }
 
-    const structuredContent =
-      getCuratedLegacyFoundationalProfile(profile.profileId) ??
-      deriveFoundationalProfileFromMarkdown(activeRevision.content);
+    const structuredContent = deriveFoundationalProfileFromMarkdown(activeRevision.content);
     if (!structuredContent) {
       items.push({
         studentId: profile.studentId,
         studentName: profile.studentName,
-        profileId: profile.profileId,
         label: profile.studentName,
         sourceRevisionId: activeRevision.id,
         originalMarkdown: activeRevision.content,
@@ -374,7 +324,7 @@ export async function migrateLegacyProfiles(args: {
 
     const renderedContent = renderFoundationalProfileContent(structuredContent);
     const migratedRevision = request.apply
-      ? await dependencies.profileContent.saveRevision(profile.profileId, renderedContent, {
+      ? await dependencies.profileContent.saveRevision(profile.studentId, renderedContent, {
           source: 'legacy_normalization',
           status: request.status ?? 'draft',
           createdBy: request.reviewerId ?? null,
@@ -386,7 +336,6 @@ export async function migrateLegacyProfiles(args: {
     items.push({
       studentId: profile.studentId,
       studentName: profile.studentName,
-      profileId: profile.profileId,
       label: profile.studentName,
       sourceRevisionId: activeRevision.id,
       originalMarkdown: activeRevision.content,

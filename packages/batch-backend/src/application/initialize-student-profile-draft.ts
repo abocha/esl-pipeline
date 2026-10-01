@@ -8,11 +8,7 @@ import {
 } from './foundational-profile.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
-import {
-  ensureStudentCanonicalProfileBinding,
-  getStudentProfileById,
-  type StudentStoreOverrides,
-} from './student-profiles-store.js';
+import { getStudentProfileById, type StudentStoreOverrides } from './student-profiles-store.js';
 
 export interface InitializeStudentProfileDraftRequest {
   studentId: string;
@@ -21,7 +17,6 @@ export interface InitializeStudentProfileDraftRequest {
 
 export interface InitializeStudentProfileDraftResult {
   studentId: string;
-  profileId: string;
   draftRevision: ProfileRevisionDetailResponse;
 }
 
@@ -29,7 +24,6 @@ interface InitializeStudentProfileDraftDependencies {
   config: BatchBackendConfig;
   students: {
     getById: typeof getStudentProfileById;
-    ensureCanonicalProfileBinding: typeof ensureStudentCanonicalProfileBinding;
   };
   revisions: {
     getActive: typeof getActiveProfileRevision;
@@ -58,7 +52,6 @@ function getDependencies(
     config: overrides?.config ?? loadConfig(),
     students: overrides?.students ?? {
       getById: getStudentProfileById,
-      ensureCanonicalProfileBinding: ensureStudentCanonicalProfileBinding,
     },
     revisions: overrides?.revisions ?? {
       getActive: getActiveProfileRevision,
@@ -83,27 +76,7 @@ export async function initializeStudentProfileDraft(args: {
     throw new InitializeStudentProfileDraftError('Student not found', 'student_not_found', 404);
   }
 
-  const ensuredStudent = await dependencies.students.ensureCanonicalProfileBinding(
-    request.studentId,
-    {
-      config: dependencies.config,
-      bindingAudit: {
-        reason: 'student_area_profile_initialize',
-        changedBy: request.reviewerId ?? null,
-      },
-    } satisfies StudentStoreOverrides,
-  );
-
-  const profileId = ensuredStudent?.profileId ?? null;
-  if (!profileId) {
-    throw new InitializeStudentProfileDraftError(
-      'Unable to create a canonical learner profile binding',
-      'profile_binding_failed',
-      500,
-    );
-  }
-
-  const activeRevision = await dependencies.revisions.getActive(profileId);
+  const activeRevision = await dependencies.revisions.getActive(request.studentId);
   if (activeRevision) {
     throw new InitializeStudentProfileDraftError(
       'Student already has an initialized learner profile',
@@ -114,7 +87,7 @@ export async function initializeStudentProfileDraft(args: {
 
   const structuredContent = normalizeFoundationalProfile(createEmptyFoundationalProfile());
   const draftRevision = await dependencies.profileContent.saveRevision(
-    profileId,
+    request.studentId,
     renderFoundationalProfileContent(structuredContent),
     {
       source: 'create',
@@ -127,7 +100,6 @@ export async function initializeStudentProfileDraft(args: {
 
   return {
     studentId: request.studentId,
-    profileId,
     draftRevision,
   };
 }

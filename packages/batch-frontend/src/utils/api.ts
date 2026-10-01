@@ -14,13 +14,9 @@
  * - POST /recordings/:id/transcribe (authenticated)
  * - GET /config/job-options for metadata
  * - GET /config/students for student profiles
- * - GET /config/prompts for prompt templates and profiles
+ * - GET /config/prompts for prompt templates
  * - GET /students, /students/:id, /students/:id/timeline
- * - GET /students/:id/bindings, /students/:id/bindings/active
  * - POST /students, PUT /students/:id, DELETE /students/:id
- * - GET /profiles, /profiles/:id, PUT /profiles/:id, DELETE /profiles/:id
- * - GET /profiles/revisions, GET /profiles/revisions/:revisionId
- * - POST /profiles/revisions/:revisionId/restore
  * - POST /generation/drafts
  * - GET /drafts/:id
  * - GET /jobs/events (SSE) for live updates
@@ -216,7 +212,6 @@ export interface CreateManualTranscriptSourceInput {
 export interface StudentOption {
   id: string;
   name: string;
-  profileId?: string | null;
 }
 
 export interface StudentOptionsResponse {
@@ -232,7 +227,6 @@ export interface StudentProfile {
   accentPreference?: string | null;
   voices?: Record<string, string>;
   manifestPreset?: string | null;
-  profileId?: string | null;
   archivedAt?: string | null;
   archivedBy?: string | null;
   archiveReason?: string | null;
@@ -255,7 +249,6 @@ export interface StudentProfileInput {
   dbId?: string | null;
   pageParentId?: string | null;
   voices?: Record<string, string>;
-  profileId?: string | null;
   starterProfile?: StarterProfileInput | null;
 }
 export type StudentProfileUpdate = Partial<StudentProfileInput>;
@@ -268,18 +261,8 @@ export interface StudentProfileListResponse {
   order: 'asc' | 'desc';
 }
 
-export interface ProfileContentOption {
-  id: string;
-  label: string;
-}
-
-export interface ProfileContentListResponse {
-  profiles: ProfileContentOption[];
-}
-
 export interface ProfileContentResponse {
-  id: string;
-  label: string;
+  studentId: string;
   content: string;
   structuredContent?: FoundationalProfile | null;
   currentRevisionId: string | null;
@@ -301,7 +284,7 @@ export interface FoundationalProfile {
 
 export interface ProfileRevisionSummaryResponse {
   id: string;
-  profileId: string;
+  studentId: string;
   contentHash: string;
   source:
     | 'create'
@@ -393,7 +376,6 @@ export type StudentTimelineType =
   | 'draft_saved'
   | 'job_awaiting_approval'
   | 'job_completed'
-  | 'student_profile_binding_changed'
   | 'profile_revision_saved'
   | 'profile_revision_restored'
   | 'profile_revision_activated'
@@ -893,7 +875,6 @@ export interface StudentProfileCandidatePromotionRequest {
 
 export interface StudentProfileCandidatePromotionResponse {
   draftRevisionId: string;
-  profileId: string;
   includedCandidateIds: string[];
   excludedCandidateIds: string[];
   contentHash?: string | null;
@@ -902,7 +883,6 @@ export interface StudentProfileCandidatePromotionResponse {
 
 export interface InitializeStudentProfileDraftResponse {
   draftRevisionId: string;
-  profileId: string;
   draftRevision: ProfileRevisionDetailResponse;
 }
 
@@ -961,25 +941,6 @@ function mapStudentProfileCandidate(
   };
 }
 
-export interface StudentProfileBindingResponse {
-  id: string;
-  studentId: string;
-  profileId: string;
-  effectiveFrom: string;
-  effectiveTo: string | null;
-  reason: string | null;
-  changedBy: string | null;
-  createdAt: string;
-}
-
-export interface StudentProfileBindingListResponse {
-  items: StudentProfileBindingResponse[];
-  total: number;
-  limit: number;
-  offset: number;
-  order: 'asc' | 'desc';
-}
-
 export interface StudentOverviewSurfaceResponse {
   profile: ProfileContentResponse | null;
   revisions: ProfileRevisionListResponse;
@@ -994,7 +955,6 @@ export interface StudentLearningSurfaceResponse {
   revisions: ProfileRevisionListResponse;
   memory: StudentMemoryOverviewResponse;
   memoryHealth?: StudentMemoryHealthResponse | null;
-  bindings: StudentProfileBindingListResponse;
   candidates: StudentProfileCandidateListResponse;
 }
 
@@ -1020,10 +980,8 @@ export interface PromptOption {
 
 export interface PromptOptionsResponse {
   templates: PromptOption[];
-  profiles: PromptOption[];
   defaults: {
     templateId: string | null;
-    profileId: string | null;
   };
 }
 
@@ -1039,7 +997,8 @@ export interface PromptPackageResponse {
   storageUri: string;
   text: string;
   profileSnapshot?: {
-    resolvedProfileId: string;
+    /** Obsolete standalone identity retained only for historical prompt provenance. */
+    resolvedProfileId: string | null;
     resolvedProfileHash: string;
     resolvedProfileRevisionId: string | null;
     resolvedProfileUpdatedAt: string | null;
@@ -1098,7 +1057,8 @@ export interface PromptPackageLineageResponse {
   updatedAt: string;
   profile: {
     snapshot: {
-      profileId: string | null;
+      /** Obsolete historical metadata; never a runtime profile root. */
+      profileId?: string | null;
       revisionId: string | null;
       hash: string | null;
       versionLabel: string | null;
@@ -1106,7 +1066,7 @@ export interface PromptPackageLineageResponse {
       updatedAt: string | null;
     };
     current: {
-      profileId: string | null;
+      studentId?: string | null;
       revisionId: string | null;
       hash: string | null;
       versionLabel: string | null;
@@ -1142,16 +1102,6 @@ export interface PromptPackageLineageResponse {
     retrievalPolicyVersion: string | null;
     layerAvailability: PromptPackageMemoryLayerAvailability;
   };
-  bindingAtCreation?: {
-    bindingId: string;
-    studentId: string;
-    profileId: string;
-    effectiveFrom: string;
-    effectiveTo: string | null;
-    reason: string | null;
-    changedBy: string | null;
-    createdAt: string;
-  } | null;
 }
 
 export interface JobProvenanceResponse {
@@ -2267,20 +2217,10 @@ export async function deleteStudentProfile(studentId: string): Promise<void> {
   }
 }
 
-export async function listProfileContents(): Promise<ProfileContentListResponse> {
-  try {
-    const response = await apiClient.get(buildApiProxyPath('/profiles'));
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function getProfileContent(profileId: string): Promise<ProfileContentResponse> {
+export async function getProfileContent(studentId: string): Promise<ProfileContentResponse> {
   try {
     const response = await apiClient.get(
-      buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}`),
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile`),
     );
     return response.data;
   } catch (error: unknown) {
@@ -2293,13 +2233,13 @@ export async function getProfileContent(profileId: string): Promise<ProfileConte
 }
 
 export async function upsertProfileContent(
-  profileId: string,
+  studentId: string,
   content: string | null,
   structuredContent?: FoundationalProfile,
 ): Promise<ProfileContentResponse> {
   try {
     const response = await apiClient.put(
-      buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}`),
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile`),
       {
         ...(content !== null ? { content } : {}),
         ...(structuredContent ? { structuredContent } : {}),
@@ -2315,20 +2255,8 @@ export async function upsertProfileContent(
   }
 }
 
-export async function deleteProfileContent(profileId: string): Promise<void> {
-  try {
-    await apiClient.delete(buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}`));
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to delete profiles.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
 export async function listProfileRevisions(
-  profileId: string,
+  studentId: string,
   params: {
     limit?: number;
     offset?: number;
@@ -2336,9 +2264,12 @@ export async function listProfileRevisions(
   } = {},
 ): Promise<ProfileRevisionListResponse> {
   try {
-    const response = await apiClient.get(buildApiProxyPath('/profiles/revisions'), {
-      params: { ...params, profileId },
-    });
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile/revisions`),
+      {
+        params,
+      },
+    );
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
@@ -2350,13 +2281,14 @@ export async function listProfileRevisions(
 }
 
 export async function getProfileRevision(
-  profileId: string,
+  studentId: string,
   revisionId: string,
 ): Promise<ProfileRevisionDetailResponse> {
   try {
     const response = await apiClient.get(
-      buildApiProxyPath(`/profiles/revisions/${encodeURIComponent(revisionId)}`),
-      { params: { profileId } },
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile/revisions/${encodeURIComponent(revisionId)}`,
+      ),
     );
     return response.data;
   } catch (error: unknown) {
@@ -2369,13 +2301,15 @@ export async function getProfileRevision(
 }
 
 export async function restoreProfileRevision(
-  profileId: string,
+  studentId: string,
   revisionId: string,
 ): Promise<ProfileContentResponse> {
   try {
     const response = await apiClient.post(
-      buildApiProxyPath(`/profiles/revisions/${encodeURIComponent(revisionId)}/restore`),
-      { profileId },
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile/revisions/${encodeURIComponent(revisionId)}/restore`,
+      ),
+      {},
     );
     return response.data;
   } catch (error: unknown) {
@@ -2388,14 +2322,16 @@ export async function restoreProfileRevision(
 }
 
 export async function saveProfileDraftRevision(
-  profileId: string,
+  studentId: string,
   payload: SaveProfileDraftRevisionRequest,
 ): Promise<ProfileRevisionDetailResponse> {
   try {
-    const response = await apiClient.post(buildApiProxyPath('/profiles/revisions'), {
-      ...payload,
-      profileId,
-    });
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile/revisions`),
+      {
+        ...payload,
+      },
+    );
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
@@ -2407,13 +2343,15 @@ export async function saveProfileDraftRevision(
 }
 
 export async function activateProfileRevision(
-  profileId: string,
+  studentId: string,
   revisionId: string,
 ): Promise<ProfileRevisionDetailResponse> {
   try {
     const response = await apiClient.post(
-      buildApiProxyPath(`/profiles/revisions/${encodeURIComponent(revisionId)}/activate`),
-      { profileId },
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile/revisions/${encodeURIComponent(revisionId)}/activate`,
+      ),
+      {},
     );
     return response.data;
   } catch (error: unknown) {
@@ -2576,50 +2514,6 @@ export async function activateTemplateRevision(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to activate template revisions.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function listStudentProfileBindings(
-  studentId: string,
-  params: {
-    limit?: number;
-    offset?: number;
-    order?: 'asc' | 'desc';
-  } = {},
-): Promise<StudentProfileBindingListResponse> {
-  try {
-    const response = await apiClient.get(
-      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/bindings`),
-      { params },
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to view profile bindings.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function getActiveStudentProfileBinding(
-  studentId: string,
-  at?: string,
-): Promise<StudentProfileBindingResponse> {
-  try {
-    const response = await apiClient.get(
-      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/bindings/active`),
-      {
-        params: at ? { at } : undefined,
-      },
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to view active profile bindings.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

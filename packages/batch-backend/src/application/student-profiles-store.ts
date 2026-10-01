@@ -1,13 +1,6 @@
-import path from 'node:path';
-
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import { getProfileById, upsertProfile } from '../domain/profile-repository.js';
 import type { StudentRecord } from '../domain/student-model.js';
-import {
-  clearActiveStudentProfileBinding,
-  setActiveStudentProfileBinding,
-} from '../domain/student-profile-binding-repository.js';
 import {
   archiveStudent,
   deleteStudent,
@@ -39,7 +32,6 @@ export interface StudentProfileData {
   voices?: Record<string, string>;
   manifestPreset?: string | null;
   accentPreference?: string | null;
-  profileId?: string | null;
   archivedAt?: string | null;
   archivedBy?: string | null;
   archiveReason?: string | null;
@@ -87,21 +79,13 @@ interface StudentStoreDependencies {
     archive: typeof archiveStudent;
     restore: typeof restoreStudent;
   };
-  profiles: {
-    getById: typeof getProfileById;
-    upsert: typeof upsertProfile;
-    saveRevision: typeof saveProfileRevisionContent;
-  };
-  bindings: {
-    setActive: typeof setActiveStudentProfileBinding;
-    clearActive: typeof clearActiveStudentProfileBinding;
-  };
+  revisions: { saveRevision: typeof saveProfileRevisionContent };
 }
 
 export interface StudentStoreOverrides {
   config?: BatchBackendConfig;
   workspaceId?: string | null;
-  bindingAudit?: {
+  audit?: {
     reason?: string | null;
     changedBy?: string | null;
   };
@@ -121,7 +105,6 @@ export class StudentProfileStoreError extends Error {
 }
 
 const MAX_PAGE_LIMIT = 500;
-const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
 
 interface StudentProfileEntry extends StudentProfileData {}
 
@@ -136,14 +119,8 @@ function getDependencies(overrides?: StudentStoreOverrides): StudentStoreDepende
       archive: overrides?.deps?.students?.archive ?? archiveStudent,
       restore: overrides?.deps?.students?.restore ?? restoreStudent,
     },
-    profiles: {
-      getById: overrides?.deps?.profiles?.getById ?? getProfileById,
-      upsert: overrides?.deps?.profiles?.upsert ?? upsertProfile,
-      saveRevision: overrides?.deps?.profiles?.saveRevision ?? saveProfileRevisionContent,
-    },
-    bindings: {
-      setActive: overrides?.deps?.bindings?.setActive ?? setActiveStudentProfileBinding,
-      clearActive: overrides?.deps?.bindings?.clearActive ?? clearActiveStudentProfileBinding,
+    revisions: {
+      saveRevision: overrides?.deps?.revisions?.saveRevision ?? saveProfileRevisionContent,
     },
   };
 }
@@ -164,34 +141,6 @@ function normalizeOptionalString(value?: string | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function normalizeProfileId(value: string): string {
-  return value.replaceAll('\\', '/').replace(/^\/+/, '');
-}
-
-function validateProfileId(value: string): string {
-  const normalized = normalizeProfileId(value.trim());
-  if (!normalized) {
-    throw new StudentProfileStoreError('profileId is required', 'profile_id_missing', 400);
-  }
-  const ext = path.extname(normalized).toLowerCase();
-  if (!PROFILE_EXTENSIONS.has(ext)) {
-    throw new StudentProfileStoreError(
-      'profileId must end with .md or .txt',
-      'profile_id_invalid',
-      400,
-    );
-  }
-  const segments = normalized.split('/').filter(Boolean);
-  if (segments.includes('..')) {
-    throw new StudentProfileStoreError(
-      'profileId must not include parent traversal segments',
-      'profile_id_outside_root',
-      400,
-    );
-  }
-  return normalized;
-}
-
 function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<StudentProfileInput> {
   const sanitized: Partial<StudentProfileInput> = {};
   if ('student' in input && typeof input.student === 'string') {
@@ -206,12 +155,6 @@ function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<Stud
   }
   if ('manifestPreset' in input)
     sanitized.manifestPreset = normalizeOptionalString(input.manifestPreset);
-  if ('profileId' in input) {
-    sanitized.profileId =
-      input.profileId === null || input.profileId === undefined
-        ? null
-        : validateProfileId(input.profileId);
-  }
   if ('voices' in input) {
     sanitized.voices = input.voices ? { ...input.voices } : {};
   }
@@ -231,7 +174,6 @@ function toStudentProfileData(entry: StudentProfileEntry): StudentProfileData {
     colorPreset: entry.colorPreset ?? null,
     accentPreference: entry.accentPreference ?? null,
     manifestPreset: entry.manifestPreset ?? null,
-    profileId: entry.profileId ?? null,
     voices: entry.voices ?? {},
     archivedAt: entry.archivedAt ?? null,
     archivedBy: entry.archivedBy ?? null,
@@ -249,7 +191,6 @@ function mapStudentRecordToEntry(record: StudentRecord): StudentProfileEntry {
     colorPreset: normalizeOptionalString(record.colorPreset),
     accentPreference: normalizeOptionalString(record.accentPreference),
     manifestPreset: normalizeOptionalString(record.manifestPreset),
-    profileId: normalizeOptionalString(record.profileId),
     voices: record.voices ? { ...record.voices } : {},
     archivedAt: record.archivedAt ? record.archivedAt.toISOString() : null,
     archivedBy: normalizeOptionalString(record.archivedBy),
@@ -293,47 +234,11 @@ function applyListFilters(
   };
 }
 
-function profileLabelFromId(profileId: string): string {
-  const base = path.basename(profileId, path.extname(profileId));
-  const normalized = base.replaceAll(/[_-]+/g, ' ').trim();
-  return normalized.length > 0 ? normalized : profileId;
-}
-
-export function deriveStarterProfileId(studentId: string): string {
-  return `profiles/students/${studentId}.md`;
-}
-
-async function syncBindingForStudent(
-  studentId: string,
-  profileId: string | null,
-  dependencies: StudentStoreDependencies,
-  reason: string,
-  changedBy: string | null,
-): Promise<void> {
-  if (!profileId) {
-    await dependencies.bindings.clearActive(studentId, { reason, changedBy });
-    return;
-  }
-
-  await dependencies.profiles.upsert({
-    id: profileId,
-    label: profileLabelFromId(profileId),
-    activeRevisionId: null,
-  });
-
-  await dependencies.bindings.setActive({
-    studentId,
-    profileId,
-    reason,
-    changedBy,
-  });
-}
-
 async function createStudentProfileDb(
   input: StudentProfileInput,
   dependencies: StudentStoreDependencies,
   options?: {
-    bindingAudit?: {
+    audit?: {
       reason?: string | null;
       changedBy?: string | null;
     };
@@ -355,27 +260,6 @@ async function createStudentProfileDb(
   }
 
   const starterProfile = sanitized.starterProfile ?? null;
-  const profileId = sanitized.profileId ?? (starterProfile ? deriveStarterProfileId(id) : null);
-
-  if (starterProfile && profileId) {
-    const existingProfile = await dependencies.profiles.getById(profileId);
-    if (existingProfile?.activeRevisionId) {
-      throw new StudentProfileStoreError(
-        'starterProfile requires a new or empty profileId',
-        'starter_profile_profile_conflict',
-        409,
-      );
-    }
-  }
-
-  if (profileId) {
-    await dependencies.profiles.upsert({
-      id: profileId,
-      label: profileLabelFromId(profileId),
-      activeRevisionId: null,
-    });
-  }
-
   let inserted: StudentRecord;
   try {
     inserted = await dependencies.students.insert({
@@ -387,7 +271,6 @@ async function createStudentProfileDb(
       colorPreset: sanitized.colorPreset ?? null,
       accentPreference: sanitized.accentPreference ?? null,
       manifestPreset: sanitized.manifestPreset ?? null,
-      profileId,
       voices: sanitized.voices ?? {},
     });
   } catch (error) {
@@ -399,17 +282,17 @@ async function createStudentProfileDb(
   }
 
   try {
-    if (starterProfile && profileId) {
+    if (starterProfile) {
       const starterProfileStructuredContent = buildStarterProfileStructuredContent(starterProfile);
       const starterProfileContent = renderStarterProfileContent({
         studentName: student,
         starterProfile,
       });
 
-      await dependencies.profiles.saveRevision(profileId, starterProfileContent, {
+      await dependencies.revisions.saveRevision(id, starterProfileContent, {
         source: 'starter_profile_form',
         status: 'active',
-        createdBy: options?.bindingAudit?.changedBy ?? null,
+        createdBy: options?.audit?.changedBy ?? null,
         structuredContent: starterProfileStructuredContent,
       });
     }
@@ -417,14 +300,6 @@ async function createStudentProfileDb(
     await dependencies.students.remove(inserted.id).catch(() => false);
     throw error;
   }
-
-  await syncBindingForStudent(
-    inserted.id,
-    inserted.profileId ?? null,
-    dependencies,
-    options?.bindingAudit?.reason ?? 'student_create',
-    options?.bindingAudit?.changedBy ?? null,
-  );
 
   return toStudentProfileData(mapStudentRecordToEntry(inserted));
 }
@@ -434,7 +309,7 @@ async function updateStudentProfileDb(
   input: Partial<StudentProfileInput>,
   options: {
     dependencies: StudentStoreDependencies;
-    bindingAudit?: {
+    audit?: {
       reason?: string | null;
       changedBy?: string | null;
     };
@@ -473,17 +348,8 @@ async function updateStudentProfileDb(
     manifestPreset: has('manifestPreset')
       ? (sanitized.manifestPreset ?? null)
       : existing.manifestPreset,
-    profileId: has('profileId') ? (sanitized.profileId ?? null) : existing.profileId,
     voices: has('voices') ? (sanitized.voices ?? {}) : existing.voices,
   };
-
-  if (merged.profileId) {
-    await options.dependencies.profiles.upsert({
-      id: merged.profileId,
-      label: profileLabelFromId(merged.profileId),
-      activeRevisionId: null,
-    });
-  }
 
   const persisted = await options.dependencies.students.upsert({
     id: merged.id,
@@ -494,17 +360,8 @@ async function updateStudentProfileDb(
     colorPreset: merged.colorPreset,
     accentPreference: merged.accentPreference,
     manifestPreset: merged.manifestPreset,
-    profileId: merged.profileId,
     voices: merged.voices,
   });
-
-  await syncBindingForStudent(
-    persisted.id,
-    persisted.profileId ?? null,
-    options.dependencies,
-    options.bindingAudit?.reason ?? 'student_update',
-    options.bindingAudit?.changedBy ?? null,
-  );
 
   return toStudentProfileData(mapStudentRecordToEntry(persisted));
 }
@@ -561,7 +418,7 @@ export async function createStudentProfile(
     { ...input, workspaceId: overrides?.workspaceId ?? input.workspaceId ?? null },
     getDependencies(overrides),
     {
-      bindingAudit: overrides?.bindingAudit,
+      audit: overrides?.audit,
     },
   );
 }
@@ -581,31 +438,7 @@ export async function updateStudentProfile(
     { ...input, workspaceId: overrides?.workspaceId ?? input.workspaceId ?? null },
     {
       dependencies: getDependencies(overrides),
-      bindingAudit: overrides?.bindingAudit,
-    },
-  );
-}
-
-export async function ensureStudentCanonicalProfileBinding(
-  id: string,
-  overrides?: StudentStoreOverrides,
-): Promise<StudentProfileData | null> {
-  if (!id) return null;
-
-  const existing = await getStudentProfileById(id, overrides);
-  if (!existing) {
-    return null;
-  }
-  if (existing.profileId) {
-    return existing;
-  }
-
-  return updateStudentProfile(
-    id,
-    { profileId: deriveStarterProfileId(id) },
-    {
-      ...overrides,
-      bindingAudit: overrides?.bindingAudit,
+      audit: overrides?.audit,
     },
   );
 }
@@ -627,11 +460,6 @@ export async function deleteStudentProfile(
     archiveReason: 'Archived through legacy delete operation.',
   });
   if (!archived) return false;
-
-  await dependencies.bindings.clearActive(id, {
-    reason: 'student_archive',
-    changedBy: null,
-  });
 
   return true;
 }
@@ -655,17 +483,12 @@ export async function archiveStudentProfile(
   });
   if (!archived) return null;
 
-  await dependencies.bindings.clearActive(id, {
-    reason: 'student_archive',
-    changedBy: normalizeOptionalString(input.archivedBy),
-  });
-
   return toStudentProfileData(mapStudentRecordToEntry(archived));
 }
 
 export async function restoreStudentProfile(
   id: string,
-  input: StudentRestoreInput = {},
+  _input: StudentRestoreInput = {},
   overrides?: StudentStoreOverrides,
 ): Promise<StudentProfileData | null> {
   if (!id) return null;
@@ -678,14 +501,6 @@ export async function restoreStudentProfile(
     workspaceId: overrides?.workspaceId ?? null,
   });
   if (!restored) return null;
-
-  await syncBindingForStudent(
-    restored.id,
-    restored.profileId,
-    dependencies,
-    'student_restore',
-    normalizeOptionalString(input.restoredBy),
-  );
 
   return toStudentProfileData(mapStudentRecordToEntry(restored));
 }

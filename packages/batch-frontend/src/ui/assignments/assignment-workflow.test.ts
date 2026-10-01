@@ -94,7 +94,6 @@ describe('assignment workflow model', () => {
         },
         context: {
           teacherNotes: 'saved notes',
-          profileId: null,
           profileRevisionId: null,
           profileRevisionHash: null,
         },

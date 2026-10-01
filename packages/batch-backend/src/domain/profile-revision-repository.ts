@@ -12,7 +12,7 @@ import type {
 
 interface ProfileRevisionRow {
   id: string;
-  profile_id: string;
+  student_id: string;
   content: string;
   structured_content: FoundationalProfile | null;
   content_hash: string;
@@ -25,11 +25,12 @@ interface ProfileRevisionRow {
   created_at: Date;
   created_by: string | null;
   restored_from_revision_id: string | null;
+  legacy_version_label: string | null;
 }
 
 export interface InsertProfileRevisionParams {
   id?: string;
-  profileId: string;
+  studentId: string;
   content: string;
   structuredContent?: FoundationalProfile | null;
   contentHash: string;
@@ -40,7 +41,7 @@ export interface InsertProfileRevisionParams {
 }
 
 export interface ListProfileRevisionsParams {
-  profileId: string;
+  studentId: string;
   limit?: number;
   offset?: number;
   order?: 'asc' | 'desc';
@@ -50,7 +51,7 @@ const MAX_PAGE_LIMIT = 500;
 
 const SELECT_COLUMNS = `
   id,
-  profile_id,
+  student_id,
   content,
   structured_content,
   content_hash,
@@ -62,7 +63,8 @@ const SELECT_COLUMNS = `
   deprecated_at,
   created_at,
   created_by,
-  restored_from_revision_id
+  restored_from_revision_id,
+  legacy_version_label
 `;
 
 export async function insertProfileRevision(
@@ -74,20 +76,19 @@ export async function insertProfileRevision(
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
-      // Serialize revision versioning/activation per profile to avoid write races.
-      await client.query('SELECT id FROM profiles WHERE id = $1 FOR UPDATE', [params.profileId]);
+      // Serialize revision versioning/activation per student to avoid write races.
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
 
       if (status === 'active') {
         await client.query(
           `
-          UPDATE profile_revisions
+          UPDATE student_profile_revisions
           SET
             status = 'deprecated',
-            deprecated_at = COALESCE(deprecated_at, NOW()),
-            activated_at = NULL
-          WHERE profile_id = $1 AND status = 'active'
+            deprecated_at = COALESCE(deprecated_at, NOW())
+          WHERE student_id = $1 AND status = 'active'
           `,
-          [params.profileId],
+          [params.studentId],
         );
       }
 
@@ -95,12 +96,12 @@ export async function insertProfileRevision(
         `
         WITH next_version AS (
           SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number
-          FROM profile_revisions
-          WHERE profile_id = $2
+          FROM student_profile_revisions
+          WHERE student_id = $2
         )
-        INSERT INTO profile_revisions (
+        INSERT INTO student_profile_revisions (
           id,
-          profile_id,
+          student_id,
           content,
           structured_content,
           content_hash,
@@ -134,7 +135,7 @@ export async function insertProfileRevision(
         `,
         [
           id,
-          params.profileId,
+          params.studentId,
           params.content,
           JSON.stringify(params.structuredContent ?? null),
           params.contentHash,
@@ -144,13 +145,6 @@ export async function insertProfileRevision(
           params.restoredFromRevisionId ?? null,
         ],
       );
-
-      if (status === 'active') {
-        await client.query(
-          'UPDATE profiles SET active_revision_id = $2, updated_at = NOW() WHERE id = $1',
-          [params.profileId, id],
-        );
-      }
 
       await client.query('COMMIT');
       return result.rows[0] as ProfileRevisionRow;
@@ -172,20 +166,20 @@ export async function listProfileRevisions(
 
   const { rows, total } = await withPgClient(async (client: PoolClient) => {
     const countResult = await client.query(
-      'SELECT COUNT(*)::int AS total FROM profile_revisions WHERE profile_id = $1',
-      [params.profileId],
+      'SELECT COUNT(*)::int AS total FROM student_profile_revisions WHERE student_id = $1',
+      [params.studentId],
     );
     const sortDirection = order === 'asc' ? 'ASC' : 'DESC';
     const dataResult = await client.query(
       `
       SELECT
         ${SELECT_COLUMNS}
-      FROM profile_revisions
-      WHERE profile_id = $1
+      FROM student_profile_revisions
+      WHERE student_id = $1
       ORDER BY created_at ${sortDirection}
       LIMIT $2 OFFSET $3
       `,
-      [params.profileId, limit, offset],
+      [params.studentId, limit, offset],
     );
 
     return {
@@ -204,7 +198,7 @@ export async function listProfileRevisions(
 }
 
 export async function getProfileRevisionById(
-  profileId: string,
+  studentId: string,
   revisionId: string,
 ): Promise<ProfileRevisionRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
@@ -212,10 +206,10 @@ export async function getProfileRevisionById(
       `
       SELECT
         ${SELECT_COLUMNS}
-      FROM profile_revisions
-      WHERE profile_id = $1 AND id = $2
+      FROM student_profile_revisions
+      WHERE student_id = $1 AND id = $2
       `,
-      [profileId, revisionId],
+      [studentId, revisionId],
     );
     return result.rows[0] as ProfileRevisionRow | undefined;
   });
@@ -224,40 +218,60 @@ export async function getProfileRevisionById(
 }
 
 export async function getLatestProfileRevision(
-  profileId: string,
+  studentId: string,
 ): Promise<ProfileRevisionRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       SELECT
         ${SELECT_COLUMNS}
-      FROM profile_revisions
-      WHERE profile_id = $1
+      FROM student_profile_revisions
+      WHERE student_id = $1
       ORDER BY created_at DESC
       LIMIT 1
       `,
-      [profileId],
+      [studentId],
     );
     return result.rows[0] as ProfileRevisionRow | undefined;
   });
 
+  return row ? mapRow(row) : null;
+}
+
+/** Resolve only a concrete revision recorded in an authorized assignment.
+ * Legacy IDs are immutable provenance; ordinary revision routes use getById.
+ */
+export async function getRecordedProfileRevision(
+  studentId: string,
+  revisionId: string,
+  contentHash: string,
+): Promise<ProfileRevisionRecord | null> {
+  const row = await withPgClient(async (client) => {
+    const result = await client.query(
+      `SELECT ${SELECT_COLUMNS} FROM student_profile_revisions
+       WHERE student_id = $1 AND (id = $2 OR legacy_revision_id = $2)
+         AND content_hash = $3`,
+      [studentId, revisionId, contentHash],
+    );
+    return result.rows[0] as ProfileRevisionRow | undefined;
+  });
   return row ? mapRow(row) : null;
 }
 
 export async function getActiveProfileRevision(
-  profileId: string,
+  studentId: string,
 ): Promise<ProfileRevisionRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       SELECT
         ${SELECT_COLUMNS}
-      FROM profile_revisions
-      WHERE profile_id = $1 AND status = 'active'
+      FROM student_profile_revisions
+      WHERE student_id = $1 AND status = 'active'
       ORDER BY activated_at DESC NULLS LAST, created_at DESC
       LIMIT 1
       `,
-      [profileId],
+      [studentId],
     );
     return result.rows[0] as ProfileRevisionRow | undefined;
   });
@@ -265,37 +279,37 @@ export async function getActiveProfileRevision(
   return row ? mapRow(row) : null;
 }
 
-export async function listProfileIdsWithActiveRevision(
-  profileIds: readonly string[],
+export async function listStudentIdsWithActiveProfileRevision(
+  studentIds: readonly string[],
 ): Promise<Set<string>> {
-  if (profileIds.length === 0) return new Set<string>();
+  if (studentIds.length === 0) return new Set<string>();
 
   const rows = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query<{ profile_id: string }>(
+    const result = await client.query<{ student_id: string }>(
       `
-      SELECT DISTINCT profile_id
-      FROM profile_revisions
-      WHERE profile_id = ANY($1::text[]) AND status = 'active'
+      SELECT DISTINCT student_id
+      FROM student_profile_revisions
+      WHERE student_id = ANY($1::uuid[]) AND status = 'active'
       `,
-      [profileIds],
+      [studentIds],
     );
     return result.rows;
   });
 
-  return new Set(rows.map((row) => row.profile_id));
+  return new Set(rows.map((row) => row.student_id));
 }
 
 export async function activateProfileRevision(
-  profileId: string,
+  studentId: string,
   revisionId: string,
 ): Promise<ProfileRevisionRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
-      await client.query('SELECT id FROM profiles WHERE id = $1 FOR UPDATE', [profileId]);
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [studentId]);
       const existsResult = await client.query(
-        'SELECT 1 FROM profile_revisions WHERE profile_id = $1 AND id = $2',
-        [profileId, revisionId],
+        'SELECT 1 FROM student_profile_revisions WHERE student_id = $1 AND id = $2',
+        [studentId, revisionId],
       );
       if ((existsResult.rowCount ?? 0) === 0) {
         await client.query('ROLLBACK');
@@ -304,32 +318,26 @@ export async function activateProfileRevision(
 
       await client.query(
         `
-        UPDATE profile_revisions
+        UPDATE student_profile_revisions
         SET
           status = 'deprecated',
-          deprecated_at = COALESCE(deprecated_at, NOW()),
-          activated_at = NULL
-        WHERE profile_id = $1 AND id <> $2 AND status = 'active'
+          deprecated_at = COALESCE(deprecated_at, NOW())
+        WHERE student_id = $1 AND id <> $2 AND status = 'active'
         `,
-        [profileId, revisionId],
+        [studentId, revisionId],
       );
 
       const result = await client.query(
         `
-        UPDATE profile_revisions
+        UPDATE student_profile_revisions
         SET
           status = 'active',
           activated_at = NOW(),
           deprecated_at = NULL
-        WHERE profile_id = $1 AND id = $2
+        WHERE student_id = $1 AND id = $2
         RETURNING ${SELECT_COLUMNS}
         `,
-        [profileId, revisionId],
-      );
-
-      await client.query(
-        'UPDATE profiles SET active_revision_id = $2, updated_at = NOW() WHERE id = $1',
-        [profileId, revisionId],
+        [studentId, revisionId],
       );
 
       await client.query('COMMIT');
@@ -343,25 +351,20 @@ export async function activateProfileRevision(
   return row ? mapRow(row) : null;
 }
 
-export async function deprecateActiveProfileRevision(profileId: string): Promise<number> {
+export async function deprecateActiveProfileRevision(studentId: string): Promise<number> {
   const updated = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
-      await client.query('SELECT id FROM profiles WHERE id = $1 FOR UPDATE', [profileId]);
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [studentId]);
       const result = await client.query(
         `
-        UPDATE profile_revisions
+        UPDATE student_profile_revisions
         SET
           status = 'deprecated',
-          deprecated_at = COALESCE(deprecated_at, NOW()),
-          activated_at = NULL
-        WHERE profile_id = $1 AND status = 'active'
+          deprecated_at = COALESCE(deprecated_at, NOW())
+        WHERE student_id = $1 AND status = 'active'
         `,
-        [profileId],
-      );
-      await client.query(
-        'UPDATE profiles SET active_revision_id = NULL, updated_at = NOW() WHERE id = $1',
-        [profileId],
+        [studentId],
       );
       await client.query('COMMIT');
       return result.rowCount ?? 0;
@@ -375,7 +378,7 @@ export async function deprecateActiveProfileRevision(profileId: string): Promise
 }
 
 export async function getLatestProfileRevisionByHash(
-  profileId: string,
+  studentId: string,
   contentHash: string,
 ): Promise<ProfileRevisionRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
@@ -383,12 +386,12 @@ export async function getLatestProfileRevisionByHash(
       `
       SELECT
         ${SELECT_COLUMNS}
-      FROM profile_revisions
-      WHERE profile_id = $1 AND content_hash = $2
+      FROM student_profile_revisions
+      WHERE student_id = $1 AND content_hash = $2
       ORDER BY created_at DESC
       LIMIT 1
       `,
-      [profileId, contentHash],
+      [studentId, contentHash],
     );
     return result.rows[0] as ProfileRevisionRow | undefined;
   });
@@ -399,7 +402,7 @@ export async function getLatestProfileRevisionByHash(
 function mapRow(row: ProfileRevisionRow): ProfileRevisionRecord {
   return {
     id: row.id,
-    profileId: row.profile_id,
+    studentId: row.student_id,
     content: row.content,
     structuredContent: row.structured_content ?? null,
     contentHash: row.content_hash,
@@ -412,5 +415,6 @@ function mapRow(row: ProfileRevisionRow): ProfileRevisionRecord {
     createdAt: row.created_at,
     createdBy: row.created_by ?? null,
     restoredFromRevisionId: row.restored_from_revision_id ?? null,
+    legacyVersionLabel: row.legacy_version_label ?? null,
   };
 }

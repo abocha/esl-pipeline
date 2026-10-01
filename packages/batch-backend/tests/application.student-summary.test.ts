@@ -15,7 +15,6 @@ describe('application/student-summary', () => {
           accentPreference: null,
           voices: {},
           manifestPreset: null,
-          profileId: null,
         },
         {
           id: 'student-2',
@@ -26,7 +25,6 @@ describe('application/student-summary', () => {
           accentPreference: null,
           voices: {},
           manifestPreset: null,
-          profileId: null,
         },
       ],
       total: 2,
@@ -86,7 +84,6 @@ describe('application/student-summary', () => {
           accentPreference: null,
           voices: {},
           manifestPreset: null,
-          profileId: null,
         },
         {
           id: 'student-2',
@@ -97,7 +94,6 @@ describe('application/student-summary', () => {
           accentPreference: null,
           voices: {},
           manifestPreset: null,
-          profileId: null,
         },
         {
           id: 'student-3',
@@ -108,7 +104,6 @@ describe('application/student-summary', () => {
           accentPreference: null,
           voices: {},
           manifestPreset: null,
-          profileId: null,
         },
       ],
       total: 3,

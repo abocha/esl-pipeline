@@ -6,7 +6,6 @@ import { getProfileContent, getProfileRevision } from '../../utils/api';
 export interface ContextHydrationSnapshot {
   selectedStudentId: string;
   selectedProfileId: string;
-  profileSelectionMode: 'auto' | 'manual';
   selectedProfileRevisionId?: string | null;
   selectedProfileRevisionHash?: string | null;
   profileAuthorityResolved?: boolean;
@@ -16,8 +15,6 @@ export type ProfilePreviewStatus = 'none' | 'loading' | 'ready' | 'unstructured'
 
 interface UseMinimalAssignmentContextControllerParams {
   selectedStudentId: string;
-  resolveBoundProfileId: (studentId: string) => string;
-  boundProfileResolutionReady: boolean;
 }
 
 export interface ContextController extends ContextHydrationSnapshot {
@@ -29,15 +26,11 @@ export interface ContextController extends ContextHydrationSnapshot {
   profileAuthorityResolved: boolean;
   profileLineageReady: boolean;
   applyHydratedSnapshot: (snapshot: ContextHydrationSnapshot) => void;
-  selectProfileId: (
-    profileId: string,
-    revision?: { id: string; contentHash: string } | null,
-  ) => void;
   refreshSelectedProfile: () => void;
 }
 
 export interface LearnerProfilePreview {
-  profileId: string;
+  studentId: string;
   overallLevel: string | null;
   primaryGoals: string[];
   communicationContexts: string[];
@@ -72,14 +65,14 @@ function compactTeacherNote(note: string | null): string | null {
 }
 
 export function buildProfilePreview(
-  profileId: string,
+  studentId: string,
   profile: Pick<ProfileContentResponse, 'structuredContent' | 'updatedAt'>,
 ): LearnerProfilePreview | null {
   const structured = profile.structuredContent;
   if (!structured) return null;
 
   return {
-    profileId,
+    studentId,
     overallLevel: structured.overallLevel ?? null,
     primaryGoals: compactPreviewList(structured.primaryGoals),
     communicationContexts: compactPreviewList(structured.communicationContexts),
@@ -101,11 +94,8 @@ function isUnstructuredProfileError(error: unknown): boolean {
 
 export function useMinimalAssignmentContextController({
   selectedStudentId,
-  resolveBoundProfileId,
-  boundProfileResolutionReady,
 }: UseMinimalAssignmentContextControllerParams): ContextController {
   const [selectedProfileId, setSelectedProfileId] = useState('');
-  const [profileSelectionMode, setProfileSelectionMode] = useState<'auto' | 'manual'>('auto');
   const [profilePreviewStatus, setProfilePreviewStatus] = useState<ProfilePreviewStatus>('none');
   const [profileRevisionError, setProfileRevisionError] = useState<string | null>(null);
   const [profilePreview, setProfilePreview] = useState<LearnerProfilePreview | null>(null);
@@ -128,7 +118,6 @@ export function useMinimalAssignmentContextController({
     const profileChanged = selectedProfileIdRef.current !== snapshot.selectedProfileId;
     selectedProfileIdRef.current = snapshot.selectedProfileId;
     setSelectedProfileId(snapshot.selectedProfileId);
-    setProfileSelectionMode(snapshot.profileSelectionMode);
     const hasCompleteLineage = Boolean(
       snapshot.selectedProfileId &&
         snapshot.selectedProfileRevisionId &&
@@ -151,27 +140,7 @@ export function useMinimalAssignmentContextController({
     }
   }, []);
 
-  const selectProfileId = useCallback(
-    (profileId: string, revision?: { id: string; contentHash: string } | null) => {
-      const hasCompleteLineage = Boolean(profileId && revision?.id && revision.contentHash);
-      profileLineagePinnedRef.current = hasCompleteLineage;
-      profileAuthorityPinnedRef.current = true;
-      profileAuthorityStudentIdRef.current = selectedStudentId;
-      setProfileAuthorityResolved(true);
-      selectedProfileIdRef.current = profileId;
-      setSelectedProfileId(profileId);
-      setSelectedProfileRevisionId(hasCompleteLineage ? (revision?.id ?? null) : null);
-      setSelectedProfileRevisionHash(hasCompleteLineage ? (revision?.contentHash ?? null) : null);
-      setProfileSelectionMode('auto');
-      setProfileReloadToken((current) => current + 1);
-    },
-    [selectedStudentId],
-  );
-
   useEffect(() => {
-    if (profileSelectionMode !== 'auto') {
-      return;
-    }
     if (profileAuthorityStudentIdRef.current !== selectedStudentId) {
       profileAuthorityStudentIdRef.current = selectedStudentId;
       profileAuthorityPinnedRef.current = false;
@@ -190,21 +159,17 @@ export function useMinimalAssignmentContextController({
     if (profileAuthorityPinnedRef.current) {
       return;
     }
-    if (!boundProfileResolutionReady) {
-      setProfileAuthorityResolved(false);
-      return;
-    }
-    const boundProfileId = resolveBoundProfileId(selectedStudentId);
-    if (selectedProfileIdRef.current !== boundProfileId) {
+    const profileStudentId = selectedStudentId;
+    if (selectedProfileIdRef.current !== profileStudentId) {
       profileLineagePinnedRef.current = false;
-      selectedProfileIdRef.current = boundProfileId;
+      selectedProfileIdRef.current = profileStudentId;
       setSelectedProfileRevisionId(null);
       setSelectedProfileRevisionHash(null);
-      setProfilePreviewStatus(boundProfileId ? 'loading' : 'none');
+      setProfilePreviewStatus(profileStudentId ? 'loading' : 'none');
     }
-    setSelectedProfileId(boundProfileId);
+    setSelectedProfileId(profileStudentId);
     setProfileAuthorityResolved(true);
-  }, [boundProfileResolutionReady, profileSelectionMode, resolveBoundProfileId, selectedStudentId]);
+  }, [selectedStudentId]);
 
   useEffect(() => {
     let active = true;
@@ -274,7 +239,6 @@ export function useMinimalAssignmentContextController({
   return {
     selectedStudentId,
     selectedProfileId,
-    profileSelectionMode,
     profilePreviewStatus,
     profileRevisionError,
     profilePreview,
@@ -284,6 +248,5 @@ export function useMinimalAssignmentContextController({
     profileLineageReady,
     refreshSelectedProfile,
     applyHydratedSnapshot,
-    selectProfileId,
   };
 }

@@ -8,7 +8,6 @@ import { StudentDirectoryPage } from './StudentDirectoryPage';
 const apiMocks = vi.hoisted(() => ({
   archiveStudentProfile: vi.fn(),
   createStudentProfile: vi.fn(),
-  listProfileContents: vi.fn(),
   listStudents: vi.fn(),
   restoreStudentProfile: vi.fn(),
 }));
@@ -26,13 +25,11 @@ function renderDirectory() {
 describe('StudentDirectoryPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    apiMocks.listProfileContents.mockResolvedValue({ profiles: [] });
     apiMocks.listStudents.mockResolvedValue({
       items: [
         {
           id: 'student-alex-rivera',
           student: 'Alex Rivera',
-          profileId: 'profiles/students/alex.md',
         },
       ],
       total: 1,
@@ -95,7 +92,6 @@ describe('StudentDirectoryPage', () => {
     apiMocks.createStudentProfile.mockResolvedValue({
       id: 'student-nadia',
       student: 'Nadia',
-      profileId: 'profiles/students/student-nadia.md',
     });
 
     renderDirectory();
@@ -115,7 +111,6 @@ describe('StudentDirectoryPage', () => {
         stableStrengths: 'Comfortable with prepared speaking.',
       },
     });
-    expect(apiMocks.listProfileContents).not.toHaveBeenCalled();
   });
 
   it('clears create-student validation when the tutor edits the form', async () => {
@@ -136,7 +131,7 @@ describe('StudentDirectoryPage', () => {
   it('keeps archived tab results when the active tab load resolves later', async () => {
     const user = userEvent.setup();
     let resolveActiveLoad: (value: {
-      items: { id: string; student: string; profileId: string | null; archivedAt?: string }[];
+      items: { id: string; student: string; archivedAt?: string }[];
       total: number;
       limit: number;
       offset: number;
@@ -154,7 +149,6 @@ describe('StudentDirectoryPage', () => {
           {
             id: 'student-archived-rivera',
             student: 'Archived Rivera',
-            profileId: 'profiles/students/archived.md',
             archivedAt: '2026-01-03T00:00:00.000Z',
           },
         ],
@@ -174,7 +168,6 @@ describe('StudentDirectoryPage', () => {
         {
           id: 'student-active-rivera',
           student: 'Active Rivera',
-          profileId: 'profiles/students/active.md',
         },
       ],
       total: 1,
@@ -196,7 +189,6 @@ describe('StudentDirectoryPage', () => {
           {
             id: 'student-alex-rivera',
             student: 'Alex Rivera',
-            profileId: 'profiles/students/alex.md',
             archivedAt: null,
           },
         ],
@@ -217,7 +209,6 @@ describe('StudentDirectoryPage', () => {
           {
             id: 'student-alex-rivera',
             student: 'Alex Rivera',
-            profileId: 'profiles/students/alex.md',
             archivedAt: '2026-01-03T00:00:00.000Z',
             archiveReason: 'Student paused lessons.',
           },
@@ -292,7 +283,6 @@ describe('StudentDirectoryPage', () => {
         {
           id: 'student-alex-rivera',
           student: 'Alex Rivera',
-          profileId: 'profiles/students/alex.md',
           archivedAt: null,
         },
       ],

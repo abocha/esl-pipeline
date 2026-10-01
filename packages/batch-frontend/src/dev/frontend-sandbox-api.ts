@@ -5,7 +5,6 @@ import type { FrontendSandboxScenario } from './frontend-sandbox';
 
 const now = '2026-07-03T00:00:00.000Z';
 const sandboxFirstProfileStudentId = 'student-cora';
-const sandboxFirstProfileId = 'profiles/cora.md';
 const sandboxFirstProfileRecordingId = 'recording-cora';
 const sandboxFirstProfileTranscriptId = 'transcript-cora';
 const sandboxFirstProfileRevisionId = 'profile-revision-cora-first-draft';
@@ -224,8 +223,7 @@ function jobStatus(overrides: Record<string, unknown> = {}) {
 
 function profileContent() {
   return {
-    id: 'profiles/alex.md',
-    label: 'Alex Profile',
+    studentId: 'student-alex',
     content: 'Alex is a B1 learner practicing confident workplace updates.',
     structuredContent: {
       schemaVersion: 'foundational_profile_v1',
@@ -248,7 +246,6 @@ function studentProfile() {
   return {
     id: 'student-alex',
     student: 'Alex',
-    profileId: 'profiles/alex.md',
     dbId: null,
     pageParentId: null,
     colorPreset: 'blue',
@@ -265,7 +262,6 @@ function firstProfileStudentProfile() {
   return {
     id: sandboxFirstProfileStudentId,
     student: 'Cora Preview',
-    profileId: null,
     dbId: null,
     pageParentId: null,
     colorPreset: 'green',
@@ -280,8 +276,7 @@ function firstProfileStudentProfile() {
 
 function firstProfileContent() {
   return {
-    id: sandboxFirstProfileId,
-    label: 'Cora Preview Profile',
+    studentId: sandboxFirstProfileStudentId,
     content: 'Cora wants practical English for short client updates.',
     structuredContent: firstProfileDraftStructuredContent(),
     currentRevisionId: sandboxFirstProfileRevisionId,
@@ -292,7 +287,7 @@ function firstProfileContent() {
 function profileRevisionSummary() {
   return {
     id: 'profile-revision-sandbox',
-    profileId: 'profiles/alex.md',
+    studentId: 'student-alex',
     contentHash: 'profile-hash-sandbox',
     source: 'update',
     status: 'active',
@@ -309,7 +304,7 @@ function profileRevisionSummary() {
 function profileRevisionHistorySummary(versionNumber: number) {
   return {
     id: `profile-revision-sandbox-v${versionNumber}`,
-    profileId: 'profiles/alex.md',
+    studentId: 'student-alex',
     contentHash: `profile-hash-sandbox-v${versionNumber}`,
     source: 'update',
     status: 'deprecated',
@@ -368,7 +363,7 @@ function firstProfileDraftStructuredContent() {
 function profileDraftReviewRevision(overrides: Record<string, unknown> = {}) {
   return {
     id: 'profile-revision-sandbox-draft',
-    profileId: 'profiles/alex.md',
+    studentId: 'student-alex',
     contentHash: 'profile-hash-sandbox-draft',
     source: 'profile_revision_refresh',
     status: 'draft',
@@ -406,7 +401,7 @@ function firstProfileRevisionList() {
     items: [
       {
         id: sandboxFirstProfileRevisionId,
-        profileId: sandboxFirstProfileId,
+        studentId: sandboxFirstProfileStudentId,
         contentHash: 'profile-hash-cora-first-draft',
         source: 'lesson_population',
         status: 'draft',
@@ -612,27 +607,6 @@ function firstProfileMemoryHealth() {
       rejected: 0,
       deferred: 0,
     },
-  };
-}
-
-function bindingHistory() {
-  return {
-    items: [
-      {
-        id: 'binding-sandbox',
-        studentId: 'student-alex',
-        profileId: 'profiles/alex.md',
-        effectiveFrom: now,
-        effectiveTo: null,
-        reason: 'Sandbox seed',
-        changedBy: 'sandbox-tutor',
-        createdAt: now,
-      },
-    ],
-    total: 1,
-    limit: 5,
-    offset: 0,
-    order: 'desc',
   };
 }
 
@@ -926,7 +900,7 @@ const promptPackage = {
   transcriptId: 'transcript-sandbox',
   studentId: 'student-alex',
   lessonId: null,
-  profilePath: 'profiles/alex.md',
+  profilePath: null,
   templateVersion: 'v1',
   notes: 'Sandbox teacher notes',
   storageUri: 'memory://sandbox/prompt-sandbox',
@@ -971,7 +945,7 @@ const firstProfilePromptPackage = {
   transcriptId: sandboxFirstProfileTranscriptId,
   studentId: sandboxFirstProfileStudentId,
   lessonId: null,
-  profilePath: sandboxFirstProfileId,
+  profilePath: null,
   templateVersion: 'v1',
   notes: 'Sandbox first-profile teacher notes',
   storageUri: 'memory://sandbox/prompt-cora',
@@ -1070,10 +1044,6 @@ function jobProvenance() {
           revisionId: 'template-revision-sandbox',
         },
       },
-      bindingAtCreation: {
-        profileId: 'profiles/alex.md',
-        effectiveFrom: now,
-      },
     },
     actions: [],
   };
@@ -1105,9 +1075,9 @@ export function createFrontendSandboxApiAdapter(
           scenario === 'step-one-no-learners'
             ? []
             : [
-                { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
-                { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
-                { id: sandboxFirstProfileStudentId, name: 'Cora Preview', profileId: null },
+                { id: 'student-alex', name: 'Alex' },
+                { id: 'student-bella', name: 'Bella' },
+                { id: sandboxFirstProfileStudentId, name: 'Cora Preview' },
               ],
       });
     }
@@ -1159,7 +1129,6 @@ export function createFrontendSandboxApiAdapter(
         revisions: profileRevisionList(),
         memory: memoryOverview(),
         memoryHealth: memoryHealth(),
-        bindings: bindingHistory(),
         candidates: profileCandidateList(),
       });
     }
@@ -1173,7 +1142,6 @@ export function createFrontendSandboxApiAdapter(
         revisions: { items: [], total: 0, limit: 25, offset: 0, order: 'desc' },
         memory: firstProfileMemoryOverview(),
         memoryHealth: firstProfileMemoryHealth(),
-        bindings: { items: [], total: 0, limit: 5, offset: 0, order: 'desc' },
         candidates: emptyCandidateList(),
       });
     }
@@ -1198,13 +1166,8 @@ export function createFrontendSandboxApiAdapter(
     if (method === 'get' && path === '/config/prompts') {
       return responseFor(config, {
         templates: [{ id: 'hw/default.md', label: 'Default Homework Template' }],
-        profiles: [
-          { id: 'profiles/alex.md', label: 'Alex Profile' },
-          { id: 'profiles/bella.md', label: 'Bella Profile' },
-        ],
         defaults: {
           templateId: 'hw/default.md',
-          profileId: 'profiles/alex.md',
         },
       });
     }
@@ -1382,7 +1345,7 @@ export function createFrontendSandboxApiAdapter(
         profile: firstProfile
           ? null
           : {
-              profileId: profileContent().id,
+              studentId: 'student-alex',
               revisionId: 'profile-revision-sandbox',
               revisionHash: 'profile-hash-sandbox',
               content: profileContent().content,
@@ -1441,7 +1404,6 @@ export function createFrontendSandboxApiAdapter(
                   ...base.confirmed,
                   context: {
                     teacherNotes: typeof body.teacherNotes === 'string' ? body.teacherNotes : null,
-                    profileId: typeof body.profileId === 'string' ? body.profileId : null,
                     profileRevisionId:
                       typeof body.profileRevisionId === 'string' ? body.profileRevisionId : null,
                     profileRevisionHash:
@@ -1636,17 +1598,19 @@ export function createFrontendSandboxApiAdapter(
       });
     }
 
-    if (method === 'get' && path === '/profiles/profiles%2Falex.md') {
+    if (method === 'get' && path === '/students/student-alex/profile') {
       return responseFor(config, profileContent());
     }
 
-    if (method === 'get' && path === '/profiles/profiles%2Fcora.md') {
+    if (method === 'get' && path === `/students/${sandboxFirstProfileStudentId}/profile`) {
       return responseFor(config, firstProfileContent());
     }
 
-    if (method === 'put' && path.startsWith('/profiles/profiles%2F')) {
+    if (method === 'put' && path.match(/^\/students\/[^/]+\/profile$/)) {
       const body = readRequestBody(config.data);
-      const existing = path.includes('cora.md') ? firstProfileContent() : profileContent();
+      const existing = path.includes(sandboxFirstProfileStudentId)
+        ? firstProfileContent()
+        : profileContent();
       return responseFor(config, {
         ...existing,
         content: typeof body.content === 'string' ? body.content : existing.content,
@@ -1658,15 +1622,17 @@ export function createFrontendSandboxApiAdapter(
       });
     }
 
-    if (method === 'get' && path === '/profiles/revisions') {
-      const params = config.params as Record<string, unknown> | undefined;
-      if (params?.profileId === sandboxFirstProfileId) {
+    if (method === 'get' && path.match(/^\/students\/[^/]+\/profile\/revisions$/)) {
+      if (path.includes(sandboxFirstProfileStudentId)) {
         return responseFor(config, firstProfileRevisionList());
       }
       return responseFor(config, profileRevisionList());
     }
 
-    if (method === 'get' && path === '/profiles/revisions/profile-revision-sandbox') {
+    if (
+      method === 'get' &&
+      path === '/students/student-alex/profile/revisions/profile-revision-sandbox'
+    ) {
       return responseFor(config, {
         ...profileRevisionSummary(),
         content: profileContent().content,
@@ -1674,16 +1640,23 @@ export function createFrontendSandboxApiAdapter(
       });
     }
 
-    if (method === 'get' && path === '/profiles/revisions/profile-revision-sandbox-draft') {
+    if (
+      method === 'get' &&
+      path === '/students/student-alex/profile/revisions/profile-revision-sandbox-draft'
+    ) {
       return responseFor(config, profileDraftReviewRevision());
     }
 
-    if (method === 'get' && path === `/profiles/revisions/${sandboxFirstProfileRevisionId}`) {
+    if (
+      method === 'get' &&
+      path ===
+        `/students/${sandboxFirstProfileStudentId}/profile/revisions/${sandboxFirstProfileRevisionId}`
+    ) {
       return responseFor(
         config,
         profileDraftReviewRevision({
           id: sandboxFirstProfileRevisionId,
-          profileId: sandboxFirstProfileId,
+          studentId: sandboxFirstProfileStudentId,
           contentHash: 'profile-hash-cora-first-draft',
           source: 'lesson_population',
           versionNumber: 1,
@@ -1711,7 +1684,7 @@ export function createFrontendSandboxApiAdapter(
 
       return responseFor(config, {
         draftRevisionId: draftRevision.id,
-        profileId: 'profiles/alex.md',
+        studentId: 'student-alex',
         snapshotId: 'snapshot-sandbox',
         lessonMemoryIds: ['lesson-memory-sandbox'],
         homeworkMemoryIds: ['homework-memory-sandbox'],
@@ -1725,7 +1698,7 @@ export function createFrontendSandboxApiAdapter(
     ) {
       const draftRevision = profileDraftReviewRevision({
         id: sandboxFirstProfileRevisionId,
-        profileId: sandboxFirstProfileId,
+        studentId: sandboxFirstProfileStudentId,
         contentHash: 'profile-hash-cora-first-draft',
         source: 'lesson_population',
         versionNumber: 1,
@@ -1736,7 +1709,7 @@ export function createFrontendSandboxApiAdapter(
 
       return responseFor(config, {
         draftRevisionId: draftRevision.id,
-        profileId: sandboxFirstProfileId,
+        studentId: sandboxFirstProfileStudentId,
         snapshotId: null,
         lessonMemoryIds: ['lesson-memory-cora'],
         homeworkMemoryIds: [],
@@ -1757,7 +1730,7 @@ export function createFrontendSandboxApiAdapter(
 
       return responseFor(config, {
         draftRevisionId: 'profile-revision-sandbox-draft',
-        profileId: 'profiles/alex.md',
+        studentId: 'student-alex',
         includedCandidateIds,
         excludedCandidateIds: [],
         contentHash: 'profile-hash-sandbox-draft',
@@ -1765,7 +1738,7 @@ export function createFrontendSandboxApiAdapter(
       });
     }
 
-    if (method === 'post' && path === '/profiles/revisions') {
+    if (method === 'post' && path.match(/^\/students\/[^/]+\/profile\/revisions$/)) {
       const body = readRequestBody(config.data);
       return responseFor(
         config,
@@ -1783,23 +1756,34 @@ export function createFrontendSandboxApiAdapter(
 
     if (
       method === 'post' &&
-      (path === '/profiles/revisions/profile-revision-sandbox-draft/activate' ||
-        path === '/profiles/revisions/profile-revision-sandbox-saved-draft/activate')
+      (path ===
+        '/students/student-alex/profile/revisions/profile-revision-sandbox-draft/activate' ||
+        path ===
+          '/students/student-alex/profile/revisions/profile-revision-sandbox-saved-draft/activate')
     ) {
       return responseFor(config, {
-        ...profileContent(),
-        currentRevisionId: path.includes('saved-draft')
+        ...profileDraftReviewRevision(),
+        id: path.includes('saved-draft')
           ? 'profile-revision-sandbox-saved-draft'
           : 'profile-revision-sandbox-draft',
+        status: 'active',
+        activatedAt: now,
         structuredContent: profileDraftReviewStructuredContent(),
       });
     }
 
     if (
       method === 'post' &&
-      path === `/profiles/revisions/${sandboxFirstProfileRevisionId}/activate`
+      path ===
+        `/students/${sandboxFirstProfileStudentId}/profile/revisions/${sandboxFirstProfileRevisionId}/activate`
     ) {
-      return responseFor(config, firstProfileContent());
+      return responseFor(config, {
+        ...firstProfileRevisionList().items[0],
+        status: 'active',
+        activatedAt: now,
+        content: firstProfileContent().content,
+        structuredContent: firstProfileDraftStructuredContent(),
+      });
     }
 
     if (method === 'get' && path === '/students/student-alex/surfaces/schedule-billing') {

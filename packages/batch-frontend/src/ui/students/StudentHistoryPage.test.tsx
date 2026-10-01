@@ -43,7 +43,6 @@ function seedHistoryContext() {
     student: {
       id: 'student-daria',
       student: 'Daria',
-      profileId: 'dasha.md',
     },
     studentId: 'student-daria',
     studentLoading: false,

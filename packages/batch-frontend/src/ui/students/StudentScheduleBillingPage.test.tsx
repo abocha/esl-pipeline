@@ -131,7 +131,6 @@ describe('StudentScheduleBillingPage', () => {
       student: {
         id: 'student-alex',
         student: 'Alex',
-        profileId: 'profiles/students/alex.md',
       },
       studentId: 'student-alex',
       studentLoading: false,

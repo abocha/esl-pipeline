@@ -575,8 +575,6 @@ export const MinimalAssignment: React.FC = () => {
 
   const context = useMinimalAssignmentContextController({
     selectedStudentId: source.selectedStudentId,
-    resolveBoundProfileId: source.resolveBoundProfileId,
-    boundProfileResolutionReady: source.studentOptionsResolved,
   });
   const {
     resetSourceFlow,
@@ -755,8 +753,7 @@ export const MinimalAssignment: React.FC = () => {
       setRerunTargetPronunciationMode(snapshot.rerunTargetPronunciationMode);
       applyContextHydration({
         selectedStudentId: snapshot.selectedStudentId,
-        selectedProfileId: snapshot.selectedProfileId,
-        profileSelectionMode: snapshot.profileSelectionMode,
+        selectedProfileId: snapshot.selectedStudentId,
         selectedProfileRevisionId: snapshot.selectedProfileRevisionId,
         selectedProfileRevisionHash: snapshot.selectedProfileRevisionHash,
         profileAuthorityResolved: snapshot.profileAuthorityResolved,
@@ -793,7 +790,6 @@ export const MinimalAssignment: React.FC = () => {
     isCurrentHydration,
     jobOptions,
     presetOptionIds,
-    resolveBoundProfileId: source.resolveBoundProfileId,
     currentPublishTarget: authoring.publishTarget,
     currentSelectedTtsProvider: authoring.selectedTtsProvider,
     currentSelectedTtsStrategy: authoring.selectedTtsStrategy,
@@ -801,7 +797,6 @@ export const MinimalAssignment: React.FC = () => {
     currentSelectedPreset: authoring.selectedPreset,
     currentSelectedStudentId: source.selectedStudentId,
     currentSelectedProfileId: context.selectedProfileId,
-    currentProfileSelectionMode: context.profileSelectionMode,
     onInitialHydrationResolved: handleInitialHydrationResolved,
   });
   const activeAssignmentSession = resume.activeAssignmentSession;
@@ -817,12 +812,12 @@ export const MinimalAssignment: React.FC = () => {
       : null;
   const durableProfileLineage = useMemo(
     () => ({
-      selectedProfileId: currentLearnerProfile?.profileId ?? null,
+      selectedProfileId: currentLearnerProfile?.studentId ?? null,
       selectedProfileRevisionId: currentLearnerProfile?.revisionId ?? null,
       selectedProfileRevisionHash: currentLearnerProfile?.revisionHash ?? null,
     }),
     [
-      currentLearnerProfile?.profileId,
+      currentLearnerProfile?.studentId,
       currentLearnerProfile?.revisionId,
       currentLearnerProfile?.revisionHash,
     ],
@@ -1203,7 +1198,7 @@ export const MinimalAssignment: React.FC = () => {
       session.selectedProfileId &&
         (!session.selectedProfileRevisionId || !session.selectedProfileRevisionHash) &&
         learnerContext?.confirmationAvailable &&
-        durableProfileLineage.selectedProfileId === session.selectedProfileId,
+        durableProfileLineage.selectedProfileId === session.studentId,
     );
     if (!assignmentSessionWritesAllowed() && !repairingPartialProfileLineage) return;
     const recovery: UpdateAssignmentSessionRecoveryRequest['patch'] = {
@@ -1975,7 +1970,6 @@ export const MinimalAssignment: React.FC = () => {
       step: 'context',
       expectedRevision: session.revision,
       teacherNotes: normalizedTeacherNotes || null,
-      profileId: durableProfileLineage.selectedProfileId,
       profileRevisionId: durableProfileLineage.selectedProfileRevisionId,
       profileRevisionHash: durableProfileLineage.selectedProfileRevisionHash,
     }));
@@ -2019,7 +2013,6 @@ export const MinimalAssignment: React.FC = () => {
         (activeStep === 'context' &&
           (!confirmedContext ||
             teacherNotes.trim() !== (confirmedContext.teacherNotes ?? '').trim() ||
-            context.selectedProfileId !== (confirmedContext.profileId ?? '') ||
             context.selectedProfileRevisionId !== confirmedContext.profileRevisionId ||
             context.selectedProfileRevisionHash !== confirmedContext.profileRevisionHash)) ||
         (activeStep === 'assignment' && authoring.draftDirty && !correctionMode);
@@ -2106,7 +2099,7 @@ export const MinimalAssignment: React.FC = () => {
         ...(confirmedContext
           ? {
               teacherNotes: confirmedContext.teacherNotes,
-              selectedProfileId: confirmedContext.profileId,
+              selectedProfileId: source.selectedStudentId,
               selectedProfileRevisionId: confirmedContext.profileRevisionId,
               selectedProfileRevisionHash: confirmedContext.profileRevisionHash,
             }
@@ -2501,19 +2494,16 @@ export const MinimalAssignment: React.FC = () => {
             } else {
               const localContextKey = JSON.stringify({
                 teacherNotes: teacherNotes.trim() || null,
-                selectedProfileId: context.selectedProfileId || null,
                 selectedProfileRevisionId: context.selectedProfileRevisionId,
                 selectedProfileRevisionHash: context.selectedProfileRevisionHash,
               });
               const durableContextKey = JSON.stringify({
                 teacherNotes: current.teacherNotes,
-                selectedProfileId: current.selectedProfileId,
                 selectedProfileRevisionId: current.selectedProfileRevisionId,
                 selectedProfileRevisionHash: current.selectedProfileRevisionHash,
               });
               const remoteContextKey = JSON.stringify({
                 teacherNotes: latest.teacherNotes,
-                selectedProfileId: latest.selectedProfileId,
                 selectedProfileRevisionId: latest.selectedProfileRevisionId,
                 selectedProfileRevisionHash: latest.selectedProfileRevisionHash,
               });
@@ -2525,8 +2515,7 @@ export const MinimalAssignment: React.FC = () => {
                 setTeacherNotes(latest.teacherNotes ?? '');
                 applyContextHydration({
                   selectedStudentId: source.selectedStudentId,
-                  selectedProfileId: latest.selectedProfileId ?? '',
-                  profileSelectionMode: context.profileSelectionMode,
+                  selectedProfileId: latest.studentId,
                   selectedProfileRevisionId: latest.selectedProfileRevisionId,
                   selectedProfileRevisionHash: latest.selectedProfileRevisionHash,
                   profileAuthorityResolved: true,
@@ -2572,7 +2561,6 @@ export const MinimalAssignment: React.FC = () => {
     resumeSelectedResumeJobId,
     setActiveAssignmentSession,
     source.selectedStudentId,
-    context.profileSelectionMode,
     context.selectedProfileId,
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
@@ -2939,10 +2927,10 @@ export const MinimalAssignment: React.FC = () => {
               headingRef={contextHeadingRef}
               studentId={source.selectedStudentId}
               studentName={source.selectedStudent?.name ?? null}
-              selectedProfileId={learnerContext?.profile?.profileId ?? ''}
+              selectedProfileId={learnerContext?.profile?.studentId ?? ''}
               profilePreview={
                 learnerContext?.profile
-                  ? buildProfilePreview(learnerContext.profile.profileId, {
+                  ? buildProfilePreview(learnerContext.profile.studentId, {
                       structuredContent: learnerContext.profile
                         .structuredContent as FoundationalProfile | null,
                       updatedAt: learnerContext.profile.updatedAt,

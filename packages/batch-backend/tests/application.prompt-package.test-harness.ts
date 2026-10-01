@@ -82,18 +82,11 @@ export function createPromptPackageRepositoryStub() {
   };
 }
 
-function createDefaultProfileRevision(profileId: string): ProfileRevisionRecord {
-  const contentByProfileId: Record<string, string> = {
-    'profile.md': 'PROFILE CONTENT\n',
-    'profiles/student-a.md': 'STUDENT PROFILE CONTENT\n',
-    'profiles/explicit.md': 'EXPLICIT PROFILE CONTENT\n',
-    'profiles/bound.md': 'BOUND PROFILE CONTENT\n',
-    'default-profile.md': 'DEFAULT PROFILE\n',
-  };
-  const content = contentByProfileId[profileId] ?? 'PROFILE CONTENT\n';
+function createDefaultProfileRevision(studentId: string): ProfileRevisionRecord {
+  const content = 'PROFILE CONTENT\n';
   return {
-    id: `active-${profileId}`,
-    profileId,
+    id: `active-${studentId}`,
+    studentId,
     content,
     contentHash: createHash('sha256').update(content, 'utf8').digest('hex'),
     source: 'update',
@@ -110,36 +103,42 @@ function createDefaultProfileRevision(profileId: string): ProfileRevisionRecord 
 
 export function createProfileRevisionRepositoryStub(
   overrides: {
-    getActive?: (profileId: string) => Promise<ProfileRevisionRecord | null>;
-    getById?: (profileId: string, revisionId: string) => Promise<ProfileRevisionRecord | null>;
+    getActive?: (studentId: string) => Promise<ProfileRevisionRecord | null>;
+    getById?: (studentId: string, revisionId: string) => Promise<ProfileRevisionRecord | null>;
     getLatestByHash?: (
-      profileId: string,
+      studentId: string,
       contentHash: string,
     ) => Promise<ProfileRevisionRecord | null>;
   } = {},
 ) {
   return {
     getActive:
-      overrides.getActive ?? (async (profileId: string) => createDefaultProfileRevision(profileId)),
+      overrides.getActive ?? (async (studentId: string) => createDefaultProfileRevision(studentId)),
     getById:
       overrides.getById ??
-      (async (profileId: string, revisionId: string) => {
-        return { ...createDefaultProfileRevision(profileId), id: revisionId };
+      (async (studentId: string, revisionId: string) => {
+        return { ...createDefaultProfileRevision(studentId), id: revisionId };
       }),
+    getRecorded: async (studentId: string, revisionId: string, contentHash: string) => {
+      const revision = await (
+        overrides.getById ?? (async (id: string) => createDefaultProfileRevision(id))
+      )(studentId, revisionId);
+      return revision?.contentHash === contentHash ? revision : null;
+    },
     getLatestByHash: overrides.getLatestByHash ?? (async () => null),
     activate: async (
-      _profileId: string,
+      _studentId: string,
       _revisionId: string,
     ): Promise<ProfileRevisionRecord | null> => null,
     insert: async ({
-      profileId,
+      studentId,
       content,
       contentHash,
       source,
       createdBy,
       restoredFromRevisionId,
     }: {
-      profileId: string;
+      studentId: string;
       content: string;
       contentHash: string;
       source?: 'create' | 'update' | 'restore';
@@ -148,7 +147,7 @@ export function createProfileRevisionRepositoryStub(
     }) => {
       const revision: ProfileRevisionRecord = {
         id: 'revision-1',
-        profileId,
+        studentId,
         content,
         contentHash,
         source: source ?? 'update',
@@ -243,86 +242,33 @@ export function createTemplateRevisionRepositoryStub(
   };
 }
 
-export function createBindingResolverStub() {
-  return {
-    resolveAt: async () => null,
-  };
-}
-
 export function createPromptOptionsStub(
-  options: {
-    strictAllowlist?: boolean;
-    allowedTemplateIds?: string[];
-    allowedProfileIds?: string[];
-  } = {},
+  options: { strictAllowlist?: boolean; allowedTemplateIds?: string[] } = {},
 ) {
   return {
-    resolveSelection: async (
-      params: {
-        templateId?: string | null;
-        profileId?: string | null;
-        profilePath?: string | null;
-      },
+    resolveTemplateSelection: async (
+      params: { templateId?: string | null },
       overrides?: Partial<{ config: BatchBackendConfig }>,
     ) => {
       const config = overrides?.config;
       if (!config) throw new Error('config is required');
-
       const defaultTemplateId = path.basename(config.prompt.templatePath).replaceAll('\\', '/');
-      const defaultProfileId = path
-        .basename(config.prompt.defaultProfilePath)
-        .replaceAll('\\', '/');
-
-      const allowedTemplateIds = new Set([
-        defaultTemplateId,
-        ...(options.allowedTemplateIds ?? []),
-      ]);
-      const allowedProfileIds = new Set([defaultProfileId, ...(options.allowedProfileIds ?? [])]);
-
       const templateId = params.templateId ?? defaultTemplateId;
-      if (options.strictAllowlist && !allowedTemplateIds.has(templateId)) {
+      if (
+        options.strictAllowlist &&
+        !new Set([defaultTemplateId, ...(options.allowedTemplateIds ?? [])]).has(templateId)
+      ) {
         throw new Error('templateId is not allowlisted');
       }
-
-      let profileId = params.profileId ?? null;
-      if (!profileId && params.profilePath) {
-        const profileRoot = path.dirname(path.resolve(config.prompt.defaultProfilePath));
-        const candidate = path.isAbsolute(params.profilePath)
-          ? path.resolve(params.profilePath)
-          : path.resolve(profileRoot, params.profilePath);
-
-        if (!isWithinRoot(profileRoot, candidate)) {
-          throw new Error('profilePath must resolve within the configured profile root');
-        }
-
-        profileId = path.relative(profileRoot, candidate).split(path.sep).join('/');
-      }
-
-      const resolvedProfileId = profileId ?? defaultProfileId;
-      if (options.strictAllowlist && !allowedProfileIds.has(resolvedProfileId)) {
-        throw new Error('profileId is not allowlisted');
-      }
-
-      return {
-        templateId,
-        profileId: resolvedProfileId,
-        profilePath: resolvedProfileId,
-      };
+      return { templateId };
     },
   };
 }
 
-function isWithinRoot(root: string, target: string): boolean {
-  const relative = path.relative(root, target);
-  if (!relative) return true;
-  return !relative.startsWith('..') && !path.isAbsolute(relative);
-}
-
-export function createConfig(templatePath: string, profilePath: string): BatchBackendConfig {
+export function createConfig(templatePath: string, _legacyProfilePath: string): BatchBackendConfig {
   return {
     prompt: {
       templatePath,
-      defaultProfilePath: profilePath,
     },
   } as BatchBackendConfig;
 }

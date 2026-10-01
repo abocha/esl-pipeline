@@ -50,6 +50,14 @@ BEGIN
   RETURN NEW;
 END $$;
 
+CREATE FUNCTION public.reject_legacy_profile_write() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'Legacy profile storage is frozen; reconcile ABO-12 before removal';
+END;
+$$;
+
 CREATE FUNCTION public.request_confirmed_source_audio_deletion() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -566,6 +574,50 @@ CREATE TABLE public.jobs (
     CONSTRAINT jobs_tts_provider_check CHECK (((tts_provider IS NULL) OR (tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text]))))
 );
 
+CREATE TABLE public.legacy_profile_revisions (
+    id uuid CONSTRAINT profile_revisions_id_not_null NOT NULL,
+    profile_id text CONSTRAINT profile_revisions_profile_id_not_null NOT NULL,
+    content text CONSTRAINT profile_revisions_content_not_null NOT NULL,
+    content_hash text CONSTRAINT profile_revisions_content_hash_not_null NOT NULL,
+    source text DEFAULT 'update'::text CONSTRAINT profile_revisions_source_not_null NOT NULL,
+    status text DEFAULT 'active'::text CONSTRAINT profile_revisions_status_not_null NOT NULL,
+    version_number integer DEFAULT 1 CONSTRAINT profile_revisions_version_number_not_null NOT NULL,
+    version_label text DEFAULT 'v1'::text CONSTRAINT profile_revisions_version_label_not_null NOT NULL,
+    activated_at timestamp with time zone,
+    deprecated_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() CONSTRAINT profile_revisions_created_at_not_null NOT NULL,
+    created_by uuid,
+    restored_from_revision_id uuid,
+    structured_content jsonb,
+    CONSTRAINT profile_revisions_source_check CHECK ((source = ANY (ARRAY['create'::text, 'update'::text, 'restore'::text, 'starter_profile_form'::text, 'candidate_promotion'::text, 'legacy_normalization'::text, 'lesson_population'::text, 'profile_revision_refresh'::text]))),
+    CONSTRAINT profile_revisions_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'deprecated'::text]))),
+    CONSTRAINT profile_revisions_version_number_check CHECK (((version_number IS NULL) OR (version_number > 0)))
+);
+
+CREATE TABLE public.legacy_profiles (
+    id text CONSTRAINT profiles_id_not_null NOT NULL,
+    label text CONSTRAINT profiles_label_not_null NOT NULL,
+    active_revision_id uuid,
+    created_at timestamp with time zone DEFAULT now() CONSTRAINT profiles_created_at_not_null NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() CONSTRAINT profiles_updated_at_not_null NOT NULL,
+    provenance text DEFAULT 'unknown'::text CONSTRAINT profiles_provenance_not_null NOT NULL,
+    initial_enrichment_completed_at timestamp with time zone,
+    CONSTRAINT profiles_enrichment_completion_check CHECK (((provenance = 'evidence_enriched'::text) = (initial_enrichment_completed_at IS NOT NULL))),
+    CONSTRAINT profiles_provenance_check CHECK ((provenance = ANY (ARRAY['unknown'::text, 'tutor_only'::text, 'evidence_enriched'::text])))
+);
+
+CREATE TABLE public.legacy_student_profile_bindings (
+    id uuid CONSTRAINT student_profile_bindings_id_not_null NOT NULL,
+    student_id uuid CONSTRAINT student_profile_bindings_student_id_not_null NOT NULL,
+    profile_id text CONSTRAINT student_profile_bindings_profile_id_not_null NOT NULL,
+    effective_from timestamp with time zone CONSTRAINT student_profile_bindings_effective_from_not_null NOT NULL,
+    effective_to timestamp with time zone,
+    reason text,
+    changed_by uuid,
+    created_at timestamp with time zone DEFAULT now() CONSTRAINT student_profile_bindings_created_at_not_null NOT NULL,
+    CONSTRAINT student_profile_bindings_effective_window_check CHECK (((effective_to IS NULL) OR (effective_to > effective_from)))
+);
+
 CREATE TABLE public.lesson_memory_entries (
     id uuid NOT NULL,
     student_id uuid NOT NULL,
@@ -651,7 +703,7 @@ CREATE TABLE public.ops_actions (
 
 CREATE TABLE public.profile_initial_enrichment_operations (
     id uuid NOT NULL,
-    profile_id text NOT NULL,
+    legacy_profile_id text,
     student_id uuid NOT NULL,
     assignment_session_id uuid CONSTRAINT profile_initial_enrichment_opera_assignment_session_id_not_null NOT NULL,
     recording_id uuid NOT NULL,
@@ -682,38 +734,6 @@ CREATE TABLE public.profile_initial_enrichment_operations (
     CONSTRAINT profile_initial_enrichment_state_check CHECK ((state = ANY (ARRAY['waiting_evidence'::text, 'queued'::text, 'submitting'::text, 'result_ready'::text, 'succeeded'::text, 'failed'::text, 'uncertain'::text, 'superseded'::text]))),
     CONSTRAINT profile_initial_enrichment_submission_check CHECK (((submission_id IS NULL) = (submission_reserved_at IS NULL))),
     CONSTRAINT profile_initial_enrichment_success_check CHECK (((state <> 'succeeded'::text) OR (result_revision_id IS NOT NULL)))
-);
-
-CREATE TABLE public.profile_revisions (
-    id uuid NOT NULL,
-    profile_id text NOT NULL,
-    content text NOT NULL,
-    content_hash text NOT NULL,
-    source text DEFAULT 'update'::text NOT NULL,
-    status text DEFAULT 'active'::text NOT NULL,
-    version_number integer DEFAULT 1 NOT NULL,
-    version_label text DEFAULT 'v1'::text NOT NULL,
-    activated_at timestamp with time zone,
-    deprecated_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_by uuid,
-    restored_from_revision_id uuid,
-    structured_content jsonb,
-    CONSTRAINT profile_revisions_source_check CHECK ((source = ANY (ARRAY['create'::text, 'update'::text, 'restore'::text, 'starter_profile_form'::text, 'candidate_promotion'::text, 'legacy_normalization'::text, 'lesson_population'::text, 'profile_revision_refresh'::text]))),
-    CONSTRAINT profile_revisions_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'deprecated'::text]))),
-    CONSTRAINT profile_revisions_version_number_check CHECK (((version_number IS NULL) OR (version_number > 0)))
-);
-
-CREATE TABLE public.profiles (
-    id text NOT NULL,
-    label text NOT NULL,
-    active_revision_id uuid,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    provenance text DEFAULT 'unknown'::text NOT NULL,
-    initial_enrichment_completed_at timestamp with time zone,
-    CONSTRAINT profiles_enrichment_completion_check CHECK (((provenance = 'evidence_enriched'::text) = (initial_enrichment_completed_at IS NOT NULL))),
-    CONSTRAINT profiles_provenance_check CHECK ((provenance = ANY (ARRAY['unknown'::text, 'tutor_only'::text, 'evidence_enriched'::text])))
 );
 
 CREATE TABLE public.prompt_packages (
@@ -1053,22 +1073,11 @@ CREATE TABLE public.student_payment_records (
     CONSTRAINT student_payment_records_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text))
 );
 
-CREATE TABLE public.student_profile_bindings (
-    id uuid NOT NULL,
-    student_id uuid NOT NULL,
-    profile_id text NOT NULL,
-    effective_from timestamp with time zone NOT NULL,
-    effective_to timestamp with time zone,
-    reason text,
-    changed_by uuid,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT student_profile_bindings_effective_window_check CHECK (((effective_to IS NULL) OR (effective_to > effective_from)))
-);
-
 CREATE TABLE public.student_profile_candidate_draft_revisions (
     candidate_id uuid NOT NULL,
     revision_id uuid NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    student_id uuid NOT NULL
 );
 
 CREATE TABLE public.student_profile_candidates (
@@ -1109,6 +1118,29 @@ CREATE TABLE public.student_profile_candidates (
     CONSTRAINT student_profile_candidates_target_section_check CHECK ((target_section = ANY (ARRAY['goals_motivation'::text, 'work_communication_context'::text, 'interests_personal_context'::text, 'learning_preferences_study_habits'::text, 'long_running_strengths'::text, 'persistent_challenges_constraints'::text])))
 );
 
+CREATE TABLE public.student_profile_revisions (
+    id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    content text NOT NULL,
+    structured_content jsonb,
+    content_hash text NOT NULL,
+    source text NOT NULL,
+    status text NOT NULL,
+    version_number integer NOT NULL,
+    version_label text NOT NULL,
+    activated_at timestamp with time zone,
+    deprecated_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    restored_from_revision_id uuid,
+    legacy_profile_id text,
+    legacy_revision_id uuid,
+    legacy_version_label text,
+    CONSTRAINT student_profile_revisions_source_check CHECK ((source = ANY (ARRAY['create'::text, 'update'::text, 'restore'::text, 'starter_profile_form'::text, 'candidate_promotion'::text, 'legacy_normalization'::text, 'lesson_population'::text, 'profile_revision_refresh'::text]))),
+    CONSTRAINT student_profile_revisions_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'deprecated'::text]))),
+    CONSTRAINT student_profile_revisions_version_number_check CHECK ((version_number > 0))
+);
+
 CREATE TABLE public.student_reminder_preferences (
     student_id uuid NOT NULL,
     workspace_id uuid,
@@ -1137,13 +1169,16 @@ CREATE TABLE public.students (
     voices jsonb DEFAULT '{}'::jsonb NOT NULL,
     manifest_preset text,
     accent_preference text,
-    profile_id text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     archived_at timestamp with time zone,
     archived_by uuid,
     archive_reason text,
-    workspace_id uuid
+    workspace_id uuid,
+    profile_provenance text DEFAULT 'tutor_only'::text NOT NULL,
+    profile_initial_enrichment_completed_at timestamp with time zone,
+    CONSTRAINT students_check CHECK (((profile_provenance = 'evidence_enriched'::text) = (profile_initial_enrichment_completed_at IS NOT NULL))),
+    CONSTRAINT students_profile_provenance_check CHECK ((profile_provenance = ANY (ARRAY['unknown'::text, 'tutor_only'::text, 'evidence_enriched'::text])))
 );
 
 CREATE TABLE public.template_revisions (
@@ -1354,10 +1389,10 @@ ALTER TABLE ONLY public.ops_actions
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
     ADD CONSTRAINT profile_initial_enrichment_operations_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.profile_revisions
+ALTER TABLE ONLY public.legacy_profile_revisions
     ADD CONSTRAINT profile_revisions_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.profiles
+ALTER TABLE ONLY public.legacy_profiles
     ADD CONSTRAINT profiles_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.prompt_packages
@@ -1414,7 +1449,7 @@ ALTER TABLE ONLY public.student_memory_snapshots
 ALTER TABLE ONLY public.student_payment_records
     ADD CONSTRAINT student_payment_records_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.student_profile_bindings
+ALTER TABLE ONLY public.legacy_student_profile_bindings
     ADD CONSTRAINT student_profile_bindings_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.student_profile_candidate_draft_revisions
@@ -1422,6 +1457,21 @@ ALTER TABLE ONLY public.student_profile_candidate_draft_revisions
 
 ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_profile_candidates
+    ADD CONSTRAINT student_profile_candidates_student_id_id_key UNIQUE (student_id, id);
+
+ALTER TABLE ONLY public.student_profile_revisions
+    ADD CONSTRAINT student_profile_revisions_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_profile_revisions
+    ADD CONSTRAINT student_profile_revisions_student_id_id_key UNIQUE (student_id, id);
+
+ALTER TABLE ONLY public.student_profile_revisions
+    ADD CONSTRAINT student_profile_revisions_student_id_legacy_revision_id_key UNIQUE (student_id, legacy_revision_id);
+
+ALTER TABLE ONLY public.student_profile_revisions
+    ADD CONSTRAINT student_profile_revisions_student_id_version_number_key UNIQUE (student_id, version_number);
 
 ALTER TABLE ONLY public.student_reminder_preferences
     ADD CONSTRAINT student_reminder_preferences_pkey PRIMARY KEY (student_id);
@@ -1575,17 +1625,17 @@ CREATE INDEX idx_ops_actions_retention_scan ON public.ops_actions USING btree (f
 
 CREATE INDEX idx_ops_actions_state_finished_at ON public.ops_actions USING btree (state, finished_at);
 
-CREATE INDEX idx_profile_revisions_profile_id_created_at ON public.profile_revisions USING btree (profile_id, created_at DESC);
+CREATE INDEX idx_profile_revisions_profile_id_created_at ON public.legacy_profile_revisions USING btree (profile_id, created_at DESC);
 
-CREATE INDEX idx_profile_revisions_profile_id_hash ON public.profile_revisions USING btree (profile_id, content_hash);
+CREATE INDEX idx_profile_revisions_profile_id_hash ON public.legacy_profile_revisions USING btree (profile_id, content_hash);
 
-CREATE UNIQUE INDEX idx_profile_revisions_profile_version ON public.profile_revisions USING btree (profile_id, version_number);
+CREATE UNIQUE INDEX idx_profile_revisions_profile_version ON public.legacy_profile_revisions USING btree (profile_id, version_number);
 
-CREATE UNIQUE INDEX idx_profile_revisions_single_active ON public.profile_revisions USING btree (profile_id) WHERE (status = 'active'::text);
+CREATE UNIQUE INDEX idx_profile_revisions_single_active ON public.legacy_profile_revisions USING btree (profile_id) WHERE (status = 'active'::text);
 
-CREATE INDEX idx_profiles_active_revision_id ON public.profiles USING btree (active_revision_id);
+CREATE INDEX idx_profiles_active_revision_id ON public.legacy_profiles USING btree (active_revision_id);
 
-CREATE INDEX idx_profiles_label ON public.profiles USING btree (label);
+CREATE INDEX idx_profiles_label ON public.legacy_profiles USING btree (label);
 
 CREATE INDEX idx_prompt_packages_lesson_updated ON public.prompt_packages USING btree (lesson_id, updated_at DESC, id DESC) WHERE (lesson_id IS NOT NULL);
 
@@ -1661,13 +1711,13 @@ CREATE INDEX idx_student_payment_records_student_received_at ON public.student_p
 
 CREATE INDEX idx_student_payment_records_workspace_received_at ON public.student_payment_records USING btree (workspace_id, received_at DESC, created_at DESC, id DESC) WHERE (voided_at IS NULL);
 
-CREATE INDEX idx_student_profile_bindings_effective_from ON public.student_profile_bindings USING btree (effective_from DESC);
+CREATE INDEX idx_student_profile_bindings_effective_from ON public.legacy_student_profile_bindings USING btree (effective_from DESC);
 
-CREATE INDEX idx_student_profile_bindings_profile_id ON public.student_profile_bindings USING btree (profile_id);
+CREATE INDEX idx_student_profile_bindings_profile_id ON public.legacy_student_profile_bindings USING btree (profile_id);
 
-CREATE UNIQUE INDEX idx_student_profile_bindings_single_active ON public.student_profile_bindings USING btree (student_id) WHERE (effective_to IS NULL);
+CREATE UNIQUE INDEX idx_student_profile_bindings_single_active ON public.legacy_student_profile_bindings USING btree (student_id) WHERE (effective_to IS NULL);
 
-CREATE INDEX idx_student_profile_bindings_student_id ON public.student_profile_bindings USING btree (student_id);
+CREATE INDEX idx_student_profile_bindings_student_id ON public.legacy_student_profile_bindings USING btree (student_id);
 
 CREATE INDEX idx_student_profile_candidate_draft_revisions_revision ON public.student_profile_candidate_draft_revisions USING btree (revision_id, candidate_id);
 
@@ -1690,8 +1740,6 @@ CREATE INDEX idx_students_active_student ON public.students USING btree (student
 CREATE INDEX idx_students_archived_at ON public.students USING btree (archived_at DESC, id DESC) WHERE (archived_at IS NOT NULL);
 
 CREATE INDEX idx_students_created_at ON public.students USING btree (created_at);
-
-CREATE INDEX idx_students_profile_id ON public.students USING btree (profile_id);
 
 CREATE INDEX idx_students_workspace_id ON public.students USING btree (workspace_id);
 
@@ -1743,15 +1791,27 @@ CREATE INDEX mcp_oauth_artifacts_uid_idx ON public.mcp_oauth_artifacts USING btr
 
 CREATE INDEX mcp_oauth_grants_user_idx ON public.mcp_oauth_grants USING btree (user_id);
 
-CREATE UNIQUE INDEX profile_initial_enrichment_exact_source_idx ON public.profile_initial_enrichment_operations USING btree (profile_id, assignment_session_id, transcript_id, transcript_hash);
+CREATE INDEX profile_initial_enrichment_exact_source_idx ON public.profile_initial_enrichment_operations USING btree (student_id, assignment_session_id, transcript_id, transcript_hash);
 
-CREATE UNIQUE INDEX profile_initial_enrichment_live_profile_idx ON public.profile_initial_enrichment_operations USING btree (profile_id) WHERE (state = ANY (ARRAY['waiting_evidence'::text, 'queued'::text, 'submitting'::text, 'result_ready'::text, 'uncertain'::text]));
+CREATE UNIQUE INDEX profile_initial_enrichment_live_student_idx ON public.profile_initial_enrichment_operations USING btree (student_id) WHERE (state = ANY (ARRAY['waiting_evidence'::text, 'queued'::text, 'submitting'::text, 'result_ready'::text, 'uncertain'::text]));
 
 CREATE INDEX profile_initial_enrichment_reconcile_idx ON public.profile_initial_enrichment_operations USING btree (state, updated_at) WHERE (state = ANY (ARRAY['waiting_evidence'::text, 'queued'::text, 'submitting'::text, 'result_ready'::text]));
 
-CREATE UNIQUE INDEX profile_initial_enrichment_success_profile_idx ON public.profile_initial_enrichment_operations USING btree (profile_id) WHERE (state = 'succeeded'::text);
+CREATE INDEX profile_initial_enrichment_success_student_idx ON public.profile_initial_enrichment_operations USING btree (student_id) WHERE (state = 'succeeded'::text);
+
+CREATE UNIQUE INDEX student_profile_revisions_single_active ON public.student_profile_revisions USING btree (student_id) WHERE (status = 'active'::text);
+
+CREATE INDEX student_profile_revisions_student_created ON public.student_profile_revisions USING btree (student_id, created_at DESC);
+
+CREATE INDEX student_profile_revisions_student_hash ON public.student_profile_revisions USING btree (student_id, content_hash);
 
 CREATE TRIGGER assignment_sessions_confirmed_source_audio_deletion AFTER INSERT OR UPDATE OF confirmed_snapshot, recording_id, student_id ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.request_confirmed_source_audio_deletion();
+
+CREATE TRIGGER freeze_legacy_profile_bindings BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_student_profile_bindings FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
+
+CREATE TRIGGER freeze_legacy_profile_revisions BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_profile_revisions FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
+
+CREATE TRIGGER freeze_legacy_profiles BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_profiles FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
 
 CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
 
@@ -1765,7 +1825,7 @@ CREATE TRIGGER set_jobs_updated_at BEFORE UPDATE ON public.jobs FOR EACH ROW EXE
 
 CREATE TRIGGER set_lesson_memory_entries_updated_at BEFORE UPDATE ON public.lesson_memory_entries FOR EACH ROW EXECUTE FUNCTION public.set_lesson_memory_entries_updated_at();
 
-CREATE TRIGGER set_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.set_profiles_updated_at();
+CREATE TRIGGER set_profiles_updated_at BEFORE UPDATE ON public.legacy_profiles FOR EACH ROW EXECUTE FUNCTION public.set_profiles_updated_at();
 
 CREATE TRIGGER set_prompt_packages_updated_at BEFORE UPDATE ON public.prompt_packages FOR EACH ROW EXECUTE FUNCTION public.set_prompt_packages_updated_at();
 
@@ -1810,9 +1870,6 @@ ALTER TABLE ONLY public.assignment_sessions
 
 ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_recording_id_fkey FOREIGN KEY (recording_id) REFERENCES public.recordings(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.assignment_sessions
-    ADD CONSTRAINT assignment_sessions_selected_profile_revision_id_fkey FOREIGN KEY (selected_profile_revision_id) REFERENCES public.profile_revisions(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_share_job_id_fkey FOREIGN KEY (share_job_id) REFERENCES public.jobs(id);
@@ -1920,22 +1977,22 @@ ALTER TABLE ONLY public.mcp_oauth_grants
     ADD CONSTRAINT mcp_oauth_grants_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_op_student_id_result_revision_i_fkey FOREIGN KEY (student_id, result_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
+    ADD CONSTRAINT profile_initial_enrichment_ope_student_id_seed_revision_id_fkey FOREIGN KEY (student_id, seed_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.profile_initial_enrichment_operations
     ADD CONSTRAINT profile_initial_enrichment_operatio_lesson_memory_entry_id_fkey FOREIGN KEY (lesson_memory_entry_id) REFERENCES public.lesson_memory_entries(id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
     ADD CONSTRAINT profile_initial_enrichment_operation_assignment_session_id_fkey FOREIGN KEY (assignment_session_id) REFERENCES public.assignment_sessions(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
-    ADD CONSTRAINT profile_initial_enrichment_operations_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+    ADD CONSTRAINT profile_initial_enrichment_operations_profile_id_fkey FOREIGN KEY (legacy_profile_id) REFERENCES public.legacy_profiles(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
     ADD CONSTRAINT profile_initial_enrichment_operations_recording_id_fkey FOREIGN KEY (recording_id) REFERENCES public.recordings(id) ON DELETE RESTRICT;
-
-ALTER TABLE ONLY public.profile_initial_enrichment_operations
-    ADD CONSTRAINT profile_initial_enrichment_operations_result_revision_id_fkey FOREIGN KEY (result_revision_id) REFERENCES public.profile_revisions(id) ON DELETE RESTRICT;
-
-ALTER TABLE ONLY public.profile_initial_enrichment_operations
-    ADD CONSTRAINT profile_initial_enrichment_operations_seed_revision_id_fkey FOREIGN KEY (seed_revision_id) REFERENCES public.profile_revisions(id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
     ADD CONSTRAINT profile_initial_enrichment_operations_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
@@ -1943,17 +2000,17 @@ ALTER TABLE ONLY public.profile_initial_enrichment_operations
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
     ADD CONSTRAINT profile_initial_enrichment_operations_transcript_id_fkey FOREIGN KEY (transcript_id) REFERENCES public.transcripts(id) ON DELETE RESTRICT;
 
-ALTER TABLE ONLY public.profile_revisions
+ALTER TABLE ONLY public.legacy_profile_revisions
     ADD CONSTRAINT profile_revisions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
-ALTER TABLE ONLY public.profile_revisions
-    ADD CONSTRAINT profile_revisions_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.legacy_profile_revisions
+    ADD CONSTRAINT profile_revisions_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.legacy_profiles(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.profile_revisions
-    ADD CONSTRAINT profile_revisions_restored_from_revision_id_fkey FOREIGN KEY (restored_from_revision_id) REFERENCES public.profile_revisions(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.legacy_profile_revisions
+    ADD CONSTRAINT profile_revisions_restored_from_revision_id_fkey FOREIGN KEY (restored_from_revision_id) REFERENCES public.legacy_profile_revisions(id) ON DELETE SET NULL;
 
-ALTER TABLE ONLY public.profiles
-    ADD CONSTRAINT profiles_active_revision_id_fkey FOREIGN KEY (active_revision_id) REFERENCES public.profile_revisions(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.legacy_profiles
+    ADD CONSTRAINT profiles_active_revision_id_fkey FOREIGN KEY (active_revision_id) REFERENCES public.legacy_profile_revisions(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.prompt_packages
     ADD CONSTRAINT prompt_packages_assignment_session_id_fkey FOREIGN KEY (assignment_session_id) REFERENCES public.assignment_sessions(id) ON DELETE RESTRICT;
@@ -2087,23 +2144,26 @@ ALTER TABLE ONLY public.student_payment_records
 ALTER TABLE ONLY public.student_payment_records
     ADD CONSTRAINT student_payment_records_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
 
-ALTER TABLE ONLY public.student_profile_bindings
+ALTER TABLE ONLY public.legacy_student_profile_bindings
     ADD CONSTRAINT student_profile_bindings_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
-ALTER TABLE ONLY public.student_profile_bindings
-    ADD CONSTRAINT student_profile_bindings_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id) ON DELETE RESTRICT;
+ALTER TABLE ONLY public.legacy_student_profile_bindings
+    ADD CONSTRAINT student_profile_bindings_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.legacy_profiles(id) ON DELETE RESTRICT;
 
-ALTER TABLE ONLY public.student_profile_bindings
+ALTER TABLE ONLY public.legacy_student_profile_bindings
     ADD CONSTRAINT student_profile_bindings_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_profile_candidate_draft_revisions
+    ADD CONSTRAINT student_profile_candidate_draft_re_student_id_candidate_id_fkey FOREIGN KEY (student_id, candidate_id) REFERENCES public.student_profile_candidates(student_id, id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_profile_candidate_draft_revisions
+    ADD CONSTRAINT student_profile_candidate_draft_rev_student_id_revision_id_fkey FOREIGN KEY (student_id, revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY public.student_profile_candidate_draft_revisions
     ADD CONSTRAINT student_profile_candidate_draft_revisions_candidate_id_fkey FOREIGN KEY (candidate_id) REFERENCES public.student_profile_candidates(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.student_profile_candidate_draft_revisions
-    ADD CONSTRAINT student_profile_candidate_draft_revisions_revision_id_fkey FOREIGN KEY (revision_id) REFERENCES public.profile_revisions(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.student_profile_candidates
-    ADD CONSTRAINT student_profile_candidates_promoted_revision_id_fkey FOREIGN KEY (promoted_revision_id) REFERENCES public.profile_revisions(id) ON DELETE SET NULL;
+    ADD CONSTRAINT student_profile_candidate_draft_revisions_revision_id_fkey FOREIGN KEY (revision_id) REFERENCES public.student_profile_revisions(id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.users(id) ON DELETE SET NULL;
@@ -2118,7 +2178,19 @@ ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.student_profile_candidates
+    ADD CONSTRAINT student_profile_candidates_student_id_promoted_revision_id_fkey FOREIGN KEY (student_id, promoted_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_superseded_by_id_fkey FOREIGN KEY (superseded_by_id) REFERENCES public.student_profile_candidates(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_profile_revisions
+    ADD CONSTRAINT student_profile_revision_restore_owner_fkey FOREIGN KEY (student_id, restored_from_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.student_profile_revisions
+    ADD CONSTRAINT student_profile_revisions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_profile_revisions
+    ADD CONSTRAINT student_profile_revisions_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.student_reminder_preferences
     ADD CONSTRAINT student_reminder_preferences_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
@@ -2131,9 +2203,6 @@ ALTER TABLE ONLY public.student_reminder_preferences
 
 ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_archived_by_fkey FOREIGN KEY (archived_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.students
-    ADD CONSTRAINT students_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
@@ -2306,5 +2375,6 @@ VALUES
   ('0055_prompt_package_assignment_provenance', '36c5acb4a15ffaca1880066070ad624b73f1f390891b3d51d732d66b5a9ecd81', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0056_first_profile_onboarding', '2c0fbc74c1f9ea8d6e2cf65d48e0a3e15177f9f3af7d5b581b2a0e04fa61f3ea', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0057_historical_profile_provenance_timestamp', 'e203033eb30c1456a4df56bbf1b784d0d842cf28a4dcc1a510fd87217e7a7e09', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0058_mcp_oauth_foundation', '4c4d181b4f150b453c447f3d2fb652b990f479dcd5ddb5ab2a89089f0cfb1cc0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0058_mcp_oauth_foundation', '4c4d181b4f150b453c447f3d2fb652b990f479dcd5ddb5ab2a89089f0cfb1cc0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0059_student_owned_profile_revisions', '2be84d00c2f17b681d27a19454739e16f21cb125cfa7b5709f0255274cc9bb2d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

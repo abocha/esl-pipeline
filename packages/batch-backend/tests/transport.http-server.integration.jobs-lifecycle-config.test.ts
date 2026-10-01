@@ -639,8 +639,8 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
         students: [
-          { id: deriveStudentId('Anna'), name: 'Anna', profileId: null },
-          { id: deriveStudentId('Bob'), name: 'Bob', profileId: null },
+          { id: deriveStudentId('Anna'), name: 'Anna' },
+          { id: deriveStudentId('Bob'), name: 'Bob' },
         ],
       });
     });
@@ -675,8 +675,7 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
         templates: [{ id: 'template.md', label: 'Template' }],
-        profiles: [{ id: 'profile.md', label: 'Profile' }],
-        defaults: { templateId: 'template.md', profileId: 'profile.md' },
+        defaults: { templateId: 'template.md' },
       });
     });
   },

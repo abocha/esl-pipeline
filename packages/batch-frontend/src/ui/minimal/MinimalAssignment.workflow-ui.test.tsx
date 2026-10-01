@@ -357,7 +357,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
         expect.objectContaining({
           patch: expect.objectContaining({
             teacherNotes: confirmedContext.teacherNotes,
-            selectedProfileId: confirmedContext.profileId,
+            selectedProfileId: session.studentId,
             selectedProfileRevisionId: confirmedContext.profileRevisionId,
             selectedProfileRevisionHash: confirmedContext.profileRevisionHash,
             promptPackageId: 'pkg-1',
@@ -537,7 +537,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
         transcriptId: 'tx-1',
         confirmedStep: 'context',
         teacherNotes: request.teacherNotes,
-        selectedProfileId: request.profileId,
+        selectedProfileId: 'student-alex',
         selectedProfileRevisionId: request.profileRevisionId,
         selectedProfileRevisionHash: request.profileRevisionHash,
         revision: request.expectedRevision + 1,
@@ -803,7 +803,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       draftId: 'draft-1',
       confirmedStep: 'create',
       teacherNotes: priorValue || null,
-      selectedProfileId: 'profiles/alex.md',
+      selectedProfileId: 'student-alex',
       selectedProfileRevisionId: 'revision-1',
       selectedProfileRevisionHash: 'a'.repeat(64),
       revision: 19,
@@ -817,7 +817,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(api.fetchAssignmentSession).toHaveBeenCalledTimes(baselineFetchCalls + 1),
     );
     await waitFor(() =>
-      expect(api.getProfileRevision).toHaveBeenLastCalledWith('profiles/alex.md', 'revision-1'),
+      expect(api.getProfileRevision).toHaveBeenLastCalledWith('student-alex', 'revision-1'),
     );
     let resolveProfileContent!: (value: Awaited<ReturnType<typeof api.getProfileContent>>) => void;
     const pendingProfileContent = new Promise<Awaited<ReturnType<typeof api.getProfileContent>>>(
@@ -842,15 +842,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(priorValue).not.toBe(latest.teacherNotes);
     vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(latest);
     vi.mocked(api.getProfileContent).mockResolvedValue({
-      id: 'profiles/alex.md',
-      label: 'Alex Profile',
+      studentId: 'student-alex',
       content: 'NEWER PROFILE CONTENT',
       currentRevisionId: 'revision-2',
       updatedAt: '2026-07-19T00:02:00.000Z',
     });
     vi.mocked(api.getProfileRevision).mockResolvedValue({
       id: 'revision-2',
-      profileId: 'profiles/alex.md',
+      studentId: 'student-alex',
       contentHash: 'b'.repeat(64),
       source: 'update',
       createdAt: '2026-07-19T00:02:00.000Z',
@@ -870,7 +869,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       state: 'not_applicable',
       operationState: null,
       profile: {
-        profileId: 'profiles/alex.md',
+        studentId: 'student-alex',
         revisionId: 'revision-2',
         revisionHash: 'b'.repeat(64),
         content: 'NEWER PROFILE CONTENT',
@@ -892,14 +891,13 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     await waitFor(() => expect((notes as HTMLTextAreaElement).value).toBe('Remote saved note'));
     resolveProfileContent({
-      id: 'profiles/alex.md',
-      label: 'Alex Profile',
+      studentId: 'student-alex',
       content: 'NEWER PROFILE CONTENT',
       currentRevisionId: 'revision-2',
       updatedAt: '2026-07-19T00:02:00.000Z',
     });
     await waitFor(() =>
-      expect(api.getProfileRevision).toHaveBeenLastCalledWith('profiles/alex.md', 'revision-2'),
+      expect(api.getProfileRevision).toHaveBeenLastCalledWith('student-alex', 'revision-2'),
     );
     await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
     await waitFor(() =>
@@ -1340,7 +1338,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     async () => {
       const user = createMinimalUser();
       vi.mocked(api.fetchStudentOptions).mockResolvedValue({
-        students: [{ id: 'student-cora', name: 'Cora', profileId: null as never }],
+        students: [{ id: 'student-cora', name: 'Cora' }],
       });
       vi.mocked(api.uploadRecording).mockResolvedValue(
         makeRecording({ studentId: 'student-cora', status: 'transcribed', transcriptId: 'tx-1' }),

@@ -211,14 +211,14 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const first = await confirmMixedSource(repository, fixture);
     await confirmMixedSource(repository, fixture);
     const before = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      const operations = await client.query<{ id: string; profile_id: string; state: string }>(
-        `SELECT id, profile_id, state FROM profile_initial_enrichment_operations
+      const operations = await client.query<{ id: string; student_id: string; state: string }>(
+        `SELECT id, student_id, state FROM profile_initial_enrichment_operations
          WHERE assignment_session_id = $1`,
         [fixture.sessionId],
       );
       const profile = await client.query<{ provenance: string }>(
-        'SELECT provenance FROM profiles WHERE id = $1',
-        [operations.rows[0]?.profile_id],
+        'SELECT profile_provenance AS provenance FROM students WHERE id = $1',
+        [operations.rows[0]?.student_id],
       );
       await client.query(
         `UPDATE lesson_memory_entries SET status = 'ready'
@@ -268,12 +268,12 @@ describe('domain/assignment-session-repository persistence contract', () => {
         [before.operations[0]!.id],
       );
       const profile = await client.query<{ provenance: string; active_revision_id: string }>(
-        'SELECT provenance, active_revision_id FROM profiles WHERE id = $1',
-        [before.operations[0]!.profile_id],
+        `SELECT s.profile_provenance AS provenance, r.id AS active_revision_id FROM students s LEFT JOIN student_profile_revisions r ON r.student_id = s.id AND r.status = 'active' WHERE s.id = $1`,
+        [before.operations[0]!.student_id],
       );
       const revisions = await client.query<{ id: string; status: string }>(
-        'SELECT id, status FROM profile_revisions WHERE profile_id = $1',
-        [before.operations[0]!.profile_id],
+        'SELECT id, status FROM student_profile_revisions WHERE student_id = $1',
+        [before.operations[0]!.student_id],
       );
       return { operation: operations.rows[0], profile: profile.rows[0], revisions: revisions.rows };
     });
@@ -297,7 +297,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
           step: 'context',
           expectedRevision: first.session.revision,
           teacherNotes: null,
-          profileId: null,
+
           profileRevisionId: null,
           profileRevisionHash: null,
         },
@@ -312,28 +312,13 @@ describe('domain/assignment-session-repository persistence contract', () => {
       mappingWorkingVersion: 1,
       mappingContentHash: 'a'.repeat(64),
     });
-    const profileId = `profiles/${randomUUID()}.md`;
+    const studentId = fixture.studentId;
     const seedContent =
       '# About Alex\n\nNever schedule calls after 18:00.\n\n| Topic | Tutor note |\n|---|---|\n| Family | Ask privately before using in exercises |';
-    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      await client.query(
-        `INSERT INTO profiles (id, label, provenance) VALUES ($1, 'Tutor seed', 'tutor_only')`,
-        [profileId],
-      );
-      await client.query('UPDATE students SET profile_id = $2 WHERE id = $1', [
-        fixture.studentId,
-        profileId,
-      ]);
-      await client.query(
-        `INSERT INTO student_profile_bindings
-         (id, student_id, profile_id, effective_from, reason, changed_by)
-         VALUES ($1, $2, $3, NOW(), 'student_update', $4)`,
-        [randomUUID(), fixture.studentId, profileId, fixture.userId],
-      );
-    });
+
     const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
     await insertProfileRevision({
-      profileId,
+      studentId,
       content: seedContent,
       contentHash: createHash('sha256').update(seedContent).digest('hex'),
       source: 'create',
@@ -384,9 +369,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
         content: string;
         structured_content: { teacherNotes: string };
       }>(
-        `SELECT r.content, r.structured_content FROM profiles p
-         JOIN profile_revisions r ON r.id = p.active_revision_id WHERE p.id = $1`,
-        [profileId],
+        `SELECT content, structured_content FROM student_profile_revisions WHERE student_id = $1 AND status = 'active'`,
+        [studentId],
       );
       return { input: operation.rows[0]!.generation_input, revision: revision.rows[0]! };
     });
@@ -403,7 +387,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       mappingWorkingVersion: 1,
       mappingContentHash: 'a'.repeat(64),
     });
-    const profileId = `profiles/${randomUUID()}.md`;
+    const studentId = fixture.studentId;
     const structuredSeed = {
       schemaVersion: 'foundational_profile_v1' as const,
       overallLevel: 'A2',
@@ -420,25 +404,10 @@ describe('domain/assignment-session-repository persistence contract', () => {
       '../src/application/foundational-profile.js'
     );
     const seedContent = renderFoundationalProfileContent(structuredSeed);
-    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      await client.query(
-        `INSERT INTO profiles (id, label, provenance) VALUES ($1, 'Structured seed', 'tutor_only')`,
-        [profileId],
-      );
-      await client.query('UPDATE students SET profile_id = $2 WHERE id = $1', [
-        fixture.studentId,
-        profileId,
-      ]);
-      await client.query(
-        `INSERT INTO student_profile_bindings
-         (id, student_id, profile_id, effective_from, reason, changed_by)
-         VALUES ($1, $2, $3, NOW(), 'student_update', $4)`,
-        [randomUUID(), fixture.studentId, profileId, fixture.userId],
-      );
-    });
+
     const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
     await insertProfileRevision({
-      profileId,
+      studentId,
       content: seedContent,
       contentHash: createHash('sha256').update(seedContent).digest('hex'),
       structuredContent: structuredSeed,
@@ -495,9 +464,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
           teacherNotes: string;
         };
       }>(
-        `SELECT r.content, r.structured_content FROM profiles p
-         JOIN profile_revisions r ON r.id = p.active_revision_id WHERE p.id = $1`,
-        [profileId],
+        `SELECT content, structured_content FROM student_profile_revisions WHERE student_id = $1 AND status = 'active'`,
+        [studentId],
       );
       return { input: operation.rows[0]!.generation_input, revision: revision.rows[0]! };
     });
@@ -631,7 +599,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
           step: 'context',
           expectedRevision: confirmedSource.session.revision,
           teacherNotes: 'Practice introductions',
-          profileId: null,
+
           profileRevisionId: null,
           profileRevisionHash: null,
         },
@@ -672,13 +640,11 @@ describe('domain/assignment-session-repository persistence contract', () => {
     }));
     const active = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       const result = await client.query<{
-        profile_id: string;
+        student_id: string;
         active_revision_id: string;
         content_hash: string;
       }>(
-        `SELECT p.id AS profile_id, p.active_revision_id, r.content_hash
-         FROM profiles p JOIN profile_revisions r ON r.id = p.active_revision_id
-         JOIN students s ON s.profile_id = p.id WHERE s.id = $1`,
+        `SELECT r.student_id, r.id AS active_revision_id, r.content_hash FROM student_profile_revisions r WHERE r.student_id = $1 AND r.status = 'active'`,
         [fixture.studentId],
       );
       return result.rows[0]!;
@@ -687,7 +653,6 @@ describe('domain/assignment-session-repository persistence contract', () => {
       step: 'context' as const,
       expectedRevision: confirmedSource.session.revision,
       teacherNotes: 'Practice introductions',
-      profileId: active.profile_id,
       profileRevisionId: active.active_revision_id,
       profileRevisionHash: active.content_hash,
     };
@@ -736,7 +701,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
           step: 'context',
           expectedRevision: source.session.revision,
           teacherNotes: 'Continue with tutor guidance',
-          profileId: null,
+
           profileRevisionId: null,
           profileRevisionHash: null,
         },
@@ -761,8 +726,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
         confirmed.lessonMemoryIntent?.entryId,
         'ready',
       ]);
-      const result = await client.query<{ id: string; profile_id: string }>(
-        'SELECT id, profile_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+      const result = await client.query<{ id: string; student_id: string }>(
+        'SELECT id, student_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
         [fixture.sessionId],
       );
       return result.rows[0]!;
@@ -786,7 +751,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     await entered;
     const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
     const tutor = await insertProfileRevision({
-      profileId: op.profile_id,
+      studentId: op.student_id,
       content: '# Tutor edit',
       contentHash: 'b'.repeat(64),
       source: 'update',
@@ -813,8 +778,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
         [op.id],
       );
       const profile = await client.query<{ active_revision_id: string; provenance: string }>(
-        'SELECT active_revision_id, provenance FROM profiles WHERE id = $1',
-        [op.profile_id],
+        `SELECT r.id AS active_revision_id, s.profile_provenance AS provenance FROM students s LEFT JOIN student_profile_revisions r ON r.student_id = s.id AND r.status = 'active' WHERE s.id = $1`,
+        [op.student_id],
       );
       return { operation: operation.rows[0], profile: profile.rows[0] };
     });
@@ -822,7 +787,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     expect(result.profile).toEqual({ active_revision_id: tutor.id, provenance: 'tutor_only' });
   });
 
-  it('rolls back active revision deprecation and pointer change when insertion fails', async () => {
+  it('rolls back active revision deprecation when insertion fails', async () => {
     const fixture = await createMixedSourceConfirmationFixture({
       workingVersion: 1,
       contentHash: 'a'.repeat(64),
@@ -831,16 +796,16 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
     const repository = await import('../src/domain/assignment-session-repository.js');
     await confirmMixedSource(repository, fixture);
-    const profileId = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      const result = await client.query<{ profile_id: string }>(
-        'SELECT profile_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+    const studentId = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const result = await client.query<{ student_id: string }>(
+        'SELECT student_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
         [fixture.sessionId],
       );
-      return result.rows[0]!.profile_id;
+      return result.rows[0]!.student_id;
     });
     const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
     const original = await insertProfileRevision({
-      profileId,
+      studentId,
       content: '# Tutor seed',
       contentHash: 'b'.repeat(64),
       source: 'create',
@@ -849,7 +814,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     await expect(
       insertProfileRevision({
         id: original.id,
-        profileId,
+        studentId,
         content: '# Conflicting revision',
         contentHash: 'c'.repeat(64),
         source: 'update',
@@ -858,12 +823,12 @@ describe('domain/assignment-session-repository persistence contract', () => {
     ).rejects.toBeTruthy();
     const rows = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       const profile = await client.query<{ active_revision_id: string }>(
-        'SELECT active_revision_id FROM profiles WHERE id = $1',
-        [profileId],
+        `SELECT id AS active_revision_id FROM student_profile_revisions WHERE student_id = $1 AND status = 'active'`,
+        [studentId],
       );
       const revisions = await client.query<{ id: string; status: string }>(
-        'SELECT id, status FROM profile_revisions WHERE profile_id = $1',
-        [profileId],
+        'SELECT id, status FROM student_profile_revisions WHERE student_id = $1',
+        [studentId],
       );
       return { profile: profile.rows[0], revisions: revisions.rows };
     });
@@ -991,15 +956,15 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const repository = await import('../src/domain/assignment-session-repository.js');
     const source = await confirmMixedSource(repository, fixture);
     const operation = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      const row = await client.query<{ id: string; profile_id: string }>(
-        'SELECT id, profile_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+      const row = await client.query<{ id: string; student_id: string }>(
+        'SELECT id, student_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
         [fixture.sessionId],
       );
       return row.rows[0]!;
     });
     const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
     const tutor = await insertProfileRevision({
-      profileId: operation.profile_id,
+      studentId: operation.student_id,
       content: '# Tutor correction while lesson evidence is pending',
       contentHash: 'b'.repeat(64),
       source: 'update',
@@ -1042,7 +1007,6 @@ describe('domain/assignment-session-repository persistence contract', () => {
         step: 'context',
         expectedRevision: source.session.revision,
         teacherNotes: 'Tutor correction is authoritative',
-        profileId: operation.profile_id,
         profileRevisionId: tutor.id,
         profileRevisionHash: tutor.contentHash,
       },
@@ -1113,7 +1077,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
             step: 'context',
             expectedRevision: replacement.session.revision,
             teacherNotes: 'Wait for current source',
-            profileId: null,
+
             profileRevisionId: null,
             profileRevisionHash: null,
           },
@@ -1393,8 +1357,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const { createHash } = await import('node:crypto');
     const resultHash = createHash('sha256').update(content, 'utf8').digest('hex');
     const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      const result = await client.query<{ id: string; profile_id: string }>(
-        'SELECT id, profile_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+      const result = await client.query<{ id: string; student_id: string }>(
+        'SELECT id, student_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
         [fixture.sessionId],
       );
       await client.query(
@@ -1421,8 +1385,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
         [op.id],
       );
       const profile = await client.query<{ active_revision_id: string | null; provenance: string }>(
-        'SELECT active_revision_id, provenance FROM profiles WHERE id = $1',
-        [op.profile_id],
+        `SELECT r.id AS active_revision_id, s.profile_provenance AS provenance FROM students s LEFT JOIN student_profile_revisions r ON r.student_id = s.id AND r.status = 'active' WHERE s.id = $1`,
+        [op.student_id],
       );
       return { operation: operation.rows[0], profile: profile.rows[0] };
     });
@@ -1459,8 +1423,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
       .update(renderFoundationalProfileContent(profileResult), 'utf8')
       .digest('hex');
     const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      const result = await client.query<{ id: string; profile_id: string }>(
-        'SELECT id, profile_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+      const result = await client.query<{ id: string; student_id: string }>(
+        'SELECT id, student_id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
         [fixture.sessionId],
       );
       await client.query(
@@ -1484,8 +1448,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
         [op.id],
       );
       const profile = await client.query<{ active_revision_id: string; provenance: string }>(
-        'SELECT active_revision_id, provenance FROM profiles WHERE id = $1',
-        [op.profile_id],
+        `SELECT r.id AS active_revision_id, s.profile_provenance AS provenance FROM students s LEFT JOIN student_profile_revisions r ON r.student_id = s.id AND r.status = 'active' WHERE s.id = $1`,
+        [op.student_id],
       );
       return { operation: operation.rows[0], profile: profile.rows[0] };
     });
@@ -1909,7 +1873,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
             },
             context: {
               teacherNotes: null,
-              profileId: null,
+
               profileRevisionId: null,
               profileRevisionHash: null,
             },
@@ -2216,7 +2180,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
             },
             context: {
               teacherNotes: null,
-              profileId: null,
+
               profileRevisionId: null,
               profileRevisionHash: null,
             },

@@ -152,7 +152,6 @@ export interface HydratedAssignmentSnapshot {
   selectedProfileRevisionId?: string | null;
   selectedProfileRevisionHash?: string | null;
   profileAuthorityResolved?: boolean;
-  profileSelectionMode: 'auto' | 'manual';
   uploadError: string | null;
   uploadCacheNotice: string | null;
   authoring: AuthoringHydrationSnapshot;
@@ -165,13 +164,11 @@ function resolveSessionProfileLineage(session: AssignmentSession): {
   profileAuthorityResolved: boolean;
 } {
   const currentIsComplete = Boolean(
-    session.selectedProfileId &&
-      session.selectedProfileRevisionId &&
-      session.selectedProfileRevisionHash,
+    session.studentId && session.selectedProfileRevisionId && session.selectedProfileRevisionHash,
   );
   if (currentIsComplete) {
     return {
-      selectedProfileId: session.selectedProfileId ?? '',
+      selectedProfileId: session.studentId ?? '',
       selectedProfileRevisionId: session.selectedProfileRevisionId,
       selectedProfileRevisionHash: session.selectedProfileRevisionHash,
       profileAuthorityResolved: true,
@@ -180,11 +177,11 @@ function resolveSessionProfileLineage(session: AssignmentSession): {
 
   const confirmed = session.confirmed.context;
   const confirmedIsComplete = Boolean(
-    confirmed?.profileId && confirmed.profileRevisionId && confirmed.profileRevisionHash,
+    session.studentId && confirmed?.profileRevisionId && confirmed.profileRevisionHash,
   );
   if (confirmedIsComplete) {
     return {
-      selectedProfileId: confirmed?.profileId ?? '',
+      selectedProfileId: session.studentId,
       selectedProfileRevisionId: confirmed?.profileRevisionId ?? null,
       selectedProfileRevisionHash: confirmed?.profileRevisionHash ?? null,
       profileAuthorityResolved: true,
@@ -193,7 +190,7 @@ function resolveSessionProfileLineage(session: AssignmentSession): {
 
   if (confirmed) {
     return {
-      selectedProfileId: confirmed.profileId ?? '',
+      selectedProfileId: session.studentId,
       selectedProfileRevisionId: confirmed.profileRevisionId,
       selectedProfileRevisionHash: confirmed.profileRevisionHash,
       profileAuthorityResolved: true,
@@ -201,12 +198,10 @@ function resolveSessionProfileLineage(session: AssignmentSession): {
   }
 
   const hasRecoveryProfileState = Boolean(
-    session.selectedProfileId ||
-      session.selectedProfileRevisionId ||
-      session.selectedProfileRevisionHash,
+    session.selectedProfileRevisionId || session.selectedProfileRevisionHash,
   );
   return {
-    selectedProfileId: session.selectedProfileId ?? '',
+    selectedProfileId: session.studentId ?? '',
     selectedProfileRevisionId: session.selectedProfileRevisionId,
     selectedProfileRevisionHash: session.selectedProfileRevisionHash,
     profileAuthorityResolved: hasRecoveryProfileState,
@@ -237,7 +232,6 @@ interface UseMinimalAssignmentResumeParams {
   isCurrentHydration: (context: HydrationContext) => boolean;
   jobOptions: JobOptionsResponse | null;
   presetOptionIds: readonly string[];
-  resolveBoundProfileId: (studentId: string) => string;
   currentPublishTarget: MinimalPublishTarget;
   currentSelectedTtsProvider: UiTtsProvider;
   currentSelectedTtsStrategy: UiPublishTtsStrategy;
@@ -245,7 +239,6 @@ interface UseMinimalAssignmentResumeParams {
   currentSelectedPreset: string;
   currentSelectedStudentId: string;
   currentSelectedProfileId: string;
-  currentProfileSelectionMode: 'auto' | 'manual';
   onInitialHydrationResolved: (result: ResumeOpenSuccess) => void;
 }
 
@@ -257,7 +250,6 @@ export function useMinimalAssignmentResume({
   isCurrentHydration,
   jobOptions,
   presetOptionIds,
-  resolveBoundProfileId,
   currentPublishTarget,
   currentSelectedTtsProvider,
   currentSelectedTtsStrategy,
@@ -265,7 +257,6 @@ export function useMinimalAssignmentResume({
   currentSelectedPreset,
   currentSelectedStudentId,
   currentSelectedProfileId,
-  currentProfileSelectionMode,
   onInitialHydrationResolved,
 }: UseMinimalAssignmentResumeParams) {
   const [resumeJobs, setResumeJobs] = useState<JobStatus[]>([]);
@@ -421,11 +412,10 @@ export function useMinimalAssignmentResume({
         lessonId: session.lessonId ?? null,
         selectedProfileId:
           sessionProfileLineage.selectedProfileId ||
-          (session.studentId ? resolveBoundProfileId(session.studentId) : currentSelectedProfileId),
+          (session.studentId ? session.studentId : currentSelectedProfileId),
         selectedProfileRevisionId: sessionProfileLineage.selectedProfileRevisionId,
         selectedProfileRevisionHash: sessionProfileLineage.selectedProfileRevisionHash,
         profileAuthorityResolved: sessionProfileLineage.profileAuthorityResolved,
-        profileSelectionMode: session.studentId ? 'auto' : currentProfileSelectionMode,
         uploadError: null,
         uploadCacheNotice: null,
         authoring: {
@@ -452,7 +442,6 @@ export function useMinimalAssignmentResume({
       };
     },
     [
-      currentProfileSelectionMode,
       currentPublishTarget,
       currentSelectedPreset,
       currentSelectedProfileId,
@@ -462,7 +451,6 @@ export function useMinimalAssignmentResume({
       currentSelectedTtsStrategy,
       jobOptions,
       presetOptionIds,
-      resolveBoundProfileId,
     ],
   );
 
@@ -541,9 +529,6 @@ export function useMinimalAssignmentResume({
             completedSessionProfileLineage?.selectedProfileRevisionHash ?? null,
           profileAuthorityResolved:
             completedSessionProfileLineage?.profileAuthorityResolved ?? false,
-          profileSelectionMode: completedSession?.selectedProfileId
-            ? 'manual'
-            : currentProfileSelectionMode,
           uploadError: null,
           uploadCacheNotice: null,
           authoring: {
@@ -659,10 +644,9 @@ export function useMinimalAssignmentResume({
         }
 
         if (resolvedStudentId) {
-          snapshot.profileSelectionMode = 'auto';
           snapshot.selectedStudentId = resolvedStudentId;
           if (!snapshot.profileAuthorityResolved) {
-            snapshot.selectedProfileId = resolveBoundProfileId(resolvedStudentId);
+            snapshot.selectedProfileId = resolvedStudentId;
           }
         }
 
@@ -698,7 +682,6 @@ export function useMinimalAssignmentResume({
     [
       applyHydratedSnapshot,
       beginHydration,
-      currentProfileSelectionMode,
       currentPublishTarget,
       currentSelectedPreset,
       currentSelectedProfileId,
@@ -710,7 +693,6 @@ export function useMinimalAssignmentResume({
       isCurrentHydration,
       jobOptions,
       presetOptionIds,
-      resolveBoundProfileId,
       resumeJobs,
       onInitialHydrationResolved,
     ],
@@ -833,10 +815,9 @@ export function useMinimalAssignmentResume({
         }
 
         if (resolvedStudentId) {
-          snapshot.profileSelectionMode = 'auto';
           snapshot.selectedStudentId = resolvedStudentId;
           if (!snapshot.profileAuthorityResolved) {
-            snapshot.selectedProfileId = resolveBoundProfileId(resolvedStudentId);
+            snapshot.selectedProfileId = resolvedStudentId;
           }
         }
 
@@ -894,7 +875,6 @@ export function useMinimalAssignmentResume({
       invalidateDraftGenerationRequests,
       isCurrentHydration,
       onInitialHydrationResolved,
-      resolveBoundProfileId,
     ],
   );
 

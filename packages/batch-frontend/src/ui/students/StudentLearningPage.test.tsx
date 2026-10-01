@@ -16,7 +16,6 @@ const apiMocks = vi.hoisted(() => ({
   getStudentMemoryOverview: vi.fn(),
   initializeStudentProfileDraft: vi.fn(),
   listProfileRevisions: vi.fn(),
-  listStudentProfileBindings: vi.fn(),
   listStudentProfileCandidates: vi.fn(),
   promoteStudentProfileCandidates: vi.fn(),
   refreshProfileDraftFromApprovedCandidates: vi.fn(),
@@ -95,7 +94,7 @@ function createDeferred<T>(): Deferred<T> {
 
 function seedLearningPageMocks() {
   apiMocks.getProfileContent.mockResolvedValue({
-    id: 'profiles/students/alex.md',
+    studentId: 'student-alex',
     label: 'Alex',
     content: '# Foundational Profile',
     structuredContent: {
@@ -116,7 +115,7 @@ function seedLearningPageMocks() {
 
   apiMocks.getProfileRevision.mockResolvedValue({
     id: 'revision-active-1',
-    profileId: 'profiles/students/alex.md',
+    studentId: 'student-alex',
     contentHash: 'hash-1',
     source: 'update',
     status: 'active',
@@ -146,7 +145,7 @@ function seedLearningPageMocks() {
     items: [
       {
         id: 'revision-active-1',
-        profileId: 'profiles/students/alex.md',
+        studentId: 'student-alex',
         contentHash: 'hash-1',
         source: 'update',
         status: 'active',
@@ -161,25 +160,6 @@ function seedLearningPageMocks() {
     ],
     total: 1,
     limit: 25,
-    offset: 0,
-    order: 'desc',
-  });
-
-  apiMocks.listStudentProfileBindings.mockResolvedValue({
-    items: [
-      {
-        id: 'binding-1',
-        studentId: 'student-alex',
-        profileId: 'profiles/students/alex.md',
-        effectiveFrom: NOW,
-        effectiveTo: null,
-        reason: null,
-        changedBy: 'teacher-1',
-        createdAt: NOW,
-      },
-    ],
-    total: 1,
-    limit: 5,
     offset: 0,
     order: 'desc',
   });
@@ -228,20 +208,15 @@ function seedLearningPageMocks() {
   });
 
   apiMocks.getStudentLearningSurface.mockImplementation(async (studentId: string) => {
-    const context = useStudentAreaContextMock();
-    const profileId = context.student?.profileId ?? null;
-    const [profile, revisions, memory, memoryHealth, bindings, candidates] = await Promise.all([
-      profileId ? apiMocks.getProfileContent(profileId) : Promise.resolve(null),
-      profileId
-        ? apiMocks.listProfileRevisions(profileId, {
-            limit: 25,
-            offset: 0,
-            order: 'desc',
-          })
-        : Promise.resolve({ items: [], total: 0, limit: 0, offset: 0, order: 'desc' }),
+    const [profile, revisions, memory, memoryHealth, candidates] = await Promise.all([
+      apiMocks.getProfileContent(studentId),
+      apiMocks.listProfileRevisions(studentId, {
+        limit: 25,
+        offset: 0,
+        order: 'desc',
+      }),
       apiMocks.getStudentMemoryOverview(studentId, { lessonLimit: 3, homeworkLimit: 2 }),
       apiMocks.getStudentMemoryHealth(studentId),
-      apiMocks.listStudentProfileBindings(studentId, { limit: 5, offset: 0, order: 'desc' }),
       apiMocks.listStudentProfileCandidates(studentId, { limit: 200, offset: 0, order: 'desc' }),
     ]);
     return {
@@ -249,17 +224,16 @@ function seedLearningPageMocks() {
       revisions,
       memory,
       memoryHealth,
-      bindings,
       candidates,
     };
   });
 
   apiMocks.initializeStudentProfileDraft.mockResolvedValue({
     draftRevisionId: 'revision-draft-empty-1',
-    profileId: 'profiles/students/alex.md',
+    studentId: 'student-alex',
     draftRevision: {
       id: 'revision-draft-empty-1',
-      profileId: 'profiles/students/alex.md',
+      studentId: 'student-alex',
       contentHash: 'hash-empty-1',
       source: 'create',
       status: 'draft',
@@ -287,7 +261,7 @@ function seedLearningPageMocks() {
   });
   apiMocks.activateProfileRevision.mockResolvedValue({
     id: 'revision-draft-empty-1',
-    profileId: 'profiles/students/alex.md',
+    studentId: 'student-alex',
     contentHash: 'hash-empty-1',
     source: 'create',
     status: 'active',
@@ -380,7 +354,7 @@ function makeMemoryHealth(overrides: Record<string, unknown> = {}) {
 function makeLearningSurface(overrides: Record<string, unknown> = {}) {
   return {
     profile: {
-      id: 'profiles/students/alex.md',
+      studentId: 'student-alex',
       label: 'Alex',
       content: '# Foundational Profile',
       structuredContent: {
@@ -402,7 +376,7 @@ function makeLearningSurface(overrides: Record<string, unknown> = {}) {
       items: [
         {
           id: 'revision-active-1',
-          profileId: 'profiles/students/alex.md',
+          studentId: 'student-alex',
           contentHash: 'hash-1',
           source: 'update',
           status: 'active',
@@ -428,13 +402,6 @@ function makeLearningSurface(overrides: Record<string, unknown> = {}) {
       unresolvedIssues: [],
     },
     memoryHealth: makeMemoryHealth(),
-    bindings: {
-      items: [],
-      total: 0,
-      limit: 20,
-      offset: 0,
-      order: 'desc',
-    },
     candidates: {
       items: [{ id: 'candidate-alex' }],
       total: 1,
@@ -482,7 +449,6 @@ describe('StudentLearningPage', () => {
       student: {
         id: 'student-alex',
         student: 'Alex',
-        profileId: 'profiles/students/alex.md',
       },
       studentId: 'student-alex',
       studentLoading: false,
@@ -491,7 +457,8 @@ describe('StudentLearningPage', () => {
     });
   });
 
-  it('lets an unbound student start an empty learner profile without falling back to legacy UI', async () => {
+  it('lets a student without a profile start an empty learner profile without falling back to legacy UI', async () => {
+    apiMocks.getProfileContent.mockResolvedValueOnce(null);
     const user = userEvent.setup();
     const refreshStudent = vi.fn(async () => {});
 
@@ -499,7 +466,6 @@ describe('StudentLearningPage', () => {
       student: {
         id: 'student-alex',
         student: 'Alex',
-        profileId: null,
       },
       studentId: 'student-alex',
       studentLoading: false,
@@ -743,7 +709,7 @@ describe('StudentLearningPage', () => {
     await user.click(screen.getByRole('button', { name: /Save learner profile/i }));
     await waitFor(() =>
       expect(apiMocks.upsertProfileContent).toHaveBeenCalledWith(
-        'profiles/students/alex.md',
+        'student-alex',
         null,
         expect.objectContaining({ overallLevel: 'B1 plus' }),
       ),
@@ -752,9 +718,10 @@ describe('StudentLearningPage', () => {
   });
 
   it('reports a failed initial profile activation without a success message', async () => {
+    apiMocks.getProfileContent.mockResolvedValueOnce(null);
     const user = userEvent.setup();
     useStudentAreaContextMock.mockReturnValue({
-      student: { id: 'student-alex', student: 'Alex', profileId: null },
+      student: { id: 'student-alex', student: 'Alex' },
       studentId: 'student-alex',
       studentLoading: false,
       studentError: null,
@@ -766,9 +733,9 @@ describe('StudentLearningPage', () => {
     expect(await screen.findByText('Activation failed')).toBeTruthy();
     expect(screen.queryByText(/Learner profile created/i)).toBeNull();
   });
-  it('ignores stale profile, memory, binding, and candidate responses after switching students', async () => {
+  it('ignores stale profile, memory, and candidate responses after switching students', async () => {
     const studentAProfile = createDeferred<{
-      id: string;
+      studentId: string;
       label: string;
       content: string;
       structuredContent: {
@@ -789,7 +756,7 @@ describe('StudentLearningPage', () => {
     const studentARevisions = createDeferred<{
       items: {
         id: string;
-        profileId: string;
+        studentId: string;
         contentHash: string;
         source: 'update';
         status: 'active';
@@ -838,22 +805,6 @@ describe('StudentLearningPage', () => {
       recentReadyHomeworkMemory: [];
       unresolvedIssues: [];
     }>();
-    const studentABindings = createDeferred<{
-      items: {
-        id: string;
-        studentId: string;
-        profileId: string;
-        effectiveFrom: string;
-        effectiveTo: null;
-        reason: null;
-        changedBy: string | null;
-        createdAt: string;
-      }[];
-      total: number;
-      limit: number;
-      offset: number;
-      order: 'desc';
-    }>();
     const studentACandidates = createDeferred<{
       items: {
         id: string;
@@ -864,10 +815,10 @@ describe('StudentLearningPage', () => {
       order: 'desc';
     }>();
 
-    apiMocks.getProfileContent.mockImplementation((profileId: string) => {
-      if (profileId === 'profiles/students/alex.md') return studentAProfile.promise;
+    apiMocks.getProfileContent.mockImplementation((profileStudentId: string) => {
+      if (profileStudentId === 'student-alex') return studentAProfile.promise;
       return Promise.resolve({
-        id: 'profiles/students/bora.md',
+        studentId: 'student-bora',
         label: 'Bora',
         content: '# Foundational Profile',
         structuredContent: {
@@ -886,13 +837,13 @@ describe('StudentLearningPage', () => {
         updatedAt: NOW,
       });
     });
-    apiMocks.listProfileRevisions.mockImplementation((profileId: string) => {
-      if (profileId === 'profiles/students/alex.md') return studentARevisions.promise;
+    apiMocks.listProfileRevisions.mockImplementation((profileStudentId: string) => {
+      if (profileStudentId === 'student-alex') return studentARevisions.promise;
       return Promise.resolve({
         items: [
           {
             id: 'revision-b-1',
-            profileId: 'profiles/students/bora.md',
+            studentId: 'student-bora',
             contentHash: 'hash-b-1',
             source: 'update',
             status: 'active',
@@ -946,27 +897,6 @@ describe('StudentLearningPage', () => {
         unresolvedIssues: [],
       });
     });
-    apiMocks.listStudentProfileBindings.mockImplementation((studentId: string) => {
-      if (studentId === 'student-alex') return studentABindings.promise;
-      return Promise.resolve({
-        items: [
-          {
-            id: 'binding-b',
-            studentId: 'student-bora',
-            profileId: 'profiles/students/bora.md',
-            effectiveFrom: NOW,
-            effectiveTo: null,
-            reason: null,
-            changedBy: 'teacher-1',
-            createdAt: NOW,
-          },
-        ],
-        total: 1,
-        limit: 5,
-        offset: 0,
-        order: 'desc',
-      });
-    });
     apiMocks.listStudentProfileCandidates.mockImplementation((studentId: string) => {
       if (studentId === 'student-alex') return studentACandidates.promise;
       return Promise.resolve({
@@ -986,7 +916,6 @@ describe('StudentLearningPage', () => {
       student: {
         id: 'student-alex',
         student: 'Alex',
-        profileId: 'profiles/students/alex.md',
       },
       studentId: 'student-alex',
       studentLoading: false,
@@ -1001,7 +930,6 @@ describe('StudentLearningPage', () => {
       student: {
         id: 'student-bora',
         student: 'Bora',
-        profileId: 'profiles/students/bora.md',
       },
       studentId: 'student-bora',
       studentLoading: false,
@@ -1022,7 +950,7 @@ describe('StudentLearningPage', () => {
 
     await act(async () => {
       studentAProfile.resolve({
-        id: 'profiles/students/alex.md',
+        studentId: 'student-alex',
         label: 'Alex',
         content: '# Foundational Profile',
         structuredContent: {
@@ -1044,7 +972,7 @@ describe('StudentLearningPage', () => {
         items: [
           {
             id: 'revision-a-1',
-            profileId: 'profiles/students/alex.md',
+            studentId: 'student-alex',
             contentHash: 'hash-a-1',
             source: 'update',
             status: 'active',
@@ -1094,24 +1022,6 @@ describe('StudentLearningPage', () => {
         recentReadyHomeworkMemory: [],
         unresolvedIssues: [],
       });
-      studentABindings.resolve({
-        items: [
-          {
-            id: 'binding-a',
-            studentId: 'student-alex',
-            profileId: 'profiles/students/alex.md',
-            effectiveFrom: NOW,
-            effectiveTo: null,
-            reason: null,
-            changedBy: 'teacher-1',
-            createdAt: NOW,
-          },
-        ],
-        total: 1,
-        limit: 5,
-        offset: 0,
-        order: 'desc',
-      });
       studentACandidates.resolve({
         items: [{ id: 'candidate-a' }],
         total: 1,
@@ -1142,7 +1052,6 @@ describe('StudentLearningPage', () => {
       student: {
         id: 'student-alex',
         student: 'Alex',
-        profileId: 'profiles/students/alex.md',
       },
       studentId: 'student-alex',
       studentLoading: false,
@@ -1160,7 +1069,6 @@ describe('StudentLearningPage', () => {
       student: {
         id: 'student-bora',
         student: 'Bora',
-        profileId: 'profiles/students/bora.md',
       },
       studentId: 'student-bora',
       studentLoading: false,
@@ -1198,7 +1106,7 @@ describe('StudentLearningPage', () => {
       .mockResolvedValueOnce(
         makeLearningSurface({
           profile: {
-            id: 'profiles/students/bora.md',
+            studentId: 'student-bora',
             label: 'Bora',
             content: '# Foundational Profile',
             structuredContent: {
@@ -1231,7 +1139,6 @@ describe('StudentLearningPage', () => {
       student: {
         id: 'student-alex',
         student: 'Alex',
-        profileId: 'profiles/students/alex.md',
       },
       studentId: 'student-alex',
       studentLoading: false,
@@ -1249,7 +1156,6 @@ describe('StudentLearningPage', () => {
       student: {
         id: 'student-bora',
         student: 'Bora',
-        profileId: 'profiles/students/bora.md',
       },
       studentId: 'student-bora',
       studentLoading: false,
@@ -1287,13 +1193,13 @@ describe('StudentLearningPage', () => {
     );
     apiMocks.refreshProfileDraftFromApprovedCandidates.mockResolvedValueOnce({
       draftRevisionId: 'revision-draft-2',
-      profileId: 'profiles/students/alex.md',
+      studentId: 'student-alex',
       includedCandidateIds: ['candidate-alex'],
       excludedCandidateIds: [],
       contentHash: 'hash-draft-2',
       draftRevision: {
         id: 'revision-draft-2',
-        profileId: 'profiles/students/alex.md',
+        studentId: 'student-alex',
         contentHash: 'hash-draft-2',
         source: 'profile_revision_refresh',
         status: 'draft',
@@ -1321,7 +1227,7 @@ describe('StudentLearningPage', () => {
     });
     apiMocks.saveProfileDraftRevision.mockResolvedValueOnce({
       id: 'revision-draft-3',
-      profileId: 'profiles/students/alex.md',
+      studentId: 'student-alex',
       contentHash: 'hash-draft-3',
       source: 'update',
       status: 'draft',
@@ -1383,7 +1289,7 @@ describe('StudentLearningPage', () => {
 
     await waitFor(() => {
       expect(apiMocks.saveProfileDraftRevision).toHaveBeenCalledWith(
-        'profiles/students/alex.md',
+        'student-alex',
         expect.objectContaining({
           inheritCandidateLinksFromRevisionId: 'revision-draft-2',
         }),
@@ -1400,7 +1306,7 @@ describe('StudentLearningPage', () => {
       createdAt: string,
     ) => ({
       id,
-      profileId: 'profiles/students/alex.md',
+      studentId: 'student-alex',
       contentHash: `hash-${id}`,
       source: status === 'draft' ? 'profile_revision_refresh' : 'update',
       status,
@@ -1415,7 +1321,7 @@ describe('StudentLearningPage', () => {
     apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
       makeLearningSurface({
         profile: {
-          id: 'profiles/students/alex.md',
+          studentId: 'student-alex',
           label: 'Alex',
           content: '# Foundational Profile',
           structuredContent: {

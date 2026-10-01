@@ -70,7 +70,7 @@ async function run(): Promise<void> {
   });
 
   console.log(`[legacy-profile-normalization] studentId=${result.studentId}`);
-  console.log(`[legacy-profile-normalization] profileId=${result.profileId}`);
+  console.log(`[legacy-profile-normalization] profileId=${result.studentId}`);
   console.log(`[legacy-profile-normalization] sourceRevisionId=${result.sourceRevisionId}`);
   console.log(`[legacy-profile-normalization] snapshotId=${result.snapshotId ?? 'none'}`);
   console.log(
