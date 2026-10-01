@@ -1,3 +1,4 @@
+import { MIGRATED_PROFILE_REVISION_ID } from './fixtures/migrated-profile-revision.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
 
 describeHttpServerIntegrationSuite(
@@ -45,6 +46,87 @@ describeHttpServerIntegrationSuite(
       createdAt: '2026-07-19T00:00:00.000Z',
       updatedAt: '2026-07-19T00:00:00.000Z',
     };
+
+    it('accepts migrated profile revision IDs in context confirmation and recovery', async () => {
+      const confirm = vi
+        .spyOn(confirmAssignmentSessionStepModule, 'confirmAssignmentSessionStep')
+        .mockResolvedValue({ session, invalidated: [] });
+      const recover = vi
+        .spyOn(assignmentSessionsModule, 'updateAssignmentSessionRecoveryForUser')
+        .mockResolvedValue(session);
+      const context = {
+        step: 'context',
+        expectedRevision: 1,
+        teacherNotes: null,
+        profileRevisionId: MIGRATED_PROFILE_REVISION_ID,
+        profileRevisionHash: 'a'.repeat(64),
+      };
+      const confirmed = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/confirm`,
+        payload: context,
+      });
+      expect(confirmed.statusCode).toBe(200);
+      expect(confirm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'test-user-id',
+          sessionId: session.id,
+          request: context,
+        }),
+      );
+      const recovery = {
+        expectedRevision: 1,
+        patch: { selectedProfileRevisionId: MIGRATED_PROFILE_REVISION_ID },
+      };
+      const recovered = await app.inject({
+        method: 'PATCH',
+        url: `/assignment-sessions/${session.id}/recovery`,
+        payload: recovery,
+      });
+      expect(recovered.statusCode).toBe(200);
+      expect(recover).toHaveBeenCalledWith('test-user-id', session.id, recovery);
+    });
+
+    it('rejects malformed revision IDs without weakening unrelated RFC UUID inputs', async () => {
+      const confirm = vi
+        .spyOn(confirmAssignmentSessionStepModule, 'confirmAssignmentSessionStep')
+        .mockClear();
+      const recover = vi
+        .spyOn(assignmentSessionsModule, 'updateAssignmentSessionRecoveryForUser')
+        .mockClear();
+      for (const patch of [
+        { selectedProfileRevisionId: 'not-a-uuid' },
+        { recordingId: MIGRATED_PROFILE_REVISION_ID },
+        { lessonId: MIGRATED_PROFILE_REVISION_ID },
+      ]) {
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/assignment-sessions/${session.id}/recovery`,
+          payload: { expectedRevision: 1, patch },
+        });
+        expect(response.statusCode).toBe(400);
+      }
+      const malformed = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/confirm`,
+        payload: {
+          step: 'context',
+          expectedRevision: 1,
+          teacherNotes: null,
+          profileRevisionId: 'not-a-uuid',
+          profileRevisionHash: 'a'.repeat(64),
+        },
+      });
+      expect(malformed.statusCode).toBe(400);
+      const student = await app.inject({
+        method: 'POST',
+        url: '/assignment-sessions/confirm-student',
+        payload: { requestId: MIGRATED_PROFILE_REVISION_ID, studentId: session.studentId },
+      });
+      expect(student.statusCode).toBe(400);
+      expect(confirm).not.toHaveBeenCalled();
+      expect(recover).not.toHaveBeenCalled();
+    });
 
     it('returns authenticated assignment-scoped learner authority', async () => {
       const projection = {

@@ -26,6 +26,7 @@ import {
 } from '../src/transport/auth-middleware.js';
 import type { ExtendedRoutesContext } from '../src/transport/extended-routes/context.js';
 import { registerStudentRoutes } from '../src/transport/extended-routes/students-routes.js';
+import { MIGRATED_PROFILE_REVISION_ID } from './fixtures/migrated-profile-revision.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 requirePgTestEnv();
@@ -38,7 +39,7 @@ const authService = createAuthService({
 });
 const app = Fastify({ logger: false });
 
-async function seedTenant() {
+async function seedTenant(mappedRevisionId?: string) {
   const userId = randomUUID();
   const workspaceId = randomUUID();
   const email = `${userId}@example.test`;
@@ -57,7 +58,18 @@ async function seedTenant() {
   const initialized = await initializeStudentProfileDraft({
     request: { studentId: student.id, reviewerId: userId },
   });
-  await activateProfileRevision(student.id, initialized.draftRevision.id);
+  const revisionId = mappedRevisionId ?? initialized.draftRevision.id;
+  if (mappedRevisionId) {
+    // Synthetic PostgreSQL fixture only: prove the same identity shape as 0059
+    // persists and round-trips without RFC variant bits.
+    await withPgClient((client) =>
+      client.query('UPDATE student_profile_revisions SET id = $2::uuid WHERE id = $1::uuid', [
+        initialized.draftRevision.id,
+        revisionId,
+      ]),
+    );
+  }
+  await activateProfileRevision(student.id, revisionId);
   const candidate = await insertStudentProfileCandidate({
     studentId: student.id,
     targetSection: 'goals_motivation',
@@ -73,7 +85,7 @@ async function seedTenant() {
     workspaceId,
     studentId: student.id,
     candidateId: candidate.id,
-    revisionId: initialized.draftRevision.id,
+    revisionId,
     headers: {
       authorization: `Bearer ${authService.generateTokens(userId, email, 'user').accessToken}`,
     },
@@ -145,7 +157,7 @@ describe('student-area authorization before student-owned reads', () => {
     registerStudentRoutes(app, { authenticate, config: loadConfig() } as ExtendedRoutesContext);
     await app.ready();
     tenantA = await seedTenant();
-    tenantB = await seedTenant();
+    tenantB = await seedTenant(MIGRATED_PROFILE_REVISION_ID);
   });
 
   afterAll(async () => {
@@ -245,6 +257,13 @@ describe('student-area authorization before student-owned reads', () => {
         });
         expect(response.statusCode, `${path}: ${response.body}`).toBe(200);
       }
+      const detail = await app.inject({
+        method: 'GET',
+        url: `/students/${tenant.studentId}/profile/revisions/${tenant.revisionId}`,
+        headers: tenant.headers,
+      });
+      expect(detail.statusCode).toBe(200);
+      expect(detail.json()).toMatchObject({ id: tenant.revisionId, studentId: tenant.studentId });
     }
   });
 
