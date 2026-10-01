@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [11.2.0] - 2026-10-01
+
+### Changed
+
+- Automated release from PR #296: feat(prompts): restore admin control plane and expose shipped revision drift (https://github.com/abocha/esl-pipeline/pull/296)
+
 ## [11.1.8] - 2026-10-01
 
 ### Changed
