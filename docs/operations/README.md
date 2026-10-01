@@ -16,6 +16,10 @@ Use a current runbook for instructions. Start with the relevant entry in
 [`docs/reference/DOCS_IA_MAP.md`](../reference/DOCS_IA_MAP.md), or with the deployment,
 backup/restore, health, Telegram, prompt-gallery, or replay runbook named there.
 
+For on-host container, filesystem, CPU/memory-pressure, and public-route checks, see
+[`host-runtime-health.md`](host-runtime-health.md). It is separate from PostgreSQL backup health
+and does not establish off-host availability or worker job progress.
+
 Ordinary lesson-recording rollout uses
 [`ordinary-recording-ingest-rollout.md`](ordinary-recording-ingest-rollout.md) for migrations,
 runtime media verification, run/reservation inspection, and staged enablement, plus

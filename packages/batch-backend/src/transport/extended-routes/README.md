@@ -3,8 +3,8 @@
 `registerExtendedRoutes` composes these modules in deterministic order:
 
 1. `config-routes.ts`
-2. `students-routes.ts`
-3. `profiles-templates-routes.ts`
+2. `students-routes.ts` (registers `student-profile-routes.ts` with its workspace-scoped student guard)
+3. `templates-routes.ts`
 4. `recordings-routes.ts`
 5. `auth-user-routes.ts`
 6. `ops-routes.ts`

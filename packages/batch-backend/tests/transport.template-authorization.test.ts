@@ -18,6 +18,11 @@ const templateMocks = vi.hoisted(() => ({
   activateTemplateRevisionForTemplate: vi.fn(),
 }));
 
+const controlPlaneMock = vi.hoisted(() => vi.fn());
+vi.mock('../src/application/template-control-plane.js', () => ({
+  listTemplateControlPlane: controlPlaneMock,
+}));
+
 const promptOptionsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../src/application/template-content.js', () => ({
@@ -68,6 +73,7 @@ async function createApp() {
 
 const managementRoutes = [
   { method: 'GET', url: '/templates' },
+  { method: 'GET', url: '/templates/control-plane' },
   { method: 'GET', url: '/templates/template.md' },
   { method: 'PUT', url: '/templates/template.md', payload: { content: 'updated' } },
   { method: 'DELETE', url: '/templates/template.md' },
@@ -90,6 +96,7 @@ describe('Assignment Template authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     templateMocks.listTemplateContents.mockResolvedValue([]);
+    controlPlaneMock.mockResolvedValue({ items: [], defaultTemplateId: null });
     templateMocks.upsertTemplateContent.mockResolvedValue({ id: 'template.md' });
     promptOptionsMock.mockResolvedValue({
       templates: [{ id: 'template.md', label: 'Template' }],
@@ -132,6 +139,14 @@ describe('Assignment Template authorization', () => {
     });
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json()).toEqual([]);
+
+    const stateResponse = await app.inject({
+      method: 'GET',
+      url: '/templates/control-plane',
+      headers: { 'x-test-user-role': 'admin' },
+    });
+    expect(stateResponse.statusCode).toBe(200);
+    expect(stateResponse.json()).toEqual({ items: [], defaultTemplateId: null });
 
     const saveResponse = await app.inject({
       method: 'PUT',

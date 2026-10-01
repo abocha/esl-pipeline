@@ -1,3 +1,9 @@
+export type {
+  AdminTemplateRevisionDto,
+  TemplateControlPlaneDto,
+  TemplateControlPlaneListDto,
+} from './template-control-plane.js';
+
 import type { ContractVersionRegistry } from './contract-versions.js';
 
 export {

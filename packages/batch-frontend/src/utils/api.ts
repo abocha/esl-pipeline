@@ -80,6 +80,7 @@ import type {
   RecordStudentPaymentRequest,
   StreamEventMessage,
   StudentScheduleBillingSurfaceResponse,
+  TemplateControlPlaneListDto,
   UpdateBusinessSettingsRequest,
   UpdateStudentLessonPlanRequest,
   UpdateStudentLessonRequest,
@@ -2359,6 +2360,16 @@ export async function activateProfileRevision(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to activate profile revisions.');
     }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listTemplateControlPlane(): Promise<TemplateControlPlaneListDto> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/templates/control-plane'));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }

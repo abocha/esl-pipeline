@@ -32,13 +32,14 @@ describe('CalmStudioShell', () => {
       </MemoryRouter>,
     );
 
+    expect(screen.getByRole('navigation', { name: 'Administration' })).toBeTruthy();
     expect(screen.getByText('ESL')).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Workspace' })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Assignments/i }).getAttribute('href')).toBe('/');
     expect(screen.getByRole('link', { name: /Students/i }).getAttribute('href')).toBe('/students');
     expect(screen.getByRole('link', { name: /Business/i }).getAttribute('href')).toBe('/business');
-    expect(screen.getByRole('link', { name: /Assignment Templates/i }).getAttribute('href')).toBe(
-      '/prompts',
+    expect(screen.getByRole('link', { name: /Prompts/i }).getAttribute('href')).toBe(
+      '/admin/prompts',
     );
     expect(screen.getByRole('button', { name: /Open workspace menu/i })).toBeTruthy();
     for (const icon of container.querySelectorAll('nav svg, button svg')) {
@@ -46,7 +47,7 @@ describe('CalmStudioShell', () => {
     }
   });
 
-  it.each(['user', 'viewer'] as const)('hides Assignment Templates for the %s role', (role) => {
+  it.each(['user', 'viewer'] as const)('hides Prompts for the %s role', (role) => {
     render(
       <MemoryRouter>
         <CalmStudioShell
@@ -58,7 +59,8 @@ describe('CalmStudioShell', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole('link', { name: /Assignment Templates/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Prompts/i })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Administration' })).toBeNull();
   });
 
   it('places the sandbox marker with the account controls in the rail footer', () => {
