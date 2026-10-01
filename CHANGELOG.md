@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [12.0.1] - 2026-10-01
+
+### Changed
+
+- Automated release from PR #301: fix(backend): accept migration 0059 profile revision IDs (https://github.com/abocha/esl-pipeline/pull/301)
+
 ## [12.0.0] - 2026-10-01
 
 ### Changed
