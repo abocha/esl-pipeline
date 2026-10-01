@@ -162,9 +162,13 @@ When reliable runtime metadata is available, use it before making claims about w
 
 Review follows residual semantic risk, not the existence of a diff, delegation, file count, or completion ceremony.
 
-Use the registered ordinary reviewer when meaningful correctness, integration, regression, failure-handling, or testing risk remains after implementation evidence.
+First decide whether review is warranted and whether it needs independent skepticism. Meaningful correctness, integration, regression, failure-handling, or testing risk can justify review, but non-zero residual risk does not by itself require spawning a reviewer child.
 
-Use the registered exceptional-risk reviewer only when the actual implementation contains a concrete high-consequence surface such as security or authorization, privacy, persistent-data integrity, destructive operations, migrations, concurrency, retry/idempotency, or a comparable risk.
+When independent ordinary review is warranted, route it to the registered ordinary reviewer.
+
+Explicit current task ownership remains controlling. If the primary is asked to perform the review itself, keep that review with the primary unless independent review is explicitly requested by the maintainer or required by repository or task policy.
+
+When independent review is warranted for a concrete high-consequence surface such as security or authorization, privacy, persistent-data integrity, destructive operations, migrations, concurrency, retry/idempotency, or a comparable risk, route that surface to the registered exceptional-risk reviewer.
 
 Route exceptional review to the narrow risk surface when that is sufficient.
 
