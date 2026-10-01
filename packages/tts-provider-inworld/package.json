@@ -25,7 +25,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "test": "pnpm run test:unit",
     "test:unit": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
