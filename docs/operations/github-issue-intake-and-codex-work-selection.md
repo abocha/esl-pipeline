@@ -4,140 +4,152 @@
 
 - Audience: maintainers, ChatGPT intake, and local Codex sessions.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-08-12 repository and GitHub state.
+- Last Verified Against: 2026-10-01 repository and tracker workflow.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: after several real reports or a workflow change.
 - Status: `runbook`.
 
-GitHub Issues is the only canonical engineering backlog for ESL Pipeline. This procedure is a
-small, manual handoff between conversational intake and an explicitly selected local Codex session.
-It does not create a second tracker, automatic dispatch, or an agent-working state.
+ESL Pipeline uses two tracker layers with different ownership:
+
+- Linear team `Abocha` is the canonical planning backlog and durable working memory.
+- Linear team `ESL Execution`, synchronized two-way with this GitHub repository, owns concrete
+  repository execution records.
+- GitHub Issues is the repository-native view of that execution layer and remains the natural place
+  for PR, CI, release, migration, rollout, and incident-remediation linkage.
+
+Do not maintain the same planning state independently in both systems.
+
+## Tracker boundary
+
+Use `Abocha` for work whose main purpose is deciding, remembering, prioritizing, investigating, or
+sequencing:
+
+- ideas and paper cuts;
+- product or architecture decisions;
+- investigations before an implementation boundary exists;
+- roadmaps and epics;
+- deferred work and watch items;
+- prioritization and dependency planning.
+
+Promote work to `ESL Execution` when there is a bounded repository-native execution contract that
+benefits from one or more of:
+
+- concrete implementation scope and acceptance criteria;
+- a PR/CI merge lifecycle;
+- migration or release tracking;
+- production rollout/recovery evidence;
+- incident remediation tied to repository changes;
+- cross-PR execution discussion.
+
+For new execution work, create the issue in `ESL Execution` and let the configured Linear↔GitHub
+Issues integration create/synchronize the GitHub issue. Do not manually create a second copy.
+Pre-existing GitHub execution issues that predate this split may finish in place.
+
+Repository-generated operational records such as docs-gardening issues may remain GitHub-native when
+the repository automation itself owns their lifecycle.
 
 ## Intake sequence
 
-When a bug, concern, investigation, improvement, or experiment is described conversationally:
+When a bug, concern, investigation, improvement, experiment, or idea is described conversationally:
 
-1. Preserve the user's meaning and uncertainty. A voice note is sufficient input; the reporter does
-   not need to rewrite it into a formal ticket.
-2. Search for duplicates before creating an issue. Search open issues first, then related closed
-   issues when the symptom, component, or error message suggests prior work. Inspect the complete
-   candidates rather than relying on titles alone.
-
-   ```bash
-   gh issue list --state open --search "<symptom or component>"
-   gh issue view <number>
-   ```
-
-3. If a matching issue exists, add the new evidence or link the related report instead of creating
-   a cosmetic duplicate. Create a separate issue only when the scope or acceptance criteria differ,
-   and note the relationship.
-4. Capture the smallest useful problem statement and acceptance criteria supported by the evidence.
-   Use the issue body to preserve context, not to make every report conform to a ceremony.
-5. Apply exactly one `status:*` label to each open issue in this workflow. Add a type when clear,
-   an effort estimate when the issue is ready, and an area only when one of the existing areas is a
-   natural fit.
-6. Return the issue link and a short summary of what was recorded. Do not start code changes merely
-   because an issue was created.
+1. Preserve the reporter's meaning and uncertainty. A voice note is sufficient input.
+2. Search Linear planning memory first for likely duplicates or related decisions. Search current
+   GitHub execution issues when the report may already belong to active repository work.
+3. If a matching planning item exists, update it rather than creating a cosmetic duplicate.
+4. If the report is still planning, investigation, or future work, capture it in `Abocha` with the
+   appropriate status, priority, one Type label, and one primary Area label.
+5. If there is already a concrete execution boundary, create or promote it into `ESL Execution`.
+   Let issue sync create the GitHub counterpart.
+6. Do not start code changes merely because an issue was recorded. Execution still follows current
+   authorization and repository workflow.
 
 ## Evidence language
 
-Keep these categories distinct in the issue body:
+Keep these categories distinct in planning and execution records:
 
 - **Confirmed evidence:** directly observed, reproduced, measured, or supported by a source.
 - **Strong inference:** a conclusion that follows from evidence but is not directly observed.
 - **Current hypothesis:** a possible cause or explanation that still needs validation.
 - **Proposed solution:** a suggested change from the discussion, not proof that the change is right.
 
-Do not turn a tentative voice-note statement into a confirmed fact. If validation disproves the
-initial theory, update the issue with the result and change its status rather than implementing the
-suggested fix blindly.
+Do not turn a tentative report into a confirmed fact. If validation disproves the initial theory,
+update the owning Linear/GitHub record rather than implementing the suggested fix blindly.
 
 ## Sensitive data
 
 Redact API keys, access tokens, credentials, complete `.env` files, and secrets embedded in logs
-before filing. Avoid unnecessary student personal information and raw lesson content when a
-technical summary or safely anonymized excerpt is enough. Preserve the minimum evidence needed to
-reproduce or assess the problem.
+before filing. Avoid unnecessary student personal information and raw lesson content when a technical
+summary or safely anonymized excerpt is enough. Preserve the minimum evidence needed to reproduce or
+assess the problem.
 
-## Labels
+## Labels and metadata
 
-Open issues brought into this workflow carry one status label:
+For synchronized execution issues, Linear owns classification as well as status. Apply exactly one
+Type label and one primary Area label in Linear when the distinction is useful; let issue sync carry
+those labels to GitHub.
 
-| Label            | Meaning                                                                        |
-| ---------------- | ------------------------------------------------------------------------------ |
-| `status:inbox`   | Recorded, but incomplete or not yet actionable without clarification.          |
-| `status:ready`   | Local Codex can begin after reading the issue and validating the problem.      |
-| `status:blocked` | A stated dependency, missing evidence, or required decision prevents progress. |
+Do not maintain a parallel GitHub-only classification scheme for synchronized issues. In particular,
+do not add `status:*` or `effort:*` labels, and do not duplicate synced Linear labels with legacy
+`type:*` / `area:*` variants.
 
-Use the following type labels when the distinction is supported:
+Grandfathered GitHub issues may keep existing type/area labels while they finish, but planning
+status, priority, dependencies, sizing, and future classification changes belong in Linear.
 
-| Label                | Meaning                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| `type:bug`           | Confirmed incorrect behavior.                                                        |
-| `type:investigation` | Suspicious behavior or a technical question whose defect status is uncertain.        |
-| `type:improvement`   | Current behavior is valid but undesirable, or the workflow itself needs improvement. |
-| `type:experiment`    | A comparison or evidence-gathering task must precede a direction.                    |
+## Execution issue guidance
 
-Effort labels are rough local-session selection hints, not promises:
+A GitHub execution issue should contain only the detail useful beside the repository:
 
-| Label             | Meaning                                                                                |
-| ----------------- | -------------------------------------------------------------------------------------- |
-| `effort:quick`    | Localized, reproducible, and low uncertainty.                                          |
-| `effort:standard` | Several files, meaningful debugging, or a moderate test surface.                       |
-| `effort:deep`     | Architectural, poorly understood, or likely to consume a large session/context budget. |
+- concrete goal/scope;
+- non-goals where they prevent accidental expansion;
+- acceptance criteria;
+- current repo/production evidence that matters to execution;
+- migration, CI, rollout, or recovery constraints;
+- links back to the owning Linear planning item when relevant.
 
-Area labels are optional. Use only the existing natural fits: `area:tts`, `area:generation`,
-`area:frontend`, `area:backend`, `area:infra`, and `area:student-memory`. Do not add an area just
-to classify an issue that does not fit one.
+Do not copy a full roadmap or planning history into GitHub merely for symmetry.
 
-## Issue body guidance
+## Work selection
 
-Use only sections supported by the available evidence. Useful sections include:
+Select work from Linear rather than GitHub status labels.
 
-- Summary
-- Observed behavior
-- Expected behavior
-- Impact
-- Reproduction context
-- Confirmed evidence
-- Current hypotheses
-- Unknowns
-- Suggested investigation
-- Acceptance criteria
-- Related issues / PRs
+1. Start from `Abocha` when choosing among priorities, investigations, or deferred work.
+2. Start from `ESL Execution` when choosing already-approved concrete repository execution.
+3. Read the complete top candidate and any linked GitHub execution issue before editing.
+4. Reproduce or otherwise validate the reported behavior/current contract when the task depends on a
+   defect hypothesis.
+5. Prefer the smallest durable change with focused regression coverage where behavior changes.
+6. Escalate material architecture, security, authorization, privacy, data-integrity, concurrency,
+   migration, or production decisions rather than silently widening execution scope.
 
-Empty ceremonial headings are not required. A short issue with a clear observation and next
-evidence needed is better than a complete-looking template filled with guesses.
+GitHub search remains useful for repository evidence and grandfathered execution records, but it is
+not the prioritization queue.
 
-## Local Codex work selection
+## Pull request linkage and automation
 
-When asked to choose work for a constrained session:
+For synchronized execution work, keep the Linear execution identifier in the branch/PR linkage used
+by the configured GitHub integration. Team automation may move execution issues through
+`In Progress`, `In Review`, and `Done` based on PR activity.
 
-1. List open issues labeled `status:ready`.
-2. Match `effort:quick`, `effort:standard`, or `effort:deep` to the available time and quota.
-3. Read the complete top candidates and consider impact, reproducibility, uncertainty, dependencies,
-   and likely context size.
-4. Recommend one issue and explain the fit before editing, unless the user has already authorized
-   that exact implementation.
-5. Reproduce or otherwise validate the reported behavior and current contract before implementing.
-   Treat issue hypotheses and proposed fixes as inputs to test, not as established causes.
-6. Prefer the smallest durable change, with focused regression coverage where behavior changes.
-   Escalate when validation reveals an architectural, security, authorization, privacy, data
-   integrity, concurrency, migration, or production decision rather than silently broadening scope.
+Do not manually mirror those status transitions in GitHub labels.
 
-Useful searches are:
-
-```bash
-gh issue list --state open --label 'status:ready' --json number,title,labels
-gh issue list --state open --label 'status:ready' --label 'effort:quick'
-gh issue view <number>
-```
+A planning item in `Abocha` may remain open after one execution child is merged when the broader
+outcome still has additional slices.
 
 ## Completion semantics
 
-An issue remains open while its acceptance criteria, required evidence, or stated dependencies are
-incomplete. A linked PR is not itself proof of completion. Close the issue only when the acceptance
-criteria are genuinely satisfied and the issue or PR records the relevant evidence; use `Fixes #N`
-only when merging that PR should close the issue. If follow-up work is discovered, record it as a
-separate issue instead of quietly expanding the original. GitHub's closed state represents done;
-there is intentionally no `status:done` label.
+An execution issue remains open while its acceptance criteria, required evidence, or stated
+dependencies are incomplete. A linked PR is not itself proof of completion unless the execution
+contract intentionally ends at merge.
+
+Use `Fixes #N` only when merging that PR should close the GitHub execution issue. Production
+rollout, destructive cleanup, or environment verification may need a separate execution record rather
+than keeping an implementation issue artificially open.
+
+When an execution slice completes:
+
+- allow GitHub/Linear execution sync and PR automation to close the execution record where applicable;
+- update the owning `Abocha` planning item with the result;
+- mark the planning item Done only when its broader outcome is actually complete.
+
+If follow-up work is discovered, record it in Linear first and promote a new execution slice only
+when the repository-native boundary is concrete.

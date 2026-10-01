@@ -1,12 +1,12 @@
 name: Bug report
 description: Report a reproducible bug or regression.
 title: '[Bug] '
-labels: ['type:bug', 'status:inbox']
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for the report. Please include a minimal repro so maintainers can act quickly.
+        Planning state and prioritization live in Linear; this GitHub issue is the repository execution record.
   - type: textarea
     id: summary
     attributes:

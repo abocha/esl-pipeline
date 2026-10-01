@@ -1,8 +1,11 @@
 name: Feature request
-description: Propose an improvement with clear use-case and constraints.
+description: Propose a concrete repository improvement with clear use-case and constraints.
 title: '[Feature] '
-labels: ['type:improvement', 'status:inbox']
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for concrete repository execution. Planning ideas, product decisions, and roadmaps belong in Linear first.
   - type: textarea
     id: problem
     attributes:
