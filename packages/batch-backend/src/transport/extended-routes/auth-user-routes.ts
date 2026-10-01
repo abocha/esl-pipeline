@@ -25,6 +25,7 @@ import { getReadinessMetricsWithDefaults } from '../../application/readiness-met
 import { shareAssignmentSession } from '../../application/share-assignment-session.js';
 import { SubmitJobRequest, submitJob, ValidationError } from '../../application/submit-job.js';
 import type { BatchBackendConfig } from '../../config/env.js';
+import { postgresUuidSchema } from '../../domain/postgres-uuid.js';
 import {
   isValidTtsProvider,
   isValidTtsStrategy,
@@ -796,7 +797,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         .optional(),
       selectedGenerationModel: z.string().nullable().optional(),
       teacherNotes: z.string().max(20_000).nullable().optional(),
-      selectedProfileRevisionId: z.string().uuid().nullable().optional(),
+      selectedProfileRevisionId: postgresUuidSchema.nullable().optional(),
       selectedProfileRevisionHash: z
         .string()
         .regex(/^[0-9a-f]{64}$/)
@@ -844,7 +845,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         step: z.literal('context'),
         expectedRevision: z.number().int().positive(),
         teacherNotes: z.string().max(20_000).nullable(),
-        profileRevisionId: z.string().uuid().nullable(),
+        profileRevisionId: postgresUuidSchema.nullable(),
         profileRevisionHash: z
           .string()
           .regex(/^[0-9a-f]{64}$/)
