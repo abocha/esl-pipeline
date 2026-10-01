@@ -8,7 +8,7 @@ Use `WORKFLOW_MODES.md` to decide whether Goal execution is appropriate. Atomic 
 
 For plan-backed execution, the approved implementation plan is the scope and acceptance contract. For explicitly approved goal-backed orchestration, the Goal Contract is the durable completion contract and the current implementation plan is revisable strategy beneath it.
 
-This document owns delegation boundaries, role routing, context economy, review routing, and primary-agent integration. Repository-specific validation, contracts, mutation policy, and operational procedure belong to the target repository and its adapter.
+This document owns delegation boundaries, role routing, context economy, evidence sufficiency and closure, review routing, and primary-agent integration. Repository-specific validation, contracts, mutation policy, and operational procedure belong to the target repository and its adapter.
 
 The primary agent owns decomposition, integration, validation decisions, and the final result. It
 remains accountable for repository state and authorized mutations performed by workers.
@@ -130,7 +130,7 @@ Consider:
 - tool and validation churn;
 - maintainer attention.
 
-Fresh context is useful for a new ownership boundary, a genuinely different capability, or meaningful independent skepticism. It is not a ritual requirement.
+Apply the context-selection guidance in [WORKFLOW_MODES.md §4](WORKFLOW_MODES.md#4-context-economics), including reassessment at materially different execution phases.
 
 Reuse an active owner when it already holds expensive relevant evidence and the next step is a direct continuation.
 
@@ -138,13 +138,23 @@ Prefer references to authoritative repository sources over pasting large copies 
 
 Do not send unrelated plan sections, broad conversation history, or repository history that does not affect the assignment.
 
-Before another probe, identify what unresolved decision or evidence gap its result can change. Stop when evidence is sufficient.
-
 After delegation, let the worker own its coherent local inspect/edit/test loop. The primary reviews returned evidence and artifacts in proportion to residual risk rather than shadowing every callback.
 
 A worker's completion claim is evidence, not automatic acceptance.
 
 Do not spawn agents merely because registered roles exist.
+
+### Decision-bounded evidence and closure
+
+Across workflow modes, before another probe, identify the concrete unresolved decision, acceptance criterion, failed invariant, or material anomaly its result can resolve. Additional confidence alone is insufficient justification. Stop when evidence is sufficient for that branch; reopen it only when new evidence changes its basis.
+
+Reuse still-valid evidence while its relevant inputs and semantics remain unchanged. Later unrelated execution does not automatically invalidate earlier evidence. Refresh evidence whose validity depends on changed state or time, and follow required repository gates.
+
+Safety, fidelity, rollback, and exact-evidence requirements define what must be established; they do not create an open-ended obligation to strengthen proof after the applicable criteria are satisfied. Preserve the rigor actually required by the completion contract.
+
+Investigate unexpected anomalies in proportion to their possible effect on the decision. An explained benign delta may still warrant direct corroboration; exhaustive forensic reconstruction requires a plausible alternative explanation that could materially change the decision. Close the branch once sufficient evidence resolves it.
+
+Once the completion contract is satisfied, enter closure: record and preserve existing evidence, report the result and limitations, and perform required finalization and cleanup. Do not open new investigative branches unless a newly failed invariant or genuinely missing completion criterion appears.
 
 ## 7. Role routing integrity
 
@@ -203,7 +213,7 @@ Before final handoff, the primary:
 
 Delegated validation is evidence, not a substitute for primary integration judgment.
 
-Do not broaden or repeat validation merely because delegation occurred. Reuse still-relevant evidence when its inputs have not materially changed and follow the repository's own validation policy for broader gates or reproduction.
+Do not broaden or repeat validation merely because delegation occurred. Apply [decision-bounded evidence and closure](#decision-bounded-evidence-and-closure) when composing validation evidence and finalizing the result.
 
 Do not turn a manual or environment-owned check into an unsafe experiment against real data or production merely to close a checklist item.
 
