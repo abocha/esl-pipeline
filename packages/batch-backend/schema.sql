@@ -2376,5 +2376,5 @@ VALUES
   ('0056_first_profile_onboarding', '2c0fbc74c1f9ea8d6e2cf65d48e0a3e15177f9f3af7d5b581b2a0e04fa61f3ea', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0057_historical_profile_provenance_timestamp', 'e203033eb30c1456a4df56bbf1b784d0d842cf28a4dcc1a510fd87217e7a7e09', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0058_mcp_oauth_foundation', '4c4d181b4f150b453c447f3d2fb652b990f479dcd5ddb5ab2a89089f0cfb1cc0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0059_student_owned_profile_revisions', '2be84d00c2f17b681d27a19454739e16f21cb125cfa7b5709f0255274cc9bb2d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0059_student_owned_profile_revisions', '60b283fa0b95c8afe46b3233c3e7c50f38d8a3d81fdc98394a414846df6ceb01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
