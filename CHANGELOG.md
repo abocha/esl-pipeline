@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [12.0.0] - 2026-10-01
+
+### Changed
+
+- Automated release from PR #297: feat!: collapse learner profiles into student-owned revision history (ABO-12) (https://github.com/abocha/esl-pipeline/pull/297)
+
 ## [11.2.0] - 2026-10-01
 
 ### Changed
