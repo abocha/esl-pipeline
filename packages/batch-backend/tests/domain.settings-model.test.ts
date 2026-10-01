@@ -55,7 +55,6 @@ describe('domain/settings-model', () => {
 
   describe('sanitizeSettings', () => {
     const mockRecord: UserSettingsRecord = {
-      id: 'test-id',
       userId: 'user-123',
       elevenLabsKeyEncrypted: 'encrypted-key-data',
       ttsProvider: 'elevenlabs',

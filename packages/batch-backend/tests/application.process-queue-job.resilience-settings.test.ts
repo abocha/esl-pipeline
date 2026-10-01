@@ -63,7 +63,7 @@ describe('application/process-queue-job', () => {
     runAssignmentJobSpy.mockResolvedValue({ manifestPath: '/manifests/job-1.json' });
 
     // Mock settings repository
-    getSettingsByUserIdSpy.mockResolvedValue({ id: 'settings-1', userId: 'user-123' } as any);
+    getSettingsByUserIdSpy.mockResolvedValue({ userId: 'user-123' } as any);
     getDecryptedElevenLabsKeySpy.mockResolvedValue('user-eleven-key');
 
     await processQueueJob({ jobId: 'job-1' });

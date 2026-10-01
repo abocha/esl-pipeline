@@ -67,7 +67,6 @@ function buildApprovalJob(withTts: boolean): JobRecord {
 
 function buildSettings(): UserSettingsRecord {
   return {
-    id: 'settings-1',
     userId: 'user-1',
     elevenLabsKeyEncrypted: 'encrypted',
     ttsProvider: 'elevenlabs',
