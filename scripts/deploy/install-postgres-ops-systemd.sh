@@ -28,6 +28,8 @@ units=(
   esl-postgres-restore-drill.timer
   esl-postgres-ops-alert.service
   esl-postgres-ops-alert.timer
+  esl-host-runtime-health.service
+  esl-host-runtime-health.timer
 )
 for unit in "${units[@]}"; do
   source_path="${UNIT_SOURCE_DIR}/${unit}"
