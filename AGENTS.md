@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-09-12 repository/workflow state.
+- Last Verified Against: 2026-10-01 repository/workflow state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -110,11 +110,22 @@ Use the current review routing in `.codex/ORCHESTRATION.md`. Once an invariant h
 closed, later review should focus on the new fix and direct regressions unless evidence reopens it.
 Do not stack reviewers or whole-branch review without a concrete remaining cross-boundary risk.
 
-## GitHub and repository administration
+## Planning, GitHub, and repository administration
 
-GitHub Issues is the canonical engineering backlog. Read the complete issue before acting and treat
-proposed causes/fixes as hypotheses until evidence supports them. Follow
-`docs/operations/github-issue-intake-and-codex-work-selection.md` for current intake/status rules.
+Linear is the canonical planning backlog and durable working memory. Use the `Abocha` team for
+ideas, investigations, product/design decisions, roadmaps, prioritization, and deferred work.
+
+GitHub Issues is the repository-native execution ledger. New bounded implementation, migration,
+rollout, incident-remediation, CI/release, or similar execution work should be created in the Linear
+`ESL Execution` team and allowed to sync to this repository through the configured two-way GitHub
+Issues integration. Do not manually create a duplicate on both sides. Existing GitHub execution
+issues that predate this split may finish in place.
+
+Do not create a GitHub issue merely to remember a thought or future possibility. Promote planning
+work to execution only when a concrete repository contract, acceptance criteria, or PR/CI/release/
+deployment linkage is useful. Read the complete execution issue before acting and treat proposed
+causes/fixes as hypotheses until evidence supports them. Follow
+`docs/operations/github-issue-intake-and-codex-work-selection.md` for the current boundary.
 
 Use short-lived feature branches and avoid direct pushes to `main`. Use Conventional Commit style.
 Every PR to `main` must have exactly one release label allowed by current versioning policy, and PR
