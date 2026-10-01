@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
+import type { GenerationProvider } from '@esl-pipeline/contracts';
+
 import type { BatchBackendConfig } from '../config/env.js';
 import { buildCanonicalLessonMemoryAuthoritySqlPredicate } from '../domain/lesson-memory-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
@@ -48,7 +50,7 @@ interface OperationRow {
   seed_revision_id: string | null;
   seed_revision_hash: string | null;
   generation_input: GenerationInput | null;
-  generation_provider: string | null;
+  generation_provider: GenerationProvider | null;
   generation_model: string | null;
   state: OperationState;
   submission_id: string | null;
@@ -285,7 +287,7 @@ async function prepareOrCommit(
 ): Promise<{
   submissionId: string | null;
   input: GenerationInput;
-  provider: string;
+  provider: GenerationProvider;
   model: string;
 } | null> {
   return withTransaction(async (client) => {
@@ -393,8 +395,7 @@ async function prepareOrCommit(
         ].join('\n'),
         maxOutputTokens: 2800,
       };
-      const provider = 'openai';
-      const model = config.generation.models.openai.profileDraftPrimary;
+      const { provider, model } = config.generation.targets.profile_revision_drafting;
       if (!model) {
         await client.query(
           `UPDATE profile_initial_enrichment_operations
@@ -499,11 +500,8 @@ export async function reconcileProfileInitialEnrichmentOperation(
         request: {
           prompt: reserved.input.prompt,
           operation: 'lesson_population',
-          providerOverride: 'openai',
+          providerOverride: reserved.provider,
           modelOverride: reserved.model,
-          includeProviderFallbacks: false,
-          retryMaxOverride: 0,
-          exactCandidateOnly: true,
           budgetReservationAlreadyMade: Boolean(pacer),
           maxOutputTokens: reserved.input.maxOutputTokens,
           onValidatedResponse: async (profile) => {
@@ -524,7 +522,7 @@ export async function reconcileProfileInitialEnrichmentOperation(
     const generated = pacer
       ? await pacer.run({
           workload: 'profile_initial_enrichment',
-          provider: 'openai',
+          provider: reserved.provider,
           model: reserved.model,
           prompt: reserved.input.prompt,
           maxOutputTokens: reserved.input.maxOutputTokens,
@@ -569,7 +567,7 @@ export async function reconcileProfileInitialEnrichmentOperation(
       : rateLimitRejection
         ? new StudentMemoryPacingDeferredError({
             reason: 'provider_rate_limit',
-            provider: 'openai',
+            provider: reserved.provider,
             model: reserved.model,
             notBefore: new Date(
               Math.max(

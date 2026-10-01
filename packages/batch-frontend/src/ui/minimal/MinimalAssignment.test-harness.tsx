@@ -925,8 +925,7 @@ export function setupMinimalAssignmentTest() {
         {
           provider: 'openai',
           id: 'gpt-5.2',
-          tier: 'primary',
-          fallbackRank: 0,
+
           defaultSelected: true,
           enabled: true,
         },

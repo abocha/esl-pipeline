@@ -10,7 +10,7 @@ import {
 } from '../domain/assignment-session-repository.js';
 import { toAssignmentSessionDto } from './assignment-sessions.js';
 import { LESSON_MEMORY_SCHEMA_VERSION } from './generate-lesson-memory-entry.js';
-import { resolveGenerationCandidates } from './generation-policy.js';
+import { resolveGenerationTarget } from './generation-policy.js';
 import { enqueueConfirmedLessonMemoryIntent } from './request-lesson-memory-generation.js';
 
 export interface ConfirmAssignmentSessionStepDependencies {
@@ -26,16 +26,13 @@ export async function confirmAssignmentSessionStep(args: {
   request: ConfirmAssignmentSessionStepRequest;
   overrides?: Partial<ConfirmAssignmentSessionStepDependencies>;
 }): Promise<ConfirmAssignmentSessionStepResponse> {
-  const candidate =
+  const target =
     args.request.step === 'source'
-      ? resolveGenerationCandidates({
+      ? resolveGenerationTarget({
           config: args.config.generation,
-          workload: 'student_memory_extraction',
-        })[0]
+          workload: 'lesson_memory',
+        })
       : undefined;
-  if (args.request.step === 'source' && !candidate) {
-    throw new Error('No generation candidate is available for lesson-memory extraction');
-  }
   const confirmation = args.overrides?.confirmation ?? {
     confirm: confirmAssignmentSessionStepPersistence,
   };
@@ -48,11 +45,11 @@ export async function confirmAssignmentSessionStep(args: {
     id: args.sessionId,
     userId: args.userId,
     request: args.request,
-    lessonMemory: candidate
+    lessonMemory: target
       ? {
           schemaVersion: LESSON_MEMORY_SCHEMA_VERSION,
-          provider: candidate.provider,
-          model: candidate.model,
+          provider: target.provider,
+          model: target.model,
           requestedAt: now(),
         }
       : undefined,

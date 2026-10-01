@@ -10,7 +10,7 @@ function createTestConfig() {
     ...base,
     generation: {
       ...base.generation,
-      strictNoPaid: false,
+
       safetyMode: 'off' as const,
     },
   };
@@ -277,7 +277,11 @@ describe('application/process-homework-memory-job', () => {
     });
     expect(requestRefresh).toHaveBeenCalledWith({
       config: expect.objectContaining({
-        generation: expect.objectContaining({ defaultProvider: 'openai' }),
+        generation: expect.objectContaining({
+          targets: expect.objectContaining({
+            student_memory_snapshot: { provider: 'openai', model: 'gpt-5.6-luna' },
+          }),
+        }),
       }),
       params: {
         studentId: 'student-1',
@@ -473,7 +477,11 @@ describe('application/process-homework-memory-job', () => {
     });
     expect(requestRefresh).toHaveBeenCalledWith({
       config: expect.objectContaining({
-        generation: expect.objectContaining({ defaultProvider: 'openai' }),
+        generation: expect.objectContaining({
+          targets: expect.objectContaining({
+            student_memory_snapshot: { provider: 'openai', model: 'gpt-5.6-luna' },
+          }),
+        }),
       }),
       params: {
         studentId: 'student-1',

@@ -286,8 +286,16 @@ High-signal env groups for this package:
 - optional ChatGPT OAuth foundation: `MCP_OAUTH_*` (see below)
 - optional ops control: `BATCH_BACKEND_OPS_CONTROL_*`
 - generation: assignments use `gpt-6.1-sol` at medium reasoning
-  (`GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY`); memory/profile workloads use
+  (`GEN_ASSIGNMENT_MODEL`); memory/profile workloads use
   `gpt-5.6-luna` at medium or high reasoning according to the versioned request envelope
+
+Each generation workload resolves one provider/model target via `resolveGenerationTarget()`.
+Assignment/profile calls fail explicitly without local retries or automatic model/provider switching.
+Memory queue intents and initial profile enrichment freeze the target before execution and retain
+existing durable retry/recovery semantics. Google and OpenRouter adapters support explicit choices;
+model rosters serve UI selection and Batch/planner guards. Job options no longer expose fallback
+rank/tier metadata. See the [target policy and env rollout](../../docs/reference/GENERATION_PROVIDER_POLICY.md)
+for workload env pairs, retained capacity controls, and deleted settings.
 
 The speech-planner evaluation CLI is database-free and fail-closed. Its fixed live baseline counts
 physical provider requests with no automatic retry, while checked-in TTS 1.5 identity controls run

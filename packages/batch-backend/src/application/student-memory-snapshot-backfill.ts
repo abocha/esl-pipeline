@@ -5,7 +5,7 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 import type { BatchBackendConfig } from '../config/env.js';
 import { buildEligibleStudentMemorySnapshotLineageSqlPredicate } from '../domain/student-memory-snapshot-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
-import { resolveGenerationCandidates } from './generation-policy.js';
+import { resolveGenerationTarget } from './generation-policy.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 import type { StudentMemorySnapshotRefreshStrategy } from './student-memory-snapshot-generation-notes.js';
 
@@ -81,18 +81,14 @@ export function resolveStudentMemorySnapshotBackfillCandidate(args: {
   providerOverride?: GenerationProvider;
   modelOverride?: string;
 }): { provider: GenerationProvider; model: string } {
-  const candidate = resolveGenerationCandidates({
+  const target = resolveGenerationTarget({
     config: args.config.generation,
-    workload: 'student_memory_extraction',
+    workload: 'student_memory_snapshot',
     providerOverride: args.providerOverride,
     modelOverride: args.modelOverride,
-  })[0];
+  });
 
-  if (!candidate) {
-    throw new Error('No generation candidate is available for student-memory snapshot refresh');
-  }
-
-  return candidate;
+  return target;
 }
 
 async function listSnapshotReplayCandidates(args: {

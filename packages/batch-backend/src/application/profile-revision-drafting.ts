@@ -2,13 +2,11 @@ import type { GenerationErrorCategory, GenerationProvider } from '@esl-pipeline/
 import {
   classifyProviderRuntimeFailure,
   type ProviderRuntimeClassificationRules,
-  runProviderFallbackLadder,
 } from '@esl-pipeline/provider-runtime';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
-import { logger } from '../infrastructure/logger.js';
 import {
   FOUNDATIONAL_PROFILE_JSON_SCHEMA,
   FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
@@ -23,7 +21,7 @@ import {
   recordGenerationBudgetUsageAfterSuccess,
   resolveGenerationBudgetRepository,
 } from './generation-budget-guard.js';
-import { resolveGenerationCandidates } from './generation-policy.js';
+import { resolveGenerationTarget } from './generation-policy.js';
 import {
   executeGoogleStructuredGeneration,
   executeOpenAiStructuredGeneration,
@@ -115,7 +113,6 @@ export interface GenerateProfileRevisionDraftDependencies {
   executors: Partial<Record<GenerationProvider, ProviderExecutor>>;
   budget: GenerationBudgetGuardDependencies;
   now: () => Date;
-  sleep: (ms: number) => Promise<void>;
 }
 
 export interface GenerateProfileRevisionDraftRequest {
@@ -125,9 +122,6 @@ export interface GenerateProfileRevisionDraftRequest {
   maxOutputTokens?: number;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
-  includeProviderFallbacks?: boolean;
-  retryMaxOverride?: number;
-  exactCandidateOnly?: boolean;
   budgetReservationAlreadyMade?: boolean;
   responseSchema?: ProviderStructuredExecutionRequest['responseSchema'];
   validateOutput?: (output: unknown) => FoundationalProfile | ProfileCandidatePatch;
@@ -159,152 +153,89 @@ export async function generateProfileRevisionDraft(args: {
     overrides: args.overrides?.budget,
   });
   const now = args.overrides?.now ?? (() => new Date());
-  const sleep =
-    args.overrides?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
 
-  const resolvedCandidates = resolveGenerationCandidates({
-    config: config.generation,
-    workload: 'profile_revision_drafting',
-    providerOverride: args.request.providerOverride,
-    modelOverride: args.request.modelOverride,
-    includeProviderFallbacks: args.request.includeProviderFallbacks,
-  });
-  const candidates = args.request.exactCandidateOnly
-    ? resolvedCandidates.slice(0, 1)
-    : resolvedCandidates;
-
-  if (candidates.length === 0) {
-    throw new ProfileRevisionDraftingError({
-      category: 'provider_contract_error',
-      provider: args.request.providerOverride ?? config.generation.defaultProvider,
-      model: args.request.modelOverride ?? 'unspecified',
-      message:
-        'No generation candidates are available for the current provider/model configuration.',
-      rejectedBeforeExecution: true,
+  let target = {
+    provider:
+      args.request.providerOverride ?? config.generation.targets.profile_revision_drafting.provider,
+    model: args.request.modelOverride ?? 'unspecified',
+  };
+  let execution: {
+    target: ReturnType<typeof resolveGenerationTarget>;
+    result: ProviderStructuredExecutionResult;
+    quotaUsage: GenerationBudgetUsage;
+  };
+  try {
+    target = resolveGenerationTarget({
+      config: config.generation,
+      workload: 'profile_revision_drafting',
+      providerOverride: args.request.providerOverride,
+      modelOverride: args.request.modelOverride,
     });
-  }
-
-  const execution = await runProviderFallbackLadder<
-    (typeof candidates)[number],
-    {
-      candidate: (typeof candidates)[number];
-      result: ProviderStructuredExecutionResult;
-      quotaUsage: GenerationBudgetUsage;
-    },
-    ProfileRevisionDraftingError
-  >({
-    candidates,
-    runCandidate: async (candidate) => {
-      if (!args.request.budgetReservationAlreadyMade) {
-        await enforceGenerationBudgetBeforeAttempt({
-          config,
-          provider: candidate.provider,
-          model: candidate.model,
-          prompt: args.request.prompt,
-          maxOutputTokens: args.request.maxOutputTokens,
-          now: now(),
-          repository: budgetRepository,
-        });
-      }
-
-      const executor = executors[candidate.provider];
-      if (!executor) {
-        throw new ProfileRevisionDraftingError({
-          category: 'provider_contract_error',
-          provider: candidate.provider,
-          model: candidate.model,
-          message: `No generation executor configured for provider: ${candidate.provider}`,
-          rejectedBeforeExecution: true,
-        });
-      }
-
-      const result = await executor({
-        config: config.generation,
-        request: {
-          model: candidate.model,
-          prompt: args.request.prompt,
-          ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
-          maxOutputTokens: args.request.maxOutputTokens,
-          responseSchema: args.request.responseSchema ?? {
-            name: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
-            description: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
-            schema: FOUNDATIONAL_PROFILE_JSON_SCHEMA,
-            strict: true,
-          },
-        },
-      });
-
-      if (args.request.onValidatedResponse) {
-        const validated = args.request.validateOutput
-          ? args.request.validateOutput(result.output)
-          : validateFoundationalProfileOutput(result.output);
-        await args.request.onValidatedResponse(validated);
-      }
-
-      await recordGenerationBudgetUsageAfterSuccess({
+    if (!args.request.budgetReservationAlreadyMade) {
+      await enforceGenerationBudgetBeforeAttempt({
         config,
-        provider: candidate.provider,
-        model: candidate.model,
-        usageTotalTokens: result.usage?.totalTokens,
+        provider: target.provider,
+        model: target.model,
+        prompt: args.request.prompt,
+        maxOutputTokens: args.request.maxOutputTokens,
         now: now(),
         repository: budgetRepository,
       });
+    }
 
-      const quotaUsage = await budgetRepository.getUsage({
-        provider: candidate.provider,
-        model: candidate.model,
-        now: now(),
+    const executor = executors[target.provider];
+    if (!executor) {
+      throw new ProfileRevisionDraftingError({
+        category: 'provider_contract_error',
+        provider: target.provider,
+        model: target.model,
+        message: `No generation executor configured for provider: ${target.provider}`,
+        rejectedBeforeExecution: true,
       });
+    }
 
-      return { candidate, result, quotaUsage };
-    },
-    mapError: (candidate, error) =>
-      mapProviderError({
-        provider: candidate.provider,
-        model: candidate.model,
-        error,
-      }),
-    isTimeoutError: (mappedError) => mappedError.category === 'provider_timeout',
-    isFailFastError: (mappedError) =>
-      mappedError.category === 'provider_contract_error' ||
-      mappedError.category === 'budget_exceeded',
-    getRetryMax: (candidate) =>
-      args.request.retryMaxOverride ?? retryMaxForProvider(config.generation, candidate.provider),
-    getRetryBackoffMs: (candidate) =>
-      retryBackoffForProvider(config.generation, candidate.provider),
-    sleep,
-    onAttempt: ({ candidate, retriesRemaining }) => {
-      logger.info('Attempting profile revision drafting candidate', {
-        event: 'profile_revision_drafting_candidate_attempt',
-        operation: args.request.operation,
-        provider: candidate.provider,
-        model: candidate.model,
-        fallbackRank: candidate.fallbackRank,
-        retriesRemaining,
-      });
-    },
-    onRetry: ({ candidate, retriesRemaining, backoffMs, mappedError }) => {
-      logger.warn('Profile revision drafting timed out; retrying candidate before fallback', {
-        event: 'profile_revision_drafting_candidate_retry',
-        operation: args.request.operation,
-        provider: candidate.provider,
-        model: candidate.model,
-        retriesRemaining,
-        backoffMs,
-        category: mappedError.category,
-      });
-    },
-    onFallback: ({ candidate, mappedError }) => {
-      logger.warn('Profile revision drafting candidate failed; falling back to next candidate', {
-        event: 'profile_revision_drafting_candidate_fallback',
-        operation: args.request.operation,
-        provider: candidate.provider,
-        model: candidate.model,
-        category: mappedError.category,
-        statusCode: mappedError.statusCode,
-      });
-    },
-  });
+    const result = await executor({
+      config: config.generation,
+      request: {
+        model: target.model,
+        prompt: args.request.prompt,
+        ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
+        maxOutputTokens: args.request.maxOutputTokens,
+        responseSchema: args.request.responseSchema ?? {
+          name: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
+          description: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
+          schema: FOUNDATIONAL_PROFILE_JSON_SCHEMA,
+          strict: true,
+        },
+      },
+    });
+
+    if (args.request.onValidatedResponse) {
+      const validated = args.request.validateOutput
+        ? args.request.validateOutput(result.output)
+        : validateFoundationalProfileOutput(result.output);
+      await args.request.onValidatedResponse(validated);
+    }
+
+    await recordGenerationBudgetUsageAfterSuccess({
+      config,
+      provider: target.provider,
+      model: target.model,
+      usageTotalTokens: result.usage?.totalTokens,
+      now: now(),
+      repository: budgetRepository,
+    });
+
+    const quotaUsage = await budgetRepository.getUsage({
+      provider: target.provider,
+      model: target.model,
+      now: now(),
+    });
+
+    execution = { target, result, quotaUsage };
+  } catch (error) {
+    throw mapProviderError({ provider: target.provider, model: target.model, error });
+  }
 
   return {
     structuredProfile: args.request.validateOutput
@@ -312,8 +243,8 @@ export async function generateProfileRevisionDraft(args: {
       : validateFoundationalProfileOutput(execution.result.output),
     rawOutput: execution.result.output,
     rawText: execution.result.rawText,
-    provider: execution.candidate.provider,
-    model: execution.candidate.model,
+    provider: execution.target.provider,
+    model: execution.target.model,
     ...(execution.result.usage ? { usage: execution.result.usage } : {}),
     ...(execution.result.finishReason ? { finishReason: execution.result.finishReason } : {}),
     ...(execution.result.providerRequestId
@@ -338,25 +269,6 @@ export function isCompleteTextGenerationFinishReason(finishReason?: string | nul
     normalized === 'complete' ||
     normalized === 'end_turn'
   );
-}
-
-function retryMaxForProvider(
-  config: BatchBackendConfig['generation'],
-  provider: GenerationProvider,
-): number {
-  if (provider === 'openai') return Math.max(0, config.providers.openai.retryMax);
-  if (provider === 'google_ai_studio') return Math.max(0, config.providers.googleAiStudio.retryMax);
-  return Math.max(0, config.providers.openrouter.retryMax);
-}
-
-function retryBackoffForProvider(
-  config: BatchBackendConfig['generation'],
-  provider: GenerationProvider,
-): number {
-  if (provider === 'openai') return Math.max(0, config.providers.openai.retryBackoffMs);
-  if (provider === 'google_ai_studio')
-    return Math.max(0, config.providers.googleAiStudio.retryBackoffMs);
-  return Math.max(0, config.providers.openrouter.retryBackoffMs);
 }
 
 function statusCodeForCategory(category: GenerationErrorCategory): number {

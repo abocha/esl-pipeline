@@ -75,4 +75,24 @@ describe('generation budget guard', () => {
       expect.objectContaining({ limits: expect.objectContaining({ tpmBudget: 160_000 }) }),
     );
   });
+  it('keeps the output cap when capacity enforcement is off', async () => {
+    const config = loadConfig();
+    config.generation.safetyMode = 'off';
+    config.generation.maxOutputTokensHard = 100;
+    const reserve = vi.fn();
+    const getUsage = vi.fn();
+    await expect(
+      enforceGenerationBudgetBeforeAttempt({
+        config,
+        provider: 'openai',
+        model: 'operator-custom',
+        prompt: 'source',
+        maxOutputTokens: 101,
+        now: new Date(),
+        repository: { reserve, getUsage, recordActual: vi.fn() },
+      }),
+    ).rejects.toMatchObject({ category: 'budget_exceeded', limitType: 'max_output_tokens' });
+    expect(reserve).not.toHaveBeenCalled();
+    expect(getUsage).not.toHaveBeenCalled();
+  });
 });

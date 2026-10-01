@@ -169,8 +169,7 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
         {
           provider: 'openai' as const,
           id: 'gpt-5.2',
-          tier: 'primary' as const,
-          fallbackRank: 0,
+
           defaultSelected: true,
           enabled: true,
         },

@@ -14,23 +14,24 @@ function createConfig(
     ...base,
     generation: {
       ...base.generation,
-      defaultProvider: 'openai',
-      fallbackProviders: ['google_ai_studio', 'openrouter'],
+      targets: {
+        ...base.generation.targets,
+        draft_generation: { provider: 'openai', model: 'gpt-5.2' },
+      },
       quotaSourceMode: 'hybrid',
       safetyMode: 'hard_stop',
-      strictNoPaid: false,
+
       maxOutputTokensHard: 1200,
-      budgetEmergencyOverride: false,
+
       models: {
         openai: {
-          primary: 'gpt-5.2',
-          fallback: 'gpt-5-mini',
+          model: 'gpt-5.2',
+
           allowed: ['gpt-5.2', 'gpt-5-mini'],
         },
         googleAiStudio: {
-          primary: 'gemini-3-flash-preview',
-          fallback: 'gemini-2.5-flash-lite',
-          tertiary: 'gemini-2.5-pro',
+          model: 'gemini-3-flash-preview',
+
           allowed: [
             'gemini-3-flash-preview',
             'gemini-2.5-flash-lite',
@@ -39,8 +40,8 @@ function createConfig(
           ],
         },
         openrouter: {
-          primary: 'openrouter/test-primary',
-          fallback: 'openrouter/test-fallback',
+          model: 'openrouter/test-primary',
+
           allowed: ['openrouter/test-primary', 'openrouter/test-fallback'],
         },
       },
@@ -68,8 +69,7 @@ function createConfig(
           ...base.generation.providers.openrouter,
           apiKey: 'openrouter-key',
           requestTimeoutMs: 5_000,
-          retryMax: 1,
-          retryBackoffMs: 0,
+
           dailyTokenBudget: 1_000_000,
           dailyRequestBudget: 1_000,
           rpmBudget: 1_000,
@@ -96,7 +96,6 @@ describe('application/generate-draft', () => {
       },
       executors: { openai: execute },
       now: () => new Date('2026-02-18T00:00:00.000Z'),
-      sleep: async () => {},
     };
     await expect(
       generateDraft({ promptPackageId: 'old-assignment-package' }, dependencies),
@@ -134,7 +133,6 @@ describe('application/generate-draft', () => {
           openrouter: vi.fn(),
         },
         now: () => new Date('2026-02-18T00:00:00.000Z'),
-        sleep: async () => {},
       },
     );
 
@@ -152,7 +150,7 @@ describe('application/generate-draft', () => {
     expect(openAi).toHaveBeenCalledTimes(1);
   });
 
-  it('retries timeout then falls back to next candidate', async () => {
+  it('fails explicitly without switching target on provider_timeout', async () => {
     const config = createConfig();
     const openAi = vi.fn().mockRejectedValue(
       new ProviderExecutionError({
@@ -164,36 +162,33 @@ describe('application/generate-draft', () => {
     );
     const google = vi.fn().mockResolvedValue({ text: '# Google draft', providerRequestId: 'g-1' });
 
-    const result = await generateDraft(
-      {
-        promptPackageId: 'prompt-2',
-      },
-      {
-        config,
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: vi.fn().mockResolvedValue({ id: 'prompt-2', text: 'PROMPT' }),
+    await expect(
+      generateDraft(
+        {
+          promptPackageId: 'prompt-2',
         },
-        executors: {
-          openai: openAi,
-          google_ai_studio: google,
-          openrouter: vi.fn(),
+        {
+          config,
+          promptPackages: {
+            isSourceCanonical: async () => true,
+            getById: vi.fn().mockResolvedValue({ id: 'prompt-2', text: 'PROMPT' }),
+          },
+          executors: {
+            openai: openAi,
+            google_ai_studio: google,
+            openrouter: vi.fn(),
+          },
+          now: () => new Date('2026-02-18T00:00:00.000Z'),
         },
-        now: () => new Date('2026-02-18T00:00:00.000Z'),
-        sleep: async () => {},
-      },
-    );
+      ),
+    ).rejects.toMatchObject({ category: 'provider_timeout', provider: 'openai', model: 'gpt-5.2' });
 
-    if (!result) {
-      throw new Error('Expected generated draft response');
-    }
-    expect(openAi).toHaveBeenCalledTimes(4);
-    expect(google).toHaveBeenCalledTimes(1);
-    expect(result.provider).toBe('google_ai_studio');
-    expect(result.model).toBe('gemini-3-flash-preview');
+    expect(openAi).toHaveBeenCalledTimes(1);
+    expect(openAi.mock.calls[0]?.[0].request.model).toBe('gpt-5.2');
+    expect(google).not.toHaveBeenCalled();
   });
 
-  it('falls back immediately on rate limit', async () => {
+  it('fails explicitly without switching target on provider_rate_limit', async () => {
     const config = createConfig();
     const openAi = vi.fn().mockRejectedValue(
       new ProviderExecutionError({
@@ -205,32 +200,34 @@ describe('application/generate-draft', () => {
     );
     const google = vi.fn().mockResolvedValue({ text: '# Google draft' });
 
-    const result = await generateDraft(
-      {
-        promptPackageId: 'prompt-3',
-      },
-      {
-        config,
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: vi.fn().mockResolvedValue({ id: 'prompt-3', text: 'PROMPT' }),
+    await expect(
+      generateDraft(
+        {
+          promptPackageId: 'prompt-3',
         },
-        executors: {
-          openai: openAi,
-          google_ai_studio: google,
-          openrouter: vi.fn(),
+        {
+          config,
+          promptPackages: {
+            isSourceCanonical: async () => true,
+            getById: vi.fn().mockResolvedValue({ id: 'prompt-3', text: 'PROMPT' }),
+          },
+          executors: {
+            openai: openAi,
+            google_ai_studio: google,
+            openrouter: vi.fn(),
+          },
+          now: () => new Date('2026-02-18T00:00:00.000Z'),
         },
-        now: () => new Date('2026-02-18T00:00:00.000Z'),
-        sleep: async () => {},
-      },
-    );
+      ),
+    ).rejects.toMatchObject({
+      category: 'provider_rate_limit',
+      provider: 'openai',
+      model: 'gpt-5.2',
+    });
 
-    if (!result) {
-      throw new Error('Expected generated draft response');
-    }
-    expect(openAi).toHaveBeenCalledTimes(2);
-    expect(google).toHaveBeenCalledTimes(1);
-    expect(result.provider).toBe('google_ai_studio');
+    expect(openAi).toHaveBeenCalledTimes(1);
+    expect(openAi.mock.calls[0]?.[0].request.model).toBe('gpt-5.2');
+    expect(google).not.toHaveBeenCalled();
   });
 
   it('fails fast on provider contract error', async () => {
@@ -261,7 +258,6 @@ describe('application/generate-draft', () => {
             google_ai_studio: google,
             openrouter: vi.fn(),
           },
-          sleep: async () => {},
         },
       ),
     ).rejects.toMatchObject({
@@ -295,7 +291,6 @@ describe('application/generate-draft', () => {
           google_ai_studio: google,
           openrouter: vi.fn(),
         },
-        sleep: async () => {},
       },
     );
 
@@ -359,108 +354,6 @@ describe('application/generate-draft', () => {
     expect(openAi).not.toHaveBeenCalled();
   });
 
-  it('fails fast when strict no-paid policy blocks model', async () => {
-    const config = createConfig({
-      strictNoPaid: true,
-      models: {
-        openai: {
-          primary: 'gpt-5.2',
-          fallback: 'gpt-5-mini',
-          allowed: ['gpt-5.2'],
-        },
-        googleAiStudio: {
-          primary: 'gemini-3-flash-preview',
-          fallback: 'gemini-2.5-flash-lite',
-          tertiary: 'gemini-2.5-pro',
-          allowed: ['gemini-3-flash-preview'],
-        },
-        openrouter: {
-          primary: 'openrouter/test-primary',
-          fallback: 'openrouter/test-fallback',
-          allowed: [],
-        },
-      },
-    });
-    const openAi = vi.fn();
-
-    await expect(
-      generateDraft(
-        {
-          promptPackageId: 'prompt-8',
-          provider: 'openai',
-          model: 'gpt-5-mini',
-        },
-        {
-          config,
-          promptPackages: {
-            isSourceCanonical: async () => true,
-            getById: vi.fn().mockResolvedValue({ id: 'prompt-8', text: 'PROMPT' }),
-          },
-          executors: {
-            openai: openAi,
-          },
-        },
-      ),
-    ).rejects.toMatchObject({
-      name: 'GenerateDraftProviderError',
-      category: 'budget_exceeded',
-      statusCode: 429,
-      limitType: 'model_not_allowed',
-    });
-    expect(openAi).not.toHaveBeenCalled();
-  });
-
-  it('bypasses strict no-paid checks when emergency override is enabled', async () => {
-    const config = createConfig({
-      budgetEmergencyOverride: true,
-      strictNoPaid: true,
-      models: {
-        openai: {
-          primary: 'gpt-5.2',
-          fallback: 'gpt-5-mini',
-          allowed: ['gpt-5.2'],
-        },
-        googleAiStudio: {
-          primary: 'gemini-3-flash-preview',
-          fallback: 'gemini-2.5-flash-lite',
-          tertiary: 'gemini-2.5-pro',
-          allowed: ['gemini-3-flash-preview'],
-        },
-        openrouter: {
-          primary: 'openrouter/test-primary',
-          fallback: 'openrouter/test-fallback',
-          allowed: [],
-        },
-      },
-    });
-    const openAi = vi.fn().mockResolvedValue({
-      text: '# Override path draft',
-      usage: { totalTokens: 42 },
-    });
-
-    const result = await generateDraft(
-      {
-        promptPackageId: 'prompt-override',
-        provider: 'openai',
-        model: 'gpt-5-mini',
-      },
-      {
-        config,
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: vi.fn().mockResolvedValue({ id: 'prompt-override', text: 'PROMPT' }),
-        },
-        executors: {
-          openai: openAi,
-        },
-      },
-    );
-
-    expect(openAi).toHaveBeenCalledTimes(1);
-    expect(result?.provider).toBe('openai');
-    expect(result?.model).toBe('gpt-5-mini');
-  });
-
   it('classifies missing provider credentials as contract error', async () => {
     const baseProviders = createConfig().generation.providers;
     const config = createConfig({
@@ -515,7 +408,16 @@ describe('application/generate-draft', () => {
     const result = await generateDraft(
       { promptPackageId: 'prompt-repair' },
       {
-        config,
+        config: {
+          ...config,
+          generation: {
+            ...config.generation,
+            targets: {
+              ...config.generation.targets,
+              draft_generation: { provider: 'openai', model: 'gpt-6.1-sol' },
+            },
+          },
+        },
         promptPackages: {
           isSourceCanonical: async () => true,
           getById: vi.fn().mockResolvedValue({
@@ -533,7 +435,6 @@ describe('application/generate-draft', () => {
         executors: { openai: openAi },
         validator,
         now: () => new Date('2026-02-18T00:00:00.000Z'),
-        sleep: async () => {},
       },
     );
 
@@ -584,7 +485,6 @@ describe('application/generate-draft', () => {
           executors: { openai: openAi },
           validator,
           now: () => new Date('2026-02-18T00:00:00.000Z'),
-          sleep: async () => {},
         },
       ),
     ).rejects.toMatchObject({

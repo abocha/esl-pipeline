@@ -8,7 +8,7 @@ import {
 import { supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork } from '../domain/student-memory-openai-batch-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
-import { resolveGenerationCandidates } from './generation-policy.js';
+import { resolveGenerationTarget } from './generation-policy.js';
 import { HOMEWORK_MEMORY_SCHEMA_VERSION } from './homework-memory-generation.js';
 import { resolveHomeworkMemorySourceFromSucceededJob } from './homework-memory-source.js';
 
@@ -56,15 +56,12 @@ export async function requestHomeworkMemoryGeneration(args: {
   const queue = args.overrides?.queue ?? createStudentMemoryQueue();
   const now = args.overrides?.now ?? (() => new Date());
 
-  const candidate = resolveGenerationCandidates({
+  const target = resolveGenerationTarget({
     config: args.config.generation,
-    workload: 'student_memory_extraction',
+    workload: 'homework_memory',
     providerOverride: args.params.providerOverride,
     modelOverride: args.params.modelOverride,
-  })[0];
-  if (!candidate) {
-    throw new Error('No generation candidate is available for homework-memory extraction');
-  }
+  });
 
   const sourceBundle = await source.resolveFromSucceededJob(args.params.jobId);
   const publishKind = args.params.publishKind ?? 'initial';
@@ -95,8 +92,8 @@ export async function requestHomeworkMemoryGeneration(args: {
     transcriptId: sourceBundle.transcriptId ?? null,
     schemaVersion: HOMEWORK_MEMORY_SCHEMA_VERSION,
     generatedAt: requestedAt,
-    provider: candidate.provider,
-    model: candidate.model,
+    provider: target.provider,
+    model: target.model,
     contentHash: sourceBundle.contentHash,
     bypassReadyReuse: args.params.forceRegenerate ?? false,
     generationNotes: {
@@ -117,8 +114,8 @@ export async function requestHomeworkMemoryGeneration(args: {
         jobId: args.params.jobId,
         studentId: args.params.studentId,
         pendingEntryId: pending.entry.id,
-        provider: candidate.provider,
-        model: candidate.model,
+        provider: target.provider,
+        model: target.model,
       },
       {
         jobId: `homework-memory:${pending.entry.id}`,

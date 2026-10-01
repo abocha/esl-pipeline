@@ -16,7 +16,7 @@ function createTestConfig() {
     ...base,
     generation: {
       ...base.generation,
-      strictNoPaid: false,
+
       safetyMode: 'off' as const,
     },
   };

@@ -14,7 +14,7 @@ const USAGE = {
   actualTokensToday: 0,
 };
 
-describe('application/profile-revision-drafting exact candidate', () => {
+describe('application/profile-revision-drafting single target', () => {
   it.each([
     { status: 429, category: 'provider_rate_limit', retryAfterMs: 120_000 },
     { status: 504, category: 'provider_timeout', retryAfterMs: undefined },
@@ -26,9 +26,8 @@ describe('application/profile-revision-drafting exact candidate', () => {
         ...base,
         generation: {
           ...base.generation,
-          strictNoPaid: false,
+
           safetyMode: 'hard_stop' as const,
-          budgetEmergencyOverride: false,
         },
       };
       const reserve = vi.fn().mockResolvedValue({ allowed: true, usage: USAGE });
@@ -46,16 +45,12 @@ describe('application/profile-revision-drafting exact candidate', () => {
           request: {
             prompt: 'Canonical lesson evidence',
             operation: 'lesson_population',
-            providerOverride: 'openai',
-            modelOverride: 'test-exact-model',
-            includeProviderFallbacks: false,
-            exactCandidateOnly: true,
+
             budgetReservationAlreadyMade: true,
-            retryMaxOverride: 0,
           },
           overrides: {
             config,
-            executors: { openai: execute },
+            executors: { openai: execute, google_ai_studio: vi.fn(), openrouter: vi.fn() },
             budget: {
               repository: {
                 reserve,
@@ -73,6 +68,7 @@ describe('application/profile-revision-drafting exact candidate', () => {
         rejectedBeforeExecution: caseInfo.status === 429,
       });
       expect(execute).toHaveBeenCalledOnce();
+      expect(execute.mock.calls[0]?.[0].request.model).toBe('gpt-5.6-luna');
       expect(reserve).not.toHaveBeenCalled();
     },
   );
