@@ -559,14 +559,22 @@ async function confirmLockedContext(
   }
   const context = {
     teacherNotes: request.teacherNotes,
-    profileId: null,
     profileRevisionId: request.profileRevisionId,
     profileRevisionHash: request.profileRevisionHash,
   };
-  if (JSON.stringify(current.confirmed.context) === JSON.stringify(context)) {
+  const previousContext = current.confirmed.context;
+  if (
+    previousContext &&
+    previousContext.teacherNotes === context.teacherNotes &&
+    previousContext.profileRevisionId === context.profileRevisionId &&
+    previousContext.profileRevisionHash === context.profileRevisionHash
+  ) {
     return { session: current, invalidated: [], lessonMemoryIntent: null };
   }
   assertExpectedRevision(current, request.expectedRevision);
+  // Acquire the ownership-root lock in a separate statement. A joined read
+  // waiting for this lock can retain a pre-wait revision snapshot under READ COMMITTED.
+  await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [current.studentId]);
   const pendingOnboarding = await client.query(
     `SELECT 1 FROM profile_initial_enrichment_operations op
      WHERE op.assignment_session_id = $1 AND op.student_id = $2
@@ -598,13 +606,11 @@ async function confirmLockedContext(
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PROFILE_PREPARING');
   }
   const active = await client.query<{
-    profile_id: string;
     active_revision_id: string | null;
     content_hash: string | null;
   }>(
-    `SELECT pr.id AS active_revision_id, pr.content_hash
-     FROM students s LEFT JOIN student_profile_revisions pr ON pr.student_id = s.id AND pr.status = 'active'
-     WHERE s.id = $1 FOR UPDATE OF s`,
+    `SELECT id AS active_revision_id, content_hash
+     FROM student_profile_revisions WHERE student_id = $1 AND status = 'active'`,
     [current.studentId],
   );
   const authoritative = active.rows[0];
