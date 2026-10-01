@@ -451,10 +451,12 @@ export async function linkStudentProfileCandidatesToDraftRevision(
     await client.query(
       `
       INSERT INTO student_profile_candidate_draft_revisions (
+        student_id,
         candidate_id,
         revision_id
       )
       SELECT
+        student_id,
         id,
         $3
       FROM student_profile_candidates
@@ -478,10 +480,12 @@ export async function copyStudentProfileCandidateDraftRevisionLinks(
     await client.query(
       `
       INSERT INTO student_profile_candidate_draft_revisions (
+        student_id,
         candidate_id,
         revision_id
       )
       SELECT
+        student_id,
         candidate_id,
         $2
       FROM student_profile_candidate_draft_revisions

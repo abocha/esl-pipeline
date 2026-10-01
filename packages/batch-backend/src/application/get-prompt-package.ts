@@ -2,8 +2,6 @@ import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js'
 import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
-import type { StudentProfileBindingRecord } from '../domain/student-profile-binding-model.js';
-import { getStudentProfileBindingAt } from '../domain/student-profile-binding-repository.js';
 import type { TemplateRevisionRecord } from '../domain/template-revision-model.js';
 import { getActiveTemplateRevision } from '../domain/template-revision-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -46,9 +44,6 @@ export interface GetPromptPackageDependencies {
   templateRevisions: {
     getActive: typeof getActiveTemplateRevision;
   };
-  bindings: {
-    getAt: typeof getStudentProfileBindingAt;
-  };
 }
 
 export interface PromptPackageLineageResponse {
@@ -68,7 +63,7 @@ export interface PromptPackageLineageResponse {
       updatedAt: string | null;
     };
     current: {
-      profileId: string | null;
+      studentId: string | null;
       revisionId: string | null;
       hash: string | null;
       versionLabel: string | null;
@@ -168,22 +163,16 @@ export async function getPromptPackageLineage(
   const templateRevisions = overrides?.templateRevisions ?? {
     getActive: getActiveTemplateRevision,
   };
-  const bindings = overrides?.bindings ?? {
-    getAt: getStudentProfileBindingAt,
-  };
 
   const promptPackage = await promptPackages.getById(promptPackageId);
   if (!promptPackage) return null;
 
-  const [currentProfile, currentTemplate, bindingAtCreation] = await Promise.all([
-    promptPackage.resolvedProfileId
-      ? profileRevisions.getActive(promptPackage.resolvedProfileId)
+  const [currentProfile, currentTemplate] = await Promise.all([
+    promptPackage.studentId
+      ? profileRevisions.getActive(promptPackage.studentId)
       : Promise.resolve(null),
     promptPackage.resolvedTemplateId
       ? templateRevisions.getActive(promptPackage.resolvedTemplateId)
-      : Promise.resolve(null),
-    promptPackage.studentId
-      ? bindings.getAt(promptPackage.studentId, promptPackage.createdAt)
       : Promise.resolve(null),
   ]);
 
@@ -215,7 +204,7 @@ export async function getPromptPackageLineage(
           : null,
       },
       current: {
-        profileId: promptPackage.resolvedProfileId ?? null,
+        studentId: promptPackage.studentId ?? null,
         revisionId: currentProfile?.id ?? null,
         hash: currentProfile ? hashPromptProfileContent(currentProfile) : null,
         versionLabel: currentProfile?.versionLabel ?? null,
@@ -253,29 +242,6 @@ export async function getPromptPackageLineage(
       retrievalPolicyVersion: promptPackage.retrievalPolicyVersion ?? null,
       layerAvailability: getPromptPackageMemoryLayerAvailability(promptPackage),
     },
-    bindingAtCreation: bindingAtCreation ? toBindingSnapshot(bindingAtCreation) : null,
-  };
-}
-
-function toBindingSnapshot(binding: StudentProfileBindingRecord): {
-  bindingId: string;
-  studentId: string;
-  profileId: string;
-  effectiveFrom: string;
-  effectiveTo: string | null;
-  reason: string | null;
-  changedBy: string | null;
-  createdAt: string;
-} {
-  return {
-    bindingId: binding.id,
-    studentId: binding.studentId,
-    profileId: binding.profileId,
-    effectiveFrom: binding.effectiveFrom.toISOString(),
-    effectiveTo: binding.effectiveTo ? binding.effectiveTo.toISOString() : null,
-    reason: binding.reason ?? null,
-    changedBy: binding.changedBy ?? null,
-    createdAt: binding.createdAt.toISOString(),
   };
 }
 
@@ -283,13 +249,13 @@ async function detectPromptPackageProfileDrift(
   promptPackage: PromptPackageRecord,
   getLatestRevision: (profileId: string) => Promise<ProfileRevisionRecord | null>,
 ): Promise<PromptPackageProfileDrift | null> {
-  const resolvedProfileId = promptPackage.resolvedProfileId;
+  const studentId = promptPackage.studentId;
   const resolvedProfileHash = promptPackage.resolvedProfileHash;
-  if (!resolvedProfileId || !resolvedProfileHash) {
+  if (!studentId || !resolvedProfileHash) {
     return null;
   }
 
-  const currentRevision = await getLatestRevision(resolvedProfileId);
+  const currentRevision = await getLatestRevision(studentId);
   if (!currentRevision) {
     return {
       detected: true,

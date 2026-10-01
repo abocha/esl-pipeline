@@ -84,6 +84,15 @@ For deep system maps, prefer the linked docs rather than growing this file again
 
 ### Schema and persistence
 
+- Student is the sole foundational learner-profile ownership root. Profile revisions belong to
+  `student_profile_revisions.student_id`; active status plus the partial unique index is canonical.
+  Authenticate, resolve workspace, authorize student, then read or mutate its revision. Direct
+  global profile IDs, catalogs, sharing and student/profile binding machinery are retired.
+- Preserve historical assignment and prompt-package revision/hash/version evidence. Legacy profile
+  IDs in snapshots or migration provenance are metadata, never runtime authority. Residual frozen
+  tables require the [ABO-12 reconciliation procedure](../operations/student-profile-revision-cutover.md)
+  before destructive removal; do not infer student ownership from creators.
+
 - Database changes belong in versioned migrations.
 - Runtime legacy schema patching is emergency-only and must not become the normal change path.
 - Durable workflow state, action history, and lineage are backend responsibilities, not frontend inventions.

@@ -25,14 +25,14 @@ function createDeferred<T>(): Deferred<T> {
 
 function StudentShellProbe() {
   const context = useOutletContext<{
-    student: { profileId?: string | null } | null;
+    student: { id: string } | null;
     studentId: string;
   }>();
 
   return (
     <div>
       <span data-testid="student-shell-student-id">{context.studentId}</span>
-      <span data-testid="student-shell-profile-id">{context.student?.profileId ?? 'none'}</span>
+      <span data-testid="student-shell-record-id">{context.student?.id ?? 'none'}</span>
       <Outlet />
     </div>
   );
@@ -74,7 +74,6 @@ describe('StudentAreaShell', () => {
     apiMocks.getStudentProfile.mockResolvedValue({
       id: 'student-alex-rivera',
       student: 'Alex Rivera',
-      profileId: 'profiles/students/alex.md',
     });
 
     renderStudentAreaShell('/students/student-alex-rivera/history');
@@ -100,12 +99,10 @@ describe('StudentAreaShell', () => {
     const studentA = createDeferred<{
       id: string;
       student: string;
-      profileId: string | null;
     }>();
     const studentB = createDeferred<{
       id: string;
       student: string;
-      profileId: string | null;
     }>();
 
     apiMocks.getStudentProfile.mockImplementation((studentId: string) => {
@@ -124,26 +121,24 @@ describe('StudentAreaShell', () => {
       studentB.resolve({
         id: 'student-b',
         student: 'Bora',
-        profileId: 'profile-b.md',
       });
     });
 
     expect(await screen.findByRole('heading', { name: 'Bora' })).toBeTruthy();
     expect(screen.getByTestId('student-shell-student-id').textContent).toBe('student-b');
-    expect(screen.getByTestId('student-shell-profile-id').textContent).toBe('profile-b.md');
+    expect(screen.getByTestId('student-shell-record-id').textContent).toBe('student-b');
 
     await act(async () => {
       studentA.resolve({
         id: 'student-a',
         student: 'Aiko',
-        profileId: 'profile-a.md',
       });
     });
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Bora' })).toBeTruthy();
       expect(screen.getByTestId('student-shell-student-id').textContent).toBe('student-b');
-      expect(screen.getByTestId('student-shell-profile-id').textContent).toBe('profile-b.md');
+      expect(screen.getByTestId('student-shell-record-id').textContent).toBe('student-b');
     });
   });
 });

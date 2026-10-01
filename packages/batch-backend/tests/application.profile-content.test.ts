@@ -2,18 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import type { FoundationalProfile } from '../src/application/foundational-profile.js';
 import {
-  activateProfileRevisionForProfile,
-  deleteProfileContent,
+  activateProfileRevisionForStudent,
   getProfileContent,
-  getProfileRevisionForProfile,
-  listProfileContents,
-  listProfileRevisionsForProfile,
+  getProfileRevisionForStudent,
+  listProfileRevisionsForStudent,
   restoreProfileRevision,
   saveProfileRevisionContent,
   upsertProfileContent,
 } from '../src/application/profile-content.js';
 import { renderStarterProfileContent } from '../src/application/starter-profile-content.js';
-import type { ProfileRecord } from '../src/domain/profile-model.js';
 import type {
   ProfileRevisionRecord,
   ProfileRevisionSource,
@@ -22,11 +19,11 @@ import type {
 function createInMemoryDependencies(seed?: {
   profiles?: { id: string; label: string; content: string }[];
 }) {
-  const profiles = new Map<string, ProfileRecord>();
+  const profiles = new Map<string, { id: string }>();
   const revisions: ProfileRevisionRecord[] = [];
 
   const createRevision = (params: {
-    profileId: string;
+    studentId: string;
     content: string;
     structuredContent?: ProfileRevisionRecord['structuredContent'];
     contentHash: string;
@@ -36,10 +33,10 @@ function createInMemoryDependencies(seed?: {
     restoredFromRevisionId?: string | null;
   }): ProfileRevisionRecord => {
     const versionNumber =
-      revisions.filter((revision) => revision.profileId === params.profileId).length + 1;
+      revisions.filter((revision) => revision.studentId === params.studentId).length + 1;
     return {
-      id: `revision-${params.profileId}-${versionNumber}`,
-      profileId: params.profileId,
+      id: `revision-${params.studentId}-${versionNumber}`,
+      studentId: params.studentId,
       content: params.content,
       structuredContent: params.structuredContent ?? null,
       contentHash: params.contentHash,
@@ -61,29 +58,23 @@ function createInMemoryDependencies(seed?: {
     for (const profile of seed.profiles) {
       const contentHash = `hash-${profile.id}`;
       const revision = createRevision({
-        profileId: profile.id,
+        studentId: profile.id,
         content: profile.content,
         contentHash,
         source: 'create',
       });
       revisions.push(revision);
-      profiles.set(profile.id, {
-        id: profile.id,
-        label: profile.label,
-        activeRevisionId: revision.id,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-      });
+      profiles.set(profile.id, { id: profile.id });
     }
   }
 
   const getLatestRevisionByHash = (
-    profileId: string,
+    studentId: string,
     contentHash: string,
   ): ProfileRevisionRecord | null => {
     for (let index = revisions.length - 1; index >= 0; index -= 1) {
       const revision = revisions[index];
-      if (revision && revision.profileId === profileId && revision.contentHash === contentHash) {
+      if (revision && revision.studentId === studentId && revision.contentHash === contentHash) {
         return revision;
       }
     }
@@ -91,67 +82,37 @@ function createInMemoryDependencies(seed?: {
   };
 
   return {
-    profiles: {
-      list: async (
-        params: { search?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {},
-      ) => {
-        const { limit = 500, offset = 0, order = 'asc' } = params;
-        const sorted = [...profiles.values()].sort((a, b) =>
-          order === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label),
-        );
-        return {
-          items: sorted.slice(offset, offset + limit),
-          total: sorted.length,
-          limit,
-          offset,
-          order,
-        };
-      },
-      getById: async (id: string) => profiles.get(id) ?? null,
-      upsert: async ({
-        id,
-        label,
-        activeRevisionId,
-      }: {
-        id: string;
-        label: string;
-        activeRevisionId?: string | null;
-      }): Promise<ProfileRecord> => {
-        const existing = profiles.get(id);
-        const next: ProfileRecord = {
-          id,
-          label,
-          activeRevisionId: activeRevisionId ?? existing?.activeRevisionId ?? null,
-          createdAt: existing?.createdAt ?? new Date('2026-01-01T00:00:00.000Z'),
-          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-        };
-        profiles.set(id, next);
-        return next;
-      },
-      setActive: async (
-        profileId: string,
-        revisionId: string | null,
-      ): Promise<ProfileRecord | null> => {
-        const existing = profiles.get(profileId);
-        if (!existing) return null;
-        const next = {
-          ...existing,
-          activeRevisionId: revisionId,
-          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-        };
-        profiles.set(profileId, next);
-        return next;
-      },
+    students: {
+      getById: async (id: string) =>
+        profiles.has(id)
+          ? {
+              id,
+              student: id,
+              dbId: null,
+              pageParentId: null,
+              colorPreset: null,
+              voices: {},
+              manifestPreset: null,
+              accentPreference: null,
+              archivedAt: null,
+              archivedBy: null,
+              archiveReason: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }
+          : null,
     },
     candidates: {
       markPromotedByRevision: async (_revisionId: string) => {},
       copyDraftLinks: async (_params: { sourceRevisionId: string; targetRevisionId: string }) => {},
     },
     revisions: {
-      getLatestByHash: async (profileId: string, contentHash: string) =>
-        getLatestRevisionByHash(profileId, contentHash),
+      getActive: async (studentId: string) =>
+        revisions.find((r) => r.studentId === studentId && r.status === 'active') ?? null,
+      getLatestByHash: async (studentId: string, contentHash: string) =>
+        getLatestRevisionByHash(studentId, contentHash),
       insert: async ({
-        profileId,
+        studentId,
         content,
         structuredContent,
         contentHash,
@@ -160,7 +121,7 @@ function createInMemoryDependencies(seed?: {
         createdBy,
         restoredFromRevisionId,
       }: {
-        profileId: string;
+        studentId: string;
         content: string;
         structuredContent?: ProfileRevisionRecord['structuredContent'];
         contentHash: string;
@@ -170,7 +131,7 @@ function createInMemoryDependencies(seed?: {
         restoredFromRevisionId?: string | null;
       }) => {
         const revision = createRevision({
-          profileId,
+          studentId,
           content,
           structuredContent,
           contentHash,
@@ -181,7 +142,7 @@ function createInMemoryDependencies(seed?: {
         });
         if ((status ?? 'active') === 'active') {
           for (const current of revisions) {
-            if (current.profileId === profileId && current.status === 'active') {
+            if (current.studentId === studentId && current.status === 'active') {
               current.status = 'deprecated';
               current.activatedAt = null;
               current.deprecatedAt = new Date('2026-01-01T00:00:00.000Z');
@@ -191,13 +152,13 @@ function createInMemoryDependencies(seed?: {
         revisions.push(revision);
         return revision;
       },
-      activate: async (profileId: string, revisionId: string) => {
+      activate: async (studentId: string, revisionId: string) => {
         const target = revisions.find(
-          (revision) => revision.profileId === profileId && revision.id === revisionId,
+          (revision) => revision.studentId === studentId && revision.id === revisionId,
         );
         if (!target) return null;
         for (const current of revisions) {
-          if (current.profileId !== profileId) continue;
+          if (current.studentId !== studentId) continue;
           if (current.id === revisionId) {
             current.status = 'active';
             current.activatedAt = new Date('2026-01-01T00:00:00.000Z');
@@ -210,10 +171,10 @@ function createInMemoryDependencies(seed?: {
         }
         return target;
       },
-      deprecateActive: async (profileId: string) => {
+      deprecateActive: async (studentId: string) => {
         let count = 0;
         for (const current of revisions) {
-          if (current.profileId !== profileId || current.status !== 'active') continue;
+          if (current.studentId !== studentId || current.status !== 'active') continue;
           current.status = 'deprecated';
           current.activatedAt = null;
           current.deprecatedAt = new Date('2026-01-01T00:00:00.000Z');
@@ -222,17 +183,17 @@ function createInMemoryDependencies(seed?: {
         return count;
       },
       list: async ({
-        profileId,
+        studentId,
         limit = 50,
         offset = 0,
         order = 'desc',
       }: {
-        profileId: string;
+        studentId: string;
         limit?: number;
         offset?: number;
         order?: 'asc' | 'desc';
       }) => {
-        const filtered = revisions.filter((revision) => revision.profileId === profileId);
+        const filtered = revisions.filter((revision) => revision.studentId === studentId);
         const sorted = [...filtered].sort((a, b) =>
           order === 'asc'
             ? a.createdAt.getTime() - b.createdAt.getTime()
@@ -246,73 +207,15 @@ function createInMemoryDependencies(seed?: {
           order,
         };
       },
-      getById: async (profileId: string, revisionId: string) =>
+      getById: async (studentId: string, revisionId: string) =>
         revisions.find(
-          (revision) => revision.profileId === profileId && revision.id === revisionId,
+          (revision) => revision.studentId === studentId && revision.id === revisionId,
         ) ?? null,
     },
   };
 }
 
 describe('application/profile-content (DB-only)', () => {
-  it('lists active profiles and reads active revision content', async () => {
-    const deps = createInMemoryDependencies({
-      profiles: [
-        { id: 'default.md', label: 'Default Profile', content: 'Default profile content' },
-      ],
-    });
-
-    const list = await listProfileContents(deps);
-    expect(list.profiles).toEqual([{ id: 'default.md', label: 'Default Profile' }]);
-
-    const content = await getProfileContent('default.md', deps);
-    expect(content?.content).toBe('Default profile content');
-    expect(content?.currentRevisionId).toBeTruthy();
-  });
-
-  it('paginates profile option listing beyond 500 active records', async () => {
-    const deps = createInMemoryDependencies({
-      profiles: Array.from({ length: 550 }, (_, index) => ({
-        id: `profile-${index}.md`,
-        label: `Profile ${index}`,
-        content: `Profile content ${index}`,
-      })),
-    });
-
-    const listCalls: { limit?: number; offset?: number; order?: 'asc' | 'desc' }[] = [];
-    const originalList = deps.profiles.list;
-    deps.profiles.list = async (
-      params: { search?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {},
-    ) => {
-      listCalls.push(params);
-      return originalList(params);
-    };
-
-    const list = await listProfileContents(deps);
-    expect(list.profiles).toHaveLength(550);
-    expect(list.profiles.some((profile) => profile.id === 'profile-549.md')).toBe(true);
-    expect(listCalls.length).toBeGreaterThan(1);
-    expect(listCalls[0]).toMatchObject({ limit: 500, offset: 0, order: 'asc' });
-    expect(listCalls[1]).toMatchObject({ limit: 500, offset: 500, order: 'asc' });
-  });
-
-  it('archives profiles on delete and preserves revisions', async () => {
-    const deps = createInMemoryDependencies();
-
-    const created = await upsertProfileContent('custom.md', 'Custom profile', deps);
-    expect(created.currentRevisionId).toBeTruthy();
-
-    const removed = await deleteProfileContent('custom.md', deps);
-    expect(removed).toBe(true);
-
-    const archived = await getProfileContent('custom.md', deps);
-    expect(archived).toBeNull();
-
-    const revisions = await listProfileRevisionsForProfile('custom.md', { order: 'desc' }, deps);
-    expect(revisions?.total).toBe(1);
-    expect(revisions?.items[0]?.status).toBe('deprecated');
-  });
-
   it('restores previous revisions and updates active content', async () => {
     const deps = createInMemoryDependencies({
       profiles: [{ id: 'default.md', label: 'Default Profile', content: 'Version 1' }],
@@ -320,12 +223,12 @@ describe('application/profile-content (DB-only)', () => {
 
     await upsertProfileContent('default.md', 'Version 2', deps);
 
-    const revisions = await listProfileRevisionsForProfile('default.md', { order: 'asc' }, deps);
+    const revisions = await listProfileRevisionsForStudent('default.md', { order: 'asc' }, deps);
     const firstRevisionId = revisions?.items[0]?.id;
     expect(firstRevisionId).toBeTruthy();
     if (!firstRevisionId) throw new Error('Expected a first revision id');
 
-    const detail = await getProfileRevisionForProfile('default.md', firstRevisionId, deps);
+    const detail = await getProfileRevisionForStudent('default.md', firstRevisionId, deps);
     expect(detail?.content).toBe('Version 1');
 
     const restored = await restoreProfileRevision('default.md', firstRevisionId, deps);
@@ -357,7 +260,7 @@ describe('application/profile-content (DB-only)', () => {
     const active = await getProfileContent('default.md', deps);
     expect(active?.content).toBe('Version 1');
 
-    const revisions = await listProfileRevisionsForProfile('default.md', { order: 'desc' }, deps);
+    const revisions = await listProfileRevisionsForStudent('default.md', { order: 'desc' }, deps);
     expect(revisions?.items[0]?.status).toBe('draft');
     expect(revisions?.items[1]?.status).toBe('active');
   });
@@ -393,10 +296,10 @@ describe('application/profile-content (DB-only)', () => {
     expect(draft.content).toBe('Rendered profile text');
     expect(draft.structuredContent).toEqual(structuredContent);
 
-    const detail = await getProfileRevisionForProfile('default.md', draft.id, deps);
+    const detail = await getProfileRevisionForStudent('default.md', draft.id, deps);
     expect(detail?.structuredContent).toEqual(structuredContent);
 
-    await activateProfileRevisionForProfile('default.md', draft.id, deps);
+    await activateProfileRevisionForStudent('default.md', draft.id, deps);
     const active = await getProfileContent('default.md', deps);
     expect(active?.structuredContent).toEqual(structuredContent);
   });
@@ -438,12 +341,12 @@ describe('application/profile-content (DB-only)', () => {
       teacherNotes: 'Responds well to practical scenarios.',
     });
 
-    const revisions = await listProfileRevisionsForProfile('legacy.md', { order: 'desc' }, deps);
+    const revisions = await listProfileRevisionsForStudent('legacy.md', { order: 'desc' }, deps);
     const revisionId = revisions?.items[0]?.id;
     expect(revisionId).toBeTruthy();
     if (!revisionId) throw new Error('Expected a legacy revision id');
 
-    const detail = await getProfileRevisionForProfile('legacy.md', revisionId, deps);
+    const detail = await getProfileRevisionForStudent('legacy.md', revisionId, deps);
     expect(detail?.structuredContent?.communicationContexts).toEqual([
       'Client calls',
       'Internal updates',
@@ -471,7 +374,7 @@ describe('application/profile-content (DB-only)', () => {
       deps,
     );
 
-    const activated = await activateProfileRevisionForProfile('default.md', draft.id, deps);
+    const activated = await activateProfileRevisionForStudent('default.md', draft.id, deps);
 
     expect(activated?.status).toBe('active');
     expect(promotions).toEqual([draft.id]);
@@ -498,7 +401,7 @@ describe('application/profile-content (DB-only)', () => {
       deps,
     );
 
-    const activated = await activateProfileRevisionForProfile('default.md', draft.id, deps);
+    const activated = await activateProfileRevisionForStudent('default.md', draft.id, deps);
 
     expect(activated?.status).toBe('active');
     expect(promotions).toEqual([draft.id]);

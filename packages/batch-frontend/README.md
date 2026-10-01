@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-09-14 provider-account failure handling.
+- Last Verified Against: 2026-10-01 student-owned profile revisions.
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -93,6 +93,10 @@ Canonical behavior and current status live in:
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
 - The Learning page can read `/students/:id/memory/health` for collapsed operator support details;
   manual full snapshot rebuild remains outside the frontend and CLI-only for v1.1.
+- Student IDs are the sole runtime profile root. Profile content and revision actions use
+  `/students/:id/profile` and `/students/:id/profile/revisions`; the UI has no global profile
+  catalog, manual profile selection, or student-profile binding controls. Historical prompt
+  snapshot profile identifiers remain obsolete provenance metadata.
 - Ordinary Learning page profile edits save directly as active revisions. Draft review controls
   remain available for candidate-derived drafts.
 - Approved-candidate draft refresh opens a review-mediated profile draft and shows a standalone

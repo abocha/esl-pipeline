@@ -255,3 +255,9 @@ For full key-by-key lookup, ownership, and next-hop docs, use:
 - [`packages/batch-backend/README.md`](../../packages/batch-backend/README.md)
 - [`packages/telegram-ops-bot/README.md`](../../packages/telegram-ops-bot/README.md)
 - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](GENERATION_PROVIDER_POLICY.md)
+
+## Student-owned profile cutover
+
+API contract 6 and DB contract 1 retire `PROMPT_PROFILE_PATH`. Prompt bootstrap imports templates
+only; student onboarding and Learning own profile revisions. `PG_ENABLE_LEGACY_SCHEMA_PATCHES`
+cannot enable runtime DDL. Remove both obsolete settings when reconciling environment files.

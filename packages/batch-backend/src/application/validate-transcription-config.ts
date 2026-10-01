@@ -144,13 +144,13 @@ async function validatePromptAssets(
 
   try {
     const options = await promptOptionsLoader({ config });
-    if (options.templates.length === 0 || options.profiles.length === 0) {
+    if (options.templates.length === 0) {
       await logPromptCatalogStartupWarning(
         `Prompt catalog is empty. Run ${bootstrapCommand} before starting backend services.`,
       );
       return;
     }
-    if (!options.defaults.templateId || !options.defaults.profileId) {
+    if (!options.defaults.templateId) {
       await logPromptCatalogStartupWarning(
         `Prompt defaults are not active in the DB catalog. Run ${bootstrapCommand} to seed and activate defaults.`,
       );

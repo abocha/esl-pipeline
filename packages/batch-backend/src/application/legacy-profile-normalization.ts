@@ -1,6 +1,5 @@
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import { getProfileById } from '../domain/profile-repository.js';
 import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import {
   FOUNDATIONAL_PROFILE_JSON_SCHEMA,
@@ -32,7 +31,6 @@ export interface NormalizeLegacyProfileRequest {
 
 export interface NormalizeLegacyProfileResult {
   studentId: string;
-  profileId: string;
   sourceRevisionId: string;
   draftRevision: ProfileRevisionDetailResponse;
   snapshotId: string | null;
@@ -49,9 +47,7 @@ interface LegacyProfileNormalizationDependencies {
   students: {
     getById: typeof getStudentProfileById;
   };
-  profiles: {
-    getById: typeof getProfileById;
-  };
+
   revisions: {
     getActive: typeof getActiveProfileRevision;
   };
@@ -92,21 +88,7 @@ export async function normalizeLegacyStudentProfile(args: {
     throw new LegacyProfileNormalizationError('Student not found', 'student_not_found', 404);
   }
 
-  const profileId = student.profileId;
-  if (!profileId) {
-    throw new LegacyProfileNormalizationError(
-      'Student does not have a bound profile to normalize',
-      'profile_not_bound',
-      409,
-    );
-  }
-
-  const profile = await dependencies.profiles.getById(profileId);
-  if (!profile) {
-    throw new LegacyProfileNormalizationError('Profile not found', 'profile_not_found', 404);
-  }
-
-  const activeRevision = await dependencies.revisions.getActive(profileId);
+  const activeRevision = await dependencies.revisions.getActive(request.studentId);
   if (!activeRevision) {
     throw new LegacyProfileNormalizationError(
       'Active profile revision is required for normalization',
@@ -157,7 +139,7 @@ export async function normalizeLegacyStudentProfile(args: {
   }
   const structuredDraft = drafting.structuredProfile;
   const draftRevision = await dependencies.profileContent.saveRevision(
-    profileId,
+    request.studentId,
     renderFoundationalProfileContent(structuredDraft),
     {
       source: 'legacy_normalization',
@@ -170,7 +152,6 @@ export async function normalizeLegacyStudentProfile(args: {
 
   return {
     studentId: request.studentId,
-    profileId,
     sourceRevisionId: activeRevision.id,
     draftRevision,
     snapshotId: overview.latestReadyStudentMemorySnapshot?.id ?? null,
@@ -230,9 +211,7 @@ function getDependencies(
     students: overrides?.students ?? {
       getById: getStudentProfileById,
     },
-    profiles: overrides?.profiles ?? {
-      getById: getProfileById,
-    },
+
     revisions: overrides?.revisions ?? {
       getActive: getActiveProfileRevision,
     },

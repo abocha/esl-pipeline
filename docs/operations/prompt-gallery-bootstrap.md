@@ -4,12 +4,13 @@
 
 - Audience: maintainers and AI agents deploying batch-backend environments.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-09-11 repo state.
+- Last Verified Against: 2026-10-01 ABO-12 cutover.
 - Owner: backend maintainer + automation agents.
 - Review Cadence: monthly or after prompt/runtime model changes.
 - Status: `runbook`.
 
-Prompt templates and profiles are now runtime-managed from PostgreSQL revision tables.
+Prompt templates are runtime-managed from PostgreSQL revisions. Foundational learner profiles belong
+to students and are created through student onboarding or Learning, never a bootstrap catalog.
 Backend startup validates DB prompt catalog readiness and logs warnings when defaults are missing, so services can start while operators run bootstrap.
 
 ## Required bootstrap commands
@@ -27,13 +28,9 @@ pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
 - Requires:
   - `ESL_PIPELINE_CONFIG_PROVIDER=local`
   - `PG_ENABLED=true`
-- Scans configured prompt roots (`PROMPT_TEMPLATE_PATH` and `PROMPT_PROFILE_PATH` parents). The
-  checked-in defaults live under `packages/batch-backend/prompt-assets/**`, which is copied into the
-  same `/app/packages/batch-backend/prompt-assets/**` path in the production image.
-- Requires template/profile roots to be distinct and non-overlapping.
-- Classifies files by root only:
-  - template: files discovered from the configured template root
-  - profile: files discovered from the configured profile root
+- Scans only the parent of `PROMPT_TEMPLATE_PATH`. Checked-in templates live under
+  `packages/batch-backend/prompt-assets/templates`, copied into the same `/app` path in the image.
+- `PROMPT_PROFILE_PATH` and standalone profile imports are retired by API contract 6 / DB contract 1.
 - Upserts prompt assets and hash-deduplicated revisions.
 - Activates an imported revision only when an asset has no active revision. Changed checked-in
   content for an already-active asset is imported as a draft and requires explicit admin activation.
@@ -57,7 +54,6 @@ If backend startup logs prompt catalog readiness/config warnings:
 
 Prompt CRUD APIs use archive behavior:
 
-- `DELETE /profiles/:id` clears active revision pointer and deprecates active revision.
 - `DELETE /templates/:id` clears active revision pointer and deprecates active revision.
 
 Revision rows are preserved for restore/activate workflows.

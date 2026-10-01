@@ -49,12 +49,10 @@ export function deriveAssignmentDirtyState(
       context === null
         ? Boolean(
             normalizeText(session.teacherNotes) ||
-              session.selectedProfileId ||
               session.selectedProfileRevisionId ||
               session.selectedProfileRevisionHash,
           )
         : normalizeText(session.teacherNotes) !== normalizeText(context.teacherNotes) ||
-          session.selectedProfileId !== context.profileId ||
           session.selectedProfileRevisionId !== context.profileRevisionId ||
           session.selectedProfileRevisionHash !== context.profileRevisionHash,
     create:
@@ -174,7 +172,6 @@ export function isAssignmentConfirmationApplied(
       return Boolean(
         context &&
           normalizeText(context.teacherNotes) === normalizeText(request.teacherNotes) &&
-          context.profileId === request.profileId &&
           context.profileRevisionId === request.profileRevisionId &&
           context.profileRevisionHash === request.profileRevisionHash,
       );

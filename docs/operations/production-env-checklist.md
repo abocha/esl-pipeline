@@ -339,7 +339,6 @@ under `/app/packages/batch-backend/prompt-assets`.
 
 ```bash
 PROMPT_TEMPLATE_PATH=packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md
-PROMPT_PROFILE_PATH=packages/batch-backend/prompt-assets/profiles/PROFILE_2025-11-16.md
 ```
 
 Do not use `/docs/...` paths in production containers.

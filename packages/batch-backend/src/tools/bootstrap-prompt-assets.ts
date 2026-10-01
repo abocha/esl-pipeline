@@ -8,12 +8,6 @@ import { getPromptOptions } from '../application/prompt-options.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import { loadConfig } from '../config/env.js';
-import { getProfileById, upsertProfile } from '../domain/profile-repository.js';
-import {
-  activateProfileRevision,
-  getLatestProfileRevisionByHash,
-  insertProfileRevision,
-} from '../domain/profile-revision-repository.js';
 import {
   getTemplateById,
   listTemplates,
@@ -46,7 +40,6 @@ interface ScannedAsset {
 interface BootstrapStats {
   scannedFiles: number;
   templatesDiscovered: number;
-  profilesDiscovered: number;
   createdRevisions: number;
   reusedRevisions: number;
   activatedRevisions: number;
@@ -127,21 +120,6 @@ function resolveConfiguredDefaultId(configuredPath: string, type: 'template' | '
   return normalizePromptId(path.posix.basename(normalized));
 }
 
-function assertDistinctRoots(templateRoot: string, profileRoot: string): void {
-  const resolvedTemplateRoot = path.resolve(templateRoot);
-  const resolvedProfileRoot = path.resolve(profileRoot);
-  const overlap =
-    isWithinRoot(resolvedTemplateRoot, resolvedProfileRoot) ||
-    isWithinRoot(resolvedProfileRoot, resolvedTemplateRoot);
-  if (!overlap) {
-    return;
-  }
-
-  throw new Error(
-    `Prompt template and profile roots must be distinct and non-overlapping (templateRoot=${resolvedTemplateRoot}, profileRoot=${resolvedProfileRoot}).`,
-  );
-}
-
 async function collectPromptFiles(rootDir: string): Promise<string[]> {
   const resolvedRoot = path.resolve(rootDir);
   const stats = await fs.stat(resolvedRoot).catch(() => null);
@@ -206,27 +184,12 @@ async function scanAssetRoot(
   return assets;
 }
 
-export async function scanAssets(params: { templateRoot: string; profileRoot: string }): Promise<{
+export async function scanAssets(params: { templateRoot: string }): Promise<{
   templates: ScannedAsset[];
-  profiles: ScannedAsset[];
   scannedFiles: number;
 }> {
-  assertDistinctRoots(params.templateRoot, params.profileRoot);
-  const [templates, profiles] = await Promise.all([
-    scanAssetRoot(path.resolve(params.templateRoot), 'template'),
-    scanAssetRoot(path.resolve(params.profileRoot), 'profile'),
-  ]);
-
-  const discoveredFiles = new Set<string>([
-    ...templates.map((item) => item.absolutePath),
-    ...profiles.map((item) => item.absolutePath),
-  ]);
-
-  return {
-    templates,
-    profiles,
-    scannedFiles: discoveredFiles.size,
-  };
+  const templates = await scanAssetRoot(path.resolve(params.templateRoot), 'template');
+  return { templates, scannedFiles: templates.length };
 }
 
 async function importTemplates(
@@ -277,53 +240,6 @@ async function importTemplates(
   }
 }
 
-async function importProfiles(
-  assets: ScannedAsset[],
-  dryRun: boolean,
-  stats: BootstrapStats,
-): Promise<void> {
-  for (const asset of assets) {
-    const existing = await getProfileById(asset.id);
-    const current = dryRun
-      ? existing
-      : await upsertProfile({
-          id: asset.id,
-          label: existing?.label ?? asset.label,
-          activeRevisionId: existing?.activeRevisionId ?? null,
-        });
-
-    const byHash = await getLatestProfileRevisionByHash(asset.id, asset.hash);
-    let revisionId = byHash?.id ?? null;
-
-    if (byHash) {
-      stats.reusedRevisions += 1;
-    } else {
-      stats.createdRevisions += 1;
-      if (!dryRun) {
-        const inserted = await insertProfileRevision({
-          profileId: asset.id,
-          content: asset.content,
-          contentHash: asset.hash,
-          source: existing ? 'update' : 'create',
-          // Insert as draft to avoid violating single-active constraints;
-          // activation is handled explicitly below when needed.
-          status: 'draft',
-          createdBy: null,
-          restoredFromRevisionId: null,
-        });
-        revisionId = inserted.id;
-      }
-    }
-
-    if (!current?.activeRevisionId && revisionId) {
-      stats.activatedRevisions += 1;
-      if (!dryRun) {
-        await activateProfileRevision(asset.id, revisionId);
-      }
-    }
-  }
-}
-
 async function retireMissingTemplateAssets(
   activeTemplateIds: readonly string[],
   dryRun: boolean,
@@ -365,18 +281,13 @@ function printSummary(params: {
   mode: 'dry-run' | 'apply';
   stats: BootstrapStats;
   templateRoot: string;
-  profileRoot: string;
   defaultTemplateId: string;
-  defaultProfileId: string;
 }): void {
   console.log(`[prompt-assets-bootstrap] mode=${params.mode}`);
   console.log(`[prompt-assets-bootstrap] templateRoot=${params.templateRoot}`);
-  console.log(`[prompt-assets-bootstrap] profileRoot=${params.profileRoot}`);
   console.log(`[prompt-assets-bootstrap] defaultTemplateId=${params.defaultTemplateId}`);
-  console.log(`[prompt-assets-bootstrap] defaultProfileId=${params.defaultProfileId}`);
   console.log(`[prompt-assets-bootstrap] scannedFiles=${params.stats.scannedFiles}`);
   console.log(`[prompt-assets-bootstrap] templatesDiscovered=${params.stats.templatesDiscovered}`);
-  console.log(`[prompt-assets-bootstrap] profilesDiscovered=${params.stats.profilesDiscovered}`);
   console.log(`[prompt-assets-bootstrap] createdRevisions=${params.stats.createdRevisions}`);
   console.log(`[prompt-assets-bootstrap] reusedRevisions=${params.stats.reusedRevisions}`);
   console.log(`[prompt-assets-bootstrap] activatedRevisions=${params.stats.activatedRevisions}`);
@@ -400,15 +311,12 @@ async function run(): Promise<void> {
   }
 
   const templateRoot = resolveConfiguredRoot(config.prompt.templatePath, 'template');
-  const profileRoot = resolveConfiguredRoot(config.prompt.defaultProfilePath, 'profile');
   const defaultTemplateId = resolveConfiguredDefaultId(config.prompt.templatePath, 'template');
-  const defaultProfileId = resolveConfiguredDefaultId(config.prompt.defaultProfilePath, 'profile');
 
-  const scanned = await scanAssets({ templateRoot, profileRoot });
+  const scanned = await scanAssets({ templateRoot });
   const stats: BootstrapStats = {
     scannedFiles: scanned.scannedFiles,
     templatesDiscovered: scanned.templates.length,
-    profilesDiscovered: scanned.profiles.length,
     createdRevisions: 0,
     reusedRevisions: 0,
     activatedRevisions: 0,
@@ -420,21 +328,14 @@ async function run(): Promise<void> {
       'No template assets discovered. Ensure template files exist under template root.',
     );
   }
-  if (scanned.profiles.length === 0) {
-    throw new Error('No profile assets discovered. Ensure profile files exist under profile root.');
-  }
 
   const hasDefaultTemplate = scanned.templates.some((item) => item.id === defaultTemplateId);
-  const hasDefaultProfile = scanned.profiles.some((item) => item.id === defaultProfileId);
 
-  if (!hasDefaultTemplate || !hasDefaultProfile) {
-    throw new Error(
-      `Configured defaults were not discovered (template=${defaultTemplateId}, profile=${defaultProfileId}).`,
-    );
+  if (!hasDefaultTemplate) {
+    throw new Error(`Configured defaults were not discovered (template=${defaultTemplateId}).`);
   }
 
   await importTemplates(scanned.templates, options.dryRun, stats);
-  await importProfiles(scanned.profiles, options.dryRun, stats);
   await retireMissingTemplateAssets(
     scanned.templates.map((item) => item.id),
     options.dryRun,
@@ -445,29 +346,26 @@ async function run(): Promise<void> {
     mode: options.dryRun ? 'dry-run' : 'apply',
     stats,
     templateRoot,
-    profileRoot,
     defaultTemplateId,
-    defaultProfileId,
   });
 
   if (options.dryRun) {
     const dryDefaultTemplate = stats.templatesDiscovered > 0 ? defaultTemplateId : null;
-    const dryDefaultProfile = stats.profilesDiscovered > 0 ? defaultProfileId : null;
     console.log(
-      `[prompt-assets-bootstrap] projectedReadiness templateDefault=${dryDefaultTemplate ?? 'missing'} profileDefault=${dryDefaultProfile ?? 'missing'}`,
+      `[prompt-assets-bootstrap] projectedReadiness templateDefault=${dryDefaultTemplate}`,
     );
     return;
   }
 
   const promptOptions = await getPromptOptions({ config });
-  if (!promptOptions.defaults.templateId || !promptOptions.defaults.profileId) {
+  if (!promptOptions.defaults.templateId) {
     throw new Error(
       'Bootstrap finished but defaults are not active in DB. Verify prompt files and rerun bootstrap.',
     );
   }
 
   console.log(
-    `[prompt-assets-bootstrap] readiness=ok templateDefault=${promptOptions.defaults.templateId} profileDefault=${promptOptions.defaults.profileId}`,
+    `[prompt-assets-bootstrap] readiness=ok templateDefault=${promptOptions.defaults.templateId}`,
   );
 }
 

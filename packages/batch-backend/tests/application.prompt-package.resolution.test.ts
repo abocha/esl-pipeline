@@ -8,9 +8,7 @@ import { createPromptPackage } from '../src/application/create-prompt-package.js
 import { resolvePromptTemplateSelection } from '../src/application/prompt-options.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
-import type { RecordingRecord } from '../src/domain/recording-model.js';
 import {
-  createBindingResolverStub,
   createConfig,
   createProfileRevisionRepositoryStub,
   createPromptOptionsStub,
@@ -130,7 +128,7 @@ describe('application/prompt-package', () => {
     const profileRevisions = createProfileRevisionRepositoryStub({
       getById: async () => ({
         id: 'profile-revision-a',
-        profileId: 'profile.md',
+        studentId: 'student-1',
         content: confirmedProfileContent,
         contentHash: confirmedProfileHash,
         source: 'create',
@@ -157,7 +155,7 @@ describe('application/prompt-package', () => {
       }),
       getActive: async () => ({
         id: 'profile-revision-b',
-        profileId: 'profile.md',
+        studentId: 'student-1',
         content: activeProfileContent,
         contentHash: activeProfileHash,
         source: 'update',
@@ -220,12 +218,10 @@ describe('application/prompt-package', () => {
           getById: async () => ({
             id: 'student-1',
             student: 'Student One',
-            profileId: 'profile.md',
           }),
         },
         profileRevisions,
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub(),
         promptPackages: createPromptPackageRepositoryStub(),
       },
@@ -316,7 +312,6 @@ describe('application/prompt-package', () => {
           getById: async () => ({
             id: 'student-1',
             student: 'Student One',
-            profileId: 'mutable-active-profile.md',
           }),
         },
         profileRevisions: createProfileRevisionRepositoryStub({
@@ -325,9 +320,7 @@ describe('application/prompt-package', () => {
           },
         }),
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        bindings: createBindingResolverStub(),
         promptOptions: {
-          resolveSelection: createPromptOptionsStub().resolveSelection,
           resolveTemplateSelection: (params) =>
             resolvePromptTemplateSelection(params, {
               config,
@@ -351,17 +344,6 @@ describe('application/prompt-package', () => {
                   offset: 0,
                   order: 'asc',
                 }),
-                getById: async () => null,
-              },
-              profileRevisions: {
-                listIdsWithActiveRevision: async () => {
-                  throw new Error('template-only resolution must not inspect profile revisions');
-                },
-              },
-              profiles: {
-                list: async () => {
-                  throw new Error('template-only resolution must not inspect profiles');
-                },
                 getById: async () => null,
               },
             }),
@@ -483,7 +465,6 @@ describe('application/prompt-package', () => {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
         templateId: 'template.md',
-        profileId: 'profile.md',
       },
       {
         config: createConfig(templatePath, profilePath),
@@ -492,16 +473,16 @@ describe('application/prompt-package', () => {
           getByRecordingId: async () => transcript,
         },
         recordings: {
-          getById: async () => null,
+          getById: async () => ({ id: 'recording-1', studentId: 'student-1' }) as never,
         },
         students: {
-          getById: async () => null,
+          getById: async () => ({ id: 'student-1', student: 'Student One' }),
         },
         promptPackages: createPromptPackageRepositoryStub(),
         profileRevisions: createProfileRevisionRepositoryStub({
           getActive: async () => ({
             id: 'profile-revision-active',
-            profileId: 'profile.md',
+            studentId: 'student-1',
             content: 'LEGACY PROFILE',
             contentHash: createHash('sha256').update('LEGACY PROFILE', 'utf8').digest('hex'),
             source: 'update',
@@ -528,7 +509,6 @@ describe('application/prompt-package', () => {
           }),
         }),
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub(),
       },
     );
@@ -570,7 +550,6 @@ describe('application/prompt-package', () => {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
         templateId: 'template.md',
-        profileId: 'profile.md',
       },
       {
         config: createConfig(templatePath, profilePath),
@@ -579,16 +558,16 @@ describe('application/prompt-package', () => {
           getByRecordingId: async () => transcript,
         },
         recordings: {
-          getById: async () => null,
+          getById: async () => ({ id: 'recording-1', studentId: 'student-1' }) as never,
         },
         students: {
-          getById: async () => null,
+          getById: async () => ({ id: 'student-1', student: 'Student One' }),
         },
         promptPackages: createPromptPackageRepositoryStub(),
         profileRevisions: createProfileRevisionRepositoryStub({
           getActive: async () => ({
             id: 'profile-revision-active',
-            profileId: 'profile.md',
+            studentId: 'student-1',
             content: activeProfileContent,
             contentHash: activeProfileHash,
             source: 'update',
@@ -619,7 +598,6 @@ describe('application/prompt-package', () => {
             restoredFromRevisionId: null,
           }),
         }),
-        bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub(),
       },
     );
@@ -644,7 +622,7 @@ describe('application/prompt-package', () => {
 
     const profileV1 = {
       id: 'profile-revision-v1',
-      profileId: 'profile.md',
+      studentId: 'student-1',
       content: 'PROFILE V1',
       contentHash: createHash('sha256').update('PROFILE V1', 'utf8').digest('hex'),
       source: 'update' as const,
@@ -727,18 +705,18 @@ describe('application/prompt-package', () => {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
         templateId: 'template.md',
-        profileId: 'profile.md',
       },
       {
         config: createConfig(templatePath, profilePath),
         storage,
         transcripts: { getByRecordingId: async () => transcript },
-        recordings: { getById: async () => null },
-        students: { getById: async () => null },
+        recordings: {
+          getById: async () => ({ id: 'recording-1', studentId: 'student-1' }) as never,
+        },
+        students: { getById: async () => ({ id: 'student-1', student: 'Student One' }) },
         promptPackages,
         profileRevisions,
         templateRevisions,
-        bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub(),
       },
     );
@@ -748,18 +726,18 @@ describe('application/prompt-package', () => {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
         templateId: 'template.md',
-        profileId: 'profile.md',
       },
       {
         config: createConfig(templatePath, profilePath),
         storage,
         transcripts: { getByRecordingId: async () => transcript },
-        recordings: { getById: async () => null },
-        students: { getById: async () => null },
+        recordings: {
+          getById: async () => ({ id: 'recording-1', studentId: 'student-1' }) as never,
+        },
+        students: { getById: async () => ({ id: 'student-1', student: 'Student One' }) },
         promptPackages,
         profileRevisions,
         templateRevisions,
-        bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub(),
       },
     );
@@ -769,193 +747,6 @@ describe('application/prompt-package', () => {
     expect(insertedParams[1]?.resolvedProfileRevisionId).toBe('profile-revision-v2');
     expect(insertedParams[0]?.resolvedTemplateRevisionId).toBe('template-revision-v1');
     expect(insertedParams[1]?.resolvedTemplateRevisionId).toBe('template-revision-v1');
-  });
-
-  it('rejects unknown profileId selections', async () => {
-    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
-    const templatePath = path.join(allowedDir, 'template.md');
-    const profilePath = path.join(allowedDir, 'profile.md');
-
-    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
-    await fs.writeFile(profilePath, 'PROFILE CONTENT\n', 'utf8');
-
-    const transcript = createTranscriptRecord();
-    const storage = createStorageStub({
-      getText: async () => 'TRANSCRIPT BODY',
-      putPromptPackage: async ({ promptPackageId, text }) => {
-        return {
-          uri: `local://prompt-packages/${promptPackageId}.txt`,
-          bytes: text.length,
-          sha256: 'hash',
-        };
-      },
-    });
-
-    await expect(
-      createPromptPackage(
-        {
-          recordingId: transcript.recordingId,
-          workspaceId: 'workspace-1',
-          notes: 'Some notes',
-          templateId: 'template.md',
-          profileId: 'missing.md',
-        },
-        {
-          config: createConfig(templatePath, profilePath),
-          storage,
-          transcripts: {
-            getByRecordingId: async () => transcript,
-          },
-          recordings: {
-            getById: async () => ({
-              id: transcript.recordingId,
-              workspaceId: 'workspace-1',
-              source: 'upload',
-              audioLifecycle: 'retained',
-              studentId: 'student-1',
-              sourcePath: null,
-              storageUri: 'local://recordings/recording-1.opus',
-              sha256: null,
-              bytes: 1,
-              durationSec: null,
-              channels: null,
-              status: 'transcribed',
-              error: null,
-              createdAt: new Date('2024-01-01T00:00:00Z'),
-              updatedAt: new Date('2024-01-01T00:00:00Z'),
-            }),
-          },
-          students: {
-            getById: async () => null,
-          },
-          promptPackages: {
-            insert: async () => {
-              throw new Error('insert should not be called');
-            },
-          },
-          profileRevisions: createProfileRevisionRepositoryStub(),
-          templateRevisions: createTemplateRevisionRepositoryStub(),
-          bindings: createBindingResolverStub(),
-          promptOptions: createPromptOptionsStub({ strictAllowlist: true }),
-        },
-      ),
-    ).rejects.toThrow('profileId is not allowlisted');
-  });
-
-  it('rejects profilePath outside the repository root', async () => {
-    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
-    const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-outside-'));
-    const templatePath = path.join(allowedDir, 'template.md');
-    const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
-    const profilePath = path.join(outsideDir, 'profile.md');
-
-    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
-    await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
-    await fs.writeFile(profilePath, 'PROFILE CONTENT\n', 'utf8');
-
-    const transcript = createTranscriptRecord();
-    const storage = createStorageStub({
-      getText: async () => 'TRANSCRIPT BODY',
-    });
-
-    await expect(
-      createPromptPackage(
-        {
-          recordingId: transcript.recordingId,
-          workspaceId: 'workspace-1',
-          profilePath,
-        },
-        {
-          config: createConfig(templatePath, defaultProfilePath),
-          storage,
-          transcripts: {
-            getByRecordingId: async () => transcript,
-          },
-          recordings: {
-            getById: async () => null,
-          },
-          students: {
-            getById: async () => null,
-          },
-          promptPackages: {
-            insert: async () => {
-              throw new Error('unexpected insert');
-            },
-          },
-          profileRevisions: createProfileRevisionRepositoryStub(),
-          templateRevisions: createTemplateRevisionRepositoryStub(),
-          bindings: createBindingResolverStub(),
-          promptOptions: createPromptOptionsStub(),
-        },
-      ),
-    ).rejects.toThrow('profilePath must resolve within the configured profile root');
-  });
-
-  it('uses student-linked profileId when request does not specify profile selection', async () => {
-    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
-    const templatePath = path.join(allowedDir, 'template.md');
-    const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
-    const studentProfilePath = path.join(allowedDir, 'profiles', 'student-a.md');
-
-    await fs.mkdir(path.dirname(studentProfilePath), { recursive: true });
-    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
-    await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
-    await fs.writeFile(studentProfilePath, 'STUDENT PROFILE CONTENT\n', 'utf8');
-
-    const transcript = createTranscriptRecord();
-    const storage = createStorageStub({
-      getText: async () => 'TRANSCRIPT BODY',
-    });
-    const promptPackages = createPromptPackageRepositoryStub();
-    const profileRevisions = createProfileRevisionRepositoryStub();
-
-    const result = await createPromptPackage(
-      {
-        recordingId: transcript.recordingId,
-        workspaceId: 'workspace-1',
-        templateId: 'template.md',
-      },
-      {
-        config: createConfig(templatePath, defaultProfilePath),
-        storage,
-        transcripts: {
-          getByRecordingId: async () => transcript,
-        },
-        recordings: {
-          getById: async () => ({
-            id: transcript.recordingId,
-            workspaceId: 'workspace-1',
-            source: 'upload',
-            audioLifecycle: 'retained',
-            studentId: 'student-1',
-            sourcePath: null,
-            storageUri: 'local://recordings/recording-1.opus',
-            sha256: null,
-            bytes: 1,
-            durationSec: null,
-            channels: null,
-            status: 'transcribed',
-            error: null,
-            createdAt: new Date('2024-01-01T00:00:00Z'),
-            updatedAt: new Date('2024-01-01T00:00:00Z'),
-          }),
-        },
-        students: {
-          getById: async () => ({
-            id: 'student-1',
-            student: 'Student One',
-            profileId: 'profiles/student-a.md',
-          }),
-        },
-        promptPackages,
-        profileRevisions,
-        templateRevisions: createTemplateRevisionRepositoryStub(),
-        bindings: createBindingResolverStub(),
-        promptOptions: createPromptOptionsStub(),
-      },
-    );
-
-    expect(result?.profilePath).toBe('profiles/student-a.md');
   });
 
   it('includes the selected student canonical name in assignment prompt packages', async () => {
@@ -1022,7 +813,6 @@ describe('application/prompt-package', () => {
           getById: async () => ({
             id: 'student-1',
             student: 'Student One',
-            profileId: 'profiles/student-a.md',
           }),
         },
         promptPackages: {
@@ -1063,7 +853,6 @@ describe('application/prompt-package', () => {
         },
         profileRevisions: createProfileRevisionRepositoryStub(),
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub(),
       },
     );
@@ -1088,106 +877,11 @@ describe('application/prompt-package', () => {
     );
   });
 
-  it('keeps explicit profileId and profilePath overrides ahead of student-linked defaults', async () => {
-    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
-    const templatePath = path.join(allowedDir, 'template.md');
-    const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
-    const studentProfilePath = path.join(allowedDir, 'profiles', 'student-a.md');
-    const explicitProfilePath = path.join(allowedDir, 'profiles', 'explicit.md');
-
-    await fs.mkdir(path.dirname(studentProfilePath), { recursive: true });
-    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
-    await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
-    await fs.writeFile(studentProfilePath, 'STUDENT PROFILE CONTENT\n', 'utf8');
-    await fs.writeFile(explicitProfilePath, 'EXPLICIT PROFILE CONTENT\n', 'utf8');
-
-    const transcript = createTranscriptRecord();
-    const storage = createStorageStub({
-      getText: async () => 'TRANSCRIPT BODY',
-    });
-    const promptPackages = createPromptPackageRepositoryStub();
-    const profileRevisions = createProfileRevisionRepositoryStub();
-    const recordingLookup = {
-      getById: async (): Promise<RecordingRecord> => ({
-        id: transcript.recordingId,
-        workspaceId: 'workspace-1',
-        source: 'upload',
-        audioLifecycle: 'retained',
-        studentId: 'student-1',
-        sourcePath: null,
-        storageUri: 'local://recordings/recording-1.opus',
-        sha256: null,
-        bytes: 1,
-        durationSec: null,
-        channels: null,
-        status: 'transcribed',
-        error: null,
-        createdAt: new Date('2024-01-01T00:00:00Z'),
-        updatedAt: new Date('2024-01-01T00:00:00Z'),
-      }),
-    };
-    const studentLookup = {
-      getById: async () => ({
-        id: 'student-1',
-        student: 'Student One',
-        profileId: 'profiles/student-a.md',
-      }),
-    };
-
-    const explicitIdResult = await createPromptPackage(
-      {
-        recordingId: transcript.recordingId,
-        workspaceId: 'workspace-1',
-        templateId: 'template.md',
-        profileId: 'profiles/explicit.md',
-      },
-      {
-        config: createConfig(templatePath, defaultProfilePath),
-        storage,
-        transcripts: {
-          getByRecordingId: async () => transcript,
-        },
-        recordings: recordingLookup,
-        students: studentLookup,
-        promptPackages,
-        profileRevisions,
-        templateRevisions: createTemplateRevisionRepositoryStub(),
-        bindings: createBindingResolverStub(),
-        promptOptions: createPromptOptionsStub(),
-      },
-    );
-    expect(explicitIdResult?.profilePath).toBe('profiles/explicit.md');
-
-    const explicitPathResult = await createPromptPackage(
-      {
-        recordingId: transcript.recordingId,
-        workspaceId: 'workspace-1',
-        templateId: 'template.md',
-        profilePath: explicitProfilePath,
-      },
-      {
-        config: createConfig(templatePath, defaultProfilePath),
-        storage,
-        transcripts: {
-          getByRecordingId: async () => transcript,
-        },
-        recordings: recordingLookup,
-        students: studentLookup,
-        promptPackages,
-        profileRevisions,
-        templateRevisions: createTemplateRevisionRepositoryStub(),
-        bindings: createBindingResolverStub(),
-        promptOptions: createPromptOptionsStub(),
-      },
-    );
-    expect(explicitPathResult?.profilePath).toBe('profiles/explicit.md');
-  });
-
-  it('ignores an implicit student profile fallback when the bound profile has no active revision', async () => {
+  it('omits the profile when the student has no active revision', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-draft-bound-'));
     const templatePath = path.join(allowedDir, 'template.md');
     const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
-    const draftOnlyProfileId = 'profiles/draft-only.md';
+    const draftOnlyStudentId = 'student-1';
 
     await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
@@ -1232,33 +926,32 @@ describe('application/prompt-package', () => {
           getById: async () => ({
             id: 'student-1',
             student: 'Student One',
-            profileId: draftOnlyProfileId,
           }),
         },
         promptPackages: createPromptPackageRepositoryStub(),
         profileRevisions: createProfileRevisionRepositoryStub({
           getActive: async (profileId) => {
-            if (profileId === draftOnlyProfileId) return null;
+            if (profileId === draftOnlyStudentId) return null;
             return createProfileRevisionRepositoryStub().getActive(profileId);
           },
         }),
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub({
           strictAllowlist: true,
-          allowedProfileIds: [],
         }),
       },
     );
 
-    expect(result?.profilePath).toBe('default-profile.md');
+    expect(result?.profilePath).toBeNull();
+    expect(result?.profileSnapshot).toBeUndefined();
+    expect(result?.text).not.toContain('DEFAULT PROFILE');
   });
 
-  it('propagates an active-revision lookup failure for an implicit student profile', async () => {
+  it('propagates a student active-revision lookup failure', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-profile-lookup-'));
     const templatePath = path.join(allowedDir, 'template.md');
     const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
-    const boundProfileId = 'profiles/bound.md';
+    const boundStudentId = 'student-1';
     await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
 
@@ -1297,26 +990,89 @@ describe('application/prompt-package', () => {
             getById: async () => ({
               id: 'student-1',
               student: 'Student One',
-              profileId: boundProfileId,
             }),
           },
           promptPackages: createPromptPackageRepositoryStub(),
           profileRevisions: createProfileRevisionRepositoryStub({
             getActive: async (profileId) => {
-              if (profileId === boundProfileId) {
+              if (profileId === boundStudentId) {
                 throw new Error('profile revisions database unavailable');
               }
               return createProfileRevisionRepositoryStub().getActive(profileId);
             },
           }),
           templateRevisions: createTemplateRevisionRepositoryStub(),
-          bindings: createBindingResolverStub(),
           promptOptions: createPromptOptionsStub({
             strictAllowlist: true,
-            allowedProfileIds: [],
           }),
         },
       ),
     ).rejects.toThrow('profile revisions database unavailable');
+  });
+  it.each(['foreign-student', 'wrong-hash'])(
+    'rejects confirmed revision with %s provenance before writing',
+    async (violation) => {
+      const expectedHash = createHash('sha256').update('CONFIRMED PROFILE A', 'utf8').digest('hex');
+      const revision = await createProfileRevisionRepositoryStub().getById(
+        'student-1',
+        'profile-revision-a',
+      );
+      const getRecorded = vi.fn(async () => ({
+        ...revision!,
+        studentId: violation === 'foreign-student' ? 'student-2' : 'student-1',
+        contentHash: violation === 'wrong-hash' ? 'different-hash' : expectedHash,
+      }));
+      const insert = vi.fn();
+      await expect(
+        createPromptPackage(
+          {
+            recordingId: 'recording-1',
+            workspaceId: 'workspace-1',
+            assignmentSessionId: 'session-1',
+            userId: 'user-1',
+          },
+          {
+            config: createConfig('template.md', 'profile.md'),
+            sessions: {
+              getByIdForUser: async () => createConfirmedAssignmentSession(),
+              isConfirmedSourceCanonical: async () => true,
+            },
+            recordings: {
+              getById: async () => ({ id: 'recording-1', studentId: 'student-1' }) as never,
+            },
+            profileRevisions: { ...createProfileRevisionRepositoryStub(), getRecorded },
+            promptPackages: { insert },
+          },
+        ),
+      ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID' });
+      expect(getRecorded).toHaveBeenCalledWith('student-1', 'profile-revision-a', expectedHash);
+      expect(insert).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a recording student unavailable in the authenticated workspace before profile lookup', async () => {
+    const getStudent = vi.fn(async () => null);
+    const getActive = vi.fn();
+    const insert = vi.fn();
+    const result = await createPromptPackage(
+      { recordingId: 'recording-1', workspaceId: 'workspace-1' },
+      {
+        config: createConfig('template.md', 'profile.md'),
+        transcripts: { getByRecordingId: async () => createTranscriptRecord() },
+        recordings: {
+          getById: async () => ({ id: 'recording-1', studentId: 'student-1' }) as never,
+        },
+        students: { getById: getStudent },
+        profileRevisions: { ...createProfileRevisionRepositoryStub(), getActive },
+        promptPackages: { insert },
+      },
+    );
+    expect(result).toBeNull();
+    expect(getStudent).toHaveBeenCalledWith(
+      'student-1',
+      expect.objectContaining({ workspaceId: 'workspace-1' }),
+    );
+    expect(getActive).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
   });
 });

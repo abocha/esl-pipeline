@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 3 minutes.
 - Authority Level: Canonical status tracker.
-- Last Verified Against: 2026-09-26 first-profile onboarding implementation.
+- Last Verified Against: 2026-10-01 student-owned profile revision cutover.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while alpha work continues.
 - Status: `active`.
@@ -95,12 +95,13 @@ Provider/model detail stays in
 
 ## Update Rules
 
-Student-area surfaces, memory, bindings, timeline, and candidate/draft routes prove student ownership
-in the authenticated workspace before secondary reads or writes. The shared transport guard uses the
-existing workspace-scoped student query; teaching context retains its application-level guard.
-Profile catalog/detail/revision APIs and profile binding ownership remain unresolved in
-[issue #280](https://github.com/abocha/esl-pipeline/issues/280): their current global visibility is not
-an approved sharing contract. Student-ID containment does not close direct profile-ID access.
+Student-area surfaces, profile revisions, memory, timeline and candidate/draft routes authorize the
+student in the authenticated workspace before secondary reads or writes. Foundational Profile is
+student-owned revision history with status as its sole active authority. The direct profile catalog,
+binding and rebinding APIs are removed. Historical prompt IDs remain provenance only. Migration 0059
+freezes unattributable legacy rows for [bounded reconciliation](../operations/student-profile-revision-cutover.md);
+that storage is inaccessible through runtime profile APIs. Issue #280 may close after the cutover
+lands with its authorization evidence; destructive archive removal is a separate data reconciliation.
 
 - Update this file when a capability moves between planned, partial, and live or its ownership
   boundary changes.

@@ -63,9 +63,9 @@ describe('frontend sandbox API adapter', () => {
     expect(response.status).toBe(200);
     expect(response.data).toEqual({
       students: [
-        { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
-        { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
-        { id: 'student-cora', name: 'Cora Preview', profileId: null },
+        { id: 'student-alex', name: 'Alex' },
+        { id: 'student-bella', name: 'Bella' },
+        { id: 'student-cora', name: 'Cora Preview' },
       ],
     });
   });
@@ -84,7 +84,6 @@ describe('frontend sandbox API adapter', () => {
         expect.objectContaining({
           id: 'student-alex',
           student: 'Alex',
-          profileId: 'profiles/alex.md',
         }),
       ]),
       total: 2,
@@ -92,10 +91,9 @@ describe('frontend sandbox API adapter', () => {
     expect(student.data).toMatchObject({
       id: 'student-alex',
       student: 'Alex',
-      profileId: 'profiles/alex.md',
     });
     expect(learning.data).toMatchObject({
-      profile: expect.objectContaining({ id: 'profiles/alex.md' }),
+      profile: expect.objectContaining({ studentId: 'student-alex' }),
       revisions: {
         items: expect.arrayContaining([
           expect.objectContaining({ id: 'profile-revision-sandbox', status: 'active' }),
@@ -109,9 +107,6 @@ describe('frontend sandbox API adapter', () => {
           status: 'ready',
         }),
       }),
-      bindings: {
-        items: [expect.objectContaining({ studentId: 'student-alex' })],
-      },
       candidates: {
         items: [
           expect.objectContaining({
@@ -171,19 +166,22 @@ describe('frontend sandbox API adapter', () => {
       requestConfig('post', '/api/students/student-cora/profile-drafts/populate-first-from-lesson'),
     );
     const revisions = await adapter(
-      requestConfig('get', '/api/profiles/revisions', undefined, {
-        profileId: 'profiles/cora.md',
-      }),
+      requestConfig('get', '/api/students/student-cora/profile/revisions'),
     );
     const revision = await adapter(
-      requestConfig('get', '/api/profiles/revisions/profile-revision-cora-first-draft', undefined, {
-        profileId: 'profiles/cora.md',
-      }),
+      requestConfig(
+        'get',
+        '/api/students/student-cora/profile/revisions/profile-revision-cora-first-draft',
+        undefined,
+        {},
+      ),
     );
     const activated = await adapter(
-      requestConfig('post', '/api/profiles/revisions/profile-revision-cora-first-draft/activate', {
-        profileId: 'profiles/cora.md',
-      }),
+      requestConfig(
+        'post',
+        '/api/students/student-cora/profile/revisions/profile-revision-cora-first-draft/activate',
+        {},
+      ),
     );
 
     expect(students.data).toMatchObject({
@@ -191,7 +189,6 @@ describe('frontend sandbox API adapter', () => {
         expect.objectContaining({
           id: 'student-cora',
           student: 'Cora Preview',
-          profileId: null,
         }),
       ]),
       total: 2,
@@ -199,7 +196,6 @@ describe('frontend sandbox API adapter', () => {
     expect(student.data).toMatchObject({
       id: 'student-cora',
       student: 'Cora Preview',
-      profileId: null,
     });
     expect(health.data).toMatchObject({
       studentId: 'student-cora',
@@ -229,12 +225,12 @@ describe('frontend sandbox API adapter', () => {
     expect(transcript.data.text).toContain('Cora practiced a short client update');
     expect(populated.data).toMatchObject({
       draftRevisionId: 'profile-revision-cora-first-draft',
-      profileId: 'profiles/cora.md',
+      studentId: 'student-cora',
       lessonMemoryIds: ['lesson-memory-cora'],
       homeworkMemoryIds: [],
       draftRevision: expect.objectContaining({
         id: 'profile-revision-cora-first-draft',
-        profileId: 'profiles/cora.md',
+        studentId: 'student-cora',
         status: 'draft',
         source: 'lesson_population',
         structuredContent: expect.objectContaining({
@@ -254,15 +250,15 @@ describe('frontend sandbox API adapter', () => {
     });
     expect(revision.data).toMatchObject({
       id: 'profile-revision-cora-first-draft',
-      profileId: 'profiles/cora.md',
+      studentId: 'student-cora',
       status: 'draft',
       structuredContent: expect.objectContaining({
         overallLevel: 'A2',
       }),
     });
     expect(activated.data).toMatchObject({
-      id: 'profiles/cora.md',
-      currentRevisionId: 'profile-revision-cora-first-draft',
+      studentId: 'student-cora',
+      id: 'profile-revision-cora-first-draft',
       structuredContent: expect.objectContaining({
         overallLevel: 'A2',
       }),
@@ -303,21 +299,22 @@ describe('frontend sandbox API adapter', () => {
       ),
     );
     const saved = await adapter(
-      requestConfig('post', '/api/profiles/revisions', {
-        profileId: 'profiles/alex.md',
+      requestConfig('post', '/api/students/student-alex/profile/revisions', {
         structuredContent: refresh.data.draftRevision.structuredContent,
         inheritCandidateLinksFromRevisionId: refresh.data.draftRevision.id,
       }),
     );
     const activated = await adapter(
-      requestConfig('post', `/api/profiles/revisions/${saved.data.id}/activate`, {
-        profileId: 'profiles/alex.md',
-      }),
+      requestConfig(
+        'post',
+        `/api/students/student-alex/profile/revisions/${saved.data.id}/activate`,
+        {},
+      ),
     );
 
     expect(populated.data).toMatchObject({
       draftRevisionId: 'profile-revision-sandbox-first-draft',
-      profileId: 'profiles/alex.md',
+      studentId: 'student-alex',
       snapshotId: 'snapshot-sandbox',
       lessonMemoryIds: ['lesson-memory-sandbox'],
       homeworkMemoryIds: ['homework-memory-sandbox'],
@@ -351,8 +348,9 @@ describe('frontend sandbox API adapter', () => {
       structuredContent: refresh.data.draftRevision.structuredContent,
     });
     expect(activated.data).toMatchObject({
-      id: 'profiles/alex.md',
-      currentRevisionId: 'profile-revision-sandbox-saved-draft',
+      studentId: 'student-alex',
+      id: 'profile-revision-sandbox-saved-draft',
+      status: 'active',
     });
   });
 
@@ -471,7 +469,6 @@ describe('frontend sandbox API adapter', () => {
         step: 'context',
         expectedRevision: 2,
         teacherNotes: 'Recovered automatically',
-        profileId: null,
         profileRevisionId: null,
         profileRevisionHash: null,
       }),

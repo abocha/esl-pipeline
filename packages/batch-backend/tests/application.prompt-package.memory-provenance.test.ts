@@ -4,7 +4,6 @@ import { createPromptPackage } from '../src/application/create-prompt-package.js
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
 import {
-  createBindingResolverStub,
   createConfig,
   createProfileRevisionRepositoryStub,
   createPromptOptionsStub,
@@ -62,7 +61,6 @@ describe('application/prompt-package memory provenance', () => {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
         templateId: 'template.md',
-        profileId: 'profile.md',
       },
       {
         config: createConfig('/tmp/template.md', '/tmp/profile.md'),
@@ -90,12 +88,11 @@ describe('application/prompt-package memory provenance', () => {
           }),
         },
         students: {
-          getById: async () => null,
+          getById: async () => ({ id: 'student-1', student: 'Student One' }),
         },
         promptPackages,
         profileRevisions: createProfileRevisionRepositoryStub(),
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub(),
       },
     );

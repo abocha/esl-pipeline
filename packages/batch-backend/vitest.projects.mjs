@@ -20,7 +20,6 @@ const postgresFiles = [
   'domain.lesson-memory-repository.test.ts',
   'domain.homework-memory-repository.test.ts',
   'domain.student-profile-candidate-repository.test.ts',
-  'tools.historical-profile-provenance.postgres.test.ts',
   'domain.student-memory-snapshot-repository.test.ts',
   'domain.student-memory-openai-batch-import.test.ts',
   'domain.student-memory-openai-batch-repository.test.ts',

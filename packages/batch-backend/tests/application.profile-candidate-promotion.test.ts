@@ -51,7 +51,7 @@ describe('application/profile-candidate-promotion', () => {
     }));
     const saveRevision = vi.fn(async () => ({
       id: 'revision-draft-1',
-      profileId: 'profiles/students/tolik.md',
+      studentId: 'tolik',
       contentHash: 'hash',
       source: 'candidate_promotion' as const,
       status: 'draft' as const,
@@ -91,23 +91,13 @@ describe('application/profile-candidate-promotion', () => {
           getById: async () => ({
             id: 'tolik',
             student: 'Tolik',
-            profileId: 'profiles/students/tolik.md',
             voices: {},
-          }),
-        },
-        profiles: {
-          getById: async () => ({
-            id: 'profiles/students/tolik.md',
-            label: 'Tolik',
-            activeRevisionId: 'revision-active-1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
           }),
         },
         revisions: {
           getActive: async () => ({
             id: 'revision-active-1',
-            profileId: 'profiles/students/tolik.md',
+            studentId: 'tolik',
             content: '# Existing profile',
             contentHash: 'hash-1',
             source: 'starter_profile_form',
@@ -146,7 +136,7 @@ describe('application/profile-candidate-promotion', () => {
     expect(result.baseRevisionId).toBe('revision-active-1');
     expect(result.includedCandidateIds).toEqual(['candidate-1']);
     expect(saveRevision).toHaveBeenCalledWith(
-      'profiles/students/tolik.md',
+      'tolik',
       expect.stringContaining('# Foundational Profile'),
       expect.objectContaining({
         source: 'candidate_promotion',
@@ -203,23 +193,13 @@ describe('application/profile-candidate-promotion', () => {
             getById: async () => ({
               id: 'tolik',
               student: 'Tolik',
-              profileId: 'profiles/students/tolik.md',
               voices: {},
-            }),
-          },
-          profiles: {
-            getById: async () => ({
-              id: 'profiles/students/tolik.md',
-              label: 'Tolik',
-              activeRevisionId: 'revision-active-1',
-              createdAt: new Date('2026-01-01T00:00:00.000Z'),
-              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
             }),
           },
           revisions: {
             getActive: async () => ({
               id: 'revision-active-1',
-              profileId: 'profiles/students/tolik.md',
+              studentId: 'tolik',
               content: '# Existing profile',
               contentHash: 'hash-1',
               source: 'starter_profile_form',
@@ -265,23 +245,13 @@ describe('application/profile-candidate-promotion', () => {
             getById: async () => ({
               id: 'tolik',
               student: 'Tolik',
-              profileId: 'profiles/students/tolik.md',
               voices: {},
-            }),
-          },
-          profiles: {
-            getById: async () => ({
-              id: 'profiles/students/tolik.md',
-              label: 'Tolik',
-              activeRevisionId: 'revision-active-1',
-              createdAt: new Date('2026-01-01T00:00:00.000Z'),
-              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
             }),
           },
           revisions: {
             getActive: async () => ({
               id: 'revision-active-1',
-              profileId: 'profiles/students/tolik.md',
+              studentId: 'tolik',
               content: '# Existing profile\n\nLong enough to matter.',
               contentHash: 'hash-1',
               source: 'starter_profile_form',
@@ -347,23 +317,13 @@ describe('application/profile-candidate-promotion', () => {
             getById: async () => ({
               id: 'tolik',
               student: 'Tolik',
-              profileId: 'profiles/students/tolik.md',
               voices: {},
-            }),
-          },
-          profiles: {
-            getById: async () => ({
-              id: 'profiles/students/tolik.md',
-              label: 'Tolik',
-              activeRevisionId: 'revision-active-1',
-              createdAt: new Date('2026-01-01T00:00:00.000Z'),
-              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
             }),
           },
           revisions: {
             getActive: async () => ({
               id: 'revision-active-1',
-              profileId: 'profiles/students/tolik.md',
+              studentId: 'tolik',
               content: '# Existing profile\n\n' + 'A'.repeat(2_000),
               contentHash: 'hash-1',
               source: 'starter_profile_form',

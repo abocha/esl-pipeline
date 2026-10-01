@@ -796,7 +796,6 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         .optional(),
       selectedGenerationModel: z.string().nullable().optional(),
       teacherNotes: z.string().max(20_000).nullable().optional(),
-      selectedProfileId: z.string().nullable().optional(),
       selectedProfileRevisionId: z.string().uuid().nullable().optional(),
       selectedProfileRevisionHash: z
         .string()
@@ -845,7 +844,6 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         step: z.literal('context'),
         expectedRevision: z.number().int().positive(),
         teacherNotes: z.string().max(20_000).nullable(),
-        profileId: z.string().nullable(),
         profileRevisionId: z.string().uuid().nullable(),
         profileRevisionHash: z
           .string()

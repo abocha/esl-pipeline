@@ -300,7 +300,6 @@ describeHttpServerIntegrationSuite(
           step: 'context',
           expectedRevision: 2,
           teacherNotes: 'Editable guidance',
-          profileId: null,
           profileRevisionId: null,
           profileRevisionHash: null,
         },
@@ -343,6 +342,28 @@ describeHttpServerIntegrationSuite(
       });
 
       expect(response.statusCode).toBe(400);
+    });
+
+    it('rejects retired catalog profile selection in recovery and context writes', async () => {
+      const recovery = await app.inject({
+        method: 'PATCH',
+        url: `/assignment-sessions/${session.id}/recovery`,
+        payload: { expectedRevision: 1, patch: { selectedProfileId: 'profile.md' } },
+      });
+      expect(recovery.statusCode).toBe(400);
+      const context = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/confirm`,
+        payload: {
+          step: 'context',
+          expectedRevision: 1,
+          teacherNotes: null,
+          profileId: 'profile.md',
+          profileRevisionId: null,
+          profileRevisionHash: null,
+        },
+      });
+      expect(context.statusCode).toBe(400);
     });
 
     it('shares through one stable job-backed terminal operation', async () => {

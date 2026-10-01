@@ -3,12 +3,12 @@ import './support/bootstrap-pg-test-env.js';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { upsertProfile } from '../src/domain/profile-repository.js';
 import {
   getActiveProfileRevision,
   insertProfileRevision,
   listProfileRevisions,
 } from '../src/domain/profile-revision-repository.js';
+import { upsertStudent } from '../src/domain/student-repository.js';
 import { upsertTemplate } from '../src/domain/template-repository.js';
 import {
   getActiveTemplateRevision,
@@ -25,9 +25,8 @@ async function resetRevisionFixtures() {
     await client.query(
       `
       TRUNCATE TABLE
-        student_profile_bindings,
-        profiles,
-        profile_revisions,
+        students,
+        student_profile_revisions,
         templates,
         template_revisions
       RESTART IDENTITY CASCADE
@@ -50,11 +49,11 @@ describe('domain/revision-repositories', () => {
   });
 
   it('inserts a new active profile revision while deprecating the previous active revision', async () => {
-    const profileId = `profile-${randomUUID()}.md`;
-    await upsertProfile({ id: profileId, label: 'Profile under test', activeRevisionId: null });
+    const studentId = randomUUID();
+    await upsertStudent({ id: studentId, student: 'Profile under test' });
 
     const first = await insertProfileRevision({
-      profileId,
+      studentId,
       content: 'Version 1',
       contentHash: 'hash-v1',
       source: 'create',
@@ -62,7 +61,7 @@ describe('domain/revision-repositories', () => {
     });
 
     const second = await insertProfileRevision({
-      profileId,
+      studentId,
       content: 'Version 2',
       contentHash: 'hash-v2',
       source: 'update',
@@ -71,11 +70,11 @@ describe('domain/revision-repositories', () => {
 
     expect(second.versionNumber).toBeGreaterThan(first.versionNumber);
 
-    const active = await getActiveProfileRevision(profileId);
+    const active = await getActiveProfileRevision(studentId);
     expect(active?.id).toBe(second.id);
 
     const revisions = await listProfileRevisions({
-      profileId,
+      studentId,
       order: 'desc',
       limit: 10,
       offset: 0,
@@ -83,6 +82,9 @@ describe('domain/revision-repositories', () => {
     const activeCount = revisions.items.filter((item) => item.status === 'active').length;
     expect(activeCount).toBe(1);
     expect(revisions.items.find((item) => item.id === first.id)?.status).toBe('deprecated');
+    expect(revisions.items.find((item) => item.id === first.id)?.activatedAt).toEqual(
+      first.activatedAt,
+    );
   });
 
   it('inserts a new active template revision while deprecating the previous active revision', async () => {

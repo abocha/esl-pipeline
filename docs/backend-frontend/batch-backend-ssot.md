@@ -97,7 +97,8 @@ For live readiness/status and UI parity, use the alignment tracker:
 
 ## Prompt Catalog Model (DB-Canonical)
 
-Prompt templates/profiles are runtime-managed from Postgres revisions.
+Prompt templates are runtime-managed from Postgres revisions. Foundational profiles are student-owned
+revision histories; see [ABO-12 cutover](../operations/student-profile-revision-cutover.md).
 
 Invariants:
 
@@ -143,8 +144,8 @@ Runbook: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
   - `pnpm --filter @esl-pipeline/batch-backend db:verify-baseline`
 - Existing databases upgrade through migrations; brand-new databases may initialize from the generated fresh baseline.
 - Baseline generation/verification commands require a Postgres connection that can create and drop temporary databases.
-- Runtime legacy schema patching (`ensureJobsSchema`) is emergency-only and requires explicit `PG_ENABLE_LEGACY_SCHEMA_PATCHES=true`.
-- CI enforces a frozen legacy patch catalog; new schema changes must land in versioned migrations.
+- Runtime legacy schema patching (`ensureJobsSchema`) is retired and rejects all invocations.
+- Schema changes must land in versioned migrations; generated baseline verification protects parity.
 - CI also verifies that the generated baseline matches the full migrated schema.
 - Manual migration mode can be made fail-fast on pending migrations (`PG_FAIL_ON_PENDING_MIGRATIONS`; default enabled in production).
 - Inventory mapping of legacy patch groups to migration parity:

@@ -10,6 +10,10 @@ import { createStudentProfile } from '../src/application/student-profiles-store.
 import { getStudentTeachingContext } from '../src/application/student-teaching-context.js';
 import { loadConfig } from '../src/config/env.js';
 import {
+  activateProfileRevision,
+  getProfileRevisionById,
+} from '../src/domain/profile-revision-repository.js';
+import {
   getStudentProfileCandidateById,
   insertStudentProfileCandidate,
 } from '../src/domain/student-profile-candidate-repository.js';
@@ -53,6 +57,7 @@ async function seedTenant() {
   const initialized = await initializeStudentProfileDraft({
     request: { studentId: student.id, reviewerId: userId },
   });
+  await activateProfileRevision(student.id, initialized.draftRevision.id);
   const candidate = await insertStudentProfileCandidate({
     studentId: student.id,
     targetSection: 'goals_motivation',
@@ -89,8 +94,8 @@ const readPaths = [
   'lesson-memory',
   'homework-memory',
   'memory-snapshots',
-  'bindings',
-  'bindings/active',
+  'profile',
+  'profile/revisions',
   'timeline',
 ];
 
@@ -106,6 +111,9 @@ function mutationPaths(candidateId: string) {
       payload: { candidateIds: [candidateId] },
     },
     { path: 'profile-drafts/initialize', payload: {} },
+    { path: 'profile/revisions', payload: { content: 'Attacker draft' } },
+    { path: `profile/revisions/${randomUUID()}/activate`, payload: {} },
+    { path: `profile/revisions/${randomUUID()}/restore`, payload: {} },
   ];
 }
 
@@ -150,12 +158,7 @@ describe('student-area authorization before student-owned reads', () => {
         await client.query('DELETE FROM students WHERE id = ANY($1::uuid[])', [
           [tenantA.studentId, tenantB.studentId],
         ]);
-        await client.query('DELETE FROM profiles WHERE id = ANY($1::text[])', [
-          [
-            `profiles/students/${tenantA.studentId}.md`,
-            `profiles/students/${tenantB.studentId}.md`,
-          ],
-        ]);
+
         await client.query('DELETE FROM workspaces WHERE id = ANY($1::uuid[])', [
           [tenantA.workspaceId, tenantB.workspaceId],
         ]);
@@ -195,6 +198,22 @@ describe('student-area authorization before student-owned reads', () => {
     }
   });
 
+  it('rejects malformed student identifiers without secondary SQL', async () => {
+    const queries = observeQueries();
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/students/not-a-uuid/profile',
+        headers: tenantA.headers,
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({ error: 'not_found' });
+      expect(queries.spy).not.toHaveBeenCalled();
+    } finally {
+      queries.spy.mockRestore();
+    }
+  });
+
   it('authenticates before resolving workspace or student', async () => {
     const queries = observeQueries();
     try {
@@ -209,15 +228,15 @@ describe('student-area authorization before student-owned reads', () => {
     }
   });
 
-  it('allows both tutors to initialize their own draft and read every affected surface', async () => {
+  it('allows both tutors to read their own profile and surfaces, and protects initialized history', async () => {
     for (const tenant of [tenantA, tenantB]) {
       const initialized = await app.inject({
         method: 'POST',
         url: `/students/${tenant.studentId}/profile-drafts/initialize`,
         headers: tenant.headers,
       });
-      expect(initialized.statusCode, initialized.body).toBe(200);
-      expect(initialized.json().profileId).toBe(`profiles/students/${tenant.studentId}.md`);
+      expect(initialized.statusCode, initialized.body).toBe(409);
+      expect(initialized.json().error).toBe('profile_already_initialized');
       for (const path of readPaths) {
         const response = await app.inject({
           method: 'GET',
@@ -291,12 +310,12 @@ describe('student-area authorization before student-owned reads', () => {
             expect(values?.[0]).toBe(tenantA.studentId);
           }
           const revisionQueries = queries.spy.mock.calls.filter(([sql]) =>
-            /FROM profile_revisions/.test(sql),
+            /FROM student_profile_revisions/.test(sql),
           );
           expect(revisionQueries.length).toBeGreaterThan(0);
           for (const [sql, values] of revisionQueries) {
-            expect(sql).toMatch(/profile_id = \$1/);
-            expect(values?.[0]).toBe(`profiles/students/${tenantA.studentId}.md`);
+            expect(sql).toMatch(/student_id = \$1/);
+            expect(values?.[0]).toBe(tenantA.studentId);
           }
         }
       }
@@ -327,10 +346,115 @@ describe('student-area authorization before student-owned reads', () => {
         queries
           .statements()
           .slice(1)
-          .some((sql) => /FROM profiles/.test(sql)),
+          .some((sql) => /FROM student_profile_revisions/.test(sql)),
       ).toBe(true);
     } finally {
       queries.spy.mockRestore();
     }
+  });
+  it('scopes all revision reads and mutations to the parent, including another student in the same workspace', async () => {
+    const sibling = await createStudentProfile({
+      student: `Sibling ${randomUUID()}`,
+      workspaceId: tenantA.workspaceId,
+    });
+    const initialized = await initializeStudentProfileDraft({
+      request: { studentId: sibling.id, reviewerId: tenantA.userId },
+    });
+    const foreignRevision = initialized.draftRevision.id;
+    try {
+      for (const revisionId of [foreignRevision, tenantB.revisionId, randomUUID()]) {
+        for (const action of ['', '/activate', '/restore']) {
+          const response = await app.inject({
+            method: action ? 'POST' : 'GET',
+            url: `/students/${tenantA.studentId}/profile/revisions/${revisionId}${action}`,
+            headers: tenantA.headers,
+          });
+          expect(response.statusCode, response.body).toBe(404);
+          expect(response.json()).toEqual({ error: 'not_found' });
+        }
+        const before = await app.inject({
+          method: 'GET',
+          url: `/students/${tenantA.studentId}/profile/revisions`,
+          headers: tenantA.headers,
+        });
+        const response = await app.inject({
+          method: 'POST',
+          url: `/students/${tenantA.studentId}/profile/revisions`,
+          headers: tenantA.headers,
+          payload: {
+            content: 'Unauthorized inheritance',
+            status: 'draft',
+            inheritCandidateLinksFromRevisionId: revisionId,
+          },
+        });
+        expect(response.statusCode).toBe(404);
+        const after = await app.inject({
+          method: 'GET',
+          url: `/students/${tenantA.studentId}/profile/revisions`,
+          headers: tenantA.headers,
+        });
+        expect(after.json().total).toBe(before.json().total);
+      }
+      expect((await getProfileRevisionById(sibling.id, foreignRevision))?.status).toBe('draft');
+    } finally {
+      await withPgClient((client) =>
+        client.query('DELETE FROM students WHERE id = $1', [sibling.id]),
+      );
+    }
+  });
+
+  it('edits, drafts, activates and restores independent history for an authorized student', async () => {
+    const base = `/students/${tenantA.studentId}/profile`;
+    const original = await getProfileRevisionById(tenantA.studentId, tenantA.revisionId);
+    const edited = await app.inject({
+      method: 'PUT',
+      url: base,
+      headers: tenantA.headers,
+      payload: { content: 'Tutor edit' },
+    });
+    expect(edited.statusCode, edited.body).toBe(200);
+    expect(edited.json()).toMatchObject({ studentId: tenantA.studentId, content: 'Tutor edit' });
+    const drafted = await app.inject({
+      method: 'POST',
+      url: `${base}/revisions`,
+      headers: tenantA.headers,
+      payload: { content: 'Proposed draft', status: 'draft' },
+    });
+    expect(drafted.statusCode, drafted.body).toBe(201);
+    const draft = drafted.json();
+    expect(draft).toMatchObject({
+      studentId: tenantA.studentId,
+      status: 'draft',
+      createdBy: tenantA.userId,
+    });
+    expect(
+      (await app.inject({ method: 'GET', url: base, headers: tenantA.headers })).json().content,
+    ).toBe('Tutor edit');
+    const activated = await app.inject({
+      method: 'POST',
+      url: `${base}/revisions/${draft.id}/activate`,
+      headers: tenantA.headers,
+    });
+    expect(activated.statusCode, activated.body).toBe(200);
+    const restored = await app.inject({
+      method: 'POST',
+      url: `${base}/revisions/${tenantA.revisionId}/restore`,
+      headers: tenantA.headers,
+    });
+    expect(restored.statusCode, restored.body).toBe(200);
+    const restoredRevision = await getProfileRevisionById(
+      tenantA.studentId,
+      restored.json().currentRevisionId,
+    );
+    expect(restoredRevision).toMatchObject({
+      restoredFromRevisionId: tenantA.revisionId,
+      contentHash: original?.contentHash,
+      content: original?.content,
+      status: 'active',
+    });
+    expect(restoredRevision?.id).not.toBe(original?.id);
+    expect((await getProfileRevisionById(tenantA.studentId, tenantA.revisionId))?.content).toBe(
+      original?.content,
+    );
   });
 });

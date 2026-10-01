@@ -232,7 +232,6 @@
 | `PG_USER` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `PIPELINE_CWD` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `PRESIGNED_URL_EXPIRES_IN` | `.env.example` | misc | `docs/reference/env.md` |
-| `PROMPT_PROFILE_PATH` | `.env.example` | misc | `docs/reference/env.md` |
 | `PROMPT_TEMPLATE_PATH` | `.env.example` | misc | `docs/reference/env.md` |
 | `RECORDING_AUDIO_CLEANUP_ENABLED` | `.env.example` | misc | `docs/reference/env.md` |
 | `RECORDING_AUDIO_RECOVERY_TTL_DAYS` | `.env.example` | misc | `docs/reference/env.md` |

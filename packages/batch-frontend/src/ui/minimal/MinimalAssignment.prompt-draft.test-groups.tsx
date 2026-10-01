@@ -275,7 +275,6 @@ export function registerPromptEditorTests() {
             ...savedSession.confirmed,
             context: {
               teacherNotes: request.step === 'context' ? request.teacherNotes : null,
-              profileId: request.step === 'context' ? request.profileId : null,
               profileRevisionId: request.step === 'context' ? request.profileRevisionId : null,
               profileRevisionHash: request.step === 'context' ? request.profileRevisionHash : null,
             },
@@ -578,7 +577,7 @@ export function registerPromptEditorTests() {
         state: 'not_applicable',
         operationState: null,
         profile: {
-          profileId: 'profiles/alex.md',
+          studentId: 'student-alex',
           revisionId: 'revision-1',
           revisionHash: 'a'.repeat(64),
           content: 'PROFILE CONTENT',
@@ -629,8 +628,8 @@ export function registerPromptEditorTests() {
       const user = createMinimalUser();
       vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
         students: [
-          { id: 'student-alex', name: 'Alex', profileId: null },
-          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+          { id: 'student-alex', name: 'Alex' },
+          { id: 'student-bella', name: 'Bella' },
         ],
       });
 
@@ -654,8 +653,8 @@ export function registerPromptEditorTests() {
       const user = createMinimalUser();
       vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
         students: [
-          { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
-          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+          { id: 'student-alex', name: 'Alex' },
+          { id: 'student-bella', name: 'Bella' },
         ],
       });
 
@@ -689,8 +688,8 @@ export function registerPromptEditorTests() {
       const user = createMinimalUser();
       vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
         students: [
-          { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
-          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+          { id: 'student-alex', name: 'Alex' },
+          { id: 'student-bella', name: 'Bella' },
         ],
       });
       vi.mocked(api.fetchAssignmentLearnerContext).mockRejectedValue(
@@ -736,10 +735,8 @@ export function registerPromptEditorTests() {
           { id: 'tpl-default', label: 'Default Template' },
           { id: 'tpl-focused', label: 'Focused Follow-up' },
         ],
-        profiles: [{ id: 'profiles/alex.md', label: 'Alex active profile' }],
         defaults: {
           templateId: 'tpl-default',
-          profileId: null,
         },
       });
       const user = createMinimalUser();
@@ -868,7 +865,7 @@ export function registerPromptStudentSelectionTests() {
       });
     });
 
-    it('syncs profile to selected student binding before prompt generation', async () => {
+    it('uses the selected student context before prompt generation', async () => {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
