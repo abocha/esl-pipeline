@@ -24,9 +24,8 @@ function createConfig(): BatchBackendConfig {
     ...base,
     generation: {
       ...base.generation,
-      strictNoPaid: false,
+
       safetyMode: 'hard_stop',
-      budgetEmergencyOverride: false,
     },
   };
 }

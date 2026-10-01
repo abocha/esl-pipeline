@@ -4,7 +4,7 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { withPgClient } from '../infrastructure/db.js';
-import { resolveGenerationCandidates } from './generation-policy.js';
+import { resolveGenerationTarget } from './generation-policy.js';
 import { requestHomeworkMemoryGeneration } from './request-homework-memory-generation.js';
 
 export type HomeworkMemoryBackfillSelection = 'missing' | 'failed' | 'all';
@@ -78,18 +78,14 @@ export function resolveHomeworkMemoryBackfillCandidate(args: {
   providerOverride?: GenerationProvider;
   modelOverride?: string;
 }): { provider: GenerationProvider; model: string } {
-  const candidate = resolveGenerationCandidates({
+  const target = resolveGenerationTarget({
     config: args.config.generation,
-    workload: 'student_memory_extraction',
+    workload: 'homework_memory',
     providerOverride: args.providerOverride,
     modelOverride: args.modelOverride,
-  })[0];
+  });
 
-  if (!candidate) {
-    throw new Error('No generation candidate is available for homework-memory backfill');
-  }
-
-  return candidate;
+  return target;
 }
 
 async function listSucceededHomeworkReplayCandidates(args: {

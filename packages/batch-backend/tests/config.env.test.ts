@@ -150,81 +150,6 @@ describe('config/env - core defaults', () => {
   });
 });
 
-describe('config/env - OpenAI target-model gate', () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
-
-  it('uses workload defaults while preserving the disabled compatibility gate', async () => {
-    await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'false' }, async () => {
-      const cfg = await loadConfigFresh();
-      expect(cfg.generation.models.openai.targetModelsEnabled).toBe(false);
-      expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
-      expect(cfg.generation.models.openai.assignmentDraftPrimary).toBe('gpt-6.1-sol');
-      expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.allowed).toEqual([
-        'gpt-5.6-sol',
-        'gpt-5.6-luna',
-        'gpt-6.1-sol',
-      ]);
-    });
-  });
-
-  it('uses the same workload defaults when the compatibility gate is enabled', async () => {
-    await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'true' }, async () => {
-      const cfg = await loadConfigFresh();
-      expect(cfg.generation.models.openai.targetModelsEnabled).toBe(true);
-      expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
-      expect(cfg.generation.models.openai.assignmentDraftPrimary).toBe('gpt-6.1-sol');
-      expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.6-luna');
-      expect(cfg.generation.models.openai.allowed).toEqual([
-        'gpt-5.6-sol',
-        'gpt-5.6-luna',
-        'gpt-6.1-sol',
-      ]);
-    });
-  });
-
-  it('allows every default OpenAI workload model when the target ladder is enabled', async () => {
-    await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'true' }, async () => {
-      delete process.env.GEN_OPENAI_MODEL_PRIMARY;
-      delete process.env.GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY;
-      delete process.env.GEN_OPENAI_MODEL_FALLBACK;
-      delete process.env.GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY;
-      delete process.env.GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK;
-      delete process.env.GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY;
-      delete process.env.GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK;
-      delete process.env.GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY;
-      delete process.env.GEN_ALLOWED_MODELS_OPENAI;
-
-      const cfg = await loadConfigFresh();
-
-      expect(cfg.generation.models.openai.allowed).toEqual(
-        expect.arrayContaining([
-          cfg.generation.models.openai.primary,
-          cfg.generation.models.openai.assignmentDraftPrimary,
-          cfg.generation.models.openai.fallback,
-          cfg.generation.models.openai.studentMemoryPrimary,
-          cfg.generation.models.openai.studentMemoryFallback,
-          cfg.generation.models.openai.profileDraftPrimary,
-          cfg.generation.models.openai.profileDraftFallback,
-          cfg.generation.models.openai.profileDraftTertiary,
-        ]),
-      );
-    });
-  });
-});
-
 describe('config/env - speech planner debug logging', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -587,145 +512,75 @@ describe('config/env - storage provider defaults', () => {
   });
 });
 
-describe('config/env - generation provider mapping', () => {
+describe('config/env - explicit generation targets', () => {
   beforeEach(() => {
     vi.resetModules();
   });
-
-  it('loads generation defaults and provider order', async () => {
+  it('loads intentional workload defaults and ignores retired graph settings', async () => {
     await withEnv(
       {
         NODE_ENV: 'test',
-      },
-      async () => {
-        const cfg = await loadConfigFresh();
-        expect(cfg.generation.defaultProvider).toBe('openai');
-        expect(cfg.generation.fallbackProviders).toEqual(['google_ai_studio', 'openrouter']);
-        expect(cfg.generation.quotaSourceMode).toBe('hybrid');
-        expect(cfg.generation.safetyMode).toBe('hard_stop');
-        expect(cfg.generation.strictNoPaid).toBe(true);
-        expect(cfg.generation.maxOutputTokensHard).toBe(12000);
-        expect(cfg.generation.budgetEmergencyOverride).toBe(false);
-        expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
-        expect(cfg.generation.models.openai.assignmentDraftPrimary).toBe('gpt-6.1-sol');
-        expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');
-        expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.6-luna');
-        expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.6-luna');
-        expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.6-luna');
-        expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.6-luna');
-        expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.6-luna');
-        expect(cfg.generation.models.googleAiStudio.primary).toBe('gemini-3-flash-preview');
-        expect(cfg.generation.models.googleAiStudio.allowed).toEqual(
-          expect.arrayContaining(['gemini-3-flash-preview', 'gemini-3.5-flash']),
-        );
-        expect(cfg.generation.providers.openai.dailyTokenBudget).toBe(120000);
-        expect(cfg.generation.providers.openai.tpmBudget).toBe(160000);
-        expect(cfg.generation.providers.openrouter.dailyTokenBudget).toBe(0);
-      },
-    );
-  });
-
-  it('maps generation env overrides', async () => {
-    await withEnv(
-      {
-        NODE_ENV: 'test',
-        GEN_PROVIDER_DEFAULT: 'google_ai_studio',
-        GEN_PROVIDER_FALLBACKS: 'openai,openrouter',
-        GEN_QUOTA_SOURCE_MODE: 'provider',
-        GEN_SAFETY_MODE: 'warn',
-        GEN_STRICT_NO_PAID: 'false',
-        GEN_MAX_OUTPUT_TOKENS_HARD: '900',
-        GEN_OPENAI_MODEL_PRIMARY: 'gpt-test',
-        GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY: 'gpt-assignment-test',
-        GEN_OPENAI_MODEL_FALLBACK: 'gpt-small',
-        GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY: 'gpt-memory',
-        GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK: 'gpt-memory-fallback',
-        GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY: 'gpt-big',
-        GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK: 'gpt-big-fallback',
-        GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY: 'gpt-big-tertiary',
-        GEN_ALLOWED_MODELS_OPENAI: 'gpt-test,gpt-mini',
-        OPENAI_API_KEY: 'openai-key',
-        GEN_OPENAI_TPM_BUDGET: '777',
-        GEMINI_API_KEY: 'google-key',
-        OPENROUTER_API_KEY: 'router-key',
-      },
-      async () => {
-        const cfg = await loadConfigFresh();
-        expect(cfg.generation.defaultProvider).toBe('google_ai_studio');
-        expect(cfg.generation.fallbackProviders).toEqual(['openai', 'openrouter']);
-        expect(cfg.generation.quotaSourceMode).toBe('provider');
-        expect(cfg.generation.safetyMode).toBe('warn');
-        expect(cfg.generation.strictNoPaid).toBe(false);
-        expect(cfg.generation.maxOutputTokensHard).toBe(900);
-        expect(cfg.generation.models.openai.primary).toBe('gpt-test');
-        expect(cfg.generation.models.openai.assignmentDraftPrimary).toBe('gpt-assignment-test');
-        expect(cfg.generation.models.openai.fallback).toBe('gpt-small');
-        expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-memory');
-        expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-memory-fallback');
-        expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-big');
-        expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-big-fallback');
-        expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-big-tertiary');
-        expect(cfg.generation.models.openai.allowed).toEqual(['gpt-test', 'gpt-mini']);
-        expect(cfg.generation.providers.openai.apiKey).toBe('openai-key');
-        expect(cfg.generation.providers.openai.tpmBudget).toBe(777);
-        expect(cfg.generation.providers.googleAiStudio.apiKey).toBe('google-key');
-        expect(cfg.generation.providers.openrouter.apiKey).toBe('router-key');
-      },
-    );
-  });
-
-  it('throws on invalid generation provider', async () => {
-    await expect(
-      withEnv(
-        {
-          NODE_ENV: 'test',
-          GEN_PROVIDER_DEFAULT: 'invalid-provider',
-        },
-        async () => {
-          await loadConfigFresh();
-        },
-      ),
-    ).rejects.toThrow('Generation provider must be one of: openai, google_ai_studio, openrouter');
-  });
-
-  it('throws on invalid generation safety mode', async () => {
-    await expect(
-      withEnv(
-        {
-          NODE_ENV: 'test',
-          GEN_SAFETY_MODE: 'strictest',
-        },
-        async () => {
-          await loadConfigFresh();
-        },
-      ),
-    ).rejects.toThrow('GEN_SAFETY_MODE must be one of: off, warn, hard_stop');
-  });
-
-  it('enables emergency override via GEN_ALLOW_PAID_SPEND', async () => {
-    await withEnv(
-      {
-        NODE_ENV: 'test',
+        GEN_PROVIDER_DEFAULT: 'openrouter',
+        GEN_PROVIDER_FALLBACKS: 'invalid',
+        GEN_OPENAI_MODEL_FALLBACK: 'legacy',
+        GEN_OPENAI_TARGET_MODELS_ENABLED: 'true',
+        GEN_STRICT_NO_PAID: 'true',
         GEN_ALLOW_PAID_SPEND: 'true',
       },
       async () => {
         const cfg = await loadConfigFresh();
-        expect(cfg.generation.budgetEmergencyOverride).toBe(true);
+        expect(cfg.generation.targets).toEqual({
+          draft_generation: { provider: 'openai', model: 'gpt-6.1-sol' },
+          lesson_memory: { provider: 'openai', model: 'gpt-5.6-luna' },
+          homework_memory: { provider: 'openai', model: 'gpt-5.6-luna' },
+          student_memory_snapshot: { provider: 'openai', model: 'gpt-5.6-luna' },
+          profile_revision_drafting: { provider: 'openai', model: 'gpt-5.6-luna' },
+        });
+        expect(cfg.generation).not.toHaveProperty('fallbackProviders');
+        expect(cfg.generation).not.toHaveProperty('budgetEmergencyOverride');
       },
     );
   });
-
-  it('ignores deprecated GEN_BUDGET_EMERGENCY_OVERRIDE alias', async () => {
+  it('routes workloads independently including explicit Google and OpenRouter choices', async () => {
     await withEnv(
       {
         NODE_ENV: 'test',
-        GEN_BUDGET_EMERGENCY_OVERRIDE: 'true',
+        GEN_LESSON_MEMORY_PROVIDER: 'google_ai_studio',
+        GEN_GOOGLE_MODEL: 'gemini-3-flash-preview',
+        GEN_HOMEWORK_MEMORY_MODEL: 'memory-custom',
+        GEN_PROFILE_DRAFT_PROVIDER: 'openrouter',
+        GEN_PROFILE_DRAFT_MODEL: 'operator/model',
       },
       async () => {
         const cfg = await loadConfigFresh();
-        expect(cfg.generation.budgetEmergencyOverride).toBe(false);
+        expect(cfg.generation.targets.lesson_memory).toEqual({
+          provider: 'google_ai_studio',
+          model: 'gemini-3-flash-preview',
+        });
+        expect(cfg.generation.targets.homework_memory).toEqual({
+          provider: 'openai',
+          model: 'memory-custom',
+        });
+        expect(cfg.generation.targets.profile_revision_drafting).toEqual({
+          provider: 'openrouter',
+          model: 'operator/model',
+        });
+        expect(cfg.generation.targets.draft_generation.model).toBe('gpt-6.1-sol');
       },
     );
+  });
+  it('rejects unknown providers and OpenRouter without an explicit model', async () => {
+    await withEnv({ NODE_ENV: 'test', GEN_ASSIGNMENT_PROVIDER: 'invalid' }, async () => {
+      await expect(loadConfigFresh()).rejects.toThrow();
+    });
+    await withEnv({ NODE_ENV: 'test', GEN_PROFILE_DRAFT_PROVIDER: 'openrouter' }, async () => {
+      await expect(loadConfigFresh()).rejects.toThrow('GEN_PROFILE_DRAFT_MODEL');
+    });
+  });
+  it('retains safety mode validation', async () => {
+    await withEnv({ NODE_ENV: 'test', GEN_SAFETY_MODE: 'invalid' }, async () => {
+      await expect(loadConfigFresh()).rejects.toThrow('GEN_SAFETY_MODE');
+    });
   });
 });
 

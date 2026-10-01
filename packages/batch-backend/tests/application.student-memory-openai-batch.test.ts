@@ -20,7 +20,7 @@ function createConfig(enabled = false): BatchBackendConfig {
     },
     generation: {
       ...base.generation,
-      strictNoPaid: false,
+
       providers: {
         ...base.generation.providers,
         openai: { ...base.generation.providers.openai, apiKey: 'test-openai-key' },

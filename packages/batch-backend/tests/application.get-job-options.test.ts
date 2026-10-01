@@ -27,16 +27,14 @@ function buildGenerationOptions() {
       {
         provider: 'openai' as const,
         id: 'gpt-5.2',
-        tier: 'primary' as const,
-        fallbackRank: 0,
+
         defaultSelected: true,
         enabled: true,
       },
       {
         provider: 'openai' as const,
         id: 'gpt-5-mini',
-        tier: 'fallback' as const,
-        fallbackRank: 1,
+
         enabled: true,
       },
     ],

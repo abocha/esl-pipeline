@@ -1,97 +1,69 @@
-# Generation Provider Policy (WS2B)
+# Generation Target Policy
 
 ## Meta
 
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 5 minutes.
-- Authority Level: canonical provider/model/quota policy.
-- Last Verified Against: 2026-09-14 repo state.
+- Authority Level: canonical workload target and quota policy.
+- Last Verified Against: 2026-10-02 ABO-9 implementation.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after provider policy/availability changes.
 - Status: `reference`.
 
-## Purpose
+## Explicit workload targets
 
-- Lock provider/model defaults for direct draft generation.
-- Keep quota and fallback policy stable during implementation.
+`resolveGenerationTarget()` resolves one `{ provider, model }`. Failures never select a different
+model or provider. Assignment/profile generation makes one physical request and returns a normalized
+failure; existing durable queues own background retries. Deterministic assignment validation may
+request one repair with the same target, failed draft and validator diagnostics. This is output
+repair, not transient retry or provider routing.
 
-## Locked Provider Order
+| Workload                                                | Provider default | Model default  | Exact env target                                                            |
+| ------------------------------------------------------- | ---------------- | -------------- | --------------------------------------------------------------------------- |
+| Assignment draft                                        | `openai`         | `gpt-6.1-sol`  | `GEN_ASSIGNMENT_PROVIDER`, `GEN_ASSIGNMENT_MODEL`                           |
+| Lesson memory                                           | `openai`         | `gpt-5.6-luna` | `GEN_LESSON_MEMORY_PROVIDER`, `GEN_LESSON_MEMORY_MODEL`                     |
+| Homework memory                                         | `openai`         | `gpt-5.6-luna` | `GEN_HOMEWORK_MEMORY_PROVIDER`, `GEN_HOMEWORK_MEMORY_MODEL`                 |
+| Student-memory snapshot                                 | `openai`         | `gpt-5.6-luna` | `GEN_STUDENT_MEMORY_SNAPSHOT_PROVIDER`, `GEN_STUDENT_MEMORY_SNAPSHOT_MODEL` |
+| Profile revision / candidate patch / initial enrichment | `openai`         | `gpt-5.6-luna` | `GEN_PROFILE_DRAFT_PROVIDER`, `GEN_PROFILE_DRAFT_MODEL`                     |
 
-1. `openai`
-2. `google_ai_studio`
-3. `openrouter`
+Explicit provider/model request overrides remain available. Model-only overrides use the workload's
+provider. Provider-only overrides use its configured workload model when the provider matches, or
+`GEN_OPENAI_MODEL` (Luna), `GEN_GOOGLE_MODEL` (Gemini 3 Flash Preview), or `GEN_OPENROUTER_MODEL`
+when switching provider. A missing OpenRouter model fails before execution; its adapter is retained
+for explicit use only. No provider roster order represents automatic routing.
 
-## Locked Model Ladders
+Memory enqueue, confirmation, backfill, and lesson-history refresh consumers resolve the appropriate
+lesson/homework/snapshot target before storing the pending intent. Workers continue to execute the
+provider/model already stored in the job; deployment does not retarget existing jobs or historical
+records. Profile initial enrichment also freezes its target in the existing operation record and
+retains its submission/recovery lifecycle.
 
-### OpenAI
+Versioned request envelopes still own OpenAI reasoning and verbosity: assignment medium/medium,
+lesson/homework/profile medium/low, snapshot high/low. No prompts or output schemas change here.
+ABO-6 prompt bootstrap and admin activation remain separate from deployment.
 
-- Built-in workload policy:
-  - assignment creation: `gpt-6.1-sol` with `medium` reasoning and `medium` text verbosity
-  - lesson memory and homework memory: `gpt-5.6-luna` with `medium` reasoning and `low` text verbosity
-  - student-memory snapshot: `gpt-5.6-luna` with `high` reasoning and `low` text verbosity
-  - profile revision and the closed `apply`/`no_change` candidate-patch decision: `gpt-5.6-luna`
-    with `medium` reasoning and `low` text verbosity
-- `GEN_OPENAI_TARGET_MODELS_ENABLED` remains a compatibility and operator-observability signal. Both
-  flag states resolve to the same built-in workload policy; explicit `GEN_OPENAI_MODEL_*` overrides
-  remain authoritative. The flag is not a paywall or user-plan control.
-- direct draft generation:
-  - primary: `gpt-6.1-sol` (`GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY`)
-  - fallback: `gpt-5.6-luna`
-- student-memory extraction:
-  - primary: `gpt-5.6-luna`
-  - fallback: `gpt-5.6-luna`
-- profile revision drafting:
-  - primary: `gpt-5.6-luna`
-  - fallback: `gpt-5.6-luna`
-  - tertiary fallback: `gpt-5.6-luna`
+### Explicit model rosters
 
-The prompt baseline follows the current
-[OpenAI model guide](https://developers.openai.com/api/docs/guides/latest-model): preserve explicit
-outcomes, constraints, evidence rules, success criteria, and output contracts; change working
-prompts only for a measured failure or concrete contradiction.
+`GEN_ALLOWED_MODELS_*` remains an explicit selection roster for job options and an independent
+access guard for default-off OpenAI Batch replay, speech-planner availability, and live speech
+evaluation. It never appends models to an execution target. Ordinary generation has no legacy
+strict-no-paid allowlist gate. Authenticated operator controls and provider budgets remain intact.
+OpenRouter appears as an explicit UI choice only when an operator configures its model/roster or
+assignment target; adapter existence alone does not expose a routing option.
 
-The generic `GEN_OPENAI_MODEL_PRIMARY` remains `gpt-5.6-sol`; it does not control assignment
-drafts. The implicitly allowlisted assignment primary is excluded from incidental fallback candidates
-for unrelated workloads; explicit operator allowlists are preserved. Assignment model metadata in
-`/config/job-options` uses the draft ladder. Explicit model
-and provider overrides, fallback behavior, and strict allowlist enforcement remain available. An
-explicit `GEN_ALLOWED_MODELS_OPENAI` override must include `gpt-6.1-sol` to permit that selection.
+Google's roster preserves Gemini 3 Flash Preview, 3.1 Pro Preview, 3.5 Flash, 3.1/3.5 Flash Lite,
+2.5 Pro/Flash/Flash Lite, and Gemma 4 31B/26B. No Google workload or historical selection is migrated
+to OpenAI by this cleanup. The live inventory and rollout procedure below own env translation.
 
-ABO-6 changes the shipped homework model/prompt contract. Production still requires explicit
-prompt-assets bootstrap followed by admin activation; deployment alone does not activate the new
-prompt.
+### Independent explicit generation consumers
 
-### Google AI Studio
-
-- primary: `gemini-3-flash-preview`
-- fallback: `gemini-2.5-flash-lite`
-- tertiary fallback: `gemini-2.5-pro`
-- deprecated/removed from roster:
-  - `gemini-3-pro-preview` (deprecated and shut down on March 9, 2026)
-- current allowlisted roster for text generation:
-  - `gemini-3.1-pro-preview`
-  - `gemini-3-flash-preview`
-  - `gemini-3.5-flash`
-  - `gemini-3.1-flash-lite`
-  - `gemini-3.5-flash-lite`
-  - `gemini-2.5-pro`
-  - `gemini-2.5-flash`
-  - `gemini-2.5-flash-lite`
-  - `gemma-4-31b-it`
-  - `gemma-4-26b-a4b-it`
-- `gemini-3.5-flash` is selectable as the stable 3.5 Flash model, but
-  `gemini-3-flash-preview` remains the configured primary/default until a separate default-change
-  decision lands.
-- No model-specific quota baseline is set for `gemini-3.5-flash`; generic Google provider budgets
-  still apply, and provider dashboard limits remain the external truth.
-- Historical speech-planner evaluation keeps the exact stable Gemini model matrix immutable.
-  Gemini 3.5 Flash-Lite uses default/minimal thinking for that baseline and receives
-  no deprecated `temperature`, `top_p`, or `top_k` fields or prefilled model turn.
-- The speech-planner evaluation price snapshot captured from the official Gemini pricing page on
-  2026-07-28 records standard-text input/output rates per one million tokens as USD 0.25/1.50 for
-  Gemini 3.1 Flash-Lite and USD 0.30/2.50 for Gemini 3.5 Flash-Lite. Output pricing includes
-  thinking tokens; every run records its versioned snapshot rather than assuming these values are
-  current indefinitely.
+Voice-plan ranking already selects exactly Google AI Studio with
+`ESL_TTS_VOICE_RANKER_MODEL` (default `gemma-4-31b-it`) and its own enablement/capacity controls.
+It calls the raw structured adapter once; ranking failure uses the existing deterministic voice
+selection rather than trying another provider/model. Speech planning below owns its independent
+target and identity-plan recovery. These product capabilities remain separate from assignment and
+memory routing. Disabled OpenAI Batch replay and optional fixture/live evaluators are explicit
+operator lanes, not automatic routing consumers.
 
 ### Study-text speech planning
 
@@ -121,11 +93,6 @@ prompt.
   segments. Pronunciation is excluded. Historical v1/v2 evaluation results are not reclassified as
   replacement schema-v2 or Luna listening evidence.
 
-### OpenRouter
-
-- tertiary path only
-- exact production model remains an explicit activation decision
-
 ## Quota UX Mode
 
 - `hybrid`
@@ -133,28 +100,26 @@ prompt.
   - local usage counters from app telemetry
   - provider dashboard remains operator truth
 
-## Runtime Rules
+## Runtime rules and retry ownership
 
-1. Retry, timeout, and budgets are configured per provider.
-2. Default provider request timeout is 240000 ms (4 minutes) for direct generation paths.
-3. Errors must normalize to:
-   - `provider_rate_limit`
-   - `provider_timeout`
-   - `provider_contract_error`
-   - `budget_exceeded`
-4. Fallback behavior:
-   - rate limit / quota -> fallback for fallback-capable generation workloads
-   - timeout -> retry then fallback
-   - contract/schema failure -> fail fast
-   - local safety budget failure -> hard stop
-   - canonical lesson-memory, homework-memory, and student-memory-snapshot extraction are the
-     deliberate exception: a minute RPM/TPM rejection or provider HTTP 429 defers the original
-     BullMQ job with its selected provider/model unchanged. It does not sleep a worker, enqueue a
-     duplicate, or fall back to another provider. Daily limits, hard stops, capability/schema and
-     business-validation failures, timeouts, 5xx responses, and non-429 provider failures retain
-     their ordinary failure behavior.
-
-## Active Safety Defaults
+- Provider adapters use raw HTTP with configurable `GEN_*_REQUEST_TIMEOUT_MS` (default 240000 ms).
+  There is no SDK retry layer. Assignment/profile generation does not retry locally.
+- Normalized errors remain `provider_rate_limit`, `provider_timeout`, `provider_contract_error`,
+  and `budget_exceeded`; provider/model provenance, request IDs and returned usage remain available.
+- Canonical lesson/homework/snapshot jobs retain the existing durable BullMQ lifecycle. Minute
+  RPM/TPM limits and HTTP 429 defer the original job with its frozen target. They do not sleep a
+  worker, enqueue a duplicate, or switch targets. Other failure and recovery semantics are unchanged.
+- Initial profile enrichment retains its existing durable submission pacing and uncertain-submission
+  recovery; it does not retry the provider call inside profile drafting.
+- Speech planning independently uses one target and bounded typed-timeout retries controlled by
+  `GEN_OPENAI_RETRY_*` / `GEN_GOOGLE_RETRY_*`. Its single-candidate use of the shared provider-runtime
+  helper cannot switch targets. The shared ladder remains for independent TTS adapter behavior;
+  ABO-9 does not redesign TTS.
+- `GEN_SAFETY_MODE=hard_stop` retains atomic provider/model budget reservation, UTC rollover and
+  actual usage accounting. `0` budgets remain intentional blocks. `off` / `warn` preserve their
+  existing bypass behavior for capacity limits. `GEN_MAX_OUTPUT_TOKENS_HARD=12000` is enforced
+  regardless of that mode; the removed paid-spend switch cannot bypass it.
+- `/config/job-options` exposes assignment choices and quotas without candidate ranks or tiers.
 
 ## Disabled OpenAI Batch Replay
 
@@ -162,23 +127,56 @@ prompt.
   through the explicit `student-memory:batch` operator tool. It is not a fresh-work, fallback, or
   automatic queue path.
 - `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false` is the separate default-off gate. It must not be
-  replaced with or inferred from `GEN_ALLOW_PAID_SPEND` or `GEN_OPENAI_TARGET_MODELS_ENABLED`.
+  replaced with or inferred from generation target settings.
 - `dry-run` is local and non-persistent. Every remote action requires the Batch gate, an OpenAI key,
   an allowlisted model, and explicit `--apply` for submit, retry, or cancellation.
 - This policy does not authorize provider calls, activation, or deployment. Those remain separate
   maintainer decisions after code review.
 
-- `GEN_SAFETY_MODE=hard_stop`
-- `GEN_STRICT_NO_PAID=true`
-- `GEN_MAX_OUTPUT_TOKENS_HARD=12000`
-- `GEN_ALLOW_PAID_SPEND=false`
+## ABO-9 rollout: translate and remove obsolete env
 
-Additional rules:
+Deployment and production env changes require separate operator authorization. No production mutation
+was performed during implementation. Before rollout, inspect the current effective API and worker
+settings and pending targets, rather than copying an older inventory blindly.
 
-- allowlists are enforced before provider calls in strict mode
-- `0` budgets are intentional hard blocks
-- quota windows are evaluated in UTC and must unblock correctly after rollover
-- OpenRouter remains effectively disabled until explicitly budgeted/enabled
+Read-only production inventory on 2026-10-02 found assignment selections on OpenAI (`gpt-5.6-sol`
+and `gpt-6.1-sol`) and Google `gemini-3-flash-preview` records for lesson memory (341), homework
+memory (399), and snapshots (723), alongside older/current OpenAI records. The server env selected
+OpenAI as default, Google Gemini 3 Flash Preview as primary, and no OpenRouter assignment/memory
+selection appeared in the queried records. The speech planner was explicitly enabled on OpenAI
+Luna and voice ranking was enabled on Google `gemma-4-31b-it`; preserve these independent targets. These counts describe retained records, not current
+traffic or success rates. Google adapters, explicit overrides, and frozen jobs remain supported.
+
+1. Capture current effective targets, including any explicit request overrides. Translate each
+   workload's intentional first target to the five `GEN_<WORKLOAD>_PROVIDER/MODEL` pairs above.
+   OpenAI assignment defaults to Sol 6.1; other OpenAI workloads default to Luna 5.6. For an
+   intentionally Google workload set its provider to `google_ai_studio` and model to its existing
+   exact model, such as `gemini-3-flash-preview`. Do not replace a Google workload by copying the
+   OpenAI example. Preserve historical/pending record targets; no data migration is needed.
+2. Translate provider-only debug defaults to `GEN_OPENAI_MODEL`, `GEN_GOOGLE_MODEL`, and, if
+   explicitly needed, `GEN_OPENROUTER_MODEL`. Keep provider credentials, timeouts, capacity budgets,
+   explicit rosters, speech settings and the separate default-off Batch gate.
+3. Delete `GEN_PROVIDER_DEFAULT`, `GEN_PROVIDER_FALLBACKS`, `GEN_OPENAI_TARGET_MODELS_ENABLED`,
+   `GEN_STRICT_NO_PAID`, `GEN_ALLOW_PAID_SPEND`, `GEN_OPENAI_MODEL_PRIMARY`,
+   `GEN_OPENAI_MODEL_FALLBACK`, `GEN_OPENAI_MODEL_ASSIGNMENT_DRAFT_PRIMARY`,
+   `GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY/FALLBACK`,
+   `GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY/FALLBACK/TERTIARY`,
+   `GEN_GOOGLE_MODEL_PRIMARY/FALLBACK/TERTIARY`, `GEN_OPENROUTER_MODEL_PRIMARY/FALLBACK`, and
+   `GEN_OPENROUTER_RETRY_MAX/BACKOFF_MS`. Slash suffixes here enumerate distinct variable names.
+   These variables are ignored, not compatibility aliases. The inspected server currently contains
+   provider fallback, target-model flag, Google ladder, strict-no-paid/paid-spend switches and
+   OpenRouter retry settings that must be removed. Retain the rosters because they serve explicit
+   selection/Batch/planner controls.
+4. Check `GEN_SAFETY_MODE` deliberately. The inspected server uses `off`,
+   `GEN_STRICT_NO_PAID=false`, and `GEN_ALLOW_PAID_SPEND=true`. Preserve `off` if that is the
+   operator's intended capacity policy; it no longer disables the max-output cap. Check requested
+   output limits against the retained cap before rollout. Do not enable `hard_stop` blindly with
+   example budgets. No new paid-spend replacement switch is needed.
+5. Use the standard immutable-image deployment procedure, then verify effective targets in both
+   API and workers and assignment metadata. Verify existing Google pending work retains its target
+   without making an unapproved paid smoke call. On rollback restore the previous env snapshot with
+   the previous image together; old images require old settings. Do not restore obsolete env
+   settings while keeping the new image.
 
 ## Implementation Expectations
 

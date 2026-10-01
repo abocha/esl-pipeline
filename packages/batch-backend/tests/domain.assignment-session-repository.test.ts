@@ -1590,9 +1590,22 @@ describe('domain/assignment-session-repository persistence contract', () => {
         });
         throw new Error('budget usage database write failed');
       });
-    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), generator);
+    const config = loadConfig();
+    config.generation.targets.profile_revision_drafting = {
+      provider: 'google_ai_studio',
+      model: 'gemini-3-flash-preview',
+    };
+    await reconcileProfileInitialEnrichmentOperation(op.id, config, generator);
     await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), generator);
     expect(generator).toHaveBeenCalledTimes(1);
+    expect(generator).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          providerOverride: 'google_ai_studio',
+          modelOverride: 'gemini-3-flash-preview',
+        }),
+      }),
+    );
     const operation = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
       client.query<{ state: string }>(
         'SELECT state FROM profile_initial_enrichment_operations WHERE id = $1',

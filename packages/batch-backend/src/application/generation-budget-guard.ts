@@ -393,14 +393,6 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
 }): Promise<GenerationBudgetUsage> {
   const generationConfig = args.config.generation;
 
-  if (generationConfig.budgetEmergencyOverride) {
-    return args.repository.getUsage({
-      provider: args.provider,
-      model: args.model,
-      now: args.now,
-    });
-  }
-
   if (
     typeof args.maxOutputTokens === 'number' &&
     args.maxOutputTokens > generationConfig.maxOutputTokensHard
@@ -414,22 +406,6 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
       window: 'request',
       message: `maxOutputTokens (${args.maxOutputTokens}) exceeds hard cap (${generationConfig.maxOutputTokensHard}) for safe testing.`,
     });
-  }
-
-  if (generationConfig.strictNoPaid) {
-    const allowedModels = resolveAllowedModels(generationConfig, args.provider);
-    if (!allowedModels.has(args.model)) {
-      throw new GenerationBudgetExceededError({
-        provider: args.provider,
-        model: args.model,
-        limitType: 'model_not_allowed',
-        limit: 0,
-        used: 1,
-        window: 'request',
-        message:
-          'Selected model is not allowed under strict no-paid safety mode. Choose an allowlisted model.',
-      });
-    }
   }
 
   if (generationConfig.safetyMode !== 'hard_stop') {
@@ -476,9 +452,6 @@ export async function recordGenerationBudgetUsageAfterSuccess(args: {
   now: Date;
   repository: GenerationBudgetRepository;
 }): Promise<void> {
-  if (args.config.generation.budgetEmergencyOverride) {
-    return;
-  }
   if (args.config.generation.safetyMode !== 'hard_stop') {
     return;
   }

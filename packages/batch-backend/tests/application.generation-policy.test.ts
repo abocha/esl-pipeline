@@ -1,382 +1,110 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   buildGenerationOptionsPayload,
-  resolveGenerationCandidates,
+  buildQuotaSnapshot,
+  type GenerationWorkload,
+  resolveGenerationTarget,
 } from '../src/application/generation-policy.js';
-import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
 
-function buildConfig(
-  overrides: Partial<BatchBackendConfig['generation']> = {},
-): BatchBackendConfig['generation'] {
-  return {
-    defaultProvider: 'openai',
-    fallbackProviders: ['google_ai_studio', 'openrouter'],
-    quotaSourceMode: 'hybrid',
-    safetyMode: 'hard_stop',
-    strictNoPaid: true,
-    maxOutputTokensHard: 3200,
-    budgetEmergencyOverride: false,
-    models: {
-      openai: {
-        primary: 'gpt-5.4-mini',
-        fallback: 'gpt-5.4-nano',
-        allowed: ['gpt-5.4-mini', 'gpt-5.4-nano'],
-        studentMemoryPrimary: 'gpt-5.4-nano',
-        studentMemoryFallback: 'gpt-5.4-mini',
-        profileDraftPrimary: 'gpt-5.4',
-        profileDraftFallback: 'gpt-5.4-mini',
-        profileDraftTertiary: 'gpt-5.4-nano',
-      },
-      googleAiStudio: {
-        primary: 'gemini-3-flash-preview',
-        fallback: 'gemini-2.5-flash-lite',
-        tertiary: 'gemini-2.5-pro',
-        allowed: ['gemini-3-flash-preview', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'],
-      },
-      openrouter: {
-        primary: 'anthropic/claude-sonnet-4',
-        fallback: 'openai/gpt-5-mini',
-        allowed: [],
-      },
-    },
-    providers: {
-      openai: {
-        requestTimeoutMs: 240_000,
-        retryMax: 1,
-        retryBackoffMs: 250,
-        dailyTokenBudget: 120_000,
-        dailyRequestBudget: 40,
-        rpmBudget: 3,
-      },
-      googleAiStudio: {
-        requestTimeoutMs: 240_000,
-        retryMax: 1,
-        retryBackoffMs: 250,
-        dailyRequestBudget: 12,
-        rpmBudget: 4,
-      },
-      openrouter: {
-        requestTimeoutMs: 240_000,
-        retryMax: 1,
-        retryBackoffMs: 250,
-        dailyTokenBudget: 0,
-        dailyRequestBudget: 0,
-        rpmBudget: 0,
-      },
-    },
-    ...overrides,
-  };
-}
-
-describe('application/generation-policy', () => {
-  it('isolates the assignment default and exposes it in job options', () => {
+describe('explicit workload generation routing', () => {
+  it.each([
+    'draft_generation',
+    'lesson_memory',
+    'homework_memory',
+    'student_memory_snapshot',
+    'profile_revision_drafting',
+  ] satisfies GenerationWorkload[])('resolves exactly the configured %s target', (workload) => {
     const config = loadConfig().generation;
-    const assignment = resolveGenerationCandidates({ config, workload: 'draft_generation' });
-    expect(assignment[0]).toMatchObject({ provider: 'openai', model: 'gpt-6.1-sol' });
-    expect(config.models.openai.allowed).toContain('gpt-6.1-sol');
-    const options = buildGenerationOptionsPayload({ config });
-    expect(options.defaultModelByProvider?.openai).toBe('gpt-6.1-sol');
-    expect(options.modelOptions.find((item) => item.id === 'gpt-6.1-sol')).toMatchObject({
-      defaultSelected: true,
-      tier: 'primary',
+    config.targets[workload] = { provider: 'google_ai_studio', model: 'gemini-3-flash-preview' };
+    expect(resolveGenerationTarget({ config, workload })).toEqual({
+      provider: 'google_ai_studio',
+      model: 'gemini-3-flash-preview',
     });
-
+  });
+  it('keeps assignment selection independent from memory and profile targets', () => {
+    const config = loadConfig().generation;
+    expect(resolveGenerationTarget({ config, workload: 'draft_generation' }).model).toBe(
+      'gpt-6.1-sol',
+    );
     for (const workload of [
-      'default',
-      'student_memory_extraction',
+      'lesson_memory',
+      'homework_memory',
+      'student_memory_snapshot',
       'profile_revision_drafting',
-    ] as const) {
-      const models = resolveGenerationCandidates({ config, workload })
-        .filter((candidate) => candidate.provider === 'openai')
-        .map((candidate) => candidate.model);
-      expect(models[0]).toBe(workload === 'default' ? 'gpt-5.6-sol' : 'gpt-5.6-luna');
-      expect(models).not.toContain('gpt-6.1-sol');
-    }
+    ] as const)
+      expect(resolveGenerationTarget({ config, workload }).model).toBe('gpt-5.6-luna');
+    config.targets.draft_generation.model = 'assignment-custom';
+    expect(resolveGenerationTarget({ config, workload: 'lesson_memory' }).model).toBe(
+      'gpt-5.6-luna',
+    );
   });
-
-  it('preserves the assignment model in an explicit operator allowlist for unrelated workloads', () => {
-    vi.stubEnv('GEN_ALLOWED_MODELS_OPENAI', 'gpt-5.6-sol,gpt-5.6-luna,gpt-6.1-sol');
-    try {
-      const config = loadConfig().generation;
-      expect(config.models.openai.allowed).toEqual(['gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-6.1-sol']);
-      for (const workload of [
-        'default',
-        'student_memory_extraction',
-        'profile_revision_drafting',
-      ] as const) {
-        expect(
-          resolveGenerationCandidates({ config, workload }).some(
-            (candidate) => candidate.provider === 'openai' && candidate.model === 'gpt-6.1-sol',
-          ),
-        ).toBe(true);
-      }
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-
-  it('preserves explicit assignment model and provider overrides', () => {
+  it('supports model-only, provider-only, and exact operator overrides without a graph', () => {
     const config = loadConfig().generation;
     expect(
-      resolveGenerationCandidates({
+      resolveGenerationTarget({ config, workload: 'draft_generation', modelOverride: ' custom ' }),
+    ).toEqual({ provider: 'openai', model: 'custom' });
+    expect(
+      resolveGenerationTarget({
         config,
         workload: 'draft_generation',
         providerOverride: 'google_ai_studio',
-        modelOverride: 'custom-model',
-      })[0],
-    ).toMatchObject({ provider: 'google_ai_studio', model: 'custom-model' });
-  });
-
-  it('uses global fallback ranks that match execution candidate order', () => {
-    const config = buildConfig();
-
-    const options = buildGenerationOptionsPayload({ config });
-    const candidates = resolveGenerationCandidates({ config });
-
-    expect(options.modelOptions.map((option) => option.fallbackRank)).toEqual([
-      ...options.modelOptions.keys(),
-    ]);
+      }),
+    ).toEqual({ provider: 'google_ai_studio', model: 'gemini-3-flash-preview' });
     expect(
-      options.modelOptions.map(({ provider, id, fallbackRank }) => ({
-        provider,
-        id,
-        fallbackRank,
-      })),
-    ).toEqual(
-      candidates.map(({ provider, model, fallbackRank }) => ({
-        provider,
-        id: model,
-        fallbackRank,
-      })),
-    );
-  });
-
-  it('preserves explicit zero Google daily budget in quota payload', () => {
-    const config = buildConfig({
-      defaultProvider: 'google_ai_studio',
-      fallbackProviders: ['openai', 'openrouter'],
-      providers: {
-        openai: {
-          requestTimeoutMs: 240_000,
-          retryMax: 1,
-          retryBackoffMs: 250,
-          dailyTokenBudget: 120_000,
-          dailyRequestBudget: 40,
-          rpmBudget: 3,
-        },
-        googleAiStudio: {
-          requestTimeoutMs: 240_000,
-          retryMax: 1,
-          retryBackoffMs: 250,
-          dailyRequestBudget: 0,
-          rpmBudget: 4,
-        },
-        openrouter: {
-          requestTimeoutMs: 240_000,
-          retryMax: 1,
-          retryBackoffMs: 250,
-          dailyTokenBudget: 0,
-          dailyRequestBudget: 0,
-          rpmBudget: 0,
-        },
-      },
-    });
-
-    const options = buildGenerationOptionsPayload({ config });
-    expect(options.quota.requestsPerDay).toBe(0);
-  });
-
-  it('includes additional allowed models after primary/fallback ladder', () => {
-    const config = buildConfig({
-      models: {
-        openai: {
-          primary: 'gpt-5.4-mini',
-          fallback: 'gpt-5.4-nano',
-          allowed: ['gpt-5.4-mini', 'gpt-5.4-nano'],
-          studentMemoryPrimary: 'gpt-5.4-nano',
-          studentMemoryFallback: 'gpt-5.4-mini',
-          profileDraftPrimary: 'gpt-5.4',
-          profileDraftFallback: 'gpt-5.4-mini',
-          profileDraftTertiary: 'gpt-5.4-nano',
-        },
-        googleAiStudio: {
-          primary: 'gemini-2.5-flash-lite',
-          fallback: 'gemini-2.5-flash',
-          tertiary: 'gemini-2.5-pro',
-          allowed: [
-            'gemini-2.5-flash-lite',
-            'gemini-2.5-flash',
-            'gemini-2.5-pro',
-            'gemini-3.1-pro-preview',
-          ],
-        },
-        openrouter: {
-          primary: 'anthropic/claude-sonnet-4',
-          fallback: 'openai/gpt-5-mini',
-          allowed: [],
-        },
-      },
-    });
-
-    const candidates = resolveGenerationCandidates({ config });
-    const googleModels = candidates
-      .filter((candidate) => candidate.provider === 'google_ai_studio')
-      .map((candidate) => candidate.model);
-
-    expect(googleModels).toEqual([
-      'gemini-2.5-flash-lite',
-      'gemini-2.5-flash',
-      'gemini-2.5-pro',
-      'gemini-3.1-pro-preview',
-    ]);
-
-    const options = buildGenerationOptionsPayload({ config });
-    const extraModel = options.modelOptions.find(
-      (option) => option.provider === 'google_ai_studio' && option.id === 'gemini-3.1-pro-preview',
-    );
-    expect(extraModel?.tier).toBe('custom');
-    expect(extraModel?.defaultSelected).toBe(false);
-  });
-
-  it('keeps Gemini 3.5 Flash selectable without making it the Google default', () => {
-    const config = buildConfig({
-      models: {
-        openai: {
-          primary: 'gpt-5.4-mini',
-          fallback: 'gpt-5.4-nano',
-          allowed: ['gpt-5.4-mini', 'gpt-5.4-nano'],
-          studentMemoryPrimary: 'gpt-5.4-nano',
-          studentMemoryFallback: 'gpt-5.4-mini',
-          profileDraftPrimary: 'gpt-5.4',
-          profileDraftFallback: 'gpt-5.4-mini',
-          profileDraftTertiary: 'gpt-5.4-nano',
-        },
-        googleAiStudio: {
-          primary: 'gemini-3-flash-preview',
-          fallback: 'gemini-2.5-flash-lite',
-          tertiary: 'gemini-2.5-pro',
-          allowed: [
-            'gemini-3-flash-preview',
-            'gemini-3.5-flash',
-            'gemini-2.5-flash-lite',
-            'gemini-2.5-pro',
-          ],
-        },
-        openrouter: {
-          primary: 'anthropic/claude-sonnet-4',
-          fallback: 'openai/gpt-5-mini',
-          allowed: [],
-        },
-      },
-    });
-
-    const googleModels = resolveGenerationCandidates({ config })
-      .filter((candidate) => candidate.provider === 'google_ai_studio')
-      .map((candidate) => candidate.model);
-
-    expect(googleModels).toEqual([
-      'gemini-3-flash-preview',
-      'gemini-2.5-flash-lite',
-      'gemini-2.5-pro',
-      'gemini-3.5-flash',
-    ]);
-
-    const options = buildGenerationOptionsPayload({ config });
-    const defaultModelByProvider = options.defaultModelByProvider;
-    expect(defaultModelByProvider).toBeDefined();
-    expect(defaultModelByProvider?.google_ai_studio).toBe('gemini-3-flash-preview');
-    const selectableModel = options.modelOptions.find(
-      (option) => option.provider === 'google_ai_studio' && option.id === 'gemini-3.5-flash',
-    );
-    expect(selectableModel?.tier).toBe('custom');
-    expect(selectableModel?.defaultSelected).toBe(false);
-  });
-
-  it('uses workload-specific openai ladders for memory extraction and profile drafting', () => {
-    const config = buildConfig();
-
-    expect(
-      resolveGenerationCandidates({
+      resolveGenerationTarget({
         config,
-        workload: 'student_memory_extraction',
-        providerOverride: 'openai',
-      })
-        .filter((candidate) => candidate.provider === 'openai')
-        .map((candidate) => candidate.model)
-        .slice(0, 3),
-    ).toEqual(['gpt-5.4-nano', 'gpt-5.4-mini']);
-
-    expect(
-      resolveGenerationCandidates({
+        workload: 'draft_generation',
+        providerOverride: 'openrouter',
+        modelOverride: 'operator/model',
+      }),
+    ).toEqual({ provider: 'openrouter', model: 'operator/model' });
+    expect(() =>
+      resolveGenerationTarget({
         config,
-        workload: 'profile_revision_drafting',
-        providerOverride: 'openai',
-      })
-        .filter((candidate) => candidate.provider === 'openai')
-        .map((candidate) => candidate.model)
-        .slice(0, 3),
-    ).toEqual(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano']);
+        workload: 'draft_generation',
+        providerOverride: 'openrouter',
+      }),
+    ).toThrow('No explicit model');
   });
-
-  it('can constrain override candidates to one provider without provider fallback', () => {
-    const config = buildConfig();
-
-    const candidates = resolveGenerationCandidates({
-      config,
-      workload: 'profile_revision_drafting',
-      providerOverride: 'openai',
-      includeProviderFallbacks: false,
-    });
-
-    expect([...new Set(candidates.map((candidate) => candidate.provider))]).toEqual(['openai']);
-    expect(candidates.map((candidate) => candidate.model).slice(0, 3)).toEqual([
-      'gpt-5.4',
-      'gpt-5.4-mini',
-      'gpt-5.4-nano',
+  it('presents explicit choices without rank/tier or incidental OpenRouter routing', () => {
+    const config = loadConfig().generation;
+    const options = buildGenerationOptionsPayload({ config });
+    expect(options.defaultProvider).toBe('openai');
+    expect(options.providers).toEqual(['openai', 'google_ai_studio']);
+    expect(options.defaultModelByProvider?.openai).toBe('gpt-6.1-sol');
+    expect(options.modelOptions.filter((o) => o.defaultSelected)).toEqual([
+      { provider: 'openai', id: 'gpt-6.1-sol', defaultSelected: true, enabled: true },
     ]);
+    for (const option of options.modelOptions) {
+      expect(option).not.toHaveProperty('fallbackRank');
+      expect(option).not.toHaveProperty('tier');
+    }
   });
-
-  it('collapses profileDraftTertiary when it equals a prior rung, keeps it when distinct', () => {
-    // Default config: profileDraftTertiary = 'gpt-5.4-nano' = general fallback.
-    // uniqueNonEmpty deduplicates it, so only two distinct OpenAI rungs remain.
-    const configCollapsed = buildConfig();
-    const collapsedModels = resolveGenerationCandidates({
-      config: configCollapsed,
-      workload: 'profile_revision_drafting',
-      providerOverride: 'openai',
-    })
-      .filter((c) => c.provider === 'openai')
-      .map((c) => c.model);
-    // gpt-5.4-nano appears only once (deduplicated)
-    expect(collapsedModels.filter((m) => m === 'gpt-5.4-nano')).toHaveLength(1);
-    expect(collapsedModels.slice(0, 3)).toEqual(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano']);
-
-    // Explicit distinct tertiary: preserves a true three-rung ladder.
-    const configDistinct = buildConfig({
-      models: {
-        openai: {
-          primary: 'gpt-5.4-mini',
-          fallback: 'gpt-5.4-nano',
-          allowed: ['gpt-5.4-mini', 'gpt-5.4-nano'],
-          studentMemoryPrimary: 'gpt-5.4-nano',
-          studentMemoryFallback: 'gpt-5.4-mini',
-          profileDraftPrimary: 'gpt-5.4',
-          profileDraftFallback: 'gpt-5.4-mini',
-          profileDraftTertiary: 'gpt-5.4-turbo', // distinct model
+  it('retains Google quota and usage metadata independently of routing', () => {
+    const config = loadConfig().generation;
+    config.providers.googleAiStudio.rpmBudget = undefined;
+    config.providers.googleAiStudio.dailyRequestBudget = undefined;
+    expect(
+      buildQuotaSnapshot({
+        config,
+        provider: 'google_ai_studio',
+        model: 'gemini-3-flash-preview',
+        usage: {
+          requestsPerMinuteUsed: 2,
+          requestsToday: 3,
+          reservedTokensToday: 100,
+          actualTokensToday: 80,
         },
-        googleAiStudio: configCollapsed.models.googleAiStudio,
-        openrouter: configCollapsed.models.openrouter,
-      },
+      }),
+    ).toMatchObject({
+      requestsPerMinute: 5,
+      requestsPerDay: 20,
+      usedRequestsToday: 3,
+      usedTokensToday: 100,
+      rpmRemaining: 3,
+      dailyRequestRemaining: 17,
     });
-    const distinctModels = resolveGenerationCandidates({
-      config: configDistinct,
-      workload: 'profile_revision_drafting',
-      providerOverride: 'openai',
-    })
-      .filter((c) => c.provider === 'openai')
-      .map((c) => c.model);
-    expect(distinctModels.slice(0, 3)).toEqual(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-turbo']);
   });
 });

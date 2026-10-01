@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg';
 
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
-import { resolveGenerationCandidates } from '../application/generation-policy.js';
+import { resolveGenerationTarget } from '../application/generation-policy.js';
 import { requestLessonMemoryGeneration } from '../application/request-lesson-memory-generation.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
@@ -246,13 +246,11 @@ async function listReplayTargets(args: {
 }
 
 function resolveModel(config: BatchBackendConfig, provider: GenerationProvider): string {
-  return (
-    resolveGenerationCandidates({
-      config: config.generation,
-      workload: 'student_memory_extraction',
-      providerOverride: provider,
-    })[0]?.model ?? 'openai/gpt-4o-mini'
-  );
+  return resolveGenerationTarget({
+    config: config.generation,
+    workload: 'lesson_memory',
+    providerOverride: provider,
+  }).model;
 }
 
 async function run(): Promise<void> {
@@ -265,7 +263,7 @@ async function run(): Promise<void> {
     throw new Error('PG_ENABLED=true is required');
   }
 
-  const provider = options.provider ?? config.generation.defaultProvider;
+  const provider = options.provider ?? config.generation.targets.lesson_memory.provider;
   const model = options.model ?? resolveModel(config, provider);
   const targets = await listReplayTargets({
     selection: options.selection,
