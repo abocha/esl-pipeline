@@ -668,6 +668,22 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
     expect(replay.session.confirmed.context).toEqual(confirmedContext.session.confirmed.context);
     expect(replay.session.revision).toBe(confirmedContext.session.revision);
+    // Historical snapshots retain metadata that new context requests do not own.
+    for (const legacyProfileId of [null, 'legacy.md']) {
+      await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+        client.query(
+          `UPDATE assignment_sessions SET confirmed_snapshot=jsonb_set(confirmed_snapshot,'{context,profileId}',$2::jsonb) WHERE id=$1`,
+          [fixture.sessionId, JSON.stringify(legacyProfileId)],
+        ),
+      );
+      const historicalReplay = await repository.confirmAssignmentSessionStepPersistence({
+        id: fixture.sessionId,
+        userId: fixture.userId,
+        request,
+      });
+      expect(historicalReplay.session.revision).toBe(confirmedContext.session.revision);
+      expect(historicalReplay.session.confirmed.context?.profileId).toBe(legacyProfileId);
+    }
   });
 
   it.each(['failed', 'uncertain'] as const)(
@@ -944,6 +960,80 @@ describe('domain/assignment-session-repository persistence contract', () => {
       state: 'failed',
       failure_code: 'lesson_evidence_timeout',
     });
+  });
+
+  it('rechecks active revision after waiting for a concurrent tutor edit', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const source = await confirmMixedSource(repository, fixture);
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE profile_initial_enrichment_operations SET state='failed',failure_code='controlled_failure' WHERE assignment_session_id=$1`,
+        [fixture.sessionId],
+      ),
+    );
+    const { insertProfileRevision, getActiveProfileRevision } = await import(
+      '../src/domain/profile-revision-repository.js'
+    );
+    const original = await insertProfileRevision({
+      studentId: fixture.studentId,
+      content: 'Original',
+      contentHash: 'b'.repeat(64),
+      source: 'create',
+      status: 'active',
+    });
+    const next = randomUUID();
+    let confirmation!: Promise<{ code?: string }>;
+    await withPgClientSessionContext({ rlsBypass: true }, async (writer) => {
+      const pid = (await writer.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!
+        .pid;
+      await writer.query('SELECT id FROM students WHERE id=$1 FOR UPDATE', [fixture.studentId]);
+      await writer.query(
+        `UPDATE student_profile_revisions SET status='deprecated',deprecated_at=NOW() WHERE id=$1`,
+        [original.id],
+      );
+      await writer.query(
+        `INSERT INTO student_profile_revisions (id,student_id,content,content_hash,source,status,version_number,version_label,activated_at) VALUES ($1,$2,'Concurrent tutor edit',repeat('c',64),'update','active',2,'v2',NOW())`,
+        [next, fixture.studentId],
+      );
+      confirmation = repository
+        .confirmAssignmentSessionStepPersistence({
+          id: fixture.sessionId,
+          userId: fixture.userId,
+          request: {
+            step: 'context',
+            expectedRevision: source.session.revision,
+            teacherNotes: null,
+            profileRevisionId: original.id,
+            profileRevisionHash: original.contentHash,
+          },
+        })
+        .then(
+          () => ({ code: 'accepted_stale_revision' }),
+          (error: { code?: string }) => error,
+        );
+      let blocked = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        await writer.query('SELECT pg_stat_clear_snapshot()');
+        const result = await writer.query<{ blocked: boolean }>(
+          `SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) AS blocked`,
+          [pid],
+        );
+        if (result.rows[0]?.blocked) {
+          blocked = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect(blocked).toBe(true);
+    });
+    expect(await confirmation).toMatchObject({ code: 'ASSIGNMENT_STEP_PROFILE_STALE' });
+    expect((await getActiveProfileRevision(fixture.studentId))?.id).toBe(next);
   });
 
   it('supersedes waiting evidence after a tutor edit and unlocks Context', async () => {
