@@ -40,7 +40,7 @@ A goal-backed handoff should contain a concise objective, observable completion 
 
 The persisted runtime goal, when goal tooling is available, is only a concise representation of this richer contract.
 
-Reject activity goals such as "make progress", "continue investigating", or "work on X". Use the strongest honest completion criterion available rather than inventing numerical precision.
+Reject activity goals such as "make progress", "continue investigating", or "work on X". Use an observable completion criterion that establishes the approved outcome without inventing numerical precision or maximizing proof.
 
 ## 4. What planning should preserve
 
@@ -71,6 +71,8 @@ A plan may identify exact files, symbols, reproduction steps, sequence constrain
 Avoid procedural scripts that prescribe every edit, read, or test cycle unless that exact sequence is itself part of the correctness requirement.
 
 Task-specific validation belongs in the plan when it defines acceptance. Generic repository validation procedure does not.
+
+Express task-specific evidence as observable acceptance criteria: what must hold, what evidence establishes it, and what failure would require further investigation. Avoid open-ended obligations to maximize proof. Reserve terms such as "exhaustive", "exact", or "fully prove" for criteria whose required strength is actually part of the contract. Apply [ORCHESTRATION.md's decision-bounded evidence and closure rule](ORCHESTRATION.md#decision-bounded-evidence-and-closure) rather than restating it in each plan.
 
 ## 7. Ownership boundaries
 

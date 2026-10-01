@@ -66,12 +66,9 @@ Runtime, provider, browser, media, migration, and deployment checks remain manua
 environment-owned when their current guide says so. Destructive install, upgrade, migration,
 restore, and data checks require an explicitly suitable disposable or operator-approved environment.
 
-For live production, apply the portable evidence-reuse and stopping principles through the
-deployment checklist skill and the current runbook's authorized completion criteria. Transitioning
-from rehearsal/implementation to live production is a strong fresh-context or compaction candidate
-when the active thread carries substantial history or tool output. Carry forward the authorized
-scope, protected invariants, rollout/rollback decisions, completion criteria, and references to
-still-valid evidence.
+For ESL live production, apply the portable evidence/closure and context-economy rules through the
+[`deployment checklist skill`](../.agents/skills/esl-pipeline-deployment-change-checklist/SKILL.md)
+and the applicable current operations runbook's authorized rollout/rollback and completion criteria.
 
 ## Common ownership boundaries
 
