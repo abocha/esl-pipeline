@@ -31,4 +31,12 @@ Live deployment, production environment edits, service recreation, backup/restor
 
 Validate according to current repository policy and the affected deployment surface rather than running broad checks by default.
 
+## Live evidence and closure
+
+Apply the portable workflow's evidence-reuse and stopping principles to the authorized rollout:
+
+- Reuse still-valid evidence when relevant inputs and semantics have not changed. Before a new probe, name the concrete unresolved rollout/rollback decision, failed invariant, or required completion criterion it can resolve; additional confidence alone is insufficient.
+- Corroborate an explained benign runtime delta with bounded evidence. Reconstruct it exhaustively only when a plausible alternative could materially change go/no-go, rollback, scope, or a protected invariant.
+- Once authorized rollout completion criteria pass, switch to closure: preserve/report evidence, restore required operational state, release locks, and finalize tracking. Open another investigative branch only for a newly failed invariant or missing required criterion.
+
 Report the deployment topology or contract changed or preserved, evidence actually obtained, live actions intentionally not performed, and any required operator follow-up.
