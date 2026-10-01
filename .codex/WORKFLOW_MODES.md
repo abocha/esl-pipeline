@@ -129,11 +129,7 @@ Preserve counterintuitive or expensive KEEP/DEFER rationale when it is likely to
 
 ### Stopping rule
 
-Before another probe, identify what unresolved decision or evidence gap its result can change.
-
-Continue while the expected value of the next probe is meaningfully positive.
-
-Stop when available evidence is sufficient for the current decision. Do not turn exploration into permanent repository archaeology.
+Apply [ORCHESTRATION.md's decision-bounded evidence and closure rule](ORCHESTRATION.md#decision-bounded-evidence-and-closure). Stop when available evidence is sufficient for the current decision. Do not turn exploration into permanent repository archaeology.
 
 ## 4. Context economics
 
@@ -152,6 +148,8 @@ Consider:
 Continue an active context when it already owns expensive relevant evidence and the next step is a direct bounded consequence.
 
 Prefer fresh context when the problem moves to a different ownership boundary, meaningful independent skepticism is useful, the existing context has become stale or confused, or another model capability is genuinely needed.
+
+Reassess context at a materially different execution phase, especially investigation, rehearsal, or implementation moving into live operations. When historical tool output is expensive to carry and the next phase needs only a compact decision state, strongly consider fresh context or compaction even if ownership and model stay the same. Preserve the current acceptance criteria, decisions, valid evidence references, unresolved risks, authorization, and rollback state so the transition does not require rediscovery.
 
 When runtime support allows reducing the active working set while retaining recoverable history, use that option when the decision state remains valuable but carrying all active context does not.
 
