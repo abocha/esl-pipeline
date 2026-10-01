@@ -40,7 +40,6 @@ function seedOverviewMocks() {
     student: {
       id: 'student-alex',
       student: 'Alex Rivera',
-      profileId: 'profiles/students/alex.md',
     },
     studentId: 'student-alex',
     studentLoading: false,
@@ -54,7 +53,7 @@ function seedOverviewMocks() {
 function makeOverviewSurface(overrides: Record<string, unknown> = {}) {
   return {
     profile: {
-      id: 'profiles/students/alex.md',
+      studentId: 'student-alex',
       label: 'Alex',
       content: '# Profile',
       structuredContent: {
@@ -76,7 +75,7 @@ function makeOverviewSurface(overrides: Record<string, unknown> = {}) {
       items: [
         {
           id: 'revision-active-1',
-          profileId: 'profiles/students/alex.md',
+          studentId: 'student-alex',
           contentHash: 'hash-1',
           source: 'update',
           status: 'active',
@@ -360,7 +359,7 @@ describe('StudentOverviewPage', () => {
     const boraSurface = makeOverviewSurface({
       profile: {
         ...alexSurface.profile,
-        id: 'profiles/students/bora.md',
+        studentId: 'student-bora',
         label: 'Bora',
         currentRevisionId: 'revision-bora',
         structuredContent: {
@@ -403,7 +402,6 @@ describe('StudentOverviewPage', () => {
       student: {
         id: 'student-alex',
         student: 'Alex Rivera',
-        profileId: 'profiles/students/alex.md',
       },
       studentId: 'student-alex',
       studentLoading: false,
@@ -437,7 +435,6 @@ describe('StudentOverviewPage', () => {
       student: {
         id: 'student-bora',
         student: 'Bora Nguyen',
-        profileId: 'profiles/students/bora.md',
       },
       studentId: 'student-bora',
     };
@@ -575,7 +572,7 @@ describe('StudentOverviewPage', () => {
           items: [
             {
               id: 'revision-active-5',
-              profileId: 'profiles/students/alex.md',
+              studentId: 'student-alex',
               contentHash: 'hash-active-5',
               source: 'update',
               status: 'active',
@@ -589,7 +586,7 @@ describe('StudentOverviewPage', () => {
             },
             {
               id: 'revision-draft-old',
-              profileId: 'profiles/students/alex.md',
+              studentId: 'student-alex',
               contentHash: 'hash-draft-old',
               source: 'update',
               status: 'draft',
@@ -642,7 +639,6 @@ describe('StudentOverviewPage', () => {
       student: {
         id: 'student-no-profile',
         student: 'No Profile Student',
-        profileId: null,
       },
       studentId: 'student-no-profile',
       studentLoading: false,

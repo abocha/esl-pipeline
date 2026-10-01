@@ -25,7 +25,7 @@ if (hasPgTestEnv) {
 async function truncateCandidateTables() {
   await withPgClient(async (client) => {
     await client.query(
-      'TRUNCATE TABLE student_profile_candidate_draft_revisions, student_profile_candidates, student_memory_snapshots, lesson_memory_entries, homework_memory_entries, transcripts, recordings, jobs, students, users, profile_revisions, profiles RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE student_profile_candidate_draft_revisions, student_profile_candidates, student_memory_snapshots, lesson_memory_entries, homework_memory_entries, transcripts, recordings, jobs, students, users, student_profile_revisions RESTART IDENTITY CASCADE',
     );
   });
 }
@@ -236,7 +236,6 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
 
   it('promotes candidates for any linked draft revision even after a newer draft is linked later', async () => {
     const studentId = randomUUID();
-    const profileId = randomUUID();
     const revisionA = randomUUID();
     const revisionB = randomUUID();
 
@@ -245,20 +244,16 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
         `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Ari', NOW(), NOW())`,
         [studentId],
       );
+
       await client.query(
-        `INSERT INTO profiles (id, label, active_revision_id, created_at, updated_at)
-         VALUES ($1, 'Ari', NULL, NOW(), NOW())`,
-        [profileId],
-      );
-      await client.query(
-        `INSERT INTO profile_revisions (
-           id, profile_id, content, content_hash, source, status, version_number, version_label,
+        `INSERT INTO student_profile_revisions (
+           id, student_id, content, content_hash, source, status, version_number, version_label,
            activated_at, deprecated_at, created_at, created_by, restored_from_revision_id
          )
          VALUES
            ($1, $3, 'Draft A', 'hash-a', 'update', 'draft', 1, 'v1', NULL, NULL, NOW(), NULL, NULL),
            ($2, $3, 'Draft B', 'hash-b', 'update', 'draft', 2, 'v2', NULL, NULL, NOW(), NULL, NULL)`,
-        [revisionA, revisionB, profileId],
+        [revisionA, revisionB, studentId],
       );
     });
 
@@ -301,7 +296,6 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
 
   it('moves linked approved candidates from approved listings to promoted listings', async () => {
     const studentId = randomUUID();
-    const profileId = randomUUID();
     const revisionId = randomUUID();
 
     await withPgClient(async (client) => {
@@ -309,18 +303,14 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
         `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Ari', NOW(), NOW())`,
         [studentId],
       );
+
       await client.query(
-        `INSERT INTO profiles (id, label, active_revision_id, created_at, updated_at)
-         VALUES ($1, 'Ari', NULL, NOW(), NOW())`,
-        [profileId],
-      );
-      await client.query(
-        `INSERT INTO profile_revisions (
-           id, profile_id, content, content_hash, source, status, version_number, version_label,
+        `INSERT INTO student_profile_revisions (
+           id, student_id, content, content_hash, source, status, version_number, version_label,
            activated_at, deprecated_at, created_at, created_by, restored_from_revision_id
          )
          VALUES ($1, $2, 'Draft', 'hash-a', 'profile_revision_refresh', 'draft', 1, 'v1', NULL, NULL, NOW(), NULL, NULL)`,
-        [revisionId, profileId],
+        [revisionId, studentId],
       );
     });
 
@@ -382,7 +372,6 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
 
   it('copies draft candidate links to a manually edited draft revision', async () => {
     const studentId = randomUUID();
-    const profileId = randomUUID();
     const generatedRevisionId = randomUUID();
     const editedRevisionId = randomUUID();
 
@@ -391,20 +380,16 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
         `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Ari', NOW(), NOW())`,
         [studentId],
       );
+
       await client.query(
-        `INSERT INTO profiles (id, label, active_revision_id, created_at, updated_at)
-         VALUES ($1, 'Ari', NULL, NOW(), NOW())`,
-        [profileId],
-      );
-      await client.query(
-        `INSERT INTO profile_revisions (
-           id, profile_id, content, content_hash, source, status, version_number, version_label,
+        `INSERT INTO student_profile_revisions (
+           id, student_id, content, content_hash, source, status, version_number, version_label,
            activated_at, deprecated_at, created_at, created_by, restored_from_revision_id
          )
          VALUES
            ($1, $3, 'Generated draft', 'hash-generated', 'profile_revision_refresh', 'draft', 1, 'v1', NULL, NULL, NOW(), NULL, NULL),
            ($2, $3, 'Edited draft', 'hash-edited', 'update', 'draft', 2, 'v2', NULL, NULL, NOW(), NULL, NULL)`,
-        [generatedRevisionId, editedRevisionId, profileId],
+        [generatedRevisionId, editedRevisionId, studentId],
       );
     });
 

@@ -37,7 +37,8 @@ export const AssignmentConfirmedSnapshotSchema = z
     context: z
       .object({
         teacherNotes: z.string().nullable(),
-        profileId: z.string().nullable(),
+        // Accepted only when reading immutable legacy snapshots.
+        profileId: z.string().nullable().optional(),
         profileRevisionId: z.string().uuid().nullable(),
         profileRevisionHash: nullableHash,
       })

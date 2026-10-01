@@ -8,6 +8,10 @@ import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { resolveHomeworkMemorySourceFromSucceededJob } from '../src/application/homework-memory-source.js';
+import {
+  getProfileRevisionById,
+  getRecordedProfileRevision,
+} from '../src/domain/profile-revision-repository.js';
 import { closePgPool } from '../src/infrastructure/db.js';
 import { verifyMigrations } from '../src/infrastructure/migration-verify.js';
 import { getMigrationStatus, runMigrations } from '../src/infrastructure/migrations.js';
@@ -164,7 +168,7 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
       `
       SELECT pg_get_constraintdef(oid) AS definition
       FROM pg_constraint
-      WHERE conname = 'profile_revisions_source_check'
+      WHERE conname = 'student_profile_revisions_source_check'
       `,
     );
     const definition = profileRevisionSourceConstraint.rows[0]?.definition ?? '';
@@ -173,19 +177,17 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(definition).toContain('legacy_normalization');
     expect(definition).toContain('lesson_population');
 
-    const historicalProfileId = `profiles/migration-${randomUUID()}.md`;
-    const provenance = await pool.query<{ provenance: string }>(
-      `INSERT INTO profiles (id, label) VALUES ($1, 'Migration fixture')
-       RETURNING provenance`,
-      [historicalProfileId],
+    const studentId = randomUUID();
+    const provenance = await pool.query<{ profile_provenance: string }>(
+      `INSERT INTO students (id, student) VALUES ($1, 'Migration fixture') RETURNING profile_provenance`,
+      [studentId],
     );
-    expect(provenance.rows[0]?.provenance).toBe('unknown');
-    await pool.query('DELETE FROM profiles WHERE id = $1', [historicalProfileId]);
+    expect(provenance.rows[0]?.profile_provenance).toBe('tutor_only');
+    await pool.query('DELETE FROM students WHERE id = $1', [studentId]);
     await expect(
       pool.query(
-        `INSERT INTO profiles (id, label, provenance)
-       VALUES ($1, 'Invalid provenance fixture', 'evidence_enriched')`,
-        [`profiles/migration-invalid-${randomUUID()}.md`],
+        `INSERT INTO students (id, student, profile_provenance) VALUES ($1, 'Invalid provenance', 'evidence_enriched')`,
+        [randomUUID()],
       ),
     ).rejects.toMatchObject({ code: '23514' });
     const onboardingIndexes = await pool.query<{ indexname: string }>(
@@ -193,10 +195,10 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
          AND tablename = 'profile_initial_enrichment_operations'`,
     );
     expect(onboardingIndexes.rows.map((row) => row.indexname)).toContain(
-      'profile_initial_enrichment_live_profile_idx',
+      'profile_initial_enrichment_live_student_idx',
     );
     expect(onboardingIndexes.rows.map((row) => row.indexname)).toContain(
-      'profile_initial_enrichment_success_profile_idx',
+      'profile_initial_enrichment_success_student_idx',
     );
 
     const actionTypeConstraint = await pool.query<{ definition: string }>(
@@ -241,6 +243,265 @@ describe('integration/migrations', () => {
     async () => {
       await runMigrations();
       await assertSchemaHealthy('fresh-bootstrap');
+    },
+    testTimeout,
+  );
+
+  it(
+    '0059 copies shared and historical histories per student, freezes unbound state, and preserves recorded lineage',
+    async () => {
+      const a = randomUUID(),
+        b = randomUUID(),
+        wa = randomUUID(),
+        wb = randomUUID();
+      const v1 = randomUUID(),
+        v2 = randomUUID(),
+        old = randomUUID(),
+        orphan = randomUUID();
+      const candidate = randomUUID(),
+        recording = randomUUID(),
+        transcript = randomUUID(),
+        pkg = randomUUID();
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0058_mcp_oauth_foundation');
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1,'A'),($2,'B')`, [wa, wb]);
+        await pool.query(
+          `INSERT INTO profiles (id,label,provenance) VALUES ('shared.md','Shared','tutor_only'),('old.md','Old','unknown'),('orphan.md','Unbound','unknown')`,
+        );
+        await pool.query(
+          `INSERT INTO students (id,student,workspace_id,profile_id) VALUES ($1,'A',$2,'shared.md'),($3,'B',$4,'shared.md')`,
+          [a, wa, b, wb],
+        );
+        await pool.query(
+          `INSERT INTO profile_revisions (id,profile_id,content,structured_content,content_hash,source,status,version_number,version_label,created_at,activated_at,restored_from_revision_id) VALUES
+        ($1,'shared.md','Original','{"overallLevel":"B1"}',repeat('a',64),'create','deprecated',1,'v1','2025-01-01','2025-01-01',NULL),
+        ($2,'shared.md','Original restored','{"overallLevel":"B1"}',repeat('b',64),'restore','active',2,'v2','2025-01-02','2025-01-02',$1),
+        ($3,'old.md','Old tutor history',NULL,repeat('c',64),'update','active',1,'v1','2024-01-01','2024-01-01',NULL),
+        ($4,'orphan.md','Unbound meaningful text',NULL,repeat('d',64),'create','active',1,'v1','2023-01-01','2023-01-01',NULL)`,
+          [v1, v2, old, orphan],
+        );
+        await pool.query(
+          `UPDATE profiles SET active_revision_id = CASE id WHEN 'shared.md' THEN $1::uuid WHEN 'old.md' THEN $2::uuid ELSE $3::uuid END`,
+          [v2, old, orphan],
+        );
+        await pool.query(
+          `INSERT INTO student_profile_bindings (id,student_id,profile_id,effective_from,effective_to) VALUES ($1,$2,'old.md','2024-01-01','2025-01-01')`,
+          [randomUUID(), a],
+        );
+        await pool.query(
+          `INSERT INTO student_profile_candidates (id,student_id,target_section,candidate_key,fact,category,authority,confidence,review_needed,status,promoted_revision_id) VALUES ($1,$2,'goals_motivation','goal:test','Goal','goal','student_stated','high',false,'promoted',$3)`,
+          [candidate, a, old],
+        );
+        await pool.query(
+          `INSERT INTO student_profile_candidate_draft_revisions (candidate_id,revision_id) VALUES ($1,$2)`,
+          [candidate, old],
+        );
+        await pool.query(
+          `INSERT INTO recordings (id,source,workspace_id,student_id,storage_uri,bytes,status) VALUES ($1,'upload',$2,$3,'s3://fixture/audio',10,'queued')`,
+          [recording, wb, b],
+        );
+        await pool.query(
+          `INSERT INTO transcripts (id,recording_id,storage_uri,mode,model,language,fallback_used) VALUES ($1,$2,'s3://fixture/text','timeline','fixture','en',false)`,
+          [transcript, recording],
+        );
+        await pool.query(
+          `INSERT INTO prompt_packages (id,recording_id,transcript_id,student_id,template_version,storage_uri,resolved_profile_id,resolved_profile_revision_id,resolved_profile_version_label,resolved_profile_hash) VALUES ($1,$2,$3,$4,'template.md','s3://fixture/pkg','shared.md',$5,'v1',repeat('a',64))`,
+          [pkg, recording, transcript, b, v1],
+        );
+      });
+      await runMigrations();
+      await withAdminClient(async (pool) => {
+        const revisions = await pool.query(
+          `SELECT * FROM student_profile_revisions ORDER BY student_id,version_number`,
+        );
+        const ar = revisions.rows.filter((r) => r.student_id === a),
+          br = revisions.rows.filter((r) => r.student_id === b);
+        expect(ar).toHaveLength(3);
+        expect(br).toHaveLength(2);
+        expect(ar.map((r) => r.version_number)).toEqual([1, 2, 3]);
+        for (const studentRows of [ar, br]) {
+          const first = studentRows.find((r) => r.legacy_revision_id === v1),
+            restored = studentRows.find((r) => r.legacy_revision_id === v2);
+          expect(restored).toMatchObject({
+            status: 'active',
+            restored_from_revision_id: first.id,
+            content: 'Original restored',
+            content_hash: 'b'.repeat(64),
+          });
+          expect(first.structured_content).toEqual({ overallLevel: 'B1' });
+        }
+        expect(ar.find((r) => r.legacy_revision_id === v1).id).not.toBe(
+          br.find((r) => r.legacy_revision_id === v1).id,
+        );
+        expect(ar.find((r) => r.legacy_revision_id === old).status).toBe('deprecated');
+        expect(revisions.rows.some((r) => r.legacy_revision_id === orphan)).toBe(false);
+        const archived = await pool.query(
+          `SELECT content FROM legacy_profile_revisions WHERE id = $1`,
+          [orphan],
+        );
+        expect(archived.rows[0].content).toBe('Unbound meaningful text');
+        const historical = await pool.query(
+          `SELECT resolved_profile_id,resolved_profile_revision_id,resolved_profile_version_label,resolved_profile_hash FROM prompt_packages WHERE id = $1`,
+          [pkg],
+        );
+        expect(historical.rows[0]).toEqual({
+          resolved_profile_id: 'shared.md',
+          resolved_profile_revision_id: v1,
+          resolved_profile_version_label: 'v1',
+          resolved_profile_hash: 'a'.repeat(64),
+        });
+        const promoted = await pool.query(
+          `SELECT promoted_revision_id FROM student_profile_candidates WHERE id = $1`,
+          [candidate],
+        );
+        expect(promoted.rows[0].promoted_revision_id).toBe(
+          ar.find((r) => r.legacy_revision_id === old).id,
+        );
+        const links = await pool.query(
+          `SELECT student_id,revision_id FROM student_profile_candidate_draft_revisions WHERE candidate_id = $1`,
+          [candidate],
+        );
+        expect(links.rows[0]).toEqual({
+          student_id: a,
+          revision_id: promoted.rows[0].promoted_revision_id,
+        });
+        await expect(
+          pool.query(
+            `UPDATE student_profile_candidates SET promoted_revision_id = $2 WHERE id = $1`,
+            [candidate, br[0].id],
+          ),
+        ).rejects.toMatchObject({ code: '23503' });
+        for (const table of [
+          'legacy_profiles',
+          'legacy_profile_revisions',
+          'legacy_student_profile_bindings',
+        ])
+          await expect(pool.query(`UPDATE ${table} SET created_at = created_at`)).rejects.toThrow(
+            'Legacy profile storage is frozen',
+          );
+        const columns = await pool.query(
+          `SELECT table_name,column_name FROM information_schema.columns WHERE table_name='students' AND column_name='profile_id'`,
+        );
+        expect(columns.rows).toEqual([]);
+      });
+      await assertSchemaHealthy('student-owned-profile-cutover');
+      const recordedA = await getRecordedProfileRevision(a, v1, 'a'.repeat(64));
+      const recordedB = await getRecordedProfileRevision(b, v1, 'a'.repeat(64));
+      expect(recordedA?.studentId).toBe(a);
+      expect(recordedB?.studentId).toBe(b);
+      expect(recordedA?.id).not.toBe(recordedB?.id);
+      expect(await getRecordedProfileRevision(a, v1, 'incorrect-hash')).toBeNull();
+      expect(await getRecordedProfileRevision(randomUUID(), v1, 'a'.repeat(64))).toBeNull();
+      expect(await getProfileRevisionById(a, v1)).toBeNull();
+    },
+    testTimeout,
+  );
+
+  it.each(['succeeded', 'queued'] as const)(
+    '0059 preserves historical enrichment successes and rejects conflicting live operations: %s',
+    async (state) => {
+      const student = randomUUID(),
+        user = randomUUID(),
+        session = randomUUID();
+      const recording = randomUUID(),
+        transcript = randomUUID();
+      const revisions = [randomUUID(), randomUUID()] as const;
+      const operations = [randomUUID(), randomUUID()];
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0058_mcp_oauth_foundation');
+        await pool.query(`INSERT INTO users (id,email,password_hash) VALUES ($1,$2,'fixture')`, [
+          user,
+          `${user}@example.test`,
+        ]);
+        await pool.query(
+          `INSERT INTO profiles (id,label) VALUES ('one.md','One'),('two.md','Two')`,
+        );
+        await pool.query(
+          `INSERT INTO students (id,student,workspace_id,profile_id) VALUES ($1,'Owner','00000000-0000-4000-8000-000000000001','two.md')`,
+          [student],
+        );
+        for (let i = 0; i < 2; i++) {
+          await pool.query(
+            `INSERT INTO profile_revisions (id,profile_id,content,content_hash,source,status,version_number,version_label) VALUES ($1,$2,'Historical content',repeat('a',64),'create','active',1,'v1')`,
+            [revisions[i], i === 0 ? 'one.md' : 'two.md'],
+          );
+        }
+        await pool.query(
+          `INSERT INTO recordings (id,source,student_id,workspace_id,storage_uri,bytes,status) VALUES ($1,'upload',$2,'00000000-0000-4000-8000-000000000001','s3://fixture/audio',10,'queued')`,
+          [recording, student],
+        );
+        await pool.query(
+          `INSERT INTO transcripts (id,recording_id,storage_uri,mode,model,language,fallback_used) VALUES ($1,$2,'s3://fixture/text','timeline','fixture','en',false)`,
+          [transcript, recording],
+        );
+        const snapshot = {
+          student: { studentId: student },
+          source: null,
+          context: { profileRevisionId: revisions[0], profileRevisionHash: 'a'.repeat(64) },
+          create: null,
+        };
+        await pool.query(
+          `INSERT INTO assignment_sessions (id,user_id,student_id,confirmed_step,confirmed_snapshot) VALUES ($1,$2,$3,'context',$4)`,
+          [session, user, student, JSON.stringify(snapshot)],
+        );
+        for (let i = 0; i < 2; i++) {
+          await pool.query(
+            `INSERT INTO profile_initial_enrichment_operations (id,profile_id,student_id,assignment_session_id,recording_id,transcript_id,transcript_storage_uri,transcript_hash,source_identity_kind,source_fingerprint_scheme,source_fingerprint,state,seed_revision_id,seed_revision_hash,result_revision_id) VALUES ($1,$2,$3,$4,$5,$6,'s3://fixture/text',repeat('a',64),'audio','prepared-media-sha256-v1',repeat('b',64),$7,$8,repeat('a',64),$8)`,
+            [
+              operations[i],
+              i === 0 ? 'one.md' : 'two.md',
+              student,
+              session,
+              recording,
+              transcript,
+              state,
+              revisions[i],
+            ],
+          );
+        }
+      });
+      if (state === 'queued') {
+        await expect(runMigrations()).rejects.toThrow();
+        await withAdminClient(async (pool) => {
+          expect(
+            (
+              await pool.query(
+                `SELECT to_regclass('profiles') AS old, to_regclass('student_profile_revisions') AS current`,
+              )
+            ).rows[0],
+          ).toEqual({ old: 'profiles', current: null });
+          expect(
+            (
+              await pool.query(
+                `SELECT COUNT(*)::int AS count FROM profile_initial_enrichment_operations`,
+              )
+            ).rows[0].count,
+          ).toBe(2);
+        });
+        return;
+      }
+      await runMigrations();
+      await withAdminClient(async (pool) => {
+        const preserved = await pool.query(
+          `SELECT op.id,op.legacy_profile_id,op.state,r.legacy_revision_id FROM profile_initial_enrichment_operations op JOIN student_profile_revisions r ON r.id=op.result_revision_id AND r.student_id=op.student_id ORDER BY op.legacy_profile_id`,
+        );
+        expect(preserved.rows).toEqual(
+          operations.map((id, i) => ({
+            id,
+            legacy_profile_id: i === 0 ? 'one.md' : 'two.md',
+            state,
+            legacy_revision_id: revisions[i],
+          })),
+        );
+        const frozen = await pool.query(
+          `SELECT confirmed_snapshot FROM assignment_sessions WHERE id=$1`,
+          [session],
+        );
+        expect(frozen.rows[0].confirmed_snapshot.context.profileRevisionId).toBe(revisions[0]);
+      });
+      expect(
+        (await getRecordedProfileRevision(student, revisions[0], 'a'.repeat(64)))?.studentId,
+      ).toBe(student);
     },
     testTimeout,
   );
@@ -782,7 +1043,7 @@ describe('integration/migrations', () => {
         const profileResult = await pool.query<{ profile_id: string; active_count: number }>(
           `
         SELECT profile_id, COUNT(*) FILTER (WHERE status = 'active')::int AS active_count
-        FROM profile_revisions
+        FROM legacy_profile_revisions
         GROUP BY profile_id
         `,
         );

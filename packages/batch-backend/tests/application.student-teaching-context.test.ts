@@ -19,7 +19,6 @@ function student(overrides: Record<string, unknown> = {}) {
     id: studentId,
     student: 'Maya',
     workspaceId,
-    profileId: 'maya.md',
     ...overrides,
   };
 }
@@ -27,8 +26,6 @@ function student(overrides: Record<string, unknown> = {}) {
 function dependencies() {
   return {
     getStudent: vi.fn().mockResolvedValue(student()),
-    getActiveBinding: vi.fn(),
-    getProfile: vi.fn().mockResolvedValue({ activeRevisionId: 'revision-2' }),
     getRevision: vi.fn().mockResolvedValue({
       id: 'revision-2',
       status: 'active',
@@ -125,8 +122,7 @@ describe('getStudentTeachingContext', () => {
     const context = await getStudentTeachingContext({ workspaceId, studentId, overrides });
 
     expect(overrides.getStudent).toHaveBeenCalledWith(studentId, { workspaceId });
-    expect(overrides.getProfile).toHaveBeenCalledWith('maya.md');
-    expect(overrides.getRevision).toHaveBeenCalledWith('maya.md', 'revision-2');
+    expect(overrides.getRevision).toHaveBeenCalledWith(studentId);
     expect(overrides.getSnapshot).toHaveBeenCalledWith(studentId);
     expect(overrides.listLessons).toHaveBeenCalledWith(studentId, { limit: 3 });
     expect(overrides.listHomework).toHaveBeenCalledWith(studentId, { limit: 2 });
@@ -139,7 +135,7 @@ describe('getStudentTeachingContext', () => {
       recentHomework: [{ topic: 'Travel', grammarTargets: [{ name: 'Articles' }] }],
       provenance: {
         profile: {
-          profileId: 'maya.md',
+          studentId,
           revisionId: 'revision-2',
           versionLabel: 'v2',
           source: 'profile_revision_refresh',
@@ -261,7 +257,6 @@ describe('getStudentTeachingContext', () => {
 
   it('uses the canonical legacy Markdown derivation for an active profile', async () => {
     const overrides = dependencies();
-    overrides.getProfile.mockResolvedValue({ activeRevisionId: 'legacy-revision' });
     overrides.getRevision.mockResolvedValue({
       id: 'legacy-revision',
       status: 'active',
@@ -279,7 +274,7 @@ describe('getStudentTeachingContext', () => {
       primaryGoals: ['Speak more confidently.'],
     });
     expect(context?.provenance.profile).toMatchObject({
-      profileId: 'maya.md',
+      studentId,
       revisionId: 'legacy-revision',
       contentOrigin: 'legacy_markdown_derived',
     });
@@ -287,9 +282,7 @@ describe('getStudentTeachingContext', () => {
 
   it('leaves missing optional layers explicit, including an unparseable active profile', async () => {
     const overrides = dependencies();
-    overrides.getStudent.mockResolvedValue(student({ profileId: null }));
-    overrides.getActiveBinding.mockResolvedValue({ profileId: 'bound.md' });
-    overrides.getProfile.mockResolvedValue({ activeRevisionId: 'legacy-revision' });
+    overrides.getStudent.mockResolvedValue(student());
     overrides.getRevision.mockResolvedValue({
       id: 'legacy-revision',
       status: 'active',
@@ -304,8 +297,6 @@ describe('getStudentTeachingContext', () => {
     overrides.listHomework.mockResolvedValue([]);
 
     const context = await getStudentTeachingContext({ workspaceId, studentId, overrides });
-    expect(overrides.getActiveBinding).toHaveBeenCalledWith(studentId);
-    expect(overrides.getProfile).toHaveBeenCalledWith('bound.md');
     expect(context).toEqual({
       schemaVersion: TEACHING_CONTEXT_SCHEMA_VERSION,
       student: { id: studentId, name: 'Maya' },
@@ -315,7 +306,7 @@ describe('getStudentTeachingContext', () => {
       recentHomework: [],
       provenance: {
         profile: {
-          profileId: 'bound.md',
+          studentId,
           revisionId: 'legacy-revision',
           versionLabel: 'v1',
           source: 'create',
@@ -329,10 +320,10 @@ describe('getStudentTeachingContext', () => {
     });
   });
 
-  it('reports no profile lineage when no profile is bound', async () => {
+  it('reports no profile lineage when the student has no active revision', async () => {
     const overrides = dependencies();
-    overrides.getStudent.mockResolvedValue(student({ profileId: null }));
-    overrides.getActiveBinding.mockResolvedValue(null);
+    overrides.getRevision.mockResolvedValue(null);
+    overrides.getStudent.mockResolvedValue(student());
     overrides.getSnapshot.mockResolvedValue(null);
     overrides.listLessons.mockResolvedValue([]);
     overrides.listHomework.mockResolvedValue([]);
@@ -340,8 +331,7 @@ describe('getStudentTeachingContext', () => {
     const context = await getStudentTeachingContext({ workspaceId, studentId, overrides });
     expect(context?.profile).toBeNull();
     expect(context?.provenance.profile).toBeNull();
-    expect(overrides.getProfile).not.toHaveBeenCalled();
-    expect(overrides.getRevision).not.toHaveBeenCalled();
+    expect(overrides.getRevision).toHaveBeenCalledWith(studentId);
   });
 
   it.each([null, student({ workspaceId: 'foreign-workspace' })])(
@@ -354,8 +344,6 @@ describe('getStudentTeachingContext', () => {
       expect(context).toBeNull();
       expect(overrides.getStudent).toHaveBeenCalledWith(studentId, { workspaceId });
       for (const dependency of [
-        overrides.getActiveBinding,
-        overrides.getProfile,
         overrides.getRevision,
         overrides.getSnapshot,
         overrides.listLessons,

@@ -7,7 +7,6 @@ import type {
   StudentMemoryHealthResponse,
   StudentMemoryOverviewResponse,
   StudentMemoryStatusCount,
-  StudentProfileBindingListResponse,
   StudentProfileCandidate,
 } from '../../utils/api';
 import {
@@ -21,7 +20,6 @@ import {
   getStudentMemoryOverview,
   initializeStudentProfileDraft,
   listProfileRevisions,
-  listStudentProfileBindings,
   listStudentProfileCandidates,
   refreshProfileDraftFromApprovedCandidates,
   rejectStudentProfileCandidate,
@@ -227,14 +225,14 @@ function getProfileSnapshot(form: FoundationalProfileFormState): string {
 }
 
 function buildRevisionDetailFromProfile(
-  profileId: string,
+  profileStudentId: string,
   profile: ProfileContentResponse,
   summary?: ProfileRevisionSummaryResponse | null,
 ): ProfileRevisionDetailResponse | null {
   if (!profile.currentRevisionId) return null;
   return {
     id: profile.currentRevisionId,
-    profileId,
+    studentId: profileStudentId,
     contentHash: summary?.contentHash ?? '',
     source: summary?.source ?? 'update',
     status: summary?.status ?? 'active',
@@ -617,8 +615,7 @@ export const StudentLearningPage: React.FC = () => {
   const { student, studentId, studentLoading, studentError, refreshStudent } =
     useStudentAreaContext();
   const latestPageLoadRequestRef = useRef(0);
-  const [bootstrapProfileId, setBootstrapProfileId] = useState<string | null>(null);
-  const profileId = student?.profileId ?? bootstrapProfileId ?? '';
+  const profileStudentId = studentId;
 
   const [profileForm, setProfileForm] = useState<FoundationalProfileFormState>(
     INITIAL_FOUNDATIONAL_PROFILE_FORM,
@@ -628,6 +625,7 @@ export const StudentLearningPage: React.FC = () => {
   );
   const [profileDraftDiffBase, setProfileDraftDiffBase] =
     useState<FoundationalProfileFormState | null>(null);
+  const [profileAvailable, setProfileAvailable] = useState<boolean | null>(null);
   const [currentRevision, setCurrentRevision] = useState<ProfileRevisionDetailResponse | null>(
     null,
   );
@@ -645,12 +643,6 @@ export const StudentLearningPage: React.FC = () => {
   const [memoryHealthDetailsOpen, setMemoryHealthDetailsOpen] = useState(false);
   const [memoryOverviewLoading, setMemoryOverviewLoading] = useState(false);
   const [memoryOverviewError, setMemoryOverviewError] = useState<string | null>(null);
-
-  const [bindingHistory, setBindingHistory] = useState<StudentProfileBindingListResponse['items']>(
-    [],
-  );
-  const [bindingHistoryLoading, setBindingHistoryLoading] = useState(false);
-  const [bindingHistoryError, setBindingHistoryError] = useState<string | null>(null);
 
   const [profileCandidates, setProfileCandidates] = useState<StudentProfileCandidate[]>([]);
   const [profileCandidatesLoading, setProfileCandidatesLoading] = useState(false);
@@ -731,7 +723,7 @@ export const StudentLearningPage: React.FC = () => {
   const hiddenProfileRevisionCount = profileVersionDisplay.hiddenCount;
 
   const clearLoadedLearningSurface = useCallback(() => {
-    setBootstrapProfileId(null);
+    setProfileAvailable(null);
     setCurrentRevision(null);
     setProfileRevisions([]);
     setShowAllProfileVersions(false);
@@ -742,7 +734,6 @@ export const StudentLearningPage: React.FC = () => {
     setMemoryOverview(null);
     setMemoryHealth(null);
     setMemoryHealthDetailsOpen(false);
-    setBindingHistory([]);
     setProfileCandidates([]);
     setProfileCandidateDrafts({});
     setSelectedCandidateIds([]);
@@ -752,13 +743,12 @@ export const StudentLearningPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setBootstrapProfileId(null);
     clearLoadedLearningSurface();
   }, [clearLoadedLearningSurface, studentId]);
 
   useEffect(() => {
     setShowAllProfileVersions(false);
-  }, [profileId, studentId]);
+  }, [profileStudentId, studentId]);
 
   useEffect(() => {
     setSelectedCandidateIds((current) =>
@@ -784,9 +774,9 @@ export const StudentLearningPage: React.FC = () => {
   );
 
   const loadProfileRevisionIntoEditor = useCallback(
-    async (targetProfileId: string, revisionId: string) => {
+    async (targetStudentId: string, revisionId: string) => {
       const requestId = latestPageLoadRequestRef.current;
-      const revision = await getProfileRevision(targetProfileId, revisionId);
+      const revision = await getProfileRevision(targetStudentId, revisionId);
       if (!isCurrentPageLoadRequest(requestId)) {
         return revision;
       }
@@ -803,7 +793,7 @@ export const StudentLearningPage: React.FC = () => {
 
   const loadProfileSurface = useCallback(
     async (requestId: number) => {
-      if (!profileId) {
+      if (!profileStudentId) {
         if (!isCurrentPageLoadRequest(requestId)) {
           return;
         }
@@ -820,23 +810,23 @@ export const StudentLearningPage: React.FC = () => {
       setProfileError(null);
       try {
         const [profile, revisions] = await Promise.all([
-          getProfileContent(profileId),
-          listProfileRevisions(profileId, { limit: 25, offset: 0, order: 'desc' }),
+          getProfileContent(profileStudentId),
+          listProfileRevisions(profileStudentId, { limit: 25, offset: 0, order: 'desc' }),
         ]);
         if (!isCurrentPageLoadRequest(requestId)) {
           return;
         }
         const revision =
           profile.currentRevisionId && profile.currentRevisionId.trim()
-            ? await getProfileRevision(profileId, profile.currentRevisionId).catch(() =>
+            ? await getProfileRevision(profileStudentId, profile.currentRevisionId).catch(() =>
                 buildRevisionDetailFromProfile(
-                  profileId,
+                  profileStudentId,
                   profile,
                   findCurrentProfileRevisionSummary(profile, revisions.items ?? []),
                 ),
               )
             : buildRevisionDetailFromProfile(
-                profileId,
+                profileStudentId,
                 profile,
                 findCurrentProfileRevisionSummary(profile, revisions.items ?? []),
               );
@@ -846,6 +836,7 @@ export const StudentLearningPage: React.FC = () => {
         const form = foundationalProfileToFormState(
           revision?.structuredContent ?? profile.structuredContent,
         );
+        setProfileAvailable(true);
         setCurrentRevision(revision);
         setProfileForm(form);
         setLoadedProfileForm(form);
@@ -865,7 +856,7 @@ export const StudentLearningPage: React.FC = () => {
         }
       }
     },
-    [isCurrentPageLoadRequest, profileId],
+    [isCurrentPageLoadRequest, profileStudentId],
   );
 
   const loadMemoryOverview = useCallback(
@@ -903,42 +894,6 @@ export const StudentLearningPage: React.FC = () => {
       } finally {
         if (isCurrentPageLoadRequest(requestId)) {
           setMemoryOverviewLoading(false);
-        }
-      }
-    },
-    [isCurrentPageLoadRequest, studentId],
-  );
-
-  const loadBindingHistory = useCallback(
-    async (requestId: number) => {
-      if (!studentId) {
-        if (!isCurrentPageLoadRequest(requestId)) {
-          return;
-        }
-        setBindingHistory([]);
-        return;
-      }
-      setBindingHistoryLoading(true);
-      setBindingHistoryError(null);
-      try {
-        const response = await listStudentProfileBindings(studentId, {
-          limit: 5,
-          offset: 0,
-          order: 'desc',
-        });
-        if (!isCurrentPageLoadRequest(requestId)) {
-          return;
-        }
-        setBindingHistory(response.items ?? []);
-      } catch (error) {
-        if (!isCurrentPageLoadRequest(requestId)) {
-          return;
-        }
-        const message = error instanceof Error ? error.message : 'Unable to load binding history.';
-        setBindingHistoryError(message);
-      } finally {
-        if (isCurrentPageLoadRequest(requestId)) {
-          setBindingHistoryLoading(false);
         }
       }
     },
@@ -987,10 +942,9 @@ export const StudentLearningPage: React.FC = () => {
     await Promise.all([
       loadProfileSurface(requestId),
       loadMemoryOverview(requestId),
-      loadBindingHistory(requestId),
       loadProfileCandidates(requestId),
     ]);
-  }, [loadBindingHistory, loadMemoryOverview, loadProfileCandidates, loadProfileSurface]);
+  }, [loadMemoryOverview, loadProfileCandidates, loadProfileSurface]);
 
   useEffect(() => {
     const requestId = latestPageLoadRequestRef.current + 1;
@@ -1000,11 +954,9 @@ export const StudentLearningPage: React.FC = () => {
 
     setProfileBusy('loading');
     setMemoryOverviewLoading(true);
-    setBindingHistoryLoading(true);
     setProfileCandidatesLoading(true);
     setProfileError(null);
     setMemoryOverviewError(null);
-    setBindingHistoryError(null);
     setProfileCandidatesError(null);
     clearLoadedLearningSurface();
 
@@ -1015,19 +967,20 @@ export const StudentLearningPage: React.FC = () => {
           return;
         }
 
+        setProfileAvailable(Boolean(surface.profile));
         if (surface.profile) {
-          setBootstrapProfileId(surface.profile.id);
           const currentSummary = findCurrentProfileRevisionSummary(
             surface.profile,
             surface.revisions.items ?? [],
           );
           const revision =
             surface.profile.currentRevisionId && surface.profile.currentRevisionId.trim()
-              ? buildRevisionDetailFromProfile(surface.profile.id, surface.profile, currentSummary)
+              ? buildRevisionDetailFromProfile(studentId, surface.profile, currentSummary)
               : null;
           const form = foundationalProfileToFormState(
             revision?.structuredContent ?? surface.profile.structuredContent,
           );
+          setProfileAvailable(true);
           setCurrentRevision(revision);
           setProfileForm(form);
           setLoadedProfileForm(form);
@@ -1044,7 +997,6 @@ export const StudentLearningPage: React.FC = () => {
         setMemoryOverview(surface.memory);
         setMemoryHealth(surface.memoryHealth ?? null);
         setMemoryHealthDetailsOpen(false);
-        setBindingHistory(surface.bindings.items ?? []);
         setProfileCandidates(surface.candidates.items ?? []);
       } catch (error: unknown) {
         if (!isCurrentPageLoadRequest(requestId)) {
@@ -1055,13 +1007,11 @@ export const StudentLearningPage: React.FC = () => {
         clearLoadedLearningSurface();
         setProfileError(message);
         setMemoryOverviewError(message);
-        setBindingHistoryError(message);
         setProfileCandidatesError(message);
       } finally {
         if (isCurrentPageLoadRequest(requestId)) {
           setProfileBusy(null);
           setMemoryOverviewLoading(false);
-          setBindingHistoryLoading(false);
           setProfileCandidatesLoading(false);
         }
       }
@@ -1085,8 +1035,8 @@ export const StudentLearningPage: React.FC = () => {
   );
 
   const handleSaveDraft = async () => {
-    if (!profileId) {
-      setProfileError('Bind a learner profile before saving a draft.');
+    if (!profileStudentId) {
+      setProfileError('Select a student before saving a draft.');
       return;
     }
 
@@ -1094,7 +1044,7 @@ export const StudentLearningPage: React.FC = () => {
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const saved = await saveProfileDraftRevision(profileId, {
+      const saved = await saveProfileDraftRevision(profileStudentId, {
         structuredContent: foundationalProfileFormToStructuredContent(profileForm),
         inheritCandidateLinksFromRevisionId:
           currentRevision?.status === 'draft' ? currentRevision.id : null,
@@ -1104,7 +1054,7 @@ export const StudentLearningPage: React.FC = () => {
       setProfileForm(form);
       setLoadedProfileForm(form);
       setProfileLegacyNotice(null);
-      const revisions = await listProfileRevisions(profileId, {
+      const revisions = await listProfileRevisions(profileStudentId, {
         limit: 25,
         offset: 0,
         order: 'desc',
@@ -1120,13 +1070,13 @@ export const StudentLearningPage: React.FC = () => {
   };
 
   const handleSaveProfile = async () => {
-    if (!profileId) return;
+    if (!profileStudentId) return;
     setProfileBusy('saving');
     setProfileError(null);
     setProfileSuccess(null);
     try {
       await upsertProfileContent(
-        profileId,
+        profileStudentId,
         null,
         foundationalProfileFormToStructuredContent(profileForm),
       );
@@ -1145,12 +1095,9 @@ export const StudentLearningPage: React.FC = () => {
     setProfileSuccess(null);
     try {
       const response = await initializeStudentProfileDraft(studentId);
-      const activated = await activateProfileRevision(
-        response.profileId,
-        response.draftRevision.id,
-      );
-      setBootstrapProfileId(response.profileId);
+      const activated = await activateProfileRevision(studentId, response.draftRevision.id);
       const form = foundationalProfileToFormState(activated.structuredContent);
+      setProfileAvailable(true);
       setCurrentRevision(activated);
       setProfileForm(form);
       setLoadedProfileForm(form);
@@ -1169,7 +1116,7 @@ export const StudentLearningPage: React.FC = () => {
   };
 
   const handleActivateDraft = async () => {
-    if (!profileId || !currentRevision?.id) {
+    if (!profileStudentId || !currentRevision?.id) {
       setProfileError('Open a draft revision before activating it.');
       return;
     }
@@ -1178,7 +1125,7 @@ export const StudentLearningPage: React.FC = () => {
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      await activateProfileRevision(profileId, currentRevision.id);
+      await activateProfileRevision(profileStudentId, currentRevision.id);
       await Promise.all([reloadCurrentLearningSurface(), refreshStudent()]);
       setProfileDraftDiffBase(null);
       setProfileError(null);
@@ -1192,18 +1139,18 @@ export const StudentLearningPage: React.FC = () => {
   };
 
   const handleRestoreRevision = async (revisionId: string) => {
-    if (!profileId) return;
+    if (!profileStudentId) return;
 
     setProfileBusy('restoring');
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const restored = await restoreProfileRevision(profileId, revisionId);
+      const restored = await restoreProfileRevision(profileStudentId, revisionId);
       const restoredRevision = restored.currentRevisionId
-        ? await getProfileRevision(profileId, restored.currentRevisionId).catch(() =>
-            buildRevisionDetailFromProfile(profileId, restored),
+        ? await getProfileRevision(profileStudentId, restored.currentRevisionId).catch(() =>
+            buildRevisionDetailFromProfile(profileStudentId, restored),
           )
-        : buildRevisionDetailFromProfile(profileId, restored);
+        : buildRevisionDetailFromProfile(profileStudentId, restored);
       const form = foundationalProfileToFormState(
         restoredRevision?.structuredContent ?? restored.structuredContent,
       );
@@ -1212,7 +1159,7 @@ export const StudentLearningPage: React.FC = () => {
       setLoadedProfileForm(form);
       setProfileDraftDiffBase(null);
       setProfileLegacyNotice(getLegacyProfileNotice(restoredRevision ?? restored));
-      const revisions = await listProfileRevisions(profileId, {
+      const revisions = await listProfileRevisions(profileStudentId, {
         limit: 25,
         offset: 0,
         order: 'desc',
@@ -1247,16 +1194,17 @@ export const StudentLearningPage: React.FC = () => {
       });
       const revision =
         response.draftRevision ??
-        (await loadProfileRevisionIntoEditor(response.profileId, response.draftRevisionId));
+        (await loadProfileRevisionIntoEditor(studentId, response.draftRevisionId));
       if (response.draftRevision) {
         const form = foundationalProfileToFormState(revision.structuredContent);
+        setProfileAvailable(true);
         setCurrentRevision(revision);
         setProfileForm(form);
         setLoadedProfileForm(form);
         setProfileDraftDiffBase(draftDiffBase);
         setProfileLegacyNotice(getLegacyProfileNotice(revision));
       }
-      const revisions = await listProfileRevisions(response.profileId, {
+      const revisions = await listProfileRevisions(studentId, {
         limit: 25,
         offset: 0,
         order: 'desc',
@@ -1372,12 +1320,11 @@ export const StudentLearningPage: React.FC = () => {
   }
 
   const latestSnapshot = memoryOverview?.latestReadyStudentMemorySnapshot ?? null;
-  const activeBinding = bindingHistory[0] ?? null;
   const canActivateDraft = currentRevision?.status === 'draft';
   const unresolvedIssues = latestSnapshot?.unresolvedIssues ?? [];
   const recentLessons = memoryOverview?.recentReadyLessonMemory ?? [];
   const recentHomework = memoryOverview?.recentReadyHomeworkMemory ?? [];
-  if (!profileId) {
+  if (profileAvailable === false) {
     return (
       <section className="student-learning-layout student-area-theme student-learning-bootstrap">
         <div className="student-learning-bootstrap-copy">
@@ -1688,21 +1635,12 @@ export const StudentLearningPage: React.FC = () => {
               eyebrow="Support ID"
               value={formatStudentShortId(studentId)}
               detail={
-                activeBinding
-                  ? `Profile active since ${formatDateTime(activeBinding.effectiveFrom)}`
+                currentRevision?.activatedAt
+                  ? `Profile active since ${formatDateTime(currentRevision.activatedAt)}`
                   : 'Profile activation history is not available yet'
               }
             />
           </div>
-
-          {bindingHistoryError ? (
-            <p className="workspace-error" aria-live="polite">
-              {bindingHistoryError}
-            </p>
-          ) : null}
-          {bindingHistoryLoading ? (
-            <p className="workspace-muted">Loading binding history…</p>
-          ) : null}
 
           <div className="workspace-list student-learning-revision-list">
             {visibleProfileRevisions.map((revision) => (
@@ -1717,7 +1655,9 @@ export const StudentLearningPage: React.FC = () => {
                   <button
                     type="button"
                     className="workspace-secondary-btn"
-                    onClick={() => void loadProfileRevisionIntoEditor(profileId, revision.id)}
+                    onClick={() =>
+                      void loadProfileRevisionIntoEditor(profileStudentId, revision.id)
+                    }
                     disabled={profileBusy !== null}
                   >
                     Open

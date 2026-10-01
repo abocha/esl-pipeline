@@ -35,23 +35,19 @@ Core surfaces:
   provenance without enqueueing speech-to-text work
 - student archive/restore under `/students/:id/archive` and `/students/:id/restore`; archived students are hidden from default student reads without deleting history
 - student-area route payloads under `/students/:id/surfaces/overview`, `/students/:id/surfaces/learning`, and `/students/:id/surfaces/history`
-- Student-area surfaces, memory, bindings, timeline, candidate review/promotion, and draft
-  initialization/refresh run the shared `authorizeStudent` pre-handler after authentication.
-  It resolves the caller's workspace from membership and calls
-  `getStudentProfileById(id, { workspaceId })`, whose student query includes the workspace
-  predicate, before any downstream student-owned read or write. Missing, archived, and foreign
-  students receive the same `404 { error: 'not_found' }`. Internal helpers used by these handlers
-  rely on that established student boundary; candidate and revision queries additionally constrain
-  children to their student/profile. The separate `getStudentTeachingContext({ workspaceId,
-studentId })` application query retains its own scoped lookup before secondary reads.
-- Profile ownership remains an unresolved contract in [issue #280](https://github.com/abocha/esl-pipeline/issues/280).
-  Authenticated `/profiles` catalog/detail/revision routes (including query-form aliases and
-  mutations) currently have no workspace boundary. Profiles/revisions have no workspace column,
-  and existing bindings can reference the same profile from multiple students. The student-area
-  check does not authorize arbitrary profile IDs or make cross-workspace profile sharing safe.
-  A maintainer decision is required for standalone profiles, shared profiles, binding/rebinding,
-  and revision mutation authority before changing those APIs or migrating ownership; current global
-  visibility is not evidence of an intentional sharing policy.
+- Student-area surfaces, profile revisions, memory, timeline, candidate review/promotion and
+  draft initialization/refresh use `authorizeStudent` after authentication. The guard resolves
+  membership workspace and performs the workspace-scoped student lookup before any child read
+  or mutation. Missing, archived and foreign students receive identical `404 { error: 'not_found' }`.
+  Revision and candidate queries additionally constrain every child to that authorized student.
+  `getStudentTeachingContext({ workspaceId, studentId })` retains its own authorization-first lookup.
+- Foundational Profile is student-owned revision history: `student_profile_revisions.student_id`,
+  with one active row selected by status and a partial unique index. No separate profile catalog,
+  active pointer, student binding or arbitrary rebinding exists. Live routes are
+  `GET/PUT /students/:id/profile`, `GET/POST /students/:id/profile/revisions`, revision detail,
+  and revision `activate`/`restore`. Old `/profiles` routes and query aliases are removed.
+  [ABO-12 reconciliation](../../docs/operations/student-profile-revision-cutover.md) explains
+  the frozen legacy archive and exact historical IDs retained for assignments and prompt packages.
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
 - tutor business dashboard and student schedule/billing routes resolve the active workspace from the
   authenticated tutor's membership before application reads or writes. Foreign students, lessons,
@@ -168,12 +164,11 @@ Useful indexes:
 - A snapshot is current ready state only when every referenced lesson-memory row exists, belongs to
   the same student, remains ready, and carries confirmed-source provenance. Snapshot source-ID
   columns own coverage lineage; matching `generation_notes` arrays are diagnostics only.
-- Schema changes belong in versioned migrations; runtime legacy patching is emergency-only.
-- Historical learner-profile provenance classification uses the dry-run-first
-  [`profile:provenance-backfill` maintenance tool](../../docs/operations/historical-profile-provenance-backfill.md).
-  Only profiles created before migration 0056 are in scope. Historical `unknown` remains unknown
-  without positive completed-enrichment proof; the tool never
-  infers `tutor_only`. Production apply requires separate authorization and a reviewed fingerprint.
+- Schema changes belong in versioned migrations. Runtime legacy schema patching is retired;
+  `ensureJobsSchema` rejects every invocation, including its former environment override.
+- Migration 0059 copies useful, explicitly student-attributable history and freezes residual legacy
+  storage. Historical `unknown` provenance stays unknown. The old profile-wide provenance backfill
+  and student binding tools are retired; see the cutover runbook before any residual cleanup.
 - Fresh database bootstrap uses the generated `schema.sql` baseline; existing databases upgrade through versioned migrations.
 - `/meta/version` reports the release's expected migration head, derived from the backend's packaged
   `migrations/*.sql` files. The shared DB contract version is a separate semantic compatibility signal.
@@ -206,7 +201,7 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   worker or historical nonowner cannot restore superseded memory. Changed confirmed content
   temporarily makes memory unavailable until its automatic replacement succeeds.
 - Source confirmation also records a one-time initial profile enrichment operation for a
-  `tutor_only` profile. The student-memory worker reconciles that durable operation into its
+  student with `tutor_only` profile provenance. The student-memory worker reconciles that durable operation into its
   existing BullMQ queue when exact canonical lesson evidence becomes ready. Definitively failed
   evidence or evidence still unavailable after 24 hours ends onboarding with a controlled failure.
   Generation uses student-memory pacing and preserves the exact tutor-authored seed. A reserved
@@ -214,7 +209,7 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   atomically updates the revision, active pointer, provenance, and operation. Assignment learner
   context is read through `GET /assignment-sessions/:id/learner-context`. Context confirmation
   remains unavailable until the operation succeeds or reaches a controlled terminal outcome.
-- Ordinary structured tutor edits use `PUT /profiles/:id` and activate an active revision
+- Ordinary structured tutor edits use `PUT /students/:id/profile` and activate an active revision
   atomically; candidate-derived drafts retain their explicit review flow.
 - Assignment prompt creation reads confirmed Source and Context and requires the current confirmed
   source binding. Prompt packages retain their assignment session ID so later draft creation and

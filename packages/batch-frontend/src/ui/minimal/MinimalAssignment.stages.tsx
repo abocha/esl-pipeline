@@ -150,7 +150,7 @@ interface ContextStageSectionProps {
   studentName: string | null;
   selectedProfileId: string;
   profilePreview: {
-    profileId: string;
+    studentId: string;
     overallLevel: string | null;
     primaryGoals: string[];
     communicationContexts: string[];
@@ -1105,13 +1105,10 @@ export function ContextStageSection({
   const renderLearningPageLink = (
     label: string,
     className = 'minimal-secondary minimal-link-button',
-    options: { profileId?: string | null; draftRevisionId?: string | null } = {},
+    options: { draftRevisionId?: string | null } = {},
   ) => {
     if (!studentId) return null;
     const search = new URLSearchParams();
-    if (options.profileId) {
-      search.set('profileId', options.profileId);
-    }
     if (options.draftRevisionId) {
       search.set('draftRevisionId', options.draftRevisionId);
     }

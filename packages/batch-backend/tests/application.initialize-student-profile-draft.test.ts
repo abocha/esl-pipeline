@@ -4,10 +4,10 @@ import { initializeStudentProfileDraft } from '../src/application/initialize-stu
 import { loadConfig } from '../src/config/env.js';
 
 describe('application/initialize-student-profile-draft', () => {
-  it('creates and binds a blank canonical draft for an unbound student', async () => {
+  it('creates a blank student-owned draft when no active revision exists', async () => {
     const saveRevision = vi.fn(async () => ({
       id: 'revision-draft-1',
-      profileId: 'profiles/students/tolik.md',
+      studentId: 'tolik',
       contentHash: 'hash-1',
       source: 'create' as const,
       status: 'draft' as const,
@@ -44,13 +44,6 @@ describe('application/initialize-student-profile-draft', () => {
           getById: async () => ({
             id: 'tolik',
             student: 'Tolik',
-            profileId: null,
-            voices: {},
-          }),
-          ensureCanonicalProfileBinding: async () => ({
-            id: 'tolik',
-            student: 'Tolik',
-            profileId: 'profiles/students/tolik.md',
             voices: {},
           }),
         },
@@ -63,10 +56,10 @@ describe('application/initialize-student-profile-draft', () => {
       },
     });
 
-    expect(result.profileId).toBe('profiles/students/tolik.md');
+    expect(result.studentId).toBe('tolik');
     expect(result.draftRevision.status).toBe('draft');
     expect(saveRevision).toHaveBeenCalledWith(
-      'profiles/students/tolik.md',
+      'tolik',
       expect.stringContaining('# Foundational Profile'),
       expect.objectContaining({
         source: 'create',

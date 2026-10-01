@@ -18,7 +18,7 @@ afterEach(async () => {
 });
 
 describe('tools/bootstrap-prompt-assets', () => {
-  it('scans template and profile roots independently', async () => {
+  it('imports only templates, leaving legacy profile files outside the catalog', async () => {
     const baseDir = await createTempDir('prompt-assets-');
     const templateRoot = path.join(baseDir, 'templates');
     const profileRoot = path.join(baseDir, 'profiles');
@@ -28,24 +28,11 @@ describe('tools/bootstrap-prompt-assets', () => {
     await writeFile(path.join(templateRoot, 'hw_prompt_definitive.md'), 'System prompt', 'utf8');
     await writeFile(path.join(profileRoot, 'alice.md'), 'Profile body', 'utf8');
 
-    const scanned = await scanAssets({ templateRoot, profileRoot });
+    const scanned = await scanAssets({ templateRoot });
 
     expect(scanned.templates.map((item) => item.id)).toEqual(['hw_prompt_definitive.md']);
-    expect(scanned.profiles.map((item) => item.id)).toEqual(['alice.md']);
-    expect(scanned.scannedFiles).toBe(2);
-  });
-
-  it('fails fast when template and profile roots overlap', async () => {
-    const baseDir = await createTempDir('prompt-assets-overlap-');
-    const templateRoot = path.join(baseDir, 'docs');
-    const profileRoot = path.join(baseDir, 'docs', 'profiles');
-    await mkdir(profileRoot, { recursive: true });
-    await writeFile(path.join(templateRoot, 'hw_prompt_definitive.md'), 'System prompt', 'utf8');
-    await writeFile(path.join(profileRoot, 'alice.md'), 'Profile body', 'utf8');
-
-    await expect(scanAssets({ templateRoot, profileRoot })).rejects.toThrow(
-      /must be distinct and non-overlapping/i,
-    );
+    expect(scanned).not.toHaveProperty('profiles');
+    expect(scanned.scannedFiles).toBe(1);
   });
 
   it('rejects template assets that still contain the retired profile marker', async () => {
@@ -62,8 +49,6 @@ describe('tools/bootstrap-prompt-assets', () => {
     );
     await writeFile(path.join(profileRoot, 'alice.md'), 'Profile body', 'utf8');
 
-    await expect(scanAssets({ templateRoot, profileRoot })).rejects.toThrow(
-      /retired legacy marker/i,
-    );
+    await expect(scanAssets({ templateRoot })).rejects.toThrow(/retired legacy marker/i);
   });
 });

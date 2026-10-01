@@ -1,14 +1,7 @@
 import { createHash } from 'node:crypto';
-import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import {
-  getProfileById,
-  listProfiles,
-  setProfileActiveRevision,
-  upsertProfile,
-} from '../domain/profile-repository.js';
 import type {
   ProfileRevisionRecord,
   ProfileRevisionSource,
@@ -17,6 +10,7 @@ import type {
 import {
   activateProfileRevision,
   deprecateActiveProfileRevision,
+  getActiveProfileRevision,
   getLatestProfileRevisionByHash,
   getProfileRevisionById,
   insertProfileRevision,
@@ -26,23 +20,15 @@ import {
   copyStudentProfileCandidateDraftRevisionLinks,
   markStudentProfileCandidatesPromotedByRevision,
 } from '../domain/student-profile-candidate-repository.js';
+import { getStudentById } from '../domain/student-repository.js';
 import {
   deriveFoundationalProfileFromMarkdown,
   type FoundationalProfile,
   normalizeFoundationalProfile,
 } from './foundational-profile.js';
-import type { PromptOption } from './prompt-options.js';
-
-const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
-const MAX_OPTION_PAGE_LIMIT = 500;
-
-export interface ProfileContentListResponse {
-  profiles: PromptOption[];
-}
 
 export interface ProfileContentResponse {
-  id: string;
-  label: string;
+  studentId: string;
   content: string;
   structuredContent?: FoundationalProfile | null;
   currentRevisionId: string | null;
@@ -51,7 +37,7 @@ export interface ProfileContentResponse {
 
 export interface ProfileRevisionSummaryResponse {
   id: string;
-  profileId: string;
+  studentId: string;
   contentHash: string;
   source: ProfileRevisionSource;
   status: 'draft' | 'active' | 'deprecated';
@@ -84,17 +70,13 @@ interface ProfileRevisionDependencies {
   list: typeof listProfileRevisions;
   getById: typeof getProfileRevisionById;
   getLatestByHash: typeof getLatestProfileRevisionByHash;
+  getActive: typeof getActiveProfileRevision;
 }
 
 interface ProfileContentDependencies {
   config: BatchBackendConfig;
   revisions: ProfileRevisionDependencies;
-  profiles: {
-    list: typeof listProfiles;
-    getById: typeof getProfileById;
-    upsert: typeof upsertProfile;
-    setActive: typeof setProfileActiveRevision;
-  };
+  students: { getById: typeof getStudentById };
   candidates: {
     markPromotedByRevision: typeof markStudentProfileCandidatesPromotedByRevision;
     copyDraftLinks: typeof copyStudentProfileCandidateDraftRevisionLinks;
@@ -126,32 +108,6 @@ export class ProfileContentError extends Error {
   }
 }
 
-function normalizeProfileId(id: string): string {
-  const normalized = path.posix
-    .normalize(id.replaceAll('\\', '/').replace(/^\/+/, '').trim())
-    .trim();
-
-  if (!normalized || normalized === '.' || normalized === '..') {
-    throw new ProfileContentError('profileId is required', 'profile_id_missing', 400);
-  }
-  if (normalized.startsWith('../') || path.posix.isAbsolute(normalized)) {
-    throw new ProfileContentError('profileId is invalid', 'profile_id_invalid', 400);
-  }
-
-  const ext = path.extname(normalized).toLowerCase();
-  if (!PROFILE_EXTENSIONS.has(ext)) {
-    throw new ProfileContentError('profileId must end with .md or .txt', 'profile_id_invalid', 400);
-  }
-
-  return normalized;
-}
-
-function formatProfileLabel(profileId: string): string {
-  const base = path.basename(profileId, path.extname(profileId));
-  const normalized = base.replaceAll(/[_-]+/g, ' ').trim();
-  return normalized.length > 0 ? normalized : profileId;
-}
-
 function getDependencies(
   overrides?: Partial<ProfileContentDependencies>,
 ): ProfileContentDependencies {
@@ -164,13 +120,9 @@ function getDependencies(
       list: listProfileRevisions,
       getById: getProfileRevisionById,
       getLatestByHash: getLatestProfileRevisionByHash,
+      getActive: getActiveProfileRevision,
     },
-    profiles: overrides?.profiles ?? {
-      list: listProfiles,
-      getById: getProfileById,
-      upsert: upsertProfile,
-      setActive: setProfileActiveRevision,
-    },
+    students: overrides?.students ?? { getById: getStudentById },
     candidates: overrides?.candidates ?? {
       markPromotedByRevision: markStudentProfileCandidatesPromotedByRevision,
       copyDraftLinks: copyStudentProfileCandidateDraftRevisionLinks,
@@ -196,7 +148,7 @@ function resolveStructuredContent(
 function toProfileRevisionSummary(revision: ProfileRevisionRecord): ProfileRevisionSummaryResponse {
   return {
     id: revision.id,
-    profileId: revision.profileId,
+    studentId: revision.studentId,
     contentHash: revision.contentHash,
     source: revision.source,
     status: revision.status,
@@ -210,45 +162,13 @@ function toProfileRevisionSummary(revision: ProfileRevisionRecord): ProfileRevis
   };
 }
 
-async function listActiveProfileOptions(
-  dependencies: ProfileContentDependencies,
-): Promise<PromptOption[]> {
-  const options: PromptOption[] = [];
-  let offset = 0;
-
-  while (true) {
-    const listed = await dependencies.profiles.list({
-      limit: MAX_OPTION_PAGE_LIMIT,
-      offset,
-      order: 'asc',
-    });
-
-    options.push(
-      ...listed.items
-        .filter((profile) => Boolean(profile.activeRevisionId))
-        .map((profile) => ({ id: profile.id, label: profile.label })),
-    );
-
-    offset += listed.items.length;
-    if (offset >= listed.total || listed.items.length === 0) {
-      break;
-    }
-  }
-
-  return options;
-}
-
 async function upsertProfileContentWithRevision(
-  profileId: string,
+  studentId: string,
   content: string,
   overrides: Partial<ProfileContentDependencies> | undefined,
   options: UpsertProfileContentOptions,
 ): Promise<ProfileContentResponse> {
-  const dependencies = getDependencies(overrides);
-  const normalizedProfileId = normalizeProfileId(profileId);
-  const existingProfile = await dependencies.profiles.getById(normalizedProfileId);
-  const label = existingProfile?.label ?? formatProfileLabel(normalizedProfileId);
-  const revision = await saveProfileRevision(profileId, content, overrides, {
+  const revision = await saveProfileRevision(studentId, content, overrides, {
     source: options.source,
     createdBy: options.createdBy ?? null,
     restoredFromRevisionId: options.restoredFromRevisionId ?? null,
@@ -258,8 +178,7 @@ async function upsertProfileContentWithRevision(
   });
 
   return {
-    id: normalizedProfileId,
-    label,
+    studentId,
     content: revision.content,
     structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
     currentRevisionId: revision.id,
@@ -268,39 +187,52 @@ async function upsertProfileContentWithRevision(
 }
 
 async function saveProfileRevision(
-  profileId: string,
+  studentId: string,
   content: string,
   overrides: Partial<ProfileContentDependencies> | undefined,
   options: SaveProfileRevisionContentOptions,
 ): Promise<ProfileRevisionDetailResponse> {
   const dependencies = getDependencies(overrides);
-  const normalizedProfileId = normalizeProfileId(profileId);
   const normalizedContent = content ?? '';
-  const existingProfile = await dependencies.profiles.getById(normalizedProfileId);
-  const label = existingProfile?.label ?? formatProfileLabel(normalizedProfileId);
 
-  await dependencies.profiles.upsert({
-    id: normalizedProfileId,
-    label,
-    activeRevisionId: existingProfile?.activeRevisionId ?? null,
-  });
+  if (!(await dependencies.students.getById(studentId))) {
+    throw new ProfileContentError('Student not found', 'not_found', 404);
+  }
 
   const hash = hashProfileContent(normalizedContent);
-  const source = options.source ?? (existingProfile ? 'update' : 'create');
+  const source = options.source ?? 'update';
   const status = options.status ?? 'active';
   const structuredContent = options.structuredContent
     ? normalizeFoundationalProfile(options.structuredContent)
     : null;
 
-  const existingRevision =
+  const matchingRevision =
     options.dedupeByHash === false || source === 'restore'
       ? null
-      : await dependencies.revisions.getLatestByHash(normalizedProfileId, hash);
+      : await dependencies.revisions.getLatestByHash(studentId, hash);
 
-  const revision =
+  const existingRevision =
+    matchingRevision &&
+    (status !== 'draft' || matchingRevision.status === 'draft') &&
+    JSON.stringify(matchingRevision.structuredContent) === JSON.stringify(structuredContent)
+      ? matchingRevision
+      : null;
+  const candidateLinkSource =
+    status === 'draft' && options.inheritCandidateLinksFromRevisionId
+      ? await dependencies.revisions.getById(studentId, options.inheritCandidateLinksFromRevisionId)
+      : null;
+  if (status === 'draft' && options.inheritCandidateLinksFromRevisionId && !candidateLinkSource) {
+    throw new ProfileContentError(
+      'Candidate-link source revision was not found',
+      'candidate_link_source_revision_not_found',
+      404,
+    );
+  }
+
+  let revision =
     existingRevision ??
     (await dependencies.revisions.insert({
-      profileId: normalizedProfileId,
+      studentId: studentId,
       content: normalizedContent,
       structuredContent,
       contentHash: hash,
@@ -310,66 +242,35 @@ async function saveProfileRevision(
       restoredFromRevisionId: options.restoredFromRevisionId ?? null,
     }));
 
-  if (status === 'draft' && options.inheritCandidateLinksFromRevisionId) {
-    const sourceRevision = await dependencies.revisions.getById(
-      normalizedProfileId,
-      options.inheritCandidateLinksFromRevisionId,
-    );
-    if (!sourceRevision) {
-      throw new ProfileContentError(
-        'Candidate-link source revision was not found',
-        'candidate_link_source_revision_not_found',
-        404,
-      );
-    }
-
+  if (candidateLinkSource) {
     await dependencies.candidates.copyDraftLinks({
-      sourceRevisionId: sourceRevision.id,
+      sourceRevisionId: candidateLinkSource.id,
       targetRevisionId: revision.id,
     });
   }
 
-  if (status === 'active' && (existingRevision || overrides?.revisions || overrides?.profiles)) {
-    await dependencies.revisions.activate(normalizedProfileId, revision.id);
-    if (overrides?.revisions || overrides?.profiles) {
-      await dependencies.profiles.setActive(normalizedProfileId, revision.id);
-    }
+  if (status === 'active' && existingRevision) {
+    revision = (await dependencies.revisions.activate(studentId, revision.id)) ?? revision;
   }
 
   return {
     ...toProfileRevisionSummary(revision),
-    profileId: normalizedProfileId,
+    studentId: studentId,
     content: revision.content,
     structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
   };
 }
 
-export async function listProfileContents(
-  overrides?: Partial<ProfileContentDependencies>,
-): Promise<ProfileContentListResponse> {
-  const dependencies = getDependencies(overrides);
-  const profiles = await listActiveProfileOptions(dependencies);
-  return { profiles };
-}
-
 export async function getProfileContent(
-  profileId: string,
+  studentId: string,
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileContentResponse | null> {
   const dependencies = getDependencies(overrides);
-  const normalizedProfileId = normalizeProfileId(profileId);
-  const profile = await dependencies.profiles.getById(normalizedProfileId);
-  if (!profile?.activeRevisionId) return null;
-
-  const revision = await dependencies.revisions.getById(
-    normalizedProfileId,
-    profile.activeRevisionId,
-  );
+  const revision = await dependencies.revisions.getActive(studentId);
   if (!revision) return null;
 
   return {
-    id: profile.id,
-    label: profile.label,
+    studentId,
     content: revision.content,
     structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
     currentRevisionId: revision.id,
@@ -378,12 +279,12 @@ export async function getProfileContent(
 }
 
 export async function upsertProfileContent(
-  profileId: string,
+  studentId: string,
   content: string,
   overrides?: Partial<ProfileContentDependencies & { createdBy: string | null }>,
   structuredContent?: FoundationalProfile | null,
 ): Promise<ProfileContentResponse> {
-  return upsertProfileContentWithRevision(profileId, content, overrides, {
+  return upsertProfileContentWithRevision(studentId, content, overrides, {
     source: undefined,
     createdBy: overrides?.createdBy ?? null,
     restoredFromRevisionId: null,
@@ -392,33 +293,16 @@ export async function upsertProfileContent(
 }
 
 export async function saveProfileRevisionContent(
-  profileId: string,
+  studentId: string,
   content: string,
   options: SaveProfileRevisionContentOptions = {},
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileRevisionDetailResponse> {
-  return saveProfileRevision(profileId, content, overrides, options);
+  return saveProfileRevision(studentId, content, overrides, options);
 }
 
-export async function deleteProfileContent(
-  profileId: string,
-  overrides?: Partial<ProfileContentDependencies>,
-): Promise<boolean> {
-  const dependencies = getDependencies(overrides);
-  const normalizedProfileId = normalizeProfileId(profileId);
-  const profile = await dependencies.profiles.getById(normalizedProfileId);
-  if (!profile?.activeRevisionId) return false;
-
-  await dependencies.revisions.deprecateActive(normalizedProfileId);
-  if (overrides?.revisions || overrides?.profiles) {
-    await dependencies.profiles.setActive(normalizedProfileId, null);
-  }
-
-  return true;
-}
-
-export async function listProfileRevisionsForProfile(
-  profileId: string,
+export async function listProfileRevisionsForStudent(
+  studentId: string,
   params: {
     limit?: number;
     offset?: number;
@@ -427,12 +311,9 @@ export async function listProfileRevisionsForProfile(
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileRevisionListResponse | null> {
   const dependencies = getDependencies(overrides);
-  const normalizedProfileId = normalizeProfileId(profileId);
-  const profile = await dependencies.profiles.getById(normalizedProfileId);
-  if (!profile) return null;
 
   const result = await dependencies.revisions.list({
-    profileId: normalizedProfileId,
+    studentId: studentId,
     limit: params.limit,
     offset: params.offset,
     order: params.order,
@@ -447,17 +328,14 @@ export async function listProfileRevisionsForProfile(
   };
 }
 
-export async function getProfileRevisionForProfile(
-  profileId: string,
+export async function getProfileRevisionForStudent(
+  studentId: string,
   revisionId: string,
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileRevisionDetailResponse | null> {
   const dependencies = getDependencies(overrides);
-  const normalizedProfileId = normalizeProfileId(profileId);
-  const profile = await dependencies.profiles.getById(normalizedProfileId);
-  if (!profile) return null;
 
-  const revision = await dependencies.revisions.getById(normalizedProfileId, revisionId);
+  const revision = await dependencies.revisions.getById(studentId, revisionId);
   if (!revision) return null;
 
   return {
@@ -468,19 +346,16 @@ export async function getProfileRevisionForProfile(
 }
 
 export async function restoreProfileRevision(
-  profileId: string,
+  studentId: string,
   revisionId: string,
   overrides?: Partial<ProfileContentDependencies & { createdBy: string | null }>,
 ): Promise<ProfileContentResponse | null> {
   const dependencies = getDependencies(overrides);
-  const normalizedProfileId = normalizeProfileId(profileId);
-  const profile = await dependencies.profiles.getById(normalizedProfileId);
-  if (!profile) return null;
 
-  const revision = await dependencies.revisions.getById(normalizedProfileId, revisionId);
+  const revision = await dependencies.revisions.getById(studentId, revisionId);
   if (!revision) return null;
 
-  return upsertProfileContentWithRevision(normalizedProfileId, revision.content, overrides, {
+  return upsertProfileContentWithRevision(studentId, revision.content, overrides, {
     source: 'restore',
     createdBy: overrides?.createdBy ?? null,
     restoredFromRevisionId: revision.id,
@@ -488,22 +363,16 @@ export async function restoreProfileRevision(
   });
 }
 
-export async function activateProfileRevisionForProfile(
-  profileId: string,
+export async function activateProfileRevisionForStudent(
+  studentId: string,
   revisionId: string,
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileRevisionDetailResponse | null> {
   const dependencies = getDependencies(overrides);
-  const normalizedProfileId = normalizeProfileId(profileId);
-  const profile = await dependencies.profiles.getById(normalizedProfileId);
-  if (!profile) return null;
 
-  const activated = await dependencies.revisions.activate(normalizedProfileId, revisionId);
+  const activated = await dependencies.revisions.activate(studentId, revisionId);
   if (!activated) return null;
 
-  if (overrides?.revisions || overrides?.profiles) {
-    await dependencies.profiles.setActive(normalizedProfileId, activated.id);
-  }
   await dependencies.candidates.markPromotedByRevision(activated.id);
 
   return {

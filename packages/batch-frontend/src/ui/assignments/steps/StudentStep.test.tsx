@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { StudentStep } from './StudentStep';
 
 const students = [
-  { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
-  { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+  { id: 'student-alex', name: 'Alex' },
+  { id: 'student-bella', name: 'Bella' },
 ];
 
 function StudentHarness({

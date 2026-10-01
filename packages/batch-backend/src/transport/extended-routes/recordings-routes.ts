@@ -24,7 +24,6 @@ import {
 import { ingestRecordingUpload } from '../../application/ingest-recording-upload.js';
 import { listRecordingsWithDefaults } from '../../application/list-recordings.js';
 import { materializeDraft } from '../../application/materialize-draft.js';
-import { ProfilePathError } from '../../application/profile-path.js';
 import { PromptOptionError } from '../../application/prompt-options.js';
 import {
   collectPublishStudyTextOverrideIssues,
@@ -1147,7 +1146,7 @@ export function registerRecordingRoutes(
             details: error.issues,
           });
         }
-        if (error instanceof ProfilePathError || error instanceof PromptOptionError) {
+        if (error instanceof PromptOptionError) {
           return reply.code(400).send({
             error: 'validation_failed',
             message: error.message,

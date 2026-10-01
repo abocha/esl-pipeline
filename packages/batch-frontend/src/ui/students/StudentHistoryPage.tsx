@@ -251,7 +251,7 @@ function candidateToEvent(record: StudentProfileCandidate): HistoryEvent | null 
 }
 
 function getTimelineCategory(item: StudentTimelineItem): Exclude<HistoryFilter, 'all'> | null {
-  if (item.type.startsWith('profile_revision') || item.type === 'student_profile_binding_changed') {
+  if (item.type.startsWith('profile_revision')) {
     return 'profile';
   }
   if (
@@ -300,8 +300,6 @@ function getTimelineLabel(item: StudentTimelineItem): string {
       return 'Profile restored';
     case 'profile_revision_saved':
       return 'Profile updated';
-    case 'student_profile_binding_changed':
-      return 'Profile connection changed';
     case 'template_revision_activated':
       return 'Template activated';
     case 'template_revision_restored':
@@ -356,7 +354,7 @@ function getTimelineLabel(item: StudentTimelineItem): string {
 function getTimelineTone(item: StudentTimelineItem): HistoryEventTone {
   if (item.status === 'failed') return 'rose';
   if (item.type.startsWith('job_action')) return 'amber';
-  if (item.type.startsWith('profile_revision') || item.type === 'student_profile_binding_changed') {
+  if (item.type.startsWith('profile_revision')) {
     return 'green';
   }
   if (item.type.startsWith('template_revision') || item.type === 'prompt_package_created') {

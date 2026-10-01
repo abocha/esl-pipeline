@@ -36,7 +36,6 @@ function session(confirmedStep: AssignmentSession['confirmedStep']): AssignmentS
           ? null
           : {
               teacherNotes: null,
-              profileId: null,
               profileRevisionId: null,
               profileRevisionHash: null,
             },

@@ -254,7 +254,8 @@ export interface AssignmentConfirmedSnapshot {
   } | null;
   context: {
     teacherNotes: string | null;
-    profileId: string | null;
+    /** Legacy provenance only; new confirmations omit standalone identity. */
+    profileId?: string | null;
     profileRevisionId: string | null;
     profileRevisionHash: string | null;
   } | null;
@@ -313,7 +314,7 @@ export interface AssignmentLearnerContextDto {
     | 'superseded'
     | null;
   profile: {
-    profileId: string;
+    studentId: string;
     revisionId: string;
     revisionHash: string;
     content: string;
@@ -357,7 +358,6 @@ export interface UpdateAssignmentSessionRecoveryRequest {
     selectedGenerationProvider: GenerationProvider | null;
     selectedGenerationModel: string | null;
     teacherNotes: string | null;
-    selectedProfileId: string | null;
     selectedProfileRevisionId: string | null;
     selectedProfileRevisionHash: string | null;
   }>;
@@ -386,7 +386,6 @@ export type ConfirmAssignmentSessionStepRequest =
       step: 'context';
       expectedRevision: number;
       teacherNotes: string | null;
-      profileId: string | null;
       profileRevisionId: string | null;
       profileRevisionHash: string | null;
     }
@@ -1008,7 +1007,6 @@ export interface StudentProfileDto {
   voices?: Record<string, string>;
   manifestPreset?: string | null;
   accentPreference?: string | null;
-  profileId?: string | null;
   archivedAt?: string | null;
   archivedBy?: string | null;
   archiveReason?: string | null;

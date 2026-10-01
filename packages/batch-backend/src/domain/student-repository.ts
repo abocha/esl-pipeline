@@ -14,7 +14,6 @@ interface StudentRow {
   voices: Record<string, string> | null;
   manifest_preset: string | null;
   accent_preference: string | null;
-  profile_id: string | null;
   archived_at: Date | null;
   archived_by: string | null;
   archive_reason: string | null;
@@ -32,7 +31,6 @@ export interface InsertStudentParams {
   voices?: Record<string, string>;
   manifestPreset?: string | null;
   accentPreference?: string | null;
-  profileId?: string | null;
 }
 
 export interface UpdateStudentParams {
@@ -45,7 +43,6 @@ export interface UpdateStudentParams {
   voices?: Record<string, string>;
   manifestPreset?: string | null;
   accentPreference?: string | null;
-  profileId?: string | null;
 }
 
 export interface ListStudentsParams {
@@ -80,7 +77,6 @@ const STUDENT_COLUMNS = `
   voices,
   manifest_preset,
   accent_preference,
-  profile_id,
   archived_at,
   archived_by,
   archive_reason,
@@ -102,10 +98,9 @@ export async function insertStudent(params: InsertStudentParams): Promise<Studen
         color_preset,
         voices,
         manifest_preset,
-        accent_preference,
-        profile_id
+        accent_preference
       )
-      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9, $10)
+      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9)
       RETURNING ${STUDENT_COLUMNS}
       `,
       [
@@ -118,7 +113,6 @@ export async function insertStudent(params: InsertStudentParams): Promise<Studen
         JSON.stringify(params.voices ?? {}),
         params.manifestPreset ?? null,
         params.accentPreference ?? null,
-        params.profileId ?? null,
       ],
     );
     return result.rows[0] as StudentRow;
@@ -141,10 +135,9 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
         color_preset,
         voices,
         manifest_preset,
-        accent_preference,
-        profile_id
+        accent_preference
       )
-      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9, $10)
+      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9)
       ON CONFLICT (id) DO UPDATE
       SET
         student = EXCLUDED.student,
@@ -154,8 +147,7 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
         color_preset = EXCLUDED.color_preset,
         voices = EXCLUDED.voices,
         manifest_preset = EXCLUDED.manifest_preset,
-        accent_preference = EXCLUDED.accent_preference,
-        profile_id = EXCLUDED.profile_id
+        accent_preference = EXCLUDED.accent_preference
       RETURNING ${STUDENT_COLUMNS}
       `,
       [
@@ -168,7 +160,6 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
         JSON.stringify(params.voices ?? {}),
         params.manifestPreset ?? null,
         params.accentPreference ?? null,
-        params.profileId ?? null,
       ],
     );
     return result.rows[0] as StudentRow;
@@ -271,10 +262,9 @@ export async function updateStudent(params: UpdateStudentParams): Promise<Studen
         color_preset = COALESCE($5, color_preset),
         voices = COALESCE($6::jsonb, voices),
         manifest_preset = COALESCE($7, manifest_preset),
-        accent_preference = COALESCE($8, accent_preference),
-        profile_id = $9
+        accent_preference = COALESCE($8, accent_preference)
       WHERE id = $1
-        AND ($10::uuid IS NULL OR workspace_id = $10::uuid)
+        AND ($9::uuid IS NULL OR workspace_id = $9::uuid)
       RETURNING ${STUDENT_COLUMNS}
       `,
       [
@@ -286,7 +276,6 @@ export async function updateStudent(params: UpdateStudentParams): Promise<Studen
         params.voices ? JSON.stringify(params.voices) : null,
         params.manifestPreset ?? null,
         params.accentPreference ?? null,
-        params.profileId ?? null,
         params.workspaceId ?? null,
       ],
     );
@@ -366,7 +355,6 @@ function mapRow(row: StudentRow): StudentRecord {
     voices: row.voices ?? {},
     manifestPreset: row.manifest_preset ?? null,
     accentPreference: row.accent_preference ?? null,
-    profileId: row.profile_id ?? null,
     archivedAt: row.archived_at ?? null,
     archivedBy: row.archived_by ?? null,
     archiveReason: row.archive_reason ?? null,

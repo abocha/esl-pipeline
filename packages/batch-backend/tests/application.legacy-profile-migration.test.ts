@@ -12,7 +12,7 @@ describe('application/legacy-profile-migration', () => {
   it('plans and applies structured migrations for markdown-only active revisions', async () => {
     const saveRevision = vi.fn(async () => ({
       id: 'revision-structured-1',
-      profileId: 'profiles/students/alex.md',
+      studentId: 'student-alex',
       contentHash: 'hash-2',
       source: 'legacy_normalization' as const,
       status: 'draft' as const,
@@ -52,7 +52,6 @@ describe('application/legacy-profile-migration', () => {
               {
                 id: 'student-alex',
                 student: 'Alex',
-                profileId: 'profiles/students/alex.md',
                 dbId: null,
                 pageParentId: null,
                 colorPreset: null,
@@ -72,19 +71,10 @@ describe('application/legacy-profile-migration', () => {
             order: 'asc',
           }),
         },
-        profiles: {
-          getById: async () => ({
-            id: 'profiles/students/alex.md',
-            label: 'Alex',
-            activeRevisionId: 'revision-legacy-1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-          }),
-        },
         revisions: {
           getById: async () => ({
             id: 'revision-legacy-1',
-            profileId: 'profiles/students/alex.md',
+            studentId: 'student-alex',
             content: `# Foundational Profile
 **Current Level:** B1
 
@@ -121,14 +111,13 @@ describe('application/legacy-profile-migration', () => {
       expect.objectContaining({
         studentId: 'student-alex',
         studentName: 'Alex',
-        profileId: 'profiles/students/alex.md',
         sourceRevisionId: 'revision-legacy-1',
         action: 'migrated',
       }),
     );
     expect(result.items[0]!.structuredContent?.teacherNotes).toContain('Tactical Follow-ups');
     expect(saveRevision).toHaveBeenCalledWith(
-      'profiles/students/alex.md',
+      'student-alex',
       expect.stringContaining('# Foundational Profile'),
       expect.objectContaining({
         source: 'legacy_normalization',
@@ -155,7 +144,6 @@ describe('application/legacy-profile-migration', () => {
               {
                 id: 'student-alex',
                 student: 'Alex',
-                profileId: 'profiles/students/alex.md',
                 dbId: null,
                 pageParentId: null,
                 colorPreset: null,
@@ -175,19 +163,10 @@ describe('application/legacy-profile-migration', () => {
             order: 'asc',
           }),
         },
-        profiles: {
-          getById: async () => ({
-            id: 'profiles/students/alex.md',
-            label: 'Alex',
-            activeRevisionId: 'revision-structured-1',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-          }),
-        },
         revisions: {
           getById: async () => ({
             id: 'revision-structured-1',
-            profileId: 'profiles/students/alex.md',
+            studentId: 'student-alex',
             content: '# Foundational Profile',
             structuredContent: {
               schemaVersion: 'foundational_profile_v1' as const,
@@ -230,7 +209,7 @@ describe('application/legacy-profile-migration', () => {
     expect(saveRevision).not.toHaveBeenCalled();
   });
 
-  it('keeps paging until it finds a targeted profileId', async () => {
+  it('keeps paging until it finds a targeted studentId', async () => {
     const saveRevision = vi.fn();
     const list = vi
       .fn()
@@ -238,7 +217,6 @@ describe('application/legacy-profile-migration', () => {
         items: Array.from({ length: 200 }, (_, index) => ({
           id: `student-${index}`,
           student: `Student ${index}`,
-          profileId: `profiles/students/student-${index}.md`,
           dbId: null,
           pageParentId: null,
           colorPreset: null,
@@ -261,7 +239,6 @@ describe('application/legacy-profile-migration', () => {
           {
             id: 'student-target',
             student: 'Target',
-            profileId: 'profiles/students/target.md',
             dbId: null,
             pageParentId: null,
             colorPreset: null,
@@ -283,26 +260,17 @@ describe('application/legacy-profile-migration', () => {
 
     const result = await migrateLegacyProfiles({
       request: {
-        profileId: 'profiles/students/target.md',
+        studentId: 'student-target',
       },
       overrides: {
         config: loadConfig(),
         students: {
           list,
         },
-        profiles: {
-          getById: async () => ({
-            id: 'profiles/students/target.md',
-            label: 'Target',
-            activeRevisionId: 'revision-target',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-          }),
-        },
         revisions: {
           getById: async () => ({
             id: 'revision-target',
-            profileId: 'profiles/students/target.md',
+            studentId: 'student-target',
             content: `# Foundational Profile
 **Current Level:** B1
 
@@ -332,7 +300,7 @@ describe('application/legacy-profile-migration', () => {
     expect(result.profilesScanned).toBe(1);
     expect(result.items[0]).toEqual(
       expect.objectContaining({
-        profileId: 'profiles/students/target.md',
+        studentId: 'student-target',
         action: 'planned',
       }),
     );
@@ -342,7 +310,7 @@ describe('application/legacy-profile-migration', () => {
     const report = createLegacyProfileMigrationReport({
       request: {
         apply: false,
-        profileId: 'profiles/students/alex.md',
+        studentId: 'student-alex',
         reviewerId: 'teacher-1',
         limit: 1,
       },
@@ -356,7 +324,6 @@ describe('application/legacy-profile-migration', () => {
           {
             studentId: 'student-alex',
             studentName: 'Alex',
-            profileId: 'profiles/students/alex.md',
             label: 'Alex',
             sourceRevisionId: 'revision-legacy-1',
             originalMarkdown:
@@ -388,16 +355,16 @@ describe('application/legacy-profile-migration', () => {
 
     expect(summary).toContain('Legacy Profile Migration Report');
     expect(summary).toContain('Mode: dry-run');
-    expect(summary).toContain('profiles/students/alex.md');
+    expect(summary).toContain('student-alex');
     expect(detail).toContain('Structured Content');
     expect(detail).toContain('"overallLevel": "B1"');
     expect(detail).toContain('Original Markdown');
   });
 
-  it('prefers curated canonical profile data for known live legacy profiles', async () => {
+  it('skips content that cannot derive a profile instead of substituting retired catalog seed data', async () => {
     const result = await migrateLegacyProfiles({
       request: {
-        profileId: 'dasha.md',
+        studentId: 'student-dasha',
       },
       overrides: {
         config: loadConfig(),
@@ -407,7 +374,6 @@ describe('application/legacy-profile-migration', () => {
               {
                 id: 'student-dasha',
                 student: 'Daria',
-                profileId: 'dasha.md',
                 dbId: null,
                 pageParentId: null,
                 colorPreset: null,
@@ -427,19 +393,10 @@ describe('application/legacy-profile-migration', () => {
             order: 'asc',
           }),
         },
-        profiles: {
-          getById: async () => ({
-            id: 'dasha.md',
-            label: 'Daria',
-            activeRevisionId: 'revision-legacy-dasha',
-            createdAt: new Date('2026-01-01T00:00:00.000Z'),
-            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-          }),
-        },
         revisions: {
           getById: async () => ({
             id: 'revision-legacy-dasha',
-            profileId: 'dasha.md',
+            studentId: 'student-dasha',
             content: '# Minimal markdown that would not be enough on its own',
             structuredContent: null,
             contentHash: 'hash-dasha',
@@ -462,18 +419,12 @@ describe('application/legacy-profile-migration', () => {
       },
     });
 
-    expect(result.items[0]).toEqual(
-      expect.objectContaining({
-        studentName: 'Daria',
-        profileId: 'dasha.md',
-        action: 'planned',
-        structuredContent: expect.objectContaining({
-          overallLevel: 'A2',
-          primaryGoals: [
-            'Transition photography into her main professional pursuit and source of income.',
-          ],
-        }),
-      }),
-    );
+    expect(result.items[0]).toMatchObject({
+      studentName: 'Daria',
+      studentId: 'student-dasha',
+      action: 'skipped',
+      reason: 'unable_to_derive',
+      structuredContent: null,
+    });
   });
 });

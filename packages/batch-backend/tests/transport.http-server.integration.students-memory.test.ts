@@ -17,9 +17,8 @@ describeHttpServerIntegrationSuite(
     mockListStudentHomeworkMemory,
     mockListStudentLessonMemory,
     mockListStudentMemorySnapshotsForStudent,
-    mockListStudentProfileBindingsForStudent,
     mockListStudentProfileCandidatesForStudent,
-    mockListProfileRevisionsForProfile,
+    mockListProfileRevisionsForStudent,
     mockGetStudentScheduleBillingSurface,
     mockResolvePrimaryWorkspaceIdForUser,
   }) => {
@@ -159,7 +158,7 @@ describeHttpServerIntegrationSuite(
     it('GET /students/:id/surfaces/overview composes the overview route payload', async () => {
       const studentId = deriveStudentId('Anna');
       mockGetProfileContent.mockClear();
-      mockListProfileRevisionsForProfile.mockClear();
+      mockListProfileRevisionsForStudent.mockClear();
       mockGetStudentMemoryOverview.mockClear();
       mockListStudentProfileCandidatesForStudent.mockClear();
       mockGetStudentTimeline.mockClear();
@@ -171,6 +170,11 @@ describeHttpServerIntegrationSuite(
       });
 
       expect(response.statusCode).toBe(200);
+      expect(mockGetProfileContent).toHaveBeenCalledWith(studentId);
+      expect(mockListProfileRevisionsForStudent).toHaveBeenCalledWith(
+        studentId,
+        expect.objectContaining({ limit: 20 }),
+      );
       expect(mockGetStudentMemoryOverview).toHaveBeenCalledWith(
         expect.objectContaining({ studentId, lessonLimit: 3, homeworkLimit: 2 }),
       );
@@ -192,7 +196,7 @@ describeHttpServerIntegrationSuite(
         studentId,
       );
       expect(response.json()).toMatchObject({
-        profile: { id: 'profile.md' },
+        profile: { studentId },
         revisions: { items: [{ id: 'revision-1' }] },
         memory: { studentId },
         pendingCandidates: { items: [] },
@@ -214,11 +218,10 @@ describeHttpServerIntegrationSuite(
       expect(response.json()).toMatchObject({ error: 'workspace_required' });
     });
 
-    it('GET /students/:id/surfaces/learning composes profile, memory, binding, and candidate data', async () => {
+    it('GET /students/:id/surfaces/learning composes student-owned profile, memory, and candidate data', async () => {
       const studentId = deriveStudentId('Anna');
       mockGetStudentMemoryOverview.mockClear();
       mockGetStudentMemoryHealth.mockClear();
-      mockListStudentProfileBindingsForStudent.mockClear();
       mockListStudentProfileCandidatesForStudent.mockClear();
 
       const response = await app.inject({
@@ -233,16 +236,11 @@ describeHttpServerIntegrationSuite(
       expect(mockGetStudentMemoryHealth).toHaveBeenCalledWith(
         expect.objectContaining({ studentId }),
       );
-      expect(mockListStudentProfileBindingsForStudent).toHaveBeenCalledWith(
-        studentId,
-        expect.objectContaining({ limit: 20 }),
-      );
       expect(response.json()).toMatchObject({
-        profile: { id: 'profile.md' },
+        profile: { studentId },
         revisions: { items: [{ id: 'revision-1' }] },
         memory: { studentId },
         memoryHealth: { studentId },
-        bindings: { items: [{ id: 'binding-1' }] },
         candidates: { items: [] },
       });
     });

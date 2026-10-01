@@ -17,7 +17,7 @@ interface CliOptions {
   apply: boolean;
   changedBy: string | null;
   limit: number | null;
-  profileId: string | null;
+  studentId: string | null;
   reportDir: string | null;
   status: 'draft' | 'active';
 }
@@ -26,7 +26,7 @@ function parseArgs(argv: string[]): CliOptions {
   let apply = false;
   let changedBy: string | null = null;
   let limit: number | null = null;
-  let profileId: string | null = null;
+  let studentId: string | null = null;
   let reportDir: string | null = null;
   let status: 'draft' | 'active' = 'draft';
 
@@ -56,8 +56,8 @@ function parseArgs(argv: string[]): CliOptions {
       continue;
     }
 
-    if (arg === '--profile-id') {
-      profileId = argv[index + 1] ?? null;
+    if (arg === '--student-id') {
+      studentId = argv[index + 1] ?? null;
       index += 1;
       continue;
     }
@@ -85,7 +85,7 @@ function parseArgs(argv: string[]): CliOptions {
     apply,
     changedBy: changedBy?.trim() || null,
     limit,
-    profileId: profileId?.trim() || null,
+    studentId: studentId?.trim() || null,
     reportDir: reportDir?.trim() || null,
     status,
   };
@@ -95,8 +95,8 @@ function createTimestampSuffix(now = new Date()): string {
   return now.toISOString().replaceAll(':', '-').replaceAll('.', '-');
 }
 
-function slugifyProfileId(profileId: string): string {
-  return profileId
+function slugifyProfileId(studentId: string): string {
+  return studentId
     .replaceAll(/[^a-zA-Z0-9]+/g, '-')
     .replaceAll(/^-+|-+$/g, '')
     .toLowerCase();
@@ -121,7 +121,7 @@ async function writeMigrationReportFiles(args: {
   );
 
   for (const item of args.report.items) {
-    const baseName = slugifyProfileId(item.profileId) || 'profile';
+    const baseName = slugifyProfileId(item.studentId ?? 'unknown') || 'profile';
     await writeFile(
       path.join(profilesDir, `${baseName}.json`),
       `${JSON.stringify(item, null, 2)}\n`,
@@ -150,7 +150,7 @@ async function run(): Promise<void> {
       apply: options.apply,
       reviewerId: options.changedBy,
       limit: options.limit ?? undefined,
-      profileId: options.profileId,
+      studentId: options.studentId,
       status: options.status,
     },
     overrides: {
@@ -162,7 +162,7 @@ async function run(): Promise<void> {
       apply: options.apply,
       reviewerId: options.changedBy,
       limit: options.limit ?? undefined,
-      profileId: options.profileId,
+      studentId: options.studentId,
       status: options.status,
     },
     result,
@@ -194,7 +194,7 @@ async function run(): Promise<void> {
     console.log(
       [
         '[legacy-profile-migration:item]',
-        `profileId=${item.profileId}`,
+        `studentId=${item.studentId}`,
         `action=${item.action}`,
         `sourceRevisionId=${item.sourceRevisionId ?? 'none'}`,
         `reason=${item.reason ?? 'none'}`,

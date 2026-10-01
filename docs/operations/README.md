@@ -41,3 +41,7 @@ Examples include:
 
 Keep evidence near its procedure when that improves discovery; do not move records solely to make a
 uniform folder tree. Supersede a run with a new dated record rather than rewriting its observed result.
+
+Student-owned learner profile migration uses
+[student-profile-revision-cutover.md](student-profile-revision-cutover.md), including the preflight
+and reconciliation required before removing frozen legacy storage.

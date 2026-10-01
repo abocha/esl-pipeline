@@ -2,12 +2,10 @@ import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import { listRecentReadyHomeworkMemoryByStudentId } from '../domain/homework-memory-repository.js';
 import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
 import { listRecentReadyLessonMemoryByStudentId } from '../domain/lesson-memory-repository.js';
-import { getProfileById } from '../domain/profile-repository.js';
 import type { ProfileRevisionSource } from '../domain/profile-revision-model.js';
-import { getProfileRevisionById } from '../domain/profile-revision-repository.js';
+import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
 import { getLatestReadyStudentMemorySnapshotByStudentId } from '../domain/student-memory-snapshot-repository.js';
-import { getActiveStudentProfileBinding } from '../domain/student-profile-binding-repository.js';
 import { getStudentById } from '../domain/student-repository.js';
 import {
   deriveFoundationalProfileFromMarkdown,
@@ -63,7 +61,7 @@ export interface TeachingContext {
   }>;
   provenance: {
     profile: {
-      profileId: string;
+      studentId: string;
       revisionId: string;
       versionLabel: string;
       source: ProfileRevisionSource;
@@ -78,9 +76,7 @@ export interface TeachingContext {
 
 interface TeachingContextDependencies {
   getStudent: typeof getStudentById;
-  getActiveBinding: typeof getActiveStudentProfileBinding;
-  getProfile: typeof getProfileById;
-  getRevision: typeof getProfileRevisionById;
+  getRevision: typeof getActiveProfileRevision;
   getSnapshot: typeof getLatestReadyStudentMemorySnapshotByStudentId;
   listLessons: typeof listRecentReadyLessonMemoryByStudentId;
   listHomework: typeof listRecentReadyHomeworkMemoryByStudentId;
@@ -185,9 +181,7 @@ export async function getStudentTeachingContext(args: {
 
   const dependencies: TeachingContextDependencies = {
     getStudent: args.overrides?.getStudent ?? getStudentById,
-    getActiveBinding: args.overrides?.getActiveBinding ?? getActiveStudentProfileBinding,
-    getProfile: args.overrides?.getProfile ?? getProfileById,
-    getRevision: args.overrides?.getRevision ?? getProfileRevisionById,
+    getRevision: args.overrides?.getRevision ?? getActiveProfileRevision,
     getSnapshot: args.overrides?.getSnapshot ?? getLatestReadyStudentMemorySnapshotByStudentId,
     listLessons: args.overrides?.listLessons ?? listRecentReadyLessonMemoryByStudentId,
     listHomework: args.overrides?.listHomework ?? listRecentReadyHomeworkMemoryByStudentId,
@@ -199,13 +193,7 @@ export async function getStudentTeachingContext(args: {
     return null;
   }
 
-  const profileId =
-    student.profileId ?? (await dependencies.getActiveBinding(student.id))?.profileId ?? null;
-  const profile = profileId ? await dependencies.getProfile(profileId) : null;
-  const revision =
-    profileId && profile?.activeRevisionId
-      ? await dependencies.getRevision(profileId, profile.activeRevisionId)
-      : null;
+  const revision = await dependencies.getRevision(student.id);
 
   const [snapshot, lessons, homework] = await Promise.all([
     dependencies.getSnapshot(student.id),
@@ -229,21 +217,20 @@ export async function getStudentTeachingContext(args: {
     recentLessons: selectedLessons.map(projectLesson),
     recentHomework: selectedHomework.map(projectHomework),
     provenance: {
-      profile:
-        profileId && activeRevision
-          ? {
-              profileId,
-              revisionId: activeRevision.id,
-              versionLabel: activeRevision.versionLabel,
-              source: activeRevision.source,
-              activatedAt: activeRevision.activatedAt?.toISOString() ?? null,
-              contentOrigin: activeRevision.structuredContent
-                ? 'stored_structured'
-                : profileContent
-                  ? 'legacy_markdown_derived'
-                  : 'unavailable',
-            }
-          : null,
+      profile: activeRevision
+        ? {
+            studentId: student.id,
+            revisionId: activeRevision.id,
+            versionLabel: activeRevision.versionLabel,
+            source: activeRevision.source,
+            activatedAt: activeRevision.activatedAt?.toISOString() ?? null,
+            contentOrigin: activeRevision.structuredContent
+              ? 'stored_structured'
+              : profileContent
+                ? 'legacy_markdown_derived'
+                : 'unavailable',
+          }
+        : null,
       memorySnapshot: snapshot
         ? { snapshotId: snapshot.id, generatedAt: snapshot.generatedAt.toISOString() }
         : null,

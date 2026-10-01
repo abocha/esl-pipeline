@@ -35,10 +35,8 @@ async function truncateTimelineTables() {
         workspaces,
         template_revisions,
         templates,
-        profile_revisions,
-        student_profile_bindings,
-        students,
-        profiles
+        student_profile_revisions,
+        students
       RESTART IDENTITY CASCADE
     `);
   });
@@ -138,71 +136,8 @@ describe('student-timeline', () => {
     expect(legacyAliasFilter.items).toHaveLength(0);
   });
 
-  it('includes student profile binding changes with governance details', async () => {
-    const studentId = deriveStudentId('Nina');
-    const profileId = 'profiles/nina.md';
-    const bindingId = randomUUID();
-    const changedBy = randomUUID();
-    const createdAt = new Date('2024-01-06T00:00:00.000Z');
-
-    await withPgClient(async (client) => {
-      await client.query(
-        `
-        INSERT INTO profiles (id, label, active_revision_id)
-        VALUES ($1, 'Nina profile', NULL)
-        `,
-        [profileId],
-      );
-      await client.query(
-        `
-        INSERT INTO students (id, student, profile_id)
-        VALUES ($1, 'Nina', $2)
-        `,
-        [studentId, profileId],
-      );
-      await client.query(
-        `
-        INSERT INTO users (id, email, password_hash, role, is_active, created_at, updated_at)
-        VALUES ($1, $2, 'hash', 'user', true, $3, $3)
-        `,
-        [changedBy, `${changedBy.replaceAll('-', '').slice(0, 16)}@example.com`, createdAt],
-      );
-      await client.query(
-        `
-        INSERT INTO student_profile_bindings (
-          id,
-          student_id,
-          profile_id,
-          effective_from,
-          effective_to,
-          reason,
-          changed_by,
-          created_at
-        )
-        VALUES ($1, $2, $3, $4, NULL, 'student_update', $5, $4)
-        `,
-        [bindingId, studentId, profileId, createdAt, changedBy],
-      );
-    });
-
-    const timeline = await getStudentTimeline(studentId, {
-      types: ['student_profile_binding_changed'],
-    });
-
-    expect(timeline.items).toHaveLength(1);
-    expect(timeline.items[0]?.type).toBe('student_profile_binding_changed');
-    expect(timeline.items[0]?.status).toBe('binding_changed');
-    expect(timeline.items[0]?.details).toMatchObject({
-      bindingId,
-      profileId,
-      reason: 'student_update',
-      changedBy,
-    });
-  });
-
   it('includes revision lifecycle and job action events with deterministic filtering', async () => {
     const studentId = deriveStudentId('Mila');
-    const profileId = 'profiles/mila.md';
     const templateId = 'templates/default.md';
     const recordingId = randomUUID();
     const transcriptId = randomUUID();
@@ -216,13 +151,6 @@ describe('student-timeline', () => {
     await withPgClient(async (client) => {
       await client.query(
         `
-        INSERT INTO profiles (id, label, active_revision_id)
-        VALUES ($1, 'Mila profile', NULL)
-        `,
-        [profileId],
-      );
-      await client.query(
-        `
         INSERT INTO templates (id, label, active_revision_id)
         VALUES ($1, 'Default template', NULL)
         `,
@@ -230,26 +158,10 @@ describe('student-timeline', () => {
       );
       await client.query(
         `
-        INSERT INTO students (id, student, profile_id)
-        VALUES ($1, 'Mila', $2)
+        INSERT INTO students (id, student)
+        VALUES ($1, 'Mila')
         `,
-        [studentId, profileId],
-      );
-      await client.query(
-        `
-        INSERT INTO student_profile_bindings (
-          id,
-          student_id,
-          profile_id,
-          effective_from,
-          effective_to,
-          reason,
-          changed_by,
-          created_at
-        )
-        VALUES ($1, $2, $3, $4, NULL, 'seed', NULL, $4)
-        `,
-        [randomUUID(), studentId, profileId, eventAt],
+        [studentId],
       );
       await client.query(
         `
@@ -320,9 +232,9 @@ describe('student-timeline', () => {
       );
       await client.query(
         `
-        INSERT INTO profile_revisions (
+        INSERT INTO student_profile_revisions (
           id,
-          profile_id,
+          student_id,
           content,
           content_hash,
           source,
@@ -337,7 +249,7 @@ describe('student-timeline', () => {
         )
         VALUES ($1, $2, 'content', 'hash', 'restore', 'active', 1, 'v1', $3, NULL, $3, NULL, NULL)
         `,
-        [profileRevisionId, profileId, eventAt],
+        [profileRevisionId, studentId, eventAt],
       );
       await client.query(
         `

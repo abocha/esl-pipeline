@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthenticatedRequest } from '../src/transport/auth-middleware.js';
 import { registerConfigRoutes } from '../src/transport/extended-routes/config-routes.js';
 import type { ExtendedRoutesContext } from '../src/transport/extended-routes/context.js';
-import { registerProfileTemplateRoutes } from '../src/transport/extended-routes/profiles-templates-routes.js';
+import { registerTemplateRoutes } from '../src/transport/extended-routes/templates-routes.js';
 
 const templateMocks = vi.hoisted(() => ({
   listTemplateContents: vi.fn(),
@@ -24,22 +24,6 @@ vi.mock('../src/application/template-control-plane.js', () => ({
 }));
 
 const promptOptionsMock = vi.hoisted(() => vi.fn());
-
-vi.mock('../src/application/profile-content.js', () => ({
-  listProfileContents: vi.fn(),
-  getProfileContent: vi.fn(),
-  upsertProfileContent: vi.fn(),
-  saveProfileRevisionContent: vi.fn(),
-  deleteProfileContent: vi.fn(),
-  listProfileRevisionsForProfile: vi.fn(),
-  getProfileRevisionForProfile: vi.fn(),
-  restoreProfileRevision: vi.fn(),
-  activateProfileRevisionForProfile: vi.fn(),
-  ProfileContentError: class ProfileContentError extends Error {
-    status = 500;
-    code = 'profile_content_error';
-  },
-}));
 
 vi.mock('../src/application/template-content.js', () => ({
   ...templateMocks,
@@ -81,7 +65,7 @@ function createContext(): ExtendedRoutesContext {
 async function createApp() {
   const app = Fastify();
   const context = createContext();
-  registerProfileTemplateRoutes(app, context);
+  registerTemplateRoutes(app, context);
   registerConfigRoutes(app, context);
   await app.ready();
   return app;
@@ -116,8 +100,7 @@ describe('Assignment Template authorization', () => {
     templateMocks.upsertTemplateContent.mockResolvedValue({ id: 'template.md' });
     promptOptionsMock.mockResolvedValue({
       templates: [{ id: 'template.md', label: 'Template' }],
-      profiles: [{ id: 'profile.md', label: 'Profile' }],
-      defaults: { templateId: 'template.md', profileId: 'profile.md' },
+      defaults: { templateId: 'template.md' },
     });
   });
 
@@ -189,8 +172,7 @@ describe('Assignment Template authorization', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       templates: [{ id: 'template.md', label: 'Template' }],
-      profiles: [{ id: 'profile.md', label: 'Profile' }],
-      defaults: { templateId: 'template.md', profileId: 'profile.md' },
+      defaults: { templateId: 'template.md' },
     });
   });
 });

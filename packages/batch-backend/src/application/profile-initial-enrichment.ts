@@ -35,7 +35,6 @@ type OperationState =
   | 'superseded';
 interface OperationRow {
   id: string;
-  profile_id: string;
   student_id: string;
   assignment_session_id: string;
   recording_id: string;
@@ -94,17 +93,17 @@ async function withTransaction<T>(work: (client: PoolClient) => Promise<T>): Pro
 }
 
 async function lockOperation(client: PoolClient, id: string): Promise<OperationRow | null> {
-  // Lock order is assignment -> profile -> operation, matching Source confirmation.
+  // Lock order is assignment -> student -> operation, matching Source confirmation.
   const identity = await client.query<OperationRow>(
-    'SELECT assignment_session_id, profile_id FROM profile_initial_enrichment_operations WHERE id = $1',
+    'SELECT assignment_session_id, student_id FROM profile_initial_enrichment_operations WHERE id = $1',
     [id],
   );
   if (!identity.rows[0]) return null;
   await client.query('SELECT id FROM assignment_sessions WHERE id = $1 FOR UPDATE', [
     identity.rows[0].assignment_session_id,
   ]);
-  await client.query('SELECT id FROM profiles WHERE id = $1 FOR UPDATE', [
-    identity.rows[0].profile_id,
+  await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [
+    identity.rows[0].student_id,
   ]);
   const locked = await client.query<OperationRow>(
     'SELECT * FROM profile_initial_enrichment_operations WHERE id = $1 FOR UPDATE',
@@ -127,10 +126,10 @@ async function authority(
     active_revision_id: string | null;
     content_hash: string | null;
     source_valid: boolean;
-    binding_valid: boolean;
+    student_valid: boolean;
     evidence_valid: boolean;
   }>(
-    `SELECT p.provenance, p.active_revision_id, pr.content_hash,
+    `SELECT p.profile_provenance AS provenance, pr.id AS active_revision_id, pr.content_hash,
       EXISTS (
         SELECT 1 FROM assignment_sessions a
         JOIN assignment_source_bindings b ON b.assignment_session_id = a.id
@@ -154,8 +153,7 @@ async function authority(
           AND a.confirmed_snapshot->'source'->>'transcriptId' = $5::text
           AND a.confirmed_snapshot->'source'->>'transcriptHash' = $7
       ) AS source_valid,
-      EXISTS (SELECT 1 FROM student_profile_bindings b
-        WHERE b.student_id = $2 AND b.profile_id = $1 AND b.effective_to IS NULL) AS binding_valid,
+      (p.archived_at IS NULL) AS student_valid,
       ($11::uuid IS NULL OR EXISTS (
         SELECT 1 FROM lesson_memory_entries
         WHERE lesson_memory_entries.id = $11 AND student_id = $2
@@ -164,10 +162,10 @@ async function authority(
           AND status = 'ready'
           AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
       )) AS evidence_valid
-     FROM profiles p LEFT JOIN profile_revisions pr ON pr.id = p.active_revision_id
+     FROM students p LEFT JOIN student_profile_revisions pr ON pr.student_id = p.id AND pr.status = 'active'
      WHERE p.id = $1`,
     [
-      op.profile_id,
+      op.student_id,
       op.student_id,
       op.assignment_session_id,
       op.recording_id,
@@ -184,7 +182,7 @@ async function authority(
   return {
     valid: Boolean(
       row?.source_valid &&
-        row.binding_valid &&
+        row.student_valid &&
         row.evidence_valid &&
         row.provenance === 'tutor_only' &&
         row.active_revision_id === op.seed_revision_id &&
@@ -253,25 +251,25 @@ async function publishReadyResult(client: PoolClient, op: OperationRow): Promise
   }
   const revisionId = randomUUID();
   await client.query(
-    `UPDATE profile_revisions SET status = 'deprecated',
-       deprecated_at = COALESCE(deprecated_at, NOW()), activated_at = NULL
-     WHERE profile_id = $1 AND status = 'active'`,
-    [op.profile_id],
+    `UPDATE student_profile_revisions SET status = 'deprecated',
+       deprecated_at = COALESCE(deprecated_at, NOW())
+     WHERE student_id = $1 AND status = 'active'`,
+    [op.student_id],
   );
   await client.query(
-    `INSERT INTO profile_revisions
-      (id, profile_id, content, structured_content, content_hash, source, status,
+    `INSERT INTO student_profile_revisions
+      (id, student_id, content, structured_content, content_hash, source, status,
        version_number, version_label, activated_at)
      SELECT $1, $2, $3, $4::jsonb, $5, 'lesson_population', 'active',
        COALESCE(MAX(version_number), 0) + 1,
        'v' || (COALESCE(MAX(version_number), 0) + 1)::text, NOW()
-     FROM profile_revisions WHERE profile_id = $2`,
-    [revisionId, op.profile_id, content, JSON.stringify(op.validated_result), hash],
+     FROM student_profile_revisions WHERE student_id = $2`,
+    [revisionId, op.student_id, content, JSON.stringify(op.validated_result), hash],
   );
   await client.query(
-    `UPDATE profiles SET active_revision_id = $2, provenance = 'evidence_enriched',
-       initial_enrichment_completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
-    [op.profile_id, revisionId],
+    `UPDATE students SET profile_provenance = 'evidence_enriched',
+       profile_initial_enrichment_completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
+    [op.student_id],
   );
   await client.query(
     `UPDATE profile_initial_enrichment_operations
@@ -368,8 +366,8 @@ async function prepareOrCommit(
       }
       const seed = op.seed_revision_id
         ? await client.query<{ content: string; structured_content: FoundationalProfile | null }>(
-            'SELECT content, structured_content FROM profile_revisions WHERE id = $1 AND profile_id = $2',
-            [op.seed_revision_id, op.profile_id],
+            'SELECT content, structured_content FROM student_profile_revisions WHERE id = $1 AND student_id = $2',
+            [op.seed_revision_id, op.student_id],
           )
         : null;
       const student = await client.query<{ student: string }>(
@@ -646,11 +644,9 @@ export async function enqueuePendingProfileInitialEnrichments(
           OR (op.state = 'waiting_evidence' AND (
             op.created_at < NOW() - INTERVAL '24 hours'
             OR NOT EXISTS (
-              SELECT 1 FROM profiles p
-              JOIN student_profile_bindings b ON b.profile_id = p.id
-              WHERE p.id = op.profile_id AND b.student_id = op.student_id
-                AND b.effective_to IS NULL AND p.provenance = 'tutor_only'
-                AND p.active_revision_id IS NOT DISTINCT FROM op.seed_revision_id
+              SELECT 1 FROM students p LEFT JOIN student_profile_revisions pr ON pr.student_id = p.id AND pr.status = 'active'
+              WHERE p.id = op.student_id AND p.archived_at IS NULL AND p.profile_provenance = 'tutor_only'
+                AND pr.id IS NOT DISTINCT FROM op.seed_revision_id
             )
             OR EXISTS (
               SELECT 1 FROM lesson_memory_entries e
