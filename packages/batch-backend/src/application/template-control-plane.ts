@@ -10,8 +10,45 @@ import {
   getActiveTemplateRevision,
   getLatestTemplateRevisionByHash,
 } from '../domain/template-revision-repository.js';
+import { importTemplateAsset } from './import-template-asset.js';
 import { resolveTemplateAssetRoot, scanTemplateAssets } from './template-assets.js';
-import { listTemplateContents } from './template-content.js';
+import {
+  activateTemplateRevisionForTemplate,
+  listTemplateContents,
+  TemplateContentError,
+} from './template-content.js';
+
+/** Explicit operator action; content is read from the running release, never supplied by the client. */
+export async function importAndActivateShippedTemplate(
+  templateId: string,
+  createdBy: string | null,
+  overrides: { templateRoot?: string } = {},
+): Promise<AdminTemplateRevisionDto> {
+  const assets = await scanTemplateAssets(
+    overrides.templateRoot ?? resolveTemplateAssetRoot(loadConfig().prompt.templatePath),
+  );
+  const asset = assets.find((item) => item.id === templateId);
+  if (!asset)
+    throw new TemplateContentError(
+      'This template has no shipped asset. Refresh the catalog.',
+      'template_not_shipped',
+      404,
+    );
+  const imported = await importTemplateAsset(asset, createdBy);
+  try {
+    const activated = await activateTemplateRevisionForTemplate(asset.id, imported.id);
+    if (!activated) throw new Error('Imported revision could not be activated.');
+    return activated;
+  } catch (cause) {
+    const error = new TemplateContentError(
+      `Shipped content was imported as ${imported.versionLabel}, but activation did not complete. Refresh the persisted state and retry activation of the shipped revision.`,
+      'template_shipped_activation_failed',
+      500,
+    );
+    error.cause = cause;
+    throw error;
+  }
+}
 
 function toRevision(revision: TemplateRevisionRecord | null): AdminTemplateRevisionDto | null {
   if (!revision) return null;

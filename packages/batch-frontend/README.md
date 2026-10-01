@@ -180,6 +180,10 @@ unimported shipped content. DB-only and archived templates remain inspectable wi
 shipped version. An ordered line diff and revision inspection precede activation; revision history,
 restore/rollback, archive, and default selection remain available. The editor is collapsed and
 explains that saving a manual operator edit activates it immediately. Reads never import or activate.
+Unimported shipped content offers **Import & activate** in one click. The backend reads the deployed
+asset and performs the import and normal activation. Success refreshes active/shipped state and
+history. Failure also refreshes persisted state and shows an actionable error; an imported draft
+remains available for explicit activation if only the import completed.
 
 ## Validation
 

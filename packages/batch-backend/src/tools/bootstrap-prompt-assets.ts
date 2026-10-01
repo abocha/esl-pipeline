@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { importTemplateAsset } from '../application/import-template-asset.js';
 import { resolveRepoPath } from '../application/prompt-assembly.js';
 import { getPromptOptions } from '../application/prompt-options.js';
 import { scanTemplateAssets } from '../application/template-assets.js';
@@ -11,13 +12,11 @@ import {
   getTemplateById,
   listTemplates,
   setTemplateActiveRevision,
-  upsertTemplate,
 } from '../domain/template-repository.js';
 import {
   activateTemplateRevision,
   deprecateActiveTemplateRevision,
   getLatestTemplateRevisionByHash,
-  insertTemplateRevision,
 } from '../domain/template-revision-repository.js';
 import { closePgPool } from '../infrastructure/db.js';
 
@@ -123,13 +122,6 @@ export async function importTemplates(
 ): Promise<void> {
   for (const asset of assets) {
     const existing = await getTemplateById(asset.id);
-    const current = dryRun
-      ? existing
-      : await upsertTemplate({
-          id: asset.id,
-          label: existing?.label ?? asset.label,
-          activeRevisionId: existing?.activeRevisionId ?? null,
-        });
 
     const byHash = await getLatestTemplateRevisionByHash(asset.id, asset.hash);
     let revisionId = byHash?.id ?? null;
@@ -138,23 +130,11 @@ export async function importTemplates(
       stats.reusedRevisions += 1;
     } else {
       stats.createdRevisions += 1;
-      if (!dryRun) {
-        const inserted = await insertTemplateRevision({
-          templateId: asset.id,
-          content: asset.content,
-          contentHash: asset.hash,
-          source: existing ? 'update' : 'create',
-          // Insert as draft to avoid violating single-active constraints;
-          // activation is handled explicitly below when needed.
-          status: 'draft',
-          createdBy: null,
-          restoredFromRevisionId: null,
-        });
-        revisionId = inserted.id;
-      }
     }
 
-    if (!current?.activeRevisionId && revisionId) {
+    if (!dryRun) revisionId = (await importTemplateAsset(asset)).id;
+
+    if (!existing?.activeRevisionId && revisionId) {
       stats.activatedRevisions += 1;
       if (!dryRun) {
         await activateTemplateRevision(asset.id, revisionId);

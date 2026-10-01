@@ -49,6 +49,11 @@ The UI offers an ordered content diff, revision inspection/history, explicit act
 archive, and default selection. Manual editor saves still activate immediately; bootstrap changes
 remain drafts when an active revision exists. Tutor prompt options and generation resolution are
 unchanged. No production role correction or activation is performed by this implementation.
+For an unimported shipped hash, **Import & activate** calls the admin-only
+`POST /templates/:id/import-and-activate`. The backend imports the running asset through shared
+bootstrap draft/hash semantics, then uses normal activation. The UI refreshes persisted state after
+success or failure; a partial import is never presented as successful activation. Assets and prior
+revision content/history are preserved.
 
 ## Current Focus
 
