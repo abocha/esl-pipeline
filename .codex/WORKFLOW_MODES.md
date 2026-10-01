@@ -20,9 +20,9 @@ Do not manufacture a plan, durable goal, primary orchestrator, delegation, or re
 
 Model selection is a revisable operating default, not an ownership or authorization rule.
 
-Use GPT-6 Sol as the ordinary capable model for discussion and planning when it fits the maintainer's access and quota. Select reasoning effort for the uncertainty and consequence of the decision.
+Use GPT-6.1 Sol as the ordinary capable model for discussion and planning when it fits the maintainer's access and quota. Select reasoning effort for the uncertainty and consequence of the decision.
 
-Use GPT-6 Sol for ordinary Codex coordination and repository or integration judgment. Start with medium effort for a typical coherent task; use low for clear, bounded coordination, and high or higher for tangled evidence, coupled contracts, or consequential decisions. Reassess effort as the work changes rather than fixing one level for the entire run.
+Use GPT-6.1 Sol for ordinary Codex coordination and repository or integration judgment. Start with medium effort for a typical coherent task; use low for clear, bounded coordination, and high or higher for tangled evidence, coupled contracts, or consequential decisions. Reassess effort as the work changes rather than fixing one level for the entire run.
 
 The registered `bounded_implementer` uses GPT-6 Luna at xhigh effort for specified, pattern-following work. Its effort may be adjusted when the bounded task warrants it; route work that needs repository or integration judgment to Sol. The explorer, integration workhorse, and reviewers use Sol at efforts suited to their assigned risk. The role configuration holds portable launch defaults; target repositories may deliberately adapt them.
 
