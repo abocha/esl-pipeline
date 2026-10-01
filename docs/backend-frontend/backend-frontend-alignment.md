@@ -38,6 +38,18 @@ Provider/model detail stays in
 | Audio regeneration                     | Live                          | Family selection and clip reuse follow orchestrator and speech-performance contracts; the frontend exposes capability-gated actions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Telegram operations                    | Live internal surface         | The separate bot package provides allowlisted status, browsing, share, backup, drill, and approval operations over backend APIs. It is not a batch-frontend feature.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
+### Admin prompts
+
+Administration > Prompts (`/admin/prompts`, with `/prompts` compatibility redirect) is admin-only.
+Backend role checks independently protect management reads and mutations. The read-only
+`/templates/control-plane` projection compares the running release's template asset hash/content
+with active DB content and matching revisions. It shows shipped drafts awaiting activation,
+unimported assets, and DB-only templates without treating the newest DB revision as shipped.
+The UI offers an ordered content diff, revision inspection/history, explicit activation, restore,
+archive, and default selection. Manual editor saves still activate immediately; bootstrap changes
+remain drafts when an active revision exists. Tutor prompt options and generation resolution are
+unchanged. No production role correction or activation is performed by this implementation.
+
 ## Current Focus
 
 - The read-only ChatGPT MCP resource is implemented behind disabled-by-default `MCP_OAUTH_ENABLED`.

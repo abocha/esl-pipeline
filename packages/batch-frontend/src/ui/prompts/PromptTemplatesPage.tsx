@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { TemplateControlPlaneDto } from '@esl-pipeline/contracts';
+
 import type {
   TemplateContentOption,
   TemplateContentResponse,
@@ -8,14 +10,14 @@ import type {
 import {
   activateTemplateRevision,
   deleteTemplateContent,
-  getTemplateContent,
-  listTemplateContents,
+  getTemplateRevision,
+  listTemplateControlPlane,
   listTemplateRevisions,
   restoreTemplateRevision,
   setDefaultTemplateContent,
   upsertTemplateContent,
 } from '../../utils/api';
-
+import { TemplateContentComparison, TemplateControlPlane } from './TemplateControlPlane';
 import './PromptTemplatesPage.css';
 
 const REVISION_LIMIT = 25;
@@ -75,9 +77,17 @@ export const PromptTemplatesPage: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [newTemplateId, setNewTemplateId] = useState('');
   const [currentTemplate, setCurrentTemplate] = useState<TemplateContentResponse | null>(null);
+  const [controlPlane, setControlPlane] = useState<TemplateControlPlaneDto | null>(null);
+  const [inspectedRevision, setInspectedRevision] = useState<{
+    id: string;
+    content: string;
+    label: string;
+  } | null>(null);
+  const inspectionRequestRef = useRef(0);
   const [editorText, setEditorText] = useState('');
   const [loadedText, setLoadedText] = useState('');
   const [revisions, setRevisions] = useState<TemplateRevisionSummaryResponse[]>([]);
+  const [revisionTotal, setRevisionTotal] = useState(0);
   const [busy, setBusy] = useState<TemplateBusyState | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -99,8 +109,14 @@ export const PromptTemplatesPage: React.FC = () => {
   }, [templateDirty]);
 
   const loadTemplate = useCallback(
-    async (templateId: string, options: { commitSelection?: boolean } = {}): Promise<boolean> => {
+    async (
+      templateId: string,
+      options: { commitSelection?: boolean; state?: TemplateControlPlaneDto } = {},
+    ): Promise<boolean> => {
       const requestId = ++requestIdRef.current;
+      inspectionRequestRef.current++;
+      setInspectedRevision(null);
+      setControlPlane(null);
       if (!templateId) {
         setSelectedTemplateId('');
         setCurrentTemplate(null);
@@ -114,18 +130,34 @@ export const PromptTemplatesPage: React.FC = () => {
       setBusy('loading');
       setError(null);
       try {
-        const [template, revisionList] = await Promise.all([
-          getTemplateContent(templateId),
-          listTemplateRevisions(templateId, { limit: REVISION_LIMIT, offset: 0, order: 'desc' }),
-        ]);
+        const state =
+          options.state ??
+          (await listTemplateControlPlane()).items.find((item) => item.templateId === templateId);
+        if (!state) throw new Error('Template is no longer available. Refresh the catalog.');
+        const revisionList = state.databasePresent
+          ? await listTemplateRevisions(templateId, {
+              limit: REVISION_LIMIT,
+              offset: 0,
+              order: 'desc',
+            })
+          : { items: [], total: 0 };
+        const template: TemplateContentResponse = {
+          id: state.templateId,
+          label: state.label,
+          content: state.active?.content ?? '',
+          currentRevisionId: state.active?.id ?? null,
+          updatedAt: state.active?.createdAt ?? null,
+        };
         if (requestId !== requestIdRef.current) return false;
         if (options.commitSelection) {
           setSelectedTemplateId(templateId);
         }
+        setControlPlane(state);
         setCurrentTemplate(template);
         setEditorText(template.content ?? '');
         setLoadedText(template.content ?? '');
         setRevisions(revisionList.items ?? []);
+        setRevisionTotal(revisionList.total);
         return true;
       } catch (loadError) {
         if (requestId !== requestIdRef.current) return false;
@@ -149,8 +181,11 @@ export const PromptTemplatesPage: React.FC = () => {
       setListError(null);
       setError(null);
       try {
-        const response = await listTemplateContents();
-        const nextTemplates = response.templates ?? [];
+        const response = await listTemplateControlPlane();
+        const nextTemplates = response.items.map((item) => ({
+          id: item.templateId,
+          label: item.label,
+        }));
         setDefaultTemplateId(response.defaultTemplateId ?? null);
         setTemplates(nextTemplates);
 
@@ -161,7 +196,10 @@ export const PromptTemplatesPage: React.FC = () => {
             : (nextTemplates[0]?.id ?? preferredTemplateId ?? '');
 
         if (nextSelected && options.loadSelectedTemplate !== false) {
-          await loadTemplate(nextSelected, { commitSelection: true });
+          await loadTemplate(nextSelected, {
+            commitSelection: true,
+            state: response.items.find((item) => item.templateId === nextSelected),
+          });
         } else if (!nextSelected) {
           await loadTemplate('');
         } else {
@@ -237,6 +275,7 @@ export const PromptTemplatesPage: React.FC = () => {
         order: 'desc',
       });
       setRevisions(revisionList.items ?? []);
+      await loadTemplate(saved.id);
       setSuccess('Template saved.');
       await loadTemplates(saved.id, { loadSelectedTemplate: false });
     } catch (saveError) {
@@ -264,6 +303,7 @@ export const PromptTemplatesPage: React.FC = () => {
         order: 'desc',
       });
       setRevisions(revisionList.items ?? []);
+      await loadTemplate(restored.id);
       setSuccess('Template revision restored.');
       await loadTemplates(restored.id, { loadSelectedTemplate: false });
     } catch (restoreError) {
@@ -336,6 +376,48 @@ export const PromptTemplatesPage: React.FC = () => {
     }
   };
 
+  const handleOlderRevisions = async () => {
+    const templateId = selectedTemplateId;
+    const requestId = requestIdRef.current;
+    setBusy('loading');
+    try {
+      const page = await listTemplateRevisions(templateId, {
+        limit: REVISION_LIMIT,
+        offset: revisions.length,
+        order: 'desc',
+      });
+      if (requestId === requestIdRef.current) {
+        setRevisions((current) => [
+          ...current,
+          ...page.items.filter((item) => !current.some((revision) => revision.id === item.id)),
+        ]);
+        setRevisionTotal(page.total);
+      }
+    } catch (error) {
+      if (requestId === requestIdRef.current)
+        setError(getErrorMessage(error, 'Unable to load older revisions.'));
+    } finally {
+      if (requestId === requestIdRef.current) setBusy(null);
+    }
+  };
+
+  const handleInspectRevision = async (revisionId: string) => {
+    const requestId = ++inspectionRequestRef.current;
+    setInspectedRevision(null);
+    try {
+      const revision = await getTemplateRevision(selectedTemplateId, revisionId);
+      if (requestId !== inspectionRequestRef.current) return;
+      setInspectedRevision({
+        id: revision.id,
+        content: revision.content,
+        label: getRevisionLabel(revision),
+      });
+    } catch (error) {
+      if (requestId === inspectionRequestRef.current)
+        setError(getErrorMessage(error, 'Unable to inspect revision.'));
+    }
+  };
+
   const isBusy = busy !== null || listLoading;
   const hasTemplates = templates.length > 0;
 
@@ -348,9 +430,9 @@ export const PromptTemplatesPage: React.FC = () => {
     <section className="prompt-templates-page">
       <header className="prompt-templates-hero">
         <div>
-          <span className="prompt-templates-kicker">Template library</span>
-          <h1>Assignment Templates</h1>
-          <p>Manage reusable assignment templates and their version history.</p>
+          <span className="prompt-templates-kicker">Administration</span>
+          <h1>Prompts</h1>
+          <p>Inspect shipped content, activate revisions, and manage prompt history.</p>
         </div>
         <button
           type="button"
@@ -419,6 +501,13 @@ export const PromptTemplatesPage: React.FC = () => {
         </aside>
 
         <main className="prompt-templates-editor-panel">
+          {controlPlane ? (
+            <TemplateControlPlane
+              state={controlPlane}
+              busy={isBusy}
+              onActivate={(id) => void handleActivateRevision(id)}
+            />
+          ) : null}
           <section className="prompt-templates-editor-surface">
             <header className="prompt-templates-editor-header">
               <div>
@@ -442,31 +531,40 @@ export const PromptTemplatesPage: React.FC = () => {
             {error ? <p className="prompt-templates-alert error">{error}</p> : null}
             {success ? <p className="prompt-templates-alert success">{success}</p> : null}
 
-            <label className="prompt-templates-editor-field">
-              Template content
-              <textarea
-                value={editorText}
-                onChange={(event) => setEditorText(event.target.value)}
-                rows={22}
-                disabled={!selectedTemplateId || busy === 'loading'}
-                placeholder="Select a template to edit."
-              />
-            </label>
+            <details className="prompt-control-editor">
+              <summary>Edit template content</summary>
+              <p>
+                Saving an operator edit activates that content immediately. It does not change the
+                shipped asset.
+              </p>
+              <label className="prompt-templates-editor-field">
+                Template content
+                <textarea
+                  value={editorText}
+                  onChange={(event) => setEditorText(event.target.value)}
+                  rows={22}
+                  disabled={!selectedTemplateId || busy === 'loading'}
+                  placeholder="Select a template to edit."
+                />
+              </label>
 
+              <div className="prompt-templates-actions">
+                <button
+                  type="button"
+                  className="prompt-templates-primary"
+                  onClick={() => void handleSaveTemplate()}
+                  disabled={!selectedTemplateId || isBusy || !templateDirty}
+                >
+                  {busy === 'saving' ? 'Saving...' : 'Save Template'}
+                </button>
+              </div>
+            </details>
             <div className="prompt-templates-actions">
-              <button
-                type="button"
-                className="prompt-templates-primary"
-                onClick={() => void handleSaveTemplate()}
-                disabled={!selectedTemplateId || isBusy || !templateDirty}
-              >
-                {busy === 'saving' ? 'Saving...' : 'Save Template'}
-              </button>
               <button
                 type="button"
                 className="prompt-templates-secondary danger"
                 onClick={() => void handleArchiveTemplate()}
-                disabled={!selectedTemplateId || isBusy}
+                disabled={!selectedTemplateId || isBusy || !controlPlane?.active}
               >
                 {busy === 'archiving' ? 'Archiving...' : 'Archive Template'}
               </button>
@@ -474,7 +572,12 @@ export const PromptTemplatesPage: React.FC = () => {
                 type="button"
                 className="prompt-templates-secondary"
                 onClick={() => void handleMakeDefaultTemplate()}
-                disabled={!selectedTemplateId || isBusy || selectedTemplateIsDefault}
+                disabled={
+                  !selectedTemplateId ||
+                  isBusy ||
+                  selectedTemplateIsDefault ||
+                  !controlPlane?.active
+                }
               >
                 {busy === 'defaulting' ? 'Updating default...' : 'Make Default'}
               </button>
@@ -491,6 +594,13 @@ export const PromptTemplatesPage: React.FC = () => {
               <span className="prompt-templates-section-label">Version history</span>
               <h2>Versions</h2>
             </header>
+            {inspectedRevision ? (
+              <TemplateContentComparison
+                active={controlPlane?.active?.content ?? ''}
+                proposed={inspectedRevision.content}
+                label={inspectedRevision.label}
+              />
+            ) : null}
             {revisions.length > 0 ? (
               <div className="prompt-templates-revision-list">
                 {revisions.map((revision) => {
@@ -502,14 +612,31 @@ export const PromptTemplatesPage: React.FC = () => {
                         <span>
                           {revision.status ?? 'unknown'} · {revision.source}
                         </span>
-                        <small>{formatDateTime(revision.createdAt)}</small>
+                        <small>
+                          Created {formatDateTime(revision.createdAt)} · Activated{' '}
+                          {formatDateTime(revision.activatedAt)}
+                        </small>
+                        <code title={revision.contentHash}>
+                          {revision.contentHash.slice(0, 12)}
+                        </code>
+                        {revision.restoredFromRevisionId ? (
+                          <small>Restored from {revision.restoredFromRevisionId}</small>
+                        ) : null}
                       </div>
                       <div className="prompt-templates-revision-actions">
                         <button
                           type="button"
                           className="prompt-templates-secondary"
-                          onClick={() => void handleRestoreRevision(revision.id)}
                           disabled={isBusy}
+                          onClick={() => void handleInspectRevision(revision.id)}
+                        >
+                          Inspect {label}
+                        </button>
+                        <button
+                          type="button"
+                          className="prompt-templates-secondary"
+                          onClick={() => void handleRestoreRevision(revision.id)}
+                          disabled={isBusy || !controlPlane?.databasePresent}
                         >
                           Restore
                         </button>
@@ -532,6 +659,16 @@ export const PromptTemplatesPage: React.FC = () => {
             ) : (
               <p className="prompt-templates-muted">No template revisions to show.</p>
             )}
+            {revisions.length < revisionTotal ? (
+              <button
+                type="button"
+                className="prompt-templates-secondary"
+                disabled={isBusy}
+                onClick={() => void handleOlderRevisions()}
+              >
+                Load older revisions
+              </button>
+            ) : null}
           </section>
         </main>
       </div>

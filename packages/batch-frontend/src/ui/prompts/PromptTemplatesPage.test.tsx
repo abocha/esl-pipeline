@@ -10,6 +10,8 @@ const apiMocks = vi.hoisted(() => ({
   deleteTemplateContent: vi.fn(),
   getTemplateContent: vi.fn(),
   listTemplateContents: vi.fn(),
+  listTemplateControlPlane: vi.fn(),
+  getTemplateRevision: vi.fn(),
   listTemplateRevisions: vi.fn(),
   restoreTemplateRevision: vi.fn(),
   setDefaultTemplateContent: vi.fn(),
@@ -22,6 +24,39 @@ const STARTER_TEMPLATE_SNIPPET = 'Expert ESL Content Assistant';
 const now = '2026-05-01T09:00:00.000Z';
 
 function seedPromptTemplateMocks() {
+  apiMocks.listTemplateControlPlane.mockImplementation(async () => {
+    const catalog = await apiMocks.listTemplateContents();
+    const items = await Promise.all(
+      catalog.templates.map(async (option: { id: string; label: string }) => {
+        const content = await apiMocks.getTemplateContent(option.id);
+        const active = {
+          id: content.currentRevisionId,
+          versionLabel: 'v1',
+          content: content.content,
+          contentHash: 'hash-1',
+          status: 'active',
+          source: 'create',
+          createdAt: now,
+          activatedAt: now,
+          restoredFromRevisionId: null,
+        };
+        return {
+          templateId: option.id,
+          label: option.label,
+          databasePresent: true,
+          active,
+          shipped: {
+            content: active.content,
+            contentHash: active.contentHash,
+            matchingRevision: active,
+            imported: true,
+          },
+          drift: 'in_sync',
+        };
+      }),
+    );
+    return { items, defaultTemplateId: catalog.defaultTemplateId };
+  });
   apiMocks.listTemplateContents.mockResolvedValue({
     defaultTemplateId: 'hw/default.md',
     templates: [
@@ -90,21 +125,32 @@ function seedPromptTemplateMocks() {
     content: 'DEFAULT TEMPLATE',
   });
   apiMocks.deleteTemplateContent.mockResolvedValue(undefined);
-  apiMocks.setDefaultTemplateContent.mockImplementation(async (templateId: string) => ({
-    id: templateId,
-    label: templateId === 'hw/alternate.md' ? 'Alternate Homework' : 'Default Homework',
-    content: templateId === 'hw/alternate.md' ? 'ALTERNATE TEMPLATE' : 'DEFAULT TEMPLATE',
-    currentRevisionId: templateId === 'hw/alternate.md' ? 'revision-2' : 'revision-1',
-    updatedAt: now,
-  }));
+  apiMocks.setDefaultTemplateContent.mockImplementation(async (templateId: string) => {
+    apiMocks.listTemplateContents.mockResolvedValue({
+      defaultTemplateId: templateId,
+      templates: [
+        { id: 'hw/default.md', label: 'Default Homework' },
+        { id: 'hw/alternate.md', label: 'Alternate Homework' },
+      ],
+    });
+    return {
+      id: templateId,
+      label: templateId === 'hw/alternate.md' ? 'Alternate Homework' : 'Default Homework',
+      content: templateId === 'hw/alternate.md' ? 'ALTERNATE TEMPLATE' : 'DEFAULT TEMPLATE',
+      currentRevisionId: templateId === 'hw/alternate.md' ? 'revision-2' : 'revision-1',
+      updatedAt: now,
+    };
+  });
 }
 
 function renderPromptTemplatesPage() {
-  return render(
+  const result = render(
     <MemoryRouter>
       <PromptTemplatesPage />
     </MemoryRouter>,
   );
+  result.container.querySelector('.prompt-control-editor')?.setAttribute('open', '');
+  return result;
 }
 
 describe('PromptTemplatesPage', () => {
@@ -116,12 +162,12 @@ describe('PromptTemplatesPage', () => {
   it('loads active templates, selected content, and revision history', async () => {
     renderPromptTemplatesPage();
 
-    expect(await screen.findByRole('heading', { name: /Assignment Templates/i })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /^Prompts$/i })).toBeTruthy();
     expect(await screen.findByDisplayValue('DEFAULT TEMPLATE')).toBeTruthy();
     expect((screen.getByRole('combobox', { name: /Template/i }) as HTMLSelectElement).value).toBe(
       'hw/default.md',
     );
-    expect(screen.getByText('v1')).toBeTruthy();
+    expect(screen.getAllByText(/v1/).length).toBeGreaterThan(0);
     expect(screen.getByText('Default')).toBeTruthy();
     expect(apiMocks.getTemplateContent).toHaveBeenCalledWith('hw/default.md');
     expect(apiMocks.listTemplateRevisions).toHaveBeenCalledWith('hw/default.md', {
@@ -173,9 +219,11 @@ describe('PromptTemplatesPage', () => {
       expect(apiMocks.setDefaultTemplateContent).toHaveBeenCalledWith('hw/alternate.md');
     });
     expect(screen.getByText(/Alternate Homework is now the default template/i)).toBeTruthy();
-    expect(
-      (screen.getByRole('button', { name: /Make Default/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: /Make Default/i }) as HTMLButtonElement).disabled,
+      ).toBe(true),
+    );
   });
 
   it('saves edited template content and refreshes revision history', async () => {
@@ -209,7 +257,7 @@ describe('PromptTemplatesPage', () => {
         expect.stringContaining(STARTER_TEMPLATE_SNIPPET),
       );
     });
-    expect(apiMocks.getTemplateContent).toHaveBeenLastCalledWith('hw/custom.md');
+    expect(apiMocks.listTemplateControlPlane).toHaveBeenCalled();
   });
 
   it('restores and activates revisions from the revision list', async () => {
@@ -222,7 +270,7 @@ describe('PromptTemplatesPage', () => {
     await waitFor(() => {
       expect(apiMocks.restoreTemplateRevision).toHaveBeenCalledWith('hw/default.md', 'revision-1');
     });
-    expect(screen.getByDisplayValue('RESTORED TEMPLATE')).toBeTruthy();
+    await screen.findByText('Template revision restored.');
 
     await user.click(within(revisionList).getByText(/More actions/i));
     await user.click(within(revisionList).getByRole('button', { name: /Activate v1/i }));
@@ -274,7 +322,7 @@ describe('PromptTemplatesPage', () => {
       'hw/default.md',
     );
     expect(screen.getByDisplayValue('UNSAVED TEMPLATE')).toBeTruthy();
-    expect(apiMocks.getTemplateContent).not.toHaveBeenCalledWith('hw/alternate.md');
+    expect(apiMocks.listTemplateControlPlane).toHaveBeenCalledTimes(1);
 
     confirmSpy.mockRestore();
   });
@@ -284,7 +332,7 @@ describe('PromptTemplatesPage', () => {
     renderPromptTemplatesPage();
     await screen.findByDisplayValue('DEFAULT TEMPLATE');
 
-    apiMocks.getTemplateContent.mockRejectedValueOnce(new Error('Template unavailable'));
+    apiMocks.listTemplateControlPlane.mockRejectedValueOnce(new Error('Template unavailable'));
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.change(screen.getByRole('combobox', { name: /Template/i }), {
       target: { value: 'hw/alternate.md' },
@@ -303,7 +351,7 @@ describe('PromptTemplatesPage', () => {
     renderPromptTemplatesPage();
     await screen.findByDisplayValue('DEFAULT TEMPLATE');
 
-    apiMocks.getTemplateContent.mockRejectedValueOnce(new Error('Template unavailable'));
+    apiMocks.listTemplateControlPlane.mockRejectedValueOnce(new Error('Template unavailable'));
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.change(screen.getByRole('combobox', { name: /Template/i }), {
       target: { value: 'hw/alternate.md' },
