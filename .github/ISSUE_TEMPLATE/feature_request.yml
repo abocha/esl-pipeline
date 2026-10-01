@@ -1,7 +1,6 @@
 name: Feature request
 description: Propose a concrete repository improvement with clear use-case and constraints.
 title: '[Feature] '
-labels: ['type:improvement']
 body:
   - type: markdown
     attributes:
