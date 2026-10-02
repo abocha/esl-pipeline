@@ -286,14 +286,76 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
 4. The script resolves all requested manifest digests. If a digest is already the current local
    image, it adds the new SHA tag locally instead of downloading the layers. It records image refs,
    digests, and the Caddy configuration digest under `/var/lib/esl-pipeline/deploy`, then prints its
-   plan. Backend digest changes trigger Postgres health, a verified pre-migration backup, migrations,
+   plan. Every deploy checks the requested backend's packaged migration inventory and compatibility
+   metadata against the read-only PostgreSQL migration ledger. Backend digest changes trigger
+   Postgres health, a verified pre-migration backup, migrations,
    backend workers, frontend, and Caddy recreation. Frontend changes recreate frontend and Caddy;
    bot changes recreate the enabled bot; Caddy configuration changes recreate Caddy. An alias-only
-   release updates state and runs bounded health checks without migration or service restart work.
+   release updates state and runs bounded health checks without backup, migration, or service restart work.
    The first deploy after this behavior lands recreates Caddy once because older state has no Caddy
    digest.
-5. If checks fail after services update, follow the script's application rollback instructions using
-   `/var/lib/esl-pipeline/deploy/previous-images.env`.
+5. If checks fail after services update, follow the script's compatibility-gated recovery guidance.
+   It prints a command using `/var/lib/esl-pipeline/deploy/previous-images.env` only when that
+   backend runtime supports the planned schema. An incompatible boundary blocks that command.
+
+### Schema compatibility and recovery
+
+`packages/batch-backend/migrations/runtime-compatibility.json` ships inside the backend image.
+Every migration ID must have a declaration; the release contract check rejects missing entries,
+unknown values, extra entries, duplicate migration numbers, and unsupported metadata versions.
+For each new migration, declare one of:
+
+- `compatible`: old application writers may remain live during this migration, and runtimes that
+  supported the preceding schema can still run after it commits.
+- `incompatible`: old application writers must stop before migration; a runtime whose packaged
+  inventory does not contain this boundary requires database restore before image-only recovery.
+
+Historical migrations through `0059` are explicitly `legacy-unclassified`, which has the same
+conservative deployment behavior as `incompatible` when pending or absent from the previous
+runtime's inventory. This avoids inventing compatibility guarantees for old releases. `0060` is
+explicitly incompatible: it removed `user_settings.id`, used by v12.0.1. Migrations numbered `0060`
+and later cannot use `legacy-unclassified`. Do not edit applied SQL or its checksum to add metadata.
+Compatibility declarations describe schema/runtime behavior, independently of semantic release labels.
+
+The pre-mutation output lists pending migrations, incompatible/unclassified boundaries, required
+quiescence, and previous-image rollback eligibility. To inspect it without backup, migration, or
+service mutation:
+
+```bash
+bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha> --plan
+```
+
+Planning may pull/alias images and write pending local deploy-state files. It does not advance
+current/previous image state. A requested image without valid compatibility metadata fails closed;
+older current images can supply their SQL inventory without having the new metadata. Database
+checksum drift or applied migrations missing from the requested image also block deployment,
+including image downgrade attempts. `PG_MIGRATIONS_DIR` overrides are unsupported in this path:
+the preflight and migrator must both use the image-packaged SQL.
+
+Before incompatible schema work, the script stops the live API, all three workers, frontend, and
+bot containers belonging to its Compose project, including a live bot whose profile was omitted.
+It leaves PostgreSQL, Redis, and Caddy running, rejects unknown live project services, and verifies
+that no application container remains running before taking the required verified backup and
+invoking migrations. The enabled bot is recreated even if its digest is unchanged. Ordinary
+compatible migrations retain the existing online backup/migrate/recreate sequence.
+
+After migration invocation, a failure may mean some migration transactions already committed.
+Recovery guidance therefore uses the conservative planned schema, rather than assuming migration
+failure rolled everything back. An incompatible boundary suppresses the previous-image command
+on migration, recreation, or verification failure and on success. A retry also checks already
+applied boundaries against the previous runtime's inventory. Backup/stop failures leave services
+stopped (or partially stopped), never invoke migrations, and never automatically restart writers.
+
+`/var/lib/esl-pipeline/deploy/rollback-compatibility.json` records the deployment SHA, requested and
+previous backend images, boundaries, and conservative rollback eligibility before mutation. Read
+it together with `previous-images.env`; the state file alone is not authorization to restart old
+images. To recover across an incompatible boundary, use a schema-compatible application image, or
+deliberately restore a verified database backup from before the blocked boundary whose schema
+supports the previous runtime. A backup taken during a later deploy retry may already contain that
+boundary and cannot recover the old runtime. Database restore remains a separate operator-controlled
+operation. The deploy lock and
+writer checks cover this Compose project; do not run separate migrations or restart writers
+concurrently with deployment.
 
 Post-deploy service evidence should include the dedicated memory worker:
 

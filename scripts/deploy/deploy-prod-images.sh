@@ -20,11 +20,17 @@ KNOWN_GOOD_ENV="${DEPLOY_STATE_DIR}/known-good-images.env"
 DEPLOY_LOG="${DEPLOY_STATE_DIR}/deployments.log"
 LOCK_FILE="${DEPLOY_STATE_DIR}/deploy.lock"
 UPDATED_SERVICES=false
+QUIESCED=false
+MIGRATION_STARTED=false
+IMAGE_ROLLBACK_SAFE=false
+COMPATIBILITY_PLAN="${DEPLOY_STATE_DIR}/rollback-compatibility.json"
+PLAN_ONLY=false
+[[ "${2:-}" == "--plan" ]] && PLAN_ONLY=true
 
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/deploy/deploy-prod-images.sh <40-character-git-sha>
+  scripts/deploy/deploy-prod-images.sh <40-character-git-sha> [--plan]
 
 Environment:
   APP_DIR                 Defaults to repository root resolved from this script.
@@ -38,6 +44,7 @@ Environment:
 The script deploys a complete CI-published GHCR release bundle tagged with the supplied Git SHA.
 Unchanged image digests are aliased locally; database and restart work follows the computed plan.
 Application rollback and database restore are separate operations.
+--plan resolves images and reads schema state, but does not back up, migrate, or stop/recreate services.
 USAGE
 }
 
@@ -155,7 +162,20 @@ validate_edge_configuration() {
 handle_failure() {
   local line="$1"
   echo "ERROR: deployment failed near line ${line}." >&2
-  if [[ "$UPDATED_SERVICES" == "true" && -f "$PREVIOUS_ENV" ]]; then
+  if [[ "$MIGRATION_STARTED" == "true" && "$IMAGE_ROLLBACK_SAFE" != "true" ]]; then
+    cat >&2 <<EOF
+
+Image-only rollback to the previous runtime is BLOCKED.
+  An incompatible or unclassified schema boundary may have committed, even if migration failed.
+  Keep old application writers stopped. Recover with a schema-compatible image, or deliberately
+  restore a verified backup from BEFORE the blocked boundary that supports the previous runtime.
+  A backup taken during a later deploy retry may already contain the incompatible schema.
+  Database restore remains a separate operator-controlled operation; it is never automatic.
+  Compatibility record: ${COMPATIBILITY_PLAN}
+EOF
+  elif [[ "$QUIESCED" == "true" && "$MIGRATION_STARTED" != "true" ]]; then
+    echo 'Application containers may be stopped; migrations were not invoked. No automatic restart was attempted.' >&2
+  elif [[ "$UPDATED_SERVICES" == "true" && "$IMAGE_ROLLBACK_SAFE" == "true" && -f "$PREVIOUS_ENV" ]]; then
     cat >&2 <<EOF
 
 Application rollback instructions:
@@ -163,7 +183,7 @@ Application rollback instructions:
 
 Rollback warning:
   This only rolls application images back. It does not restore PostgreSQL.
-  Application rollback is safe only when the migrated schema remains compatible with the previous image.
+  The compatibility preflight permits this previous runtime on the planned schema.
   Restore the database only as a separate, deliberate recovery step from a verified backup.
 EOF
   elif [[ "$UPDATED_SERVICES" == "true" ]]; then
@@ -177,7 +197,9 @@ EOF
   fi
 }
 
-trap 'handle_failure "$LINENO"' ERR
+FAILURE_LINE=unknown
+trap 'FAILURE_LINE=$LINENO' ERR
+trap 'status=$?; if (( status != 0 )); then handle_failure "$FAILURE_LINE"; fi' EXIT
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
@@ -395,6 +417,68 @@ create_pre_migration_backup() {
   info "Verified pre-migration backup: ${dump_file}"
 }
 
+read_schema_compatibility_plan() {
+  local requested_inventory="${DEPLOY_STATE_DIR}/requested-migrations.json"
+  local previous_inventory="${DEPLOY_STATE_DIR}/previous-migrations.json"
+  local applied_ledger="${DEPLOY_STATE_DIR}/applied-migrations.json"
+  local previous_arg=-
+  local helper="${APP_DIR}/scripts/deploy/schema-compatibility.mjs"
+  # Read image contents without booting application code, loading secrets, or joining a network.
+  docker run --rm -i --network none --read-only --entrypoint node "$backend_image" \
+    --input-type=module - inventory /app/migrations <"$helper" >"$requested_inventory"
+  if [[ -n "$current_backend_image" ]]; then
+    docker run --rm -i --network none --read-only --entrypoint node "$current_backend_image" \
+      --input-type=module - inventory /app/migrations <"$helper" >"$previous_inventory"
+    previous_arg="$previous_inventory"
+  fi
+  # Unlike the application's status command, this never creates schema_migrations.
+  # Expand PostgreSQL credentials inside the container rather than on the host.
+  # shellcheck disable=SC2016
+  compose_with_env "$PENDING_ENV" exec -T postgres sh -ec '
+    table="$(psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SELECT to_regclass('\''public.schema_migrations'\'')")"
+    if [ -n "$table" ]; then
+      psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc \
+        "SELECT COALESCE(json_agg(row_to_json(m)), '\''[]'\''::json) FROM (SELECT id, checksum FROM public.schema_migrations ORDER BY id) m"
+    else
+      echo "[]"
+    fi
+  ' >"$applied_ledger"
+  node "$helper" plan "$requested_inventory" "$applied_ledger" "$previous_arg" \
+    "${DEPLOY_STATE_DIR}/pending-compatibility.json" "$SHA" "$backend_image" "$current_backend_image"
+  IMAGE_ROLLBACK_SAFE="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1])).imageRollbackSafe' "${DEPLOY_STATE_DIR}/pending-compatibility.json")"
+  SCHEMA_QUIESCE_REQUIRED="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1])).quiesce' "${DEPLOY_STATE_DIR}/pending-compatibility.json")"
+}
+
+running_application_containers() {
+  local ids id service
+  # Explicit propagation is necessary: Bash clears errexit inside command substitutions.
+  ids="$(docker ps -q --filter "label=com.docker.compose.project=${PROJECT_NAME}")" || return 1
+  for id in $ids; do
+    service="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$id")" || return 1
+    case "$service" in
+      postgres | redis | caddy-edge) ;;
+      batch-backend | batch-worker | transcribe-worker | student-memory-worker | batch-frontend | telegram-ops-bot)
+        printf '%s\n' "$id" ;;
+      *) die "unknown live Compose service ${service}; cannot establish writer quiescence" ;;
+    esac
+  done
+}
+
+quiesce_application() {
+  local ids remaining
+  ids="$(running_application_containers)"
+  info "Quiescing application containers before incompatible schema work"
+  QUIESCED=true
+  # Include live profile services regardless of selected profiles. Leave DB/Redis/edge running.
+  if [[ -n "$ids" ]]; then
+    local -a containers
+    mapfile -t containers <<<"$ids"
+    docker stop --time 30 "${containers[@]}"
+  fi
+  remaining="$(running_application_containers)"
+  [[ -z "$remaining" ]] || die "application containers remain running; refusing incompatible migration"
+}
+
 run_migrations_once() {
   info "Running database migrations once with requested backend image"
   compose_with_env "$PENDING_ENV" run --rm --no-deps batch-backend node dist/tools/migrate-db.js migrate
@@ -549,6 +633,8 @@ main() {
     return 0
   fi
 
+  [[ "$#" -eq 1 || ( "$#" -eq 2 && "${2:-}" == "--plan" ) ]] || die "expected a Git SHA and optional --plan"
+
   validate_sha
   require_command docker
   require_command curl
@@ -556,6 +642,7 @@ main() {
   require_command sha256sum
   require_command find
   require_command flock
+  require_command node
 
   [[ -f "$COMPOSE_FILE" ]] || die "compose file not found: ${COMPOSE_FILE}"
   [[ -f "${APP_DIR}/.env" ]] || die "missing required env file: ${APP_DIR}/.env"
@@ -572,6 +659,9 @@ main() {
   flock -n 9 || die "another deployment is already running"
 
   docker info >/dev/null
+  # Remember a live bot even when its profile was omitted; quiescence must cover it.
+  local live_bot
+  live_bot="$(docker ps -q --filter "label=com.docker.compose.project=${PROJECT_NAME}" --filter 'label=com.docker.compose.service=telegram-ops-bot')"
   check_disk_free "Application checkout filesystem" "$APP_DIR"
   local docker_root
   docker_root="$(docker info --format '{{.DockerRootDir}}')"
@@ -616,16 +706,51 @@ main() {
   print_deployment_plan
 
   compose_with_env "$PENDING_ENV" config --quiet
+  compose_with_env "$PENDING_ENV" config --format json | node "${APP_DIR}/scripts/deploy/schema-compatibility.mjs" check-compose
+
+  # Always check schema compatibility, including image downgrade and alias-only attempts.
+  require_postgres_healthy
+  read_schema_compatibility_plan
+  if [[ "$SCHEMA_QUIESCE_REQUIRED" == "true" && -n "$live_bot" ]] && ! ops_bot_enabled; then
+    # Enable recovery of a bot that will be stopped, without widening ordinary deploys.
+    DEPLOY_INCLUDE_OPS_BOT=true
+    include_bot=true
+    prepare_image "$bot_image" "$current_bot_image" "$current_bot_digest"
+    bot_digest="$PREPARED_IMAGE_DIGEST"
+    write_pending_env "$backend_image" "$frontend_image" "$bot_image" "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest"
+    build_deployment_plan \
+      "$current_backend_digest" "$current_frontend_digest" "$current_bot_digest" "$current_caddy_digest" \
+      "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest" \
+      "$include_bot" "$include_edge"
+    print_deployment_plan
+    compose_with_env "$PENDING_ENV" config --quiet
+    compose_with_env "$PENDING_ENV" config --format json | node "${APP_DIR}/scripts/deploy/schema-compatibility.mjs" check-compose
+  fi
+  if [[ "$PLAN_ONLY" == "true" ]]; then
+    info "Plan only: no database or service mutation performed"
+    return 0
+  fi
 
   if [[ -f "$CURRENT_ENV" ]]; then
     copy_state_file "$CURRENT_ENV" "$PREVIOUS_ENV"
   fi
+  cp "${DEPLOY_STATE_DIR}/pending-compatibility.json" "${COMPATIBILITY_PLAN}.tmp"
+  chmod 0640 "${COMPATIBILITY_PLAN}.tmp"
+  mv "${COMPATIBILITY_PLAN}.tmp" "$COMPATIBILITY_PLAN"
 
   if [[ "$DATABASE_WORK_REQUIRED" == "true" ]]; then
     require_command aws
-    require_postgres_healthy
+    if [[ "$SCHEMA_QUIESCE_REQUIRED" == "true" ]]; then
+      quiesce_application
+      if ops_bot_enabled && [[ "$BOT_CHANGED" != "true" ]]; then
+        DEPLOYMENT_SERVICES+=(telegram-ops-bot)
+      fi
+    fi
     create_pre_migration_backup
+    MIGRATION_STARTED=true
     run_migrations_once
+  elif [[ "$SCHEMA_QUIESCE_REQUIRED" == "true" ]]; then
+    die "current image state is incompatible with the database; deploy a schema-compatible backend image"
   fi
 
   if [[ "${#DEPLOYMENT_SERVICES[@]}" -gt 0 ]]; then
@@ -646,6 +771,9 @@ main() {
   append_deploy_log success
   remove_old_custom_images
   info "Deployment completed for ${SHA}"
+  if [[ "$IMAGE_ROLLBACK_SAFE" != "true" ]]; then
+    info "Image-only rollback to the previous runtime is BLOCKED; recover with a schema-compatible image or deliberately restore a verified backup from BEFORE the blocked boundary that supports the previous runtime."
+  fi
 }
 
 main "$@"

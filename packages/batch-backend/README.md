@@ -179,6 +179,11 @@ Useful indexes:
   columns own coverage lineage; matching `generation_notes` arrays are diagnostics only.
 - Schema changes belong in versioned migrations. Runtime legacy schema patching is retired;
   `ensureJobsSchema` rejects every invocation, including its former environment override.
+  every migration must also appear in the packaged `migrations/runtime-compatibility.json`.
+  New migrations declare `compatible` or `incompatible` with prior application writers and
+  previous-image recovery. The release contract check enforces complete metadata; production deploy
+  quiesces writers before incompatible boundaries and gates rollback guidance. See
+  [deployment compatibility and recovery](../../docs/backend-frontend/DEPLOYMENT.md#schema-compatibility-and-recovery).
 - Migration 0059 copies useful, explicitly student-attributable history and freezes residual legacy
   storage. Historical `unknown` provenance stays unknown. The old profile-wide provenance backfill
   and student binding tools are retired; see the cutover runbook before any residual cleanup.
