@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [14.0.0] - 2026-10-02
+
+### Changed
+
+- Automated release from PR #314: feat(generation)!: strict AssignmentV1 with PMD compatibility (https://github.com/abocha/esl-pipeline/pull/314)
+
 ## [13.1.1] - 2026-10-02
 
 ### Changed
