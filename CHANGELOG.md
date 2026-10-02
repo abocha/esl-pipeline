@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [14.1.1] - 2026-10-02
+
+### Changed
+
+- Automated release from PR #322: feat(ops): verify worker readiness and monitor queue progress (https://github.com/abocha/esl-pipeline/pull/322)
+
 ## [14.1.0] - 2026-10-02
 
 ### Changed
