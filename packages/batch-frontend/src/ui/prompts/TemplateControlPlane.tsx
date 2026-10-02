@@ -75,10 +75,12 @@ export function TemplateControlPlane({
   state,
   busy,
   onActivate,
+  onImportAndActivate,
 }: {
   state: TemplateControlPlaneDto;
   busy: boolean;
   onActivate: (revisionId: string) => void;
+  onImportAndActivate: () => void;
 }) {
   const shippedRevision = state.shipped?.matchingRevision;
   return (
@@ -140,6 +142,16 @@ export function TemplateControlPlane({
           onClick={() => onActivate(shippedRevision.id)}
         >
           Activate shipped {shippedRevision.versionLabel}
+        </button>
+      ) : null}
+      {state.shipped && !shippedRevision ? (
+        <button
+          type="button"
+          className="prompt-templates-primary"
+          disabled={busy}
+          onClick={onImportAndActivate}
+        >
+          Import &amp; activate
         </button>
       ) : null}
     </section>

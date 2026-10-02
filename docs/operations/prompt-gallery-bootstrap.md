@@ -40,6 +40,10 @@ pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
 For an existing environment receiving a changed default template, run the dry/apply commands, review
 the imported draft through the service-owned template management surface, and explicitly activate
 the intended revision. Bootstrap does not replace an existing active revision automatically.
+For a single deployed template whose shipped hash has not been imported, an admin can instead use
+**Import & activate** in Administration > Prompts. This imports the current running asset and
+explicitly activates it, preserving previous revisions. If activation fails after import, refresh
+the persisted state and use **Activate shipped** to retry; the imported revision remains in history.
 
 ## Startup warning mode
 

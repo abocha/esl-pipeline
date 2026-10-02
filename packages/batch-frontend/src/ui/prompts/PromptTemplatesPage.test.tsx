@@ -7,6 +7,7 @@ import { PromptTemplatesPage } from './PromptTemplatesPage';
 
 const apiMocks = vi.hoisted(() => ({
   activateTemplateRevision: vi.fn(),
+  importAndActivateShippedTemplate: vi.fn(),
   deleteTemplateContent: vi.fn(),
   getTemplateContent: vi.fn(),
   listTemplateContents: vi.fn(),
