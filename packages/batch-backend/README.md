@@ -149,6 +149,10 @@ Useful indexes:
   Ordinary `/config/prompts` consumption and generation continue resolving active DB revisions.
 - Manual template saves and restores retain immediate activation; shipped drafts require an explicit
   admin activation. The UI lives at `/admin/prompts` inside the existing frontend.
+- Admin-only `POST /templates/:id/import-and-activate` reads the current deployed asset, imports a
+  hash-deduplicated draft using bootstrap semantics with operator provenance, and invokes normal
+  revision activation. It preserves assets and revision content/history. Import can persist before
+  activation fails; errors require refreshing persisted state and retrying the shipped action.
 - Prompt-package lineage is the canonical assignment-level student-memory provenance surface. When
   canonical memory lookup is unavailable, prompt packages carry explicit unavailable memory text
   instead of treating the layer as empty.

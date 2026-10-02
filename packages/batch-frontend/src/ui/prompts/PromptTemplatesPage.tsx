@@ -11,6 +11,7 @@ import {
   activateTemplateRevision,
   deleteTemplateContent,
   getTemplateRevision,
+  importAndActivateShippedTemplate,
   listTemplateControlPlane,
   listTemplateRevisions,
   restoreTemplateRevision,
@@ -332,6 +333,32 @@ export const PromptTemplatesPage: React.FC = () => {
     }
   };
 
+  const handleImportAndActivate = async () => {
+    if (!selectedTemplateId || isBusy) return;
+    if (!confirmDiscardDirty()) return;
+    setBusy('activating');
+    setError(null);
+    setSuccess(null);
+    try {
+      await importAndActivateShippedTemplate(selectedTemplateId);
+    } catch (importError) {
+      const message = getErrorMessage(importError, 'Import and activation could not be completed.');
+      const refreshed = await loadTemplate(selectedTemplateId);
+      setError(
+        `${message}${refreshed ? '' : ' Persisted state could not be refreshed. Reload the page before retrying.'}`,
+      );
+      setBusy(null);
+      return;
+    }
+    const refreshed = await loadTemplate(selectedTemplateId);
+    if (refreshed) setSuccess('Shipped template imported and activated.');
+    else
+      setError(
+        'Import and activation completed, but persisted state could not be refreshed. Reload the page.',
+      );
+    setBusy(null);
+  };
+
   const handleArchiveTemplate = async () => {
     if (!selectedTemplateId) return;
     if (!window.confirm(`Archive ${selectedTemplateId}? Revision history will be preserved.`)) {
@@ -506,6 +533,7 @@ export const PromptTemplatesPage: React.FC = () => {
               state={controlPlane}
               busy={isBusy}
               onActivate={(id) => void handleActivateRevision(id)}
+              onImportAndActivate={() => void handleImportAndActivate()}
             />
           ) : null}
           <section className="prompt-templates-editor-surface">

@@ -19,8 +19,10 @@ const templateMocks = vi.hoisted(() => ({
 }));
 
 const controlPlaneMock = vi.hoisted(() => vi.fn());
+const importAndActivateMock = vi.hoisted(() => vi.fn());
 vi.mock('../src/application/template-control-plane.js', () => ({
   listTemplateControlPlane: controlPlaneMock,
+  importAndActivateShippedTemplate: importAndActivateMock,
 }));
 
 const promptOptionsMock = vi.hoisted(() => vi.fn());
@@ -74,6 +76,7 @@ async function createApp() {
 const managementRoutes = [
   { method: 'GET', url: '/templates' },
   { method: 'GET', url: '/templates/control-plane' },
+  { method: 'POST', url: '/templates/template.md/import-and-activate' },
   { method: 'GET', url: '/templates/template.md' },
   { method: 'PUT', url: '/templates/template.md', payload: { content: 'updated' } },
   { method: 'DELETE', url: '/templates/template.md' },
@@ -174,5 +177,25 @@ describe('Assignment Template authorization', () => {
       templates: [{ id: 'template.md', label: 'Template' }],
       defaults: { templateId: 'template.md' },
     });
+  });
+
+  it('imports and activates only through the admin boundary with operator provenance', async () => {
+    app = await createApp();
+    importAndActivateMock.mockResolvedValue({ id: REVISION_ID, status: 'active' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/templates/template.md/import-and-activate',
+      headers: { 'x-test-user-role': 'admin' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(importAndActivateMock).toHaveBeenCalledWith('template.md', 'admin-user');
+    importAndActivateMock.mockRejectedValue(new Error('database unavailable'));
+    const failed = await app.inject({
+      method: 'POST',
+      url: '/templates/template.md/import-and-activate',
+      headers: { 'x-test-user-role': 'admin' },
+    });
+    expect(failed.statusCode).toBe(500);
+    expect(failed.json().message).toMatch(/Refresh the persisted state/);
   });
 });
