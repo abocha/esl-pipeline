@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [13.1.0] - 2026-10-02
+
+### Changed
+
+- Automated release from PR #307: feat(prompts): import and activate unimported shipped content (https://github.com/abocha/esl-pipeline/pull/307)
+
 ## [13.0.0] - 2026-10-01
 
 ### Changed
