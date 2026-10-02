@@ -254,6 +254,7 @@ export function registerJobActionTests() {
         expect(initialPublishButton.className).toContain('minimal-secondary');
         expect(initialPreviewButton.className).toContain('minimal-primary');
         expect(initialPreviewButton.className).toContain('minimal-preview-attention');
+        expect(initialPreviewButton.className).toContain('minimal-guided-button--secondary');
         expect(screen.queryByText('Preview required before sharing.')).toBeNull();
         expect(api.materializeDraft).not.toHaveBeenCalled();
         await previewCurrentDraft(user);
