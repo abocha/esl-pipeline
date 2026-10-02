@@ -812,15 +812,10 @@ export const MinimalAssignment: React.FC = () => {
       : null;
   const durableProfileLineage = useMemo(
     () => ({
-      selectedProfileId: currentLearnerProfile?.studentId ?? null,
       selectedProfileRevisionId: currentLearnerProfile?.revisionId ?? null,
       selectedProfileRevisionHash: currentLearnerProfile?.revisionHash ?? null,
     }),
-    [
-      currentLearnerProfile?.studentId,
-      currentLearnerProfile?.revisionId,
-      currentLearnerProfile?.revisionHash,
-    ],
+    [currentLearnerProfile?.revisionId, currentLearnerProfile?.revisionHash],
   );
   activeAssignmentSessionIdRef.current = activeAssignmentSession?.id ?? null;
   activeAssignmentSessionRef.current = activeAssignmentSession;
@@ -1198,7 +1193,7 @@ export const MinimalAssignment: React.FC = () => {
       session.selectedProfileId &&
         (!session.selectedProfileRevisionId || !session.selectedProfileRevisionHash) &&
         learnerContext?.confirmationAvailable &&
-        durableProfileLineage.selectedProfileId === session.studentId,
+        currentLearnerProfile?.studentId === session.studentId,
     );
     if (!assignmentSessionWritesAllowed() && !repairingPartialProfileLineage) return;
     const recovery: UpdateAssignmentSessionRecoveryRequest['patch'] = {
@@ -1237,6 +1232,7 @@ export const MinimalAssignment: React.FC = () => {
   }, [
     assignmentSessionWritesAllowed,
     learnerContext?.confirmationAvailable,
+    currentLearnerProfile?.studentId,
     context.selectedProfileId,
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
@@ -2099,7 +2095,6 @@ export const MinimalAssignment: React.FC = () => {
         ...(confirmedContext
           ? {
               teacherNotes: confirmedContext.teacherNotes,
-              selectedProfileId: source.selectedStudentId,
               selectedProfileRevisionId: confirmedContext.profileRevisionId,
               selectedProfileRevisionHash: confirmedContext.profileRevisionHash,
             }
