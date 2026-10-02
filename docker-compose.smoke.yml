@@ -14,7 +14,7 @@ services:
     ports:
       - '127.0.0.1:55432:5432'
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U esl -d esl_smoke']
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -p 5432 -U esl -d esl_smoke']
       interval: 2s
       timeout: 3s
       retries: 30

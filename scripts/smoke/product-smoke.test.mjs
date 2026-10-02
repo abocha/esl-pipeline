@@ -5,7 +5,13 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { buildFingerprint, composeArgs, root, smokeEnv } from './product-smoke.mjs';
+import {
+  assertAccountBootstrapReady,
+  buildFingerprint,
+  composeArgs,
+  root,
+  smokeEnv,
+} from './product-smoke.mjs';
 
 test('ordinary environment cannot redirect smoke state or enable paid generation', () => {
   const env = smokeEnv({
@@ -86,6 +92,18 @@ test('compose project, volumes, ports, and Redis version stay isolated from dev/
     readFileSync(path.join(root, 'docker-compose.prod.yml'), 'utf8'),
     /image: redis:8\.10\.1-alpine3\.23/u,
   );
+});
+
+test('smoke PostgreSQL readiness requires TCP instead of the startup Unix socket', () => {
+  const smoke = readFileSync(path.join(root, 'docker-compose.smoke.yml'), 'utf8');
+  assert.match(smoke, /pg_isready -h 127\.0\.0\.1 -p 5432 -U esl -d esl_smoke/u);
+  assert.doesNotMatch(smoke, /pg_isready -U esl -d esl_smoke/u);
+});
+
+test('fresh-account bootstrap requires a running default no-provider smoke session', () => {
+  assert.throws(() => assertAccountBootstrapReady(undefined, false), /smoke:start/u);
+  assert.throws(() => assertAccountBootstrapReady({ live: true }, true), /no-provider/u);
+  assert.doesNotThrow(() => assertAccountBootstrapReady({ live: false }, true));
 });
 
 test('reset without deliberate fresh-state flag fails before invoking Docker', () => {

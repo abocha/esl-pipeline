@@ -28,17 +28,22 @@ In another terminal:
 
 ```powershell
 pnpm smoke:status
-pnpm smoke:invite
+pnpm smoke:bootstrap-account
 ```
 
-Open the printed invitation URL and register `smoke@example.test` with a local test password.
-On subsequent starts, sign in to the same account. Invitation creation uses the existing
-`alpha-invites.ts` tool; it does not bypass the invite-only registration contract.
+The helper creates an invitation with the existing `alpha-invites.ts` tool, completes signup
+through the normal local `POST /auth/register` route, verifies `POST /auth/login`, then prints a
+random local test password once. Open the app and sign in as `smoke@example.test`. This requires
+the default `smoke:start` mode and uses only the fixed loopback smoke API and isolated smoke DB; it
+does not add or enable an authentication bypass. On later starts without a fresh reset, sign in to
+the existing account with the password retained from your local password manager or notes. The
+manual `pnpm smoke:invite` flow remains available when you want to exercise browser signup itself.
 
 ```powershell
 pnpm smoke:stop
 pnpm smoke:reset --fresh-state
 pnpm smoke:start
+pnpm smoke:bootstrap-account
 ```
 
 `stop` stops host processes and removes smoke containers/network, preserving named volumes and
