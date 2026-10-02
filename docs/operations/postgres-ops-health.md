@@ -93,6 +93,11 @@ remain outside the current host/runtime check.
 
 ## Production systemd units
 
+Fresh-host preparation uses the single
+[production host bootstrap path](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap),
+which calls the installer below and enables all five ops timers without starting them. Activation
+and database/application readiness remain separately authorized deployment/recovery work.
+
 The canonical production unit files are under [`deploy/systemd`](../../deploy/systemd/). They
 capture the existing backup, weekly artifact-integrity, and monthly restore-drill services and add
 the missing six-hour ops-alert service/timer. The host scripts source `/opt/esl-pipeline/.env`; keep
