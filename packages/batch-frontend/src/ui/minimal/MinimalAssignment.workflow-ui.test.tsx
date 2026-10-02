@@ -1609,6 +1609,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
     const transcriptEditor = screen.getByRole('textbox', { name: /Transcript text/i });
     const speakerFieldset = speakerChoice.closest('fieldset');
     expect(speakerFieldset).not.toBeNull();
+    expect(screen.getByRole('group', { name: 'Which one of these is the tutor?' })).toBe(
+      speakerFieldset,
+    );
+    expect(speakerFieldset?.querySelectorAll('.minimal-speaker-choice-option')).toHaveLength(2);
     expect(
       speakerFieldset!.compareDocumentPosition(transcriptEditor) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -1617,6 +1621,9 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(api.confirmAssignmentSessionStep).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('radio', { name: /Speaker 1/i }));
+    expect(screen.getByRole('radio', { name: /Speaker 1/i }).closest('label')?.className).toContain(
+      'is-selected',
+    );
     await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
     await waitFor(() =>
