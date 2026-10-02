@@ -10,6 +10,7 @@ import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { reconcileDeferredInitialEnrichmentIntents } from '../domain/assignment-session-repository.js';
 import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { createStudentMemoryWorker } from '../infrastructure/student-memory-queue.js';
+import { reportWorkerReady } from '../infrastructure/worker-readiness.js';
 
 async function getLogger() {
   const { logger } = await import('../infrastructure/logger.js');
@@ -137,7 +138,7 @@ export async function startStudentMemoryWorker(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
-  logger.info('Student-memory worker started', { component: 'student-memory-worker' });
+  await reportWorkerReady(worker, 'student-memory-worker', logger);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

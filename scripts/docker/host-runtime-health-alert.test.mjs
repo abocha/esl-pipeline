@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import test from 'node:test';
 import path from 'node:path';
+import test from 'node:test';
 
 import {
   collectApplicationObservation,
@@ -12,12 +12,14 @@ import {
   hostHealthConfig,
   runHostRuntimeHealthAlert,
 } from './host-runtime-health-alert.mjs';
+import { QUEUE_GRACE_MS } from './worker-queue-observation.mjs';
 
 const checkedAtUtc = '2026-10-01T00:00:00.000Z';
 
 function healthyObservation(env = { CADDY_PUBLIC_HOSTNAME: 'production.example.test' }) {
   const expectedServices = hostHealthConfig(env).expectedServices;
   return {
+    queues: { ok: true, queues: [] },
     checkedAtUtc,
     docker: {
       ok: true,
@@ -73,6 +75,58 @@ test('host health is green for running critical services and healthy host/public
     'student-memory-worker',
     'caddy-edge',
   ]);
+});
+
+test('queue history persists despite notification failure, observation failure and container recreation', async () => {
+  let state = {};
+  let time = 1_790_000_000_000;
+  const observation = healthyObservation();
+  observation.queues = {
+    ok: true,
+    queues: [
+      {
+        service: 'batch-worker',
+        queue: 'esl-jobs',
+        consumers: [],
+        waiting: 1,
+        prioritized: 0,
+        overdueDelayed: 0,
+        active: 0,
+        delayed: 0,
+        paused: false,
+        cursorPresent: false,
+        lastId: '0-0',
+        entriesAdded: 0,
+        events: [],
+      },
+    ],
+  };
+  const run = () =>
+    runHostRuntimeHealthAlert({
+      previousState: state,
+      env: {},
+      dependencies: {
+        now: () => new Date(time),
+        collectObservation: () => observation,
+        writeState: (_file, value) => {
+          state = value;
+        },
+        sendTelegram: async () => ({ result: 'failed' }),
+      },
+    });
+  await run();
+  assert.equal(state.queueHistory['esl-jobs'].backlogSince, time);
+  observation.queues.ok = false;
+  time += QUEUE_GRACE_MS / 2;
+  await run();
+  observation.docker.containers.find((container) => container.service === 'batch-worker').id =
+    'recreated';
+  observation.queues.ok = true;
+  time += QUEUE_GRACE_MS / 2;
+  const expired = await run();
+  assert.equal(expired.components.workerQueues.state, 'critical');
+  assert.equal(state.queueHistory['esl-jobs'].backlogSince, time - QUEUE_GRACE_MS);
+  assert.equal(expired.alert.pending, true);
 });
 
 test('missing/unhealthy services, failed public checks, and exhausted disk are critical', () => {

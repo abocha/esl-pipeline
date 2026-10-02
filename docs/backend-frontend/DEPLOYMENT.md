@@ -306,8 +306,14 @@ docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml
   logs --tail=120 student-memory-worker
 ```
 
-Treat missing `student-memory-worker` logs or a non-running container as a production readiness
-blocker for student-memory features; `batch-worker` does not consume those BullMQ jobs.
+The deploy script requires structured `worker_ready` evidence for all three current worker
+instances, including the dedicated memory worker, on every deploy verification. Each record must
+match the container's hostname, current Docker start time, service, and configured queue. Workers
+await BullMQ initialization with a 30-second deadline; verification polls for up to 60 seconds.
+A running container or generic “started” log alone does not satisfy readiness. Readiness proves
+current consumer initialization, not future liveness or business success. See
+[`host-runtime-health.md`](../operations/host-runtime-health.md) for the separate read-only runtime
+queue observation and rollout procedure. `batch-worker` does not consume student-memory jobs.
 
 Record the deployed Git SHA or image version in
 [`docs/operations/hosted-mvp-evidence.md`](../operations/hosted-mvp-evidence.md) or the active
