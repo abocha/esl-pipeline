@@ -4,6 +4,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { migrationInventory, validateCompatibility } from '../deploy/schema-compatibility.mjs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..');
@@ -51,14 +53,14 @@ function main() {
   if (invalidFiles.length > 0) {
     die(`Invalid backend migration filenames: ${invalidFiles.join(', ')}`);
   }
-  const migrationFiles = sqlFiles
-    .sort((a, b) => a.localeCompare(b));
+  const migrationFiles = sqlFiles.sort((a, b) => a.localeCompare(b));
 
   if (migrationFiles.length === 0) {
     die('No migration files found in packages/batch-backend/migrations');
   }
 
   const latestMigration = migrationFiles[migrationFiles.length - 1].replace(/\.sql$/, '');
+  validateCompatibility(migrationInventory(migrationsDir));
   console.log('[verify-contract-version-consistency] OK');
   console.log(`- latest migration: ${latestMigration}`);
   console.log(`- api: ${api}`);
