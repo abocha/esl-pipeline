@@ -120,6 +120,17 @@ export interface AssignmentValidationContext {
   suppliedUrls?: readonly string[];
 }
 
+const LEXICAL_WORD_PATTERN = /[\p{L}\p{M}\p{N}]+(?:['’‐‑-][\p{L}\p{M}\p{N}]+)*/gu;
+
+function lexicalWords(value: string): string[] {
+  return (
+    value
+      .normalize('NFKC')
+      .match(LEXICAL_WORD_PATTERN)
+      ?.map((word) => word.toLowerCase()) ?? []
+  );
+}
+
 export function validateAssignmentV1(
   output: unknown,
   context: AssignmentValidationContext = {},
@@ -208,7 +219,13 @@ export function validateAssignmentV1(
             item.text.replace(/\s+/g, ' ').trim()
         )
           errors.push('pronunciation chunks must reconstruct drill text');
-        if (item.stressedWords.some((word) => !item.text.split(/\s+/).includes(word)))
+        const drillWords = new Set(lexicalWords(item.text));
+        if (
+          item.stressedWords.some((word) => {
+            const words = lexicalWords(word);
+            return words.length !== 1 || !drillWords.has(words[0]!);
+          })
+        )
           errors.push('pronunciation stressedWords must occur in drill text');
         if (p.mode === 'rhythm_chunking' && !item.chunks.length)
           errors.push('rhythm_chunking requires chunks');
