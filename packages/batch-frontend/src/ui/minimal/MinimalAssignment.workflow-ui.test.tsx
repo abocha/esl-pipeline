@@ -357,7 +357,6 @@ describe('MinimalAssignment - staged workflow UI', () => {
         expect.objectContaining({
           patch: expect.objectContaining({
             teacherNotes: confirmedContext.teacherNotes,
-            selectedProfileId: session.studentId,
             selectedProfileRevisionId: confirmedContext.profileRevisionId,
             selectedProfileRevisionHash: confirmedContext.profileRevisionHash,
             promptPackageId: 'pkg-1',
@@ -366,6 +365,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
         }),
       ),
     );
+    const recoveryPatch = vi
+      .mocked(api.updateAssignmentSessionRecovery)
+      .mock.calls.at(-1)?.[1].patch;
+    expect(recoveryPatch).not.toHaveProperty('selectedProfileId');
     expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ step: 'create', promptPackageId: 'pkg-1', draftId: 'draft-1' }),
@@ -1434,6 +1437,85 @@ describe('MinimalAssignment - staged workflow UI', () => {
         { timeout: 15_000 },
       );
       expect(api.fetchAssignmentLearnerContext).toHaveBeenCalledTimes(3);
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'recovers a new student learner context with only revision lineage fields',
+    async () => {
+      const user = createMinimalUser();
+      const revisionHash = 'c'.repeat(64);
+      vi.mocked(api.fetchStudentOptions).mockResolvedValue({
+        students: [{ id: 'student-cora', name: 'Cora' }],
+      });
+      vi.mocked(api.uploadRecording).mockResolvedValue(
+        makeRecording({ studentId: 'student-cora', status: 'transcribed', transcriptId: 'tx-1' }),
+      );
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({ studentId: 'student-cora', status: 'transcribed', transcriptId: 'tx-1' }),
+      );
+      vi.mocked(api.fetchAssignmentLearnerContext).mockResolvedValue({
+        assignmentSessionId: 'session-1',
+        studentId: 'student-cora',
+        source: { recordingId: 'rec-1', transcriptId: 'tx-1', transcriptHash: 'a'.repeat(64) },
+        eligibility: 'already_enriched',
+        state: 'not_applicable',
+        operationState: null,
+        profile: {
+          studentId: 'student-cora',
+          revisionId: 'revision-cora',
+          revisionHash,
+          content: 'Cora learner context',
+          structuredContent: null,
+          updatedAt: new Date().toISOString(),
+        },
+        pinned: null,
+        confirmationAvailable: true,
+        warning: null,
+      });
+
+      renderMinimalAssignment();
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Cora' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Choose learner/i }),
+        'student-cora',
+      );
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await screen.findByRole('heading', { name: /Learner context/i });
+      await waitFor(() =>
+        expect(api.fetchAssignmentLearnerContext).toHaveBeenCalledWith('session-1'),
+      );
+      await waitFor(() =>
+        expect(
+          (screen.getByRole('button', { name: /Confirm and continue/i }) as HTMLButtonElement)
+            .disabled,
+        ).toBe(false),
+      );
+
+      vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
+      vi.useFakeTimers();
+      fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+        target: { value: "Keep Cora's project update goals visible." },
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      vi.useRealTimers();
+
+      const recoveryPatch = vi
+        .mocked(api.updateAssignmentSessionRecovery)
+        .mock.calls.at(-1)?.[1].patch;
+      expect(recoveryPatch).toEqual({
+        teacherNotes: "Keep Cora's project update goals visible.",
+        selectedProfileRevisionId: 'revision-cora',
+        selectedProfileRevisionHash: revisionHash,
+      });
+      expect(recoveryPatch).not.toHaveProperty('selectedProfileId');
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
