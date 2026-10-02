@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# Owns only newly allocated local Docker resources. Never accepts a host/SSH/cloud target.
+set -Eeuo pipefail
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+unset DOCKER_HOST DOCKER_CONTEXT DOCKER_TLS DOCKER_TLS_VERIFY DOCKER_CERT_PATH
+export DOCKER_HOST=unix:///var/run/docker.sock
+case "${1:-}" in
+  --dry-run) echo 'Disposable Ubuntu 24.04 source -> backup bundle -> destroy source -> clean Ubuntu replacement -> bootstrap/restore/pinned deploy/verify. Local Docker socket only; no SSH, VPS, DNS or production inputs.'; exit 0 ;;
+  '') ;;
+  *) echo 'Usage: bash scripts/recovery/run-replacement-host-rehearsal.sh [--dry-run]' >&2; exit 1 ;;
+esac
+revision="${ESL_REHEARSAL_REVISION:-$(git -C "$ROOT_DIR" rev-parse origin/main)}"
+[[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'Full pinned Git SHA required' >&2; exit 1; }
+git -C "$ROOT_DIR" cat-file -e "$revision^{commit}"
+work="$(mktemp -d /tmp/esl-recovery.XXXXXXXX)"
+run_id="$(basename "$work" | tr '[:upper:]' '[:lower:]')"
+evidence="${ESL_REHEARSAL_EVIDENCE_DIR:-$work/evidence}"
+# Refuse existing evidence, including symlinks; never overwrite operator-owned artifacts.
+[[ ! -e "$evidence" && ! -L "$evidence" ]] || { echo 'Evidence directory must be new' >&2; exit 1; }
+[[ "$evidence" == /* ]] || { echo 'Evidence directory must be absolute' >&2; exit 1; }
+mkdir -p "$(dirname "$evidence")"
+mkdir -m 0700 "$evidence"
+printf 'Evidence: %s\nPinned application: %s\n' "$evidence" "$revision"
+container=''
+volume=''
+builder="$run_id-build"
+builder_created=false
+created_images=()
+host_image="$run_id-host:rehearsal"
+backend="$run_id/batch-backend:$revision"
+frontend="$run_id/batch-frontend:$revision"
+cleanup_host() {
+  if [[ -n "$container" ]]; then
+    docker cp "$container:/evidence/." "$evidence/" 2>/dev/null || true
+    docker logs "$container" > "$evidence/host-console-$phase.log" 2>&1 || true
+    docker rm -f "$container" >/dev/null 2>&1 || true
+    container=''
+  fi
+  if [[ -n "$volume" ]]; then
+    if [[ "$(docker volume inspect "$volume" --format '{{index .Labels "esl.rehearsal"}}' 2>/dev/null)" == "$run_id" ]]; then
+      docker volume rm "$volume" >/dev/null 2>&1 || true
+    fi
+    volume=''
+  fi
+}
+cleanup() {
+  local rc=$?
+  cleanup_host
+  if [[ "$builder_created" == true ]]; then docker buildx rm "$builder" >/dev/null 2>&1 || true; fi
+  if [[ "${#created_images[@]}" -gt 0 ]]; then docker image rm "${created_images[@]}" >/dev/null 2>&1 || true; fi
+  # Evidence is retained even on failure. Source/build staging belongs to this allocation.
+  rm -rf "$work/source" "$work/host" "$work/images.tar" "$work/repository.tar" "$work/tooling.tar" "$work/bundle"
+  rm -f "$work/buildkitd.toml" "$work/"*.Dockerfile
+  printf 'Rehearsal exit=%s; retained evidence: %s\n' "$rc" "$evidence"
+}
+phase=build
+trap cleanup EXIT
+mkdir "$work/source" "$work/host"
+git -C "$ROOT_DIR" archive "$revision" > "$work/repository.tar"
+tar -xf "$work/repository.tar" -C "$work/source"
+# A dedicated builder owns its cache; remove it before guest image loads on small Cloud disks.
+# Native snapshotting works on nested filesystems without relying on an overlay-on-overlay mount.
+builder_args=(--name "$builder" --driver docker-container --buildkitd-flags '--oci-worker-snapshotter=native')
+if [[ -n "${HTTP_PROXY:-}" ]]; then
+  resolve_proxy() {
+    python3 - "$1" <<'PYPROXY'
+import socket, sys
+from urllib.parse import urlparse, urlunparse
+url = urlparse(sys.argv[1])
+if url.scheme == 'http' and url.hostname == 'proxy':
+    url = url._replace(netloc=url.netloc.replace('proxy', socket.gethostbyname('proxy')))
+print(urlunparse(url))
+PYPROXY
+  }
+  builder_args+=(--driver-opt "env.HTTP_PROXY=$(resolve_proxy "$HTTP_PROXY")" --driver-opt "env.HTTPS_PROXY=$(resolve_proxy "${HTTPS_PROXY:-$HTTP_PROXY}")" --driver-opt "\"env.NO_PROXY=${NO_PROXY:-localhost,127.0.0.1}\"")
+fi
+if [[ -n "${CODEX_PROXY_CERT:-}" ]]; then
+  python3 - "$work/buildkitd.toml" "$CODEX_PROXY_CERT" <<'PYCA'
+import json, sys
+with open(sys.argv[1], 'w') as output:
+    for registry in ['docker.io', 'registry-1.docker.io', 'auth.docker.io']:
+        output.write('[registry.' + json.dumps(registry) + ']\n  ca = [' + json.dumps(sys.argv[2]) + ']\n')
+PYCA
+  builder_args+=(--buildkitd-config "$work/buildkitd.toml")
+fi
+if docker buildx inspect "$builder" >/dev/null 2>&1; then echo 'Allocated builder name already exists' >&2; exit 1; fi
+docker buildx create "${builder_args[@]}" >/dev/null
+builder_created=true
+# Tooling under review is separate from the pinned application source; no .env/data/credentials.
+for service in batch-backend batch-frontend; do
+  dockerfile="$work/source/packages/$service/Dockerfile"
+  build_args=()
+  if [[ -n "${CODEX_PROXY_CERT:-}" ]]; then
+    # Session CA is a BuildKit secret, never an image layer or committed Dockerfile change.
+    sed -E 's|^RUN ((--mount=[^ ]+ )*)|RUN \1--mount=type=secret,id=proxy_ca,required=true export NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; |' "$dockerfile" > "$work/$service.Dockerfile"
+    dockerfile="$work/$service.Dockerfile"
+    build_args+=(--secret "id=proxy_ca,src=$CODEX_PROXY_CERT")
+  fi
+  if docker image inspect "$run_id/$service:$revision" >/dev/null 2>&1; then echo 'Allocated image tag already exists' >&2; exit 1; fi
+  docker buildx build --builder "$builder" --load "${build_args[@]}" --label "org.opencontainers.image.revision=$revision" -f "$dockerfile" -t "$run_id/$service:$revision" "$work/source" > "$evidence/build-$service.log" 2>&1
+  created_images+=("$run_id/$service:$revision")
+  docker image inspect "$run_id/$service:$revision" --format '{{json .}}' > "$evidence/image-$service.json"
+done
+# Exact dependency refs from production Compose; no provider requests.
+for image in postgres:18.6-alpine3.24 redis:8.10.1-alpine3.23 caddy:2.11-alpine registry:2.8.3 motoserver/moto:5.1.15; do
+  docker pull "$image" > "$evidence/pull-${image//[\/:]/-}.log" 2>&1
+done
+docker save "$backend" "$frontend" postgres:18.6-alpine3.24 redis:8.10.1-alpine3.23 caddy:2.11-alpine registry:2.8.3 motoserver/moto:5.1.15 -o "$work/images.tar"
+cat > "$work/host/Dockerfile" <<'DOCKERFILE'
+FROM ubuntu:24.04
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-sysv dbus ca-certificates && rm -rf /var/lib/apt/lists/*
+CMD ["/sbin/init"]
+DOCKERFILE
+if docker image inspect "$host_image" >/dev/null 2>&1; then echo 'Allocated host image tag already exists' >&2; exit 1; fi
+docker buildx build --builder "$builder" --load -t "$host_image" "$work/host" > "$evidence/build-ubuntu.log" 2>&1
+created_images+=("$host_image")
+docker buildx rm "$builder" >/dev/null
+builder_created=false
+start_host() {
+  local host_name="$run_id-$phase" next_volume="$run_id-$phase-docker"
+  if docker container inspect "$host_name" >/dev/null 2>&1 || docker volume inspect "$next_volume" >/dev/null 2>&1; then
+    echo 'Allocated guest resource name already exists; refusing to reuse it' >&2; exit 1
+  fi
+  docker volume create --label esl.rehearsal="$run_id" "$next_volume" >/dev/null
+  volume="$next_volume"
+  [[ "$(docker volume inspect "$volume" --format '{{index .Labels "esl.rehearsal"}}')" == "$run_id" ]]
+  extra_args=()
+  if [[ -n "${CODEX_PROXY_CERT:-}" ]]; then
+    extra_args+=(--mount "type=bind,src=$CODEX_PROXY_CERT,dst=/run/rehearsal-ca.crt,readonly")
+  fi
+  container="$(docker run -d --name "$host_name" --label esl.rehearsal="$run_id" --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock --mount "type=volume,src=$volume,dst=/var/lib/docker" "${extra_args[@]}" "$host_image")"
+  for ((attempt=0; attempt<60; attempt++)); do
+    if docker exec "$container" systemctl is-active --quiet multi-user.target; then break; fi
+    sleep 1
+  done
+  docker exec "$container" systemctl is-active --quiet multi-user.target
+  docker exec "$container" install -d -m 0750 /opt/esl-pipeline /evidence /bundle
+  docker cp "$work/repository.tar" "$container:/tmp/repository.tar"
+  docker cp "$work/tooling.tar" "$container:/tmp/tooling.tar"
+  docker cp "$work/images.tar" "$container:/tmp/images.tar"
+  docker exec "$container" bash -ec 'tar -xf /tmp/repository.tar -C /opt/esl-pipeline; tar -xf /tmp/tooling.tar -C /opt/esl-pipeline; printf "esl-disposable-recovery-v1\n" > /run/esl-recovery-disposable'
+}
+tar -C "$ROOT_DIR" -cf "$work/tooling.tar" scripts/recovery
+phase=source
+start_host
+docker exec "$container" bash /opt/esl-pipeline/scripts/recovery/rehearse-host.sh source "$revision" "$run_id" > "$evidence/source.log" 2>&1
+mkdir "$work/bundle"
+docker cp "$container:/bundle/." "$work/bundle/"
+docker cp "$container:/evidence/." "$evidence/"
+cleanup_host
+# No old containers, volumes, uploads or deployment/monitor state crosses this boundary.
+phase=replacement
+start_host
+docker cp "$work/bundle/." "$container:/bundle/"
+docker exec "$container" bash /opt/esl-pipeline/scripts/recovery/rehearse-host.sh replacement "$revision" "$run_id" > "$evidence/replacement.log" 2>&1
+docker cp "$container:/evidence/." "$evidence/"
+cat "$evidence/recovery-result.json"

@@ -18,6 +18,7 @@ backup/restore, health, Telegram, prompt-gallery, or replay runbook named there.
 
 For a fresh supported Ubuntu host, start with
 [production host bootstrap](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap).
+For host loss, use the [replacement-host recovery inventory and disposable rehearsal](replacement-host-recovery.md).
 
 For on-host container, filesystem, CPU/memory-pressure, and public-route checks, see
 [`host-runtime-health.md`](host-runtime-health.md). It is separate from PostgreSQL backup health

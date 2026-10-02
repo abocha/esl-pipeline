@@ -34,7 +34,9 @@
 
 GitHub [#326 / ESL-14](https://github.com/abocha/esl-pipeline/issues/326) owns this v1 execution
 slice of [ABO-10](https://linear.app/abocha/issue/ABO-10). It prepares the current single-host
-Compose baseline. A replacement-host database/application recovery rehearsal remains later work.
+Compose baseline. [GitHub #328 / ESL-15](https://github.com/abocha/esl-pipeline/issues/328) owns the
+[disposable replacement-host recovery rehearsal](../operations/replacement-host-recovery.md),
+including its durable-state inventory and synthetic recovery evidence boundary.
 Bootstrap completion does **not** mean a working production database or permission to receive traffic.
 
 ### Prerequisites and command
@@ -178,8 +180,9 @@ release bundle and root-owned state directory. The current deploy script require
 PostgreSQL/schema baseline even on its initial image-state path; **bootstrap does not create that
 database or make that command sufficient for a fresh installation**. Initial database establishment
 or deliberate verified recovery, Docker volumes/data, and subsequent application deployment remain
-operator-controlled work. The later replacement-host rehearsal must prove these data/application
-steps; #326 does not claim completed disaster recovery. Activate the ops timers only as part of
+operator-controlled work. The [disposable recovery path](../operations/replacement-host-recovery.md)
+composes bootstrap, verified restore and pinned deployment with synthetic state; #326 does not claim
+completed disaster recovery, and synthetic success does not prove production recovery. Activate the ops timers only as part of
 that separately authorized rollout and retain the runbooks' runtime/backup verification requirements.
 
 ## Operating Model
