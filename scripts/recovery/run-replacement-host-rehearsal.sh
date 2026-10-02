@@ -33,14 +33,12 @@ cleanup_host() {
   if [[ -n "$container" ]]; then
     docker cp "$container:/evidence/." "$evidence/" 2>/dev/null || true
     docker logs "$container" > "$evidence/host-console-$phase.log" 2>&1 || true
-    docker rm -f "$container" >/dev/null 2>&1 || true
-    container=''
+    if docker rm -f "$container" >/dev/null 2>&1; then container=''; fi
   fi
   if [[ -n "$volume" ]]; then
     if [[ "$(docker volume inspect "$volume" --format '{{index .Labels "esl.rehearsal"}}' 2>/dev/null)" == "$run_id" ]]; then
-      docker volume rm "$volume" >/dev/null 2>&1 || true
+      if docker volume rm "$volume" >/dev/null 2>&1; then volume=''; fi
     fi
-    volume=''
   fi
 }
 cleanup() {
@@ -62,6 +60,9 @@ tar -xf "$work/repository.tar" -C "$work/source"
 # Native snapshotting works on nested filesystems without relying on an overlay-on-overlay mount.
 builder_args=(--name "$builder" --driver docker-container --buildkitd-flags '--oci-worker-snapshotter=native')
 if [[ -n "${HTTP_PROXY:-}" ]]; then
+  # Managed Cloud proxy transport is host-local; keep registry requests on that transport.
+  # This is the build daemon only, outside either recovery guest or application network.
+  builder_args+=(--driver-opt network=host)
   resolve_proxy() {
     python3 - "$1" <<'PYPROXY'
 import socket, sys
@@ -128,7 +129,11 @@ start_host() {
   if [[ -n "${CODEX_PROXY_CERT:-}" ]]; then
     extra_args+=(--mount "type=bind,src=$CODEX_PROXY_CERT,dst=/run/rehearsal-ca.crt,readonly")
   fi
+  if [[ -n "${HTTP_PROXY:-}" ]]; then
+    extra_args+=(--env "HTTP_PROXY=$(resolve_proxy "$HTTP_PROXY")" --env "HTTPS_PROXY=$(resolve_proxy "${HTTPS_PROXY:-$HTTP_PROXY}")" --env 'NO_PROXY=localhost,127.0.0.1,::1,rehearsal-s3,postgres,redis')
+  fi
   container="$(docker run -d --name "$host_name" --label esl.rehearsal="$run_id" --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock --mount "type=volume,src=$volume,dst=/var/lib/docker" "${extra_args[@]}" "$host_image")"
+  docker inspect "$container" --format '{{json .}}' > "$evidence/$phase-host.json"
   for ((attempt=0; attempt<60; attempt++)); do
     if docker exec "$container" systemctl is-active --quiet multi-user.target; then break; fi
     sleep 1
@@ -147,7 +152,14 @@ docker exec "$container" bash /opt/esl-pipeline/scripts/recovery/rehearse-host.s
 mkdir "$work/bundle"
 docker cp "$container:/bundle/." "$work/bundle/"
 docker cp "$container:/evidence/." "$evidence/"
+source_container="$container"
+source_volume="$volume"
 cleanup_host
+[[ -z "$container" && -z "$volume" ]] || { echo 'Source destruction failed; refusing replacement' >&2; exit 1; }
+if docker container inspect "$source_container" >/dev/null 2>&1 || docker volume inspect "$source_volume" >/dev/null 2>&1; then
+  echo 'Source resources still exist; refusing replacement' >&2; exit 1
+fi
+printf '{"destroyed":true,"containerId":"%s","dockerVolume":"%s"}\n' "$source_container" "$source_volume" > "$evidence/source-destroyed.json"
 # No old containers, volumes, uploads or deployment/monitor state crosses this boundary.
 phase=replacement
 start_host

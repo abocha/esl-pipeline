@@ -136,6 +136,7 @@ const result = {
   outcome: 'disposable-recovery-proven',
   productionRecoveryProven: false,
   applicationRevision: revision,
+  dockerStorageDriver: execute('docker', ['info', '--format', '{{.Driver}}']),
   host: 'Clean Ubuntu 24.04 systemd Docker guest; separate source and replacement local daemons',
   invariants: [
     'repository bootstrap',
@@ -150,7 +151,7 @@ const result = {
     'backup/monitor units installed, timers never triggered',
   ],
   limitations: [
-    'Containerized Ubuntu shares Cloud Linux kernel; no VPS or SSH reachability evidence',
+    'Containerized Ubuntu shares the disposable runner kernel; no VPS or SSH reachability evidence',
     'Locally built production Dockerfiles and disposable registry; no GHCR authorization evidence',
     'Local S3 emulator and synthetic credentials; no real S3/KMS/IAM backup retrieval',
     'Local HTTP Caddy route; no public DNS, ACME or TLS evidence',

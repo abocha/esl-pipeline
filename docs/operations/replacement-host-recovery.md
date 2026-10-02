@@ -49,7 +49,7 @@ Requires Git, Bash, Python 3, a Linux local Docker daemon with Buildx, privilege
 and enough disk for production
 image builds and two sequential nested daemons, and Internet access for pinned dependencies.
 The clean supported host is a Ubuntu 24.04 Docker guest with a real systemd manager and its own
-Docker daemon. It shares the Cloud Linux kernel; it is not a VPS or a full VM.
+Docker daemon. It shares the disposable runner's Linux kernel; it is not a VPS or a full VM.
 
 ```bash
 bash scripts/recovery/run-replacement-host-rehearsal.sh --dry-run
@@ -91,7 +91,8 @@ become committed assets or application image layers.
 4. Stop application writers, create the real four-artifact PostgreSQL backup with
    `postgres-backup-restore.sh backup`, stop Redis and archive its quiet volume, and archive uploads.
    Keep checksums, full application revision and synthetic expected IDs/password in the bundle.
-5. Destroy the source guest and its entire Docker volume. Create another pristine Ubuntu host and
+5. Destroy the source guest and its entire Docker volume, verify both are absent and record their
+   identities in `source-destroyed.json`; failure blocks replacement. Create another pristine Ubuntu host and
    run the same repository host bootstrap. Reconstruct synthetic configuration and local bucket.
 6. Check required operator inputs, bundle checksums, required uploads/Redis artifacts and pinned
    revision. Start only PostgreSQL, Redis and the local S3 dependency. Verify and restore the dump
@@ -113,7 +114,10 @@ absolute evidence path. Synthetic credentials/tokens and the backup/media bundle
 only sanitized verification evidence is retained. It removes its allocated guests, Docker volumes,
 application image tags and staging archives on success or failure. Its dedicated native-snapshot
 BuildKit builder/cache is removed before starting either guest, so VFS build snapshots do not
-exhaust the recovery host disk. Downloaded base images can remain in the development daemon. It never prunes unrelated resources. Failure logs remain available.
+compete with recovery storage. Ubuntu Docker selects its normal supported guest storage driver;
+the observed driver is retained in evidence. Hosts that only support VFS need substantially more
+disk because it duplicates image layers. Downloaded base images can remain in the development
+daemon. It never prunes unrelated resources. Failure logs remain available.
 
 Focused hazards: missing external input, missing uploads artifact, corrupt dump restore,
 incompatible schema ledger, and a current worker instance without readiness evidence. Preflight

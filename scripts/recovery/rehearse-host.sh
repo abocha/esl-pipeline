@@ -6,7 +6,9 @@ set -Eeuo pipefail
 phase="${1:?source or replacement}"
 revision="${2:?full application revision}"
 run_id="${3:?allocated resource prefix}"
-[[ "$phase" == source || "$phase" == replacement ]] && [[ "$revision" =~ ^[0-9a-f]{40}$ && "$run_id" =~ ^esl-recovery\.[a-z0-9]+$ ]] || { echo 'Invalid rehearsal arguments' >&2; exit 1; }
+if [[ "$phase" != source && "$phase" != replacement ]] || [[ ! "$revision" =~ ^[0-9a-f]{40}$ || ! "$run_id" =~ ^esl-recovery\.[a-z0-9]+$ ]]; then
+  echo 'Invalid rehearsal arguments' >&2; exit 1
+fi
 cd /opt/esl-pipeline
 unset DOCKER_HOST DOCKER_CONTEXT DOCKER_TLS DOCKER_TLS_VERIFY DOCKER_CERT_PATH
 [[ ! -e .env && ! -e uploads && ! -e /var/lib/esl-pipeline ]]
@@ -23,7 +25,8 @@ if [[ -f /run/rehearsal-ca.crt ]]; then
   update-ca-certificates
 fi
 install -d /etc/docker /etc/systemd/system/docker.service.d
-printf '{"storage-driver":"vfs"}\n' > /etc/docker/daemon.json
+# Let Ubuntu Docker select its supported storage driver, as on a normal clean host.
+# Forcing VFS duplicates every image layer and can exhaust small disposable runners.
 # Public proxy values are copied only into the isolated guest daemon, never repository evidence.
 if [[ -n "${HTTPS_PROXY:-}" ]]; then
   printf '[Service]\nEnvironment="HTTP_PROXY=%s" "HTTPS_PROXY=%s" "NO_PROXY=localhost,127.0.0.1,::1"\n' "${HTTP_PROXY:-}" "$HTTPS_PROXY" > /etc/systemd/system/docker.service.d/rehearsal-proxy.conf
@@ -33,6 +36,7 @@ bash scripts/deploy/bootstrap-prod-host.sh apply 22 > "/evidence/$phase-bootstra
 [[ "$bootstrap_rc" == 2 ]] # absent external inputs are an explicit bootstrap handoff
 bash scripts/deploy/bootstrap-prod-host.sh verify 22 > "/evidence/$phase-bootstrap.json" || [[ $? == 2 ]]
 jq -e '.bootstrapComplete and (.externalInputsPresent == false) and (.deploymentStatePresent == false)' "/evidence/$phase-bootstrap.json"
+docker info --format '{{json .Driver}}' > "/evidence/$phase-storage-driver.json"
 # Provision exclusively synthetic operator inputs. Never source caller .env or AWS profiles.
 cat > .env <<'ENV'
 NODE_ENV=production
