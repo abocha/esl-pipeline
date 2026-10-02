@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [14.1.2] - 2026-10-02
+
+### Changed
+
+- Automated release from PR #325: fix(deploy): gate incompatible schema migrations and image rollback (https://github.com/abocha/esl-pipeline/pull/325)
+
 ## [14.1.1] - 2026-10-02
 
 ### Changed
