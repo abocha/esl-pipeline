@@ -7,6 +7,7 @@ import {
 } from './generation-request-envelope.js';
 import {
   buildOpenAiResponsesRequestBody,
+  parseOpenAiAssignmentResponsesPayload,
   parseOpenAiResponsesPayload,
 } from './openai-responses-contract.js';
 
@@ -32,6 +33,7 @@ export interface ProviderStructuredExecutionRequest {
   responseSchema: StructuredOutputSchema;
   maxOutputTokens?: number;
   store?: boolean;
+  admission?: 'assignment_v1';
 }
 
 function resolveProviderPrompt(request: {
@@ -70,6 +72,7 @@ export interface ProviderStructuredRawExecutionResult {
   providerRequestId?: string;
   usage?: GenerateDraftUsage;
   finishReason?: string;
+  contractError?: string;
 }
 
 export type StructuredJsonParseResult =
@@ -82,6 +85,9 @@ export class ProviderExecutionError extends Error {
   readonly code?: string;
   readonly rawText?: string;
   readonly retryAfterMs?: number;
+  readonly usage?: GenerateDraftUsage;
+  readonly providerRequestId?: string;
+  readonly finishReason?: string;
 
   constructor(args: {
     provider: GenerationProvider;
@@ -90,6 +96,9 @@ export class ProviderExecutionError extends Error {
     code?: string;
     rawText?: string;
     retryAfterMs?: number;
+    usage?: GenerateDraftUsage;
+    providerRequestId?: string;
+    finishReason?: string;
   }) {
     super(args.message);
     this.name = 'ProviderExecutionError';
@@ -98,6 +107,9 @@ export class ProviderExecutionError extends Error {
     this.code = args.code;
     this.rawText = args.rawText;
     this.retryAfterMs = args.retryAfterMs;
+    this.usage = args.usage;
+    this.providerRequestId = args.providerRequestId;
+    this.finishReason = args.finishReason;
   }
 }
 
@@ -532,6 +544,30 @@ export async function executeOpenAiStructuredGeneration(args: {
   request: ProviderStructuredExecutionRequest;
 }): Promise<ProviderStructuredExecutionResult> {
   const raw = await executeOpenAiStructuredGenerationRaw(args);
+  if (args.request.admission === 'assignment_v1') {
+    const metadata = {
+      usage: raw.usage,
+      providerRequestId: raw.providerRequestId,
+      finishReason: raw.finishReason,
+    };
+    if (raw.contractError)
+      throw new ProviderExecutionError({
+        provider: 'openai',
+        message: raw.contractError,
+        code: 'assignment_contract_error',
+        ...metadata,
+      });
+    try {
+      return { ...raw, output: JSON.parse(raw.rawText) };
+    } catch {
+      throw new ProviderExecutionError({
+        provider: 'openai',
+        message: 'Assignment response must contain direct JSON',
+        code: 'malformed_structured_output',
+        ...metadata,
+      });
+    }
+  }
   const parsed = parseStructuredJsonText(raw.rawText);
   if (parsed.status === 'malformed') {
     throw new ProviderExecutionError({
@@ -600,6 +636,9 @@ export async function executeOpenAiStructuredGenerationRaw(args: {
       retryAfterMs: parseRetryAfterMs(response),
     });
   }
+
+  if (args.request.admission === 'assignment_v1')
+    return parseOpenAiAssignmentResponsesPayload(payload);
 
   let parsed;
   try {

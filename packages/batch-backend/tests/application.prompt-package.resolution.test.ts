@@ -176,10 +176,10 @@ describe('application/prompt-package', () => {
         workspaceId: 'workspace-1',
         assignmentSessionId: 'session-1',
         userId: 'user-1',
-        templateId: 'template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
       {
-        config: createConfig('template.md', 'profile.md'),
+        config: createConfig('hw_prompt_assignment_v1.md', 'profile.md'),
         storage: createStorageStub({
           getText: async (uri) =>
             uri === 'local://confirmed/transcript-a.txt'
@@ -238,7 +238,7 @@ describe('application/prompt-package', () => {
   });
 
   it('keeps an explicitly confirmed null profile deterministic', async () => {
-    const config = createConfig('template.md', 'missing-default-profile.md');
+    const config = createConfig('hw_prompt_assignment_v1.md', 'missing-default-profile.md');
     const session = createConfirmedAssignmentSession({
       teacherNotes: null,
       selectedProfileId: null,
@@ -273,7 +273,7 @@ describe('application/prompt-package', () => {
         workspaceId: 'workspace-1',
         assignmentSessionId: 'session-1',
         userId: 'user-1',
-        templateId: 'template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
       {
         config,
@@ -325,13 +325,13 @@ describe('application/prompt-package', () => {
             resolvePromptTemplateSelection(params, {
               config,
               templateRevisions: {
-                listIdsWithActiveRevision: async () => new Set(['template.md']),
+                listIdsWithActiveRevision: async () => new Set(['hw_prompt_assignment_v1.md']),
               },
               templates: {
                 list: async () => ({
                   items: [
                     {
-                      id: 'template.md',
+                      id: 'hw_prompt_assignment_v1.md',
                       label: 'Template',
                       activeRevisionId: 'template-revision-active',
                       isDefault: true,
@@ -439,9 +439,13 @@ describe('application/prompt-package', () => {
 
   it('renders the foundational profile block from structured content when the active revision has canonical JSON', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-structured-'));
-    const templatePath = path.join(allowedDir, 'template.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_assignment_v1.md');
     const profilePath = path.join(allowedDir, 'profile.md');
-    await fs.writeFile(templatePath, 'DB TEMPLATE\nEND\n', 'utf8');
+    await fs.writeFile(
+      templatePath,
+      'Assignment output contract: assignment_v1\nDB TEMPLATE\nEND\n',
+      'utf8',
+    );
     await fs.writeFile(profilePath, 'LEGACY PROFILE\n', 'utf8');
 
     const transcript = createTranscriptRecord();
@@ -464,7 +468,7 @@ describe('application/prompt-package', () => {
       {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
-        templateId: 'template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
       {
         config: createConfig(templatePath, profilePath),
@@ -516,13 +520,13 @@ describe('application/prompt-package', () => {
 
   it('prefers active profile/template revisions over filesystem files when available', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
-    const templatePath = path.join(allowedDir, 'template.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_assignment_v1.md');
     const profilePath = path.join(allowedDir, 'profile.md');
     await fs.writeFile(templatePath, 'FS TEMPLATE\nEND\n', 'utf8');
     await fs.writeFile(profilePath, 'FS PROFILE\n', 'utf8');
 
     const transcript = createTranscriptRecord();
-    const activeTemplateContent = 'DB TEMPLATE\nEND\n';
+    const activeTemplateContent = 'Assignment output contract: assignment_v1\nDB TEMPLATE\nEND\n';
     const activeProfileContent = 'DB PROFILE\n';
     const activeTemplateHash = createHash('sha256')
       .update(activeTemplateContent, 'utf8')
@@ -549,7 +553,7 @@ describe('application/prompt-package', () => {
       {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
-        templateId: 'template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
       {
         config: createConfig(templatePath, profilePath),
@@ -584,7 +588,7 @@ describe('application/prompt-package', () => {
         templateRevisions: createTemplateRevisionRepositoryStub({
           getActive: async () => ({
             id: 'template-revision-active',
-            templateId: 'template.md',
+            templateId: 'hw_prompt_assignment_v1.md',
             content: activeTemplateContent,
             contentHash: activeTemplateHash,
             source: 'update',
@@ -610,7 +614,7 @@ describe('application/prompt-package', () => {
 
   it('pins newer active revisions on rerun while preserving previous package lineage', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
-    const templatePath = path.join(allowedDir, 'template.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_assignment_v1.md');
     const profilePath = path.join(allowedDir, 'profile.md');
     await fs.writeFile(templatePath, 'TEMPLATE FS\nEND\n', 'utf8');
     await fs.writeFile(profilePath, 'PROFILE FS\n', 'utf8');
@@ -647,9 +651,11 @@ describe('application/prompt-package', () => {
     };
     const templateV1 = {
       id: 'template-revision-v1',
-      templateId: 'template.md',
-      content: 'TEMPLATE V1\nEND\n',
-      contentHash: createHash('sha256').update('TEMPLATE V1\nEND\n', 'utf8').digest('hex'),
+      templateId: 'hw_prompt_assignment_v1.md',
+      content: 'Assignment output contract: assignment_v1\nTEMPLATE V1\nEND\n',
+      contentHash: createHash('sha256')
+        .update('Assignment output contract: assignment_v1\nTEMPLATE V1\nEND\n', 'utf8')
+        .digest('hex'),
       source: 'update' as const,
       status: 'active' as const,
       versionNumber: 1,
@@ -704,7 +710,7 @@ describe('application/prompt-package', () => {
       {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
-        templateId: 'template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
       {
         config: createConfig(templatePath, profilePath),
@@ -725,7 +731,7 @@ describe('application/prompt-package', () => {
       {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
-        templateId: 'template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
       {
         config: createConfig(templatePath, profilePath),
@@ -751,7 +757,7 @@ describe('application/prompt-package', () => {
 
   it('includes the selected student canonical name in assignment prompt packages', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-student-name-'));
-    const templatePath = path.join(allowedDir, 'template.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_assignment_v1.md');
     const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
     const studentProfilePath = path.join(allowedDir, 'profiles', 'student-a.md');
 
@@ -782,7 +788,7 @@ describe('application/prompt-package', () => {
       {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
-        templateId: 'template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
       {
         config: createConfig(templatePath, defaultProfilePath),
@@ -879,11 +885,15 @@ describe('application/prompt-package', () => {
 
   it('omits the profile when the student has no active revision', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-draft-bound-'));
-    const templatePath = path.join(allowedDir, 'template.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_assignment_v1.md');
     const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
     const draftOnlyStudentId = 'student-1';
 
-    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
+    await fs.writeFile(
+      templatePath,
+      'Assignment output contract: assignment_v1\nHello\nFooter\n',
+      'utf8',
+    );
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
 
     const transcript = createTranscriptRecord();
@@ -895,7 +905,7 @@ describe('application/prompt-package', () => {
       {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
-        templateId: 'template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
       {
         config: createConfig(templatePath, defaultProfilePath),
@@ -949,10 +959,14 @@ describe('application/prompt-package', () => {
 
   it('propagates a student active-revision lookup failure', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-profile-lookup-'));
-    const templatePath = path.join(allowedDir, 'template.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_assignment_v1.md');
     const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
     const boundStudentId = 'student-1';
-    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
+    await fs.writeFile(
+      templatePath,
+      'Assignment output contract: assignment_v1\nHello\nFooter\n',
+      'utf8',
+    );
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
 
     const transcript = createTranscriptRecord();
@@ -961,7 +975,7 @@ describe('application/prompt-package', () => {
         {
           recordingId: transcript.recordingId,
           workspaceId: 'workspace-1',
-          templateId: 'template.md',
+          templateId: 'hw_prompt_assignment_v1.md',
         },
         {
           config: createConfig(templatePath, defaultProfilePath),
@@ -1032,7 +1046,7 @@ describe('application/prompt-package', () => {
             userId: 'user-1',
           },
           {
-            config: createConfig('template.md', 'profile.md'),
+            config: createConfig('hw_prompt_assignment_v1.md', 'profile.md'),
             sessions: {
               getByIdForUser: async () => createConfirmedAssignmentSession(),
               isConfirmedSourceCanonical: async () => true,
@@ -1057,7 +1071,7 @@ describe('application/prompt-package', () => {
     const result = await createPromptPackage(
       { recordingId: 'recording-1', workspaceId: 'workspace-1' },
       {
-        config: createConfig('template.md', 'profile.md'),
+        config: createConfig('hw_prompt_assignment_v1.md', 'profile.md'),
         transcripts: { getByRecordingId: async () => createTranscriptRecord() },
         recordings: {
           getById: async () => ({ id: 'recording-1', studentId: 'student-1' }) as never,

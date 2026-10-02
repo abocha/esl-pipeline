@@ -1,10 +1,17 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import type {
   GenerateDraftRequest,
   GenerateDraftResponse,
   GenerationErrorCategory,
   GenerationProvider,
 } from '@esl-pipeline/contracts';
-import { validateMarkdown } from '@esl-pipeline/md-validator';
+import {
+  ASSIGNMENT_RESPONSE_SCHEMA,
+  ASSIGNMENT_TEMPLATE_ID,
+  validateAssignmentV1,
+} from '@esl-pipeline/contracts';
+import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
 import {
   classifyProviderRuntimeFailure,
   type ProviderRuntimeClassificationRules,
@@ -24,30 +31,18 @@ import {
 } from './generation-budget-guard.js';
 import { buildQuotaSnapshot, resolveGenerationTarget } from './generation-policy.js';
 import {
-  executeGoogleGeneration,
-  executeOpenAiGeneration,
-  executeOpenRouterGeneration,
+  executeOpenAiStructuredGenerationRaw,
   ProviderExecutionError,
-  type ProviderExecutionRequest,
-  type ProviderExecutionResult,
+  type ProviderStructuredExecutionRequest,
+  type ProviderStructuredRawExecutionResult,
 } from './generation-providers.js';
-import {
-  createGenerationRequestEnvelope,
-  flattenGenerationRequestEnvelope,
-  isGenerationRequestEnvelope,
-} from './generation-request-envelope.js';
+import { isGenerationRequestEnvelope } from './generation-request-envelope.js';
 import { getPromptPackage } from './get-prompt-package.js';
 
 type ProviderExecutor = (args: {
   config: BatchBackendConfig['generation'];
-  request: ProviderExecutionRequest;
-}) => Promise<ProviderExecutionResult>;
-
-const DEFAULT_EXECUTORS: Record<GenerationProvider, ProviderExecutor> = {
-  openai: executeOpenAiGeneration,
-  google_ai_studio: executeGoogleGeneration,
-  openrouter: executeOpenRouterGeneration,
-};
+  request: ProviderStructuredExecutionRequest;
+}) => Promise<ProviderStructuredRawExecutionResult>;
 
 const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRules = {
   byProvider: {
@@ -74,6 +69,9 @@ export class GenerateDraftProviderError extends Error {
   readonly limit?: number;
   readonly used?: number;
   readonly window?: string;
+  readonly usage?: GenerateDraftResponse['usage'];
+  readonly providerRequestId?: string;
+  readonly finishReason?: string;
 
   constructor(args: {
     category: GenerationErrorCategory;
@@ -84,6 +82,9 @@ export class GenerateDraftProviderError extends Error {
     limit?: number;
     used?: number;
     window?: string;
+    usage?: GenerateDraftResponse['usage'];
+    providerRequestId?: string;
+    finishReason?: string;
   }) {
     super(args.message);
     this.name = 'GenerateDraftProviderError';
@@ -95,6 +96,9 @@ export class GenerateDraftProviderError extends Error {
     this.limit = args.limit;
     this.used = args.used;
     this.window = args.window;
+    this.usage = args.usage;
+    this.providerRequestId = args.providerRequestId;
+    this.finishReason = args.finishReason;
   }
 }
 
@@ -106,7 +110,6 @@ export interface GenerateDraftDependencies {
   };
   executors: Partial<Record<GenerationProvider, ProviderExecutor>>;
   budget: GenerationBudgetGuardDependencies;
-  validator: typeof validateMarkdown;
   now: () => Date;
 }
 
@@ -120,14 +123,13 @@ export async function generateDraft(
     isSourceCanonical: isPromptPackageSourceCanonical,
   };
   const executors = {
-    ...DEFAULT_EXECUTORS,
+    openai: executeOpenAiStructuredGenerationRaw,
     ...overrides?.executors,
   };
   const budgetRepository = resolveGenerationBudgetRepository({
     config,
     overrides: overrides?.budget,
   });
-  const validator = overrides?.validator ?? validateMarkdown;
   const now = overrides?.now ?? (() => new Date());
 
   const promptPackage = await promptPackages.getById(request.promptPackageId);
@@ -141,13 +143,28 @@ export async function generateDraft(
     );
   }
 
+  const envelope = promptPackage.requestEnvelope;
+  if (
+    !isGenerationRequestEnvelope(envelope) ||
+    envelope.workload !== 'assignment_draft' ||
+    envelope.promptVersion !== 'assignment_v1' ||
+    !envelope.assignmentContext ||
+    promptPackage.templateSnapshot?.resolvedTemplateId !== ASSIGNMENT_TEMPLATE_ID ||
+    !isDeepStrictEqual(envelope.responseSchema, ASSIGNMENT_RESPONSE_SCHEMA)
+  ) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED',
+      'This prompt package does not pin AssignmentV1. Activate the structured homework template and recreate the prompt package before generation.',
+    );
+  }
+
   let target = {
     provider: request.provider ?? config.generation.targets.draft_generation.provider,
     model: request.model ?? 'unspecified',
   };
   let execution: {
     target: ReturnType<typeof resolveGenerationTarget>;
-    result: ProviderExecutionResult;
+    result: ProviderStructuredRawExecutionResult;
     quotaUsage: GenerationBudgetUsage;
   };
   try {
@@ -157,6 +174,14 @@ export async function generateDraft(
       providerOverride: request.provider,
       modelOverride: request.model,
     });
+    if (target.provider !== 'openai' || target.model !== 'gpt-6.1-sol') {
+      throw new GenerateDraftProviderError({
+        category: 'provider_contract_error',
+        ...target,
+        message:
+          'AssignmentV1 requires the verified OpenAI gpt-6.1-sol target. Select that target before generation.',
+      });
+    }
     await enforceGenerationBudgetBeforeAttempt({
       config,
       provider: target.provider,
@@ -182,11 +207,10 @@ export async function generateDraft(
       request: {
         model: target.model,
         prompt: promptPackage.text,
-        ...(isGenerationRequestEnvelope(promptPackage.requestEnvelope)
-          ? { envelope: promptPackage.requestEnvelope }
-          : {}),
+        envelope,
+        responseSchema: ASSIGNMENT_RESPONSE_SCHEMA,
+        admission: 'assignment_v1',
         maxOutputTokens: request.maxOutputTokens,
-        stream: false,
       },
     });
 
@@ -210,143 +234,43 @@ export async function generateDraft(
     throw mapProviderError({ provider: target.provider, model: target.model, error });
   }
 
-  const validated = await validateAssignmentDraftIfRequired({
-    config,
-    promptPackage,
-    request,
-    execution,
-    executors,
-    validator,
-    budgetRepository,
-    now,
-  });
+  let text: string;
+  try {
+    if (execution.result.contractError) throw new Error(execution.result.contractError);
+    let output: unknown;
+    try {
+      output = JSON.parse(execution.result.rawText);
+    } catch {
+      throw new Error('AssignmentV1 response must contain direct JSON without wrappers or fences');
+    }
+    text = renderAssignmentToPmd(validateAssignmentV1(output, envelope.assignmentContext));
+  } catch (error) {
+    throw new GenerateDraftProviderError({
+      category: 'provider_contract_error',
+      ...execution.target,
+      message: error instanceof Error ? error.message : 'AssignmentV1 output was invalid',
+      usage: execution.result.usage,
+      providerRequestId: execution.result.providerRequestId,
+      finishReason: execution.result.finishReason,
+    });
+  }
 
   return {
-    text: validated.result.text,
+    text,
     provider: execution.target.provider,
     model: execution.target.model,
     quota: buildQuotaSnapshot({
       config: config.generation,
       provider: execution.target.provider,
       model: execution.target.model,
-      usage: validated.quotaUsage,
+      usage: execution.quotaUsage,
       now: now(),
     }),
-    ...(validated.result.usage ? { usage: validated.result.usage } : {}),
-    ...(validated.result.providerRequestId
-      ? { providerRequestId: validated.result.providerRequestId }
+    ...(execution.result.usage ? { usage: execution.result.usage } : {}),
+    ...(execution.result.providerRequestId
+      ? { providerRequestId: execution.result.providerRequestId }
       : {}),
   };
-}
-
-async function validateAssignmentDraftIfRequired(args: {
-  config: BatchBackendConfig;
-  promptPackage: Awaited<ReturnType<typeof getPromptPackage>> & {};
-  request: GenerateDraftRequest;
-  execution: {
-    target: ReturnType<typeof resolveGenerationTarget>;
-    result: ProviderExecutionResult;
-    quotaUsage: GenerationBudgetUsage;
-  };
-  executors: Record<GenerationProvider, ProviderExecutor>;
-  validator: typeof validateMarkdown;
-  budgetRepository: ReturnType<typeof resolveGenerationBudgetRepository>;
-  now: () => Date;
-}): Promise<{ result: ProviderExecutionResult; quotaUsage: GenerationBudgetUsage }> {
-  const envelope = args.promptPackage.requestEnvelope;
-  if (!isGenerationRequestEnvelope(envelope) || envelope.workload !== 'assignment_draft') {
-    return { result: args.execution.result, quotaUsage: args.execution.quotaUsage };
-  }
-
-  const validation = await args.validator({ markdown: args.execution.result.text, strict: true });
-  if (validation.ok) {
-    return { result: args.execution.result, quotaUsage: args.execution.quotaUsage };
-  }
-
-  const executor = args.executors[args.execution.target.provider];
-  if (!executor) {
-    throw new GenerateDraftProviderError({
-      category: 'provider_contract_error',
-      provider: args.execution.target.provider,
-      model: args.execution.target.model,
-      message: `No generation executor configured for provider: ${args.execution.target.provider}`,
-    });
-  }
-
-  const repairEnvelope = createGenerationRequestEnvelope({
-    workload: 'assignment_draft',
-    promptVersion: `${envelope.promptVersion}:validator-repair-v1`,
-    instructions: [
-      'Repair the assignment markdown so it passes the supplied deterministic validator.',
-      'Return only the complete repaired assignment markdown.',
-      'Use only the failed draft and the validator diagnostics supplied as source data.',
-      'Do not add facts, requirements, or instructions that are not present in the failed draft.',
-    ].join('\n'),
-    sources: [
-      { id: 'failed-draft', label: 'FAILED_ASSIGNMENT_DRAFT', content: args.execution.result.text },
-      {
-        id: 'validator-diagnostics',
-        label: 'VALIDATOR_DIAGNOSTICS',
-        content: validation.errors.join('\n'),
-      },
-    ],
-  });
-
-  await enforceGenerationBudgetBeforeAttempt({
-    config: args.config,
-    provider: args.execution.target.provider,
-    model: args.execution.target.model,
-    prompt: flattenGenerationRequestEnvelope(repairEnvelope),
-    maxOutputTokens: args.request.maxOutputTokens,
-    now: args.now(),
-    repository: args.budgetRepository,
-  });
-
-  let repaired: ProviderExecutionResult;
-  try {
-    repaired = await executor({
-      config: args.config.generation,
-      request: {
-        model: args.execution.target.model,
-        prompt: flattenGenerationRequestEnvelope(repairEnvelope),
-        envelope: repairEnvelope,
-        maxOutputTokens: args.request.maxOutputTokens,
-        stream: false,
-      },
-    });
-  } catch (error) {
-    throw mapProviderError({
-      provider: args.execution.target.provider,
-      model: args.execution.target.model,
-      error,
-    });
-  }
-
-  await recordGenerationBudgetUsageAfterSuccess({
-    config: args.config,
-    provider: args.execution.target.provider,
-    model: args.execution.target.model,
-    usageTotalTokens: repaired.usage?.totalTokens,
-    now: args.now(),
-    repository: args.budgetRepository,
-  });
-
-  const repairValidation = await args.validator({ markdown: repaired.text, strict: true });
-  if (!repairValidation.ok) {
-    throw new GenerateDraftProviderError({
-      category: 'provider_contract_error',
-      provider: args.execution.target.provider,
-      model: args.execution.target.model,
-      message: `Assignment markdown failed validation after one repair: ${repairValidation.errors.join('; ')}`,
-    });
-  }
-
-  const quotaUsage = await args.budgetRepository.getUsage({
-    provider: args.execution.target.provider,
-    model: args.execution.target.model,
-    now: args.now(),
-  });
-  return { result: repaired, quotaUsage };
 }
 
 function statusCodeForCategory(category: GenerationErrorCategory): number {

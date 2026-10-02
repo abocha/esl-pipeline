@@ -429,3 +429,12 @@ pnpm docs:check
 - [`docs/design/CANONICAL_ASSIGNMENT_STATE.md`](../../docs/design/CANONICAL_ASSIGNMENT_STATE.md)
 - [`docs/backend-frontend/batch-backend-ssot.md`](../../docs/backend-frontend/batch-backend-ssot.md)
 - [`docs/backend-frontend/backend-frontend-alignment.md`](../../docs/backend-frontend/backend-frontend-alignment.md)
+
+## Structured assignment generation
+
+Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
+`AssignmentV1` response schema in the existing prompt-package envelope. Only OpenAI GPT-6.1 Sol
+is admitted in this slice. Completed, non-refusal direct JSON is validated locally and rendered
+into the existing Markdown generation response. Old packages require recreation; saved Markdown
+drafts and publication/correction/memory workflows remain usable. There is no model-driven
+Markdown repair. See [contract and rollout](../../docs/reference/ASSIGNMENT_V1.md).

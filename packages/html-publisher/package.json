@@ -41,6 +41,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
     "markdown-it": "^15.0.2",

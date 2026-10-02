@@ -179,13 +179,15 @@ export function createTemplateRevisionRepositoryStub(
       overrides.getActive ??
       (async (templateId: string) => {
         const contentByTemplateId: Record<string, string> = {
-          'template.md': 'Hello\nFooter\n',
-          'hw_prompt_definitive.md': [
+          'hw_prompt_assignment_v1.md': [
+            'Assignment output contract: assignment_v1',
             'Header',
             'Use descriptive speaker profiles with stable role and persona text.',
           ].join('\n'),
         };
-        const content = contentByTemplateId[templateId] ?? 'Hello\nFooter\n';
+        const content =
+          contentByTemplateId[templateId] ??
+          'Assignment output contract: assignment_v1\nHello\nFooter\n';
         return {
           id: `active-${templateId}`,
           templateId,

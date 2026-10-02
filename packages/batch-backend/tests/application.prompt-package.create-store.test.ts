@@ -54,12 +54,16 @@ describe('application/prompt-package', () => {
   it('creates a prompt package with canonical ordering', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
     const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-outside-'));
-    const templatePath = path.join(allowedDir, 'template.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_assignment_v1.md');
     const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
     const profilePath = path.join(outsideDir, 'profile.md');
     const voicesPath = path.join(allowedDir, 'voices.json');
 
-    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
+    await fs.writeFile(
+      templatePath,
+      'Assignment output contract: assignment_v1\nHello\nFooter\n',
+      'utf8',
+    );
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
     await fs.writeFile(profilePath, 'PROFILE CONTENT\n', 'utf8');
     await writeVoiceCatalog(voicesPath);
@@ -144,7 +148,7 @@ describe('application/prompt-package', () => {
           recordingId: transcript.recordingId,
           workspaceId: 'workspace-1',
           notes: 'Some notes',
-          templateId: 'template.md',
+          templateId: 'hw_prompt_assignment_v1.md',
         },
         {
           config: createConfig(templatePath, profilePath),
@@ -186,7 +190,7 @@ describe('application/prompt-package', () => {
       expect(result?.transcriptId).toBe(transcript.id);
       expect(result?.studentId).toBe('student-1');
       expect(result?.notes).toBe('Some notes');
-      expect(result?.templateVersion).toBe('template.md');
+      expect(result?.templateVersion).toBe('hw_prompt_assignment_v1.md');
       expect(result?.profilePath).toBeNull();
       expect(result?.profileSnapshot?.resolvedProfileId).toBeNull();
       expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('active-student-1');
@@ -202,7 +206,7 @@ describe('application/prompt-package', () => {
 
   it('does not stitch provider voice catalogs into authored prompt context', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-v10-'));
-    const templatePath = path.join(allowedDir, 'hw_prompt_definitive.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_assignment_v1.md');
     const profilePath = path.join(allowedDir, 'profile.md');
     const voicesPath = path.join(allowedDir, 'voices.json');
 
@@ -262,7 +266,7 @@ describe('application/prompt-package', () => {
         {
           recordingId: transcript.recordingId,
           workspaceId: 'workspace-1',
-          templateId: 'hw_prompt_definitive.md',
+          templateId: 'hw_prompt_assignment_v1.md',
         },
         {
           config: createConfig(templatePath, profilePath),
@@ -303,8 +307,9 @@ describe('application/prompt-package', () => {
   });
 
   it('default active definitive template does not include a capability marker', async () => {
-    const revision =
-      await createTemplateRevisionRepositoryStub().getActive('hw_prompt_definitive.md');
+    const revision = await createTemplateRevisionRepositoryStub().getActive(
+      'hw_prompt_assignment_v1.md',
+    );
 
     expect(revision?.content).not.toContain('[VOICE_CAPABILITIES]');
     expect(revision?.content).not.toContain('# CAPABILITY SNAPSHOT');

@@ -69,7 +69,7 @@ Allowed WS2B fields:
 3. `metadata?: Record<string, string>` (lineage/tracing)
 4. `stream?: boolean`
 5. `reasoning.effort` and `text.verbosity`, only from the versioned workload request envelope
-6. `text.format` with strict `json_schema` for structured extraction and closed candidate-patch output
+6. `text.format` with strict `json_schema` for AssignmentV1, structured extraction and closed candidate-patch output
 
 Deferred optional fields (not baseline WS2B-S1/S2):
 
@@ -103,6 +103,11 @@ multi-agent execution.
 Consequential structured claims must reference a source ID in the request manifest and include a
 short evidence excerpt. Candidate promotion is a closed `apply`/`no_change` decision over selected
 approved candidate IDs; backend code applies approved facts and preserves unrelated profile fields.
+
+AssignmentV1 additionally admits only a completed non-refusal assistant message and direct JSON.
+It preserves usage before local domain rejection and deterministically returns PMD through the
+existing text DTO; see [AssignmentV1](ASSIGNMENT_V1.md). Other structured workloads retain
+their current online/Batch parsing contracts.
 
 ## Response Profile (Consumed Fields)
 

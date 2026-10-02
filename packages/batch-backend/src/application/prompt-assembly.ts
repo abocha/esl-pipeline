@@ -1,6 +1,8 @@
 // packages/batch-backend/src/application/prompt-assembly.ts
 import path from 'node:path';
 
+import { ASSIGNMENT_RESPONSE_SCHEMA } from '@esl-pipeline/contracts';
+
 import {
   createGenerationRequestEnvelope,
   type GenerationRequestEnvelopeV1,
@@ -41,8 +43,10 @@ export function stitchPromptPayload(options: PromptStitchOptions): string {
 
 export function stitchPromptEnvelope(options: PromptStitchOptions): GenerationRequestEnvelopeV1 {
   const canonicalStudentName = (options.canonicalStudentName ?? '').trim() || 'Not available.';
-  return createGenerationRequestEnvelope({
+  const envelope = createGenerationRequestEnvelope({
     workload: 'assignment_draft',
+    promptVersion: 'assignment_v1',
+    responseSchema: ASSIGNMENT_RESPONSE_SCHEMA,
     instructions: options.template,
     sources: [
       {
@@ -75,6 +79,19 @@ export function stitchPromptEnvelope(options: PromptStitchOptions): GenerationRe
       { id: 'latest-transcript', label: 'LATEST_TRANSCRIPT', content: options.transcript },
     ],
   });
+  envelope.assignmentContext = {
+    studentName: canonicalStudentName === 'Not available.' ? 'Student' : canonicalStudentName,
+    // Authentic requests may fall back to generated input when no usable excerpt exists.
+    ...(/Input Type:\s*authentic/i.test(options.notes ?? '')
+      ? {}
+      : { inputKind: 'generate' as const }),
+    suppliedUrls: [
+      ...new Set(
+        `${options.notes ?? ''}\n${options.transcript}`.match(/https?:\/\/[^\s<>"'`]+/g) ?? [],
+      ),
+    ],
+  };
+  return envelope;
 }
 
 function formatLabeledBlock(label: string, content: string): string {

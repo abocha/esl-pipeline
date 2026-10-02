@@ -47,7 +47,7 @@ The product is successful when it consistently does all three:
   - Prompt Workspace foundations,
   - one trusted shipped preset content track: `general-english`,
   - canonical baseline prompt:
-    `packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md`.
+    `packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md`.
 - Direct LLM generation through backend API and guided assignment UX.
 - At least one low-cost TTS fallback in addition to premium providers.
 - Basic CRM-lite ledger:
