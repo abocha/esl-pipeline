@@ -102,6 +102,8 @@ For plan-backed execution, identify the approved plan and ask the primary to imp
 
 For goal-backed execution, identify the approved Goal Contract and ask the primary to execute toward its outcome, adapt implementation strategy from current evidence, preserve approved decisions and authorization boundaries, and continue until completion evidence exists or a real stop/escalation condition is reached.
 
+Make the stopping rule explicit without duplicating validation procedure: complete the approved acceptance criteria and repository-required gates, then close. Do not ask for extra compatibility investigation, repeated validation, or adjacent-surface tracing solely to increase confidence after those criteria are satisfied.
+
 Add task-specific context, new decisions, and mutation authorization only when they are not already available through the repository or active context.
 
 ## 10. Handoff quality

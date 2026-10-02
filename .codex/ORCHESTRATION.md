@@ -154,7 +154,9 @@ Safety, fidelity, rollback, and exact-evidence requirements define what must be 
 
 Investigate unexpected anomalies in proportion to their possible effect on the decision. An explained benign delta may still warrant direct corroboration; exhaustive forensic reconstruction requires a plausible alternative explanation that could materially change the decision. Close the branch once sufficient evidence resolves it.
 
-Once the completion contract is satisfied, enter closure: record and preserve existing evidence, report the result and limitations, and perform required finalization and cleanup. Do not open new investigative branches unless a newly failed invariant or genuinely missing completion criterion appears.
+Once the completion contract is satisfied, enter closure: record and preserve existing evidence, report the result and limitations, and perform required finalization and cleanup. Treat satisfaction of the required acceptance criteria and repository-required gates as a phase transition, not an invitation to search for further confidence. In closure, do not start new repository-wide searches, adjacent-consumer or provider traces, compatibility audits, repeated validation passes, or other probes unless a newly failed invariant, unexplained material anomaly, or genuinely missing completion criterion gives that work a concrete decision to resolve.
+
+A schema, domain-field, or compatibility change does not by itself justify tracing every downstream consumer or provider after the affected contract and identified material consumers are validated. Broaden that trace only when code evidence, a failed check, or a known dependency makes the adjacent surface material to completion.
 
 ## 7. Role routing integrity
 
