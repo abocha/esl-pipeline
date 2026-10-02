@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [14.1.0] - 2026-10-02
+
+### Changed
+
+- Automated release from PR #321: feat(smoke): add isolated local product smoke workflow (https://github.com/abocha/esl-pipeline/pull/321)
+
 ## [14.0.2] - 2026-10-02
 
 ### Changed
