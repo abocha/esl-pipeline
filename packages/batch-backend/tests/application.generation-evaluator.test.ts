@@ -3,8 +3,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { validateMarkdown } from '@esl-pipeline/md-validator';
-
 import {
   GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE,
   GENERATION_EVAL_FIXTURES,
@@ -12,13 +10,13 @@ import {
 import {
   assertLiveGenerationEvalAccess,
   buildGenerationEvalEnvelope,
-  evaluateAssignmentWithBoundedRepair,
   evaluateGenerationEvalVerdict,
   evaluateInjectionOutcome,
   runGenerationEval,
   validateStructuredEvalOutput,
 } from '../src/application/generation-evaluator.js';
 import { stitchPromptEnvelope } from '../src/application/prompt-assembly.js';
+import { assignmentFixture } from './assignment-v1.test-harness.js';
 
 describe('application/generation-evaluator', () => {
   it('routes assignment evals to Sol and every other OpenAI eval to Luna', () => {
@@ -74,7 +72,7 @@ describe('application/generation-evaluator', () => {
       'utf8',
     );
     expect(GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE).toMatchObject({
-      path: 'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md',
+      path: 'packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md',
       content: templateContent,
       contentHash: createHash('sha256').update(templateContent).digest('hex'),
     });
@@ -95,7 +93,9 @@ describe('application/generation-evaluator', () => {
       }).sourceManifest,
     );
     expect(
-      assignmentFixture.sources.every((source) => source.content.includes('Synthetic eval')),
+      assignmentFixture.sources
+        .filter((source) => source.id !== 'canonical-student-name')
+        .every((source) => source.content.includes('Synthetic eval')),
     ).toBe(true);
   });
 
@@ -108,12 +108,11 @@ describe('application/generation-evaluator', () => {
       fixtures: [assignmentFixture],
       live: false,
       structured: vi.fn(),
-      assignment: vi.fn(),
     });
 
     expect(result.records[0]).toMatchObject({
       templateBaseline: {
-        path: 'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md',
+        path: 'packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md',
         contentHash: GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.contentHash,
       },
     });
@@ -220,41 +219,6 @@ describe('application/generation-evaluator', () => {
     expect(evaluateInjectionOutcome(fixture, '# Safe assignment')).toMatchObject({ passed: true });
   });
 
-  it('uses md-validator and allows exactly one repair request', async () => {
-    const validator = vi.fn(validateMarkdown);
-    const generate = vi
-      .fn()
-      .mockResolvedValueOnce({ text: '# Goal\n\nBroken assignment' })
-      .mockResolvedValueOnce({ text: '# Self-check\n\nStill incomplete' });
-
-    const result = await evaluateAssignmentWithBoundedRepair({
-      fixture: GENERATION_EVAL_FIXTURES[0]!,
-      generate,
-      validator,
-    });
-
-    expect(generate).toHaveBeenCalledTimes(2);
-    expect(validator).toHaveBeenCalledTimes(2);
-    expect(validator).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        strict: true,
-        learningPresetId: 'general-english',
-        learningPresetVersion: 'v2',
-      }),
-    );
-    expect(validator).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        strict: true,
-        learningPresetId: 'general-english',
-        learningPresetVersion: 'v2',
-      }),
-    );
-    expect(result.validationPassed).toBe(false);
-    expect(result.repairAttempted).toBe(true);
-  });
-
   it('fails the overall verdict for every activation-gate failure category', () => {
     const verdict = evaluateGenerationEvalVerdict({
       expectedFixtures: 2,
@@ -320,7 +284,6 @@ describe('application/generation-evaluator', () => {
       fixtures: [fixture],
       live: true,
       structured,
-      assignment: vi.fn(),
       now: () => 1_000,
     });
 
@@ -346,29 +309,33 @@ describe('application/generation-evaluator', () => {
     expect(result.verdict).toMatchObject({ passed: false });
   });
 
-  it('records a privacy-safe reason and repair count when assignment validation still fails', async () => {
-    const assignment = vi
-      .fn()
-      .mockResolvedValueOnce({ text: '# Goal\n\nBroken assignment' })
-      .mockResolvedValueOnce({ text: '# Self-check\n\nStill incomplete' });
-
-    const result = await runGenerationEval({
-      fixtures: [GENERATION_EVAL_FIXTURES[0]!],
-      live: true,
-      structured: vi.fn(),
-      assignment,
-    });
-
-    expect(result.records[0]).toMatchObject({
-      assignmentValidationPassed: false,
-      assignmentRepairAttempted: true,
-      assignmentValidationErrorCount: expect.any(Number),
-      normalizedFailureReason: 'assignment_validation_failed',
-      verdict: 'failed',
-    });
-    expect(result.records[0]?.assignmentValidationErrorCount).toBeGreaterThan(0);
-    expect(assignment).toHaveBeenCalledTimes(2);
-  });
+  it.each([true, false])(
+    'validates assignment domain output without a repair (valid=%s)',
+    async (valid) => {
+      const output = assignmentFixture();
+      if (!valid) output.input.studyText.turns[0]!.speakerId = 'invented';
+      const structured = vi.fn().mockResolvedValue({
+        output,
+        rawText: JSON.stringify(output),
+        usage: { totalTokens: 36 },
+        providerRequestId: 'resp-1',
+      });
+      const result = await runGenerationEval({
+        fixtures: [GENERATION_EVAL_FIXTURES[0]!],
+        live: true,
+        structured,
+      });
+      expect(structured).toHaveBeenCalledTimes(1);
+      expect(structured.mock.calls[0]![0].request.admission).toBe('assignment_v1');
+      expect(result.records[0]).toMatchObject({
+        assignmentValidationPassed: valid,
+        usage: { totalTokens: 36 },
+        providerRequestId: 'resp-1',
+        verdict: valid ? 'passed' : 'failed',
+      });
+      expect(JSON.stringify(result.records)).not.toContain('invented');
+    },
+  );
 });
 
 function validFoundationalProfile() {

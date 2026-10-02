@@ -12,6 +12,8 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
 - Job action types (`JobActionType`, `JobActionRequest`, `JobActionResponse`, `ActionCapability`)
 - Job options metadata payload types (`JobOptionsPayload`, `VoiceOption`)
 - WS2B generation DTOs (`GenerateDraftRequest`, `GenerateDraftResponse`, provider/model/quota types)
+- Transient `AssignmentV1` schema, inferred types, strict provider projection and local domain
+  validation; see [the Slice 1 contract](../../docs/reference/ASSIGNMENT_V1.md).
 - Shared errors (`PipelineError`, `ConfigurationError`, etc.)
 - Shared observability shapes (`PipelineLogEvent`, `PipelineLogger`, `noopLogger`)
 - Semantic contract version registry (`CONTRACT_VERSIONS`)

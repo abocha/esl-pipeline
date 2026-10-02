@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import { ASSIGNMENT_TEMPLATE_CONTRACT, ASSIGNMENT_TEMPLATE_ID } from '@esl-pipeline/contracts';
+
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { AssignmentSessionRecord } from '../domain/assignment-session-model.js';
@@ -153,7 +155,8 @@ export class PromptPackageAssignmentError extends Error {
       | 'PROMPT_PACKAGE_CONFIRMED_PREREQUISITE_MISSING'
       | 'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID'
       | 'PROMPT_PACKAGE_CONFIRMED_SOURCE_HASH_MISMATCH'
-      | 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+      | 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL'
+      | 'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED',
     message: string,
   ) {
     super(message);
@@ -312,6 +315,15 @@ export async function createPromptPackage(
     currentTranscriptId: transcript.id,
     config,
   });
+  if (
+    selection.templateId !== ASSIGNMENT_TEMPLATE_ID ||
+    artifacts.template.content.split(/\r?\n/, 1)[0] !== ASSIGNMENT_TEMPLATE_CONTRACT
+  ) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED',
+      'Activate the AssignmentV1 structured homework template and recreate the prompt package. The selected active template has an unsupported output contract.',
+    );
+  }
   const payload = stitchPromptPayload({
     template: artifacts.template.content,
     profile: artifacts.profile?.content ?? '',

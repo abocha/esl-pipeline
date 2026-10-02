@@ -282,7 +282,7 @@ describe('application/get-job-options', () => {
         title: 'General English',
         track: 'general-english',
         status: 'active',
-        promptSnapshotVersion: 'hw_prompt_definitive',
+        promptSnapshotVersion: 'hw_prompt_assignment_v1',
       },
     ]);
     expect(result).not.toHaveProperty('notionDatabases');

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { cp, mkdtemp, rm } from 'node:fs/promises';
+import { cp, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -121,6 +121,12 @@ describe('application/prompt-assembly', () => {
     const distRoot = path.join(runtimeRoot, 'dist');
     const sourceDist = path.resolve(import.meta.dirname, '..', 'dist');
     await cp(sourceDist, distRoot, { recursive: true });
+    // The deployed application includes runtime dependencies alongside its compiled modules.
+    await symlink(
+      path.resolve(import.meta.dirname, '..', 'node_modules'),
+      path.join(runtimeRoot, 'node_modules'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
 
     const absoluteAssetPath = path.join(fixtureRoot, 'external', 'profile.md');
     const moduleUrl = pathToFileURL(path.join(distRoot, 'application', 'prompt-assembly.js')).href;

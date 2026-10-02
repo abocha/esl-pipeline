@@ -1159,6 +1159,7 @@ export interface VersionMetaResponse {
   };
 }
 
+export * from './assignment-v1.js';
 export * from './contract-versions.js';
 export * from './errors.js';
 // Job actions exports

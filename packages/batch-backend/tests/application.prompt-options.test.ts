@@ -28,18 +28,18 @@ function createActiveRevisionDependencies(activeTemplateIds: readonly string[]) 
 describe('application/prompt-options', () => {
   it('returns active-only template catalog and DB-backed defaults', async () => {
     const config = createConfig(
-      'packages/batch-backend/prompt-assets/templates/default-template.md',
+      'packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md',
       'packages/batch-backend/prompt-assets/profiles/default-profile.md',
     );
 
     const options = await getPromptOptions({
       config,
-      ...createActiveRevisionDependencies(['default-template.md']),
+      ...createActiveRevisionDependencies(['hw_prompt_assignment_v1.md']),
       templates: {
         list: async () => ({
           items: [
             {
-              id: 'default-template.md',
+              id: 'hw_prompt_assignment_v1.md',
               label: 'Default Template',
               activeRevisionId: 'template-revision-1',
               createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -63,9 +63,9 @@ describe('application/prompt-options', () => {
     });
 
     expect(options).toEqual({
-      templates: [{ id: 'default-template.md', label: 'Default Template' }],
+      templates: [{ id: 'hw_prompt_assignment_v1.md', label: 'Default Template' }],
       defaults: {
-        templateId: 'default-template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
     });
   });
@@ -106,18 +106,18 @@ describe('application/prompt-options', () => {
 
   it('prefers an active DB-selected default template over the configured path', async () => {
     const config = createConfig(
-      'packages/batch-backend/prompt-assets/templates/default-template.md',
+      'packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md',
       'packages/batch-backend/prompt-assets/profiles/default-profile.md',
     );
 
     const options = await getPromptOptions({
       config,
-      ...createActiveRevisionDependencies(['default-template.md', 'alternate-template.md']),
+      ...createActiveRevisionDependencies(['hw_prompt_assignment_v1.md', 'alternate-template.md']),
       templates: {
         list: async () => ({
           items: [
             {
-              id: 'default-template.md',
+              id: 'hw_prompt_assignment_v1.md',
               label: 'Default Template',
               activeRevisionId: 'template-revision-1',
               isDefault: false,
@@ -142,17 +142,17 @@ describe('application/prompt-options', () => {
       },
     });
 
-    expect(options.defaults.templateId).toBe('alternate-template.md');
+    expect(options.defaults.templateId).toBe('hw_prompt_assignment_v1.md');
   });
 
   it('paginates beyond 500 records and resolves defaults outside first page', async () => {
     const config = createConfig(
-      'packages/batch-backend/prompt-assets/templates/template-549.md',
+      'packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md',
       'packages/batch-backend/prompt-assets/profiles/profile-549.md',
     );
 
     const templateItems = Array.from({ length: 550 }, (_, index) => ({
-      id: `template-${index}.md`,
+      id: index === 549 ? 'hw_prompt_assignment_v1.md' : `template-${index}.md`,
       label: `Template ${index}`,
       activeRevisionId: `template-revision-${index}`,
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -181,15 +181,17 @@ describe('application/prompt-options', () => {
     });
 
     expect(options.defaults).toEqual({
-      templateId: 'template-549.md',
+      templateId: 'hw_prompt_assignment_v1.md',
     });
-    expect(options.templates.some((template) => template.id === 'template-549.md')).toBe(true);
+    expect(options.templates.some((template) => template.id === 'hw_prompt_assignment_v1.md')).toBe(
+      true,
+    );
     expect(templateListCalls.length).toBeGreaterThan(1);
   });
 
   it('excludes prompts when pointer exists but no active revision is confirmed', async () => {
     const config = createConfig(
-      'packages/batch-backend/prompt-assets/templates/default-template.md',
+      'packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md',
       'packages/batch-backend/prompt-assets/profiles/default-profile.md',
     );
 
@@ -200,7 +202,7 @@ describe('application/prompt-options', () => {
         list: async () => ({
           items: [
             {
-              id: 'default-template.md',
+              id: 'hw_prompt_assignment_v1.md',
               label: 'Default Template',
               activeRevisionId: 'stale-template-pointer',
               createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -224,15 +226,15 @@ describe('application/prompt-options', () => {
     });
   });
   it('resolves only an active allowlisted template', async () => {
-    const config = createConfig('default-template.md', 'retired-profile.md');
+    const config = createConfig('hw_prompt_assignment_v1.md', 'retired-profile.md');
     const overrides = {
       config,
-      ...createActiveRevisionDependencies(['default-template.md']),
+      ...createActiveRevisionDependencies(['hw_prompt_assignment_v1.md']),
       templates: {
         list: async () => ({
           items: [
             {
-              id: 'default-template.md',
+              id: 'hw_prompt_assignment_v1.md',
               label: 'Template',
               activeRevisionId: 'revision-1',
               createdAt: new Date(),
@@ -248,7 +250,7 @@ describe('application/prompt-options', () => {
       },
     };
     await expect(resolvePromptTemplateSelection({}, overrides)).resolves.toEqual({
-      templateId: 'default-template.md',
+      templateId: 'hw_prompt_assignment_v1.md',
     });
     await expect(
       resolvePromptTemplateSelection({ templateId: 'foreign.md' }, overrides),
