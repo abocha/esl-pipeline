@@ -23,6 +23,7 @@ mkdir -m 0700 "$evidence"
 printf 'Evidence: %s\nPinned application: %s\n' "$evidence" "$revision"
 container=''
 volume=''
+containerd_volume=''
 builder="$run_id-build"
 builder_created=false
 created_images=()
@@ -38,6 +39,11 @@ cleanup_host() {
   if [[ -n "$volume" ]]; then
     if [[ "$(docker volume inspect "$volume" --format '{{index .Labels "esl.rehearsal"}}' 2>/dev/null)" == "$run_id" ]]; then
       if docker volume rm "$volume" >/dev/null 2>&1; then volume=''; fi
+    fi
+  fi
+  if [[ -n "$containerd_volume" ]]; then
+    if [[ "$(docker volume inspect "$containerd_volume" --format '{{index .Labels "esl.rehearsal"}}' 2>/dev/null)" == "$run_id" ]]; then
+      if docker volume rm "$containerd_volume" >/dev/null 2>&1; then containerd_volume=''; fi
     fi
   fi
 }
@@ -89,6 +95,7 @@ docker buildx create "${builder_args[@]}" >/dev/null
 builder_created=true
 # Tooling under review is separate from the pinned application source; no .env/data/credentials.
 for service in batch-backend batch-frontend; do
+  printf 'Building pinned %s image\n' "$service"
   dockerfile="$work/source/packages/$service/Dockerfile"
   build_args=()
   if [[ -n "${CODEX_PROXY_CERT:-}" ]]; then
@@ -118,13 +125,16 @@ created_images+=("$host_image")
 docker buildx rm "$builder" >/dev/null
 builder_created=false
 start_host() {
-  local host_name="$run_id-$phase" next_volume="$run_id-$phase-docker"
-  if docker container inspect "$host_name" >/dev/null 2>&1 || docker volume inspect "$next_volume" >/dev/null 2>&1; then
+  local host_name="$run_id-$phase" next_volume="$run_id-$phase-docker" next_containerd_volume="$run_id-$phase-containerd"
+  if docker container inspect "$host_name" >/dev/null 2>&1 || docker volume inspect "$next_volume" >/dev/null 2>&1 || docker volume inspect "$next_containerd_volume" >/dev/null 2>&1; then
     echo 'Allocated guest resource name already exists; refusing to reuse it' >&2; exit 1
   fi
   docker volume create --label esl.rehearsal="$run_id" "$next_volume" >/dev/null
   volume="$next_volume"
   [[ "$(docker volume inspect "$volume" --format '{{index .Labels "esl.rehearsal"}}')" == "$run_id" ]]
+  docker volume create --label esl.rehearsal="$run_id" "$next_containerd_volume" >/dev/null
+  containerd_volume="$next_containerd_volume"
+  [[ "$(docker volume inspect "$containerd_volume" --format '{{index .Labels "esl.rehearsal"}}')" == "$run_id" ]]
   extra_args=()
   if [[ -n "${CODEX_PROXY_CERT:-}" ]]; then
     extra_args+=(--mount "type=bind,src=$CODEX_PROXY_CERT,dst=/run/rehearsal-ca.crt,readonly")
@@ -132,7 +142,7 @@ start_host() {
   if [[ -n "${HTTP_PROXY:-}" ]]; then
     extra_args+=(--env "HTTP_PROXY=$(resolve_proxy "$HTTP_PROXY")" --env "HTTPS_PROXY=$(resolve_proxy "${HTTPS_PROXY:-$HTTP_PROXY}")" --env 'NO_PROXY=localhost,127.0.0.1,::1,rehearsal-s3,postgres,redis')
   fi
-  container="$(docker run -d --name "$host_name" --label esl.rehearsal="$run_id" --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock --mount "type=volume,src=$volume,dst=/var/lib/docker" "${extra_args[@]}" "$host_image")"
+  container="$(docker run -d --name "$host_name" --label esl.rehearsal="$run_id" --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock --mount "type=volume,src=$volume,dst=/var/lib/docker" --mount "type=volume,src=$containerd_volume,dst=/var/lib/containerd" "${extra_args[@]}" "$host_image")"
   docker inspect "$container" --format '{{json .}}' > "$evidence/$phase-host.json"
   for ((attempt=0; attempt<60; attempt++)); do
     if docker exec "$container" systemctl is-active --quiet multi-user.target; then break; fi
@@ -147,6 +157,7 @@ start_host() {
 }
 tar -C "$ROOT_DIR" -cf "$work/tooling.tar" scripts/recovery
 phase=source
+printf 'Starting pristine source host and synthetic backup creation\n'
 start_host
 docker exec "$container" bash /opt/esl-pipeline/scripts/recovery/rehearse-host.sh source "$revision" "$run_id" > "$evidence/source.log" 2>&1
 mkdir "$work/bundle"
@@ -154,14 +165,16 @@ docker cp "$container:/bundle/." "$work/bundle/"
 docker cp "$container:/evidence/." "$evidence/"
 source_container="$container"
 source_volume="$volume"
+source_containerd_volume="$containerd_volume"
 cleanup_host
-[[ -z "$container" && -z "$volume" ]] || { echo 'Source destruction failed; refusing replacement' >&2; exit 1; }
-if docker container inspect "$source_container" >/dev/null 2>&1 || docker volume inspect "$source_volume" >/dev/null 2>&1; then
+[[ -z "$container" && -z "$volume" && -z "$containerd_volume" ]] || { echo 'Source destruction failed; refusing replacement' >&2; exit 1; }
+if docker container inspect "$source_container" >/dev/null 2>&1 || docker volume inspect "$source_volume" >/dev/null 2>&1 || docker volume inspect "$source_containerd_volume" >/dev/null 2>&1; then
   echo 'Source resources still exist; refusing replacement' >&2; exit 1
 fi
-printf '{"destroyed":true,"containerId":"%s","dockerVolume":"%s"}\n' "$source_container" "$source_volume" > "$evidence/source-destroyed.json"
+printf '{"destroyed":true,"containerId":"%s","dockerVolume":"%s","containerdVolume":"%s"}\n' "$source_container" "$source_volume" "$source_containerd_volume" > "$evidence/source-destroyed.json"
 # No old containers, volumes, uploads or deployment/monitor state crosses this boundary.
 phase=replacement
+printf 'Source destroyed; starting pristine replacement host recovery\n'
 start_host
 docker cp "$work/bundle/." "$container:/bundle/"
 docker exec "$container" bash /opt/esl-pipeline/scripts/recovery/rehearse-host.sh replacement "$revision" "$run_id" > "$evidence/replacement.log" 2>&1

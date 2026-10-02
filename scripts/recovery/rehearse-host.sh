@@ -188,7 +188,7 @@ else
   compose stop redis
   redis_volume="$(docker inspect "$(compose ps -aq redis)" --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')"
   docker run --rm --network none -v "$redis_volume:/state" -v /bundle:/bundle:ro redis:8.10.1-alpine3.23 sh -ec 'rm -rf /state/*; tar -xf /bundle/redis.tar -C /state'
-  compose start redis
+  compose up -d --wait --wait-timeout 120 redis
   [[ "$(compose exec -T redis redis-cli GET rehearsal:durable-marker)" == "$revision" ]]
   # Check schema against the image before the normal deploy can start application containers.
   backend_tool dist/tools/migrate-db.js verify > /evidence/migrations-verify.log
