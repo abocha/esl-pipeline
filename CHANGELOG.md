@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [14.1.3] - 2026-10-02
+
+### Changed
+
+- Automated release from PR #327: feat(deploy): make production host bootstrap reproducible v1 (https://github.com/abocha/esl-pipeline/pull/327)
+
 ## [14.1.2] - 2026-10-02
 
 ### Changed
