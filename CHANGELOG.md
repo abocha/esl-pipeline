@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [14.0.1] - 2026-10-02
+
+### Changed
+
+- Automated release from PR #317: fix(contracts): tolerate punctuation in AssignmentV1 stressed words (https://github.com/abocha/esl-pipeline/pull/317)
+
 ## [14.0.0] - 2026-10-02
 
 ### Changed
