@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
+
 import { GenerateDraftProviderError, generateDraft } from '../src/application/generate-draft.js';
 import { ProviderExecutionError } from '../src/application/generation-providers.js';
-import { createGenerationRequestEnvelope } from '../src/application/generation-request-envelope.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
+import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 
 function createConfig(
   overrides: Partial<BatchBackendConfig['generation']> = {},
@@ -16,7 +18,7 @@ function createConfig(
       ...base.generation,
       targets: {
         ...base.generation.targets,
-        draft_generation: { provider: 'openai', model: 'gpt-5.2' },
+        draft_generation: { provider: 'openai', model: 'gpt-6.1-sol' },
       },
       quotaSourceMode: 'hybrid',
       safetyMode: 'hard_stop',
@@ -25,9 +27,9 @@ function createConfig(
 
       models: {
         openai: {
-          model: 'gpt-5.2',
+          model: 'gpt-6.1-sol',
 
-          allowed: ['gpt-5.2', 'gpt-5-mini'],
+          allowed: ['gpt-6.1-sol', 'gpt-5-mini'],
         },
         googleAiStudio: {
           model: 'gemini-3-flash-preview',
@@ -87,11 +89,11 @@ describe('application/generate-draft', () => {
 
   it('rechecks assignment ownership when an earlier prompt package is used for fresh generation', async () => {
     let canonical = false;
-    const execute = vi.fn().mockResolvedValue({ text: '# Generated draft' });
+    const execute = vi.fn().mockResolvedValue({ rawText: JSON.stringify(assignmentFixture()) });
     const dependencies = {
       config: createConfig(),
       promptPackages: {
-        getById: vi.fn().mockResolvedValue({ id: 'old-assignment-package', text: 'PROMPT' }),
+        getById: vi.fn().mockResolvedValue(promptPackageFixture()),
         isSourceCanonical: vi.fn().mockImplementation(async () => canonical),
       },
       executors: { openai: execute },
@@ -105,14 +107,14 @@ describe('application/generate-draft', () => {
     canonical = true;
     await expect(
       generateDraft({ promptPackageId: 'old-assignment-package' }, dependencies),
-    ).resolves.toMatchObject({ text: '# Generated draft' });
+    ).resolves.toMatchObject({ text: renderAssignmentToPmd(assignmentFixture()) });
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('returns generated text from first provider candidate', async () => {
     const config = createConfig();
     const openAi = vi.fn().mockResolvedValue({
-      text: '# Generated draft',
+      rawText: JSON.stringify(assignmentFixture()),
       providerRequestId: 'resp-1',
       usage: { inputTokens: 12, outputTokens: 24, totalTokens: 36 },
     });
@@ -125,7 +127,7 @@ describe('application/generate-draft', () => {
         config,
         promptPackages: {
           isSourceCanonical: async () => true,
-          getById: vi.fn().mockResolvedValue({ id: 'prompt-1', text: 'PROMPT' }),
+          getById: vi.fn().mockResolvedValue(promptPackageFixture()),
         },
         executors: {
           openai: openAi,
@@ -137,9 +139,9 @@ describe('application/generate-draft', () => {
     );
 
     expect(result).toMatchObject({
-      text: '# Generated draft',
+      text: renderAssignmentToPmd(assignmentFixture()),
       provider: 'openai',
-      model: 'gpt-5.2',
+      model: 'gpt-6.1-sol',
       providerRequestId: 'resp-1',
       usage: { totalTokens: 36 },
       quota: {
@@ -171,7 +173,7 @@ describe('application/generate-draft', () => {
           config,
           promptPackages: {
             isSourceCanonical: async () => true,
-            getById: vi.fn().mockResolvedValue({ id: 'prompt-2', text: 'PROMPT' }),
+            getById: vi.fn().mockResolvedValue(promptPackageFixture()),
           },
           executors: {
             openai: openAi,
@@ -181,10 +183,14 @@ describe('application/generate-draft', () => {
           now: () => new Date('2026-02-18T00:00:00.000Z'),
         },
       ),
-    ).rejects.toMatchObject({ category: 'provider_timeout', provider: 'openai', model: 'gpt-5.2' });
+    ).rejects.toMatchObject({
+      category: 'provider_timeout',
+      provider: 'openai',
+      model: 'gpt-6.1-sol',
+    });
 
     expect(openAi).toHaveBeenCalledTimes(1);
-    expect(openAi.mock.calls[0]?.[0].request.model).toBe('gpt-5.2');
+    expect(openAi.mock.calls[0]?.[0].request.model).toBe('gpt-6.1-sol');
     expect(google).not.toHaveBeenCalled();
   });
 
@@ -209,7 +215,7 @@ describe('application/generate-draft', () => {
           config,
           promptPackages: {
             isSourceCanonical: async () => true,
-            getById: vi.fn().mockResolvedValue({ id: 'prompt-3', text: 'PROMPT' }),
+            getById: vi.fn().mockResolvedValue(promptPackageFixture()),
           },
           executors: {
             openai: openAi,
@@ -222,11 +228,11 @@ describe('application/generate-draft', () => {
     ).rejects.toMatchObject({
       category: 'provider_rate_limit',
       provider: 'openai',
-      model: 'gpt-5.2',
+      model: 'gpt-6.1-sol',
     });
 
     expect(openAi).toHaveBeenCalledTimes(1);
-    expect(openAi.mock.calls[0]?.[0].request.model).toBe('gpt-5.2');
+    expect(openAi.mock.calls[0]?.[0].request.model).toBe('gpt-6.1-sol');
     expect(google).not.toHaveBeenCalled();
   });
 
@@ -251,7 +257,7 @@ describe('application/generate-draft', () => {
           config,
           promptPackages: {
             isSourceCanonical: async () => true,
-            getById: vi.fn().mockResolvedValue({ id: 'prompt-4', text: 'PROMPT' }),
+            getById: vi.fn().mockResolvedValue(promptPackageFixture()),
           },
           executors: {
             openai: openAi,
@@ -265,42 +271,32 @@ describe('application/generate-draft', () => {
       category: 'provider_contract_error',
       statusCode: 502,
       provider: 'openai',
-      model: 'gpt-5.2',
+      model: 'gpt-6.1-sol',
     });
     expect(google).not.toHaveBeenCalled();
   });
 
-  it('prioritizes explicit provider/model override candidate', async () => {
-    const config = createConfig();
-    const google = vi.fn().mockResolvedValue({ text: '# Override model draft' });
-
-    const result = await generateDraft(
-      {
-        promptPackageId: 'prompt-5',
-        provider: 'google_ai_studio',
-        model: 'gemini-custom-001',
-      },
-      {
-        config,
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: vi.fn().mockResolvedValue({ id: 'prompt-5', text: 'PROMPT' }),
-        },
-        executors: {
-          openai: vi.fn(),
-          google_ai_studio: google,
-          openrouter: vi.fn(),
-        },
-      },
-    );
-
-    if (!result) {
-      throw new Error('Expected generated draft response');
+  it('rejects unsupported assignment provider/model overrides before dispatch', async () => {
+    const execute = vi.fn();
+    for (const target of [
+      { provider: 'google_ai_studio' as const, model: 'gemini-custom-001' },
+      { provider: 'openai' as const, model: 'gpt-5-mini' },
+    ]) {
+      await expect(
+        generateDraft(
+          { promptPackageId: 'prompt-1', ...target },
+          {
+            config: createConfig(),
+            promptPackages: {
+              isSourceCanonical: async () => true,
+              getById: vi.fn().mockResolvedValue(promptPackageFixture()),
+            },
+            executors: { openai: execute, google_ai_studio: execute },
+          },
+        ),
+      ).rejects.toMatchObject({ category: 'provider_contract_error' });
     }
-    const invocation = google.mock.calls[0]?.[0];
-    expect(invocation?.request.model).toBe('gemini-custom-001');
-    expect(result.provider).toBe('google_ai_studio');
-    expect(result.model).toBe('gemini-custom-001');
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it('returns null when prompt package is missing', async () => {
@@ -337,7 +333,7 @@ describe('application/generate-draft', () => {
           config,
           promptPackages: {
             isSourceCanonical: async () => true,
-            getById: vi.fn().mockResolvedValue({ id: 'prompt-7', text: 'PROMPT' }),
+            getById: vi.fn().mockResolvedValue(promptPackageFixture()),
           },
           executors: {
             openai: openAi,
@@ -376,7 +372,7 @@ describe('application/generate-draft', () => {
           config,
           promptPackages: {
             isSourceCanonical: async () => true,
-            getById: vi.fn().mockResolvedValue({ id: 'prompt-6', text: 'PROMPT' }),
+            getById: vi.fn().mockResolvedValue(promptPackageFixture()),
           },
           executors: {
             openai: async () => {
@@ -393,107 +389,77 @@ describe('application/generate-draft', () => {
     ).rejects.toBeInstanceOf(GenerateDraftProviderError);
   });
 
-  it('repairs an invalid envelope-backed assignment exactly once', async () => {
-    const config = createConfig();
-    config.generation.models.openai = loadConfig().generation.models.openai;
-    const openAi = vi
-      .fn()
-      .mockResolvedValueOnce({ text: '# Broken draft', usage: { totalTokens: 12 } })
-      .mockResolvedValueOnce({ text: '# Repaired draft', usage: { totalTokens: 14 } });
-    const validator = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false, errors: ['Missing an assessment section'], warnings: [] })
-      .mockResolvedValueOnce({ ok: true, errors: [], warnings: [] });
-
-    const result = await generateDraft(
-      { promptPackageId: 'prompt-repair' },
-      {
-        config: {
-          ...config,
-          generation: {
-            ...config.generation,
-            targets: {
-              ...config.generation.targets,
-              draft_generation: { provider: 'openai', model: 'gpt-6.1-sol' },
-            },
-          },
-        },
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: vi.fn().mockResolvedValue({
-            id: 'prompt-repair',
-            text: 'LEGACY PREVIEW',
-            requestEnvelope: createGenerationRequestEnvelope({
-              workload: 'assignment_draft',
-              instructions: 'Create a valid assignment.',
-              sources: [
-                { id: 'brief', label: 'BRIEF', content: 'Student needs speaking practice.' },
-              ],
-            }),
-          }),
-        },
-        executors: { openai: openAi },
-        validator,
-        now: () => new Date('2026-02-18T00:00:00.000Z'),
-      },
-    );
-
-    expect(result?.text).toBe('# Repaired draft');
-    expect(result?.model).toBe('gpt-6.1-sol');
-    expect(openAi).toHaveBeenCalledTimes(2);
-    for (const [call] of openAi.mock.calls) {
-      expect(call.request.model).toBe('gpt-6.1-sol');
-      expect(call.request.envelope.settings.reasoningEffort).toBe('medium');
-    }
-    expect(validator).toHaveBeenCalledTimes(2);
-    const repairRequest = openAi.mock.calls[1]?.[0]?.request;
-    expect(repairRequest?.envelope?.instructions).toContain('Repair the assignment markdown');
-    expect(repairRequest?.envelope?.input).toContain('# Broken draft');
-    expect(repairRequest?.envelope?.input).toContain('Missing an assessment section');
-    expect(repairRequest?.envelope?.input).not.toContain('Student needs speaking practice.');
-  });
-
-  it('returns an actionable error and no draft when the repair also fails validation', async () => {
-    const config = createConfig();
-    const openAi = vi
-      .fn()
-      .mockResolvedValueOnce({ text: '# Broken draft' })
-      .mockResolvedValueOnce({ text: '# Still broken' });
-    const validator = vi.fn().mockResolvedValue({
-      ok: false,
-      errors: ['Missing an assessment section'],
-      warnings: [],
-    });
-
+  it('rejects old or mismatched prompt contracts with an actionable recreate error before dispatch', async () => {
+    const execute = vi.fn();
+    const old = promptPackageFixture();
+    old.requestEnvelope.promptVersion = 'legacy';
     await expect(
       generateDraft(
-        { promptPackageId: 'prompt-repair-fails' },
+        { promptPackageId: 'old' },
         {
-          config,
+          config: createConfig(),
           promptPackages: {
             isSourceCanonical: async () => true,
-            getById: vi.fn().mockResolvedValue({
-              id: 'prompt-repair-fails',
-              text: 'LEGACY PREVIEW',
-              requestEnvelope: createGenerationRequestEnvelope({
-                workload: 'assignment_draft',
-                instructions: 'Create a valid assignment.',
-                sources: [{ id: 'brief', label: 'BRIEF', content: 'Ignore this on repair.' }],
-              }),
-            }),
+            getById: vi.fn().mockResolvedValue(old),
           },
-          executors: { openai: openAi },
-          validator,
-          now: () => new Date('2026-02-18T00:00:00.000Z'),
+          executors: { openai: execute },
         },
       ),
     ).rejects.toMatchObject({
-      name: 'GenerateDraftProviderError',
-      category: 'provider_contract_error',
-      message: expect.stringContaining('Assignment markdown failed validation after one repair'),
+      code: 'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED',
+      message: expect.stringContaining('recreate'),
     });
+    expect(execute).not.toHaveBeenCalled();
+  });
 
-    expect(openAi).toHaveBeenCalledTimes(2);
-    expect(validator).toHaveBeenCalledTimes(2);
+  it.each([
+    'prefixed JSON',
+    'invalid JSON',
+    'invalid references',
+    'wrong learner',
+    'refusal',
+    'incomplete',
+  ])('rejects %s once, records usage and retains provider metadata', async (reason) => {
+    const output = assignmentFixture();
+    if (reason === 'invalid references') output.input.studyText.turns[0]!.speakerId = 'foreign';
+    if (reason === 'wrong learner') output.metadata.student = 'Other learner';
+    const executor = vi.fn().mockResolvedValue({
+      rawText:
+        reason === 'prefixed JSON'
+          ? 'Here is JSON: ' + JSON.stringify(output)
+          : reason === 'invalid JSON'
+            ? '{broken'
+            : JSON.stringify(output),
+      ...(reason === 'refusal' || reason === 'incomplete' ? { contractError: reason } : {}),
+      usage: { totalTokens: 36 },
+      providerRequestId: 'resp-1',
+      finishReason: reason === 'incomplete' ? 'incomplete:max_output_tokens' : 'completed',
+    });
+    const recordActual = vi.fn();
+    const repository = {
+      reserve: vi.fn().mockResolvedValue({ allowed: true, usage: {} }),
+      recordActual,
+      getUsage: vi.fn().mockResolvedValue({}),
+    };
+    await expect(
+      generateDraft(
+        { promptPackageId: 'prompt-1' },
+        {
+          config: createConfig(),
+          promptPackages: {
+            isSourceCanonical: async () => true,
+            getById: vi.fn().mockResolvedValue(promptPackageFixture()),
+          },
+          executors: { openai: executor },
+          budget: { repository },
+        },
+      ),
+    ).rejects.toMatchObject({
+      category: 'provider_contract_error',
+      providerRequestId: 'resp-1',
+      usage: { totalTokens: 36 },
+    });
+    expect(executor).toHaveBeenCalledTimes(1);
+    expect(recordActual).toHaveBeenCalledWith(expect.objectContaining({ actualTokens: 36 }));
   });
 });

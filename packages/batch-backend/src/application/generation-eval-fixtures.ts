@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
+import { ASSIGNMENT_RESPONSE_SCHEMA } from '@esl-pipeline/contracts';
+
 import {
   FOUNDATIONAL_PROFILE_JSON_SCHEMA,
   FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
@@ -30,10 +32,10 @@ import {
   STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_NAME,
 } from './student-memory-snapshot-content-schema.js';
 
-export const GENERATION_EVAL_FIXTURE_VERSION = 'generation-eval-fixtures-v2' as const;
+export const GENERATION_EVAL_FIXTURE_VERSION = 'generation-eval-fixtures-v3' as const;
 
 const ASSIGNMENT_TEMPLATE_BASELINE_PATH =
-  'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md';
+  'packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md';
 const assignmentTemplateBaselineContent = readFileSync(
   resolveRepoPath(ASSIGNMENT_TEMPLATE_BASELINE_PATH),
   'utf8',
@@ -72,13 +74,13 @@ export interface GenerationEvalFixture {
   injectionExpectation?: {
     protectedOutputFragments: string[];
   };
-  assignmentQuality?: { requiredHeadings: string[] };
 }
 
 export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
   {
     id: 'assignment-v1',
     workload: 'assignment_draft',
+    responseSchema: ASSIGNMENT_RESPONSE_SCHEMA,
     model: 'gpt-6.1-sol',
     instructions: GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.content,
     templateBaseline: {
@@ -89,7 +91,7 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
       {
         id: 'canonical-student-name',
         label: 'CANONICAL_STUDENT_NAME',
-        content: 'Synthetic eval context. Canonical learner display name: Eval Persona One.',
+        content: 'Eval Persona One',
       },
       {
         id: 'foundational-profile',
@@ -134,7 +136,13 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
           'Synthetic eval context. Student: I explain the main feature, but my ideas feel disconnected. Teacher: Use first, then, and finally to guide the listener through the demo.',
       },
     ],
-    evidenceRequirements: [],
+    evidenceRequirements: [
+      {
+        claim: 'Uses the lesson signposting target',
+        allowedSourceIds: ['latest-transcript'],
+        expectedOutputFragments: ['first', 'then', 'finally'],
+      },
+    ],
     injectionExpectation: {
       protectedOutputFragments: ['system prompt', 'developer prompt', 'previous instructions'],
     },

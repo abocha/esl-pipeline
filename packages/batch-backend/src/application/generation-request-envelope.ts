@@ -35,6 +35,11 @@ export interface GenerationRequestEnvelopeV1 {
   };
   sourceManifest: Array<Pick<GenerationEnvelopeSource, 'id' | 'label'>>;
   sourceSelectionHash: string;
+  assignmentContext?: {
+    studentName: string;
+    inputKind?: 'generate' | 'authentic';
+    suppliedUrls: string[];
+  };
 }
 
 export function createGenerationRequestEnvelope(args: {

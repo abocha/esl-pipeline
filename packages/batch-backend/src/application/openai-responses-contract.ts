@@ -95,6 +95,68 @@ export function parseOpenAiStructuredResponsesPayload(
   };
 }
 
+/** Assignment admission is deliberately stricter than historical structured workloads. */
+export function parseOpenAiAssignmentResponsesPayload(payload: unknown): {
+  rawText: string;
+  model?: string;
+  providerRequestId?: string;
+  usage?: GenerateDraftUsage;
+  finishReason?: string;
+  contractError?: string;
+} {
+  if (!payload || typeof payload !== 'object')
+    return { rawText: '', contractError: 'OpenAI returned malformed assignment payload' };
+  const cast = payload as Record<string, unknown>;
+  const metadata = {
+    ...(typeof cast.model === 'string' ? { model: cast.model } : {}),
+    ...(typeof cast.id === 'string' ? { providerRequestId: cast.id } : {}),
+    ...(parseOpenAiUsage(cast) ? { usage: parseOpenAiUsage(cast) } : {}),
+    ...(extractOpenAiFinishReason(cast) ? { finishReason: extractOpenAiFinishReason(cast) } : {}),
+  };
+  const reject = (contractError: string) => ({ ...metadata, rawText: '', contractError });
+  if (cast.status !== 'completed')
+    return reject(
+      `Assignment response was not completed (${metadata.finishReason ?? 'missing status'})`,
+    );
+  if (
+    cast.error ||
+    cast.incomplete_details ||
+    ['length', 'max_tokens', 'max_output_tokens'].includes(metadata.finishReason ?? '')
+  )
+    return reject(
+      `Assignment response was terminated (${metadata.finishReason ?? 'provider error'})`,
+    );
+  if (!Array.isArray(cast.output))
+    return reject('Assignment response did not contain a completed assistant message');
+  const messages = cast.output.filter(
+    (item) => item && typeof item === 'object' && item.type === 'message',
+  );
+  if (
+    messages.some(
+      (message) =>
+        Array.isArray(message.content) &&
+        message.content.some((part: Record<string, unknown>) => part.type === 'refusal'),
+    )
+  )
+    return reject('OpenAI refused assignment generation');
+  if (
+    messages.length !== 1 ||
+    messages[0].status !== 'completed' ||
+    messages[0].role !== 'assistant'
+  )
+    return reject('Assignment response did not contain exactly one completed assistant message');
+  const content = messages[0].content;
+  if (
+    !Array.isArray(content) ||
+    content.length !== 1 ||
+    content[0]?.type !== 'output_text' ||
+    typeof content[0].text !== 'string' ||
+    !content[0].text.trim()
+  )
+    return reject('Assignment response did not contain the expected output text');
+  return { ...metadata, rawText: content[0].text };
+}
+
 function requirePrompt(prompt: string | undefined): string {
   const normalized = prompt?.trim();
   if (!normalized) {
@@ -202,6 +264,14 @@ function extractOpenAiText(payload: Record<string, unknown>): string | null {
 }
 
 function extractOpenAiFinishReason(payload: Record<string, unknown>): string | undefined {
+  const incompleteDetails = payload.incomplete_details;
+  if (incompleteDetails && typeof incompleteDetails === 'object') {
+    const reason = (incompleteDetails as Record<string, unknown>).reason;
+    if (typeof reason === 'string' && reason.trim().length > 0) {
+      return `incomplete:${reason}`;
+    }
+  }
+
   const output = payload.output;
   if (Array.isArray(output)) {
     for (const item of output) {
@@ -214,17 +284,7 @@ function extractOpenAiFinishReason(payload: Record<string, unknown>): string | u
   }
 
   const status = payload.status;
-  if (typeof status === 'string' && status.trim().length > 0) {
-    return status;
-  }
-
-  const incompleteDetails = payload.incomplete_details;
-  if (incompleteDetails && typeof incompleteDetails === 'object') {
-    const reason = (incompleteDetails as Record<string, unknown>).reason;
-    if (typeof reason === 'string' && reason.trim().length > 0) {
-      return `incomplete:${reason}`;
-    }
-  }
+  if (typeof status === 'string' && status.trim().length > 0) return status;
 
   return undefined;
 }

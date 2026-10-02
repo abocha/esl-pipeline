@@ -1,3 +1,4 @@
+export { renderAssignmentToPmd } from './assignment-to-pmd.js';
 export {
   type HtmlPublishResult,
   type PublishHtmlOptions,
