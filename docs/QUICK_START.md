@@ -42,6 +42,11 @@ bind-mount, and host-vs-Docker dependency notes.
 
 ## Repo Checks
 
+For cross-layer product rehearsal with isolated local state and providers disabled by default, use
+`pnpm smoke:start`, then follow [`Local Product Smoke`](operations/local-product-smoke.md) for
+invitation, browser checklist, stop, reset, and deliberate generation. This hybrid path preserves the
+full Docker dev stack as a fidelity/debug fallback.
+
 ```bash
 pnpm --filter @esl-pipeline/<package> test
 pnpm docs:check

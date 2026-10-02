@@ -11,6 +11,11 @@
 
 The repo has one supported development shape across Windows, Linux, and WSL. Keep the codebase unified; only local state differs by machine.
 
+For ordinary pre-production product rehearsal, prefer the
+[`hybrid local smoke workflow`](local-product-smoke.md): host-native pnpm/tsx/Vite with only isolated
+PostgreSQL/Redis in Docker. It avoids Windows source bind-mount overhead without moving the checkout.
+The full Docker stack below remains available for runtime fidelity and Docker-specific debugging.
+
 ## Core Cross-Platform Flow
 
 Run these from the checkout you intend to edit:

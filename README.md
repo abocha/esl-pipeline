@@ -18,6 +18,10 @@ For prerequisites, local Docker behavior, environment setup, and operational com
 [`docs/QUICK_START.md`](docs/QUICK_START.md) and
 [`docs/reference/env.md`](docs/reference/env.md).
 
+For an isolated, no-spend product rehearsal, use `pnpm smoke:start` and follow
+[`Local Product Smoke`](docs/operations/local-product-smoke.md). PostgreSQL/Redis run in Docker;
+API, frontend, and the required student-memory worker run from this checkout.
+
 ## Validate
 
 ```bash
