@@ -132,6 +132,11 @@ It does not change PostgreSQL schedules or the PostgreSQL alert's health model.
 
 ## Repository-owned systemd units
 
+Fresh-host preparation uses the single
+[production host bootstrap path](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap),
+which calls the installer below and enables all five ops timers without starting them. Activation
+and database/application readiness remain separately authorized deployment/recovery work.
+
 `deploy/systemd/esl-host-runtime-health.service` runs the monitor as a oneshot ordered after
 `docker.service` when both units are being started. It does not require or start Docker, allowing it
 to report when the Docker daemon is unavailable. The timer checks every five minutes and catches a

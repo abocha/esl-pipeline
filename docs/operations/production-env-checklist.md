@@ -345,6 +345,11 @@ Do not use `/docs/...` paths in production containers.
 
 ## Host-Level Checklist
 
+For a fresh Ubuntu 24.04 host, begin with the repository-owned
+[bootstrap and verification path](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap).
+It prepares host prerequisites and identifies external inputs; the runtime checks below still
+belong to separately authorized deployment/recovery.
+
 On the Ubuntu 24.04 VPS:
 
 ```text
