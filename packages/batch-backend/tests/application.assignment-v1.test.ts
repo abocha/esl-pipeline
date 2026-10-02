@@ -130,6 +130,37 @@ describe('AssignmentV1 domain and PMD compatibility', () => {
     action: 'Repeat',
     deliverable: 'Optional recording',
   };
+
+  it('matches stressed words to lexical words in punctuated rhythm drills', () => {
+    const a = assignmentFixture();
+    a.pronunciation = {
+      ...common,
+      mode: 'rhythm_chunking',
+      drills: [
+        {
+          text: "First, I'll show you how to create a task.",
+          transcription: null,
+          chunks: ["First, I'll show you how", 'to create a task.'],
+          stressedWords: ['First', 'create', 'task'],
+        },
+        {
+          text: "Finally, I'll show you the team view.",
+          transcription: null,
+          chunks: ["Finally, I'll show you", 'the team view.'],
+          stressedWords: ['Finally', 'team', 'view'],
+        },
+      ],
+      naturalSentence: "First, I'll show you how to create a task.",
+      contourCue: null,
+    };
+
+    expect(validateAssignmentV1(a)).toEqual(a);
+
+    if (!a.pronunciation || !('drills' in a.pronunciation)) throw new Error('Expected drills');
+    a.pronunciation.drills[0]!.stressedWords[0] = 'FIRST';
+    expect(validateAssignmentV1(a)).toEqual(a);
+  });
+
   const modes: AssignmentPronunciation[] = [
     {
       ...common,
@@ -239,7 +270,6 @@ describe('AssignmentV1 domain and PMD compatibility', () => {
     'kind',
     'empty',
     'chunks',
-    'stress',
     'invented-url',
     'unsafe-url',
     'extra-property',
@@ -262,14 +292,36 @@ describe('AssignmentV1 domain and PMD compatibility', () => {
           {
             text: 'First open the app.',
             transcription: null,
-            chunks: ['Other sentence'],
-            stressedWords: ['missing'],
+            chunks: defect === 'chunks' ? ['Other sentence'] : ['First', 'open the app.'],
+            stressedWords: ['First'],
           },
         ],
         naturalSentence: 'First open the app.',
         contourCue: null,
       };
     expect(() => validateAssignmentV1(a, { inputKind: 'generate' })).toThrow();
+  });
+
+  it('rejects a stressed word that is absent from punctuated drill text', () => {
+    const a = assignmentFixture();
+    a.pronunciation = {
+      ...common,
+      mode: 'rhythm_chunking',
+      drills: [
+        {
+          text: "First, I'll show you how to create a task.",
+          transcription: null,
+          chunks: ["First, I'll show you how", 'to create a task.'],
+          stressedWords: ['missing'],
+        },
+      ],
+      naturalSentence: "First, I'll show you how to create a task.",
+      contourCue: null,
+    };
+
+    expect(() => validateAssignmentV1(a)).toThrow(
+      'pronunciation stressedWords must occur in drill text',
+    );
   });
   it('admits only exact supplied source/media URLs', () => {
     const a = assignmentFixture();
