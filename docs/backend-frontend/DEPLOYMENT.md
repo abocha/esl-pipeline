@@ -3,9 +3,9 @@
 ## Meta
 
 - Audience: maintainers/operators deploying batch services.
-- Read Time: 7 minutes.
+- Read Time: 12 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-09-13 repo state.
+- Last Verified Against: 2026-10-02 repo and disposable Ubuntu host bootstrap.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -29,6 +29,158 @@
 - Postgres 18+
 - Redis 8.10.1
 - ffmpeg available in backend runtime
+
+## Fresh Ubuntu Production Host Bootstrap
+
+GitHub [#326 / ESL-14](https://github.com/abocha/esl-pipeline/issues/326) owns this v1 execution
+slice of [ABO-10](https://linear.app/abocha/issue/ABO-10). It prepares the current single-host
+Compose baseline. A replacement-host database/application recovery rehearsal remains later work.
+Bootstrap completion does **not** mean a working production database or permission to receive traffic.
+
+### Prerequisites and command
+
+Use Ubuntu **24.04 LTS**, amd64 or arm64, with a running systemd manager, root/sudo access,
+working apt repositories (including `universe`), outbound HTTPS, and sufficient disk space. The
+existing deploy guard requires at least 2 GiB free on both checkout and Docker filesystems; capacity
+planning for real data remains operator-owned. First establish and test key-based SSH access and
+record its actual TCP port. Bootstrap does not change SSH authentication or listen configuration.
+Obtain a reviewed repository checkout at `/opt/esl-pipeline` using operator-provisioned GitHub access.
+Install `git` with apt if needed. The checkout directory must belong to root; do not repurpose an
+unknown existing directory or recursively change ownership of an existing deployment.
+
+Run against that checkout (absolute paths also work from an unprivileged sudo account), replacing `<SSH-port>` with the actual approved numeric port:
+
+```bash
+sudo bash /opt/esl-pipeline/scripts/deploy/bootstrap-prod-host.sh apply <SSH-port>
+sudo bash /opt/esl-pipeline/scripts/deploy/bootstrap-prod-host.sh verify <SSH-port>
+```
+
+`apply` ends with the same read-only JSON verification as `verify`. Exit **0** means bootstrap
+invariants and the limited external-file/firewall checks pass; **2** means bootstrap is complete but
+operator inputs remain; **1** means a failed host invariant or unsafe/unsupported state. Inspect
+`bootstrapComplete`, `externalInputsPresent`, and each check's requirement. Missing `.env` and an
+unconfigured firewall on a fresh host are expected exit-2 results, never fabricated configuration.
+`productionReadiness` always says `not-assessed`; even exit 0 does not validate secret values,
+provider/IAM access, DNS, a database, backups, or application health. No image-state file is invented.
+
+### Repository-controlled state and safe reruns
+
+The shell path uses apt and the existing systemd installer, with no provisioning framework:
+
+- Installs Ubuntu `docker.io` and `docker-compose-v2`, plus CA certificates, curl, git, jq,
+  xz-utils, unzip, GnuPG, UFW, OpenSSH server, and logrotate. It enables/starts the local Docker
+  daemon. Other Docker distributions are verification failures requiring explicit reconciliation;
+  bootstrap never removes conflicting packages or changes a remote Docker daemon.
+- Installs Node from the exact `.nvmrc` version when absent, checking its upstream SHA-256 archive
+  checksum. An existing Node 24.15+ on the Node 24 line is accepted. Node lives under
+  `/opt/esl-pipeline-host`, linked as `/usr/local/bin/node`. Host operations use standalone Bash/Node
+  scripts; no host application dependency or pnpm installation is needed for bootstrap/deployment.
+- Installs AWS CLI v2 when absent, verifying the upstream archive signature with
+  [`aws-cli-signing-key.asc`](../../deploy/host/aws-cli-signing-key.asc), obtained from
+  [AWS's installation documentation](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
+  Existing v2 installations are retained. No AWS command contacts account resources during bootstrap.
+- Creates root:root `0750` checkout, `/var/lib/esl-pipeline`, `deploy/`, and `ops/` directories,
+  including `ops/backups/postgres/remote-restore`, `logs`, `reports`, `run`, and `state`.
+  These are the existing deploy and backup/monitoring contracts, not alternate state locations.
+- Creates `uploads/` and `uploads/drafts/` as `1000:1000`, mode `0750`, for the backend image's
+  `node` user. Creates `.secrets/` as `root:1000`, mode `0750`, so that runtime can traverse its
+  read-only mount. Root runs deployment and the existing systemd jobs; no host Docker-group user
+  is created (Docker access would grant root-equivalent privileges).
+- Sets Docker daemon defaults to `json-file`, `max-size=10m`, `max-file=5`, preserving unrelated
+  daemon settings. Malformed/conflicting configuration fails. If changing settings requires restarting
+  an already active daemon, bootstrap fails for explicit operator reconciliation rather than restarting
+  workloads. Existing containers retain their original logging configuration until a reviewed
+  recreation; this path establishes defaults for future containers.
+- Writes `/etc/systemd/journald.conf.d/esl-pipeline.conf` with persistent storage, `256M` maximum
+  usage and one-month retention, restarting/flushing journald only when that file changes. Existing
+  backup and monitoring scripts retain/prune their own dated logs under `ops/logs`; logrotate remains
+  available for Ubuntu's host logs. No new wildcard rotation/deletion of application state is added.
+- Calls `install-postgres-ops-systemd.sh` for all ten existing service/timer files and enables the
+  five timers: backup, integrity, restore drill, PostgreSQL alerts, and host/runtime health.
+  **It does not start those timers or any operations service.** Separately authorized deployment
+  activates them as described in the owning health runbooks. Enabled timers can run on the next
+  boot; keep real external inputs absent until deployment/recovery is authorized. Already active
+  timers are left running on a matching deployed host.
+
+Rerun the same reviewed checkout and command to converge. Matching packages/configuration/units are
+retained, directory metadata is repaired only on the named known directories, and systemd reload is
+retried through the existing installer. Existing files, secret values, uploads, databases, images,
+users, and unknown packages are never deleted. Symlinks and mismatched directory ownership fail for
+operator inspection; child files are never recursively chowned. Partial unsupported installations
+also fail explicitly rather than being guessed away.
+
+### External inputs and verification-only assumptions
+
+Provision `/opt/esl-pipeline/.env` securely as a nonempty **root:root `0600`** file, outside Git.
+Do not copy `.env.example` unchanged onto a production host. Use it as a variable catalog alongside
+[`production-env-checklist.md`](../operations/production-env-checklist.md) and
+[`env.md`](../reference/env.md); supply actual operator-controlled values through a secure channel.
+The existing host wrappers **source `.env` as shell code**: only trusted operators may write it,
+and assignments must also be valid for Compose. Bootstrap never sources or prints it.
+
+Set the existing host contract `PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops` and production
+backup namespace/Compose targeting per [`postgres-ops-health.md`](../operations/postgres-ops-health.md).
+Provide backup S3 region/bucket/prefix, the selected encryption/KMS settings, and Telegram alert
+settings (enabled for production). AWS authentication must be available to root's noninteractive
+systemd context through the approved environment/profile/role mechanism. For file-backed profiles,
+protect `/root/.aws` as root:root `0700` and its credential/config files as `0600`; bootstrap creates
+no AWS credentials and does not test them remotely. GHCR access, if required, is also provisioned
+for the root deployment context. No secret belongs in systemd unit files or generated deploy state.
+
+If Google STT/TTS service-account auth is enabled, securely provide
+`/opt/esl-pipeline/.secrets/google-service-account.json` as **root:1000 `0640`**; the Compose path
+is `/app/secrets/google-service-account.json`. Absence is an explicit provider-dependent operator
+requirement, not a fabricated empty JSON file. Verification checks permissions of any present file;
+the existing environment/provider validation remains required before deployment.
+
+The documented network baseline allows only the approved SSH TCP port and HTTP/HTTPS TCP 80/443.
+The repo does not specify SSH source networks or a safe replacement for arbitrary host firewall
+policy. Bootstrap therefore installs UFW but **never edits, resets, or enables firewall policy**.
+An operator must test SSH access, configure UFW default deny incoming/allow outgoing with routed
+traffic disabled, and allow the approved SSH TCP port and TCP 80/443 (optionally source-restricted).
+Preflight fails if UFW is inactive or has additional inbound allows/unsupported rule shapes; reconcile
+custom policy explicitly. Check IPv4 and IPv6 and keep a recovery console available when changing
+firewall policy. Provider firewalls, DNS, and cloud resources are outside this command.
+
+Docker published ports can bypass UFW. Preserve the production Compose loopback bindings for
+PostgreSQL, Redis, backend, and frontend; only Caddy publishes public TCP 80/443. Validate the
+production environment and Compose configuration before deployment, including no frontend bind
+address override. Bootstrap does not deploy Caddy or prove external port reachability.
+
+### Disposable rehearsal
+
+On a development/Cloud Linux environment with a local Docker daemon and privileged container support:
+
+```bash
+ESL_BOOTSTRAP_EVIDENCE_DIR=/tmp/esl-bootstrap-evidence \
+  bash scripts/deploy/test-bootstrap-prod-host.sh
+node --test scripts/deploy/verify-prod-host.test.mjs
+```
+
+The rehearsal builds a fresh Ubuntu 24.04 systemd baseline, then exercises actual package/CLI
+installation, first apply, second apply, directory/runtime permissions, installed units and inactive
+enabled timers, effective Docker log defaults, missing inputs, malformed/unsupported state, and
+existing Compose/deploy entrypoints. It uses no production access or credentials and removes its
+own container/image on exit; evidence can be retained outside the checkout. Docker data gets tmpfs
+backing in the disposable container so nested overlay snapshotting does not depend on Cloud's outer
+filesystem. No production application is started. The UFW check runs in the disposable network
+namespace; if the Cloud kernel cannot execute its IPv6/netfilter operations, the runner retains that
+failure as an explicit environment limitation, while the focused policy tests validate safe/unsafe
+IPv4/IPv6 status parsing. This cannot prove VPS SSH reachability or an external/provider firewall;
+those remain operator evidence, not waived preflight checks.
+
+### Handoff to separately authorized deployment/recovery
+
+After bootstrap, resolve external checks, validate the production environment and optional edge
+configuration through the existing procedures, and obtain separate deployment/recovery authorization.
+Use `sudo bash /opt/esl-pipeline/scripts/deploy/deploy-prod-images.sh <40-char-git-sha>` with the existing immutable
+release bundle and root-owned state directory. The current deploy script requires a healthy existing
+PostgreSQL/schema baseline even on its initial image-state path; **bootstrap does not create that
+database or make that command sufficient for a fresh installation**. Initial database establishment
+or deliberate verified recovery, Docker volumes/data, and subsequent application deployment remain
+operator-controlled work. The later replacement-host rehearsal must prove these data/application
+steps; #326 does not claim completed disaster recovery. Activate the ops timers only as part of
+that separately authorized rollout and retain the runbooks' runtime/backup verification requirements.
 
 ## Operating Model
 
