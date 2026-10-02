@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [14.0.2] - 2026-10-02
+
+### Changed
+
+- Automated release from PR #320: fix(frontend): omit retired profile ID from recovery (https://github.com/abocha/esl-pipeline/pull/320)
+
 ## [14.0.1] - 2026-10-02
 
 ### Changed
