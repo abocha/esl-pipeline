@@ -878,11 +878,11 @@ export function registerResumeBasicTests() {
       expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
         'session-confirmed-profile-refresh',
         expect.objectContaining({
-          patch: expect.objectContaining({
-            selectedProfileId: resumedSession.studentId,
+          patch: {
+            teacherNotes: 'Keep the examples practical and add a pronunciation contrast.',
             selectedProfileRevisionId: confirmedProfile.profileRevisionId,
             selectedProfileRevisionHash: confirmedProfile.profileRevisionHash,
-          }),
+          },
         }),
       );
       vi.useRealTimers();
