@@ -350,8 +350,10 @@ stopped (or partially stopped), never invoke migrations, and never automatically
 previous backend images, boundaries, and conservative rollback eligibility before mutation. Read
 it together with `previous-images.env`; the state file alone is not authorization to restart old
 images. To recover across an incompatible boundary, use a schema-compatible application image, or
-deliberately restore the verified pre-migration database backup before restarting the previous
-runtime. Database restore remains a separate operator-controlled operation. The deploy lock and
+deliberately restore a verified database backup from before the blocked boundary whose schema
+supports the previous runtime. A backup taken during a later deploy retry may already contain that
+boundary and cannot recover the old runtime. Database restore remains a separate operator-controlled
+operation. The deploy lock and
 writer checks cover this Compose project; do not run separate migrations or restart writers
 concurrently with deployment.
 

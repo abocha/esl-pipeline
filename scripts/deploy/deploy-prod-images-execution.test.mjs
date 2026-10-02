@@ -272,4 +272,6 @@ test('retry after incompatible commit still blocks old rollback and quiesces old
   assert.match(result.output, /pending=none boundaries=none quiesce=true/);
   assert.ok(index(result, (e) => e[0] === 'stop') < index(result, migration));
   assert.match(result.output, /Image-only rollback.*BLOCKED/);
+  assert.match(result.output, /backup from BEFORE the blocked boundary/);
+  assert.match(result.output, /later deploy retry may already contain/);
 });

@@ -168,7 +168,8 @@ handle_failure() {
 Image-only rollback to the previous runtime is BLOCKED.
   An incompatible or unclassified schema boundary may have committed, even if migration failed.
   Keep old application writers stopped. Recover with a schema-compatible image, or deliberately
-  restore the verified pre-migration database backup before restarting the previous runtime.
+  restore a verified backup from BEFORE the blocked boundary that supports the previous runtime.
+  A backup taken during a later deploy retry may already contain the incompatible schema.
   Database restore remains a separate operator-controlled operation; it is never automatic.
   Compatibility record: ${COMPATIBILITY_PLAN}
 EOF
@@ -771,7 +772,7 @@ main() {
   remove_old_custom_images
   info "Deployment completed for ${SHA}"
   if [[ "$IMAGE_ROLLBACK_SAFE" != "true" ]]; then
-    info "Image-only rollback to the previous runtime is BLOCKED; using it requires deliberate verified database restore. Schema-compatible image recovery remains available."
+    info "Image-only rollback to the previous runtime is BLOCKED; recover with a schema-compatible image or deliberately restore a verified backup from BEFORE the blocked boundary that supports the previous runtime."
   fi
 }
 
