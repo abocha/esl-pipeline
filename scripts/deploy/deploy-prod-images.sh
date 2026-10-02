@@ -479,12 +479,18 @@ run_smoke_checks() {
   if [[ "$DATABASE_WORK_REQUIRED" == "true" ]]; then
     run_in_backend node dist/tools/migrate-db.js verify
     run_in_backend node dist/tools/smoke-s3-storage.js
-
-    assert_service_command batch-worker 'dist/transport/worker-runner.js'
-    assert_service_command transcribe-worker 'dist/transport/transcribe-worker.js'
-    assert_recent_logs_clean batch-worker
-    assert_recent_logs_clean transcribe-worker
   fi
+
+  assert_service_command batch-worker 'dist/transport/worker-runner.js'
+  assert_service_command transcribe-worker 'dist/transport/transcribe-worker.js'
+  assert_service_command student-memory-worker 'dist/transport/student-memory-worker.js'
+  local -a worker_ids
+  mapfile -t worker_ids < <(compose_with_env "$PENDING_ENV" ps -q batch-worker transcribe-worker student-memory-worker)
+  [[ "${#worker_ids[@]}" -eq 3 ]] || die "Expected three current worker instances"
+  node "${APP_DIR}/scripts/deploy/verify-workers-ready.mjs" "${worker_ids[@]}" || die "Worker readiness verification failed"
+  assert_recent_logs_clean batch-worker
+  assert_recent_logs_clean transcribe-worker
+  assert_recent_logs_clean student-memory-worker
 }
 
 print_deployment_plan() {
