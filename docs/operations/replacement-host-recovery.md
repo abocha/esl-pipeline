@@ -132,11 +132,14 @@ actual service-backed recovery, not replace it.
 
 ## Evidence boundary
 
-**Current evidence:** the disposable Ubuntu 24.04 repository bootstrap completed and reported the
-expected unresolved external inputs. Full recovery has **not** completed: subsequent attempts are
-blocked by the Cloud network proxy returning HTTP 503 for dependency downloads. There is no
-successful `recovery-result.json`. This runbook describes the implemented procedure and its
-acceptance criteria, not an observed end-to-end recovery success.
+**Current evidence:** work stopped at the user's request after the final hosted attempt established
+source-host bootstrap, healthy dependencies/application, 60 applied migrations, and synthetic
+account/student/lesson/session creation. Source verification then failed because the media handoff
+lacked `recordingId`. No database backup or replacement recovery completed, and there is no
+successful `recovery-result.json`. See the
+[2026-10-02 evidence and failure report](replacement-host-recovery-evidence-2026-10-02.md) for
+the observed results, earlier network/storage failures, CI status, and remaining work. This runbook
+describes the implemented procedure and acceptance criteria, not end-to-end recovery success.
 
 The [hosted rehearsal workflow](../../.github/workflows/replacement-host-rehearsal.yml) executes the
 same command on disposable Ubuntu 24.04 compute for relevant pull requests and manual dispatches.

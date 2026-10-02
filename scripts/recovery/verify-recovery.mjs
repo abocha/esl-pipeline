@@ -115,11 +115,13 @@ for (const asset of assets) {
   assert.equal(response.status, 200);
   const bytes = (await response.arrayBuffer()).byteLength;
   assert.ok(bytes > 0);
+  const contentType = response.headers.get('content-type') ?? '';
+  assert.match(contentType, asset.endsWith('.css') ? /^text\/css\b/u : /javascript|ecmascript/u);
   assetEvidence.push({
     path: asset,
     status: response.status,
     bytes,
-    contentType: response.headers.get('content-type'),
+    contentType,
   });
 }
 writeFileSync('/evidence/frontend-assets.json', JSON.stringify(assetEvidence, null, 2));
