@@ -237,7 +237,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:8.6.3-alpine
+    image: redis:8.10.2-alpine3.23
     # Persistent data (named volume).
     volumes:
       - redis_data:/data
