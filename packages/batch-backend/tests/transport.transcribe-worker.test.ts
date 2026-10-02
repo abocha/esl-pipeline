@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const worker = { on: vi.fn(), close: vi.fn(async () => undefined) };
+const worker = {
+  name: 'test-queue',
+  waitUntilReady: vi.fn(async () => undefined),
+  isRunning: () => true,
+  isPaused: () => false,
+  on: vi.fn(),
+  close: vi.fn(async () => undefined),
+};
 const config = {
   pg: {
     enabled: true,

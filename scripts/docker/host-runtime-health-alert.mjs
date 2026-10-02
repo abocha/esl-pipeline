@@ -5,13 +5,19 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
-  statSync,
   statfsSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+
+import {
+  collectQueueObservation,
+  evaluateQueueObservation,
+  normalizeQueueHistory,
+} from './worker-queue-observation.mjs';
 
 const REQUIRED_SERVICES = [
   'postgres',
@@ -371,7 +377,14 @@ export async function collectHostObservation(env = process.env, dependencies = {
     config,
     dependencies,
   );
+  const queues = await (dependencies.collectQueues ?? collectQueueObservation)(
+    env,
+    docker,
+    dependencies.queueHistory ?? {},
+    dependencies,
+  );
   return {
+    queues,
     checkedAtUtc: (dependencies.now?.() ?? new Date()).toISOString(),
     docker,
     memory,
@@ -594,6 +607,16 @@ export function composeIssues(observation, config, previousState, nowEpoch) {
       ).map((message) => ({ severity: 'critical', message }));
   addIssues('applicationReachability', appIssues, { checks: observation.application.checks ?? [] });
 
+  const queueResult = evaluateQueueObservation(
+    observation.queues,
+    previousState.queueHistory,
+    nowEpoch * 1000,
+  );
+  addIssues('workerQueues', queueResult.issues, {
+    queues: queueResult.queues,
+    observationState: observation.queues?.ok ? 'available' : 'observation_unavailable',
+  });
+
   for (const message of config.errors) {
     const issue = {
       severity: 'degraded',
@@ -626,6 +649,7 @@ export function composeIssues(observation, config, previousState, nowEpoch) {
       ? restartCounts
       : (previousState.lastDockerRestartCounts ?? {}),
     lastRestartAtEpoch,
+    queueHistory: queueResult.history,
   };
 }
 
@@ -660,6 +684,7 @@ function normalizeAlertState(value) {
       : {};
 
   return {
+    queueHistory: normalizeQueueHistory(state.queueHistory),
     lastState,
     lastSeverity: severityForState(lastState),
     lastSentEpoch,
@@ -753,6 +778,7 @@ export async function runHostRuntimeHealthAlert(options = {}) {
   const observation = await (dependencies.collectObservation ?? collectHostObservation)(env, {
     ...dependencies,
     now: () => now,
+    queueHistory: previous.queueHistory,
   });
   const evaluated = composeIssues(observation, config, previous, nowEpoch);
   const currentState = evaluated.status.overall.state;
@@ -782,6 +808,7 @@ export async function runHostRuntimeHealthAlert(options = {}) {
           lastSeverity: previous.lastSeverity ?? 0,
         }),
     lastSentEpoch: delivery.result === 'sent' ? nowEpoch : (previous.lastSentEpoch ?? 0),
+    queueHistory: evaluated.queueHistory,
     lastCheckedAtUtc: evaluated.status.checkedAtUtc,
     lastDockerRestartCounts: evaluated.restartCounts,
     lastRestartAtEpoch: evaluated.lastRestartAtEpoch,

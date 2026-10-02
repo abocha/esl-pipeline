@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 let capturedProcessor: ((job: { data: Record<string, unknown> }) => Promise<void>) | undefined;
 
 const worker = {
+  name: 'test-queue',
+  waitUntilReady: vi.fn(async () => undefined),
+  isRunning: () => true,
+  isPaused: () => false,
   on: vi.fn(),
   close: vi.fn(),
 };

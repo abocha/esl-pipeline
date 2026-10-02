@@ -12,6 +12,7 @@ import { loadConfig } from '../config/env.js';
 import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { enableRedisRecordingEventBridge } from '../infrastructure/recording-event-redis-bridge.js';
 import { createTranscribeWorker } from '../infrastructure/transcribe-queue.js';
+import { reportWorkerReady } from '../infrastructure/worker-readiness.js';
 
 async function getLogger() {
   const { logger } = await import('../infrastructure/logger.js');
@@ -111,7 +112,7 @@ export async function startTranscribeWorker(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
-  logger.info('Transcribe worker started', { component: 'transcribe-worker' });
+  await reportWorkerReady(worker, 'transcribe-worker', logger);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -15,6 +15,7 @@ import { loadConfig } from '../config/env.js';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
 import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { createJobWorker } from '../infrastructure/queue-bullmq.js';
+import { reportWorkerReady } from '../infrastructure/worker-readiness.js';
 
 async function getLogger() {
   const { logger } = await import('../infrastructure/logger.js');
@@ -66,7 +67,7 @@ export async function startWorker(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
-  logger.info('Worker started', { component: 'worker' });
+  await reportWorkerReady(worker, 'batch-worker', logger);
 }
 
 // Allow running directly: node dist/transport/worker-runner.js
