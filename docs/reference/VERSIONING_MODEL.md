@@ -134,6 +134,9 @@ This validates:
 2. Backend migration filenames are valid and at least one migration exists. The backend derives
    its published migration head from that same packaged directory; a focused test checks that
    `/meta/version` reports the latest migration.
+3. Every packaged migration has valid runtime compatibility metadata. New migrations must explicitly
+   declare `compatible` or `incompatible`; see the
+   [deployment compatibility contract](../backend-frontend/DEPLOYMENT.md#schema-compatibility-and-recovery).
 
 Pre-PR rule when migrations or schema baselines change:
 

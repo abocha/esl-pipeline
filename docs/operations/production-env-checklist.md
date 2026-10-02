@@ -479,11 +479,16 @@ pnpm docker:prod:db:list:s3
 pnpm docker:prod:db:artifact-integrity -- <latest-backup-key.dump>
 ```
 
-Application rollback and database rollback are separate. The deployment script may tell you how to
-restart the previous application image set, but it never restores PostgreSQL automatically. Only
-restore the database after choosing that recovery path explicitly and verifying the target backup.
-Older application images may fail against a migrated schema unless the migration was
-backward-compatible.
+Application rollback and database rollback are separate. The deployment script prints previous-image
+restart instructions only when its compatibility preflight permits that runtime on the planned
+schema. Incompatible or unclassified boundaries stop application writers before the verified backup
+and migration, then block unsafe previous-image recovery even if migration or verification fails.
+Read `rollback-compatibility.json` alongside `previous-images.env`; never treat the image state file
+alone as permission to restart an old runtime. Use a schema-compatible image, or choose database
+restore separately and verify the target backup before restarting the previous runtime. See the
+[schema compatibility and recovery contract](../backend-frontend/DEPLOYMENT.md#schema-compatibility-and-recovery),
+including `--plan`, metadata requirements, and stopped-service failure behavior. PostgreSQL restore
+is never automatic.
 
 Do not copy real production student, invoice, transcript, or credential data into local development
 unless it has been anonymized.
