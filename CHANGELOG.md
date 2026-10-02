@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [13.1.1] - 2026-10-02
+
+### Changed
+
+- Automated release from PR #313: fix(batch-frontend): polish tutor speaker and Preview controls (https://github.com/abocha/esl-pipeline/pull/313)
+
 ## [13.1.0] - 2026-10-02
 
 ### Changed
