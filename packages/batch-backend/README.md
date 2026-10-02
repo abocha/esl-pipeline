@@ -131,6 +131,11 @@ Useful indexes:
 - Manual transcript sources require a student, retain the pasted text as durable source material,
   and participate in prompt-package, assignment-history, and resume flows like uploaded lessons.
 - Local/dev startup runs the API server, batch worker, transcribe worker, and dedicated student-memory worker as separate processes.
+- Each worker awaits BullMQ initialization under a 30-second deadline, checks running/unpaused state,
+  and emits structured `worker_ready` evidence with service, queue, current instance identity, and
+  timestamp. Deployment verification requires all three current instances. This is initialization
+  evidence, not a heartbeat or business-success signal. Host-owned read-only queue observation and
+  persistent grace policy are documented in [Host and Runtime Health](../../docs/operations/host-runtime-health.md).
 - Canonical lesson/homework/snapshot extraction reserves the shared generation budget before its
   provider call and records actual token use after success. If that post-success accounting write
   is unavailable, the completed result is preserved and a privacy-safe metric records the gap;

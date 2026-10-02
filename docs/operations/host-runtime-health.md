@@ -4,7 +4,7 @@
 
 - Audience: production maintainers and operators.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-10-01 repository and read-only production inspection.
+- Last Verified Against: 2026-10-02 repository and disposable Redis validation.
 - Owner: operations maintainers.
 - Review Cadence: after Compose, systemd, threshold, or alert-delivery changes.
 - Status: `runbook`.
@@ -47,11 +47,70 @@ The public-route request runs on the VPS. It cannot detect total host loss, and 
 when the host is down. It also cannot cover network failures specific to outside clients. A separate
 off-host synthetic monitor would be needed for those cases.
 
-All three workers have Compose restart policies but no Docker healthchecks. Their code logs startup
-and worker errors, but exposes no durable worker heartbeat, last-success timestamp, or trustworthy
-queue-progress signal. This check confirms that worker containers are running only; it does not
-claim they are consuming or completing jobs. Add worker-progress monitoring in a separate pass if a
-small, durable signal can be designed around the existing queue contracts.
+## Worker readiness and queue observation
+
+Deployment and runtime observation have separate contracts (`SPLIT_READINESS_AND_PROGRESS`,
+[ABO-14](https://linear.app/abocha/issue/ABO-14/implement-worker-readiness-and-queue-progress-monitoring-v1)).
+Each worker awaits BullMQ `waitUntilReady()` after its existing startup work, with a 30-second
+deadline, checks running/unpaused state, and emits JSON `worker_ready` evidence. The record includes
+service, actual queue name, hostname, process ID, unique startup ID, and UTC timestamp. Deployment
+verification requires records for **all three current instances**, including selective deploys:
+
+| Service                 | Default queue          |
+| ----------------------- | ---------------------- |
+| `batch-worker`          | `esl-jobs`             |
+| `transcribe-worker`     | `transcribe-queue`     |
+| `student-memory-worker` | `student-memory-queue` |
+
+The verifier reads each container's actual queue configuration and hostname, rejects records older
+than its current Docker start time, and rechecks container start/running state after reading logs.
+Its polling deadline is 60 seconds. Readiness proves consumer initialization at that moment; it
+makes no claim about future liveness or application-level business success. Log retention must
+retain the current boot's readiness record; missing evidence fails deployment verification.
+
+Every host-monitor run also reads Redis consumer names and BullMQ queue state/events through
+`scripts/docker/worker-queue-observation.mjs`. It reports:
+
+| Observation                   | Meaning and alert policy                                                                                                                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `idle`                        | Connected consumer, no runnable/active work and no newly observed processing event. Healthy regardless of completion age.                                                                     |
+| `processing_observed`         | New claim (`active`), `completed`, or `failed` event in a continuous observed stream, or an active job in the current snapshot. The JSON separates event activity from retained active state. |
+| `consumer_connection_missing` | No matching BullMQ consumer connection. Critical after ten continuous minutes observed missing, even if idle.                                                                                 |
+| `runnable_work_not_claimed`   | Waiting, prioritized, or overdue delayed work without active work or newly observed processing events. Critical after ten minutes without observed claims/attempt outcomes.                   |
+| `paused`                      | Queue metadata marks consumption paused. Immediately degraded; JSON still includes connections/backlog, and persistent missing connections can escalate.                                      |
+| `observation_unavailable`     | Redis/Docker read failure, unsupported topology, or collector timeout. Immediately degraded; previous history is retained.                                                                    |
+
+Ten minutes allows two five-minute cadence intervals for reconnect/backlog grace. Clocks and grace
+are keyed by queue in the existing host state file, independently of worker/container identity and
+Telegram delivery. Recreation never reseeds them. Runnable backlog age is retained while active
+work exists, but v1 does not alert on backlog waiting behind active work: no legitimate execution-
+duration policy exists yet. Reconsider this ceiling when per-worker duration policies are approved.
+A reconnect clears missing-connection history; observed backlog clearance clears backlog age.
+Confirmed new processing events reset the queue's progress grace. Producer activity, lock renewals,
+reconciliation timers, and custom `progress` events do not count. Completion/failure is an attempt
+outcome, not proof of business success.
+
+Future delayed jobs are not runnable. Delayed jobs whose encoded due time has passed are runnable,
+because absent consumers can prevent promotion. Queue pause and delayed due-time interpretation use
+the installed BullMQ 6.3.4 layout. The collector reads at most 1001 new events per queue. Cursor loss,
+event-count discontinuity, stream reset, or more than 1000 new events creates a degraded
+`observationGap`, never inferred progress; it establishes a new cursor while retaining grace clocks.
+The first observation establishes a baseline and does not count historical events as new progress.
+Monitor state loss/corruption requires a new baseline; preserve the host state file during rollouts.
+
+The collector constructs no BullMQ `Queue`, `QueueEvents`, or `Worker`. It uses only `CLIENT LIST`
+and a fixed Redis [`EVAL_RO`](https://redis.io/docs/latest/commands/eval_ro/) script containing
+`TIME`, `EXISTS`, `XINFO STREAM`, `XRANGE`, `LLEN`, `ZCARD`, `ZCOUNT`, and `HEXISTS`. Redis enforces
+non-writing script execution. Disposable integration tests run collection with an ACL allowing only
+these reads and compare every queue key's serialized value before/after. The same tests show Redis
+rejecting writes through `EVAL_RO`. The host uses the Redis service's bundled `redis-cli`; no host
+npm dependency install is required. Authentication travels through stdin, never command arguments.
+The complete queue collection has a ten-second deadline and bounded output. This supports the
+current local Compose Redis on port 6379 and configured queue-name variables; an external Redis
+host/port reports unavailable rather than observing a different server.
+
+There is no periodic worker heartbeat, active-job duration alarm, business-result monitor, or new
+application milestone instrumentation in v1.
 
 ## Alert and state behavior
 
@@ -103,3 +162,10 @@ sudo cat /var/lib/esl-pipeline/ops/state/host-runtime-health-alert-state.json
 The first successful run establishes the restart-count baseline. A healthy run does not send a
 Telegram message, so it verifies monitoring and delivery configuration only through logs/state; it
 does not act as a Telegram test. Do not create synthetic failures on production to test transitions.
+
+For the separately authorized worker-monitoring rollout, deploy the immutable backend release
+containing all three readiness records before using the updated verifier. Update the deployed
+checkout's monitor scripts and preserve the existing host state directory. Run the normal deploy
+verification and the host/runtime oneshot above; inspect `components.workerQueues` and persisted
+`queueHistory`. A healthy idle queue requires a consumer connection, not a recent completion.
+Use disposable infrastructure for failure/recovery tests, never synthetic production jobs or pauses.
