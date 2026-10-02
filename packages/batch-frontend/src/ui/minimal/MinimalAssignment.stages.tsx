@@ -1011,25 +1011,32 @@ export function SourceStageSection({
                   {ordinaryTwoSpeakerMapping ? (
                     <fieldset className="minimal-speaker-choice">
                       <legend>Which one of these is the tutor?</legend>
-                      {mixedSpeakerRoles.map((item) => (
-                        <label key={item.speaker}>
-                          <input
-                            type="radio"
-                            name="tutor-speaker"
-                            checked={item.role === 'teacher'}
-                            onChange={() => {
-                              for (const candidate of mixedSpeakerRoles) {
-                                onMixedSpeakerRoleChange(
-                                  candidate.speaker,
-                                  candidate.speaker === item.speaker ? 'teacher' : 'student',
-                                );
-                              }
-                            }}
-                            disabled={readOnly || transcriptSaving}
-                          />
-                          Speaker {item.speaker + 1}
-                        </label>
-                      ))}
+                      <div className="minimal-speaker-choice-options">
+                        {mixedSpeakerRoles.map((item) => (
+                          <label
+                            className={`minimal-speaker-choice-option${
+                              item.role === 'teacher' ? ' is-selected' : ''
+                            }`}
+                            key={item.speaker}
+                          >
+                            <input
+                              type="radio"
+                              name="tutor-speaker"
+                              checked={item.role === 'teacher'}
+                              onChange={() => {
+                                for (const candidate of mixedSpeakerRoles) {
+                                  onMixedSpeakerRoleChange(
+                                    candidate.speaker,
+                                    candidate.speaker === item.speaker ? 'teacher' : 'student',
+                                  );
+                                }
+                              }}
+                              disabled={readOnly || transcriptSaving}
+                            />
+                            <span>Speaker {item.speaker + 1}</span>
+                          </label>
+                        ))}
+                      </div>
                     </fieldset>
                   ) : (
                     <>
