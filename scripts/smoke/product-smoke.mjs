@@ -18,6 +18,8 @@ export const composeArgs = [
   'docker-compose.smoke.yml',
 ];
 const backend = '@esl-pipeline/batch-backend';
+const smokeAccountEmail = 'smoke@example.test';
+const smokeApiOrigin = 'http://127.0.0.1:18080';
 
 // Shadow every local application-env key before its normal non-overriding loader runs.
 // Read keys only: ordinary developer credentials and remote service targets never enter smoke.
@@ -108,8 +110,24 @@ function run(command, args, env) {
   if (result.status !== 0) throw new Error(`${command} failed (${result.status})`);
 }
 
+function runCaptured(command, args, env) {
+  const result = spawnSync(command, args, {
+    cwd: root,
+    env,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw new Error(`${command} failed (${result.status}): ${result.stderr.trim()}`);
+  return result.stdout;
+}
+
 function pnpm(args, env) {
   run(process.execPath, pnpmArgs(args), env);
+}
+function pnpmCaptured(args, env) {
+  return runCaptured(process.execPath, pnpmArgs(args), env);
 }
 function compose(args) {
   run('docker', [...composeArgs, ...args], {
@@ -178,6 +196,107 @@ function active() {
   } catch {
     return false;
   }
+}
+
+export function assertAccountBootstrapReady(running, hostServicesActive) {
+  if (!hostServicesActive || !running)
+    throw new Error('Run pnpm smoke:start in default mode before bootstrapping a smoke account.');
+  if (running.live)
+    throw new Error('Account bootstrap requires the default no-provider smoke mode.');
+}
+
+async function bootstrapAccount() {
+  let running;
+  if (existsSync(runningFile)) running = JSON.parse(readFileSync(runningFile, 'utf8'));
+  assertAccountBootstrapReady(running, active());
+
+  const health = await fetch(`${smokeApiOrigin}/health`, {
+    signal: AbortSignal.timeout(3000),
+  });
+  if (!health.ok) throw new Error(`Smoke API health check failed (HTTP ${health.status}).`);
+
+  const env = smokeEnv();
+  const inviteArgs = [
+    '--filter',
+    backend,
+    'exec',
+    'tsx',
+    '--tsconfig',
+    'tsconfig.json',
+    'src/tools/alpha-invites.ts',
+    'create',
+    '--email',
+    smokeAccountEmail,
+    '--app-url',
+    'http://127.0.0.1:15173',
+  ];
+  const inviteOutput = pnpmCaptured(inviteArgs, env);
+  const inviteToken = inviteOutput.match(/^Token: (\S+)$/mu)?.[1];
+  if (!inviteToken) throw new Error('Smoke invite tool did not return its one-time token.');
+
+  const password = randomBytes(24).toString('base64url');
+  let registrationSucceeded = false;
+  try {
+    const registration = await fetch(`${smokeApiOrigin}/auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: smokeAccountEmail, password, inviteToken }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const registrationBody = await registration.text();
+    if (registration.status !== 201) {
+      let message = '';
+      try {
+        message = JSON.parse(registrationBody).message ?? '';
+      } catch {
+        // Keep unexpected response bodies out of the terminal.
+      }
+      throw new Error(
+        `Smoke account registration failed (HTTP ${registration.status})${message ? `: ${message}` : '.'}`,
+      );
+    }
+    registrationSucceeded = true;
+
+    const login = await fetch(`${smokeApiOrigin}/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: smokeAccountEmail, password }),
+      signal: AbortSignal.timeout(10000),
+    });
+    await login.arrayBuffer();
+    if (!login.ok)
+      throw new Error(
+        `Smoke account was created, but the normal login check failed (HTTP ${login.status}).`,
+      );
+  } catch (error) {
+    if (!registrationSucceeded) {
+      try {
+        pnpmCaptured(
+          [
+            '--filter',
+            backend,
+            'exec',
+            'tsx',
+            '--tsconfig',
+            'tsconfig.json',
+            'src/tools/alpha-invites.ts',
+            'revoke',
+            '--email',
+            smokeAccountEmail,
+          ],
+          env,
+        );
+      } catch {
+        console.error('Could not revoke the unused smoke invite; inspect smoke invite state.');
+      }
+    }
+    throw error;
+  }
+
+  console.log('Smoke account created through invite-only registration; normal login verified.');
+  console.log(`Email: ${smokeAccountEmail}`);
+  console.log(`Local test password (shown once): ${password}`);
+  console.log('Open http://127.0.0.1:15173 and sign in.');
 }
 
 async function portFree(port) {
@@ -336,6 +455,9 @@ async function main() {
         smokeEnv(),
       );
       break;
+    case 'bootstrap-account':
+      await bootstrapAccount();
+      break;
     case 'stop':
       await stop();
       break;
@@ -366,7 +488,7 @@ async function main() {
       console.log('Smoke state removed. pnpm smoke:start initializes current schema and prompts.');
       break;
     default:
-      throw new Error('Use pnpm smoke:start|stop|status|reset|prepare|invite.');
+      throw new Error('Use pnpm smoke:start|stop|status|reset|prepare|invite|bootstrap-account.');
   }
 }
 
