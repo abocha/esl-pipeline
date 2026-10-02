@@ -5,6 +5,9 @@ Shared HTML renderer/publisher for the pipeline's html-only publish path.
 ## Exports
 
 - `renderToHtml(markdown, title, options)`
+- `renderAssignmentToPmd(assignment)`: deterministic eight-section compatibility output for
+  validated `AssignmentV1`, including safe YAML, plain-text escaping and pronunciation projection.
+  Draft storage, editing and publishing continue to consume Markdown; this is a transient adapter.
 - `createStaticPageHtml(markdown, title, options)`
 - `publishHtmlToS3(html, options)`
 - `renderAndPublishMarkdownToS3({ markdown, title, ...options })`

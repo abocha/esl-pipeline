@@ -338,7 +338,7 @@ generation. The production backend image runs from `/app` and copies runtime-own
 under `/app/packages/batch-backend/prompt-assets`.
 
 ```bash
-PROMPT_TEMPLATE_PATH=packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md
+PROMPT_TEMPLATE_PATH=packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md
 ```
 
 Do not use `/docs/...` paths in production containers.

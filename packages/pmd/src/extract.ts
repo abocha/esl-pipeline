@@ -27,6 +27,23 @@ function cleanLine(input: string): string {
   return input.replace(BOM, '').replaceAll(NBSP, ' ').replaceAll(ZWSP, '');
 }
 
+// Numeric escapes are presentation data. Decode only after structural parsing.
+function decodeProse(value: string): string {
+  return value.replace(/&#(\d+);/g, (entity, code: string) => {
+    const point = Number(code);
+    return point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : entity;
+  });
+}
+function decodePronunciation<T>(value: T): T {
+  if (typeof value === 'string') return decodeProse(value) as T;
+  if (Array.isArray(value)) return value.map(decodePronunciation) as T;
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, decodePronunciation(item)]),
+    ) as T;
+  return value;
+}
+
 function getDirectiveBounds(
   block: PmdDirectiveBlock,
   contentLines: string[],
@@ -122,7 +139,11 @@ export function extractStudyText(md: ParsedMarkdownContext): StudyText {
 
   const dialogueCount = lines.filter((line) => isDialogueLine(line)).length;
   const type: StudyText['type'] = dialogueCount >= 2 ? 'dialogue' : 'monologue';
-  return { type, lines };
+  return {
+    type,
+    lines:
+      doc.frontmatter.assignment_projection === 'assignment_v1' ? lines.map(decodeProse) : lines,
+  };
 }
 
 export function extractAnswerKey(md: ParsedMarkdownContext): string {
@@ -253,6 +274,7 @@ function normalizePronunciationMode(value: string | null): PronunciationMode | n
 function parsePronunciationWordLine(
   line: string,
   lineNumber: number,
+  assignmentProjection = false,
 ): { word?: PronunciationShadowWord; issue?: PronunciationShadowIssue } | null {
   const numberedItem = /^\s*(?:[-*]\s+)?\d+\.\s+/.test(line);
   if (!numberedItem) return null;
@@ -282,6 +304,8 @@ function parsePronunciationWordLine(
       };
     }
 
+    if (assignmentProjection)
+      return { word: { text: itemContent, transcription: '', line: lineNumber } };
     return {
       issue: {
         code: 'invalid_word_item_format',
@@ -323,6 +347,7 @@ function parsePronunciationWordLine(
 function parseMinimalPairLine(
   line: string,
   lineNumber: number,
+  assignmentProjection = false,
 ): { pair?: PronunciationMinimalPairItem; issue?: PronunciationShadowIssue } | null {
   const numberedItem = /^\s*(?:[-*]\s+)?\d+\.\s+/.test(line);
   if (!numberedItem) return null;
@@ -342,6 +367,21 @@ function parseMinimalPairLine(
     itemContent,
   );
   if (!match) {
+    const plainPair = /^(.+?)\s+—\s+(.+)$/.exec(itemContent);
+    if (plainPair && assignmentProjection) {
+      const parseWord = (value: string) => {
+        const ipa = /\s+(\/[^/\n]+\/)\s*$/.exec(value);
+        return {
+          text: ipa ? value.slice(0, ipa.index).trim() : value.trim(),
+          transcription: ipa?.[1] ?? '',
+          line: lineNumber,
+        };
+      };
+      return {
+        pair: { left: parseWord(plainPair[1]!), right: parseWord(plainPair[2]!), line: lineNumber },
+      };
+    }
+
     return {
       issue: {
         code: 'invalid_minimal_pair_format',
@@ -511,6 +551,8 @@ function getPronunciationSection(md: ParsedMarkdownContext): {
 }
 
 export function extractPronunciationFocus(md: ParsedMarkdownContext): PronunciationFocus | null {
+  const assignmentProjection = md.document.frontmatter.assignment_projection === 'assignment_v1';
+  const decode = <T>(value: T): T => (assignmentProjection ? decodePronunciation(value) : value);
   const section = getPronunciationSection(md);
   if (!section) return null;
   const { sectionStartLine, sectionLines } = section;
@@ -578,7 +620,7 @@ export function extractPronunciationFocus(md: ParsedMarkdownContext): Pronunciat
 
     const lineNumber = sectionStartLine + index + 1;
     if (modeValue === 'shadow_sentence') {
-      const parsedWord = parsePronunciationWordLine(trimmed, lineNumber);
+      const parsedWord = parsePronunciationWordLine(trimmed, lineNumber, assignmentProjection);
       if (parsedWord?.word) {
         words.push(parsedWord.word);
         continue;
@@ -589,7 +631,7 @@ export function extractPronunciationFocus(md: ParsedMarkdownContext): Pronunciat
       continue;
     }
     if (modeValue === 'minimal_pair') {
-      const parsedPair = parseMinimalPairLine(trimmed, lineNumber);
+      const parsedPair = parseMinimalPairLine(trimmed, lineNumber, assignmentProjection);
       if (parsedPair?.pair) {
         pairs.push(parsedPair.pair);
         continue;
@@ -634,35 +676,35 @@ export function extractPronunciationFocus(md: ParsedMarkdownContext): Pronunciat
   };
 
   if (modeValue === 'shadow_sentence') {
-    return {
+    return decode({
       mode: 'shadow_sentence',
       shadowSentence,
       words,
       ...shared,
-    };
+    });
   }
   if (modeValue === 'minimal_pair') {
-    return {
+    return decode({
       mode: 'minimal_pair',
       pairs,
       ...shared,
-    };
+    });
   }
   if (modeValue === 'connected_speech') {
-    return {
+    return decode({
       mode: 'connected_speech',
       lines,
       naturalSentence,
       ...shared,
-    };
+    });
   }
-  return {
+  return decode({
     mode: modeValue,
     drills,
     naturalSentence,
     contourCue,
     ...shared,
-  };
+  });
 }
 
 export function extractPronunciationShadowFocus(

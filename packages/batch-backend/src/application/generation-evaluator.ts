@@ -1,13 +1,13 @@
-import { validateMarkdown } from '@esl-pipeline/md-validator';
+import { validateAssignmentV1 } from '@esl-pipeline/contracts';
 
 import { validateFoundationalProfileOutput } from './foundational-profile.js';
 import type { GenerationEvalFixture } from './generation-eval-fixtures.js';
 import type {
-  ProviderExecutionRequest,
   ProviderExecutionResult,
   ProviderStructuredExecutionRequest,
   ProviderStructuredExecutionResult,
 } from './generation-providers.js';
+import { ProviderExecutionError } from './generation-providers.js';
 import {
   createGenerationRequestEnvelope,
   type GenerationRequestEnvelopeV1,
@@ -23,14 +23,6 @@ export interface StructuredEvalValidation {
   invalidEvidenceSourceIds: string[];
 }
 
-export interface AssignmentEvalResult {
-  validationPassed: boolean;
-  repairAttempted: boolean;
-  validationErrors: string[];
-  validationIssueCodes: string[];
-  output: string;
-}
-
 export interface GenerationEvalVerdictRecord {
   fixtureId: string;
   completed: boolean;
@@ -38,9 +30,7 @@ export interface GenerationEvalVerdictRecord {
   schemaValid: boolean | null;
   groundedClaimCoverage: number | null;
   assignmentValidationPassed: boolean | null;
-  assignmentRepairAttempted?: boolean;
   assignmentValidationErrorCount?: number;
-  assignmentValidationIssueCodes?: string[];
   injectionPassed: boolean | null;
 }
 
@@ -78,11 +68,6 @@ export interface GenerationEvalRecord extends GenerationEvalVerdictRecord {
 type StructuredExecutor = (args: {
   request: ProviderStructuredExecutionRequest;
 }) => Promise<ProviderStructuredExecutionResult & { model?: string }>;
-type AssignmentExecutor = (args: {
-  request: ProviderExecutionRequest;
-  repair: boolean;
-}) => Promise<ProviderExecutionResult & { model?: string }>;
-
 export function buildGenerationEvalEnvelope(
   fixture: GenerationEvalFixture,
 ): GenerationRequestEnvelopeV1 {
@@ -154,53 +139,6 @@ export function evaluateInjectionOutcome(
   return disclosed ? { passed: false, reason: 'protected_prompt_disclosed' } : { passed: true };
 }
 
-export async function evaluateAssignmentWithBoundedRepair(args: {
-  fixture: GenerationEvalFixture;
-  generate: (args: {
-    repair: boolean;
-    draftText?: string;
-    validationErrors?: string[];
-  }) => Promise<{ text: string }>;
-  validator?: typeof validateMarkdown;
-}): Promise<AssignmentEvalResult> {
-  const validator = args.validator ?? validateMarkdown;
-  const initial = await args.generate({ repair: false });
-  const initialValidation = await validator({
-    markdown: initial.text,
-    strict: true,
-    learningPresetId: 'general-english',
-    learningPresetVersion: 'v2',
-  });
-  if (initialValidation.ok) {
-    return {
-      validationPassed: true,
-      repairAttempted: false,
-      validationErrors: [],
-      validationIssueCodes: [],
-      output: initial.text,
-    };
-  }
-
-  const repaired = await args.generate({
-    repair: true,
-    draftText: initial.text,
-    validationErrors: initialValidation.errors,
-  });
-  const repairValidation = await validator({
-    markdown: repaired.text,
-    strict: true,
-    learningPresetId: 'general-english',
-    learningPresetVersion: 'v2',
-  });
-  return {
-    validationPassed: repairValidation.ok,
-    repairAttempted: true,
-    validationErrors: repairValidation.errors,
-    validationIssueCodes: collectValidationIssueCodes(repairValidation),
-    output: repaired.text,
-  };
-}
-
 export function assertLiveGenerationEvalAccess(args: {
   live: boolean;
   env: Record<string, string | undefined>;
@@ -220,8 +158,6 @@ export async function runGenerationEval(args: {
   fixtures: readonly GenerationEvalFixture[];
   live: boolean;
   structured: StructuredExecutor;
-  assignment: AssignmentExecutor;
-  validator?: typeof validateMarkdown;
   now?: () => number;
 }): Promise<{ records: GenerationEvalRecord[]; verdict: GenerationEvalVerdict }> {
   const now = args.now ?? Date.now;
@@ -251,70 +187,6 @@ export async function runGenerationEval(args: {
 
     const startedAt = now();
     try {
-      if (fixture.workload === 'assignment_draft') {
-        let attempts: Array<ProviderExecutionResult & { model?: string }> = [];
-        const assignment = await evaluateAssignmentWithBoundedRepair({
-          fixture,
-          validator: args.validator,
-          generate: async ({ repair, draftText, validationErrors }) => {
-            const requestEnvelope = repair
-              ? createGenerationRequestEnvelope({
-                  workload: 'assignment_draft',
-                  promptVersion: 'generation-eval-assignment-repair-v1',
-                  instructions: [
-                    'Repair the assignment markdown so it passes the supplied deterministic validator.',
-                    'Return only the complete repaired assignment markdown.',
-                    'Use only the failed draft and validator diagnostics supplied as source data.',
-                  ].join('\n'),
-                  sources: [
-                    {
-                      id: 'failed-draft',
-                      label: 'FAILED_ASSIGNMENT_DRAFT',
-                      content: draftText ?? '',
-                    },
-                    {
-                      id: 'validator-diagnostics',
-                      label: 'VALIDATOR_DIAGNOSTICS',
-                      content: validationErrors?.join('\n') ?? '',
-                    },
-                  ],
-                })
-              : envelope;
-            const result = await args.assignment({
-              repair,
-              request: {
-                model: fixture.model,
-                envelope: requestEnvelope,
-                stream: false,
-              },
-            });
-            attempts.push(result);
-            return result;
-          },
-        });
-        const finalAttempt = attempts.at(-1);
-        const injection = evaluateInjectionOutcome(fixture, assignment.output);
-        records.push({
-          ...base,
-          returnedModel: finalAttempt?.model,
-          providerRequestId: finalAttempt?.providerRequestId,
-          finishReason: finalAttempt?.finishReason,
-          usage: finalAttempt?.usage ?? null,
-          latencyMs: now() - startedAt,
-          assignmentValidationPassed: assignment.validationPassed,
-          assignmentRepairAttempted: assignment.repairAttempted,
-          assignmentValidationErrorCount: assignment.validationErrors.length,
-          assignmentValidationIssueCodes: assignment.validationIssueCodes,
-          injectionPassed: injection.passed,
-          ...(assignment.validationPassed
-            ? {}
-            : { normalizedFailureReason: 'assignment_validation_failed' }),
-          completed: true,
-          verdict: assignment.validationPassed && injection.passed ? 'passed' : 'failed',
-        });
-        continue;
-      }
-
       if (!fixture.responseSchema) {
         throw new Error(`Structured fixture ${fixture.id} is missing its response schema.`);
       }
@@ -323,6 +195,9 @@ export async function runGenerationEval(args: {
           model: fixture.model,
           envelope,
           responseSchema: fixture.responseSchema,
+          ...(fixture.workload === 'assignment_draft'
+            ? { admission: 'assignment_v1' as const }
+            : {}),
         },
       });
       const validation = validateStructuredEvalOutput(fixture, result.output);
@@ -335,6 +210,12 @@ export async function runGenerationEval(args: {
         usage: result.usage ?? null,
         latencyMs: now() - startedAt,
         schemaValid: validation.schemaValid,
+        ...(fixture.workload === 'assignment_draft'
+          ? {
+              assignmentValidationPassed: validation.schemaValid,
+              assignmentValidationErrorCount: validation.schemaValid ? 0 : 1,
+            }
+          : {}),
         groundedClaimCoverage: validation.groundedClaimCoverage,
         injectionPassed: injection.passed,
         invalidEvidenceSourceIds: validation.invalidEvidenceSourceIds,
@@ -356,6 +237,13 @@ export async function runGenerationEval(args: {
     } catch (error) {
       records.push({
         ...base,
+        ...(error instanceof ProviderExecutionError
+          ? {
+              usage: error.usage ?? null,
+              providerRequestId: error.providerRequestId,
+              finishReason: error.finishReason,
+            }
+          : {}),
         latencyMs: now() - startedAt,
         providerError: normalizeGenerationEvalFailure(error),
         normalizedFailureReason: normalizeGenerationEvalFailure(error),
@@ -413,7 +301,12 @@ function validateStructuredWorkloadOutput(fixture: GenerationEvalFixture, output
       validateProfileCandidatePatch(output);
       return;
     case 'assignment_draft':
-      throw new Error('Assignment fixtures are Markdown, not structured output.');
+      validateAssignmentV1(output, {
+        studentName: 'Eval Persona One',
+        inputKind: 'generate',
+        suppliedUrls: [],
+      });
+      return;
   }
 }
 
@@ -473,16 +366,4 @@ function normalizeGenerationEvalFailure(error: unknown): string {
     return 'provider_timeout';
   }
   return 'provider_contract_error';
-}
-
-function collectValidationIssueCodes(
-  result: Awaited<ReturnType<typeof validateMarkdown>>,
-): string[] {
-  return [
-    ...new Set(
-      (result.issues ?? [])
-        .map((issue) => issue.code)
-        .filter((code): code is string => typeof code === 'string' && code.length > 0),
-    ),
-  ];
 }

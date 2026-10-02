@@ -24,6 +24,9 @@
     "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "zod": "^4.6.4"
+  },
   "devDependencies": {
     "@types/node": "^24.13.4",
     "typescript": "^7.0.2"

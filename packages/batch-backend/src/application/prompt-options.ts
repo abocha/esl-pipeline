@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+import { ASSIGNMENT_TEMPLATE_ID } from '@esl-pipeline/contracts';
+
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { TemplateRecord } from '../domain/template-model.js';
@@ -188,7 +190,12 @@ function toActivePromptOptions(
   confirmedActiveIds: ReadonlySet<string>,
 ): PromptOptionWithPath[] {
   return records
-    .filter((record) => Boolean(record.activeRevisionId) && confirmedActiveIds.has(record.id))
+    .filter(
+      (record) =>
+        record.id === ASSIGNMENT_TEMPLATE_ID &&
+        Boolean(record.activeRevisionId) &&
+        confirmedActiveIds.has(record.id),
+    )
     .map((record) => ({
       id: record.id,
       label: record.label,

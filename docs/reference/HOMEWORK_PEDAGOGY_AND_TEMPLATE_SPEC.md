@@ -6,7 +6,7 @@
 - Read Time: 8 minutes.
 - Authority Level: canonical pedagogy and assignment-template reference for the current
   `general-english` track; `v1` remains explicit persisted-job validator compatibility.
-- Last Verified Against: 2026-08-28 repo state.
+- Last Verified Against: 2026-10-02 AssignmentV1 Slice 1.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: monthly or after meaningful homework-template changes.
 - Status: `reference`.
@@ -23,7 +23,7 @@
 
 This spec is intentionally based on the current canonical prompt baseline:
 
-- [`hw_prompt_definitive.md`](../../packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md)
+- [`hw_prompt_assignment_v1.md`](../../packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md)
 
 That template is the canonical pedagogical reference for the homework method. This doc exists to
 explain which pedagogical moves in the definitive prompt are deliberate, protected, and worth
@@ -86,8 +86,10 @@ Runtime note:
 
 ## Section-by-Section Assignment Contract
 
-The headings below intentionally mirror the current template. Future prompt revisions should treat
-this structure as the default contract unless a later decision doc explicitly changes it.
+The headings below describe the current deterministic PMD presentation. AssignmentV1 generation
+supplies domain content; the renderer owns headings and formatting. See
+[AssignmentV1](ASSIGNMENT_V1.md) for schema, admission and Slice 1 boundaries. The pedagogical
+content remains the default contract for future prompt revisions.
 
 ### 1. `## 1. 🎯 This Week's Mission Briefing`
 
@@ -435,7 +437,7 @@ method while improving the surrounding system.
 
 ## Related
 
-- [`hw_prompt_definitive.md`](../../packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md)
+- [`hw_prompt_assignment_v1.md`](../../packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md)
 - [`docs/reference/PRESET_V2_SPEC.md`](PRESET_V2_SPEC.md)
 - [`docs/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md`](../plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md)
 - [`docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md`](../plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)

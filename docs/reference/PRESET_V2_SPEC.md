@@ -5,7 +5,7 @@
 - Audience: founder, maintainers, AI agents.
 - Read Time: 6 minutes.
 - Authority Level: canonical preset architecture spec.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-10-02 AssignmentV1 Slice 1.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: monthly or after preset/runtime contract changes.
 - Status: `reference`.
@@ -29,8 +29,8 @@
 
 ## Current Baseline
 
-- active prompt snapshot:
-  - `packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md`
+- shipped structured prompt snapshot (live activation is operator-owned):
+  - `packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md`
 - runtime default lineage:
   - learning preset id: `general-english`
   - learning preset version: `v2`
@@ -57,9 +57,13 @@ Every generated draft should retain:
 - prompt snapshot version
 - prompt alias when applicable
 
+New generation pins the AssignmentV1 response schema and requires fresh structured prompt packages.
+Saved Markdown and existing job lineage retain their original identity. See
+[AssignmentV1](ASSIGNMENT_V1.md).
+
 ## Speaker And Speech-Performance Rules
 
-The default `general-english` preset uses `hw_prompt_definitive`.
+The default `general-english` preset uses `hw_prompt_assignment_v1`.
 
 - authored `speaker_profiles` stay provider-neutral
 - descriptive cast intent belongs in `role`, optional `persona`, and optional `voice_direction`

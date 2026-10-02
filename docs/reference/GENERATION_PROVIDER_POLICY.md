@@ -14,9 +14,10 @@
 
 `resolveGenerationTarget()` resolves one `{ provider, model }`. Failures never select a different
 model or provider. Assignment/profile generation makes one physical request and returns a normalized
-failure; existing durable queues own background retries. Deterministic assignment validation may
-request one repair with the same target, failed draft and validator diagnostics. This is output
-repair, not transient retry or provider routing.
+failure; existing durable queues own background retries. Assignment generation requires strict AssignmentV1 on OpenAI GPT-6.1 Sol, admits completed
+non-refusal direct JSON, validates locally and deterministically renders PMD. Unsupported assignment
+overrides fail before dispatch. There is no model-driven Markdown repair. See
+[AssignmentV1](ASSIGNMENT_V1.md) for prompt cutover and compatibility boundaries.
 
 | Workload                                                | Provider default | Model default  | Exact env target                                                            |
 | ------------------------------------------------------- | ---------------- | -------------- | --------------------------------------------------------------------------- |
@@ -26,7 +27,7 @@ repair, not transient retry or provider routing.
 | Student-memory snapshot                                 | `openai`         | `gpt-5.6-luna` | `GEN_STUDENT_MEMORY_SNAPSHOT_PROVIDER`, `GEN_STUDENT_MEMORY_SNAPSHOT_MODEL` |
 | Profile revision / candidate patch / initial enrichment | `openai`         | `gpt-5.6-luna` | `GEN_PROFILE_DRAFT_PROVIDER`, `GEN_PROFILE_DRAFT_MODEL`                     |
 
-Explicit provider/model request overrides remain available. Model-only overrides use the workload's
+Explicit provider/model request overrides remain available for workloads whose admission policy supports them. Model-only overrides use the workload's
 provider. Provider-only overrides use its configured workload model when the provider matches, or
 `GEN_OPENAI_MODEL` (Luna), `GEN_GOOGLE_MODEL` (Gemini 3 Flash Preview), or `GEN_OPENROUTER_MODEL`
 when switching provider. A missing OpenRouter model fails before execution; its adapter is retained
@@ -39,7 +40,7 @@ records. Profile initial enrichment also freezes its target in the existing oper
 retains its submission/recovery lifecycle.
 
 Versioned request envelopes still own OpenAI reasoning and verbosity: assignment medium/medium,
-lesson/homework/profile medium/low, snapshot high/low. No prompts or output schemas change here.
+lesson/homework/profile medium/low, snapshot high/low. AssignmentV1 pins its schema in the existing envelope; memory/profile schemas remain unchanged.
 ABO-6 prompt bootstrap and admin activation remain separate from deployment.
 
 ### Explicit model rosters
@@ -188,9 +189,9 @@ traffic or success rates. Google adapters, explicit overrides, and frozen jobs r
   [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
 - Evaluators are optional diagnostic/evaluation tooling, not merge or activation gates.
   Offline fixtures can be inspected with:
-  `pnpm --filter @esl-pipeline/batch-backend generation:eval`
+  `pnpm exec tsx --tsconfig packages/batch-backend/tsconfig.json packages/batch-backend/src/tools/evaluate-generation-fixtures.ts`
 - Optional live evaluation requires explicit paid-provider authorization and the opt-in flag:
-  `GENERATION_LIVE_EVAL_ENABLED=true pnpm --filter @esl-pipeline/batch-backend generation:eval:live`
+  set `GENERATION_LIVE_EVAL_ENABLED=true` and invoke that tool with `--live`
 
 ## Detailed Provider References
 

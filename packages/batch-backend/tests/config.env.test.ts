@@ -143,7 +143,7 @@ describe('config/env - core defaults', () => {
         const cfg = await loadConfigFresh();
 
         expect(cfg.prompt).toMatchObject({
-          templatePath: 'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md',
+          templatePath: 'packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md',
         });
       },
     );

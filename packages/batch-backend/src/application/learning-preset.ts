@@ -1,6 +1,6 @@
 export const DEFAULT_LEARNING_PRESET_ID = 'general-english';
 export const DEFAULT_LEARNING_PRESET_VERSION = 'v2';
-export const DEFAULT_PROMPT_SNAPSHOT_VERSION = 'hw_prompt_definitive';
+export const DEFAULT_PROMPT_SNAPSHOT_VERSION = 'hw_prompt_assignment_v1';
 export const DEFAULT_PROMPT_ALIAS = 'current';
 
 export interface LearningPresetOption {

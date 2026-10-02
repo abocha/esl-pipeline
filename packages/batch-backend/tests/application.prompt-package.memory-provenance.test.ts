@@ -60,7 +60,7 @@ describe('application/prompt-package memory provenance', () => {
       {
         recordingId: transcript.recordingId,
         workspaceId: 'workspace-1',
-        templateId: 'template.md',
+        templateId: 'hw_prompt_assignment_v1.md',
       },
       {
         config: createConfig('/tmp/template.md', '/tmp/profile.md'),

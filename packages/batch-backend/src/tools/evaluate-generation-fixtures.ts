@@ -9,10 +9,7 @@ import {
   assertLiveGenerationEvalAccess,
   runGenerationEval,
 } from '../application/generation-evaluator.js';
-import {
-  executeOpenAiGeneration,
-  executeOpenAiStructuredGeneration,
-} from '../application/generation-providers.js';
+import { executeOpenAiStructuredGeneration } from '../application/generation-providers.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
 
@@ -40,7 +37,6 @@ const evaluation = await runGenerationEval({
   live,
   structured: ({ request }) =>
     executeOpenAiStructuredGeneration({ config: config.generation, request }),
-  assignment: ({ request }) => executeOpenAiGeneration({ config: config.generation, request }),
 });
 const report = {
   version: GENERATION_EVAL_FIXTURE_VERSION,
