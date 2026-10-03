@@ -4,11 +4,17 @@ import path from 'node:path';
 import type { PoolClient } from 'pg';
 
 import type { PublishTarget } from '@esl-pipeline/contracts';
+import {
+  type AssignmentArtifactReference,
+  AssignmentArtifactReferenceSchema,
+  type AssignmentV1,
+} from '@esl-pipeline/contracts';
 
 import type { HomeworkMemoryPublishTarget } from '../domain/homework-memory-model.js';
 import { getLatestReadyHomeworkMemoryByAssignmentLineageKey } from '../domain/homework-memory-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
+import { readAssignmentArtifact } from './assignment-artifact.js';
 import {
   type NormalizedHomeworkMarkdown,
   normalizeHomeworkMarkdown,
@@ -19,6 +25,7 @@ interface HomeworkSourceJobRow {
   student_id: string | null;
   md: string | null;
   md_storage_uri: string | null;
+  assignment_artifact?: unknown;
   published_content_hash: string | null;
   prompt_package_id: string | null;
   draft_id: string | null;
@@ -43,10 +50,13 @@ export interface HomeworkMemorySourceBundle {
   recordingId?: string | null;
   transcriptId?: string | null;
   publishedAt: Date;
-  publishedMarkdown: string;
+  format?: 'markdown' | 'assignment_v1';
+  assignment?: AssignmentV1;
+  artifact?: AssignmentArtifactReference;
+  publishedMarkdown?: string;
   contentHash: string;
   publishTargets: HomeworkMemoryPublishTarget[];
-  normalizedMarkdown: NormalizedHomeworkMarkdown;
+  normalizedMarkdown?: NormalizedHomeworkMarkdown;
 }
 
 export interface HomeworkMemoryGenerationDecision {
@@ -68,13 +78,31 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
   }
 
   const assignmentLineageKey = await resolveAssignmentLineageKey(jobId, options?.client);
-  const publishedMarkdown = await readPublishedMarkdownFromJob(currentJob);
-  const contentHash = sha256(publishedMarkdown);
+  const artifact = currentJob.assignment_artifact
+    ? AssignmentArtifactReferenceSchema.parse(currentJob.assignment_artifact)
+    : undefined;
+  if (artifact && !currentJob.prompt_package_id)
+    throw new Error('Typed homework source missing prompt identity');
+  const assignment = artifact
+    ? await readAssignmentArtifact(artifact, currentJob.prompt_package_id!)
+    : undefined;
+  const publishedMarkdown = artifact ? undefined : await readPublishedMarkdownFromJob(currentJob);
+  const contentHash = artifact
+    ? sha256(`assignment_v1:1:${artifact.contentHash}`)
+    : sha256(publishedMarkdown!);
   const lineageJobs = await listSucceededLineageJobs(assignmentLineageKey, options?.client);
 
   const sameContentJobs: HomeworkSourceJobRow[] = [currentJob];
   for (const lineageJob of lineageJobs) {
     if (lineageJob.id === currentJob.id) {
+      continue;
+    }
+    if (artifact || lineageJob.assignment_artifact) {
+      const other = lineageJob.assignment_artifact
+        ? AssignmentArtifactReferenceSchema.parse(lineageJob.assignment_artifact)
+        : undefined;
+      if (artifact && other && artifact.contentHash === other.contentHash)
+        sameContentJobs.push(lineageJob);
       continue;
     }
     if (lineageJob.published_content_hash) {
@@ -105,7 +133,10 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
     publishedMarkdown,
     contentHash,
     publishTargets: mergePublishTargets(sameContentJobs),
-    normalizedMarkdown: normalizeHomeworkMarkdown(publishedMarkdown),
+    format: artifact ? 'assignment_v1' : 'markdown',
+    ...(assignment
+      ? { assignment, artifact }
+      : { normalizedMarkdown: normalizeHomeworkMarkdown(publishedMarkdown!) }),
   };
 }
 
@@ -149,6 +180,7 @@ async function loadSucceededJob(
         student_id,
         md,
         md_storage_uri,
+        assignment_artifact,
         published_content_hash,
         prompt_package_id,
         draft_id,
@@ -215,6 +247,7 @@ async function listSucceededLineageJobs(
           student_id,
           md,
           md_storage_uri,
+          assignment_artifact,
           published_content_hash,
           prompt_package_id,
           draft_id,
@@ -237,6 +270,7 @@ async function listSucceededLineageJobs(
           j.student_id,
           j.md,
           j.md_storage_uri,
+          j.assignment_artifact,
           j.published_content_hash,
           j.prompt_package_id,
           j.draft_id,

@@ -117,6 +117,11 @@ Runbook: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
 ## Data and Workflow Invariants
 
 - Artifacts are ID-based (`recording`, `transcript`, `prompt package`, `draft`, `job`), not user-managed filesystem paths.
+- New structured assignments persist only validated AssignmentV1 JSON. API/durable references name
+  format, schema/serialization version, working version, canonical hash and immutable JSON URI.
+  Invalid textarea state remains local; PMD projections are downstream execution inputs. Historical
+  Markdown is read through explicit legacy dispatch. See [AssignmentV1 authority](../reference/ASSIGNMENT_V1.md)
+  for confirmation, correction, memory and migration rollback boundaries.
 - Approval boundary is explicit: draft materialization precedes publish execution.
 - Worker processing is queue-driven and stateful; transitions are persisted.
 - Cancellation is cooperative for in-flight jobs.

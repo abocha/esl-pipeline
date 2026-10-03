@@ -115,6 +115,17 @@ Canonical behavior and current status live in:
   Confirmation flushes the latest safe pending write before advancing. Routine Save, Refresh, and
   Reload controls are absent; bounded transient retries run automatically and contextual Retry is
   reserved for exhausted or ambiguous outcomes.
+- New structured assignments use a temporary whole-document JSON textarea. It loads pretty-printed
+  validated AssignmentV1 and displays syntax, schema-path and domain errors while the tutor edits.
+  Invalid text remains browser-local: autosave, Preview, Continue, Share and correction cannot admit
+  it. Reload resumes the latest valid saved JSON; invalid buffers have no durable storage. Valid
+  saves retain working-version CAS and conflicts preserve the local buffer. Canonical object
+  comparison makes whitespace/key formatting irrelevant to dirty state and Preview identity.
+  Save/flush responses can admit confirmation or correction only while the current typed buffer
+  canonically matches the saved object; a newer edit remains local until saved and reviewed.
+  Preview submits the validated object with its pinned prompt ID. Historical `markdown` drafts use
+  the retained legacy editor/validation path. The JSON textarea is migration scaffolding, with no
+  form, block, or schema-generated authoring UI.
 - Resume loads the newest durable working values, opens the earliest dirty Source, Context, or
   Create boundary, then falls back to the destination derived from `confirmedStep`. Completed
   post-cutover jobs use their retained assignment-session link to reopen every confirmed step for

@@ -46,6 +46,8 @@ export async function buildHomeworkMemoryBatchCandidates(args: {
       ),
       envelope,
       sourceRefs: {
+        sourceFormat: source.format ?? 'markdown',
+        ...(source.artifact ? { assignmentArtifact: source.artifact } : {}),
         jobId: source.jobId,
         assignmentLineageKey: source.assignmentLineageKey,
         promptPackageId: source.promptPackageId ?? null,

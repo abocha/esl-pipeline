@@ -51,6 +51,7 @@ export interface PutPromptPackageOptions {
 }
 
 export interface PutDraftOptions {
+  format?: import('@esl-pipeline/contracts').AssignmentFormat;
   draftId: string;
   text: string;
 }
@@ -195,7 +196,12 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
 
   async putDraft(options: PutDraftOptions): Promise<StorageWriteResult> {
     const sha256 = hashText(options.text);
-    const relativePath = path.posix.join('drafts', options.draftId, 'content', `${sha256}.md`);
+    const relativePath = path.posix.join(
+      'drafts',
+      options.draftId,
+      'content',
+      `${sha256}.${options.format === 'assignment_v1' ? 'json' : 'md'}`,
+    );
     return this.writeText(relativePath, options.text);
   }
 
@@ -364,8 +370,17 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
 
   async putDraft(options: PutDraftOptions): Promise<StorageWriteResult> {
     const sha256 = hashText(options.text);
-    const relativePath = path.posix.join('drafts', options.draftId, 'content', `${sha256}.md`);
-    return this.writeText(relativePath, options.text, 'text/markdown');
+    const relativePath = path.posix.join(
+      'drafts',
+      options.draftId,
+      'content',
+      `${sha256}.${options.format === 'assignment_v1' ? 'json' : 'md'}`,
+    );
+    return this.writeText(
+      relativePath,
+      options.text,
+      options.format === 'assignment_v1' ? 'application/json' : 'text/markdown',
+    );
   }
 
   async getText(uri: string): Promise<string> {

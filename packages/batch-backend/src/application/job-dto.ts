@@ -19,6 +19,8 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
     transcriptId: job.transcriptId ?? null,
     promptPackageId: job.promptPackageId ?? null,
     draftId: job.draftId ?? null,
+    assignmentArtifact: job.assignmentArtifact ?? null,
+    assignmentRendererVersion: job.assignmentRendererVersion ?? null,
     lessonId: job.lessonId ?? null,
     preset: job.preset ?? null,
     ...(job.learningPresetId ? { learningPresetId: job.learningPresetId } : {}),

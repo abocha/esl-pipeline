@@ -32,6 +32,7 @@ import {
   maybeRunTtsCacheMaintenanceWithPgLock,
   withTtsCacheActivitySharedLock,
 } from '../infrastructure/tts-cache-maintenance-coordinator.js';
+import { projectAssignmentArtifact } from './assignment-artifact.js';
 import { requestHomeworkMemoryGeneration } from './request-homework-memory-generation.js';
 
 function resolveInheritedVoiceIdForProviderChange(args: {
@@ -65,7 +66,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
   if (job.state === 'failed' && payload.executionMode === 'correction') {
     if (
       !payload.sourceJobId ||
-      !payload.correction?.expectedMarkdownHash ||
+      !(payload.correction?.expectedAssignmentHash || payload.correction?.expectedMarkdownHash) ||
       !payload.correction.manifestMd
     ) {
       throw new Error('Corrupted correction retry payload');
@@ -73,6 +74,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     const reset = await resetFailedAssignmentCorrectionJob({
       jobId,
       sourceJobId: payload.sourceJobId,
+      expectedAssignmentHash: payload.correction.expectedAssignmentHash,
       expectedMarkdownHash: payload.correction.expectedMarkdownHash,
     });
     if (reset) {
@@ -131,7 +133,10 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         'Corrupted rerun queue payload: rerun jobs must include executionMode="rerun" and rerun metadata.',
       );
     }
-    if (payload.executionMode === 'correction' && !payload.correction?.expectedMarkdownHash) {
+    if (
+      payload.executionMode === 'correction' &&
+      !(payload.correction?.expectedAssignmentHash || payload.correction?.expectedMarkdownHash)
+    ) {
       throw new Error(
         'Corrupted correction queue payload: correction jobs must include the expected markdown hash.',
       );
@@ -164,6 +169,9 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     const isCorrectionExecution = payload.executionMode === 'correction';
     const markdownInput = await resolveMarkdownInput(running, {
       preferFilesystemMd: isRerunExecution,
+      expectedAssignmentHash: isCorrectionExecution
+        ? payload.correction?.expectedAssignmentHash
+        : undefined,
       expectedContentHash: isCorrectionExecution
         ? payload.correction?.expectedMarkdownHash
         : undefined,
@@ -227,7 +235,16 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       ? await resolveManifestMdPath(payload.rerun?.manifestMd, markdownInput.mdPath)
       : isCorrectionExecution
         ? resolveCorrectionManifestMd(jobId, payload.correction?.manifestMd)
-        : await resolveManifestMdPath(running.md, markdownInput.mdPath);
+        : await resolveManifestMdPath(
+            running.assignmentArtifact
+              ? path.resolve(
+                  process.env.FILESYSTEM_UPLOAD_DIR || './uploads',
+                  'assignments',
+                  `${sanitizeForFs(jobId)}.md`,
+                )
+              : running.md,
+            markdownInput.mdPath,
+          );
 
     const executePipeline = async () => {
       try {
@@ -530,13 +547,47 @@ async function resolveMarkdownInput(
     id: string;
     md: string | null;
     mdStorageUri?: string | null;
+    assignmentArtifact?: import('@esl-pipeline/contracts').AssignmentArtifactReference | null;
+    assignmentRendererVersion?: number | null;
+    promptPackageId?: string | null;
   },
   options: {
     preferFilesystemMd?: boolean;
     expectedContentHash?: string;
+    expectedAssignmentHash?: string;
     materializedFilename?: string;
   } = {},
 ): Promise<ResolvedMarkdownInput> {
+  if (job.assignmentArtifact) {
+    if (!job.promptPackageId) throw new Error('Structured job prompt identity missing');
+    if (
+      options.expectedAssignmentHash &&
+      options.expectedAssignmentHash !== job.assignmentArtifact.contentHash
+    )
+      throw new Error('Correction assignment identity mismatch');
+    if (options.expectedContentHash)
+      throw new Error('Typed correction cannot use a Markdown identity');
+    const contents = await projectAssignmentArtifact(
+      job.assignmentArtifact,
+      job.promptPackageId,
+      job.assignmentRendererVersion,
+    );
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), `esl-job-${sanitizeForFs(job.id)}-`));
+    const mdPath = path.join(
+      baseDir,
+      path.basename(options.materializedFilename ?? 'assignment.md'),
+    );
+    await fs.writeFile(mdPath, contents, 'utf8');
+    return {
+      mdPath,
+      contentHash: hashMarkdown(contents),
+      cleanup: async () => {
+        await fs.rm(baseDir, { recursive: true, force: true });
+      },
+    };
+  }
+  if (options.expectedAssignmentHash)
+    throw new Error('Legacy correction cannot use an AssignmentV1 identity');
   if (options.preferFilesystemMd) {
     if (!job.md) {
       throw new Error('Rerun job is missing an approved markdown source');

@@ -212,6 +212,29 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   Transcript and draft autosaves use independent working-version compare-and-swap, server hashes,
   and content-addressed storage. Source/Create confirmation copy the exact immutable URI, hash, and
   working version into the session snapshot; there are no transcript/draft revision tables.
+- AssignmentV1 Slice 2 makes validated JSON the only editable authority for new structured
+  prompts. Draft responses identify `format: assignment_v1`, the parsed `assignment`, pinned
+  `validationContext`, and a frozen `artifact` reference (schema/serialization version 1, working
+  version, content-addressed JSON URI, canonical SHA-256). Draft create/autosave always parse and
+  validate schema plus domain constraints before storage or CAS. The text field is pretty-printed
+  JSON for the temporary textarea bridge; it is never a separately saved editor buffer.
+- Create confirmation, Share, correction and rerun jobs preserve that reference. Jobs separately
+  pin PMD renderer version 1; compatibility Markdown, manifest, HTML, audio and publication hashes
+  are downstream identities. The worker rereads and verifies frozen JSON, then projects PMD without
+  consulting the mutable draft. Typed preview authorizes the pinned prompt and validates the same
+  object before projection. Homework memory consumes typed content directly and namespaces its
+  dedup hash by format/schema; legacy and pending Markdown jobs retain explicit legacy dispatch.
+- Materialization rejects typed/legacy job-format mismatches before projecting or relinking.
+  Typed reruns do not require a local Markdown source: frozen JSON supplies content, while a
+  stable manifest identity under `assignments/` (or `corrections/`) retains publication artifacts
+  independently of temporary PMD projection files.
+- Migration 0062 retains existing rows as `markdown`, freezes draft formats and job artifact
+  references, and leaves historical readers executable. API 7 / DB 2 mark the authority cutover;
+  prompt, validator and manifest contracts are unchanged. Previous-image rollback is deliberately
+  blocked by `runtime-compatibility.json`: retain the additive schema and use typed-capable readers
+  for forward repair. Returning to pre-Slice-2 code requires quiescence and restoring the paired
+  database/object backup from before typed writes; never relabel typed JSON as Markdown or drop
+  references to make old code run. No production rollout is implied by local migration evidence.
 - `POST /assignment-sessions/:id/source-attachment` is the explicit ownership boundary. In one
   PostgreSQL transaction it claims the classified source fingerprint and updates session recovery
   pointers, or returns `existing_assignment_resumed` with the current owner. Confirmed ownership
@@ -451,7 +474,8 @@ pnpm docs:check
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
 `AssignmentV1` response schema in the existing prompt-package envelope. Only OpenAI GPT-6.1 Sol
-is admitted in this slice. Completed, non-refusal direct JSON is validated locally and rendered
-into the existing Markdown generation response. Old packages require recreation; saved Markdown
-drafts and publication/correction/memory workflows remain usable. There is no model-driven
+is admitted in this slice. Completed, non-refusal direct JSON is validated locally and returned
+as AssignmentV1 with a pretty-printed JSON text bridge. PMD projection is downstream of validated
+typed authority. Old packages require recreation; historical Markdown workflows remain usable
+through explicit legacy reads. There is no model-driven
 Markdown repair. See [contract and rollout](../../docs/reference/ASSIGNMENT_V1.md).

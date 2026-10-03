@@ -4,6 +4,32 @@ import { jobRecordToDto } from '../src/application/job-dto.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 
 describe('application/job-dto', () => {
+  it('carries frozen canonical identity separately from downstream PMD and job identity', () => {
+    const artifact = {
+      format: 'assignment_v1' as const,
+      schemaVersion: 1 as const,
+      serializationVersion: 1 as const,
+      workingVersion: 2,
+      storageUri: `local://drafts/draft-1/content/${'a'.repeat(64)}.json`,
+      contentHash: 'a'.repeat(64),
+    };
+    const dto = jobRecordToDto({
+      id: 'job-typed',
+      state: 'queued',
+      md: null,
+      mdStorageUri: `local://drafts/draft-1/content/${'b'.repeat(64)}.md`,
+      assignmentArtifact: artifact,
+      assignmentRendererVersion: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as JobRecord);
+    expect(dto).toMatchObject({
+      jobId: 'job-typed',
+      assignmentArtifact: artifact,
+      assignmentRendererVersion: 1,
+      mdStorageUri: expect.stringContaining('b'.repeat(64)),
+    });
+  });
   it('serializes JobRecord fields with ISO timestamps', () => {
     const job: JobRecord = {
       id: 'job-1',
@@ -49,6 +75,8 @@ describe('application/job-dto', () => {
       transcriptId: 'transcript-1',
       promptPackageId: 'prompt-1',
       draftId: 'draft-1',
+      assignmentArtifact: null,
+      assignmentRendererVersion: null,
       lessonId: null,
       preset: 'b1-default',
       learningPresetId: 'general-english',
@@ -108,6 +136,8 @@ describe('application/job-dto', () => {
 
     expect(jobRecordToDto(job)).toEqual({
       jobId: 'job-2',
+      assignmentArtifact: null,
+      assignmentRendererVersion: null,
       md: 'fixtures/ok.md',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',

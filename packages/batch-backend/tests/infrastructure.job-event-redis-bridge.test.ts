@@ -88,7 +88,18 @@ describe('infrastructure/job-event-redis-bridge', () => {
 
     await new Promise((resolve) => setImmediate(resolve));
 
-    const job = makeJob('queued');
+    const job = {
+      ...makeJob('queued'),
+      assignmentArtifact: {
+        format: 'assignment_v1',
+        schemaVersion: 1,
+        serializationVersion: 1,
+        workingVersion: 2,
+        storageUri: `local://drafts/draft-1/content/${'a'.repeat(64)}.json`,
+        contentHash: 'a'.repeat(64),
+      },
+      assignmentRendererVersion: 1,
+    };
     jobEvents.publishJobEvent({ type: 'job_created', job: job as any });
 
     expect(subscriber.subscribe).toHaveBeenCalledWith('batch_job_events:job-1');
@@ -101,6 +112,8 @@ describe('infrastructure/job-event-redis-bridge', () => {
     const payloadJson = JSON.parse(payloadStr);
     expect(payloadJson.type).toBe('job_created');
     expect(payloadJson.job.id).toBe(job.id);
+    expect(payloadJson.job.assignmentArtifact).toEqual(job.assignmentArtifact);
+    expect(payloadJson.job.assignmentRendererVersion).toBe(1);
 
     const remotePayload = JSON.stringify({
       sourceId: 'remote-instance',

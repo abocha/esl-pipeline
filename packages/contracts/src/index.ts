@@ -165,6 +165,9 @@ export interface GenerateDraftUsage {
 
 export interface GenerateDraftResponse {
   text: string;
+  format?: import('./assignment-artifact.js').AssignmentFormat;
+  assignment?: import('./assignment-v1.js').AssignmentV1;
+  validationContext?: import('./assignment-v1.js').AssignmentValidationContext;
   provider: GenerationProvider;
   model: string;
   quota: GenerationQuotaView;
@@ -263,6 +266,7 @@ export interface AssignmentConfirmedSnapshot {
     draftWorkingVersion: number;
     draftStorageUri: string;
     draftHash: string;
+    artifact?: import('./assignment-artifact.js').AssignmentArtifactReference;
   } | null;
 }
 
@@ -411,6 +415,7 @@ export interface ConfirmAssignmentSessionShareResponse {
 }
 
 export interface PublishAssignmentCorrectionRequest {
+  artifact?: import('./assignment-artifact.js').AssignmentArtifactReference;
   requestId: string;
   draftId: string;
   draftWorkingVersion: number;
@@ -443,6 +448,8 @@ export interface JobStatusDto {
   lessonId?: string | null;
   md: string | null;
   mdStorageUri?: string | null;
+  assignmentArtifact?: import('./assignment-artifact.js').AssignmentArtifactReference | null;
+  assignmentRendererVersion?: number | null;
   pronunciationMode?:
     | 'shadow_sentence'
     | 'connected_speech'
@@ -1131,6 +1138,8 @@ export interface JobEventPayload {
   learningPresetId?: string | null;
   md?: string | null;
   mdStorageUri?: string | null;
+  assignmentArtifact?: import('./assignment-artifact.js').AssignmentArtifactReference | null;
+  assignmentRendererVersion?: number | null;
   htmlUrl?: string | null;
   publishTarget?: PublishTarget | null;
   recordingId?: string | null;
@@ -1159,6 +1168,7 @@ export interface VersionMetaResponse {
   };
 }
 
+export * from './assignment-artifact.js';
 export * from './assignment-v1.js';
 export * from './contract-versions.js';
 export * from './errors.js';
