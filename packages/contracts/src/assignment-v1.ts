@@ -45,7 +45,7 @@ const pronunciation = z.union([
   ),
 ]);
 
-/** Transient generation domain. Saved drafts remain Markdown in Slice 1. */
+/** Canonical generation and durable editable assignment domain. */
 export const AssignmentV1Schema = z.strictObject({
   schemaVersion: z.literal(1),
   metadata: z.strictObject({ title: text, student: text, level: text, topic: text }),

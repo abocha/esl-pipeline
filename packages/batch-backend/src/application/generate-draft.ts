@@ -11,7 +11,6 @@ import {
   ASSIGNMENT_TEMPLATE_ID,
   validateAssignmentV1,
 } from '@esl-pipeline/contracts';
-import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
 import {
   classifyProviderRuntimeFailure,
   type ProviderRuntimeClassificationRules,
@@ -235,6 +234,7 @@ export async function generateDraft(
   }
 
   let text: string;
+  let assignment;
   try {
     if (execution.result.contractError) throw new Error(execution.result.contractError);
     let output: unknown;
@@ -243,7 +243,8 @@ export async function generateDraft(
     } catch {
       throw new Error('AssignmentV1 response must contain direct JSON without wrappers or fences');
     }
-    text = renderAssignmentToPmd(validateAssignmentV1(output, envelope.assignmentContext));
+    assignment = validateAssignmentV1(output, envelope.assignmentContext);
+    text = JSON.stringify(assignment, null, 2);
   } catch (error) {
     throw new GenerateDraftProviderError({
       category: 'provider_contract_error',
@@ -257,6 +258,9 @@ export async function generateDraft(
 
   return {
     text,
+    format: 'assignment_v1',
+    assignment,
+    validationContext: envelope.assignmentContext,
     provider: execution.target.provider,
     model: execution.target.model,
     quota: buildQuotaSnapshot({

@@ -377,6 +377,7 @@ interface AssignmentStageSectionProps {
   validation: MarkdownValidationResponse | null;
   validationError: string | null;
   draftError: string | null;
+  structuredDraft?: boolean;
   readOnly?: boolean;
   allowGenerate?: boolean;
 }
@@ -1251,6 +1252,7 @@ export function AssignmentStageSection({
   validation,
   validationError,
   draftError,
+  structuredDraft,
   readOnly = false,
   allowGenerate = true,
 }: AssignmentStageSectionProps) {
@@ -1328,8 +1330,15 @@ export function AssignmentStageSection({
               </button>
             </div>
           ) : null}
+          {structuredDraft ? (
+            <p className="minimal-muted">
+              Edit the assignment JSON. Only valid changes are saved. Repair errors below before
+              preview or confirmation.
+            </p>
+          ) : null}
           <textarea
-            aria-label="Draft markdown"
+            aria-label={structuredDraft ? 'Assignment JSON' : 'Draft markdown'}
+            spellCheck={!structuredDraft}
             value={draftText}
             onChange={(event) => onDraftTextChange(event.target.value)}
             disabled={readOnly || assignmentBusy}

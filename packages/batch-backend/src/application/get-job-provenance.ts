@@ -77,6 +77,8 @@ export interface JobProvenanceResponse {
     createdAt: string | null;
     updatedAt: string | null;
   } | null;
+  assignmentArtifact?: import('@esl-pipeline/contracts').AssignmentArtifactReference | null;
+  assignmentRendererVersion?: number | null;
   draft: {
     id: string;
     studentId: string | null;
@@ -221,6 +223,8 @@ export async function getJobProvenance(
           updatedAt: row.prompt_updated_at ? row.prompt_updated_at.toISOString() : null,
         }
       : null,
+    assignmentArtifact: job.assignmentArtifact ?? null,
+    assignmentRendererVersion: job.assignmentRendererVersion ?? null,
     draft: row?.draft_id
       ? {
           id: row.draft_id,

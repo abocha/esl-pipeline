@@ -5,6 +5,7 @@ import multipart, { type MultipartFile } from '@fastify/multipart';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { AssignmentArtifactValidationError } from '../../application/assignment-artifact.js';
 import { toAssignmentSessionDto } from '../../application/assignment-sessions.js';
 import { createDraft } from '../../application/create-draft.js';
 import {
@@ -46,6 +47,8 @@ import {
   getAssignmentSessionByIdForUser,
   getCanonicalAssignmentSessionBySourceIdentity,
 } from '../../domain/assignment-session-repository.js';
+import { getDraftById } from '../../domain/draft-repository.js';
+import { isPromptPackageAccessibleForUser } from '../../domain/prompt-package-repository.js';
 import {
   type RecordingRecord,
   RecordingSourceSchema,
@@ -108,6 +111,7 @@ function isApplicationValidationError(
 ): error is ValidationError & { code?: string } {
   return (
     error instanceof ValidationError ||
+    error instanceof AssignmentArtifactValidationError ||
     (typeof error === 'object' &&
       error !== null &&
       'name' in error &&
@@ -1278,6 +1282,13 @@ export function registerRecordingRoutes(
 
       try {
         const body = schema.parse(request.body ?? {});
+        if (
+          !(await isPromptPackageAccessibleForUser(
+            promptPackageId,
+            getAuthenticatedUser(request)!.id,
+          ))
+        )
+          return errorResponse(reply, 'not_found');
         const draft = await createDraft({
           promptPackageId,
           text: body.text,
@@ -1348,6 +1359,15 @@ export function registerRecordingRoutes(
       const routePath = resolveRoutePath(request, 'GET /drafts/:draftId');
 
       try {
+        const record = await getDraftById(draftId);
+        if (
+          !record ||
+          !(await isPromptPackageAccessibleForUser(
+            record.promptPackageId,
+            getAuthenticatedUser(request)!.id,
+          ))
+        )
+          return errorResponse(reply, 'not_found');
         const draft = await getDraft(draftId);
 
         if (!draft) {
@@ -1426,6 +1446,15 @@ export function registerRecordingRoutes(
 
       try {
         const body = schema.parse(request.body ?? {});
+        const record = await getDraftById(draftId);
+        if (
+          !record ||
+          !(await isPromptPackageAccessibleForUser(
+            record.promptPackageId,
+            getAuthenticatedUser(request)!.id,
+          ))
+        )
+          return errorResponse(reply, 'not_found');
         const materialized = await materializeDraft({
           draftId,
           jobId: body.jobId,
@@ -1684,6 +1713,15 @@ export function registerRecordingRoutes(
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const body = bodySchema.parse(request.body ?? {});
+        const record = await getDraftById(params.id);
+        if (
+          !record ||
+          !(await isPromptPackageAccessibleForUser(
+            record.promptPackageId,
+            getAuthenticatedUser(request)!.id,
+          ))
+        )
+          return errorResponse(reply, 'not_found');
         const { updateDraft } = await import('../../application/update-draft.js');
         const updated = await updateDraft({
           id: params.id,
@@ -1713,6 +1751,10 @@ export function registerRecordingRoutes(
             },
           });
         }
+        if (error instanceof AssignmentArtifactValidationError)
+          return reply
+            .code(400)
+            .send({ error: 'validation_failed', code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',

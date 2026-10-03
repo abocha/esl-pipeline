@@ -116,7 +116,7 @@ export async function shareAssignmentSession(args: {
       sessionId: args.sessionId,
       userId: args.userId,
       expectedState: 'awaiting_approval',
-      mdStorageUri: create.draftStorageUri,
+      mdStorageUri: job.mdStorageUri ?? create.draftStorageUri,
     });
     if (approved) {
       job = approved;

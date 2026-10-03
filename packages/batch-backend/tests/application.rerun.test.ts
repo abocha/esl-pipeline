@@ -69,7 +69,51 @@ describe('application/job-actions/rerun', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(jobDir, { recursive: true, force: true });
+  });
+
+  it('reruns typed publications without a local Markdown source and preserves the frozen reference', async () => {
+    vi.stubEnv('FILESYSTEM_UPLOAD_DIR', jobDir);
+    const artifact = {
+      format: 'assignment_v1',
+      schemaVersion: 1,
+      serializationVersion: 1,
+      workingVersion: 2,
+      contentHash: 'a'.repeat(64),
+      storageUri: `local://drafts/draft-1/content/${'a'.repeat(64)}.json`,
+    };
+    vi.mocked(getJobById).mockResolvedValue({
+      id: 'job-1',
+      state: 'succeeded',
+      md: null,
+      assignmentArtifact: artifact,
+      assignmentRendererVersion: 1,
+      publishTarget: 'html',
+      manifestPath: durableManifestPath,
+    } as never);
+    const queue = { enqueue: vi.fn().mockResolvedValue(undefined) };
+    vi.mocked(createJobQueue).mockReturnValue(queue as never);
+    const result = await rerun('job-1', {
+      type: JobActionType.RERUN,
+      requestedAt,
+      payload: { republishOnly: true },
+    });
+    expect(result.success).toBe(true);
+    expect(insertJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentArtifact: artifact,
+        assignmentRendererVersion: 1,
+        md: path.join(jobDir, 'assignments', 'job-1.md'),
+      }),
+    );
+    expect(queue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rerun: expect.objectContaining({
+          manifestMd: path.join(jobDir, 'assignments', 'job-1.md'),
+        }),
+      }),
+    );
   });
 
   it('rejects eleven_v3 for pronunciation synthesis reruns', async () => {

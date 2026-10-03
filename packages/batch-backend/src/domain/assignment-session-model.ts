@@ -8,6 +8,7 @@ import type {
   TtsProviderId,
   TtsStrategy,
 } from '@esl-pipeline/contracts';
+import { AssignmentArtifactReferenceSchema } from '@esl-pipeline/contracts';
 
 import { postgresUuidSchema } from './postgres-uuid.js';
 
@@ -53,6 +54,7 @@ export const AssignmentConfirmedSnapshotSchema = z
         draftWorkingVersion: z.number().int().positive(),
         draftStorageUri: z.string().min(1),
         draftHash: z.string().regex(/^[0-9a-f]{64}$/),
+        artifact: AssignmentArtifactReferenceSchema.optional(),
       })
       .strict()
       .nullable(),

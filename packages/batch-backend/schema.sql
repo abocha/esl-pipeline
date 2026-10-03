@@ -90,6 +90,29 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.preserve_assignment_artifact_identity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.assignment_artifact IS DISTINCT FROM OLD.assignment_artifact
+     OR NEW.assignment_renderer_version IS DISTINCT FROM OLD.assignment_renderer_version THEN
+    RAISE EXCEPTION 'Frozen assignment artifact identity cannot be changed';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.preserve_assignment_draft_format() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.format IS DISTINCT FROM OLD.format THEN
+    RAISE EXCEPTION 'Assignment draft authority format cannot be changed';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
 CREATE FUNCTION public.reject_legacy_profile_write() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -492,7 +515,10 @@ CREATE TABLE public.drafts (
     lesson_id uuid,
     working_version integer NOT NULL,
     content_hash text NOT NULL,
+    format text DEFAULT 'markdown'::text NOT NULL,
+    CONSTRAINT drafts_assignment_v1_identity CHECK (((format = 'markdown'::text) OR ((working_version IS NOT NULL) AND (content_hash IS NOT NULL) AND (storage_uri ~~ (('%/content/'::text || content_hash) || '.json'::text))))),
     CONSTRAINT drafts_content_hash_check CHECK ((content_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT drafts_format_check CHECK ((format = ANY (ARRAY['markdown'::text, 'assignment_v1'::text]))),
     CONSTRAINT drafts_working_version_check CHECK ((working_version > 0))
 );
 
@@ -608,6 +634,9 @@ CREATE TABLE public.jobs (
     tts_model text,
     publication_sequence bigint DEFAULT 0 NOT NULL,
     published_content_hash text,
+    assignment_artifact jsonb,
+    assignment_renderer_version integer,
+    CONSTRAINT jobs_assignment_artifact_identity CHECK ((((assignment_artifact IS NULL) AND (assignment_renderer_version IS NULL)) OR (((assignment_artifact IS NOT NULL) AND (assignment_renderer_version = 1) AND (prompt_package_id IS NOT NULL) AND (draft_id IS NOT NULL) AND ((assignment_artifact ->> 'format'::text) = 'assignment_v1'::text) AND ((assignment_artifact ->> 'schemaVersion'::text) = '1'::text) AND ((assignment_artifact ->> 'serializationVersion'::text) = '1'::text) AND ((assignment_artifact ->> 'workingVersion'::text) ~ '^[1-9][0-9]*$'::text) AND ((assignment_artifact ->> 'contentHash'::text) ~ '^[0-9a-f]{64}$'::text) AND ((assignment_artifact ->> 'storageUri'::text) ~~ (('%/content/'::text || (assignment_artifact ->> 'contentHash'::text)) || '.json'::text)) AND (jsonb_typeof((assignment_artifact -> 'schemaVersion'::text)) = 'number'::text) AND (jsonb_typeof((assignment_artifact -> 'serializationVersion'::text)) = 'number'::text) AND (jsonb_typeof((assignment_artifact -> 'workingVersion'::text)) = 'number'::text) AND (assignment_artifact ?& ARRAY['format'::text, 'schemaVersion'::text, 'serializationVersion'::text, 'workingVersion'::text, 'contentHash'::text, 'storageUri'::text])) IS TRUE))),
     CONSTRAINT jobs_mode_check CHECK (((mode IS NULL) OR (mode = ANY (ARRAY['auto'::text, 'dialogue'::text, 'monologue'::text, 'tts'::text])))),
     CONSTRAINT jobs_state_check CHECK ((state = ANY (ARRAY['queued'::text, 'running'::text, 'awaiting_approval'::text, 'succeeded'::text, 'failed'::text]))),
     CONSTRAINT jobs_tts_model_check CHECK (((tts_model IS NULL) OR ((tts_provider = 'elevenlabs'::text) AND (tts_model = ANY (ARRAY['eleven_v3'::text, 'eleven_multilingual_v2'::text, 'eleven_flash_v2_5'::text, 'eleven_flash_v2'::text]))) OR ((tts_provider = 'google'::text) AND (tts_model = ANY (ARRAY['chirp3_hd'::text, 'studio'::text, 'neural2'::text, 'wavenet'::text]))) OR ((tts_provider = 'inworld'::text) AND (tts_model = ANY (ARRAY['inworld-tts-2'::text, 'inworld-tts-1.5-max'::text, 'inworld-tts-1.5-mini'::text]))))),
@@ -1864,6 +1893,10 @@ CREATE TRIGGER memory_confirmed_source_snapshot_lock BEFORE UPDATE ON public.ass
 
 CREATE TRIGGER memory_confirmed_source_update_lock BEFORE UPDATE ON public.assignment_source_bindings FOR EACH ROW WHEN (((old.binding_role = 'confirmed'::text) OR (new.binding_role = 'confirmed'::text))) EXECUTE FUNCTION public.lock_memory_source_student();
 
+CREATE TRIGGER preserve_assignment_artifact_identity BEFORE UPDATE ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.preserve_assignment_artifact_identity();
+
+CREATE TRIGGER preserve_assignment_draft_format BEFORE UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.preserve_assignment_draft_format();
+
 CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
 
 CREATE TRIGGER set_drafts_updated_at BEFORE UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.set_drafts_updated_at();
@@ -2429,5 +2462,6 @@ VALUES
   ('0058_mcp_oauth_foundation', '4c4d181b4f150b453c447f3d2fb652b990f479dcd5ddb5ab2a89089f0cfb1cc0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0059_student_owned_profile_revisions', '60b283fa0b95c8afe46b3233c3e7c50f38d8a3d81fdc98394a414846df6ceb01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0060_user_settings_owner_key', '80e6ba7ab7e15f5e8049a6114dc2bc6cee6fe43bf16121cec137d4af51f760c3', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0061_ordinary_memory_replay', '0f5da854ddd4ea23025e5f9d78938f5d4e4454c63e5fd9314ac887c4110565ff', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0061_ordinary_memory_replay', '0f5da854ddd4ea23025e5f9d78938f5d4e4454c63e5fd9314ac887c4110565ff', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0062_assignment_v1_authority', 'df1b835d96032ecf9afb0d3fe034ee3cfe605dfecdb1dc578d7fb2f2f20c5b4d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

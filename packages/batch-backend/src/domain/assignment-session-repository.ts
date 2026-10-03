@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import type { PoolClient } from 'pg';
 
 import type {
@@ -13,6 +14,7 @@ import type {
   TtsStrategy,
 } from '@esl-pipeline/contracts';
 
+import { draftArtifact, readAssignmentArtifact } from '../application/assignment-artifact.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { ArtifactWorkingConflictError } from './artifact-working-conflict.js';
@@ -695,12 +697,15 @@ async function confirmLockedCreate(
   ) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
   }
+  const reference = draftArtifact(draft);
+  if (reference) await readAssignmentArtifact(reference, draft.promptPackageId);
   const create = {
     promptPackageId: request.promptPackageId,
     draftId: request.draftId,
     draftWorkingVersion: draft.workingVersion,
     draftStorageUri: draft.storageUri,
     draftHash: draft.contentHash,
+    ...(draftArtifact(draft) ? { artifact: draftArtifact(draft) } : {}),
   };
   if (JSON.stringify(current.confirmed.create) === JSON.stringify(create)) {
     return { session: current, invalidated: [], lessonMemoryIntent: null };
@@ -741,6 +746,7 @@ async function getAuthorizedCreateLineageForUpdate(
       draft_prompt_package_id: string;
       draft_student_id: string | null;
       draft_lesson_id: string | null;
+      draft_format?: 'markdown' | 'assignment_v1';
       draft_storage_uri: string;
       draft_working_version: number | null;
       draft_content_hash: string | null;
@@ -760,6 +766,7 @@ async function getAuthorizedCreateLineageForUpdate(
        d.prompt_package_id AS draft_prompt_package_id,
        d.student_id AS draft_student_id,
        d.lesson_id AS draft_lesson_id,
+       d.format AS draft_format,
        d.storage_uri AS draft_storage_uri,
        d.working_version AS draft_working_version,
        d.content_hash AS draft_content_hash,
@@ -803,6 +810,7 @@ async function getAuthorizedCreateLineageForUpdate(
       promptPackageId: row.draft_prompt_package_id,
       studentId: row.draft_student_id,
       lessonId: row.draft_lesson_id,
+      format: row.draft_format ?? 'markdown',
       storageUri: row.draft_storage_uri,
       workingVersion: row.draft_working_version,
       contentHash: row.draft_content_hash,
@@ -1659,7 +1667,8 @@ export async function reserveAssignmentShare(
         draft.studentId !== current.studentId ||
         draft.workingVersion !== create.draftWorkingVersion ||
         draft.storageUri !== create.draftStorageUri ||
-        draft.contentHash !== create.draftHash
+        draft.contentHash !== create.draftHash ||
+        !isDeepStrictEqual(draftArtifact(draft), create.artifact)
       ) {
         throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_DIRTY_RECOVERY');
       }
@@ -1676,7 +1685,9 @@ export async function reserveAssignmentShare(
           lessonId: source.lessonId,
           userId: current.userId,
           md: null,
-          mdStorageUri: create.draftStorageUri,
+          mdStorageUri: create.artifact ? null : create.draftStorageUri,
+          assignmentArtifact: create.artifact,
+          assignmentRendererVersion: create.artifact ? 1 : undefined,
         },
         { client },
       );
@@ -1759,7 +1770,11 @@ export async function publishAssignmentCorrectionJob(
           existing.userId !== params.userId ||
           existing.sourceJobId !== parent.id ||
           existing.draftId !== params.request.draftId ||
-          !storageUriMatchesHash(existing.mdStorageUri, params.request.draftHash) ||
+          !(existing.assignmentArtifact
+            ? existing.assignmentArtifact.contentHash === params.request.draftHash &&
+              existing.assignmentArtifact.workingVersion === params.request.draftWorkingVersion
+            : storageUriMatchesHash(existing.mdStorageUri, params.request.draftHash)) ||
+          !isDeepStrictEqual(existing.assignmentArtifact ?? undefined, params.request.artifact) ||
           !correctionReplayMatches(replay, params)
         ) {
           throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_REQUEST_CONFLICT');
@@ -1770,7 +1785,9 @@ export async function publishAssignmentCorrectionJob(
                 {
                   jobId: existing.id,
                   sourceJobId: parent.id,
-                  expectedMarkdownHash: params.request.draftHash,
+                  ...(existing.assignmentArtifact
+                    ? { expectedAssignmentHash: params.request.draftHash }
+                    : { expectedMarkdownHash: params.request.draftHash }),
                 },
                 { client },
               )
@@ -1791,16 +1808,21 @@ export async function publishAssignmentCorrectionJob(
         draft.promptPackageId !== create.promptPackageId ||
         draft.studentId !== session.studentId ||
         draft.workingVersion !== params.request.draftWorkingVersion ||
-        draft.contentHash !== params.request.draftHash
+        draft.contentHash !== params.request.draftHash ||
+        !isDeepStrictEqual(draftArtifact(draft), params.request.artifact)
       ) {
         throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_DRAFT_CONFLICT');
       }
 
+      const reference = draftArtifact(draft);
+      if (reference) await readAssignmentArtifact(reference, draft.promptPackageId);
       const job = await insertJob(
         {
           id: params.request.requestId,
           md: null,
-          mdStorageUri: draft.storageUri,
+          mdStorageUri: reference ? null : draft.storageUri,
+          assignmentArtifact: reference,
+          assignmentRendererVersion: reference ? 1 : undefined,
           recordingId: parent.recordingId,
           transcriptId: parent.transcriptId,
           promptPackageId: parent.promptPackageId,
@@ -1924,7 +1946,7 @@ export async function completeAssignmentShare(params: {
              AND to_jsonb(j.prompt_package_id) = s.confirmed_snapshot #> '{create,promptPackageId}'
              AND to_jsonb(j.draft_id) = s.confirmed_snapshot #> '{create,draftId}'
              AND COALESCE(to_jsonb(j.lesson_id), 'null'::jsonb) = s.confirmed_snapshot #> '{source,lessonId}'
-             AND j.md_storage_uri = s.confirmed_snapshot #>> '{create,draftStorageUri}'
+             AND ((j.assignment_artifact IS NOT NULL AND j.assignment_artifact = s.confirmed_snapshot #> '{create,artifact}') OR (j.assignment_artifact IS NULL AND NOT (s.confirmed_snapshot #> '{create}') ? 'artifact' AND j.md_storage_uri = s.confirmed_snapshot #>> '{create,draftStorageUri}'))
              AND j.source_job_id IS NULL
          )
        RETURNING ${RETURNING_COLUMNS}`,
@@ -1976,7 +1998,9 @@ function shareJobMatchesSession(job: JobRecord, session: AssignmentSessionRecord
       job.promptPackageId === create.promptPackageId &&
       job.draftId === create.draftId &&
       job.lessonId === source.lessonId &&
-      job.mdStorageUri === create.draftStorageUri &&
+      (create.artifact
+        ? isDeepStrictEqual(job.assignmentArtifact, create.artifact)
+        : !job.assignmentArtifact && job.mdStorageUri === create.draftStorageUri) &&
       job.sourceJobId === null,
   );
 }

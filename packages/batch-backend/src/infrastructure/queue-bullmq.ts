@@ -17,7 +17,8 @@ export interface QueueJobPayload {
   executionMode?: 'new_assignment' | 'rerun' | 'correction';
   sourceJobId?: string;
   correction?: {
-    expectedMarkdownHash: string;
+    expectedMarkdownHash?: string;
+    expectedAssignmentHash?: string;
     manifestMd: string;
   };
   rerun?: {

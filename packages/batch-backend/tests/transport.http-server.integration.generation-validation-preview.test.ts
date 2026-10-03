@@ -1,3 +1,8 @@
+import { beforeEach } from 'vitest';
+
+import * as draftRepository from '../src/domain/draft-repository.js';
+import * as promptRepository from '../src/domain/prompt-package-repository.js';
+import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
 
 function extractPronunciationAudioPayload(html: string): Record<string, unknown> | null {
@@ -22,6 +27,46 @@ describeHttpServerIntegrationSuite(
     validateMarkdown,
     vi,
   }) => {
+    beforeEach(() => {
+      vi.spyOn(promptRepository, 'isPromptPackageAccessibleForUser').mockResolvedValue(true);
+      vi.spyOn(draftRepository, 'getDraftById').mockResolvedValue({
+        id: 'draft-1',
+        promptPackageId: 'prompt-1',
+      } as never);
+    });
+    it('previews validated typed input through the compatibility projection and rejects invalid domains', async () => {
+      vi.spyOn(promptRepository, 'getPromptPackageById').mockResolvedValue(
+        promptPackageFixture() as never,
+      );
+      const valid = await app.inject({
+        method: 'POST',
+        url: '/preview/html',
+        payload: { assignment: assignmentFixture(), promptPackageId: 'prompt-1' },
+      });
+      expect(valid.statusCode).toBe(200);
+      expect(valid.json().html).toContain('Clear demos');
+      const invalid = await app.inject({
+        method: 'POST',
+        url: '/preview/html',
+        payload: {
+          assignment: { ...assignmentFixture(), practice: [] },
+          promptPackageId: 'prompt-1',
+        },
+      });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.json().message).toContain('practice must not be empty');
+    });
+    it('authorizes typed preview before reading the pinned prompt or rendering', async () => {
+      vi.spyOn(promptRepository, 'isPromptPackageAccessibleForUser').mockResolvedValue(false);
+      const read = vi.spyOn(promptRepository, 'getPromptPackageById').mockClear();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/preview/html',
+        payload: { assignment: assignmentFixture(), promptPackageId: 'foreign' },
+      });
+      expect(response.statusCode).toBe(404);
+      expect(read).not.toHaveBeenCalled();
+    });
     it('POST /generation/drafts returns generated payload', async () => {
       const generateDraft = vi.spyOn(generateDraftModule, 'generateDraft');
       generateDraft.mockClear();

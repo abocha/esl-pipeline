@@ -44,7 +44,9 @@ export async function publishAssignmentCorrection(args: {
       executionMode: 'correction',
       sourceJobId: args.publishedJobId,
       correction: {
-        expectedMarkdownHash: args.request.draftHash,
+        ...(reserved.job.assignmentArtifact
+          ? { expectedAssignmentHash: reserved.job.assignmentArtifact.contentHash }
+          : { expectedMarkdownHash: args.request.draftHash }),
         manifestMd: `corrections/${reserved.job.id}.md`,
       },
     });

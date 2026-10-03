@@ -464,6 +464,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
                         learningPresetId: dto.learningPresetId,
                         md: dto.md,
                         mdStorageUri: dto.mdStorageUri,
+                        assignmentArtifact: dto.assignmentArtifact,
+                        assignmentRendererVersion: dto.assignmentRendererVersion,
                         htmlUrl: dto.htmlUrl,
                         publishTarget: dto.publishTarget,
                         recordingId: dto.recordingId,
