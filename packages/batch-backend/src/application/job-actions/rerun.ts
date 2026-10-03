@@ -337,7 +337,7 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     };
   }
 
-  if (!job.md) {
+  if (!job.md && !job.assignmentArtifact) {
     return {
       success: false,
       message: 'Job is missing markdown path; cannot rerun',
@@ -348,7 +348,15 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     };
   }
 
-  await recoverDurableHtmlManifest(job);
+  // For typed jobs this is a manifest identity, never editable content authority.
+  const manifestMd =
+    job.md ??
+    path.resolve(
+      process.env.FILESYSTEM_UPLOAD_DIR || './uploads',
+      job.sourceJobId ? 'corrections' : 'assignments',
+      `${job.id}.md`,
+    );
+  await recoverDurableHtmlManifest({ ...job, md: manifestMd });
 
   const parsed = rerunSchema.safeParse(action.payload ?? {});
   if (!parsed.success) {
@@ -402,7 +410,7 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     : (job.ttsModel ?? undefined);
 
   const rerunJob = await insertJob({
-    md: job.md,
+    md: manifestMd,
     studentId: job.studentId ?? null,
     recordingId: job.recordingId ?? null,
     transcriptId: job.transcriptId ?? null,
@@ -422,6 +430,8 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     userId: job.userId ?? undefined,
     autoPublish: job.autoPublish ?? undefined,
     sourceJobId: jobId,
+    assignmentArtifact: job.assignmentArtifact,
+    assignmentRendererVersion: job.assignmentRendererVersion,
   });
 
   publishJobEvent({ type: 'job_created', job: rerunJob });
@@ -432,7 +442,7 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     executionMode: 'rerun',
     sourceJobId: jobId,
     rerun: {
-      manifestMd: job.md,
+      manifestMd,
       republishOnly: payload.republishOnly ?? false,
       regenerateStudyTextAudio: payload.regenerateStudyTextAudio ?? false,
       regeneratePronunciationMainAudio: payload.regeneratePronunciationMainAudio ?? false,

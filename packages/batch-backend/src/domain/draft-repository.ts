@@ -11,6 +11,7 @@ interface DraftRow {
   prompt_package_id: string;
   student_id: string | null;
   lesson_id: string | null;
+  format?: 'markdown' | 'assignment_v1';
   storage_uri: string;
   working_version: number | null;
   content_hash: string | null;
@@ -24,6 +25,7 @@ export interface InsertDraftParams {
   promptPackageId: string;
   studentId?: string | null;
   lessonId?: string | null;
+  format?: 'markdown' | 'assignment_v1';
   storageUri: string;
   workingVersion: number;
   contentHash: string;
@@ -42,6 +44,7 @@ export async function insertDraft(params: InsertDraftParams): Promise<DraftRecor
         prompt_package_id,
         student_id,
         lesson_id,
+        format,
         storage_uri,
         working_version,
         content_hash,
@@ -49,12 +52,13 @@ export async function insertDraft(params: InsertDraftParams): Promise<DraftRecor
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING
         id,
         prompt_package_id,
         student_id,
         lesson_id,
+        format,
         storage_uri,
         working_version,
         content_hash,
@@ -67,6 +71,7 @@ export async function insertDraft(params: InsertDraftParams): Promise<DraftRecor
         params.promptPackageId,
         params.studentId ?? null,
         params.lessonId ?? null,
+        params.format ?? 'markdown',
         params.storageUri,
         params.workingVersion,
         params.contentHash,
@@ -86,7 +91,7 @@ export async function getDraftById(id: string): Promise<DraftRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
-      SELECT id, prompt_package_id, student_id, lesson_id, storage_uri,
+      SELECT id, prompt_package_id, student_id, lesson_id, format, storage_uri,
              working_version, content_hash, created_by, created_at, updated_at
       FROM drafts
       WHERE id = $1
@@ -105,6 +110,7 @@ function mapRowToDraft(row: DraftRow): DraftRecord {
     promptPackageId: row.prompt_package_id,
     studentId: row.student_id ?? null,
     lessonId: row.lesson_id ?? null,
+    format: row.format ?? 'markdown',
     storageUri: row.storage_uri,
     workingVersion: row.working_version,
     contentHash: row.content_hash,
@@ -139,6 +145,7 @@ export async function updateDraftWorkingContent(params: UpdateDraftParams): Prom
         prompt_package_id,
         student_id,
         lesson_id,
+        format,
         storage_uri,
         working_version,
         content_hash,
@@ -166,7 +173,7 @@ export async function getDraftByIdForUpdate(
 ): Promise<DraftRecord | null> {
   const result = await client.query(
     `
-    SELECT id, prompt_package_id, student_id, lesson_id, storage_uri,
+    SELECT id, prompt_package_id, student_id, lesson_id, format, storage_uri,
            working_version, content_hash, created_by, created_at, updated_at
     FROM drafts
     WHERE id = $1

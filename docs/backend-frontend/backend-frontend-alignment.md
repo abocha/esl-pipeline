@@ -79,6 +79,18 @@ revision content/history are preserved.
 
 ## Assignment Workflow Boundary
 
+- AssignmentV1 Slice 2 / ABO-29 uses a temporary JSON textarea for new structured assignments.
+  Only parsed, schema/domain-valid AssignmentV1 can cross the durable autosave boundary. Invalid
+  buffers stay local, suppress preview/confirmation/publication/correction, and disappear on reload.
+  The API returns the same validated object and pinned context used by preview. Canonical sorted-key
+  JSON defines the saved hash independently of textarea formatting. Frozen Create/job references
+  carry format, schema/serialization version, working version, URI and hash; PMD renderer version and
+  publication/media identities remain separate. Homework-memory extraction reads frozen typed input
+  directly, preserving lineage, dedup and publication ordering. Historical Markdown and pending
+  memory work dispatch explicitly by stored format. Migration 0062 is classified incompatible for
+  previous-image recovery; use typed-capable forward repair or a paired pre-write DB/object restore,
+  with no automatic conversion or loss of typed history.
+
 - The API `4.0.0` / DB `0.23.0` cutover is the historical assignment-contract boundary that removes
   revisionless assignment, transcript, and draft mutations. Pre-cutover sessions, drafts, and prompt
   packages are deleted without compatibility or fabricated confirmation; completed jobs, handouts,

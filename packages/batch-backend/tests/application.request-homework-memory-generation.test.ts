@@ -50,6 +50,7 @@ vi.mock('../src/infrastructure/logger.js', () => ({
 }));
 
 import { requestHomeworkMemoryGeneration } from '../src/application/request-homework-memory-generation.js';
+import { assignmentFixture } from './assignment-v1.test-harness.js';
 
 describe('application/request-homework-memory-generation', () => {
   beforeEach(() => {
@@ -104,6 +105,47 @@ describe('application/request-homework-memory-generation', () => {
       expect.objectContaining({
         jobId: 'homework-memory:pending-1',
       }),
+    );
+  });
+
+  it('retains frozen typed artifact provenance in durable pending memory while preserving correction lineage', async () => {
+    const artifact = {
+      format: 'assignment_v1',
+      schemaVersion: 1,
+      serializationVersion: 1,
+      workingVersion: 2,
+      storageUri: `local://drafts/draft-1/content/${'a'.repeat(64)}.json`,
+      contentHash: 'a'.repeat(64),
+    };
+    resolveHomeworkMemorySourceFromSucceededJobMock.mockResolvedValue({
+      jobId: 'job-2',
+      assignmentLineageKey: 'job-root',
+      studentId: 'student-1',
+      publishedAt: new Date('2026-10-03T00:00:00Z'),
+      contentHash: 'typed-namespaced-hash',
+      format: 'assignment_v1',
+      assignment: assignmentFixture(),
+      artifact,
+      publishTargets: [],
+    });
+    await requestHomeworkMemoryGeneration({
+      config: { generation: {} } as never,
+      params: { jobId: 'job-2', studentId: 'student-1', publishKind: 'correction' },
+    });
+    expect(ensurePendingHomeworkMemoryEntryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentLineageKey: 'job-root',
+        contentHash: 'typed-namespaced-hash',
+        generationNotes: expect.objectContaining({
+          sourceFormat: 'assignment_v1',
+          assignmentArtifact: artifact,
+          trigger: 'publish-correction-succeeded',
+        }),
+      }),
+    );
+    expect(enqueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: 'job-2', pendingEntryId: 'pending-1' }),
+      expect.anything(),
     );
   });
 

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import type { AssignmentSessionDto, JobState } from '@esl-pipeline/contracts';
+import { AssignmentArtifactReferenceSchema } from '@esl-pipeline/contracts';
 
 import { AlphaInviteError, registerInvitedUser } from '../../application/alpha-invites.js';
 import { getAssignmentLearnerContext } from '../../application/assignment-learner-context.js';
@@ -874,6 +875,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       draftId: z.string().uuid(),
       draftWorkingVersion: z.number().int().positive(),
       draftHash: z.string().regex(/^[0-9a-f]{64}$/),
+      artifact: AssignmentArtifactReferenceSchema.optional(),
     })
     .strict();
 

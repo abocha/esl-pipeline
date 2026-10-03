@@ -143,7 +143,7 @@ describeIfPg('application/homework-memory-source', () => {
         url: 'https://example.test/latest-history',
       }),
     ]);
-    expect(source.normalizedMarkdown.sections).toEqual(
+    expect(source.normalizedMarkdown!.sections).toEqual(
       expect.arrayContaining([expect.objectContaining({ heading: 'F. Your Mission' })]),
     );
   });
@@ -353,7 +353,7 @@ describeIfPg('application/homework-memory-source', () => {
     expect(source.publishTargets.map((target) => target.target)).toEqual(['html']);
     expect(source.contentHash).toHaveLength(64);
     expect(
-      source.normalizedMarkdown.sections.some((section) =>
+      source.normalizedMarkdown!.sections.some((section) =>
         section.heading.includes('Your Mission'),
       ),
     ).toBe(true);

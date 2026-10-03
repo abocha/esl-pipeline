@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { JobConfigOverrides } from '@esl-pipeline/contracts';
+import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
 import { readBool } from '@esl-pipeline/shared-infrastructure';
 
 import { getDraftById } from '../domain/draft-repository.js';
@@ -19,6 +20,12 @@ import { createStorageConfigService } from '../infrastructure/storage-config.js'
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import { approveJobForPipeline } from './approve-job.js';
+import {
+  AssignmentArtifactValidationError,
+  assignmentContext,
+  draftArtifact,
+  readValidatedAssignment,
+} from './assignment-artifact.js';
 import { createApprovalJobFromDraft } from './create-approval-job.js';
 import { PromptPackageAssignmentError } from './create-prompt-package.js';
 
@@ -101,16 +108,45 @@ export async function materializeDraft(
     );
   }
 
+  let frozenJob;
   if (resolvedJobId && jobs.getById) {
     const targetJob = await jobs.getById(resolvedJobId);
+    frozenJob = targetJob;
     if (!targetJob || targetJob.state !== 'awaiting_approval') {
       return null;
     }
   }
 
-  const sourceStorageUri = params.sourceStorageUri ?? draft.storageUri;
+  const typedDraft = draftArtifact(draft);
+  if (resolvedJobId && Boolean(frozenJob?.assignmentArtifact) !== Boolean(typedDraft)) {
+    throw new AssignmentArtifactValidationError('Assignment job authority format mismatch');
+  }
+  const reference = frozenJob?.assignmentArtifact ?? typedDraft;
+  if (
+    frozenJob?.assignmentArtifact &&
+    (frozenJob.draftId !== draft.id || frozenJob.promptPackageId !== promptPackage.id)
+  ) {
+    throw new Error('Frozen assignment lineage mismatch');
+  }
+  const sourceStorageUri = params.sourceStorageUri ?? reference?.storageUri ?? draft.storageUri;
+  if (reference && sourceStorageUri !== reference.storageUri)
+    throw new Error('Frozen assignment URI mismatch');
   const storage = overrides?.storage ?? createTranscriptionStorageForUri(sourceStorageUri);
 
+  const assignment = reference
+    ? await readValidatedAssignment(reference, assignmentContext(promptPackage), storage)
+    : undefined;
+  const text = assignment
+    ? renderAssignmentToPmd(assignment)
+    : await storage.getText(sourceStorageUri);
+  if (
+    params.expectedContentHash &&
+    (reference
+      ? reference.contentHash
+      : createHash('sha256').update(text, 'utf8').digest('hex')) !== params.expectedContentHash
+  ) {
+    throw new Error('Confirmed draft content hash mismatch');
+  }
   if (!resolvedJobId) {
     const approvalJob = await createApprovalJob({
       draft,
@@ -119,14 +155,6 @@ export async function materializeDraft(
     });
     resolvedJobId = approvalJob.id;
   }
-
-  const text = await storage.getText(sourceStorageUri);
-  if (
-    params.expectedContentHash &&
-    createHash('sha256').update(text, 'utf8').digest('hex') !== params.expectedContentHash
-  ) {
-    throw new Error('Confirmed draft content hash mismatch');
-  }
   const context = {
     studentId: promptPackage.studentId ?? null,
     promptPackageId: promptPackage.id,
@@ -134,6 +162,9 @@ export async function materializeDraft(
     templateRevisionId: promptPackage.resolvedTemplateRevisionId ?? null,
   };
   const materializedText = injectMaterializationContext(text, context);
+  const mdStorageUri = assignment
+    ? (await storage.putDraft({ draftId: draft.id, text })).uri
+    : sourceStorageUri;
   let mdPath: string | null = null;
   if (localExport) {
     mdPath = resolveDraftMaterializePath(uploadDir, draft.id);
@@ -148,14 +179,14 @@ export async function materializeDraft(
         userId: params.assignmentShare.userId,
         expectedState: 'awaiting_approval',
         md: mdPath,
-        mdStorageUri: sourceStorageUri,
+        mdStorageUri,
         draftId: draft.id,
       })
     : await jobs.updateDraftLink({
         id: resolvedJobId,
         expectedState: 'awaiting_approval',
         md: mdPath,
-        mdStorageUri: sourceStorageUri,
+        mdStorageUri,
         draftId: draft.id,
       });
 
@@ -164,7 +195,7 @@ export async function materializeDraft(
   if (params.jobOverrides?.autoPublish) {
     const approved = await approvals.approveForPipeline(resolvedJobId, {
       md: mdPath ?? undefined,
-      mdStorageUri: sourceStorageUri,
+      mdStorageUri,
     });
     if (!approved) return null;
   }
@@ -173,7 +204,7 @@ export async function materializeDraft(
     draftId: draft.id,
     jobId: resolvedJobId,
     mdPath,
-    mdStorageUri: sourceStorageUri,
+    mdStorageUri,
   };
 }
 

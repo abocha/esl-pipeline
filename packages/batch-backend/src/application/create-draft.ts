@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { type AssignmentDraftDto, serializeAssignmentV1 } from '@esl-pipeline/contracts';
+
 import type { DraftRecord } from '../domain/draft-model.js';
 import { insertDraft } from '../domain/draft-repository.js';
 import {
@@ -8,6 +10,12 @@ import {
 } from '../domain/prompt-package-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
+import {
+  admitAssignment,
+  assignmentContext,
+  draftArtifact,
+  isStructuredPrompt,
+} from './assignment-artifact.js';
 import { PromptPackageAssignmentError } from './create-prompt-package.js';
 
 export interface CreateDraftParams {
@@ -16,20 +24,7 @@ export interface CreateDraftParams {
   createdBy?: string | null;
 }
 
-export interface DraftResponse {
-  id: string;
-  promptPackageId: string;
-  studentId: string | null;
-  lessonId: string | null;
-  storageUri: string;
-  workingVersion: number | null;
-  contentHash: string | null;
-  createdBy: string | null;
-  text: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
+export type DraftResponse = AssignmentDraftDto;
 export interface CreateDraftDependencies {
   storage: TranscriptionStorage;
   promptPackages: {
@@ -65,10 +60,15 @@ export async function createDraft(
     );
   }
 
+  const format = isStructuredPrompt(promptPackage) ? 'assignment_v1' : 'markdown';
+  const context = format === 'assignment_v1' ? assignmentContext(promptPackage) : undefined;
+  const assignment = context ? admitAssignment(params.text, context) : undefined;
+  const text = assignment ? serializeAssignmentV1(assignment) : params.text;
   const draftId = randomUUID();
   const stored = await storage.putDraft({
     draftId,
-    text: params.text,
+    text,
+    format,
   });
 
   const draft = await drafts.insert({
@@ -76,16 +76,23 @@ export async function createDraft(
     promptPackageId: promptPackage.id,
     studentId: promptPackage.studentId ?? null,
     lessonId: promptPackage.lessonId ?? null,
+    format,
     storageUri: stored.uri,
     workingVersion: 1,
     contentHash: stored.sha256,
     createdBy: params.createdBy ?? null,
   });
 
-  return toDraftResponse(draft, params.text);
+  return toDraftResponse(draft, text, context);
 }
 
-export function toDraftResponse(draft: DraftRecord, text: string): DraftResponse {
+export function toDraftResponse(
+  draft: DraftRecord,
+  text: string,
+  context?: import('@esl-pipeline/contracts').AssignmentValidationContext,
+): DraftResponse {
+  const assignment =
+    draft.format === 'assignment_v1' ? admitAssignment(text, context ?? {}) : undefined;
   return {
     id: draft.id,
     promptPackageId: draft.promptPackageId,
@@ -95,7 +102,15 @@ export function toDraftResponse(draft: DraftRecord, text: string): DraftResponse
     workingVersion: draft.workingVersion,
     contentHash: draft.contentHash,
     createdBy: draft.createdBy ?? null,
-    text,
+    format: draft.format ?? 'markdown',
+    ...(assignment
+      ? {
+          assignment,
+          artifact: draftArtifact(draft),
+          validationContext: context,
+          text: JSON.stringify(assignment, null, 2),
+        }
+      : { text }),
     createdAt: draft.createdAt.toISOString(),
     updatedAt: draft.updatedAt.toISOString(),
   };
