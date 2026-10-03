@@ -119,9 +119,10 @@ separately gated pending the later ABO-26 retirement slice.
   candidate delivery in `pending`/`failed` state are recovered without regenerating canonical
   memory. Existing failed/cancelled downstream intent is not replaced automatically. Provider
   failures still use existing pacing/retries and terminal failure policy.
-- Before recovered snapshot delivery can enter BullMQ, reconciliation repairs the existing active
+- Before recovered pending snapshot generation can enter BullMQ, reconciliation repairs the existing active
   Batch claim supersession prerequisite. A failed fence leaves delivery retryable and unqueued;
   a later Batch import cannot overwrite recovered ordinary output through an old active claim.
+  Redelivery of an already completed intent only repairs downstream work and preserves later Batch ownership.
 - Failure marking merges failure-owned metadata into current database JSONB. Concurrently adopted
   replay identity, currentness, and delivery metadata survive, so same-key retry resumes the same
   intent and frozen provider/model target.

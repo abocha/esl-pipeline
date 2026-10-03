@@ -3,6 +3,7 @@ import {
   markMemoryDeliveryChecked,
 } from '../domain/memory-replay-delivery.js';
 import { supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork } from '../domain/student-memory-openai-batch-repository.js';
+import { getStudentMemorySnapshotById } from '../domain/student-memory-snapshot-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 
@@ -23,7 +24,10 @@ export async function reconcileMemoryDelivery(overrides?: {
     try {
       // Intent may have committed before request-time Batch fencing completed.
       // Repair that prerequisite before making ordinary snapshot work runnable.
-      if (payload.kind === 'student-memory-snapshot-refresh') {
+      if (
+        payload.kind === 'student-memory-snapshot-refresh' &&
+        (await getStudentMemorySnapshotById(payload.pendingEntryId))?.status === 'pending'
+      ) {
         await (
           overrides?.supersedeBatchClaims ?? supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork
         )({
