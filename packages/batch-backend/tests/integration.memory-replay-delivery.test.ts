@@ -455,6 +455,30 @@ describe('ordinary replay transactions and DB → BullMQ delivery', () => {
       importValidatedStudentMemoryOpenAiBatchResult({ item, content: snapshotContent }),
     ).rejects.toBeInstanceOf(StudentMemoryOpenAiBatchIneligibleClaimError);
     expect((await getStudentMemorySnapshotById(completed!.supersededById!))?.status).toBe('ready');
+    // Redelivery of an already completed intent only repairs downstream delivery;
+    // it must not supersede a later Batch attempt for new generation.
+    const laterRun = await createStudentMemoryOpenAiBatchRun({
+      workload: 'student_memory_snapshot',
+      model: 'gpt-5.2',
+      inputJsonlSha256: 'c'.repeat(64),
+      inputBytes: 123,
+      items: [
+        {
+          studentId: source.studentId,
+          customId: randomUUID(),
+          canonicalScopeKey: source.studentId,
+          sourceVersionHash: 'd'.repeat(64),
+          requestEnvelope: {},
+          responseSchemaFingerprint: 'snapshot-schema',
+          requestBody: {},
+          sourceRefs: { lessonMemoryEntryIds: [], homeworkMemoryEntryIds: [] },
+        },
+      ],
+    });
+    await reconcileMemoryDelivery({ list: async () => [payload], queue: { reconcile } });
+    expect((await listStudentMemoryOpenAiBatchItems({ runId: laterRun.id }))[0]?.claimState).toBe(
+      'active',
+    );
   });
 
   it('review regression: failure after concurrent online-intent adoption preserves replay identity and target', async () => {
