@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [14.2.1] - 2026-10-03
+
+### Changed
+
+- Automated release from PR #333: fix(prompts): integrate Candidate-3 homework semantics (ESL-17) (https://github.com/abocha/esl-pipeline/pull/333)
+
 ## [14.2.0] - 2026-10-03
 
 ### Changed
