@@ -685,14 +685,13 @@ export async function ensurePendingHomeworkMemoryEntry(
       if (latestPending) {
         // An operator can resume already-durable online work without changing its target.
         if (params.replayKey && !latestPending.generation_notes?.replayKey) {
-          latestPending.generation_notes = {
-            ...latestPending.generation_notes,
-            replayKey: params.replayKey,
-          };
-          await client.query(
-            'UPDATE homework_memory_entries SET generation_notes = $2::jsonb WHERE id = $1',
-            [latestPending.id, JSON.stringify(latestPending.generation_notes)],
+          const adopted = await client.query<HomeworkMemoryRow>(
+            `UPDATE homework_memory_entries
+             SET generation_notes = COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object('replayKey', $2::text)
+             WHERE id = $1 RETURNING *`,
+            [latestPending.id, params.replayKey],
           );
+          Object.assign(latestPending, adopted.rows[0]);
         }
         await client.query('COMMIT');
         return {
@@ -1005,8 +1004,18 @@ export async function supersedeReadyHomeworkMemoryEntriesForAssignmentLineage(pa
   }
 
   const rows = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [
+        params.assignmentLineageKey,
+      ]);
+      await client.query(
+        `SELECT s.id FROM students s JOIN jobs j ON j.student_id = s.id
+        WHERE j.id = $1 FOR UPDATE OF s`,
+        [params.assignmentLineageKey],
+      );
+      const result = await client.query(
+        `
       UPDATE homework_memory_entries
       SET
         status = 'superseded',
@@ -1017,9 +1026,14 @@ export async function supersedeReadyHomeworkMemoryEntriesForAssignmentLineage(pa
       RETURNING
         ${HOMEWORK_MEMORY_COLUMNS}
       `,
-      values,
-    );
-    return result.rows;
+        values,
+      );
+      await client.query('COMMIT');
+      return result.rows;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
 
   if (rows.length > 0) {
@@ -1071,34 +1085,29 @@ export async function markHomeworkMemoryEntryFailed(params: {
   providerRequestId?: string | null;
   usage?: unknown;
 }): Promise<HomeworkMemoryRecord | null> {
-  const existing = await getHomeworkMemoryEntryById(params.id);
-  if (!existing) {
-    return null;
-  }
-
-  const generationNotes: HomeworkMemoryGenerationNotes = {
-    ...existing.generationNotes,
-    error: params.errorMessage,
-    providerRequestId:
-      params.providerRequestId ?? existing.generationNotes?.providerRequestId ?? null,
-    usage: params.usage ?? existing.generationNotes?.usage ?? null,
-    failedAt: new Date().toISOString(),
-  };
-
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       UPDATE homework_memory_entries
       SET
         status = 'failed',
-        generation_notes = $2::jsonb,
+        generation_notes = COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object(
+          'error', $2::text, 'failedAt', $5::text,
+          'providerRequestId', COALESCE($3::text, generation_notes ->> 'providerRequestId'),
+          'usage', COALESCE($4::jsonb, generation_notes -> 'usage')),
         updated_at = NOW()
       WHERE id = $1
         AND status = 'pending'
       RETURNING
         ${HOMEWORK_MEMORY_COLUMNS}
       `,
-      [params.id, JSON.stringify(generationNotes)],
+      [
+        params.id,
+        params.errorMessage,
+        params.providerRequestId ?? null,
+        params.usage == null ? null : JSON.stringify(params.usage),
+        new Date().toISOString(),
+      ],
     );
     return result.rows[0];
   });

@@ -1,6 +1,7 @@
 import './support/bootstrap-pg-test-env.js';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'bullmq';
+import { Client } from 'pg';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateHomeworkMemoryFromSource } from '../src/application/homework-memory-generation.js';
@@ -9,12 +10,19 @@ import { processStudentMemorySnapshotJob } from '../src/application/process-stud
 import { reconcileMemoryDelivery } from '../src/application/reconcile-memory-delivery.js';
 import { requestHomeworkMemoryGeneration } from '../src/application/request-homework-memory-generation.js';
 import { requestStudentMemorySnapshotRefresh } from '../src/application/request-student-memory-snapshot-refresh.js';
+import {
+  importValidatedStudentMemoryOpenAiBatchResult,
+  StudentMemoryOpenAiBatchIneligibleClaimError,
+} from '../src/application/student-memory-openai-batch-importer.js';
 import { loadConfig } from '../src/config/env.js';
+import { confirmAssignmentSessionStepPersistence } from '../src/domain/assignment-session-repository.js';
 import {
   commitCanonicalReadyHomeworkMemoryEntry,
   ensurePendingHomeworkMemoryEntry,
   getHomeworkMemoryEntryById,
+  markHomeworkMemoryEntryFailed,
 } from '../src/domain/homework-memory-repository.js';
+import { publishConfirmedLessonMemoryEntry } from '../src/domain/lesson-memory-repository.js';
 import {
   cancelMemoryReplayIntent,
   listRecoverableMemoryDeliveries,
@@ -24,9 +32,14 @@ import {
   type StudentMemoryCurrentness,
 } from '../src/domain/student-memory-currentness.js';
 import {
+  createStudentMemoryOpenAiBatchRun,
+  listStudentMemoryOpenAiBatchItems,
+} from '../src/domain/student-memory-openai-batch-repository.js';
+import {
   ensurePendingStudentMemorySnapshot,
   getStudentMemorySnapshotById,
   insertCanonicalReadyStudentMemorySnapshot,
+  markStudentMemorySnapshotFailed,
   StudentMemorySnapshotIntentObsoleteError,
 } from '../src/domain/student-memory-snapshot-repository.js';
 import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
@@ -233,6 +246,310 @@ describe('ordinary replay transactions and DB → BullMQ delivery', () => {
     await createStudentMemoryQueue().queue.obliterate({ force: true });
     await closeStudentMemoryQueue();
     await closePgPool();
+  });
+
+  it('review regression: lesson publication waits for Source student lock before locking its pending row', async () => {
+    const source = await seed();
+    const lessonId = await insertLessonMemory({
+      studentId: source.studentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    const lesson = await withPgClient(async (client) => {
+      const result = await client.query(
+        `UPDATE lesson_memory_entries SET status = 'pending' WHERE id = $1 RETURNING *`,
+        [lessonId],
+      );
+      return result.rows[0];
+    });
+    let publication!: ReturnType<typeof publishConfirmedLessonMemoryEntry>;
+    await withPgClient(async (guard) => {
+      await guard.query('BEGIN');
+      await guard.query("SET LOCAL lock_timeout = '2s'");
+      try {
+        // Reconfirmation owns the binding and student before requesting this lesson row.
+        await guard.query(
+          `UPDATE assignment_source_bindings SET updated_at = NOW() WHERE assignment_session_id = $1`,
+          [lesson.assignment_session_id],
+        );
+        publication = publishConfirmedLessonMemoryEntry({
+          id: lessonId,
+          studentId: source.studentId,
+          transcriptId: lesson.transcript_id,
+          recordingId: lesson.recording_id,
+          schemaVersion: lesson.schema_version,
+          provider: lesson.provider,
+          model: lesson.model,
+          sourceStorageUri: lesson.source_storage_uri,
+          sourceContentHash: lesson.source_content_hash,
+        });
+        // Attach immediately: a regression can fail the competing transaction with 40P01.
+        void publication.catch(() => {});
+        await expect
+          .poll(async () => {
+            await guard.query('SELECT pg_stat_clear_snapshot()');
+            return (
+              await guard.query(
+                `SELECT count(*)::int AS count FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND wait_event_type = 'Lock' AND (query LIKE '%SELECT id FROM students%' OR query LIKE '%UPDATE lesson_memory_entries%')`,
+              )
+            ).rows[0].count;
+          })
+          .toBe(1);
+        // NOWAIT also prevents the DB adapter's deadlock retries masking reversed ordering.
+        await guard.query('SELECT id FROM lesson_memory_entries WHERE id = $1 FOR UPDATE NOWAIT', [
+          lessonId,
+        ]);
+        await guard.query('COMMIT');
+      } finally {
+        await guard.query('ROLLBACK');
+      }
+    });
+    expect((await publication)?.status).toBe('ready');
+  });
+
+  it('review regression: Source reconfirmation takes student before transcript and memory locks', async () => {
+    const source = await seed();
+    const lessonId = await insertLessonMemory({
+      studentId: source.studentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    const fixture = await withPgClient(async (client) => {
+      const result = await client.query(
+        `SELECT l.*, s.user_id FROM lesson_memory_entries l JOIN assignment_sessions s ON s.id = l.assignment_session_id WHERE l.id = $1`,
+        [lessonId],
+      );
+      await client.query(
+        `UPDATE recordings SET audio_topology = 'trusted_split_channels' WHERE id = $1`,
+        [result.rows[0].recording_id],
+      );
+      return result.rows[0];
+    });
+    let reconfirm!: ReturnType<typeof confirmAssignmentSessionStepPersistence>;
+    await withPgClient(async (guard) => {
+      await guard.query('BEGIN');
+      try {
+        await guard.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [source.studentId]);
+        reconfirm = confirmAssignmentSessionStepPersistence({
+          id: fixture.assignment_session_id,
+          userId: fixture.user_id,
+          request: {
+            step: 'source',
+            expectedRevision: 2,
+            lessonId: null,
+            recordingId: fixture.recording_id,
+            transcriptId: fixture.transcript_id,
+            transcriptWorkingVersion: 1,
+          },
+          lessonMemory: {
+            schemaVersion: fixture.schema_version,
+            provider: fixture.provider,
+            model: fixture.model,
+            requestedAt: new Date(),
+          },
+        });
+        let reconfirmError: unknown;
+        void reconfirm.catch((error) => {
+          reconfirmError = error;
+        });
+        await expect
+          .poll(async () => {
+            if (reconfirmError) throw reconfirmError;
+            await guard.query('SELECT pg_stat_clear_snapshot()');
+            return (
+              await guard.query(
+                `SELECT count(*)::int AS count FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND wait_event_type = 'Lock' AND query LIKE '%SELECT id FROM students%'`,
+              )
+            ).rows[0].count;
+          })
+          .toBe(1);
+        await guard.query('SELECT id FROM transcripts WHERE id = $1 FOR UPDATE NOWAIT', [
+          fixture.transcript_id,
+        ]);
+        await guard.query('SELECT id FROM lesson_memory_entries WHERE id = $1 FOR UPDATE NOWAIT', [
+          lessonId,
+        ]);
+        await guard.query('COMMIT');
+      } finally {
+        await guard.query('ROLLBACK');
+      }
+    });
+    await expect(reconfirm).resolves.toBeDefined();
+  });
+
+  it('review regression: recovery fences active Batch ownership before delivering a frozen snapshot intent', async () => {
+    const source = await seed();
+    await readyHomework(source);
+    const run = await createStudentMemoryOpenAiBatchRun({
+      workload: 'student_memory_snapshot',
+      model: 'gpt-5.2',
+      inputJsonlSha256: 'a'.repeat(64),
+      inputBytes: 123,
+      items: [
+        {
+          studentId: source.studentId,
+          customId: randomUUID(),
+          canonicalScopeKey: source.studentId,
+          sourceVersionHash: 'b'.repeat(64),
+          requestEnvelope: {},
+          responseSchemaFingerprint: 'snapshot-schema',
+          requestBody: {},
+          sourceRefs: { lessonMemoryEntryIds: [], homeworkMemoryEntryIds: [] },
+        },
+      ],
+    });
+    const replayKey = randomUUID();
+    const reconcile = vi.fn();
+    await expect(
+      requestStudentMemorySnapshotRefresh({
+        config,
+        params: {
+          studentId: source.studentId,
+          trigger: 'manual-replay',
+          strategy: 'manual_rebuild_v1_1',
+          operatorReason: 'crash boundary',
+          replayKey,
+          modelOverride: 'gpt-5.2',
+        },
+        overrides: {
+          batchClaims: {
+            supersedeForOnlineWork: vi.fn().mockRejectedValue(new Error('crash before fence')),
+          },
+          queue: { reconcile },
+        },
+      }),
+    ).rejects.toThrow('crash before fence');
+    const [payload] = await listRecoverableMemoryDeliveries();
+    if (!payload || payload.kind !== 'student-memory-snapshot-refresh')
+      throw new Error('Expected persisted snapshot intent');
+    expect(payload).toMatchObject({
+      kind: 'student-memory-snapshot-refresh',
+      provider: 'openai',
+      model: 'gpt-5.2',
+    });
+    const [item] = await listStudentMemoryOpenAiBatchItems({ runId: run.id });
+    if (!item) throw new Error('Expected active Batch item');
+    expect(item.claimState).toBe('active');
+    await reconcileMemoryDelivery({
+      list: async () => [payload],
+      queue: { reconcile },
+      supersedeBatchClaims: vi.fn().mockRejectedValue(new Error('fence unavailable')),
+    });
+    expect(reconcile).not.toHaveBeenCalled();
+    await reconcileMemoryDelivery({ list: async () => [payload] });
+    const [fenced] = await listStudentMemoryOpenAiBatchItems({ runId: run.id });
+    expect(fenced?.claimState).toBe('superseded_by_online');
+    const queued = await createStudentMemoryQueue().queue.getJob(
+      `student-memory-snapshot__${source.studentId}__${payload.pendingEntryId}`,
+    );
+    expect(queued?.data).toMatchObject({
+      pendingEntryId: payload.pendingEntryId,
+      provider: 'openai',
+      model: 'gpt-5.2',
+    });
+    const intent = await getStudentMemorySnapshotById(payload.pendingEntryId);
+    await runSnapshot(intent!);
+    const completed = await getStudentMemorySnapshotById(intent!.id);
+    expect(completed?.supersededById).toBeTruthy();
+    await expect(
+      importValidatedStudentMemoryOpenAiBatchResult({ item, content: snapshotContent }),
+    ).rejects.toBeInstanceOf(StudentMemoryOpenAiBatchIneligibleClaimError);
+    expect((await getStudentMemorySnapshotById(completed!.supersededById!))?.status).toBe('ready');
+  });
+
+  it('review regression: failure after concurrent online-intent adoption preserves replay identity and target', async () => {
+    const source = await seed();
+    const original = (
+      await ensurePendingHomeworkMemoryEntry({
+        ...source,
+        model: 'frozen-online-model',
+        generationNotes: { deliveryCheckedAt: '2026-10-03T00:00:00Z' },
+      })
+    ).entry;
+    const earlier = await getHomeworkMemoryEntryById(original.id);
+    expect(earlier?.generationNotes?.replayKey).toBeUndefined();
+    const barrier = pausedExtraction(null);
+    const query = Client.prototype.query;
+    const spy = vi.spyOn(Client.prototype, 'query').mockImplementation(function (
+      this: Client,
+      ...args: unknown[]
+    ) {
+      if (
+        typeof args[0] === 'string' &&
+        /UPDATE homework_memory_entries\s+SET\s+status = 'failed'/.test(args[0])
+      ) {
+        return barrier.extractor().then(() => Reflect.apply(query, this, args));
+      }
+      return Reflect.apply(query, this, args);
+    } as typeof Client.prototype.query);
+    const failure = markHomeworkMemoryEntryFailed({
+      id: original.id,
+      errorMessage: 'provider failure',
+      providerRequestId: 'failed-request',
+    });
+    const replayKey = randomUUID();
+    try {
+      await barrier.entered;
+      const adopted = await ensurePendingHomeworkMemoryEntry({
+        ...source,
+        model: 'different-current-model',
+        replayKey,
+      });
+      expect(adopted.entry.id).toBe(original.id);
+    } finally {
+      barrier.release();
+      try {
+        await failure;
+      } finally {
+        spy.mockRestore();
+      }
+    }
+    expect((await getHomeworkMemoryEntryById(original.id))?.generationNotes).toMatchObject({
+      replayKey,
+      deliveryCheckedAt: '2026-10-03T00:00:00Z',
+      providerRequestId: 'failed-request',
+      error: 'provider failure',
+    });
+    const retry = await ensurePendingHomeworkMemoryEntry({
+      ...source,
+      replayKey,
+      model: 'different-current-model',
+    });
+    expect(retry.entry).toMatchObject({
+      id: original.id,
+      provider: 'openai',
+      model: 'frozen-online-model',
+      status: 'pending',
+    });
+  });
+
+  it('review regression: snapshot failure merges current replay and delivery metadata despite stale prompt notes', async () => {
+    const source = await seed();
+    const intent = await pendingSnapshot(source.studentId);
+    await withPgClient((client) =>
+      client.query(
+        `UPDATE student_memory_snapshots SET generation_notes = generation_notes || '{"deliveryCheckedAt":"new delivery"}'::jsonb WHERE id = $1`,
+        [intent.id],
+      ),
+    );
+    await markStudentMemorySnapshotFailed({
+      id: intent.id,
+      errorMessage: 'provider failure',
+      generationNotes: {
+        ...intent.generationNotes,
+        replayKey: 'stale key',
+        currentness: null,
+        deliveryCheckedAt: 'stale delivery',
+        promptId: 'failed prompt',
+      },
+    });
+    expect((await getStudentMemorySnapshotById(intent.id))?.generationNotes).toMatchObject({
+      replayKey: intent.generationNotes!.replayKey,
+      currentness: intent.generationNotes!.currentness,
+      deliveryCheckedAt: 'new delivery',
+      promptId: 'failed prompt',
+      error: 'provider failure',
+    });
   });
 
   it('atomically links one result through concurrent duplicate commits and response-loss retry', async () => {
