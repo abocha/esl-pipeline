@@ -59,6 +59,8 @@ describe('application/process-homework-memory-job', () => {
     const sourcePending = {
       id: 'pending-1',
       status: 'pending',
+      provider: 'openai',
+      model: 'gpt-5.2',
       jobId: 'correction-1',
       studentId: 'student-1',
       assignmentLineageKey: 'root-1',
@@ -78,6 +80,7 @@ describe('application/process-homework-memory-job', () => {
     };
     const getById = vi
       .fn()
+      .mockResolvedValueOnce(sourcePending)
       .mockResolvedValueOnce(sourcePending)
       .mockResolvedValueOnce({ ...sourcePending, status: 'superseded', supersededById: 'ready-1' })
       .mockResolvedValueOnce(canonicalEntry);
@@ -163,6 +166,11 @@ describe('application/process-homework-memory-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'pending-1',
               status: 'pending',
+              jobId: 'job-1',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
+              contentHash: 'hash-1',
               generatedAt: new Date('2026-03-20T00:00:00.000Z'),
               generationNotes: { trigger: 'publish-succeeded' },
             }),
@@ -188,6 +196,7 @@ describe('application/process-homework-memory-job', () => {
       outcome: 'canonical_committed',
       entry: {
         id: 'homework-memory-1',
+        status: 'ready',
         generatedAt: new Date('2026-03-20T00:00:00.000Z'),
       },
     });
@@ -235,6 +244,11 @@ describe('application/process-homework-memory-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'pending-1',
             status: 'pending',
+            jobId: 'job-1',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
+            contentHash: 'hash-1',
             generatedAt: new Date('2026-03-20T00:00:00.000Z'),
             generationNotes: {
               trigger: 'publish-succeeded',
@@ -327,6 +341,11 @@ describe('application/process-homework-memory-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'pending-1',
             status: 'pending',
+            jobId: 'job-1',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
+            contentHash: 'hash-1',
             generatedAt: new Date('2026-03-20T00:30:00.000Z'),
             generationNotes: { trigger: 'publish-succeeded' },
           }),
@@ -391,6 +410,11 @@ describe('application/process-homework-memory-job', () => {
         homeworkMemory: {
           getById: vi.fn().mockResolvedValue({
             id: 'pending-a',
+            jobId: 'correction-a',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
+            contentHash: 'hash-a',
             status: 'pending',
             generatedAt: new Date('2026-03-20T10:00:00.000Z'),
             generationNotes: { trigger: 'publish-correction-succeeded' },
@@ -412,6 +436,7 @@ describe('application/process-homework-memory-job', () => {
       outcome: 'canonical_committed',
       entry: {
         id: 'homework-memory-replay-1',
+        status: 'ready',
         generatedAt: new Date('2026-03-20T02:00:00.000Z'),
       },
     });
@@ -448,6 +473,11 @@ describe('application/process-homework-memory-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'pending-1',
             status: 'pending',
+            jobId: 'job-1',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
+            contentHash: 'hash-1',
             generatedAt: new Date('2026-03-20T01:30:00.000Z'),
             generationNotes: {
               trigger: 'publish-succeeded',
@@ -530,6 +560,11 @@ describe('application/process-homework-memory-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'pending-1',
               status: 'pending',
+              jobId: 'job-1',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.4-mini',
+              contentHash: 'hash-1',
               generatedAt: new Date('2026-06-21T10:00:00.000Z'),
               generationNotes: null,
             }),

@@ -49,6 +49,7 @@ export async function requestStudentMemorySnapshotBackfill(args: {
     'manual_rebuild_v1_1' | 'full_rebuild_v1'
   >;
   operatorReason: string;
+  replayKey: string;
   requestCandidateRefresh?: boolean;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
@@ -65,6 +66,7 @@ export async function requestStudentMemorySnapshotBackfill(args: {
         trigger: 'manual-replay',
         strategy: args.strategy,
         operatorReason: args.operatorReason,
+        replayKey: args.replayKey,
         requestCandidateRefresh: args.requestCandidateRefresh === true,
         providerOverride: args.providerOverride,
         modelOverride: args.modelOverride,

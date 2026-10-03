@@ -7,6 +7,7 @@ import {
   markHomeworkMemoryEntryFailed,
   supersedePendingHomeworkMemoryEntriesForAssignmentLineage,
 } from '../domain/homework-memory-repository.js';
+import { obsoleteMemoryReplayIntent } from '../domain/memory-replay-delivery.js';
 import { generateHomeworkMemoryFromSource } from './homework-memory-generation.js';
 import {
   buildHomeworkMemoryEnvelope,
@@ -37,6 +38,7 @@ export interface ProcessHomeworkMemoryJobDependencies {
     getLatestReadyByAssignmentLineageKey: typeof getLatestReadyHomeworkMemoryByAssignmentLineageKey;
     markFailed: typeof markHomeworkMemoryEntryFailed;
     supersedePendingForAssignmentLineage: typeof supersedePendingHomeworkMemoryEntriesForAssignmentLineage;
+    obsoleteIntent?: typeof obsoleteMemoryReplayIntent;
   };
   snapshots: {
     requestRefresh: typeof requestStudentMemorySnapshotRefresh;
@@ -77,9 +79,35 @@ export async function processHomeworkMemoryJob(args: {
     return;
   }
   const forceRegenerate = pendingEntry.generationNotes?.forceRegenerate === true;
+  if (
+    pendingEntry.studentId !== args.payload.studentId ||
+    pendingEntry.jobId !== args.payload.jobId
+  ) {
+    throw new Error('Homework intent ownership mismatch');
+  }
+  args = {
+    ...args,
+    payload: {
+      ...args.payload,
+      provider: pendingEntry.provider as GenerationProvider,
+      model: pendingEntry.model,
+    },
+  };
 
   try {
     const source = await sourceResolver(args.payload.jobId);
+    if (
+      source.studentId !== pendingEntry.studentId ||
+      source.contentHash !== pendingEntry.contentHash
+    ) {
+      await (homeworkMemory.obsoleteIntent ?? obsoleteMemoryReplayIntent)({
+        family: 'homework',
+        studentId: pendingEntry.studentId,
+        pendingEntryId: pendingEntry.id,
+        reason: 'source_changed',
+      });
+      return;
+    }
     const latestReady = await homeworkMemory.getLatestReadyByAssignmentLineageKey(
       source.assignmentLineageKey,
     );
@@ -111,8 +139,11 @@ export async function processHomeworkMemoryJob(args: {
       provider: args.payload.provider,
       model: args.payload.model,
       prompt,
-      execute: () =>
-        generator({
+      execute: async () => {
+        const current = await homeworkMemory.getById(pendingEntry.id);
+        if (current?.status !== 'pending')
+          return { outcome: 'stale_discarded' as const, entry: null };
+        return generator({
           config: args.config.generation,
           request: {
             source,
@@ -123,10 +154,11 @@ export async function processHomeworkMemoryJob(args: {
             prompt,
             envelope,
           },
-        }),
+        });
+      },
     });
 
-    if (result.outcome !== 'canonical_committed' || !result.entry) {
+    if (result.outcome !== 'canonical_committed' || result.entry?.status !== 'ready') {
       return;
     }
 

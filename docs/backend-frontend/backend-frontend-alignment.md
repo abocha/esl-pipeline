@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 3 minutes.
 - Authority Level: Canonical status tracker.
-- Last Verified Against: 2026-10-01 student-owned profile revision cutover.
+- Last Verified Against: 2026-10-03 ordinary replay safety (ESL-16).
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while alpha work continues.
 - Status: `active`.
@@ -37,6 +37,14 @@ Provider/model detail stays in
 | Generation and safety policy           | Live                          | Assignment drafts default to GPT-6.1 Sol; memory/profile defaults remain GPT-5.6 Luna. One target per workload; provider failure never switches models/providers. Explicit choices, provenance, provider budgets, and default-off Batch replay remain; candidate ranks/tiers are removed. Durable worker retries retain frozen targets.                                                                                                                                                                                                                                                                                                                                                 |
 | Audio regeneration                     | Live                          | Family selection and clip reuse follow orchestrator and speech-performance contracts; the frontend exposes capability-gated actions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Telegram operations                    | Live internal surface         | The separate bot package provides allowlisted status, browsing, share, backup, drill, and approval operations over backend APIs. It is not a batch-frontend feature.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+### Ordinary memory replay
+
+Ordinary homework/snapshot replay stays operator-owned and CLI-only. Durable replay keys distinguish
+resumption from new regeneration; cancellation and changed canonical source/current snapshot state
+fence late results. Snapshot completion links one canonical result atomically, and the existing
+worker repairs DB-to-BullMQ delivery gaps with frozen targets. Candidate refresh remains opt-in for
+manual replay. See [the replay runbook](../operations/student-memory-replay-backfill.md).
 
 ### Admin prompts
 

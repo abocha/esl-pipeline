@@ -4,6 +4,11 @@ import type { PoolClient } from 'pg';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import type { StudentFact } from './lesson-memory-model.js';
+import { buildCanonicalLessonMemoryAuthoritySqlPredicate } from './lesson-memory-repository.js';
+import {
+  readStudentMemoryCurrentness,
+  type StudentMemoryCurrentness,
+} from './student-memory-currentness.js';
 import {
   StudentMemoryConfidenceSchema,
   StudentMemoryIssueTypeSchema,
@@ -18,7 +23,6 @@ import {
   StudentMemorySnapshotStatusSchema,
   type StudentMemoryUnresolvedIssue,
 } from './student-memory-snapshot-model.js';
-import { buildCanonicalLessonMemoryAuthoritySqlPredicate } from './lesson-memory-repository.js';
 
 interface StudentMemorySnapshotRow {
   id: string;
@@ -74,7 +78,16 @@ export type InsertCanonicalReadyStudentMemorySnapshotParams = Omit<
   'status'
 > & {
   expectedLatestReadySnapshotId?: string | null;
+  pendingEntryId?: string | null;
+  expectedCurrentness?: StudentMemoryCurrentness;
 };
+
+export class StudentMemorySnapshotIntentObsoleteError extends Error {
+  constructor() {
+    super('Snapshot intent is cancelled, superseded, or its source/current snapshot state changed');
+    this.name = 'StudentMemorySnapshotIntentObsoleteError';
+  }
+}
 
 export class StudentMemorySnapshotParentChangedError extends Error {
   readonly studentId: string;
@@ -115,6 +128,7 @@ export interface EnsurePendingStudentMemorySnapshotParams {
   generationNotes?: StudentMemorySnapshotGenerationNotes | null;
   sourceEntryId?: string | null;
   reuseReadyHomeworkSource?: boolean;
+  replayKey?: string;
 }
 
 export interface EnsurePendingStudentMemorySnapshotResult {
@@ -161,6 +175,46 @@ export async function ensurePendingStudentMemorySnapshot(
     await client.query('BEGIN');
     try {
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+
+      if (params.replayKey) {
+        const existing = await client.query<StudentMemorySnapshotRow>(
+          `SELECT * FROM student_memory_snapshots WHERE student_id = $1
+           AND generation_notes ->> 'replayKey' = $2
+           AND generation_notes ->> 'pendingEntryId' IS NULL`,
+          [params.studentId, params.replayKey],
+        );
+        if (existing.rows[0]) {
+          if (existing.rows[0].status === 'failed') {
+            await client.query(
+              `UPDATE student_memory_snapshots SET status = 'pending', updated_at = NOW() WHERE id = $1`,
+              [existing.rows[0].id],
+            );
+            existing.rows[0].status = 'pending';
+          }
+          await client.query('COMMIT');
+          return {
+            outcome:
+              existing.rows[0].status === 'pending' ? 'pending_exists' : 'already_reconciled',
+            entry: mapRowToStudentMemorySnapshot(existing.rows[0]),
+          };
+        }
+        // A new explicit manual replay replaces older manual intent, never online intent.
+        await client.query(
+          `UPDATE student_memory_snapshots SET status = 'superseded',
+          generation_notes = COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object('obsoleteReason', 'new_manual_replay'),
+          updated_at = NOW() WHERE student_id = $1 AND status IN ('pending', 'failed')
+          AND generation_notes ->> 'trigger' = 'manual-replay'`,
+          [params.studentId],
+        );
+        params = {
+          ...params,
+          generationNotes: {
+            ...params.generationNotes,
+            replayKey: params.replayKey,
+            currentness: await readStudentMemoryCurrentness(client, params.studentId),
+          },
+        };
+      }
 
       if (params.reuseReadyHomeworkSource && params.sourceEntryId) {
         const eligibleLineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot');
@@ -226,6 +280,21 @@ export async function ensurePendingStudentMemorySnapshot(
       }
 
       if (params.sourceEntryId) {
+        const terminal = await client.query<StudentMemorySnapshotRow>(
+          `SELECT * FROM student_memory_snapshots WHERE student_id = $1
+           AND generation_notes ->> 'sourceEntryId' = $2 AND status = 'superseded'
+           AND (generation_notes ? 'cancelledAt' OR generation_notes ? 'obsoleteReason')
+           AND generation_notes ->> 'pendingEntryId' IS NULL
+           ORDER BY created_at DESC, id DESC LIMIT 1`,
+          [params.studentId, params.sourceEntryId],
+        );
+        if (terminal.rows[0]) {
+          await client.query('COMMIT');
+          return {
+            outcome: 'already_reconciled',
+            entry: mapRowToStudentMemorySnapshot(terminal.rows[0]),
+          };
+        }
         const pendingResult = await client.query<StudentMemorySnapshotRow>(
           `
           SELECT
@@ -470,6 +539,10 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
   params: InsertCanonicalReadyStudentMemorySnapshotParams,
   options?: { client?: PoolClient },
 ): Promise<StudentMemorySnapshotRecord> {
+  if (params.pendingEntryId) {
+    if (options?.client) throw new Error('Ordinary snapshot finalization owns its transaction');
+    return finalizePendingStudentMemorySnapshot(params);
+  }
   const id = params.id ?? randomUUID();
   const generatedAt = params.generatedAt ?? new Date();
 
@@ -487,7 +560,7 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
              AND lesson_memory_entries.status = 'ready'
              AND lesson_memory_entries.source_content_hash IS NOT NULL
              AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
-           FOR SHARE`,
+           `,
           [params.studentId, requestedLessonIds],
         );
         const readyLessonIds = new Set(readyLessonResult.rows.map((row) => row.id));
@@ -634,6 +707,124 @@ export async function insertCanonicalReadyStudentMemorySnapshotWithinTransaction
   params: InsertCanonicalReadyStudentMemorySnapshotParams,
 ): Promise<StudentMemorySnapshotRecord> {
   return insertCanonicalReadyStudentMemorySnapshot(params, { client });
+}
+
+export async function admitStudentMemorySnapshotIntent(params: {
+  studentId: string;
+  pendingEntryId: string;
+  expectedCurrentness: StudentMemoryCurrentness;
+}): Promise<boolean> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+      const intent = (
+        await client.query<StudentMemorySnapshotRow>(
+          'SELECT * FROM student_memory_snapshots WHERE id = $1 AND student_id = $2 FOR UPDATE',
+          [params.pendingEntryId, params.studentId],
+        )
+      ).rows[0];
+      if (intent?.status !== 'pending') {
+        await client.query('COMMIT');
+        return false;
+      }
+      const current = await readStudentMemoryCurrentness(client, params.studentId);
+      const admitted =
+        current.sourceState === params.expectedCurrentness.sourceState &&
+        current.latestReadySnapshotId === params.expectedCurrentness.latestReadySnapshotId;
+      if (!admitted)
+        await client.query(
+          `UPDATE student_memory_snapshots SET status = 'superseded',
+        generation_notes = COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object('obsoleteReason', 'memory_state_changed'),
+        updated_at = NOW() WHERE id = $1`,
+          [intent.id],
+        );
+      await client.query('COMMIT');
+      return admitted;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+async function finalizePendingStudentMemorySnapshot(
+  params: InsertCanonicalReadyStudentMemorySnapshotParams,
+): Promise<StudentMemorySnapshotRecord> {
+  const result = await withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+      const intent = (
+        await client.query<StudentMemorySnapshotRow>(
+          'SELECT * FROM student_memory_snapshots WHERE id = $1 FOR UPDATE',
+          [params.pendingEntryId],
+        )
+      ).rows[0];
+      if (intent?.student_id === params.studentId && intent.superseded_by_id) {
+        const completed = (
+          await client.query<StudentMemorySnapshotRow>(
+            `SELECT * FROM student_memory_snapshots WHERE id = $1 AND student_id = $2
+           AND generation_notes ->> 'pendingEntryId' = $3`,
+            [intent.superseded_by_id, params.studentId, intent.id],
+          )
+        ).rows[0];
+        if (completed) {
+          await client.query('COMMIT');
+          return mapRowToStudentMemorySnapshot(completed);
+        }
+      }
+      if (!intent || intent.student_id !== params.studentId || intent.status !== 'pending') {
+        await client.query('COMMIT');
+        return null;
+      }
+      if (
+        intent.provider !== params.provider ||
+        intent.model !== params.model ||
+        !params.expectedCurrentness
+      ) {
+        throw new Error('Snapshot finalization requires the frozen target and currentness');
+      }
+      const current = await readStudentMemoryCurrentness(client, params.studentId);
+      if (
+        current.sourceState !== params.expectedCurrentness.sourceState ||
+        current.latestReadySnapshotId !== params.expectedCurrentness.latestReadySnapshotId
+      ) {
+        await client.query(
+          `UPDATE student_memory_snapshots SET status = 'superseded',
+          generation_notes = COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object('obsoleteReason', 'memory_state_changed'),
+          updated_at = NOW() WHERE id = $1`,
+          [intent.id],
+        );
+        await client.query('COMMIT');
+        return null;
+      }
+      const snapshot = await insertCanonicalReadyStudentMemorySnapshot(
+        {
+          ...params,
+          pendingEntryId: null,
+          generationNotes: {
+            ...intent.generation_notes,
+            ...params.generationNotes,
+            pendingEntryId: intent.id,
+          },
+        },
+        { client },
+      );
+      await client.query(
+        `UPDATE student_memory_snapshots SET status = 'superseded',
+        superseded_by_id = $2, superseded_at = $3, updated_at = NOW() WHERE id = $1`,
+        [intent.id, snapshot.id, snapshot.generatedAt],
+      );
+      await client.query('COMMIT');
+      return snapshot;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+  if (!result) throw new StudentMemorySnapshotIntentObsoleteError();
+  return result;
 }
 
 export async function getStudentMemorySnapshotById(
