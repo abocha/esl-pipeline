@@ -481,6 +481,88 @@ describe('ordinary replay transactions and DB → BullMQ delivery', () => {
     );
   });
 
+  it('delta regression: recovery cannot fence newer Batch ownership after its selected intent completes', async () => {
+    const source = await seed();
+    await readyHomework(source);
+    const intent = await pendingSnapshot(source.studentId);
+    const [payload] = await listRecoverableMemoryDeliveries();
+    if (!payload || payload.kind !== 'student-memory-snapshot-refresh')
+      throw new Error('Expected selected pending snapshot intent');
+    expect(payload.pendingEntryId).toBe(intent.id);
+    const barrier = pausedExtraction(null);
+    const query = Client.prototype.query;
+    let paused = false;
+    const spy = vi.spyOn(Client.prototype, 'query').mockImplementation(function (
+      this: Client,
+      ...args: unknown[]
+    ) {
+      if (
+        !paused &&
+        typeof args[0] === 'string' &&
+        args[0].includes('UPDATE student_memory_openai_batch_items AS item')
+      ) {
+        paused = true;
+        return barrier.extractor().then(() => Reflect.apply(query, this, args));
+      }
+      return Reflect.apply(query, this, args);
+    } as typeof Client.prototype.query);
+    const reconcile = vi.fn();
+    const recovery = reconcileMemoryDelivery({ list: async () => [payload], queue: { reconcile } });
+    let laterRunId!: string;
+    let completedId!: string;
+    try {
+      // The selection was pending, but fencing has not acquired ownership yet.
+      await barrier.entered;
+      await runSnapshot(intent);
+      completedId = (await getStudentMemorySnapshotById(intent.id))!.supersededById!;
+      expect(completedId).toBeTruthy();
+      laterRunId = (
+        await createStudentMemoryOpenAiBatchRun({
+          workload: 'student_memory_snapshot',
+          model: 'gpt-5.2',
+          inputJsonlSha256: 'e'.repeat(64),
+          inputBytes: 123,
+          items: [
+            {
+              studentId: source.studentId,
+              customId: randomUUID(),
+              canonicalScopeKey: source.studentId,
+              sourceVersionHash: 'f'.repeat(64),
+              requestEnvelope: {},
+              responseSchemaFingerprint: 'snapshot-schema',
+              requestBody: {},
+              sourceRefs: { lessonMemoryEntryIds: [], homeworkMemoryEntryIds: [] },
+            },
+          ],
+        })
+      ).id;
+    } finally {
+      barrier.release();
+      try {
+        await recovery;
+      } finally {
+        spy.mockRestore();
+      }
+    }
+    const [laterItem] = await listStudentMemoryOpenAiBatchItems({ runId: laterRunId });
+    expect(laterItem).toMatchObject({ claimState: 'active', state: 'planned' });
+    const claim = await withPgClient((client) =>
+      client.query('SELECT state FROM student_memory_openai_batch_claims WHERE item_id = $1', [
+        laterItem!.id,
+      ]),
+    );
+    expect(claim.rows[0].state).toBe('active');
+    expect((await getStudentMemorySnapshotById(completedId))?.status).toBe('ready');
+    expect(reconcile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingEntryId: intent.id,
+        provider: intent.provider,
+        model: intent.model,
+      }),
+      expect.anything(),
+    );
+  });
+
   it('review regression: failure after concurrent online-intent adoption preserves replay identity and target', async () => {
     const source = await seed();
     const original = (

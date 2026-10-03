@@ -620,7 +620,11 @@ export async function recordStudentMemoryOpenAiBatchReconciliationAudit(params: 
 export async function supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork(params: {
   workload: StudentMemoryOpenAiBatchWorkload;
   canonicalScopeKey: string;
+  pendingSnapshotIntentId?: string;
 }): Promise<string[]> {
+  if (params.pendingSnapshotIntentId && params.workload !== 'student_memory_snapshot') {
+    throw new Error('Pending snapshot ownership fencing requires the snapshot workload');
+  }
   return withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
@@ -647,6 +651,23 @@ export async function supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork(param
         `,
         [params.workload, params.canonicalScopeKey],
       );
+      if (params.pendingSnapshotIntentId) {
+        // Transitional recovery guard: retain Batch import's item/claim → student
+        // order, then finalization's student → intent order. The tentative fence
+        // is invisible outside this transaction and rolls back for terminal work.
+        await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [
+          params.canonicalScopeKey,
+        ]);
+        const intent = await client.query<{ status: string }>(
+          `SELECT status FROM student_memory_snapshots
+           WHERE id = $1 AND student_id = $2 FOR UPDATE`,
+          [params.pendingSnapshotIntentId, params.canonicalScopeKey],
+        );
+        if (intent.rows[0]?.status !== 'pending') {
+          await client.query('ROLLBACK');
+          return [];
+        }
+      }
       await client.query('COMMIT');
       return result.rows.map((row) => row.id);
     } catch (error) {
