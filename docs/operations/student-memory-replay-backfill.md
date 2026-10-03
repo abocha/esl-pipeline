@@ -122,7 +122,10 @@ separately gated pending the later ABO-26 retirement slice.
 - Before recovered pending snapshot generation can enter BullMQ, reconciliation repairs the existing active
   Batch claim supersession prerequisite. A failed fence leaves delivery retryable and unqueued;
   a later Batch import cannot overwrite recovered ordinary output through an old active claim.
-  Redelivery of an already completed intent only repairs downstream work and preserves later Batch ownership.
+  The existing Batch fencing transaction locks items/claims before the student and exact intent,
+  matching Batch import and ordinary completion ordering. It commits supersession only while that
+  intent is still pending; otherwise it rolls back, including if completion raced the recovery
+  selection. Redelivery of a completed intent preserves later Batch ownership and repairs downstream work.
 - Failure marking merges failure-owned metadata into current database JSONB. Concurrently adopted
   replay identity, currentness, and delivery metadata survive, so same-key retry resumes the same
   intent and frozen provider/model target.
