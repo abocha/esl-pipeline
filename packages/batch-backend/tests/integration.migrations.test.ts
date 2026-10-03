@@ -1232,6 +1232,7 @@ describe('integration/migrations', () => {
     'hard cutover removes unfinished editor state and preserves completed output lineage',
     async () => {
       const ids = {
+        workspace: randomUUID(),
         user: randomUUID(),
         student: randomUUID(),
         recording: randomUUID(),
@@ -1277,12 +1278,17 @@ describe('integration/migrations', () => {
             `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'hash', 'user')`,
             [ids.user, `${ids.user}@example.test`],
           );
-          await pool.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha Tester')`, [
-            ids.student,
+          await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Cutover fixture')`, [
+            ids.workspace,
           ]);
-          await pool.query(`INSERT INTO students (id, student) VALUES ($1, 'Other Tester')`, [
-            ids.otherStudent,
-          ]);
+          await pool.query(
+            `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alpha Tester', $2)`,
+            [ids.student, ids.workspace],
+          );
+          await pool.query(
+            `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Other Tester', $2)`,
+            [ids.otherStudent, ids.workspace],
+          );
           await pool.query(
             `
           INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
@@ -1636,7 +1642,11 @@ describe('integration/migrations', () => {
           expect(transcript.rows[0]).toEqual({ working_version: null, content_hash: null });
         });
 
+        // Keep the historical cutover assertions at their original boundary, then
+        // upgrade the fixture before exercising the current application reader.
+        await runMigrations();
         const source = await resolveHomeworkMemorySourceFromSucceededJob(ids.rerunJob);
+        expect(source.format).toBe('markdown');
         expect(source.publishedMarkdown).toBe(historicalMarkdown);
         expect(source.assignmentLineageKey).toBe(ids.rootJob);
       } finally {
