@@ -98,6 +98,11 @@ separately gated pending the later ABO-26 retirement slice.
   automatic refresh captures them before building its prompt. Both recheck before dispatch and
   commit. New relevant lesson/homework state, lost Source authority, a newer snapshot, cancellation,
   or supersession discards late output. Manual replay no longer overwrites newer valid state.
+- Lesson publication/replacement and Source confirmation/reconfirmation acquire that student lock
+  before transcript, binding, or memory-row locks. Homework retains its lineage job lock before
+  the student and memory rows. Triggers enforce participation but cannot repair reversed application
+  lock ordering. Migration `0061` is runtime-incompatible with previous writers: use the existing
+  deploy quiescence and schema-compatible recovery procedure; image-only rollback is blocked.
 - Snapshot canonical insertion, superseding prior ready state, and linking the pending intent to
   its result commit together. Duplicate completion returns that same result, preserving lineage,
   included/covered IDs, parent, prompt/source metadata, strategy, and ownership. Homework keeps its
@@ -114,6 +119,12 @@ separately gated pending the later ABO-26 retirement slice.
   candidate delivery in `pending`/`failed` state are recovered without regenerating canonical
   memory. Existing failed/cancelled downstream intent is not replaced automatically. Provider
   failures still use existing pacing/retries and terminal failure policy.
+- Before recovered snapshot delivery can enter BullMQ, reconciliation repairs the existing active
+  Batch claim supersession prerequisite. A failed fence leaves delivery retryable and unqueued;
+  a later Batch import cannot overwrite recovered ordinary output through an old active claim.
+- Failure marking merges failure-owned metadata into current database JSONB. Concurrently adopted
+  replay identity, currentness, and delivery metadata survive, so same-key retry resumes the same
+  intent and frozen provider/model target.
 
 Inspect the original intent UUID and its `superseded_by_id` together with the linked result's
 `generation_notes.pendingEntryId`. `obsoleteReason` records discarded replay. Use a new key only

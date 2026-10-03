@@ -1023,31 +1023,17 @@ export async function markStudentMemorySnapshotFailed(params: {
   providerRequestId?: string | null;
   usage?: unknown;
 }): Promise<StudentMemorySnapshotRecord | null> {
-  const existing = await getStudentMemorySnapshotById(params.id);
-  if (!existing) {
-    return null;
-  }
-
-  const generationNotes: StudentMemorySnapshotGenerationNotes = {
-    ...existing.generationNotes,
-    ...(params.generationNotes ?? {}),
-    error: params.errorMessage,
-    providerRequestId:
-      params.providerRequestId ??
-      params.generationNotes?.providerRequestId ??
-      existing.generationNotes?.providerRequestId ??
-      null,
-    usage: params.usage ?? params.generationNotes?.usage ?? existing.generationNotes?.usage ?? null,
-    failedAt: new Date().toISOString(),
-  };
-
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       UPDATE student_memory_snapshots
       SET
         status = 'failed',
-        generation_notes = $2::jsonb,
+        generation_notes = COALESCE(generation_notes, '{}'::jsonb)
+          || ($2::jsonb - ARRAY['replayKey', 'currentness', 'deliveryCheckedAt'])
+          || jsonb_build_object('error', $3::text, 'failedAt', $6::text,
+            'providerRequestId', COALESCE($4::text, generation_notes ->> 'providerRequestId'),
+            'usage', COALESCE($5::jsonb, generation_notes -> 'usage')),
         updated_at = NOW()
       WHERE id = $1
         AND status = 'pending'
@@ -1077,7 +1063,16 @@ export async function markStudentMemorySnapshotFailed(params: {
         created_at,
         updated_at
       `,
-      [params.id, JSON.stringify(generationNotes)],
+      [
+        params.id,
+        JSON.stringify(params.generationNotes ?? {}),
+        params.errorMessage,
+        params.providerRequestId ?? params.generationNotes?.providerRequestId ?? null,
+        (params.usage ?? params.generationNotes?.usage) == null
+          ? null
+          : JSON.stringify(params.usage ?? params.generationNotes?.usage),
+        new Date().toISOString(),
+      ],
     );
     return result.rows[0];
   });

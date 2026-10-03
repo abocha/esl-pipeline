@@ -248,6 +248,8 @@ export async function insertCanonicalReadyLessonMemoryEntry(
   const write = async (client: PoolClient) => {
     if (!options?.client) await client.query('BEGIN');
     try {
+      // Acquire currentness ownership before transcript or memory-row locks.
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
       // Serialize canonical ready replacement per transcript to avoid supersession races.
       await client.query('SELECT id FROM transcripts WHERE id = $1 FOR UPDATE', [
         params.transcriptId,
@@ -423,6 +425,8 @@ export async function ensurePendingLessonMemoryEntry(
   return withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
+      // Reassignment and replacement can mutate ready sources as well as intent.
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
       const transcriptResult = await client.query<TranscriptVersionRow>(
         'SELECT id, updated_at FROM transcripts WHERE id = $1 FOR UPDATE',
         [params.transcriptId],
@@ -724,8 +728,11 @@ export async function publishConfirmedLessonMemoryEntry(
 ): Promise<LessonMemoryRecord | null> {
   const generatedAt = params.generatedAt ?? new Date();
   const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query<LessonMemoryRow>(
-      `
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+      const result = await client.query<LessonMemoryRow>(
+        `
       UPDATE lesson_memory_entries
       SET schema_version = $4, generated_at = $5, provider = $6, model = $7,
           status = 'ready', generation_notes = $8::jsonb, lesson_title = $9,
@@ -743,30 +750,35 @@ export async function publishConfirmedLessonMemoryEntry(
         AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
       RETURNING *
       `,
-      [
-        params.id,
-        params.transcriptId,
-        params.sourceContentHash,
-        params.schemaVersion,
-        generatedAt,
-        params.provider,
-        params.model,
-        JSON.stringify(params.generationNotes ?? null),
-        params.lessonTitle ?? null,
-        params.lessonSummary ?? null,
-        JSON.stringify(params.topicsDiscussed ?? []),
-        JSON.stringify(params.mistakePatterns ?? []),
-        JSON.stringify(params.grammarReviewed ?? []),
-        JSON.stringify(params.grammarWatchlist ?? []),
-        JSON.stringify(params.vocabularyFocus ?? []),
-        JSON.stringify(params.pronunciationFocus ?? []),
-        JSON.stringify(params.studentFacts ?? []),
-        JSON.stringify(params.progressSignals ?? []),
-        JSON.stringify(params.followUpRecommendations ?? []),
-        params.sourceStorageUri,
-      ],
-    );
-    return result.rows[0] ?? null;
+        [
+          params.id,
+          params.transcriptId,
+          params.sourceContentHash,
+          params.schemaVersion,
+          generatedAt,
+          params.provider,
+          params.model,
+          JSON.stringify(params.generationNotes ?? null),
+          params.lessonTitle ?? null,
+          params.lessonSummary ?? null,
+          JSON.stringify(params.topicsDiscussed ?? []),
+          JSON.stringify(params.mistakePatterns ?? []),
+          JSON.stringify(params.grammarReviewed ?? []),
+          JSON.stringify(params.grammarWatchlist ?? []),
+          JSON.stringify(params.vocabularyFocus ?? []),
+          JSON.stringify(params.pronunciationFocus ?? []),
+          JSON.stringify(params.studentFacts ?? []),
+          JSON.stringify(params.progressSignals ?? []),
+          JSON.stringify(params.followUpRecommendations ?? []),
+          params.sourceStorageUri,
+        ],
+      );
+      await client.query('COMMIT');
+      return result.rows[0] ?? null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
   return row ? mapRowToLessonMemory(row) : null;
 }
@@ -1051,8 +1063,16 @@ export async function supersedeReadyLessonMemoryEntriesForTranscript(params: {
   }
 
   const rows = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+    await client.query('BEGIN');
+    try {
+      await client.query(
+        `SELECT s.id FROM students s
+        JOIN recordings r ON r.student_id = s.id JOIN transcripts t ON t.recording_id = r.id
+        WHERE t.id = $1 FOR UPDATE OF s`,
+        [params.transcriptId],
+      );
+      const result = await client.query(
+        `
       UPDATE lesson_memory_entries
       SET
         status = 'superseded',
@@ -1088,9 +1108,14 @@ export async function supersedeReadyLessonMemoryEntriesForTranscript(params: {
         created_at,
         updated_at
       `,
-      values,
-    );
-    return result.rows;
+        values,
+      );
+      await client.query('COMMIT');
+      return result.rows;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
 
   if (rows.length > 0) {
