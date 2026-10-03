@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [14.2.0] - 2026-10-03
+
+### Changed
+
+- Automated release from PR #331: feat(student-memory): make ordinary replay safely resumable (https://github.com/abocha/esl-pipeline/pull/331)
+
 ## [14.1.3] - 2026-10-02
 
 ### Changed
