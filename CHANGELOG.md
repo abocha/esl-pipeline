@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [15.0.0] - 2026-10-03
+
+### Changed
+
+- Automated release from PR #335: feat(assignments): make AssignmentV1 the durable draft authority (https://github.com/abocha/esl-pipeline/pull/335)
+
 ## [14.2.1] - 2026-10-03
 
 ### Changed
