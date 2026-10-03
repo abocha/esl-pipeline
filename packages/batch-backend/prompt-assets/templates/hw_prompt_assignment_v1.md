@@ -81,30 +81,42 @@ The list below describes append order. Authority is defined by fact type above.
 **Task-Specific Generation Rules**
 
 1. Produce one coherent homework mission, not a loose bundle of unrelated exercises.
-2. Design around one dominant lesson target, with up to 0-3 smaller directly relevant supporting or review targets when warranted.
-3. Use one primary input source and reuse it across comprehension, grammar, vocabulary, and pronunciation whenever possible.
+2. Design around one dominant lesson target. Add a supporting or review target only when the chosen mission needs it.
+3. Use one primary input source and reuse it across the sections that serve the chosen mission.
 4. Personalize the homework to the student only when that personalization improves learning outcomes.
-5. Carry forward relevant unresolved issues and recent targets without making the assignment repetitive, overloaded, or fragmented.
+5. Use relevant unresolved issues and recent targets to inform target selection; carry one forward only when it serves the chosen mission.
 6. Prefer natural, believable English over generic worksheet filler or textbook-ish dialogue.
 7. Use authentic material only when **`[TEACHER_NOTES]`** requests `Input Type: authentic` and usable authentic-source content is explicitly provided in **`[TEACHER_NOTES]`**, or **`[LATEST_TRANSCRIPT]`**. The model may only transform, shorten, simplify, or summarize authentic-source content that is explicitly provided in the runtime blocks. A URL, title, thumbnail, or general world knowledge is not usable source content.
 8. If no input type is specified in **`[TEACHER_NOTES]`**, default to `generate`.
 9. If authentic material is requested but no usable excerpt, transcript, summary, or source text is provided, set `input.kind: 'generate'` and create a generated parallel scenario grounded in the lesson context. Do not pretend to have read, watched, or accessed an external source.
 10. Do not use the real student's name as a character inside the study text. Always invent separate names and scenarios for the study text.
 11. Keep the study text level-appropriate, coherent, and reusable across later homework sections.
-12. **Target Density:** When generating the study text, deliberately seed it with 3-5 natural occurrences of the primary grammar target and enough useful chunks or vocabulary to support later sections. The Language Toolkit should reuse this text rather than invent cleaner examples elsewhere. For authentic material, choose or adapt the provided excerpt/summary to support the target where possible, but do not fabricate source details or force target density when the supplied authentic content does not support it.
+12. **Target Support:** When generating the study text, include natural occurrences of the primary grammar target and useful language needed for the chosen mission, without targeting an occurrence count. The Language Toolkit should reuse this text rather than invent cleaner examples elsewhere. For authentic material, choose or adapt the provided excerpt/summary to support the target where possible, but do not fabricate source details or force target density when the supplied authentic content does not support it.
 13. **Parallel Scenario Principle:** Keep the study text relevant by matching the themes, pressures, or communicative situation of the lesson, but change private facts, identities, and life details. Preserve relevance without retelling the student's real story.
 14. If the lesson target is not clearly supported by the transcript or teacher notes, choose the strongest recurring language need visible in the provided context. Keep the topic broad and safe. Use `metadata.topic: 'English Practice'` if no narrower topic is justified.
 15. Make the homework feel practical, focused, and cognitively manageable for one adult learner.
 
+**Teaching-Design Intent**
+
+- AssignmentV1 represents one teaching design, not a checklist whose fields should be maximized.
+- A supported learner issue is a candidate, not automatically a target for this assignment.
+- Minimize content to what the chosen mission actually needs.
+- Prefer one grammar object when one coherent concept covers the mission. Add another only for a genuinely separate concept required by the mission. Do not make object count itself the goal or combine unrelated concepts merely to satisfy it.
+- Optional uses, traps, explanations, vocabulary, practice items, and pronunciation exist to express useful content, not to fill capacity. Do not fill optional fields merely because schema capacity exists.
+- Controlled practice must preserve the learner's actual linguistic decision. Do not reveal the auxiliary, tense, aspect, construction, or lexical choice, directly or through indirect cues, when choosing it is the skill being tested.
+- Prefer a short coherent progression over broad coverage of the learner's current backlog.
+- Choose only the vocabulary worth actively using in this assignment. Do not target a preferred item count.
+- Add answer explanations only when they resolve a likely misconception, ambiguity, or non-obvious contrast.
+
 **Exercise Design Rules**
 
-1. Every controlled-practice item must require a real linguistic decision; reject or rewrite items solvable through copying, formatting cleanup, punctuation cleanup, or superficial pattern matching.
+1. Every controlled-practice item must require a real linguistic decision; reject or rewrite items solvable through formatting cleanup, punctuation cleanup, or superficial pattern matching. Copying is acceptable only when intentionally part of the task.
 2. Each controlled-practice item must clearly map to at least one of:
    - the primary lesson target
    - a recent correction
    - a recurring learner error
    - a deliberately chosen review point
-3. Prefer fewer, sharper items over filler items that merely make the worksheet look balanced.
+3. Prefer fewer, sharper items over filler items that merely make the worksheet look balanced. Each additional practice item should introduce a meaningfully different decision, context, or transfer demand. Remove items that merely repeat the same decision in another sentence.
 4. For B1 and above, do not rely on 50/50 binary choices such as `[make / do]` unless a very specific contrast is the real target. Prefer formats that force retrieval from memory.
 5. When the learner has a fossilized error, L1-interference trap, article/preposition omission, or other structural habit, prefer production formats:
    - error correction
@@ -112,10 +124,17 @@ The list below describes append order. Authority is defined by fact type above.
    - gap fill without a word bank
    - inserting one necessary missing word or phrase
 6. When a contrastive format is useful, make it cognitively demanding enough that guessing is not the main path to success. Avoid flat item sets that become repetitive after the first 2-3 questions.
-7. Organize controlled practice into 2-3 distinct named parts when that improves diagnostic value. Each part should test the same weekly target from a different angle rather than repeating one flat item type 10 times.
+7. Use distinct named parts only when that improves diagnostic value. Each part should test the same assignment target from a meaningfully different angle; do not add parts or items for balance or coverage.
 8. Controlled practice should diagnose understanding, not just create the appearance of activity.
 9. If pronunciation is included, tie it to a real issue from the lesson or learner history; do not add generic pronunciation work only because the format contains a pronunciation section.
-10. If no strong pronunciation issue is evidenced, choose the smallest source-grounded rhythm, stress, or chunking intervention from the study text.
+10. Omit pronunciation when no useful intervention is supported; do not add a fallback drill merely to fill the section.
+11. **Local copy-shortcut check:** For each controlled-practice item, inspect the item and its immediately surrounding context for a copying shortcut. If the exact answer, required inflected form, or a trivially reusable target phrase is already visible nearby, rewrite the item unless copying that language is intentionally part of the task.
+
+**Final Mission Design**
+
+- Design the final task around what the listener or reader should understand or accomplish.
+- Let the learner choose how to express those meanings using the language practised in the assignment.
+- Use meaning-based requirements when necessary to ensure important target language is elicited. State what the learner should communicate or find out without naming or supplying the grammatical form they need to choose.
 
 **Final Quality Standard**
 
@@ -133,10 +152,10 @@ The pinned response schema owns output shape. Supply plain text values; presenta
 - Metadata: title, canonical student display name, level (Unknown if unavailable), and supported topic.
 - Mission: one practical goal and the key language that supports it.
 - Input: one generated or supplied authentic source. Use only exact supplied safe HTTP(S) source/media URLs; no invented media links. Source title/attribution/URL may be null, and media may be empty.
-- Study text: one monologue with one speaker, or a dialogue with 2–4 speakers. Each turn references one declared speaker ID; use every speaker. Aim for 3–5 monologue paragraphs or 10–15 dialogue turns. Speaker role/persona/voice direction are provider-neutral descriptions; gender is male, female or neutral, and age carries child/teen/adult distinctions independently. Never include provider voice IDs.
-- Comprehension: prefer 2–3 meaningful questions with answers and optional explanations, based on the study text.
-- Toolkit: practical grammar names, forms, explanations, examples, uses and error traps; prefer 5–10 useful vocabulary expressions with meanings and examples, reusing the input.
-- Practice: usually 6–10 useful questions with corresponding answers and optional explanations. Named parts and instructions are optional. Do not pad item counts.
+- Study text: one monologue with one speaker, or a dialogue with 2–4 speakers. Each turn references one declared speaker ID; use every speaker. Keep the text as short as the chosen mission needs. Speaker role/persona/voice direction are provider-neutral descriptions; gender is male, female or neutral, and age carries child/teen/adult distinctions independently. Never include provider voice IDs.
+- Comprehension: meaningful questions with answers, based on the study text and needed for the mission. Include explanations only when they resolve a likely misconception, ambiguity, or non-obvious contrast.
+- Toolkit: practical grammar names, forms, explanations and examples for the chosen concept, with uses and error traps only where useful. Choose vocabulary worth actively using in this assignment, with meanings and examples reusing the input; do not target a preferred item count.
+- Practice: useful questions with corresponding answers; each item adds a different decision, context, or transfer demand. Include explanations only when they resolve a likely misconception, ambiguity, or non-obvious contrast. Named parts and instructions are optional. Do not pad item counts.
 - Pronunciation: null when no useful intervention is supported. Otherwise choose shadow_sentence, minimal_pair, connected_speech, intonation, rhythm_chunking or sentence_stress. Supply its specific payload, target, focus, action and deliverable. Transcription is optional; chunks reconstruct their drill text, and stressed words occur in it. Prefer a small, coherent set of drills and natural sentence practice.
 - Output task: a practical learner response, optional extension and one sample response. Recording, submission or sending to the teacher must remain optional unless the tutor explicitly requests it; do not invent links, upload destinations or external resources.
 - Rationale: explain why this mission helps this learner with supported evidence.
