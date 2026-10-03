@@ -987,6 +987,10 @@ export interface PromptOptionsResponse {
 }
 
 export interface PromptPackageResponse {
+  requestEnvelope?: {
+    promptVersion?: string;
+    assignmentContext?: import('@esl-pipeline/contracts').AssignmentValidationContext;
+  } | null;
   id: string;
   recordingId: string;
   transcriptId: string;
@@ -1178,19 +1182,10 @@ export interface JobProvenanceResponse {
   }[];
 }
 
-export interface DraftResponse {
-  id: string;
-  promptPackageId: string;
-  studentId: string | null;
-  lessonId?: string | null;
-  storageUri: string;
-  createdBy: string | null;
-  text: string;
-  workingVersion: number;
-  contentHash: string;
-  createdAt: string;
-  updatedAt: string;
-}
+export type DraftResponse = Omit<
+  import('@esl-pipeline/contracts').AssignmentDraftDto,
+  'workingVersion' | 'contentHash'
+> & { workingVersion: number; contentHash: string };
 
 export interface MaterializeDraftResponse {
   draftId: string;
@@ -1576,7 +1571,9 @@ export async function validateMarkdown(
 }
 
 export async function renderHtmlPreview(params: {
-  text: string;
+  text?: string;
+  assignment?: import('@esl-pipeline/contracts').AssignmentV1;
+  promptPackageId?: string;
   title?: string;
   learningPresetId?: string | null;
   audioUrl?: string | null;
@@ -1585,6 +1582,8 @@ export async function renderHtmlPreview(params: {
   try {
     const response = await apiClient.post(buildApiProxyPath('/preview/html'), {
       text: params.text,
+      assignment: params.assignment,
+      promptPackageId: params.promptPackageId,
       title: params.title,
       learningPresetId: params.learningPresetId,
       audioUrl: params.audioUrl,

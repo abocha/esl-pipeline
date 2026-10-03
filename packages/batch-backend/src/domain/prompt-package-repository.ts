@@ -276,3 +276,19 @@ function mapRowToPromptPackage(row: PromptPackageRow): PromptPackageRecord {
     updatedAt: row.updated_at,
   };
 }
+
+export async function isPromptPackageAccessibleForUser(
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  return withPgClient(async (client) => {
+    const result = await client.query(
+      `SELECT 1 FROM prompt_packages pp
+      JOIN recordings r ON r.id = pp.recording_id
+      JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id
+      WHERE pp.id = $1 AND wm.user_id = $2`,
+      [id, userId],
+    );
+    return Boolean(result.rows[0]);
+  });
+}

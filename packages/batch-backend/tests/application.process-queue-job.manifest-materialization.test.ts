@@ -4,11 +4,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
+import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
 import { manifestPathFor } from '@esl-pipeline/orchestrator';
 
+import { assignmentHash } from '../src/application/assignment-artifact.js';
 import { processQueueJob } from '../src/application/process-queue-job.js';
+import * as promptRepository from '../src/domain/prompt-package-repository.js';
 import * as transcriptionStorage from '../src/infrastructure/transcription-storage.js';
 import * as h from './application.process-queue-job.test-harness.js';
+import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 
 const {
   makeJob,
@@ -20,6 +25,142 @@ const {
 } = h;
 
 describe('application/process-queue-job', () => {
+  it('retains the initial typed filesystem manifest after temporary projection cleanup', async () => {
+    const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-typed-manifest-'));
+    vi.stubEnv('FILESYSTEM_UPLOAD_DIR', uploadDir);
+    const assignment = assignmentFixture();
+    const hash = assignmentHash(assignment);
+    const initial = makeJob({
+      md: null,
+      assignmentArtifact: {
+        format: 'assignment_v1',
+        schemaVersion: 1,
+        serializationVersion: 1,
+        workingVersion: 1,
+        contentHash: hash,
+        storageUri: `local://drafts/test/content/${hash}.json`,
+      },
+      assignmentRendererVersion: 1,
+      promptPackageId: 'prompt-1',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+    const running = makeJob({ ...initial, state: 'running' });
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running)
+      .mockResolvedValueOnce({ ...running, state: 'succeeded' });
+    const prompt = vi
+      .spyOn(promptRepository, 'getPromptPackageById')
+      .mockResolvedValue(promptPackageFixture() as never);
+    createTranscriptionStorageForUriSpy.mockReturnValue({
+      getText: vi.fn().mockResolvedValue(serializeAssignmentV1(assignment)),
+    } as never);
+    let temporaryManifest!: string;
+    runAssignmentJobSpy.mockImplementation(async (payload) => {
+      temporaryManifest = manifestPathFor(payload.md);
+      await fs.writeFile(temporaryManifest, '{"mdHash":"typed-projection"}', 'utf8');
+      return { manifestPath: temporaryManifest };
+    });
+    try {
+      await processQueueJob({ jobId: initial.id });
+      const durable = path.join(uploadDir, 'assignments', `${initial.id}.manifest.json`);
+      expect(await fs.readFile(durable, 'utf8')).toBe('{"mdHash":"typed-projection"}');
+      await expect(fs.access(temporaryManifest)).rejects.toThrow();
+      expect(updateJobStateAndResultSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ manifestPath: durable }),
+      );
+    } finally {
+      prompt.mockRestore();
+      vi.unstubAllEnvs();
+      await fs.rm(uploadDir, { recursive: true, force: true });
+    }
+  });
+
+  it('publishes frozen typed JSON with a separate PMD hash and child-owned correction identity', async () => {
+    const assignment = assignmentFixture();
+    const hash = assignmentHash(assignment);
+    const artifact = {
+      format: 'assignment_v1' as const,
+      schemaVersion: 1 as const,
+      serializationVersion: 1 as const,
+      workingVersion: 2,
+      storageUri: `local://drafts/test/content/${hash}.json`,
+      contentHash: hash,
+    };
+    const initial = makeJob({
+      md: '/unrelated-later-draft.md',
+      mdStorageUri: 'local://unreadable-projection.md',
+      assignmentArtifact: artifact,
+      assignmentRendererVersion: 1,
+      promptPackageId: 'prompt-1',
+      studentId: 'student-1',
+      sourceJobId: 'job-parent',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+    const running = makeJob({ ...initial, state: 'running' });
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running)
+      .mockResolvedValueOnce({ ...running, state: 'succeeded', htmlUrl: 'https://test/typed' });
+    const prompt = vi
+      .spyOn(promptRepository, 'getPromptPackageById')
+      .mockResolvedValue(promptPackageFixture() as never);
+    const read = vi.fn().mockResolvedValue(serializeAssignmentV1(assignment));
+    createTranscriptionStorageForUriSpy.mockReturnValue({ getText: read } as never);
+    runAssignmentJobSpy.mockImplementation(async (payload) => {
+      expect(await fs.readFile(payload.md, 'utf8')).toBe(renderAssignmentToPmd(assignment));
+      expect(payload.md).toMatch(/[\\/]job-1\.md$/);
+      return { manifestPath: 's3://manifests/job-1.manifest.json' };
+    });
+    try {
+      await processQueueJob({
+        jobId: initial.id,
+        sourceJobId: 'job-parent',
+        executionMode: 'correction',
+        correction: { expectedAssignmentHash: hash, manifestMd: 'corrections/job-1.md' },
+      });
+      expect(read).toHaveBeenCalledWith(artifact.storageUri);
+      const pmdHash = createHash('sha256').update(renderAssignmentToPmd(assignment)).digest('hex');
+      expect(pmdHash).not.toBe(hash);
+      expect(updateJobStateAndResultSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ publishedContentHash: pmdHash }),
+      );
+      expect(h.requestHomeworkMemoryGenerationSpy).toHaveBeenCalled();
+    } finally {
+      prompt.mockRestore();
+    }
+  });
+
+  it('fails typed correction identity mismatch before rendering or pipeline execution', async () => {
+    const hash = 'a'.repeat(64);
+    const initial = makeJob({
+      assignmentArtifact: {
+        format: 'assignment_v1',
+        schemaVersion: 1,
+        serializationVersion: 1,
+        workingVersion: 1,
+        storageUri: `local://drafts/test/content/${hash}.json`,
+        contentHash: hash,
+      },
+      assignmentRendererVersion: 1,
+      promptPackageId: 'prompt-1',
+      sourceJobId: 'job-parent',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce({ ...initial, state: 'running' })
+      .mockResolvedValueOnce({ ...initial, state: 'failed' });
+    await expect(
+      processQueueJob({
+        jobId: initial.id,
+        sourceJobId: 'job-parent',
+        executionMode: 'correction',
+        correction: { expectedAssignmentHash: 'b'.repeat(64), manifestMd: 'corrections/job-1.md' },
+      }),
+    ).rejects.toThrow('Correction assignment identity mismatch');
+    expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+    expect(updateJobStateAndResultSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ nextState: 'failed' }),
+    );
+  });
   it('uses a child-specific markdown basename for correction manifest identity', async () => {
     const markdown = '# Corrected assignment';
     const expectedHash = createHash('sha256').update(markdown, 'utf8').digest('hex');

@@ -101,6 +101,8 @@ export async function requestHomeworkMemoryGeneration(args: {
     contentHash: sourceBundle.contentHash,
     bypassReadyReuse: args.params.forceRegenerate ?? false,
     generationNotes: {
+      sourceFormat: sourceBundle.format ?? 'markdown',
+      ...(sourceBundle.artifact ? { assignmentArtifact: sourceBundle.artifact } : {}),
       trigger: publishKind === 'correction' ? 'publish-correction-succeeded' : 'publish-succeeded',
       publishKind,
       requestedAt: requestedAt.toISOString(),

@@ -1,10 +1,10 @@
-# AssignmentV1 generation and PMD compatibility
+# AssignmentV1 durable authority and PMD compatibility
 
 ## Meta
 
 - Audience: maintainers, prompt authors and implementing agents.
 - Authority Level: generation contract and compatibility reference.
-- Last Verified Against: 2026-10-02 ESL-4 / GitHub #308 implementation.
+- Last Verified Against: 2026-10-03 ESL-5 / ABO-29 local implementation.
 - Owner: backend maintainer + founder-maintainer.
 - Review Cadence: after assignment schema, renderer or prompt cutover changes.
 - Status: `reference`.
@@ -63,11 +63,33 @@ prose escapes only after structural/delimiter parsing, restoring actual speech t
 word/pair drills without transcription. Historical Markdown parsing remains unchanged. This tag
 identifies an escaping convention; it does not grant ownership or establish a durable typed draft.
 
-The generation DTO still returns `text`. Editing, autosave/resume, confirmation, preview, Share,
-immutable Markdown storage, hashes, correction reservations, frozen republish/audio selection,
-publication ordering and memory extraction continue using their existing Markdown contracts.
-No SQL migration, typed persistence, canonical hash migration, manifest redesign, typed editor,
-direct typed TTS/publisher or memory-schema change is part of this slice.
+Slice 1 originally returned projected Markdown. [ESL-5](https://linear.app/abocha/issue/ESL-5)
+and the decided [ABO-29](https://linear.app/abocha/issue/ABO-29) bridge now make validated
+AssignmentV1 the durable editable authority. Generation/draft DTOs return `format: assignment_v1`,
+`assignment`, pinned `validationContext`, and pretty-printed JSON in `text`. The shared
+`assignment-artifact.ts` contract defines canonical serialization version 1: sorted object keys,
+preserved arrays and exact string content. SHA-256 hashes canonical UTF-8 bytes; textarea whitespace
+and key formatting have no identity effect. Immutable objects use content-addressed `.json` URIs.
+
+The whole-document editor is a temporary JSON textarea. It permits invalid local text while typing,
+shows syntax/schema-path/domain errors and admits durable autosave only after parse and validation.
+Invalid buffers cannot preview, confirm, correct or publish, and have no durable storage. Reload
+loads the latest valid object. Existing working-version CAS, conflict-buffer preservation, source
+authority, confirmation and lineage remain. Historical rows explicitly use `format: markdown`.
+
+Confirmed Create and jobs freeze format/schema/serialization/working-version/URI/hash references.
+Jobs separately pin PMD renderer version 1. Publication and corrections read and integrity-check
+that frozen JSON even after later draft edits. PMD, HTML, media, manifest and job identities stay
+downstream; no native typed orchestrator/TTS/HTML cutover occurs in Slice 2. Correction requests
+carry the exact saved artifact and replay against frozen job/history identity. Ordinary republish
+retains its memory-neutral behavior. Typed homework memory consumes the object directly; its dedup
+hash is SHA-256 of `assignment_v1:1:<canonical artifact hash>`. Legacy/pending Markdown paths preserve
+their prior extraction and hashes, while publication sequence still governs canonical memory order.
+
+Migration 0062 is additive and preserves historical records, freezes draft formats/job references,
+and rejects incomplete typed identity. API 7 / DB 2 identify the cutover; schema version 1, prompt,
+validator and manifest versions are unchanged. Local evidence covers typed admission, lifecycle,
+frozen worker input, mixed reads, memory and migration boundaries; hosted CI remains the merge gate.
 
 ## Later authorized rollout and rollback
 
@@ -90,6 +112,10 @@ Use the [prompt bootstrap runbook](../operations/prompt-gallery-bootstrap.md) an
    A separately authorized synthetic paid smoke must verify the submitted provider schema and
    completion/refusal/truncation behavior. Inspect representative handout/audio previews, including
    each supported mode's existing audio capability, before claiming runtime activation.
-5. On rollback, restore the prior code/image and template/env selection together. Slice-1 saved
-   drafts are ordinary Markdown and remain consumable. Do not pair old Markdown generation code
-   with the structured prompt or modify saved snapshots to make incompatible generation succeed.
+5. Before typed writes, retain a paired database/object backup and compatible image/template/env
+   state. Migration 0062 declares previous-image recovery incompatible, so the deployment planner
+   blocks image-only rollback and requires quiescence. Prefer forward repair with typed-capable
+   readers while preserving JSON/history. Returning to a pre-Slice-2 image requires the paired
+   pre-write restore; it loses later writes and requires separate operator authorization. Never
+   relabel JSON as Markdown, drop references or substitute PMD as editable authority. Existing
+   historical Markdown stays executable through explicit compatibility readers.

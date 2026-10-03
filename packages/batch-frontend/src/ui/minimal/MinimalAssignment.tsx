@@ -2087,6 +2087,7 @@ export const MinimalAssignment: React.FC = () => {
       return;
     }
     if (activeStep === 'assignment') {
+      if (!authoring.draftValid || authoring.draftRecoveryConflict) return;
       const promptPackageId = authoring.promptPackage?.id;
       const draft = authoring.draftDirty ? await authoring.saveDraft() : authoring.draft;
       if (!promptPackageId || !draft?.id || !draft.workingVersion) return;
@@ -2108,13 +2109,18 @@ export const MinimalAssignment: React.FC = () => {
         selectedPreset: authoring.selectedPreset || null,
       });
       if (!recovered) return;
-      const confirmed = await confirmAssignmentStep((session) => ({
-        step: 'create',
-        expectedRevision: session.revision,
-        promptPackageId,
-        draftId: draft.id,
-        draftWorkingVersion: draft.workingVersion,
-      }));
+      if (!authoring.isCurrentDraftSaved(draft)) return;
+      const confirmed = await confirmAssignmentStep((session) => {
+        if (!authoring.isCurrentDraftSaved(draft))
+          throw new Error('Save the current assignment before confirmation.');
+        return {
+          step: 'create',
+          expectedRevision: session.revision,
+          promptPackageId,
+          draftId: draft.id,
+          draftWorkingVersion: draft.workingVersion,
+        };
+      });
       if (!confirmed) return;
       setActiveStep('review');
       return;
@@ -2138,6 +2144,7 @@ export const MinimalAssignment: React.FC = () => {
   ]);
 
   const handleShareAssignment = useCallback(async () => {
+    if (!authoring.draftValid) return;
     const initialSession = activeAssignmentSessionRef.current;
     if (!initialSession || initialSession.confirmedStep !== 'create') return;
     if (shareReconciliationInFlightRef.current) return;
@@ -2183,6 +2190,7 @@ export const MinimalAssignment: React.FC = () => {
             selectedPreset: authoring.selectedPreset || null,
           });
       if (!recovered) return;
+      if (!authoring.isCurrentDraftSaved(authoring.draft)) return;
       const response = await shareAssignmentSession(recovered.id, {
         expectedRevision: recovered.revision,
         requestId,
@@ -2267,7 +2275,10 @@ export const MinimalAssignment: React.FC = () => {
         : activeStep === 'context'
           ? !learnerContext?.confirmationAvailable
           : activeStep === 'assignment'
-            ? !hasAssignmentContent || authoringOperationBusy
+            ? !hasAssignmentContent ||
+              !authoring.draftValid ||
+              authoring.draftRecoveryConflict ||
+              authoringOperationBusy
             : false;
   const guardAssignmentExit = shouldGuardAssignmentExit({
     recovery:
@@ -2376,13 +2387,23 @@ export const MinimalAssignment: React.FC = () => {
     setCorrectionError(null);
 
     try {
+      if (!authoring.draftValid)
+        throw new Error(
+          authoring.assignmentValidationError ?? 'Repair the assignment JSON before correction.',
+        );
       let payload = correctionPayloadRef.current;
       if (!payload) {
         if (authoring.draftRecoveryConflict) {
           throw new Error('Resolve the saved draft conflict before publishing the correction.');
         }
         const saved = await authoring.flushDraftAutosave();
+        if (!authoring.isCurrentDraftValid())
+          throw new Error('Repair the assignment JSON before correction.');
+        if (authoring.draftDirty && !saved)
+          throw new Error('Save the valid assignment before correction.');
         const draft = saved ?? authoring.draft;
+        if (!authoring.isCurrentDraftSaved(draft))
+          throw new Error('Save the current assignment before correction.');
         payload = buildAssignmentCorrectionRequest({
           requestId: correctionRequestRef.current ?? globalThis.crypto.randomUUID(),
           draft,
@@ -2976,7 +2997,8 @@ export const MinimalAssignment: React.FC = () => {
               }}
               validation={authoring.validation}
               validationError={authoring.validationError}
-              draftError={authoring.draftError}
+              draftError={authoring.assignmentValidationError ?? authoring.draftError}
+              structuredDraft={authoring.structuredDraft}
               readOnly={completedReferenceMode && !correctionMode}
               allowGenerate={!completedReferenceMode}
             />
@@ -3004,7 +3026,7 @@ export const MinimalAssignment: React.FC = () => {
               publishing={authoring.publishing || sharingAssignment}
               previewing={authoring.previewing}
               onPreviewDraft={() => void authoring.previewDraft()}
-              draftHasContent={authoring.draftText.trim().length > 0}
+              draftHasContent={authoring.draftValid && authoring.draftText.trim().length > 0}
               previewReadyForCurrentDraft={authoring.previewReadyForCurrentDraft}
               previewError={authoring.previewError}
               previewHtml={authoring.previewHtml}

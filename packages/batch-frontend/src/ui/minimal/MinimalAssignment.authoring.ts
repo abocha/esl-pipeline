@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 
+import {
+  type AssignmentFormat,
+  type AssignmentValidationContext,
+  parseAssignmentV1,
+  serializeAssignmentV1,
+} from '@esl-pipeline/contracts';
+
 import type {
   DraftResponse,
   GenerateDraftRequest,
@@ -120,6 +127,8 @@ const DRAFT_AUTOSAVE_DEBOUNCE_MS = 1500;
 const DRAFT_AUTOSAVE_MIN_INTERVAL_MS = 5000;
 
 export interface AuthoringHydrationSnapshot {
+  draftFormat?: AssignmentFormat;
+  generatedValidationContext?: AssignmentValidationContext;
   publishTarget: MinimalPublishTarget;
   selectedTtsProvider: UiTtsProvider;
   selectedTtsStrategy: UiPublishTtsStrategy;
@@ -181,6 +190,8 @@ export type AuthoringAction =
       type: 'draft_generate_succeeded';
       payload: {
         draftText: string;
+        draftFormat?: AssignmentFormat;
+        generatedValidationContext?: AssignmentValidationContext;
         quota: GenerateDraftResponse['quota'] | null;
         runtimeSelection: { provider: string; model: string };
         successMessage: string;
@@ -340,6 +351,8 @@ function authoringReducer(state: AuthoringState, action: AuthoringAction): Autho
         generatingDraft: false,
         draft: null,
         draftText: action.payload.draftText,
+        draftFormat: action.payload.draftFormat,
+        generatedValidationContext: action.payload.generatedValidationContext,
         draftError: null,
         validation: null,
         validationError: null,
@@ -536,6 +549,11 @@ export interface AuthoringController extends AuthoringState {
   generationModelsForProvider: GenerationModelOption[];
   promptReady: boolean;
   draftDirty: boolean;
+  draftValid: boolean;
+  structuredDraft: boolean;
+  assignmentValidationError: string | null;
+  isCurrentDraftValid: () => boolean;
+  isCurrentDraftSaved: (draft: DraftResponse | null | undefined) => boolean;
   draftRecoveryConflict: boolean;
   draftPreviewGate: ReturnType<typeof getDraftPreviewGate>;
   previewReadyForCurrentDraft: boolean;
@@ -666,6 +684,56 @@ export function useMinimalAssignmentAuthoringController({
   const publishModelSelectionDisabled =
     state.selectedTtsProvider === 'elevenlabs' && state.selectedTtsStrategy === 'auto';
   const promptReady = Boolean(state.promptPackage?.id && state.promptText.trim().length > 0);
+  const structuredDraft = state.draft
+    ? state.draft.format === 'assignment_v1'
+    : state.draftFormat === 'assignment_v1' ||
+      state.promptPackage?.requestEnvelope?.promptVersion === 'assignment_v1';
+  const validationContext =
+    state.draft?.validationContext ??
+    state.promptPackage?.requestEnvelope?.assignmentContext ??
+    state.generatedValidationContext;
+  const typedDraft = useMemo(() => {
+    if (!structuredDraft)
+      return { assignment: null, canonical: state.draftText.trim(), error: null };
+    try {
+      if (!validationContext)
+        throw new Error('Assignment validation context is missing. Reload the saved draft.');
+      const assignment = parseAssignmentV1(state.draftText, validationContext);
+      return { assignment, canonical: serializeAssignmentV1(assignment), error: null };
+    } catch (error) {
+      return {
+        assignment: null,
+        canonical: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }, [structuredDraft, state.draftText, validationContext]);
+  const draftValid = !typedDraft.error;
+  const isCurrentDraftValid = useCallback(() => {
+    if (!structuredDraft) return true;
+    if (!validationContext) return false;
+    try {
+      parseAssignmentV1(draftTextRef.current, validationContext);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [structuredDraft, validationContext]);
+  const isCurrentDraftSaved = useCallback(
+    (draft: DraftResponse | null | undefined) => {
+      if (!structuredDraft) return true;
+      if (!draft?.assignment || !validationContext) return false;
+      try {
+        return (
+          serializeAssignmentV1(parseAssignmentV1(draftTextRef.current, validationContext)) ===
+          serializeAssignmentV1(draft.assignment)
+        );
+      } catch {
+        return false;
+      }
+    },
+    [structuredDraft, validationContext],
+  );
   const draftDirty = useMemo(() => {
     const original = state.draft?.text ?? '';
     const lineageChanged = Boolean(
@@ -673,8 +741,18 @@ export function useMinimalAssignmentAuthoringController({
         state.promptPackage?.id &&
         state.draft.promptPackageId !== state.promptPackage.id,
     );
+    if (structuredDraft) {
+      if (!typedDraft.assignment) return true;
+      if (!state.draft?.assignment) return true;
+      return (
+        lineageChanged || typedDraft.canonical !== serializeAssignmentV1(state.draft.assignment)
+      );
+    }
     return lineageChanged || state.draftText.trim() !== original.trim();
   }, [
+    structuredDraft,
+    typedDraft,
+    state.draft?.assignment,
     state.draft?.id,
     state.draft?.promptPackageId,
     state.draft?.text,
@@ -684,14 +762,21 @@ export function useMinimalAssignmentAuthoringController({
   const draftPreviewGate = useMemo(
     () =>
       getDraftPreviewGate({
-        draftText: state.draftText,
-        previewHtml: state.previewHtml,
+        draftText: typedDraft.canonical ?? state.draftText,
+        previewHtml: draftValid ? state.previewHtml : null,
         lastPreviewedDraftHash: state.lastPreviewedDraftHash,
       }),
-    [state.draftText, state.lastPreviewedDraftHash, state.previewHtml],
+    [
+      typedDraft.canonical,
+      draftValid,
+      state.draftText,
+      state.lastPreviewedDraftHash,
+      state.previewHtml,
+    ],
   );
   const previewReadyForCurrentDraft = draftPreviewGate.previewReady;
-  const canPublish = promptReady && state.draftText.trim().length > 0 && !state.publishing;
+  const canPublish =
+    draftValid && promptReady && state.draftText.trim().length > 0 && !state.publishing;
   const canPublishWithPreview = canPublish && previewReadyForCurrentDraft;
   const activeGenerationQuota =
     state.generationRuntimeQuotaSnapshot ?? generationOptions?.quota ?? null;
@@ -801,6 +886,7 @@ export function useMinimalAssignmentAuthoringController({
   }, []);
 
   const setDraftText = useCallback((value: string) => {
+    draftTextRef.current = value;
     dispatch({ type: 'draft_text_changed', payload: { value } });
   }, []);
 
@@ -841,6 +927,16 @@ export function useMinimalAssignmentAuthoringController({
   }, []);
 
   const runValidation = useCallback(async (): Promise<MarkdownValidationResponse> => {
+    if (structuredDraft) {
+      const response = {
+        ok: draftValid,
+        errors: typedDraft.error ? [typedDraft.error] : [],
+        warnings: [],
+        meta: typedDraft.assignment?.metadata,
+      } as MarkdownValidationResponse;
+      dispatch({ type: 'validation_succeeded', payload: { validation: response } });
+      return response;
+    }
     if (!state.draftText.trim()) {
       dispatch({ type: 'validation_cleared' });
       return { ok: false, errors: [], warnings: [] } as MarkdownValidationResponse;
@@ -863,7 +959,15 @@ export function useMinimalAssignmentAuthoringController({
       dispatch({ type: 'validation_failed', payload: { error: message } });
       return { ok: false, errors: [message], warnings: [] } as MarkdownValidationResponse;
     }
-  }, [learningPresetCatalogEnabled, presetOptionIds, state.draftText, state.selectedPreset]);
+  }, [
+    structuredDraft,
+    draftValid,
+    typedDraft,
+    learningPresetCatalogEnabled,
+    presetOptionIds,
+    state.draftText,
+    state.selectedPreset,
+  ]);
 
   useEffect(() => {
     draftTextRef.current = state.draftText;
@@ -875,8 +979,16 @@ export function useMinimalAssignmentAuthoringController({
       options: {
         preserveCurrentText?: boolean;
         promptPackageId?: string;
+        format?: AssignmentFormat;
+        validationContext?: AssignmentValidationContext;
       } = {},
     ): Promise<DraftResponse | null> => {
+      const typed = options.format ? options.format === 'assignment_v1' : structuredDraft;
+      if (typed) {
+        const context = options.validationContext ?? validationContext;
+        if (!context) throw new Error('Assignment validation context is missing');
+        parseAssignmentV1(text, context);
+      }
       const normalizedText = text.trim();
       const promptPackageId = options.promptPackageId ?? state.promptPackage?.id;
       if (!promptPackageId || !normalizedText) {
@@ -916,11 +1028,16 @@ export function useMinimalAssignmentAuthoringController({
         type: 'draft_save_succeeded',
         payload: { draft: response, preserveCurrentText },
       });
-      onDraftPronunciationModeDetected(detectPronunciationModeFromDraft(response.text ?? text));
+      onDraftPronunciationModeDetected(
+        response.assignment?.pronunciation?.mode ??
+          detectPronunciationModeFromDraft(response.text ?? text),
+      );
       return response;
     },
     [
       onDraftPronunciationModeDetected,
+      structuredDraft,
+      validationContext,
       state.draft?.id,
       state.draft?.promptPackageId,
       state.draft?.workingVersion,
@@ -956,13 +1073,13 @@ export function useMinimalAssignmentAuthoringController({
     dispatch({ type: 'draft_save_started' });
     try {
       const response = await persistDraftText(state.draftText);
-      return response;
+      return isCurrentDraftSaved(response) ? response : null;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save draft.';
       dispatch({ type: 'draft_save_failed', payload: { error: message } });
       return null;
     }
-  }, [persistDraftText, runValidation, state.draftText, state.promptPackage]);
+  }, [isCurrentDraftSaved, persistDraftText, runValidation, state.draftText, state.promptPackage]);
 
   const flushDraftAutosave = useCallback(async (): Promise<DraftResponse | null> => {
     if (draftAutosaveTimeoutRef.current) {
@@ -973,6 +1090,8 @@ export function useMinimalAssignmentAuthoringController({
     let inFlightDraft: DraftResponse | null | undefined;
     if (inFlight) {
       inFlightDraft = await inFlight;
+      if (!isCurrentDraftValid()) return null;
+      if (structuredDraft) return isCurrentDraftSaved(inFlightDraft) ? inFlightDraft : null;
       if (inFlightDraft && draftTextRef.current.trim() === (inFlightDraft.text ?? '').trim()) {
         return inFlightDraft;
       }
@@ -980,8 +1099,16 @@ export function useMinimalAssignmentAuthoringController({
     if (draftDirty) {
       return saveDraft();
     }
-    return inFlightDraft ?? state.draft;
-  }, [draftDirty, saveDraft, state.draft]);
+    const saved = inFlightDraft ?? state.draft;
+    return isCurrentDraftSaved(saved) ? saved : null;
+  }, [
+    isCurrentDraftSaved,
+    isCurrentDraftValid,
+    structuredDraft,
+    draftDirty,
+    saveDraft,
+    state.draft,
+  ]);
 
   const refreshDraftPreservingLocal = useCallback(
     async (options?: { forcePreserveLocal?: boolean }) => {
@@ -1150,6 +1277,8 @@ export function useMinimalAssignmentAuthoringController({
           type: 'draft_generate_succeeded',
           payload: {
             draftText: generatedText,
+            draftFormat: generated.format,
+            generatedValidationContext: generated.validationContext,
             quota: generated.quota ?? null,
             runtimeSelection: {
               provider: generated.provider,
@@ -1163,6 +1292,8 @@ export function useMinimalAssignmentAuthoringController({
           try {
             await persistDraftText(generated.text, {
               promptPackageId,
+              format: generated.format,
+              validationContext: generated.validationContext,
             });
             draftAutosaveLastSavedAtRef.current = Date.now();
           } catch (error) {
@@ -1240,7 +1371,9 @@ export function useMinimalAssignmentAuthoringController({
           ? state.selectedPreset
           : null;
       const htmlResponse = await renderHtmlPreview({
-        text: normalizedDraft,
+        ...(typedDraft.assignment
+          ? { assignment: typedDraft.assignment, promptPackageId: state.promptPackage?.id }
+          : { text: normalizedDraft }),
         title: validationResult.meta?.title?.trim() || undefined,
         learningPresetId: learningPresetCatalogEnabled ? validPreset : null,
       });
@@ -1257,6 +1390,8 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [
     draftPreviewGate.draftHash,
+    typedDraft.assignment,
+    state.promptPackage?.id,
     learningPresetCatalogEnabled,
     presetOptionIds,
     runValidation,
@@ -1352,7 +1487,7 @@ export function useMinimalAssignmentAuthoringController({
   }, []);
 
   useEffect(() => {
-    if (!state.promptPackage?.id || !state.draftText.trim() || !draftDirty) {
+    if (!draftValid || !state.promptPackage?.id || !state.draftText.trim() || !draftDirty) {
       if (draftAutosaveTimeoutRef.current) {
         clearTimeout(draftAutosaveTimeoutRef.current);
         draftAutosaveTimeoutRef.current = null;
@@ -1417,6 +1552,7 @@ export function useMinimalAssignmentAuthoringController({
     };
   }, [
     draftAutosaveRescheduleToken,
+    draftValid,
     draftDirty,
     draftRecoveryConflict,
     persistDraftText,
@@ -1639,6 +1775,12 @@ export function useMinimalAssignmentAuthoringController({
 
   return {
     ...state,
+    previewHtml: draftValid ? state.previewHtml : null,
+    draftValid,
+    structuredDraft,
+    isCurrentDraftValid,
+    isCurrentDraftSaved,
+    assignmentValidationError: typedDraft.error,
     generationProviders,
     generationModelsForProvider,
     promptReady,

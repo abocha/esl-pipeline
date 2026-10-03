@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
-
 import { GenerateDraftProviderError, generateDraft } from '../src/application/generate-draft.js';
 import { ProviderExecutionError } from '../src/application/generation-providers.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
@@ -107,7 +105,7 @@ describe('application/generate-draft', () => {
     canonical = true;
     await expect(
       generateDraft({ promptPackageId: 'old-assignment-package' }, dependencies),
-    ).resolves.toMatchObject({ text: renderAssignmentToPmd(assignmentFixture()) });
+    ).resolves.toMatchObject({ assignment: assignmentFixture(), format: 'assignment_v1' });
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
@@ -139,7 +137,8 @@ describe('application/generate-draft', () => {
     );
 
     expect(result).toMatchObject({
-      text: renderAssignmentToPmd(assignmentFixture()),
+      assignment: assignmentFixture(),
+      format: 'assignment_v1',
       provider: 'openai',
       model: 'gpt-6.1-sol',
       providerRequestId: 'resp-1',

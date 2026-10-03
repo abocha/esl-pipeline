@@ -239,6 +239,85 @@ describe('integration/migrations', () => {
   });
 
   it(
+    '0062 preserves legacy reads and freezes typed authority without a lossy rollback conversion',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0061_ordinary_memory_replay');
+        const recordingId = randomUUID(),
+          transcriptId = randomUUID(),
+          promptId = randomUUID(),
+          legacyId = randomUUID(),
+          typedId = randomUUID();
+        const workspaceId = randomUUID(),
+          studentId = randomUUID();
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Typed migration')`, [
+          workspaceId,
+        ]);
+        await pool.query(
+          `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Migration learner', $2)`,
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          `INSERT INTO recordings (id, student_id, source, storage_uri, bytes, status) VALUES ($1, $2, 'upload', 'local://test.mp3', 1, 'transcribed')`,
+          [recordingId, studentId],
+        );
+        await pool.query(
+          `INSERT INTO transcripts (id, recording_id, storage_uri, stt_provider, mode, model, language, fallback_used) VALUES ($1, $2, 'local://test.txt', 'deepgram', 'timeline', 'nova-3', 'auto', false)`,
+          [transcriptId, recordingId],
+        );
+        await pool.query(
+          `INSERT INTO prompt_packages (id, recording_id, transcript_id, template_version, storage_uri) VALUES ($1, $2, $3, 'legacy', 'local://prompt.txt')`,
+          [promptId, recordingId, transcriptId],
+        );
+        await pool.query(
+          `INSERT INTO drafts (id, prompt_package_id, storage_uri, working_version, content_hash) VALUES ($1, $2, 'local://legacy.md', 1, repeat('b', 64))`,
+          [legacyId, promptId],
+        );
+        await runMigrations();
+        expect(
+          (await pool.query(`SELECT format, storage_uri FROM drafts WHERE id = $1`, [legacyId]))
+            .rows[0],
+        ).toEqual({ format: 'markdown', storage_uri: 'local://legacy.md' });
+        const hash = 'a'.repeat(64);
+        const uri = `local://drafts/${typedId}/content/${hash}.json`;
+        await pool.query(
+          `INSERT INTO drafts (id, prompt_package_id, format, storage_uri, working_version, content_hash) VALUES ($1, $2, 'assignment_v1', $3, 1, $4)`,
+          [typedId, promptId, uri, hash],
+        );
+        await expect(
+          pool.query(`UPDATE drafts SET format = 'markdown' WHERE id = $1`, [typedId]),
+        ).rejects.toThrow('authority format');
+        const artifact = {
+          format: 'assignment_v1',
+          schemaVersion: 1,
+          serializationVersion: 1,
+          workingVersion: 1,
+          storageUri: uri,
+          contentHash: hash,
+        };
+        const jobId = randomUUID();
+        await pool.query(
+          `INSERT INTO jobs (id, state, prompt_package_id, draft_id, assignment_artifact, assignment_renderer_version) VALUES ($1, 'queued', $2, $3, $4::jsonb, 1)`,
+          [jobId, promptId, typedId, JSON.stringify(artifact)],
+        );
+        await expect(
+          pool.query(
+            `UPDATE jobs SET assignment_artifact = NULL, assignment_renderer_version = NULL WHERE id = $1`,
+            [jobId],
+          ),
+        ).rejects.toThrow('Frozen assignment');
+        await expect(
+          pool.query(
+            `INSERT INTO jobs (id, state, prompt_package_id, draft_id, assignment_artifact, assignment_renderer_version) VALUES ($1, 'queued', $2, $3, $4::jsonb, 1)`,
+            [randomUUID(), promptId, typedId, JSON.stringify({ ...artifact, contentHash: null })],
+          ),
+        ).rejects.toThrow('jobs_assignment_artifact_identity');
+      });
+    },
+    testTimeout,
+  );
+
+  it(
     '0060 preserves user-owned settings and refuses undisposed legacy tokens',
     async () => {
       const userId = randomUUID();

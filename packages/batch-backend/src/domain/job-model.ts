@@ -18,6 +18,8 @@ export interface JobRecord {
   state: JobState;
   md: string | null;
   mdStorageUri?: string | null;
+  assignmentArtifact?: import('@esl-pipeline/contracts').AssignmentArtifactReference | null;
+  assignmentRendererVersion?: number | null;
   recordingId?: string | null;
   transcriptId?: string | null;
   promptPackageId?: string | null;

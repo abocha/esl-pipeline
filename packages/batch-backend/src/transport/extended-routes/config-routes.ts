@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { createStaticPageHtml } from '@esl-pipeline/html-publisher';
+import { createStaticPageHtml, renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import { resolveConfigPaths } from '@esl-pipeline/orchestrator';
 import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
@@ -14,6 +14,11 @@ import {
   resolveMarkdownTitle,
 } from '@esl-pipeline/shared-infrastructure';
 
+import {
+  AssignmentArtifactValidationError,
+  admitAssignment,
+  assignmentContext,
+} from '../../application/assignment-artifact.js';
 import { PromptPackageAssignmentError } from '../../application/create-prompt-package.js';
 import { GenerateDraftProviderError, generateDraft } from '../../application/generate-draft.js';
 import { getJobOptions } from '../../application/get-job-options.js';
@@ -25,6 +30,10 @@ import {
   resolvePrimaryWorkspaceIdForUser,
   WorkspaceContextError,
 } from '../../application/workspace-context.js';
+import {
+  getPromptPackageById,
+  isPromptPackageAccessibleForUser,
+} from '../../domain/prompt-package-repository.js';
 import { getDefaultSettings } from '../../domain/settings-model.js';
 import { createDefaultSettings, getSettingsByUserId } from '../../domain/settings-repository.js';
 import { logger } from '../../infrastructure/logger.js';
@@ -822,7 +831,9 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'POST /preview/html');
       const schema = z.object({
-        text: z.string().min(1),
+        text: z.string().min(1).optional(),
+        assignment: z.unknown().optional(),
+        promptPackageId: z.string().min(1).optional(),
         title: z.string().trim().min(1).optional(),
         learningPresetId: z.string().trim().min(1).nullable().optional(),
         audioUrl: z.string().trim().nullable().optional(),
@@ -832,6 +843,27 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
 
       try {
         const body = schema.parse(request.body ?? {});
+        let text = body.text ?? '';
+        if (body.assignment !== undefined) {
+          const userId = getAuthenticatedUser(request)?.id;
+          if (
+            !userId ||
+            !body.promptPackageId ||
+            !(await isPromptPackageAccessibleForUser(body.promptPackageId, userId))
+          )
+            return errorResponse(reply, 'not_found');
+          const prompt = await getPromptPackageById(body.promptPackageId);
+          if (!prompt) return errorResponse(reply, 'not_found');
+          const assignment = admitAssignment(
+            JSON.stringify(body.assignment),
+            assignmentContext(prompt),
+          );
+          text = renderAssignmentToPmd(assignment);
+        }
+        if (!text)
+          throw new AssignmentArtifactValidationError(
+            'Preview requires a validated assignment or explicit legacy Markdown',
+          );
         let headingTheme: { h2?: string; h3?: string } | undefined;
         let presetName: string | undefined;
         if (body.learningPresetId?.trim()) {
@@ -869,23 +901,19 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
 
         const previewPronunciationAudio =
           (body.pronunciationAudio as PronunciationAudioPayload | null | undefined) ??
-          buildPreviewPronunciationAudio(body.text);
+          buildPreviewPronunciationAudio(text);
 
-        const markdown = insertGeneratedPreviewAudio(body.text, {
+        const markdown = insertGeneratedPreviewAudio(text, {
           studyTextAudioUrl: body.audioUrl,
           pronunciationAudioUrl: body.pronunciationAudioUrl,
           pronunciationAudio: previewPronunciationAudio ?? null,
           includePronunciation:
-            previewPronunciationAudio !== null || hasPronunciationReferenceMode(body.text),
+            previewPronunciationAudio !== null || hasPronunciationReferenceMode(text),
         });
-        const html = await createStaticPageHtml(
-          markdown,
-          resolvePreviewTitle(body.text, body.title),
-          {
-            headingTheme,
-            pronunciationAudio: previewPronunciationAudio ?? null,
-          },
-        );
+        const html = await createStaticPageHtml(markdown, resolvePreviewTitle(text, body.title), {
+          headingTheme,
+          pronunciationAudio: previewPronunciationAudio ?? null,
+        });
 
         logger.info('HTTP request handled', {
           event: 'http_request',
@@ -895,6 +923,10 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
 
         return reply.send({ html });
       } catch (error: unknown) {
+        if (error instanceof AssignmentArtifactValidationError)
+          return reply
+            .code(400)
+            .send({ error: 'validation_failed', code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
