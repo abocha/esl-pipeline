@@ -269,6 +269,8 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(202);
       expect(response.json()).toEqual({
         jobId: 'job-approve-1',
+        assignmentArtifact: null,
+        assignmentRendererVersion: null,
         md: '/uploads/drafts/draft-1.md',
         mdStorageUri: 'local://drafts/draft-1.md',
         recordingId: 'recording-1',
