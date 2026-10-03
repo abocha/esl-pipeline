@@ -354,6 +354,9 @@ async function confirmLockedSource(
     ConfirmAssignmentSessionStepRequest,
     { step: 'source' }
   >;
+  // Source authority and lesson publication share this root; take it before
+  // transcript, binding, or memory-row locks (including identical reconfirmation).
+  await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [current.studentId]);
   const transcript = await getTranscriptByIdForUpdateForUser(
     client,
     request.transcriptId,
@@ -1113,6 +1116,7 @@ export async function attachAssignmentSourceCandidate(
       if (current.shareJobId) {
         throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_SHARE_IN_PROGRESS');
       }
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [current.studentId]);
       const candidateResult = await client.query<{
         workspace_id: string;
         source_identity_kind: 'audio' | 'manual_transcript' | null;
@@ -2139,6 +2143,7 @@ export async function remapCanonicalAssignmentSource(params: {
         throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
       }
       const target = mapRow(targetResult.rows[0]);
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [target.studentId]);
       const source = target.confirmed.source;
       if (
         !source?.sourceIdentityKind ||

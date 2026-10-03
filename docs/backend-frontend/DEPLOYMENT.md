@@ -469,6 +469,11 @@ explicitly incompatible: it removed `user_settings.id`, used by v12.0.1. Migrati
 and later cannot use `legacy-unclassified`. Do not edit applied SQL or its checksum to add metadata.
 Compatibility declarations describe schema/runtime behavior, independently of semantic release labels.
 
+`0061_ordinary_memory_replay` is also incompatible with previous writers. Its student-lock
+triggers require publication and confirmed Source transactions to acquire the student lock before
+source/memory rows; previous images use opposing ordering and can deadlock. The same quiescence and
+schema-compatible recovery gates apply even though this migration only adds indexes and triggers.
+
 The pre-mutation output lists pending migrations, incompatible/unclassified boundaries, required
 quiescence, and previous-image rollback eligibility. To inspect it without backup, migration, or
 service mutation:

@@ -1,6 +1,7 @@
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import type { StudentMemoryCurrentness } from '../domain/student-memory-currentness.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
 import { insertCanonicalReadyStudentMemorySnapshot } from '../domain/student-memory-snapshot-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
@@ -26,6 +27,7 @@ export interface GenerateStudentMemorySnapshotRequest {
   envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
   expectedLatestReadySnapshotId?: string | null;
+  expectedCurrentness?: StudentMemoryCurrentness;
   finalizeGenerationNotes?: (args: {
     content: StudentMemorySnapshotContent;
     contentHash: string;
@@ -77,6 +79,8 @@ export async function generateStudentMemorySnapshot(args: {
     }) ?? {};
 
   const snapshot = await repository.insertCanonicalReady({
+    pendingEntryId: args.request.pendingEntryId,
+    expectedCurrentness: args.request.expectedCurrentness,
     studentId: args.request.studentId,
     schemaVersion: STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION,
     generatedAt,
