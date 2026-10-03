@@ -50,6 +50,46 @@ BEGIN
   RETURN NEW;
 END $$;
 
+CREATE FUNCTION public.lock_canonical_memory_student() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.status = 'ready' THEN
+      PERFORM id FROM students WHERE id = NEW.student_id FOR UPDATE;
+    END IF;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD.status = 'ready' THEN
+      PERFORM id FROM students WHERE id = OLD.student_id FOR UPDATE;
+    END IF;
+    RETURN OLD;
+  ELSE
+    IF OLD.status = 'ready' OR NEW.status = 'ready' THEN
+      PERFORM id FROM students WHERE id IN (OLD.student_id, NEW.student_id) ORDER BY id FOR UPDATE;
+    END IF;
+    RETURN NEW;
+  END IF;
+END;
+$$;
+
+CREATE FUNCTION public.lock_memory_source_student() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    PERFORM id FROM students WHERE id = NEW.student_id FOR UPDATE;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    PERFORM id FROM students WHERE id = OLD.student_id FOR UPDATE;
+    RETURN OLD;
+  ELSE
+    PERFORM id FROM students WHERE id IN (OLD.student_id, NEW.student_id) ORDER BY id FOR UPDATE;
+    RETURN NEW;
+  END IF;
+END;
+$$;
+
 CREATE FUNCTION public.reject_legacy_profile_write() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -1516,6 +1556,8 @@ ALTER TABLE ONLY public.workspace_memberships
 ALTER TABLE ONLY public.workspaces
     ADD CONSTRAINT workspaces_pkey PRIMARY KEY (id);
 
+CREATE UNIQUE INDEX homework_memory_replay_key ON public.homework_memory_entries USING btree (assignment_lineage_key, ((generation_notes ->> 'replayKey'::text))) WHERE (((generation_notes ->> 'replayKey'::text) IS NOT NULL) AND ((generation_notes ->> 'pendingEntryId'::text) IS NULL));
+
 CREATE UNIQUE INDEX idx_alpha_invites_pending_email_normalized ON public.alpha_invites USING btree (email_normalized) WHERE (status = 'pending'::text);
 
 CREATE INDEX idx_alpha_invites_status_expires_at ON public.alpha_invites USING btree (status, expires_at);
@@ -1794,6 +1836,8 @@ CREATE INDEX profile_initial_enrichment_reconcile_idx ON public.profile_initial_
 
 CREATE INDEX profile_initial_enrichment_success_student_idx ON public.profile_initial_enrichment_operations USING btree (student_id) WHERE (state = 'succeeded'::text);
 
+CREATE UNIQUE INDEX student_memory_snapshot_replay_key ON public.student_memory_snapshots USING btree (student_id, ((generation_notes ->> 'replayKey'::text))) WHERE (((generation_notes ->> 'replayKey'::text) IS NOT NULL) AND ((generation_notes ->> 'pendingEntryId'::text) IS NULL));
+
 CREATE UNIQUE INDEX student_profile_revisions_single_active ON public.student_profile_revisions USING btree (student_id) WHERE (status = 'active'::text);
 
 CREATE INDEX student_profile_revisions_student_created ON public.student_profile_revisions USING btree (student_id, created_at DESC);
@@ -1807,6 +1851,18 @@ CREATE TRIGGER freeze_legacy_profile_bindings BEFORE INSERT OR DELETE OR UPDATE 
 CREATE TRIGGER freeze_legacy_profile_revisions BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_profile_revisions FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
 
 CREATE TRIGGER freeze_legacy_profiles BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_profiles FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
+
+CREATE TRIGGER homework_memory_canonical_student_lock BEFORE INSERT OR DELETE OR UPDATE ON public.homework_memory_entries FOR EACH ROW EXECUTE FUNCTION public.lock_canonical_memory_student();
+
+CREATE TRIGGER lesson_memory_canonical_student_lock BEFORE INSERT OR DELETE OR UPDATE ON public.lesson_memory_entries FOR EACH ROW EXECUTE FUNCTION public.lock_canonical_memory_student();
+
+CREATE TRIGGER memory_confirmed_source_delete_lock BEFORE DELETE ON public.assignment_source_bindings FOR EACH ROW WHEN ((old.binding_role = 'confirmed'::text)) EXECUTE FUNCTION public.lock_memory_source_student();
+
+CREATE TRIGGER memory_confirmed_source_insert_lock BEFORE INSERT ON public.assignment_source_bindings FOR EACH ROW WHEN ((new.binding_role = 'confirmed'::text)) EXECUTE FUNCTION public.lock_memory_source_student();
+
+CREATE TRIGGER memory_confirmed_source_snapshot_lock BEFORE UPDATE ON public.assignment_sessions FOR EACH ROW WHEN ((((old.confirmed_snapshot -> 'source'::text) IS DISTINCT FROM (new.confirmed_snapshot -> 'source'::text)) OR (old.student_id IS DISTINCT FROM new.student_id))) EXECUTE FUNCTION public.lock_memory_source_student();
+
+CREATE TRIGGER memory_confirmed_source_update_lock BEFORE UPDATE ON public.assignment_source_bindings FOR EACH ROW WHEN (((old.binding_role = 'confirmed'::text) OR (new.binding_role = 'confirmed'::text))) EXECUTE FUNCTION public.lock_memory_source_student();
 
 CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
 
@@ -2372,5 +2428,6 @@ VALUES
   ('0057_historical_profile_provenance_timestamp', 'e203033eb30c1456a4df56bbf1b784d0d842cf28a4dcc1a510fd87217e7a7e09', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0058_mcp_oauth_foundation', '4c4d181b4f150b453c447f3d2fb652b990f479dcd5ddb5ab2a89089f0cfb1cc0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0059_student_owned_profile_revisions', '60b283fa0b95c8afe46b3233c3e7c50f38d8a3d81fdc98394a414846df6ceb01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0060_user_settings_owner_key', '80e6ba7ab7e15f5e8049a6114dc2bc6cee6fe43bf16121cec137d4af51f760c3', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0060_user_settings_owner_key', '80e6ba7ab7e15f5e8049a6114dc2bc6cee6fe43bf16121cec137d4af51f760c3', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0061_ordinary_memory_replay', '0f5da854ddd4ea23025e5f9d78938f5d4e4454c63e5fd9314ac887c4110565ff', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

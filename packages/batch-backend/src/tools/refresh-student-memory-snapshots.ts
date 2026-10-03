@@ -9,6 +9,7 @@ import {
 import type { StudentMemorySnapshotRefreshStrategy } from '../application/student-memory-snapshot-generation-notes.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
+import { cancelMemoryReplayIntent } from '../domain/memory-replay-delivery.js';
 import { closeStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 
 type ManualSnapshotRefreshStrategy = Extract<
@@ -26,6 +27,8 @@ interface CliOptions {
   studentId?: string;
   requestCandidateRefresh: boolean;
   dryRun: boolean;
+  replayKey?: string;
+  cancelIntent?: string;
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -39,6 +42,13 @@ function parseArgs(argv: string[]): CliOptions {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg === '--replay-key' || arg === '--cancel-intent') {
+      const value = argv[++index]?.trim();
+      if (!value) throw new Error(`Missing value for ${arg}`);
+      if (arg === '--replay-key') options.replayKey = value;
+      else options.cancelIntent = value;
+      continue;
+    }
     if (!arg || arg === '--') {
       continue;
     }
@@ -162,6 +172,23 @@ async function run(): Promise<void> {
   if (!config.pg.enabled) {
     throw new Error('PG_ENABLED=true is required');
   }
+  if (options.cancelIntent) {
+    if (!options.studentId || !options.reason)
+      throw new Error('--student-id and --reason are required for cancellation');
+    console.log(
+      options.dryRun
+        ? '[snapshot] cancellation dry run'
+        : await cancelMemoryReplayIntent({
+            family: 'snapshot',
+            studentId: options.studentId,
+            pendingEntryId: options.cancelIntent,
+            reason: options.reason,
+          }),
+    );
+    return;
+  }
+  if (!options.dryRun && !options.replayKey)
+    throw new Error('--replay-key is required; reuse it to resume, change it for new regeneration');
 
   const candidate = resolveStudentMemorySnapshotBackfillCandidate({
     config,
@@ -204,6 +231,7 @@ async function run(): Promise<void> {
   }
 
   const result = await requestStudentMemorySnapshotBackfill({
+    replayKey: options.replayKey!,
     config,
     targets,
     strategy: options.strategy,

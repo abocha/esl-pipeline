@@ -60,6 +60,7 @@
     "0057_historical_profile_provenance_timestamp": "legacy-unclassified",
     "0058_mcp_oauth_foundation": "legacy-unclassified",
     "0059_student_owned_profile_revisions": "legacy-unclassified",
-    "0060_user_settings_owner_key": "incompatible"
+    "0060_user_settings_owner_key": "incompatible",
+    "0061_ordinary_memory_replay": "compatible"
   }
 }
