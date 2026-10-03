@@ -49,6 +49,7 @@ export async function requestHomeworkMemoryBackfill(args: {
   providerOverride?: GenerationProvider;
   modelOverride?: string;
   forceRegenerate?: boolean;
+  replayKey: string;
 }): Promise<{
   requested: number;
 }> {
@@ -63,6 +64,7 @@ export async function requestHomeworkMemoryBackfill(args: {
         providerOverride: args.providerOverride,
         modelOverride: args.modelOverride,
         forceRegenerate: args.forceRegenerate ?? false,
+        replayKey: args.replayKey,
       },
     });
     if (result) {

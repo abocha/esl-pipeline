@@ -5,7 +5,7 @@
 - Audience: operators and implementation agents maintaining the batch backend.
 - Read Time: 5 minutes.
 - Authority Level: active operations runbook.
-- Last Verified Against: 2026-07-27 repo state.
+- Last Verified Against: 2026-10-03 repo state (ESL-16 / GitHub #330).
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: after student-memory tooling changes.
 - Status: `active`.
@@ -77,6 +77,64 @@ and the student workspace can look stale even though the replay command accepted
 
 ## Homework Memory Replay
 
+### Durable ordinary replay contract
+
+Ordinary replay uses persisted memory intent, the existing BullMQ student-memory queue, normal
+generation, a transactional canonical commit, and existing downstream delivery. Batch remains
+separately gated pending the later ABO-26 retirement slice.
+
+- Every operator run supplies `--replay-key <key>`. Keep the key when retrying/resubmitting the
+  same intended run, including after an uncertain response. Identity is scoped to the assignment
+  lineage for homework and the student for snapshots, and survives Redis retention and terminal
+  intent state. A failed intent may resume with its original target. Completed, cancelled, or
+  obsolete intent stays terminal; choose a new key for genuinely new regeneration.
+- A new manual snapshot key supersedes older pending/failed manual replay for that student. New forced
+  homework regeneration supersedes prior pending/failed intent for the same published job. Retry
+  uses the original provider/model and snapshot strategy/reason/candidate policy, even if current
+  configuration or command overrides differ. A new key can select a new explicit target.
+- Snapshot completion locks the student and exact pending intent. Canonical ready-source changes,
+  confirmed Source ownership changes, and snapshot writers share the student lock. Manual replay
+  freezes the canonical source-set fingerprint and latest ready snapshot at intent creation;
+  automatic refresh captures them before building its prompt. Both recheck before dispatch and
+  commit. New relevant lesson/homework state, lost Source authority, a newer snapshot, cancellation,
+  or supersession discards late output. Manual replay no longer overwrites newer valid state.
+- Lesson publication/replacement and Source confirmation/reconfirmation acquire that student lock
+  before transcript, binding, or memory-row locks. Homework retains its lineage job lock before
+  the student and memory rows. Triggers enforce participation but cannot repair reversed application
+  lock ordering. Migration `0061` is runtime-incompatible with previous writers: use the existing
+  deploy quiescence and schema-compatible recovery procedure; image-only rollback is blocked.
+- Snapshot canonical insertion, superseding prior ready state, and linking the pending intent to
+  its result commit together. Duplicate completion returns that same result, preserving lineage,
+  included/covered IDs, parent, prompt/source metadata, strategy, and ownership. Homework keeps its
+  existing publication-sequence ordering and transactional canonical commit.
+- Cancel by exact intent UUID using either tool with `--cancel-intent <uuid> --student-id <uuid>
+--reason <reason>` (add `--dry-run` to inspect the request). Cancellation is durable on the original
+  pending/failed row (`superseded`, `cancelledAt`, `cancellationReason`). It cannot undo an already
+  committed result. Redis removal alone does not cancel work. Checks before dispatch and canonical
+  commit fence an in-flight late response; provider execution or billing is not exactly once.
+- The worker's existing five-second reconciliation tick checks at most 50 homework/snapshot
+  deliveries, rotating by `deliveryCheckedAt`. It repairs committed intent without a queue job,
+  including retained failed/completed BullMQ delivery, using the persisted provider/model. Linked
+  canonical homework without downstream snapshot intent and explicitly requested snapshot
+  candidate delivery in `pending`/`failed` state are recovered without regenerating canonical
+  memory. Existing failed/cancelled downstream intent is not replaced automatically. Provider
+  failures still use existing pacing/retries and terminal failure policy.
+- Before recovered pending snapshot generation can enter BullMQ, reconciliation repairs the existing active
+  Batch claim supersession prerequisite. A failed fence leaves delivery retryable and unqueued;
+  a later Batch import cannot overwrite recovered ordinary output through an old active claim.
+  The existing Batch fencing transaction locks items/claims before the student and exact intent,
+  matching Batch import and ordinary completion ordering. It commits supersession only while that
+  intent is still pending; otherwise it rolls back, including if completion raced the recovery
+  selection. Redelivery of a completed intent preserves later Batch ownership and repairs downstream work.
+- Failure marking merges failure-owned metadata into current database JSONB. Concurrently adopted
+  replay identity, currentness, and delivery metadata survive, so same-key retry resumes the same
+  intent and frozen provider/model target.
+
+Inspect the original intent UUID and its `superseded_by_id` together with the linked result's
+`generation_notes.pendingEntryId`. `obsoleteReason` records discarded replay. Use a new key only
+after reviewing why the original attempt became obsolete. No new provider work is needed to
+recover downstream delivery of an already current canonical result.
+
 Homework memory is canonical only after publish succeeds, so replay operates from succeeded publish
 jobs and the canonical published markdown source.
 
@@ -101,6 +159,8 @@ Supported options:
 - `--selection missing|failed|all`
 - `--student-id <student-id>`
 - `--job-id <job-id>`
+- `--replay-key <key>` (required unless dry-run or cancellation)
+- `--cancel-intent <pending-intent-uuid>` with `--student-id` and `--reason`
 - `--provider openai|google_ai_studio|openrouter`
 - `--model <model-id>`
 
@@ -148,6 +208,8 @@ Supported options:
 - `--strategy manual_rebuild_v1_1|full_rebuild_v1`
 - `--reason <operator-reason>` (required unless `--dry-run`)
 - `--candidate-refresh` (explicitly request downstream profile-candidate refresh)
+- `--replay-key <key>` (required unless dry-run or cancellation)
+- `--cancel-intent <pending-intent-uuid>` with `--student-id` and `--reason`
 - `--provider openai|google_ai_studio|openrouter`
 - `--model <model-id>`
 
@@ -170,7 +232,7 @@ Operator notes:
 Example:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts --selection missing --limit 20 --strategy manual_rebuild_v1_1 --reason "Backfill missing alpha snapshots"
+pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts --selection missing --limit 20 --strategy manual_rebuild_v1_1 --reason "Backfill missing alpha snapshots" --replay-key alpha-snapshots-2026-10-03
 ```
 
 ### Snapshot eligibility repair recovery
@@ -192,7 +254,8 @@ release that includes 0045, stop after each step and review its bounded output b
 
 3. Compare the selected student count with the pre-deploy read-only audit. Obtain explicit operator
    approval before removing `--dry-run`.
-4. Execute the same bounded command without `--dry-run` only after that approval.
+4. Execute the same bounded command without `--dry-run`, adding a stable `--replay-key`, only after
+   that approval.
 5. Verify each processed student has an eligible ready snapshot and candidate-refresh metadata with
    `enqueueStatus` equal to `enqueued` or `not_requested` for a documented policy reason.
 6. Confirm `student_profile_candidate_refresh_requested` and a processed job event or persisted

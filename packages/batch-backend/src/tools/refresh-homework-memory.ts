@@ -8,6 +8,8 @@ import {
 } from '../application/homework-memory-backfill.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
+import { cancelMemoryReplayIntent } from '../domain/memory-replay-delivery.js';
+import { closeStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 
 interface CliOptions {
   limit: number;
@@ -17,6 +19,9 @@ interface CliOptions {
   studentId?: string;
   jobId?: string;
   dryRun: boolean;
+  replayKey?: string;
+  cancelIntent?: string;
+  reason?: string;
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -28,6 +33,14 @@ function parseArgs(argv: string[]): CliOptions {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg === '--replay-key' || arg === '--cancel-intent' || arg === '--reason') {
+      const value = argv[++index]?.trim();
+      if (!value) throw new Error(`Missing value for ${arg}`);
+      if (arg === '--replay-key') options.replayKey = value;
+      else if (arg === '--cancel-intent') options.cancelIntent = value;
+      else options.reason = value;
+      continue;
+    }
     if (!arg || arg === '--') {
       continue;
     }
@@ -133,6 +146,23 @@ async function run(): Promise<void> {
   if (!config.pg.enabled) {
     throw new Error('PG_ENABLED=true is required');
   }
+  if (options.cancelIntent) {
+    if (!options.studentId || !options.reason)
+      throw new Error('--student-id and --reason are required for cancellation');
+    console.log(
+      options.dryRun
+        ? '[homework] cancellation dry run'
+        : await cancelMemoryReplayIntent({
+            family: 'homework',
+            studentId: options.studentId,
+            pendingEntryId: options.cancelIntent,
+            reason: options.reason,
+          }),
+    );
+    return;
+  }
+  if (!options.dryRun && !options.replayKey)
+    throw new Error('--replay-key is required; reuse it to resume, change it for new regeneration');
 
   const candidate = resolveHomeworkMemoryBackfillCandidate({
     config,
@@ -164,6 +194,7 @@ async function run(): Promise<void> {
   }
 
   const result = await requestHomeworkMemoryBackfill({
+    replayKey: options.replayKey!,
     config,
     targets,
     providerOverride: options.provider,
@@ -178,8 +209,10 @@ async function run(): Promise<void> {
   console.log('[homework-memory-refresh] dryRun=false');
 }
 
-void run().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`[homework-memory-refresh] failed: ${message}`);
-  process.exitCode = 1;
-});
+void run()
+  .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[homework-memory-refresh] failed: ${message}`);
+    process.exitCode = 1;
+  })
+  .finally(closeStudentMemoryQueue);

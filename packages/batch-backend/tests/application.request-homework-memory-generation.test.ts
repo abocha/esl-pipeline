@@ -14,7 +14,7 @@ const {
 
 vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
   createStudentMemoryQueue: vi.fn(() => ({
-    enqueue: enqueueMock,
+    reconcile: enqueueMock,
   })),
 }));
 
@@ -68,12 +68,10 @@ describe('application/request-homework-memory-generation', () => {
         plainText: '# Homework',
       },
     });
-    ensurePendingHomeworkMemoryEntryMock.mockResolvedValue({
+    ensurePendingHomeworkMemoryEntryMock.mockImplementation(async (params) => ({
       outcome: 'created',
-      entry: {
-        id: 'pending-1',
-      },
-    });
+      entry: { ...params, id: 'pending-1' },
+    }));
     supersedeClaimsMock.mockResolvedValue([]);
   });
 
@@ -128,6 +126,10 @@ describe('application/request-homework-memory-generation', () => {
       outcome: 'pending_exists',
       entry: {
         id: 'pending-1',
+        jobId: 'job-2',
+        studentId: 'student-1',
+        provider: 'openai',
+        model: 'gpt-5.4-mini',
       },
     });
 
@@ -194,6 +196,7 @@ describe('application/request-homework-memory-generation', () => {
         jobId: 'job-2',
         studentId: 'student-1',
         forceRegenerate: true,
+        replayKey: 'replay-1',
       },
     });
 

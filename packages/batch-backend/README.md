@@ -392,6 +392,13 @@ Student-memory operator workflows:
   from compiled production-container `node dist/tools/...` commands.
 - Manual full snapshot rebuild is CLI-only during Gate B through the focused replay/backfill tool;
   no normal tutor-facing rebuild control is part of v1.1.
+- Ordinary homework/snapshot replay requires a durable `--replay-key`: reuse it to resume the same
+  intent with its frozen provider/model; a new key requests new regeneration. `--cancel-intent`
+  durably fences pending/failed work. Snapshot finalization atomically links one result and rejects
+  changed canonical source sets, confirmed Source authority, newer snapshots, and terminal intent.
+  The existing worker reconciliation tick repairs DB-to-queue gaps and post-commit downstream
+  delivery without depending on Redis job retention for business identity. See the runbook for the
+  locking, currentness, cancellation, and recovery contract.
 - Candidate-refresh notes distinguish `not_requested`, `pending`, `enqueued`, and `failed`
   delivery. The focused snapshot-ID retry tool recovers requested delivery without regenerating a
   snapshot or inferring candidate intent.

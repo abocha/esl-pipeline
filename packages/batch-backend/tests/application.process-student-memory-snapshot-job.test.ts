@@ -1,5 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('../src/domain/student-memory-currentness.js', () => ({
+  captureStudentMemoryCurrentness: vi
+    .fn()
+    .mockResolvedValue({ sourceState: 'fixture-state', latestReadySnapshotId: null }),
+}));
+vi.mock('../src/domain/student-memory-snapshot-repository.js', async () => ({
+  ...(await vi.importActual('../src/domain/student-memory-snapshot-repository.js')),
+  getLatestReadyStudentMemorySnapshotByStudentId: vi.fn().mockResolvedValue(null),
+  admitStudentMemorySnapshotIntent: vi.fn().mockResolvedValue(true),
+}));
+
 import { estimateGenerationTokens } from '../src/application/generation-budget-guard.js';
 import { processStudentMemorySnapshotJob } from '../src/application/process-student-memory-snapshot-job.js';
 import { StudentMemoryPacingDeferredError } from '../src/application/student-memory-generation-pacing.js';
@@ -164,6 +175,9 @@ function finalizationRaceOverrides(args: {
       getById: vi.fn().mockResolvedValue({
         id: 'snapshot-pending-1',
         status: 'pending',
+        studentId: 'student-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
         generatedAt: new Date('2026-03-20T01:00:00.000Z'),
         generationNotes: {
           trigger: 'lesson-memory-ready',
@@ -273,9 +287,13 @@ describe('application/process-student-memory-snapshot-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: {
               trigger: 'lesson-memory-ready',
+              sourceEntryId: 'lesson-1',
             },
           }),
           getLatestReadyByStudentId: vi.fn().mockResolvedValue(parentSnapshot),
@@ -328,7 +346,7 @@ describe('application/process-student-memory-snapshot-job', () => {
       }),
       materialChange: null,
     });
-    expect(supersedePendingForStudent).toHaveBeenCalled();
+    expect(supersedePendingForStudent).not.toHaveBeenCalled();
     const generated = await generator.mock.results[0]?.value;
     expect(generated.snapshot.generationNotes).toEqual(
       expect.objectContaining({
@@ -381,6 +399,9 @@ describe('application/process-student-memory-snapshot-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: null,
           }),
@@ -463,6 +484,9 @@ describe('application/process-student-memory-snapshot-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: null,
             }),
@@ -540,6 +564,9 @@ describe('application/process-student-memory-snapshot-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: null,
             }),
@@ -620,6 +647,9 @@ describe('application/process-student-memory-snapshot-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: null,
           }),
@@ -689,6 +719,9 @@ describe('application/process-student-memory-snapshot-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: null,
           }),
@@ -745,6 +778,9 @@ describe('application/process-student-memory-snapshot-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: {
               trigger: 'manual-replay',
@@ -762,9 +798,7 @@ describe('application/process-student-memory-snapshot-job', () => {
       } as never,
     });
 
-    expect(generator.mock.calls[0]?.[0].request).not.toHaveProperty(
-      'expectedLatestReadySnapshotId',
-    );
+    expect(generator.mock.calls[0]?.[0].request.expectedLatestReadySnapshotId).toBeNull();
     expect(updateGenerationNotes).toHaveBeenCalledWith({
       id: 'snapshot-ready-manual',
       generationNotes: expect.objectContaining({
@@ -817,6 +851,9 @@ describe('application/process-student-memory-snapshot-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: {
               trigger: 'manual-replay',
@@ -913,9 +950,13 @@ describe('application/process-student-memory-snapshot-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: {
               trigger: 'homework-memory-ready',
+              sourceEntryId: 'homework-1',
             },
           }),
           getLatestReadyByStudentId: vi.fn().mockResolvedValue(null),
@@ -1008,9 +1049,13 @@ describe('application/process-student-memory-snapshot-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: {
                 trigger: 'lesson-memory-ready',
+                sourceEntryId: 'lesson-1',
               },
             }),
             getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
@@ -1100,9 +1145,13 @@ describe('application/process-student-memory-snapshot-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: {
               trigger: 'lesson-memory-ready',
+              sourceEntryId: 'lesson-1',
             },
           }),
           getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
@@ -1189,6 +1238,9 @@ describe('application/process-student-memory-snapshot-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: {
               trigger: 'manual-replay',
@@ -1273,6 +1325,9 @@ describe('application/process-student-memory-snapshot-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: {
                 trigger: 'lesson-memory-ready',
@@ -1348,6 +1403,9 @@ describe('application/process-student-memory-snapshot-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: {
                 trigger: 'lesson-memory-ready',
@@ -1516,6 +1574,9 @@ describe('application/process-student-memory-snapshot-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: null,
             }),
@@ -1571,6 +1632,9 @@ describe('application/process-student-memory-snapshot-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: null,
             }),
@@ -1636,6 +1700,9 @@ describe('application/process-student-memory-snapshot-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: {
                 trigger: 'manual-replay',
@@ -1731,6 +1798,9 @@ describe('application/process-student-memory-snapshot-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.4-mini',
               generatedAt: new Date('2026-06-21T10:00:00.000Z'),
               generationNotes: {
                 strategy: 'manual_rebuild_v1_1',
