@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import { validateAssignmentV1 } from '@esl-pipeline/contracts';
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import {
@@ -278,6 +280,33 @@ describe('speech performance plans', () => {
         expect.objectContaining({ code: 'candidate_emphasis_invalid', segmentId: 'segment-1' }),
         expect.objectContaining({ code: 'candidate_nonverbal_invalid', segmentId: 'segment-1' }),
       ]),
+    );
+  });
+
+  it('keeps literal typed markup while rejecting rendered word changes', () => {
+    const assignment = validateAssignmentV1(
+      JSON.parse(
+        readFileSync(
+          new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+          'utf8',
+        ),
+      ),
+    );
+    assignment.input.studyText.turns[0]!.text = '**literal** <tag> `code`';
+    const prepared = createPreparedStudyTextSynthesis(
+      { assignment },
+      { outPath: '', voiceMapPath: '', ttsProvider: 'inworld' },
+    );
+    const plan = createIdentitySpeechPerformancePlan(prepared);
+    const summaries = prepared.segments.map((s) => ({
+      id: s.id,
+      text: s.text,
+      lexicalText: s.text,
+    }));
+    expect(analyzeValidatedSpeechPlan(prepared, plan, summaries).hardFailures).toEqual([]);
+    summaries[0]!.lexicalText = 'literal code';
+    expect(analyzeValidatedSpeechPlan(prepared, plan, summaries).hardFailures).toContainEqual(
+      expect.objectContaining({ code: 'rendered_words_changed', segmentId: 'segment-1' }),
     );
   });
 

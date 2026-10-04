@@ -18,7 +18,8 @@ export function createRenderedDocument(html: string): Document {
   const scriptText = extractBehaviorScript(html);
 
   document.open();
-  document.write(html);
+  // Install browser mocks before executing the script exactly once.
+  document.write(html.replace(`<script>\n${scriptText}</script>`, ''));
   document.close();
 
   const browserWindow = globalThis as Window & typeof globalThis;

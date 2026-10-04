@@ -5,7 +5,6 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
-import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
 import { manifestPathFor } from '@esl-pipeline/orchestrator';
 
 import { assignmentHash } from '../src/application/assignment-artifact.js';
@@ -25,7 +24,7 @@ const {
 } = h;
 
 describe('application/process-queue-job', () => {
-  it('retains the initial typed filesystem manifest after temporary projection cleanup', async () => {
+  it('retains the initial typed filesystem manifest without a temporary projection', async () => {
     const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-typed-manifest-'));
     vi.stubEnv('FILESYSTEM_UPLOAD_DIR', uploadDir);
     const assignment = assignmentFixture();
@@ -57,6 +56,7 @@ describe('application/process-queue-job', () => {
     let temporaryManifest!: string;
     runAssignmentJobSpy.mockImplementation(async (payload) => {
       temporaryManifest = manifestPathFor(payload.md);
+      await fs.mkdir(path.dirname(temporaryManifest), { recursive: true });
       await fs.writeFile(temporaryManifest, '{"mdHash":"typed-projection"}', 'utf8');
       return { manifestPath: temporaryManifest };
     });
@@ -64,7 +64,7 @@ describe('application/process-queue-job', () => {
       await processQueueJob({ jobId: initial.id });
       const durable = path.join(uploadDir, 'assignments', `${initial.id}.manifest.json`);
       expect(await fs.readFile(durable, 'utf8')).toBe('{"mdHash":"typed-projection"}');
-      await expect(fs.access(temporaryManifest)).rejects.toThrow();
+      expect(temporaryManifest).toBe(durable);
       expect(updateJobStateAndResultSpy).toHaveBeenLastCalledWith(
         expect.objectContaining({ manifestPath: durable }),
       );
@@ -75,7 +75,7 @@ describe('application/process-queue-job', () => {
     }
   });
 
-  it('publishes frozen typed JSON with a separate PMD hash and child-owned correction identity', async () => {
+  it('publishes frozen typed JSON with a canonical assignment hash and child-owned correction identity', async () => {
     const assignment = assignmentFixture();
     const hash = assignmentHash(assignment);
     const artifact = {
@@ -106,7 +106,8 @@ describe('application/process-queue-job', () => {
     const read = vi.fn().mockResolvedValue(serializeAssignmentV1(assignment));
     createTranscriptionStorageForUriSpy.mockReturnValue({ getText: read } as never);
     runAssignmentJobSpy.mockImplementation(async (payload) => {
-      expect(await fs.readFile(payload.md, 'utf8')).toBe(renderAssignmentToPmd(assignment));
+      expect(payload.assignment).toEqual(assignment);
+      await expect(fs.access(payload.md)).rejects.toThrow();
       expect(payload.md).toMatch(/[\\/]job-1\.md$/);
       return { manifestPath: 's3://manifests/job-1.manifest.json' };
     });
@@ -118,10 +119,9 @@ describe('application/process-queue-job', () => {
         correction: { expectedAssignmentHash: hash, manifestMd: 'corrections/job-1.md' },
       });
       expect(read).toHaveBeenCalledWith(artifact.storageUri);
-      const pmdHash = createHash('sha256').update(renderAssignmentToPmd(assignment)).digest('hex');
-      expect(pmdHash).not.toBe(hash);
+
       expect(updateJobStateAndResultSpy).toHaveBeenLastCalledWith(
-        expect.objectContaining({ publishedContentHash: pmdHash }),
+        expect.objectContaining({ publishedContentHash: hash }),
       );
       expect(h.requestHomeworkMemoryGenerationSpy).toHaveBeenCalled();
     } finally {

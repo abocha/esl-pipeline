@@ -5,14 +5,15 @@ Shared HTML renderer/publisher for the pipeline's html-only publish path.
 ## Exports
 
 - `renderToHtml(markdown, title, options)`
-- `renderAssignmentToPmd(assignment)`: deterministic eight-section compatibility output for
-  validated `AssignmentV1`, including safe YAML, plain-text escaping and pronunciation projection.
-  Draft storage, editing and publishing continue to consume Markdown; this is a transient adapter.
+- `renderAssignmentToHtml(assignment, options)`: native validated AssignmentV1 handout with direct
+  field escaping, shared responsive shell, safe media and deterministic pronunciation controls.
+- `renderAndPublishAssignmentToS3({ assignment, ...options })`: native typed publication.
+- `ASSIGNMENT_HTML_RENDERER_VERSION`: `2`. No active AssignmentV1-to-PMD adapter remains.
 - `createStaticPageHtml(markdown, title, options)`
 - `publishHtmlToS3(html, options)`
 - `renderAndPublishMarkdownToS3({ markdown, title, ...options })`
 
-## Markdown Preprocessing Notes
+## Historical Markdown Preprocessing Notes
 
 - Single-backtick inline snippets render as `<code>` and can include rich inline Markdown formatting
   (for example `` `**Bold cue:** *slowly*` ``).

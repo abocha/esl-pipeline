@@ -1,16 +1,14 @@
-import type { PipelineLogger } from '@esl-pipeline/contracts';
-import {
-  extractPronunciationFocus,
-  type ParsedMarkdownContext,
-  type PronunciationFocus,
-} from '@esl-pipeline/pmd';
+import type { PipelineLogger, PronunciationFocus } from '@esl-pipeline/contracts';
 import type { PronunciationAudioClip } from '@esl-pipeline/shared-infrastructure';
 import {
+  type AssignmentExecutionInput,
   type BuildPronunciationTextOptions,
   buildPronunciationShadowSentenceMp3,
   buildPronunciationTextMp3,
   type GoogleTtsModel,
   isTtsModelForProvider,
+  normalizePlainSpeechText,
+  resolveAssignmentPronunciation,
   resolveDefaultTtsModel,
   type TtsModelId,
   type TtsProviderId,
@@ -23,24 +21,24 @@ import type { PronunciationAudioArtifact } from './audio-artifacts.js';
 
 type PronunciationClipRecord = PronunciationAudioClip & AudioArtifactManifest;
 
-interface PronunciationAudioSynthesisOptions extends TtsRequestControl {
-  context: ParsedMarkdownContext;
-  mdPath: string;
-  outPath: string;
-  title?: string | null;
-  preview?: boolean;
-  force?: boolean;
-  regeneratePrimary?: boolean;
-  regenerateItems?: boolean;
-  primaryTtsProvider?: TtsProviderId;
-  primaryTtsModel?: TtsModelId;
-  chunkTtsProvider?: TtsProviderId;
-  chunkTtsModel?: TtsModelId;
-  logger?: PipelineLogger;
-  primaryVoiceId?: string | null;
-  chunkVoiceId?: string | null;
-  previousAudio?: PronunciationAudioArtifact;
-}
+type PronunciationAudioSynthesisOptions = TtsRequestControl &
+  AssignmentExecutionInput & {
+    mdPath: string;
+    outPath: string;
+    title?: string | null;
+    preview?: boolean;
+    force?: boolean;
+    regeneratePrimary?: boolean;
+    regenerateItems?: boolean;
+    primaryTtsProvider?: TtsProviderId;
+    primaryTtsModel?: TtsModelId;
+    chunkTtsProvider?: TtsProviderId;
+    chunkTtsModel?: TtsModelId;
+    logger?: PipelineLogger;
+    primaryVoiceId?: string | null;
+    chunkVoiceId?: string | null;
+    previousAudio?: PronunciationAudioArtifact;
+  };
 
 interface ProviderClipSynthesisConfig {
   ttsProvider?: TtsProviderId;
@@ -69,8 +67,8 @@ function normalizeSpeechText(value: string): string {
     .trim();
 }
 
-function normalizeConnectedSpeechText(value: string): string {
-  return normalizeSpeechText(value).replaceAll(/\s*->\s*/g, ' ');
+function normalizeConnectedSpeechText(value: string, normalize = normalizeSpeechText): string {
+  return normalize(value).replaceAll(/\s*->\s*/g, ' ');
 }
 
 function looksLikeIpaTranscription(value: string): boolean {
@@ -80,9 +78,10 @@ function looksLikeIpaTranscription(value: string): boolean {
 function resolveConnectedSpeechSpeechText(
   line: Extract<PronunciationFocus, { mode: 'connected_speech' }>['lines'][number],
   logger?: PipelineLogger,
+  normalize = normalizeSpeechText,
 ): string {
-  const careful = normalizeSpeechText(line.careful);
-  const connected = normalizeConnectedSpeechText(line.connected);
+  const careful = normalize(line.careful);
+  const connected = normalizeConnectedSpeechText(line.connected, normalize);
 
   if (careful) {
     if (connected && looksLikeIpaTranscription(connected)) {
@@ -259,6 +258,7 @@ async function synthesizeProviderClip(
     result = await buildPronunciationTextMp3(
       {
         text: clip.text,
+        plainText: Boolean(options.assignment),
         voiceId: config.voiceId.trim(),
         mdPath: options.mdPath,
         title: options.title ?? undefined,
@@ -301,7 +301,11 @@ async function synthesizeShadowPrimary(
   options: PronunciationAudioSynthesisOptions,
 ): Promise<PronunciationClipRecord | null> {
   throwIfTtsCancelled(options);
-  const normalizedText = focus.shadowSentence ? normalizeSpeechText(focus.shadowSentence) : '';
+  const normalizedText = focus.shadowSentence
+    ? options.assignment
+      ? normalizePlainSpeechText(focus.shadowSentence)
+      : normalizeSpeechText(focus.shadowSentence)
+    : '';
   const baseClip: PronunciationAudioClip = {
     id: 'primary-shadow-sentence',
     kind: 'shadow_sentence',
@@ -327,7 +331,7 @@ async function synthesizeShadowPrimary(
   try {
     result = await buildPronunciationShadowSentenceMp3(
       {
-        context: options.context,
+        ...(options.assignment ? { assignment: options.assignment } : { context: options.context }),
         mdPath: options.mdPath,
         voiceId: options.primaryVoiceId.trim(),
       },
@@ -362,21 +366,24 @@ async function synthesizeShadowPrimary(
   };
 }
 
-function buildGenericPrimaryText(focus: PronunciationFocus): string | null {
+function buildGenericPrimaryText(
+  focus: PronunciationFocus,
+  normalize = normalizeSpeechText,
+): string | null {
   switch (focus.mode) {
     case 'shadow_sentence': {
-      return focus.shadowSentence ? normalizeSpeechText(focus.shadowSentence) : null;
+      return focus.shadowSentence ? normalize(focus.shadowSentence) : null;
     }
     case 'minimal_pair': {
       return null;
     }
     case 'connected_speech': {
-      return focus.naturalSentence ? normalizeSpeechText(focus.naturalSentence) : null;
+      return focus.naturalSentence ? normalize(focus.naturalSentence) : null;
     }
     case 'intonation':
     case 'rhythm_chunking':
     case 'sentence_stress': {
-      return focus.naturalSentence ? normalizeSpeechText(focus.naturalSentence) : null;
+      return focus.naturalSentence ? normalize(focus.naturalSentence) : null;
     }
   }
 }
@@ -409,11 +416,12 @@ export async function synthesizePronunciationAudio(
   options: PronunciationAudioSynthesisOptions,
 ): Promise<PronunciationAudioArtifact | undefined> {
   throwIfTtsCancelled(options);
-  const focus = extractPronunciationFocus(options.context);
+  const focus = resolveAssignmentPronunciation(options);
   if (!focus) {
     return undefined;
   }
 
+  const normalize = options.assignment ? normalizePlainSpeechText : normalizeSpeechText;
   let primaryClip: PronunciationClipRecord | null = null;
   const itemClips: PronunciationClipRecord[] = [];
   const warnings: PronunciationAudioWarning[] = [];
@@ -475,7 +483,7 @@ export async function synthesizePronunciationAudio(
       if (!shouldGenerateItems) break;
       const tasks: PronunciationAudioClip[] = [];
       for (const [index, word] of focus.words.entries()) {
-        const normalizedWord = normalizeSpeechText(word.text);
+        const normalizedWord = normalize(word.text);
         if (!normalizedWord) continue;
         tasks.push({
           id: `shadow-word-${index + 1}`,
@@ -504,7 +512,7 @@ export async function synthesizePronunciationAudio(
             itemIndex: index,
             kind: 'pair_left' as const,
             engine: 'provider' as const,
-            text: normalizeSpeechText(pair.left.text),
+            text: normalize(pair.left.text),
             label: 'Left',
             note: pair.note,
           },
@@ -515,7 +523,7 @@ export async function synthesizePronunciationAudio(
             itemIndex: index,
             kind: 'pair_right' as const,
             engine: 'provider' as const,
-            text: normalizeSpeechText(pair.right.text),
+            text: normalize(pair.right.text),
             label: 'Right',
             note: pair.note,
           },
@@ -530,7 +538,7 @@ export async function synthesizePronunciationAudio(
       break;
     }
     case 'connected_speech': {
-      const primaryText = shouldGeneratePrimary ? buildGenericPrimaryText(focus) : null;
+      const primaryText = shouldGeneratePrimary ? buildGenericPrimaryText(focus, normalize) : null;
       if (primaryText) {
         primaryClip = await synthesizeProviderClip(
           {
@@ -546,7 +554,7 @@ export async function synthesizePronunciationAudio(
       }
       if (!shouldGenerateItems) break;
       const tasks = focus.lines.flatMap((line, index) => {
-        const spokenText = resolveConnectedSpeechSpeechText(line, options.logger);
+        const spokenText = resolveConnectedSpeechSpeechText(line, options.logger, normalize);
         if (!spokenText) return [];
         return [
           {
@@ -573,7 +581,7 @@ export async function synthesizePronunciationAudio(
     case 'intonation':
     case 'rhythm_chunking':
     case 'sentence_stress': {
-      const primaryText = shouldGeneratePrimary ? buildGenericPrimaryText(focus) : null;
+      const primaryText = shouldGeneratePrimary ? buildGenericPrimaryText(focus, normalize) : null;
       if (primaryText) {
         primaryClip = await synthesizeProviderClip(
           {
@@ -589,7 +597,7 @@ export async function synthesizePronunciationAudio(
       }
       if (!shouldGenerateItems) break;
       const tasks = focus.drills.map((drill, index) => {
-        const normalizedDrill = normalizeSpeechText(drill.text);
+        const normalizedDrill = normalize(drill.text);
         return {
           clip: {
             id: `${focus.mode}-${index + 1}`,

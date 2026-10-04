@@ -7,7 +7,6 @@ import {
   parseAssignmentV1,
   serializeAssignmentV1,
 } from '@esl-pipeline/contracts';
-import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
 
 import type { DraftRecord } from '../domain/draft-model.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
@@ -17,8 +16,6 @@ import {
   type TranscriptionStorage,
 } from '../infrastructure/transcription-storage.js';
 import { isGenerationRequestEnvelope } from './generation-request-envelope.js';
-
-export const ASSIGNMENT_PMD_RENDERER_VERSION = 1;
 
 export class AssignmentArtifactValidationError extends Error {
   readonly code = 'assignment_validation_failed';
@@ -101,14 +98,4 @@ export async function readValidatedAssignment(
   if (!reference.storageUri.endsWith(`/content/${reference.contentHash}.json`))
     throw new Error('Assignment artifact storage identity mismatch');
   return assignment;
-}
-
-export async function projectAssignmentArtifact(
-  reference: AssignmentArtifactReference,
-  promptPackageId: string,
-  rendererVersion: number | null | undefined,
-) {
-  if (rendererVersion !== ASSIGNMENT_PMD_RENDERER_VERSION)
-    throw new Error('Unsupported assignment PMD renderer version');
-  return renderAssignmentToPmd(await readAssignmentArtifact(reference, promptPackageId));
 }

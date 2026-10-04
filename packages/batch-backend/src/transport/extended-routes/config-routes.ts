@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { createStaticPageHtml, renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
+import { createStaticPageHtml, renderAssignmentToHtml } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import { resolveConfigPaths } from '@esl-pipeline/orchestrator';
 import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
@@ -843,7 +843,8 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
 
       try {
         const body = schema.parse(request.body ?? {});
-        let text = body.text ?? '';
+        const text = body.text ?? '';
+        let assignment: import('@esl-pipeline/contracts').AssignmentV1 | undefined;
         if (body.assignment !== undefined) {
           const userId = getAuthenticatedUser(request)?.id;
           if (
@@ -854,13 +855,9 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
             return errorResponse(reply, 'not_found');
           const prompt = await getPromptPackageById(body.promptPackageId);
           if (!prompt) return errorResponse(reply, 'not_found');
-          const assignment = admitAssignment(
-            JSON.stringify(body.assignment),
-            assignmentContext(prompt),
-          );
-          text = renderAssignmentToPmd(assignment);
+          assignment = admitAssignment(JSON.stringify(body.assignment), assignmentContext(prompt));
         }
-        if (!text)
+        if (!assignment && !text)
           throw new AssignmentArtifactValidationError(
             'Preview requires a validated assignment or explicit legacy Markdown',
           );
@@ -901,19 +898,29 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
 
         const previewPronunciationAudio =
           (body.pronunciationAudio as PronunciationAudioPayload | null | undefined) ??
-          buildPreviewPronunciationAudio(text);
+          (assignment ? null : buildPreviewPronunciationAudio(text));
 
-        const markdown = insertGeneratedPreviewAudio(text, {
-          studyTextAudioUrl: body.audioUrl,
-          pronunciationAudioUrl: body.pronunciationAudioUrl,
-          pronunciationAudio: previewPronunciationAudio ?? null,
-          includePronunciation:
-            previewPronunciationAudio !== null || hasPronunciationReferenceMode(text),
-        });
-        const html = await createStaticPageHtml(markdown, resolvePreviewTitle(text, body.title), {
-          headingTheme,
-          pronunciationAudio: previewPronunciationAudio ?? null,
-        });
+        const markdown = assignment
+          ? undefined
+          : insertGeneratedPreviewAudio(text, {
+              studyTextAudioUrl: body.audioUrl,
+              pronunciationAudioUrl: body.pronunciationAudioUrl,
+              pronunciationAudio: previewPronunciationAudio ?? null,
+              includePronunciation:
+                previewPronunciationAudio !== null || hasPronunciationReferenceMode(text),
+            });
+        const html = assignment
+          ? await renderAssignmentToHtml(assignment, {
+              headingTheme,
+              studyTextAudioUrl: body.audioUrl,
+              pronunciationAudioUrl: body.pronunciationAudioUrl,
+              pronunciationAudio: previewPronunciationAudio,
+              preview: true,
+            })
+          : await createStaticPageHtml(markdown!, resolvePreviewTitle(text, body.title), {
+              headingTheme,
+              pronunciationAudio: previewPronunciationAudio ?? null,
+            });
 
         logger.info('HTTP request handled', {
           event: 'http_request',

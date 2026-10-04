@@ -119,7 +119,7 @@ Runbook: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
 - Artifacts are ID-based (`recording`, `transcript`, `prompt package`, `draft`, `job`), not user-managed filesystem paths.
 - New structured assignments persist only validated AssignmentV1 JSON. API/durable references name
   format, schema/serialization version, working version, canonical hash and immutable JSON URI.
-  Invalid textarea state remains local; PMD projections are downstream execution inputs. Historical
+  Invalid textarea state remains local; frozen AssignmentV1 is the native execution input. Historical
   Markdown is read through explicit legacy dispatch. See [AssignmentV1 authority](../reference/ASSIGNMENT_V1.md)
   for confirmation, correction, memory and migration rollback boundaries.
 - Approval boundary is explicit: draft materialization precedes publish execution.
@@ -179,3 +179,13 @@ When modifying backend behavior:
 - Update `docs/reference/env.md` when env contracts change.
 
 If this doc and code conflict, code plus tests are the immediate truth; then update docs in the same change.
+
+### AssignmentV1 native execution (ESL-6)
+
+Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
+HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
+is created. Native renderer 2 / manifest schema 6 carry canonical assignment and publication
+metadata; API 8 / manifest contract 4 identify the typed path/hash changes. Historical Markdown and
+renderer-1 manifest readers remain supported. Editable JSON authority, source authorization, CAS,
+lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
+[AssignmentV1](../reference/ASSIGNMENT_V1.md) for the canonical execution contract.

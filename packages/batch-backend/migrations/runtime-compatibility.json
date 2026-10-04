@@ -62,6 +62,7 @@
     "0059_student_owned_profile_revisions": "legacy-unclassified",
     "0060_user_settings_owner_key": "incompatible",
     "0061_ordinary_memory_replay": "incompatible",
-    "0062_assignment_v1_authority": "incompatible"
+    "0062_assignment_v1_authority": "incompatible",
+    "0063_assignment_native_renderer": "incompatible"
   }
 }

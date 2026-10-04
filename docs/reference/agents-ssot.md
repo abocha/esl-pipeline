@@ -281,3 +281,15 @@ Docs-heavy changes also require:
 - [`docs/README.md`](../README.md)
 - [`docs/backend-frontend/backend-frontend-alignment.md`](../backend-frontend/backend-frontend-alignment.md)
 - [`docs/reference/env.md`](env.md)
+
+### AssignmentV1 native execution (ESL-6)
+
+Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
+HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
+is created. Native renderer 2 / manifest schema 6 carry canonical assignment and publication
+metadata; API 8 / manifest contract 4 identify the typed path/hash changes. Historical Markdown and
+renderer-1 manifest readers remain supported. Editable JSON authority, source authorization, CAS,
+lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
+[AssignmentV1](ASSIGNMENT_V1.md) for the canonical execution contract.
+Migration 0063 admits renderer-2 job writes while retaining renderer 1 and frozen artifact identity;
+it is required before native execution writes and marks prior executors incompatible with native jobs.
