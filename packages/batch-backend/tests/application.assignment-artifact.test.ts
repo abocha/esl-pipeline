@@ -4,7 +4,6 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { parseAssignmentV1, serializeAssignmentV1 } from '@esl-pipeline/contracts';
-import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
 
 import {
   assignmentContext,
@@ -209,15 +208,15 @@ describe('durable AssignmentV1 authority', () => {
               promptPackageId: f.prompt.id,
               state: 'awaiting_approval',
               assignmentArtifact: frozen,
-              assignmentRendererVersion: 1,
+              assignmentRendererVersion: 2,
             }) as never,
           updateDraftLink: link,
         },
       },
     );
-    expect(materialized?.mdStorageUri).toMatch(/\.md$/);
+    expect(materialized?.mdStorageUri).toBe(frozen.storageUri);
     expect(await f.storage.getText(materialized!.mdStorageUri)).toBe(
-      renderAssignmentToPmd(assignmentFixture()),
+      serializeAssignmentV1(assignmentFixture()),
     );
     expect(await readValidatedAssignment(frozen, assignmentContext(f.prompt), f.storage)).toEqual(
       assignmentFixture(),

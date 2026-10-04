@@ -3,8 +3,10 @@ import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 
+import type { AssignmentV1 } from '@esl-pipeline/contracts';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 
+import { type AssignmentRenderOptions, renderAssignmentToHtml } from './assignment-rendering.js';
 import { type RenderOptions, renderToHtml } from './rendering.js';
 
 export interface PublishHtmlOptions {
@@ -126,4 +128,11 @@ function buildHtmlArtifactKey(hash: string, keyPrefix?: string): string {
   const normalizedPrefix = keyPrefix?.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '') ?? '';
   const baseKey = `materials/html/artifacts/${hash}.html`;
   return normalizedPrefix ? `${normalizedPrefix}/${baseKey}` : baseKey;
+}
+
+export async function renderAndPublishAssignmentToS3(
+  options: AssignmentRenderOptions & PublishHtmlOptions & { assignment: AssignmentV1 },
+): Promise<HtmlPublishResult> {
+  const html = await renderAssignmentToHtml(options.assignment, options);
+  return { ...(await publishHtmlToS3(html, options)), html };
 }

@@ -204,6 +204,9 @@ export function analyzeValidatedSpeechPlan(
   }
   const hardFailures: SpeechPlanQualityIssue[] = [];
   const warnings: SpeechPlanQualityIssue[] = [];
+  const typedText = Boolean(
+    prepared.enhancementContext && 'assignment' in prepared.enhancementContext,
+  );
   const capabilities = getTtsModelCapabilities(plan.provider, plan.model);
   const renderedById = new Map(renderedSegments.map((segment) => [segment.id, segment]));
   const deliveryModeCounts: Record<string, number> = {};
@@ -220,7 +223,7 @@ export function analyzeValidatedSpeechPlan(
     if (!source || segment.id !== source.id || segment.text !== source.text) {
       hardFailures.push(issue('authored_words_changed', segment.id));
     }
-    if (source && containsUnsafeMarkupDelimiter(source.text)) {
+    if (!typedText && source && containsUnsafeMarkupDelimiter(source.text)) {
       hardFailures.push(issue('authored_markup_delimiter', segment.id));
     }
     for (const field of ['emotion', 'intonation', 'freeFormDirection'] as const) {
@@ -295,12 +298,14 @@ export function analyzeValidatedSpeechPlan(
       if (!rendered) {
         hardFailures.push(issue('segment_not_rendered', segment.id));
       } else {
-        if (containsUnsafeMarkupDelimiter(rendered.lexicalText)) {
+        if (!typedText && containsUnsafeMarkupDelimiter(rendered.lexicalText)) {
           hardFailures.push(issue('rendered_markup_delimiter', segment.id));
         }
         if (
           renderedLexicalSignature(rendered.lexicalText) !==
-          authoredLexicalSignature(source?.text ?? '')
+          (typedText
+            ? renderedLexicalSignature(source?.text ?? '')
+            : authoredLexicalSignature(source?.text ?? ''))
         ) {
           hardFailures.push(issue('rendered_words_changed', segment.id));
         }

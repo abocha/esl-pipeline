@@ -1,4 +1,5 @@
 import type {
+  AssignmentV1,
   ElevenLabsTtsModelId,
   GoogleTtsModel,
   InworldTtsModel,
@@ -59,10 +60,11 @@ export interface TtsSelection<
   model: ModelId;
 }
 
-export interface BuildStudyTextInput {
-  context: ParsedMarkdownContext;
-  mdPath?: string;
-}
+export type AssignmentExecutionInput =
+  | { assignment: AssignmentV1; context?: never }
+  | { context: ParsedMarkdownContext; assignment?: never };
+
+export type BuildStudyTextInput = AssignmentExecutionInput & { mdPath?: string };
 
 export interface SpeechPerformancePlanSegment {
   id: string;
@@ -129,7 +131,7 @@ export interface PreparedStudyTextSynthesis {
   voices: VoiceSelectionSummary[];
   voiceAssignments: Record<string, string>;
   voicePlan?: VoicePlan;
-  enhancementContext?: { assignmentMarkdown: string };
+  enhancementContext?: { assignment: AssignmentV1 } | { assignmentMarkdown: string };
 }
 
 export interface VoiceAssignmentCapabilities {
@@ -219,13 +221,13 @@ export interface SpeechPerformancePlannerBinding {
   >;
 }
 
-export interface BuildPronunciationShadowSentenceInput {
-  context: ParsedMarkdownContext;
+export type BuildPronunciationShadowSentenceInput = AssignmentExecutionInput & {
   voiceId: string;
   mdPath?: string;
-}
+};
 
 export interface BuildPronunciationTextInput {
+  plainText?: boolean;
   text: string;
   voiceId: string;
   mdPath?: string;

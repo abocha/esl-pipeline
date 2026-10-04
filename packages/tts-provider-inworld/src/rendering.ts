@@ -7,6 +7,7 @@ import type {
   VoiceAssignmentCapabilities,
 } from '@esl-pipeline/tts-core';
 import {
+  normalizePlainSpeechText,
   SPEECH_ANNOTATION_CLOSE,
   SPEECH_ANNOTATION_OPEN,
   validateSpeechAnnotationText,
@@ -49,6 +50,7 @@ export function cleanSpeechText(text: string): string {
 }
 
 export function renderInworldSpeechSegment(args: {
+  plainText?: boolean;
   model: InworldTtsModel;
   segment: SpeechPerformancePlanSegment | SpeechPerformancePlanSegmentV2;
   enhancerVersion?: SpeechEnhancementVersion;
@@ -72,7 +74,9 @@ export function renderInworldSpeechSegment(args: {
       enhancerVersion: args.enhancerVersion,
     };
   }
-  const cleanText = cleanSpeechText(args.segment.text);
+  const cleanText = args.plainText
+    ? normalizePlainSpeechText(args.segment.text)
+    : cleanSpeechText(args.segment.text);
   if (args.model !== 'inworld-tts-2') {
     return {
       text: cleanText,

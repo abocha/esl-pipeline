@@ -1,8 +1,11 @@
+import { readFileSync as readAssignmentFixture } from 'node:fs';
 import { readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
+import { assignmentMetadata, assignmentStudySegments } from '@esl-pipeline/contracts';
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 import {
   hashStudyText,
@@ -1407,3 +1410,45 @@ describe('inworld provider adapter basics', () => {
     expect(differentPolicy).not.toBe(first);
   });
 });
+
+it('keeps native typed cast and cache identity for unchanged historical speech', async () => {
+  const assignment = assignmentFixture();
+  const context = parseMarkdownContext(
+    `---\n${JSON.stringify(assignmentMetadata(assignment))}\n---\n:::study-text\n${assignmentStudySegments(
+      assignment,
+    )
+      .map((s) => `${s.speaker}: ${s.text}`)
+      .join('\n')}\n:::`,
+  );
+  const voicePlan = {
+    ...createPreviewVoicePlan('fixed'),
+    assignments: ['Alex', 'Jo'].map((speaker) => ({
+      ...createPreviewVoicePlan('fixed').assignments[0]!,
+      speaker,
+    })),
+  };
+  const options = { outPath: tmpdir(), voiceMapPath: '/unused', preview: true, voicePlan };
+  const typed = await buildStudyTextMp3Inworld({ assignment }, options);
+  const historical = await buildStudyTextMp3Inworld({ context }, options);
+  expect(typed.hash).toBe(historical.hash);
+  expect(typed.voiceAssignments).toEqual(historical.voiceAssignments);
+  assignment.input.studyText.turns[0]!.text = '**First**, open the app.';
+  const literal = await buildStudyTextMp3Inworld({ assignment }, options);
+  expect(literal.hash).not.toBe(typed.hash);
+  expect(
+    renderInworldSpeechSegment({
+      plainText: true,
+      model: 'inworld-tts-2',
+      segment: { id: 'segment-1', text: '**literal** <tag> `code`' },
+    }).lexicalText,
+  ).toBe('**literal** <tag> `code`');
+});
+
+function assignmentFixture(): FixtureAssignmentV1 {
+  return JSON.parse(
+    readAssignmentFixture(
+      new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+      'utf8',
+    ),
+  ) as FixtureAssignmentV1;
+}

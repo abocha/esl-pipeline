@@ -1,8 +1,11 @@
+import { readFileSync as readAssignmentFixture } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
+import { assignmentMetadata, assignmentStudySegments } from '@esl-pipeline/contracts';
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import type { GoogleVoiceListEntry } from '../src/google.js';
@@ -659,3 +662,35 @@ describe('google cache-key regression coverage', () => {
     expect(synthSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+it('keeps native typed cast and cache identity for unchanged historical speech', async () => {
+  mockGoogleVoiceList(createRichEnglishMockVoices());
+  const assignment = assignmentFixture();
+  const dir = await mkdtemp(join(tmpdir(), 'typed-google-'));
+  const voiceMapPath = join(dir, 'voices.yml');
+  await writeFile(voiceMapPath, 'default: en-US-Chirp3-HD-Charon');
+  const context = parseMarkdownContext(
+    `---\n${JSON.stringify(assignmentMetadata(assignment))}\n---\n:::study-text\n${assignmentStudySegments(
+      assignment,
+    )
+      .map((s) => `${s.speaker}: ${s.text}`)
+      .join('\n')}\n:::`,
+  );
+  const options = { outPath: dir, voiceMapPath, preview: true };
+  const typed = await buildStudyTextMp3Google({ assignment }, options);
+  const historical = await buildStudyTextMp3Google({ context }, options);
+  expect(typed.hash).toBe(historical.hash);
+  expect(typed.voiceAssignments).toEqual(historical.voiceAssignments);
+  assignment.input.studyText.turns[0]!.text = '**First**, open the app.';
+  const literal = await buildStudyTextMp3Google({ assignment }, options);
+  expect(literal.hash).not.toBe(typed.hash);
+});
+
+function assignmentFixture(): FixtureAssignmentV1 {
+  return JSON.parse(
+    readAssignmentFixture(
+      new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+      'utf8',
+    ),
+  ) as FixtureAssignmentV1;
+}

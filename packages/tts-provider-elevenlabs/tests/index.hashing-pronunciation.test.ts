@@ -1,11 +1,17 @@
+import { readFileSync as readAssignmentFixture } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
+import { assignmentMetadata, assignmentStudySegments } from '@esl-pipeline/contracts';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
+
 import { createElevenLabsTtsProvider } from '../src/adapter.js';
-import { hashStudyText } from '../src/index.js';
+import { buildStudyTextMp3, hashStudyText } from '../src/index.js';
 import {
   buildPronunciationShadowSentenceMp3FromPath,
   createTempDir,
+  mockConcat,
   setupClientMock,
   setupTtsTestSuite,
   writeFixture,
@@ -125,3 +131,61 @@ Narrator: Main text.
     );
   });
 });
+
+it('keeps typed cast and cache identity for unchanged historical speech and preserves literal punctuation', async () => {
+  const assignment = assignmentFixture();
+  const dir = await createTempDir('typed-eleven-');
+  const voiceMapPath = join(dir, 'voices.yml');
+  await writeFixture(voiceMapPath, 'default: voice_narrator');
+  const context = parseMarkdownContext(
+    `---\n${JSON.stringify(assignmentMetadata(assignment))}\n---\n:::study-text\n${assignmentStudySegments(
+      assignment,
+    )
+      .map((s) => `${s.speaker}: ${s.text}`)
+      .join('\n')}\n:::`,
+  );
+  const options = { outPath: dir, voiceMapPath, preview: true, ttsStrategy: 'tts' as const };
+  const typed = await buildStudyTextMp3({ assignment }, options);
+  const historical = await buildStudyTextMp3({ context }, options);
+  expect(typed.hash).toBe(historical.hash);
+  expect(typed.voiceAssignments).toEqual(historical.voiceAssignments);
+  const convert = setupClientMock();
+  mockConcat();
+  assignment.input.studyText.turns[0]!.text = '**literal** <tag> `code`';
+  await buildStudyTextMp3({ assignment }, { ...options, preview: false });
+  expect(
+    convert.mock.calls.some(([, request]) => request.text.includes('**literal** <tag> `code`')),
+  ).toBe(true);
+});
+
+it.each(['Mary  Jane', 'Mary_Jane'])(
+  'routes typed dialogue speaker %s to its historical cast',
+  async (name) => {
+    const assignment = assignmentFixture();
+    assignment.input.studyText.speakers[1]!.displayName = name;
+    const dir = await createTempDir('typed-speaker-routing-');
+    const voiceMapPath = join(dir, 'voices.yml');
+    await writeFixture(voiceMapPath, 'default: voice_narrator');
+    const historical = parseMarkdownContext(
+      `---\n${JSON.stringify(assignmentMetadata(assignment))}\n---\n:::study-text\n${assignmentStudySegments(
+        assignment,
+      )
+        .map((s) => `${s.speaker}: ${s.text}`)
+        .join('\n')}\n:::`,
+    );
+    const options = { outPath: dir, voiceMapPath, preview: true, ttsStrategy: 'dialogue' as const };
+    const prior = await buildStudyTextMp3({ context: historical }, options);
+    const native = await buildStudyTextMp3({ assignment }, options);
+    expect(native.voiceAssignments).toEqual(prior.voiceAssignments);
+    expect(native.hash).toBe(prior.hash);
+  },
+);
+
+function assignmentFixture(): FixtureAssignmentV1 {
+  return JSON.parse(
+    readAssignmentFixture(
+      new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+      'utf8',
+    ),
+  ) as FixtureAssignmentV1;
+}

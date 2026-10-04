@@ -82,3 +82,13 @@ pnpm --filter @esl-pipeline/orchestrator build
 pnpm --filter @esl-pipeline/orchestrator test
 pnpm --filter @esl-pipeline/orchestrator test:integration
 ```
+
+## Structured AssignmentV1 execution
+
+`newAssignment` and `rerunAssignment` accept `assignment` with optional pinned `validationContext`.
+They validate before execution, resolve typed study/pronunciation fields directly and publish native
+HTML. `md` is required as a stable manifest locator; typed execution never reads or creates that
+file. Native schema-6 manifests carry canonical `assignmentHash` and title/icon/audio publication
+metadata; explicit Markdown calls retain schema-5 writes and all historical readers. Provider cast,
+speech plans and selected audio-family rerun/upload behavior remain shared. See
+[AssignmentV1](../../docs/reference/ASSIGNMENT_V1.md) for the source/hash contract.
