@@ -7,7 +7,6 @@ import type { AssignmentV1 } from '@esl-pipeline/contracts';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 
 import { type AssignmentRenderOptions, renderAssignmentToHtml } from './assignment-rendering.js';
-import { type RenderOptions, renderToHtml } from './rendering.js';
 
 export interface PublishHtmlOptions {
   keyPrefix?: string;
@@ -15,11 +14,6 @@ export interface PublishHtmlOptions {
   filename?: string;
   key?: string;
   renderHash?: string;
-}
-
-export interface RenderAndPublishOptions extends RenderOptions, PublishHtmlOptions {
-  markdown: string;
-  title: string;
 }
 
 export interface HtmlPublishResult {
@@ -62,33 +56,6 @@ export async function publishHtmlToS3(
   } finally {
     await unlink(localPath).catch(() => {});
   }
-}
-
-export async function renderAndPublishMarkdownToS3(
-  options: RenderAndPublishOptions,
-): Promise<HtmlPublishResult> {
-  const html = await renderToHtml(options.markdown, options.title, {
-    css: options.css,
-    allowRawHtml: options.allowRawHtml,
-    showGeneratedDate: options.showGeneratedDate,
-    features: options.features,
-    theme: options.theme,
-    headingTheme: options.headingTheme,
-    pronunciationAudio: options.pronunciationAudio,
-  });
-
-  const upload = await publishHtmlToS3(html, {
-    keyPrefix: options.keyPrefix,
-    publicRead: options.publicRead,
-    filename: options.filename,
-    key: options.key,
-    renderHash: options.renderHash,
-  });
-
-  return {
-    ...upload,
-    html,
-  };
 }
 
 function resolveFilename(filename?: string): string {

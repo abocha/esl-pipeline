@@ -370,7 +370,7 @@ function isCiIntegrationPath(file) {
     ) ||
     /^packages\/(?:contracts|orchestrator|tts-provider-elevenlabs)\//u.test(file) ||
     // The pipeline integration consumes these workspace dependencies.
-    /^packages\/(?:md-validator|pmd|tts-core|tts-provider-inworld|tts-provider-google|provider-runtime|storage-uploader|html-publisher|shared-infrastructure)\//u.test(
+    /^packages\/(?:tts-core|tts-provider-inworld|tts-provider-google|provider-runtime|storage-uploader|html-publisher|shared-infrastructure)\//u.test(
       file,
     )
   );

@@ -22,6 +22,7 @@ import {
   testVi as vi,
   testWaitFor as waitFor,
 } from './MinimalAssignment.test-harness';
+import { makeAssignmentText, typedDraftFields } from './MinimalAssignment.typed-test-fixtures';
 
 export function registerGenerationDefaultsTests() {
   describe('MinimalAssignment - generation defaults', () => {
@@ -60,7 +61,9 @@ export function registerGenerationDefaultsTests() {
           model: 'gpt-5.2',
         });
       });
-      expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
+      expect(
+        await screen.findByDisplayValue(makeAssignmentText('# Generated assignment draft')),
+      ).toBeTruthy();
       expect(screen.getByText(/Assignment draft ready\. Saved automatically\./i)).toBeTruthy();
     });
 
@@ -74,7 +77,9 @@ export function registerGenerationDefaultsTests() {
 
         await preparePromptReady(user);
 
-        expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
+        expect(
+          await screen.findByDisplayValue(makeAssignmentText('# Generated assignment draft')),
+        ).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -96,12 +101,14 @@ export function registerGenerationDefaultsTests() {
             model: 'gpt-5.2',
           });
         });
-        expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
+        expect(
+          await screen.findByDisplayValue(makeAssignmentText('# Generated assignment draft')),
+        ).toBeTruthy();
         expect(screen.getByText(/Assignment draft ready\. Saved automatically\./i)).toBeTruthy();
         await waitFor(() => {
           expect(api.updateDraft).toHaveBeenCalledWith(
             'draft-1',
-            '# Generated assignment draft',
+            makeAssignmentText('# Generated assignment draft'),
             1,
           );
         });
@@ -156,12 +163,13 @@ export function registerGenerationThrottleTests() {
       'preserves the latest manual edit when autosave overlaps an older save',
       async () => {
         const firstSavedDraft = {
+          ...typedDraftFields(makeAssignmentText('# First autosave')),
           id: 'draft-1',
           promptPackageId: 'pkg-1',
           studentId: null,
           storageUri: 'memory://drafts/draft-1',
           createdBy: 'user-1',
-          text: '# First autosave',
+          text: makeAssignmentText('# First autosave'),
           workingVersion: 2,
           contentHash: 'a'.repeat(64),
           createdAt: now,
@@ -169,7 +177,7 @@ export function registerGenerationThrottleTests() {
         };
         const finalSavedDraft = {
           ...firstSavedDraft,
-          text: '# Final autosave',
+          text: makeAssignmentText('# Final autosave'),
           workingVersion: 3,
         };
         let resolveFirstSave: (value: typeof firstSavedDraft) => void = () => {};
@@ -185,16 +193,24 @@ export function registerGenerationThrottleTests() {
         await renderGenerationReadyAssignment();
         vi.useFakeTimers();
         const draftTextarea = screen.getByRole('textbox', {
-          name: /Draft markdown/i,
+          name: /Assignment JSON/i,
         }) as HTMLTextAreaElement;
 
-        fireEvent.change(draftTextarea, { target: { value: '# First autosave' } });
+        fireEvent.change(draftTextarea, {
+          target: { value: makeAssignmentText('# First autosave') },
+        });
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
-        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# First autosave', 1);
+        expect(api.updateDraft).toHaveBeenCalledWith(
+          'draft-1',
+          makeAssignmentText('# First autosave'),
+          1,
+        );
 
-        fireEvent.change(draftTextarea, { target: { value: '# Final autosave' } });
+        fireEvent.change(draftTextarea, {
+          target: { value: makeAssignmentText('# Final autosave') },
+        });
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
@@ -204,13 +220,17 @@ export function registerGenerationThrottleTests() {
           resolveFirstSave(firstSavedDraft);
           await Promise.resolve();
         });
-        expect(draftTextarea.value).toBe('# Final autosave');
+        expect(draftTextarea.value).toBe(makeAssignmentText('# Final autosave'));
 
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
-        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Final autosave', 2);
-        expect(draftTextarea.value).toBe('# Final autosave');
+        expect(api.updateDraft).toHaveBeenCalledWith(
+          'draft-1',
+          makeAssignmentText('# Final autosave'),
+          2,
+        );
+        expect(draftTextarea.value).toBe(makeAssignmentText('# Final autosave'));
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -223,7 +243,8 @@ export function registerGenerationThrottleTests() {
           vi.setSystemTime(new Date('2026-02-18T00:00:40.000Z'));
           const user = createTimerAwareMinimalUser();
           vi.mocked(api.generateDraft).mockResolvedValueOnce({
-            text: '# Generated assignment draft',
+            ...typedDraftFields(makeAssignmentText('# Generated assignment draft')),
+            text: makeAssignmentText('# Generated assignment draft'),
             provider: 'openai',
             model: 'gpt-5.2',
             quota: {
@@ -313,7 +334,8 @@ export function registerGenerationThrottleTests() {
       async () => {
         const user = createMinimalUser();
         vi.mocked(api.generateDraft).mockResolvedValueOnce({
-          text: '# Generated assignment draft',
+          ...typedDraftFields(makeAssignmentText('# Generated assignment draft')),
+          text: makeAssignmentText('# Generated assignment draft'),
           provider: 'openai',
           model: 'gpt-5.2',
           quota: {
@@ -323,8 +345,10 @@ export function registerGenerationThrottleTests() {
         });
         await renderGenerationReadyAssignment();
 
-        const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-        fireEvent.change(draftTextarea, { target: { value: '# Existing draft' } });
+        const draftTextarea = screen.getByRole('textbox', { name: /Assignment JSON/i });
+        fireEvent.change(draftTextarea, {
+          target: { value: makeAssignmentText('# Existing draft') },
+        });
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
         await screen.findByRole('heading', { name: /Review and share/i });
         await previewCurrentDraft(user);
@@ -347,7 +371,9 @@ export function registerGenerationThrottleTests() {
             provider: 'openai',
             model: 'gpt-5.2',
           });
-          expect(screen.getByDisplayValue('# Generated assignment draft')).toBeTruthy();
+          expect(
+            screen.getByDisplayValue(makeAssignmentText('# Generated assignment draft')),
+          ).toBeTruthy();
         });
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
         await waitFor(() =>
@@ -397,7 +423,8 @@ export function registerGenerationThrottleTests() {
 
         await act(async () => {
           resolveGeneration({
-            text: '# Stale generated draft',
+            ...typedDraftFields(makeAssignmentText('# Stale generated draft')),
+            text: makeAssignmentText('# Stale generated draft'),
             provider: 'openai',
             model: 'gpt-5.2',
             quota: {
@@ -410,7 +437,9 @@ export function registerGenerationThrottleTests() {
 
         await waitFor(
           () => {
-            expect(screen.queryByDisplayValue('# Stale generated draft')).toBeNull();
+            expect(
+              screen.queryByDisplayValue(makeAssignmentText('# Stale generated draft')),
+            ).toBeNull();
           },
           { timeout: UI_WAIT_TIMEOUT_MS },
         );

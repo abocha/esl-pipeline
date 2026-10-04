@@ -3,20 +3,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
 
 import * as assign from '../src/assign.js';
 import { pickVoiceForSpeaker } from '../src/assign.js';
 import { buildStudyTextMp3 } from '../src/index.js';
 import { resolveSpeakerVoices } from '../src/speakerAssignment.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 
 const buildStudyTextMp3FromPath = async (
   mdPath: string,
   ...args: Parameters<typeof buildStudyTextMp3> extends [any, ...infer Rest] ? Rest : never
 ) => {
-  const markdown = await readFile(mdPath, 'utf8');
-  const context = parseMarkdownContext(markdown);
-  return buildStudyTextMp3({ context, mdPath }, ...args);
+  const source = await readFile(mdPath, 'utf8');
+  const context = JSON.parse(source) as FixtureAssignmentV1;
+  return buildStudyTextMp3({ assignment: context, mdPath }, ...args);
 };
 
 describe('tts elevenlabs gender-aware voice selection', () => {
@@ -197,29 +198,38 @@ describe('tts elevenlabs gender-aware voice selection', () => {
 
   it('cleans markdown speaker formatting so profile gender applies (e.g. \"**Mark:**\")', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tts-gender-'));
-    const tempMdPath = join(dir, 'lesson.md');
+    const assignmentPath = join(dir, 'assignment.json');
     const tempVoiceMapPath = join(dir, 'voices.yml');
 
     await writeFile(
-      tempMdPath,
-      `
----
-title: Speaker Formatting
-student: Anna
-level: A1
-topic: greetings
-input_type: dialogue
-speaker_labels: [Mark]
-speaker_profiles:
-  - id: Mark
-    role: student
-    gender: male
----
-
-:::study-text
-**Mark:** Hello!
-:::
-      `.trim(),
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: {
+            title: 'Speaker Formatting',
+            student: 'Anna',
+            level: 'A1',
+            topic: 'greetings',
+          },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Mark',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'male',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [{ speakerId: 's0', text: '** Hello!' }],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
 
     await writeFile(
@@ -239,7 +249,7 @@ auto: true
     vi.spyOn(assign, 'loadVoicesCatalog').mockResolvedValue(catalogMock as any);
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const result = await buildStudyTextMp3FromPath(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       preview: true,
@@ -259,30 +269,38 @@ auto: true
 
   it('applies profile gender when study-text uses speaker display_name (id != display_name)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tts-gender-display-name-'));
-    const tempMdPath = join(dir, 'lesson.md');
+    const assignmentPath = join(dir, 'assignment.json');
     const tempVoiceMapPath = join(dir, 'voices.yml');
 
     await writeFile(
-      tempMdPath,
-      `
----
-title: Speaker Display Name
-student: Tolik
-level: A1
-topic: greetings
-input_type: dialogue
-speaker_labels: [Narrator]
-speaker_profiles:
-  - id: Narrator
-    display_name: Tolik
-    role: student
-    gender: male
----
-
-:::study-text
-Tolik: Hello!
-:::
-      `.trim(),
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: {
+            title: 'Speaker Display Name',
+            student: 'Tolik',
+            level: 'A1',
+            topic: 'greetings',
+          },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Tolik',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'male',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [{ speakerId: 's0', text: 'Hello!' }],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
 
     await writeFile(
@@ -302,7 +320,7 @@ auto: true
     vi.spyOn(assign, 'loadVoicesCatalog').mockResolvedValue(catalogMock as any);
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const result = await buildStudyTextMp3FromPath(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       preview: true,

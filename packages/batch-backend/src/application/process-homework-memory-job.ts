@@ -8,6 +8,10 @@ import {
   supersedePendingHomeworkMemoryEntriesForAssignmentLineage,
 } from '../domain/homework-memory-repository.js';
 import { obsoleteMemoryReplayIntent } from '../domain/memory-replay-delivery.js';
+import {
+  HistoricalAssignmentReadOnlyError,
+  requireTypedAssignment,
+} from './historical-assignment.js';
 import { generateHomeworkMemoryFromSource } from './homework-memory-generation.js';
 import {
   buildHomeworkMemoryEnvelope,
@@ -69,6 +73,16 @@ export async function processHomeworkMemoryJob(args: {
 
   const pendingEntry = await homeworkMemory.getById(args.payload.pendingEntryId);
   if (!pendingEntry || pendingEntry.status !== 'pending') {
+    if (pendingEntry) {
+      try {
+        requireTypedAssignment(
+          (await sourceResolver(args.payload.jobId)).format === 'assignment_v1',
+        );
+      } catch (error) {
+        if (error instanceof HistoricalAssignmentReadOnlyError) return;
+        throw error;
+      }
+    }
     await reconcileSnapshotForCommittedHomeworkMemory({
       config: args.config,
       payload: args.payload,
@@ -126,11 +140,9 @@ export async function processHomeworkMemoryJob(args: {
     }
 
     const prompt = buildHomeworkMemoryPrompt({
-      normalizedMarkdown: source.normalizedMarkdown,
       source,
     });
     const envelope = buildHomeworkMemoryEnvelope({
-      normalizedMarkdown: source.normalizedMarkdown,
       source,
     });
 
@@ -177,6 +189,10 @@ export async function processHomeworkMemoryJob(args: {
       },
     });
   } catch (error) {
+    if (error instanceof HistoricalAssignmentReadOnlyError) {
+      await homeworkMemory.markFailed({ id: pendingEntry.id, errorMessage: error.code });
+      return;
+    }
     if (isStudentMemoryPacingDeferredError(error)) {
       throw error;
     }

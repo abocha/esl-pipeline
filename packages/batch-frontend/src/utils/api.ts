@@ -8,7 +8,6 @@
  * - GET /jobs/:jobId/provenance (authenticated)
  * - GET /user/jobs, /user/jobs/summary (authenticated)
  * - GET /students/summary (authenticated)
- * - POST /validation/markdown (authenticated)
  * - POST /uploads (authenticated)
  * - POST /recordings/upload (authenticated)
  * - POST /recordings/:id/transcribe (authenticated)
@@ -35,6 +34,7 @@ import type {
   AssignmentLearnerContextDto as ContractAssignmentLearnerContextDto,
   AssignmentSessionDto as ContractAssignmentSessionDto,
   AssignmentSessionListResponse as ContractAssignmentSessionListResponse,
+  AssignmentValidationResponse as ContractAssignmentValidationResponse,
   AttachAssignmentSourceRequest as ContractAttachAssignmentSourceRequest,
   AttachAssignmentSourceResponse as ContractAttachAssignmentSourceResponse,
   ConfirmAssignmentSessionShareRequest as ContractConfirmAssignmentSessionShareRequest,
@@ -55,7 +55,6 @@ import type {
   JobOptionsPayload as ContractJobOptionsPayload,
   JobState as ContractJobState,
   JobSummaryResponse as ContractJobSummaryResponse,
-  MarkdownValidationResponse as ContractMarkdownValidationResponse,
   PronunciationChunkTtsProviderId as ContractPronunciationChunkTtsProviderId,
   PublishAssignmentCorrectionRequest as ContractPublishAssignmentCorrectionRequest,
   PublishAssignmentCorrectionResponse as ContractPublishAssignmentCorrectionResponse,
@@ -131,7 +130,7 @@ export type GoogleTtsModel = ContractGoogleTtsModel;
 export type InworldTtsModel = ContractInworldTtsModel;
 export type ElevenLabsTtsModelId = ContractElevenLabsTtsModelId;
 export type PronunciationChunkTtsProviderId = ContractPronunciationChunkTtsProviderId;
-export type MarkdownValidationResponse = ContractMarkdownValidationResponse;
+export type AssignmentValidationResponse = ContractAssignmentValidationResponse;
 export type GenerateDraftRequest = ContractGenerateDraftRequest;
 export type RecordingSourceAcquisitionResult =
   | RecordingListItem
@@ -1194,11 +1193,6 @@ export interface MaterializeDraftResponse {
   mdStorageUri: string;
 }
 
-export interface UploadMarkdownResponse {
-  id: string;
-  md: string;
-}
-
 export interface SubmitJobResponse {
   jobId: string;
 }
@@ -1545,34 +1539,8 @@ export async function getStudentSummary(
   }
 }
 
-export async function validateMarkdown(
-  text: string,
-  strict?: boolean,
-  context?: {
-    learningPresetId?: string | null;
-    learningPresetVersion?: string | null;
-  },
-): Promise<MarkdownValidationResponse> {
-  try {
-    const response = await apiClient.post(buildApiProxyPath('/validation/markdown'), {
-      text,
-      strict,
-      learningPresetId: context?.learningPresetId ?? undefined,
-      learningPresetVersion: context?.learningPresetVersion ?? undefined,
-    });
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to validate markdown.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
 export async function renderHtmlPreview(params: {
-  text?: string;
-  assignment?: import('@esl-pipeline/contracts').AssignmentV1;
+  assignment: import('@esl-pipeline/contracts').AssignmentV1;
   promptPackageId?: string;
   title?: string;
   learningPresetId?: string | null;
@@ -1581,7 +1549,6 @@ export async function renderHtmlPreview(params: {
 }): Promise<{ html: string }> {
   try {
     const response = await apiClient.post(buildApiProxyPath('/preview/html'), {
-      text: params.text,
       assignment: params.assignment,
       promptPackageId: params.promptPackageId,
       title: params.title,
@@ -1872,36 +1839,6 @@ export async function createJob(body: SubmitJobRequest): Promise<SubmitJobRespon
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to submit jobs.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-/**
- * Upload a markdown file via POST /uploads and receive an md identifier
- * that can be passed through to POST /jobs. Now uses authenticated API client.
- */
-export async function uploadMarkdown(
-  file: File,
-  options: { onProgress?: UploadProgressCallback; signal?: AbortSignal } = {},
-): Promise<UploadMarkdownResponse> {
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await apiClient.post(buildApiProxyPath('/uploads'), formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress: (event) => reportUploadProgress(event, options.onProgress),
-      signal: options.signal,
-    });
-
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to upload files.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

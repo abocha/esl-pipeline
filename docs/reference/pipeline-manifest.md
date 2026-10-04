@@ -15,7 +15,7 @@ This document captures the canonical schema so remote stores and services can va
 
 ## Schema Versioning
 
-- **Current native version:** `6`; explicit historical Markdown writes remain schema `5`.
+- **Current native version:** `6`; schemas `1`–`5` are read-only historical evidence. Legacy execution/writes are retired.
 - Schema 6 adds canonical `assignmentHash` and versioned `publication` metadata. Its `mdHash`
   equals the canonical AssignmentV1 hash. Schema 1–5 `mdHash` retains Markdown semantics.
 - Native manifests retain the same audio/cast/speech-plan fields and historical readers.
@@ -38,7 +38,7 @@ This document captures the canonical schema so remote stores and services can va
     "title": "Homework Assignment: Clear demos",
     "icon": "🎧",
     "studyTextAudioUrl": "https://...", // null when absent
-    "pronunciationAudioUrl": null // primary sentence only; never an item clip
+    "pronunciationAudioUrl": null, // primary sentence only; never an item clip
   },
   "timestamp": "2024-07-19T12:34:56.789Z",
   "preset": "b1-default", // optional, last applied heading preset

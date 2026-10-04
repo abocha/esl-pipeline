@@ -4,12 +4,12 @@ import type {
   PronunciationAudioPayload,
 } from '@esl-pipeline/shared-infrastructure';
 
+import { renderAudioFigure, renderAudioPlaceholder } from './rendering/audio.js';
 import { buildBehaviorScript } from './rendering/behavior.js';
 import { buildCss } from './rendering/css.js';
+import { buildVideoEmbed } from './rendering/media.js';
 import { type RenderOptions, resolveRenderOptions } from './rendering/options.js';
 import { renderPageShell } from './rendering/page-shell.js';
-import { renderAudioFigure, renderAudioPlaceholder } from './rendering/postprocess.js';
-import { buildVideoEmbed } from './rendering/preprocess.js';
 import { sanitizeLinkHref, sanitizeMediaUrl } from './rendering/safety.js';
 import { escapeHtml as e } from './rendering/shared.js';
 

@@ -21,6 +21,12 @@ import {
   testWaitFor as waitFor,
   testWithin as within,
 } from './MinimalAssignment.test-harness';
+import {
+  assignmentArtifact,
+  makeAssignmentText,
+  requestEnvelope,
+  typedDraftFields,
+} from './MinimalAssignment.typed-test-fixtures';
 
 async function openResumeRoute(user: ReturnType<typeof createMinimalUser>) {
   const resumeButton = await screen.findByRole('button', { name: /Resume recent work/i });
@@ -359,6 +365,7 @@ export function registerResumeBasicTests() {
         }),
       );
       vi.mocked(api.fetchPromptPackage).mockResolvedValue({
+        requestEnvelope,
         id: 'pkg-session',
         recordingId: 'rec-session',
         transcriptId: 'tx-session',
@@ -372,12 +379,13 @@ export function registerResumeBasicTests() {
         updatedAt: now,
       });
       vi.mocked(api.fetchDraft).mockResolvedValue({
+        ...typedDraftFields(makeAssignmentText('# Session draft')),
         id: 'draft-session',
         promptPackageId: 'pkg-session',
         studentId: 'student-alex',
         storageUri: 'memory://drafts/draft-session',
         createdBy: 'user-1',
-        text: '# Session draft',
+        text: makeAssignmentText('# Session draft'),
         workingVersion: 1,
         contentHash: 'a'.repeat(64),
         createdAt: now,
@@ -391,7 +399,7 @@ export function registerResumeBasicTests() {
       await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       expect(await screen.findByDisplayValue('Session transcript')).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /Create/i }));
-      expect(await screen.findByDisplayValue('# Session draft')).toBeTruthy();
+      expect(await screen.findByDisplayValue(makeAssignmentText('# Session draft'))).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(((await screen.findByLabelText(/Teacher notes/i)) as HTMLTextAreaElement).value).toBe(
         'Remember the travel vocab.',
@@ -655,6 +663,7 @@ export function registerResumeBasicTests() {
         limit: 20,
       });
       vi.mocked(api.fetchPromptPackage).mockResolvedValueOnce({
+        requestEnvelope,
         id: 'pkg-current',
         recordingId: 'rec-session',
         transcriptId: 'tx-session',
@@ -668,12 +677,13 @@ export function registerResumeBasicTests() {
         updatedAt: now,
       });
       vi.mocked(api.fetchDraft).mockResolvedValueOnce({
+        ...typedDraftFields(makeAssignmentText('# Stale draft')),
         id: 'draft-stale',
         promptPackageId: 'pkg-old',
         studentId: 'student-alex',
         storageUri: 'memory://drafts/draft-stale',
         createdBy: 'user-1',
-        text: '# Stale draft',
+        text: makeAssignmentText('# Stale draft'),
         workingVersion: 1,
         contentHash: 'a'.repeat(64),
         createdAt: now,
@@ -684,13 +694,16 @@ export function registerResumeBasicTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      await screen.findByDisplayValue('# Stale draft');
+      await screen.findByDisplayValue(makeAssignmentText('# Stale draft'));
       vi.mocked(api.createDraft).mockClear();
       vi.mocked(api.updateDraft).mockClear();
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
       await waitFor(() =>
-        expect(api.createDraft).toHaveBeenCalledWith('pkg-current', '# Stale draft'),
+        expect(api.createDraft).toHaveBeenCalledWith(
+          'pkg-current',
+          makeAssignmentText('# Stale draft'),
+        ),
       );
       expect(api.updateDraft).not.toHaveBeenCalled();
     });
@@ -977,6 +990,7 @@ export function registerResumeBasicTests() {
         }),
       );
       vi.mocked(api.fetchPromptPackage).mockResolvedValueOnce({
+        requestEnvelope,
         id: 'pkg-stale',
         recordingId: 'rec-stale',
         transcriptId: 'tx-stale',
@@ -1013,12 +1027,13 @@ export function registerResumeBasicTests() {
 
       await act(async () => {
         resolveStaleDraft({
+          ...typedDraftFields(makeAssignmentText('# Stale draft')),
           id: 'draft-stale',
           promptPackageId: 'pkg-stale',
           studentId: 'student-alex',
           storageUri: 'memory://drafts/draft-stale',
           createdBy: 'user-1',
-          text: '# Stale draft',
+          text: makeAssignmentText('# Stale draft'),
           workingVersion: 1,
           contentHash: 'b'.repeat(64),
           createdAt: now,
@@ -1056,12 +1071,13 @@ export function registerResumeBasicTests() {
         vi.mocked(api.fetchDraft).mockImplementation(async (draftId) => {
           if (draftId === 'draft-next') {
             return {
+              ...typedDraftFields(makeAssignmentText('# Next session draft')),
               id: 'draft-next',
               promptPackageId: 'pkg-next',
               studentId: 'student-bella',
               storageUri: 'memory://drafts/draft-next',
               createdBy: 'user-1',
-              text: '# Next session draft',
+              text: makeAssignmentText('# Next session draft'),
               workingVersion: 1,
               contentHash: 'c'.repeat(64),
               createdAt: now,
@@ -1069,12 +1085,13 @@ export function registerResumeBasicTests() {
             };
           }
           return {
+            ...typedDraftFields(makeAssignmentText('# Original draft')),
             id: 'draft-1',
             promptPackageId: 'pkg-1',
             studentId: 'student-alex',
             storageUri: 'memory://drafts/draft-1',
             createdBy: 'user-1',
-            text: '# Original draft',
+            text: makeAssignmentText('# Original draft'),
             workingVersion: 1,
             contentHash: 'd'.repeat(64),
             createdAt: now,
@@ -1104,6 +1121,7 @@ export function registerResumeBasicTests() {
           }),
         );
         vi.mocked(api.fetchPromptPackage).mockImplementation(async (promptPackageId) => ({
+          requestEnvelope,
           id: promptPackageId,
           recordingId: promptPackageId === 'pkg-next' ? 'rec-next' : 'rec-1',
           transcriptId: promptPackageId === 'pkg-next' ? 'tx-next' : 'tx-1',
@@ -1160,14 +1178,20 @@ export function registerResumeBasicTests() {
         renderMinimalAssignment();
 
         const draftTextarea = (await screen.findByDisplayValue(
-          '# Original draft',
+          makeAssignmentText('# Original draft'),
         )) as HTMLTextAreaElement;
         vi.useFakeTimers();
-        fireEvent.change(draftTextarea, { target: { value: '# Older autosave' } });
+        fireEvent.change(draftTextarea, {
+          target: { value: makeAssignmentText('# Older autosave') },
+        });
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
-        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Older autosave', 1);
+        expect(api.updateDraft).toHaveBeenCalledWith(
+          'draft-1',
+          makeAssignmentText('# Older autosave'),
+          1,
+        );
         vi.useRealTimers();
 
         await user.click(screen.getByRole('button', { name: /Student/i }));
@@ -1177,17 +1201,18 @@ export function registerResumeBasicTests() {
         await user.click(screen.getByRole('button', { name: /Continue assignment/i }));
 
         const nextDraftTextarea = (await screen.findByDisplayValue(
-          '# Next session draft',
+          makeAssignmentText('# Next session draft'),
         )) as HTMLTextAreaElement;
 
         await act(async () => {
           resolveOlderAutosave({
+            ...typedDraftFields(makeAssignmentText('# Older autosave')),
             id: 'draft-1',
             promptPackageId: 'pkg-1',
             studentId: 'student-alex',
             storageUri: 'memory://drafts/draft-1',
             createdBy: 'user-1',
-            text: '# Older autosave',
+            text: makeAssignmentText('# Older autosave'),
             workingVersion: 2,
             contentHash: 'e'.repeat(64),
             createdAt: now,
@@ -1196,8 +1221,8 @@ export function registerResumeBasicTests() {
           await Promise.resolve();
         });
 
-        expect(nextDraftTextarea.value).toBe('# Next session draft');
-        expect(screen.queryByDisplayValue('# Older autosave')).toBeNull();
+        expect(nextDraftTextarea.value).toBe(makeAssignmentText('# Next session draft'));
+        expect(screen.queryByDisplayValue(makeAssignmentText('# Older autosave'))).toBeNull();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -1251,6 +1276,7 @@ export function registerResumeBasicTests() {
       vi.mocked(api.listUserJobs).mockResolvedValueOnce({
         jobs: [
           {
+            assignmentArtifact,
             jobId: 'job-resume',
             studentId: 'student-alex',
             md: '/tmp/resume.md',
@@ -1284,6 +1310,7 @@ export function registerResumeBasicTests() {
       });
 
       vi.mocked(api.getJobStatus).mockResolvedValueOnce({
+        assignmentArtifact,
         jobId: 'job-resume',
         md: '/tmp/resume.md',
         mdStorageUri: 's3://bucket/resume.md',
@@ -1326,6 +1353,7 @@ export function registerResumeBasicTests() {
         }),
       );
       vi.mocked(api.fetchPromptPackage).mockResolvedValueOnce({
+        requestEnvelope,
         id: 'pkg-resume',
         recordingId: 'rec-resume',
         transcriptId: 'tx-resume',
@@ -1339,12 +1367,13 @@ export function registerResumeBasicTests() {
         updatedAt: now,
       });
       vi.mocked(api.fetchDraft).mockResolvedValueOnce({
+        ...typedDraftFields(makeAssignmentText('# Recovered draft')),
         id: 'draft-resume',
         promptPackageId: 'pkg-resume',
         studentId: null,
         storageUri: 'memory://drafts/draft-resume',
         createdBy: 'user-1',
-        text: '# Recovered draft',
+        text: makeAssignmentText('# Recovered draft'),
         workingVersion: 1,
         contentHash: 'f'.repeat(64),
         createdAt: now,
@@ -1424,6 +1453,7 @@ export function registerResumePresetRaceTests() {
       vi.mocked(api.listUserJobs).mockResolvedValueOnce({
         jobs: [
           {
+            assignmentArtifact,
             jobId: 'job-stale-preset',
             studentId: 'student-alex',
             md: '/tmp/stale.md',
@@ -1457,6 +1487,7 @@ export function registerResumePresetRaceTests() {
       });
 
       vi.mocked(api.getJobStatus).mockResolvedValueOnce({
+        assignmentArtifact,
         jobId: 'job-stale-preset',
         md: '/tmp/stale.md',
         mdStorageUri: 's3://bucket/stale.md',
@@ -1506,6 +1537,7 @@ export function registerResumePresetRaceTests() {
       vi.mocked(api.listUserJobs).mockResolvedValueOnce({
         jobs: [
           {
+            assignmentArtifact,
             jobId: 'job-empty-presets',
             studentId: 'student-alex',
             md: '/tmp/stale.md',
@@ -1539,6 +1571,7 @@ export function registerResumePresetRaceTests() {
       });
 
       vi.mocked(api.getJobStatus).mockResolvedValueOnce({
+        assignmentArtifact,
         jobId: 'job-empty-presets',
         md: '/tmp/stale.md',
         mdStorageUri: 's3://bucket/stale.md',
@@ -1590,6 +1623,7 @@ export function registerResumePresetRaceTests() {
         vi.mocked(api.listUserJobs).mockResolvedValueOnce({
           jobs: [
             {
+              assignmentArtifact,
               jobId: 'job-race-preset',
               studentId: 'student-alex',
               md: '/tmp/stale.md',
@@ -1622,6 +1656,7 @@ export function registerResumePresetRaceTests() {
           offset: 0,
         });
         vi.mocked(api.getJobStatus).mockResolvedValueOnce({
+          assignmentArtifact,
           jobId: 'job-race-preset',
           md: '/tmp/stale.md',
           mdStorageUri: 's3://bucket/stale.md',
@@ -1695,6 +1730,7 @@ export function registerResumePresetRaceTests() {
       vi.mocked(api.listUserJobs).mockResolvedValueOnce({
         jobs: [
           {
+            assignmentArtifact,
             jobId: 'job-learning-race',
             studentId: 'student-alex',
             md: '/tmp/stale.md',
@@ -1740,6 +1776,7 @@ export function registerResumePresetRaceTests() {
         expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
       });
       resolveJobStatus({
+        assignmentArtifact,
         jobId: 'job-learning-race',
         md: '/tmp/stale.md',
         mdStorageUri: 's3://bucket/stale.md',

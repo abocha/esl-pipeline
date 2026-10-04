@@ -44,8 +44,8 @@ Use the runtime blocks in this order:
 3. If no input type is specified, default to \`generate\`.
 
 **Output Formatting Rules**
-- Return one Markdown code block with YAML front matter.
-- Use the required section structure.
+- Return an AssignmentV1 object matching the supplied Structured Outputs JSON schema.
+- Use typed fields and preserve the learner and source context.
 `;
 
 type TemplateBusyState =

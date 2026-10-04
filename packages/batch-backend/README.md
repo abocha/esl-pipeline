@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-09-14 provider-account failure handling.
+- Last Verified Against: 2026-10-05 ESL-7 historical Markdown retirement.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: monthly or after major API/worker changes.
 - Status: `active`.
@@ -24,6 +24,22 @@ It does not redefine orchestrator behavior. Contract and architecture detail sta
 
 - [`docs/backend-frontend/batch-backend-ssot.md`](../../docs/backend-frontend/batch-backend-ssot.md)
 - [`docs/backend-frontend/backend-frontend-alignment.md`](../../docs/backend-frontend/backend-frontend-alignment.md)
+
+## Historical Markdown
+
+AssignmentV1 is the only executable homework input. Historical Markdown jobs, drafts and assignment
+sessions remain inspectable with their original source, prompt provenance, manifests, static outputs
+and produced media. Legacy mutations and processing return `legacy_assignment_read_only`; the old
+Markdown submission and validation endpoints return HTTP 410. Reads do not regenerate memory,
+render, scrape outputs or convert Markdown to AssignmentV1.
+
+Migration 0064 requires old API and workers to be quiesced and unfinished remote legacy homework
+Batch work resolved. Refresh existing remote runs, including old cancelled rows, with the updated
+Batch status tool to record terminal provider confirmation; cancellation-in-progress remains blocking.
+Historical profile-enrichment reservations must also be quiesced. Its pending/result-ready intent is
+retired and admission, recovery, dispatch and publication reject historical sessions. Migration 0064
+terminalizes queued legacy work and freezes historical rows without dropping
+SQL evidence. See [the retirement contract and cutover boundary](../../docs/reference/ASSIGNMENT_V1.md#legacy-retirement-esl-7--slice-4).
 
 ## Runtime Surface
 

@@ -1,691 +1,139 @@
-import { createHash } from 'node:crypto';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
+
+import { assignmentHash } from '../src/application/assignment-artifact.js';
 import { createDraft } from '../src/application/create-draft.js';
 import { materializeDraft } from '../src/application/materialize-draft.js';
 import { updateDraft } from '../src/application/update-draft.js';
-import type { DraftRecord } from '../src/domain/draft-model.js';
-import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
-import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
+import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 
-describe('application/draft', () => {
-  it('does not create fresh draft lineage from a prompt whose assignment lost its source', async () => {
-    const putDraft = vi.fn();
-    const insert = vi.fn();
+describe('draft execution boundaries', () => {
+  it('rejects historical creation, update and materialization before storing or relinking', async () => {
+    const putDraft = vi.fn(),
+      insert = vi.fn(),
+      update = vi.fn(),
+      createApprovalJob = vi.fn(),
+      link = vi.fn(),
+      read = vi.fn();
+    const legacy = {
+      id: 'legacy',
+      promptPackageId: 'old-prompt',
+      format: 'markdown',
+      storageUri: 'local://history/original.md',
+    };
+    const storage = { putDraft, getText: read } as never;
+    const prompts = {
+      getById: vi.fn().mockResolvedValue({ id: 'old-prompt' }),
+      isSourceCanonical: vi.fn().mockResolvedValue(true),
+    };
     await expect(
       createDraft(
-        { promptPackageId: 'prompt-1', text: 'DRAFT TEXT' },
-        {
-          storage: createStorageStub({ putDraft }),
-          promptPackages: {
-            getById: async () => ({ id: 'prompt-1' }) as PromptPackageRecord,
-            isSourceCanonical: async () => false,
-          },
-          drafts: { insert },
-        },
+        { promptPackageId: 'old-prompt', text: '# Original' },
+        { storage, promptPackages: prompts, drafts: { insert } },
       ),
-    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL' });
-    expect(putDraft).not.toHaveBeenCalled();
-    expect(insert).not.toHaveBeenCalled();
-  });
-  it('creates a draft for a prompt package', async () => {
-    const promptPackage: PromptPackageRecord = {
-      id: 'prompt-1',
-      recordingId: 'recording-1',
-      transcriptId: 'transcript-1',
-      studentId: 'student-1',
-      profilePath: null,
-      templateVersion: '/templates/t1.md',
-      notes: null,
-      storageUri: 'local://prompt-packages/prompt-1.txt',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-
-    const storage = createStorageStub({
-      putDraft: async ({ draftId, text }) => {
-        expect(text).toBe('DRAFT TEXT');
-        return { uri: `local://drafts/${draftId}.md`, bytes: text.length, sha256: 'a'.repeat(64) };
-      },
-    });
-
-    const draft = await createDraft(
-      {
-        promptPackageId: promptPackage.id,
-        text: 'DRAFT TEXT',
-        createdBy: 'user-1',
-      },
-      {
-        storage,
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: async () => promptPackage,
-        },
-        drafts: {
-          insert: async (params) => ({
-            id: params.id ?? 'draft-1',
-            promptPackageId: params.promptPackageId,
-            studentId: params.studentId ?? null,
-            storageUri: params.storageUri,
-            workingVersion: params.workingVersion,
-            contentHash: params.contentHash,
-            createdBy: params.createdBy ?? null,
-            createdAt: new Date('2024-01-01T00:10:00Z'),
-            updatedAt: new Date('2024-01-01T00:10:00Z'),
-          }),
-        },
-      },
-    );
-
-    expect(draft).not.toBeNull();
-    expect(draft?.promptPackageId).toBe(promptPackage.id);
-    expect(draft?.studentId).toBe('student-1');
-    expect(draft?.createdBy).toBe('user-1');
-    expect(draft?.storageUri).toContain('local://drafts/');
-    expect(draft?.text).toBe('DRAFT TEXT');
-    expect(draft).toMatchObject({ workingVersion: 1, contentHash: 'a'.repeat(64) });
-  });
-
-  it('CAS-updates draft working content', async () => {
-    const original = createDraftRecord();
-    const winner = {
-      ...original,
-      storageUri: 'local://drafts/draft-1/content/b.md',
-      workingVersion: 2,
-      contentHash: 'b'.repeat(64),
-    };
-    const update = vi.fn().mockResolvedValue(winner);
-
-    const result = await updateDraft(
-      { id: original.id, text: 'second', expectedWorkingVersion: 1 },
-      {
-        storage: createStorageStub({
-          putDraft: vi.fn().mockResolvedValue({
-            uri: winner.storageUri,
-            bytes: 6,
-            sha256: winner.contentHash,
-          }),
-        }),
-        drafts: { getById: vi.fn().mockResolvedValue(original), update },
-      },
-    );
-
-    expect(update).toHaveBeenCalledWith({
-      id: original.id,
-      expectedWorkingVersion: 1,
-      storageUri: winner.storageUri,
-      contentHash: winner.contentHash,
-    });
-    expect(result).toMatchObject({ workingVersion: 2, contentHash: winner.contentHash });
-  });
-
-  it('returns null when prompt package is missing', async () => {
-    const storage = createStorageStub();
-    const insert = vi.fn();
-
-    const draft = await createDraft(
-      {
-        promptPackageId: 'missing',
-        text: 'DRAFT TEXT',
-      },
-      {
-        storage,
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: async () => null,
-        },
-        drafts: {
-          insert,
-        },
-      },
-    );
-
-    expect(draft).toBeNull();
-    expect(insert).not.toHaveBeenCalled();
-  });
-
-  it('rejects stale assignment materialization before a new job or auto-publish', async () => {
-    const draft = {
-      id: 'draft-stale',
-      promptPackageId: 'prompt-stale',
-      storageUri: 'local://drafts/stale.md',
-    } as DraftRecord;
-    const promptPackage = {
-      id: 'prompt-stale',
-      assignmentSessionId: 'session-stale',
-    } as PromptPackageRecord;
-    const createApprovalJob = vi.fn();
-    const approveForPipeline = vi.fn();
-    const updateDraftLink = vi.fn();
-    const getText = vi.fn();
-
+    ).rejects.toMatchObject({ code: 'legacy_assignment_read_only' });
+    await expect(
+      updateDraft(
+        { id: 'legacy', text: '# Changed', expectedWorkingVersion: 1 },
+        { storage, drafts: { getById: vi.fn().mockResolvedValue(legacy), update } },
+      ),
+    ).rejects.toMatchObject({ code: 'legacy_assignment_read_only' });
     await expect(
       materializeDraft(
-        { draftId: draft.id, jobOverrides: { autoPublish: true } },
+        { draftId: 'legacy' },
         {
-          drafts: { getById: async () => draft },
+          storage,
+          drafts: { getById: vi.fn().mockResolvedValue(legacy) },
+          createApprovalJob,
+          jobs: { updateDraftLink: link },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'legacy_assignment_read_only' });
+    for (const operation of [putDraft, insert, update, createApprovalJob, link, read])
+      expect(operation).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'materializes canonical typed input into a new job with autoPublish=%s',
+    async (autoPublish) => {
+      const assignment = assignmentFixture(),
+        hash = assignmentHash(assignment);
+      const uri = `local://drafts/content/${hash}.json`;
+      const draft = {
+        id: 'draft',
+        promptPackageId: 'prompt-1',
+        format: 'assignment_v1',
+        workingVersion: 1,
+        contentHash: hash,
+        storageUri: uri,
+      };
+      const prompt = promptPackageFixture();
+      const createApprovalJob = vi.fn().mockResolvedValue({ id: 'native-job' }),
+        link = vi.fn().mockResolvedValue({ id: 'native-job' }),
+        approve = vi.fn().mockResolvedValue({ id: 'native-job' });
+      const result = await materializeDraft(
+        { draftId: 'draft', jobOverrides: { autoPublish, learningPresetId: 'general-english' } },
+        {
+          storage: {
+            getText: vi.fn().mockResolvedValue(serializeAssignmentV1(assignment)),
+          } as never,
+          drafts: { getById: vi.fn().mockResolvedValue(draft) },
           promptPackages: {
-            getById: async () => promptPackage,
-            isSourceCanonical: async () => false,
+            getById: vi.fn().mockResolvedValue(prompt),
+            isSourceCanonical: vi.fn().mockResolvedValue(true),
           },
           createApprovalJob,
-          approvals: { approveForPipeline },
-          jobs: { updateDraftLink },
-          storage: createStorageStub({ getText }),
-          localExport: false,
-          uploadDir: '/tmp',
+          jobs: { updateDraftLink: link },
+          approvals: { approveForPipeline: approve },
+        },
+      );
+      expect(createApprovalJob).toHaveBeenCalledWith({
+        draft,
+        promptPackage: prompt,
+        jobOverrides: { autoPublish, learningPresetId: 'general-english' },
+      });
+      expect(result).toEqual({
+        draftId: 'draft',
+        jobId: 'native-job',
+        mdPath: null,
+        mdStorageUri: uri,
+      });
+      expect(approve).toHaveBeenCalledTimes(autoPublish ? 1 : 0);
+    },
+  );
+
+  it('rejects displaced native source authority before reading, creating or publishing', async () => {
+    const read = vi.fn(),
+      createApprovalJob = vi.fn(),
+      publish = vi.fn();
+    await expect(
+      materializeDraft(
+        { draftId: 'draft', jobOverrides: { autoPublish: true } },
+        {
+          drafts: {
+            getById: vi
+              .fn()
+              .mockResolvedValue({
+                id: 'draft',
+                promptPackageId: 'prompt-1',
+                format: 'assignment_v1',
+                workingVersion: 1,
+                contentHash: 'a'.repeat(64),
+                storageUri: `local://drafts/content/${'a'.repeat(64)}.json`,
+              }),
+          },
+          promptPackages: {
+            getById: vi.fn().mockResolvedValue(promptPackageFixture()),
+            isSourceCanonical: vi.fn().mockResolvedValue(false),
+          },
+          storage: { getText: read } as never,
+          createApprovalJob,
+          approvals: { approveForPipeline: publish },
         },
       ),
     ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL' });
-    expect(createApprovalJob).not.toHaveBeenCalled();
-    expect(updateDraftLink).not.toHaveBeenCalled();
-    expect(approveForPipeline).not.toHaveBeenCalled();
-    expect(getText).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['canonical assignment', 'session-current'],
-    ['standalone prompt', null],
-  ])('materializes a %s into a new approval job', async (_label, assignmentSessionId) => {
-    const draft = {
-      id: 'draft-current',
-      promptPackageId: 'prompt-current',
-      storageUri: 'local://drafts/current.md',
-    } as DraftRecord;
-    const promptPackage = {
-      id: 'prompt-current',
-      assignmentSessionId,
-    } as PromptPackageRecord;
-    const createApprovalJob = vi.fn().mockResolvedValue({ id: 'job-current' });
-    const updateDraftLink = vi.fn().mockResolvedValue({ id: 'job-current' });
-    const isSourceCanonical = vi.fn().mockResolvedValue(true);
-    const result = await materializeDraft(
-      { draftId: draft.id },
-      {
-        drafts: { getById: async () => draft },
-        promptPackages: { getById: async () => promptPackage, isSourceCanonical },
-        createApprovalJob,
-        jobs: { updateDraftLink },
-        storage: createStorageStub({ getText: async () => '# Draft' }),
-        localExport: false,
-        uploadDir: '/tmp',
-      },
-    );
-    expect(isSourceCanonical).toHaveBeenCalledWith(promptPackage.id);
-    expect(createApprovalJob).toHaveBeenCalledTimes(1);
-    expect(result?.jobId).toBe('job-current');
-  });
-
-  it('materializes the current owner through its reserved Share job', async () => {
-    const draft = {
-      id: 'draft-share',
-      promptPackageId: 'prompt-share',
-      storageUri: 'local://drafts/share.md',
-    } as DraftRecord;
-    const promptPackage = {
-      id: 'prompt-share',
-      assignmentSessionId: 'session-share',
-    } as PromptPackageRecord;
-    const createApprovalJob = vi.fn();
-    const updateAssignmentShareDraftLink = vi.fn().mockResolvedValue({ id: 'job-share' });
-    const result = await materializeDraft(
-      {
-        draftId: draft.id,
-        jobId: 'job-share',
-        assignmentShare: { sessionId: 'session-share', userId: 'user-share' },
-      },
-      {
-        drafts: { getById: async () => draft },
-        promptPackages: {
-          getById: async () => promptPackage,
-          isSourceCanonical: async () => true,
-        },
-        createApprovalJob,
-        jobs: {
-          getById: async () => ({ id: 'job-share', state: 'awaiting_approval' }) as never,
-          updateDraftLink: vi.fn(),
-          updateAssignmentShareDraftLink,
-        },
-        storage: createStorageStub({ getText: async () => '# Draft' }),
-        localExport: false,
-        uploadDir: '/tmp',
-      },
-    );
-    expect(result?.jobId).toBe('job-share');
-    expect(createApprovalJob).not.toHaveBeenCalled();
-    expect(updateAssignmentShareDraftLink).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'session-share', id: 'job-share' }),
-    );
-  });
-
-  it('materializes a draft and updates the job', async () => {
-    const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
-    const draft: DraftRecord = {
-      id: 'draft-1',
-      promptPackageId: 'prompt-1',
-      studentId: 'student-1',
-      storageUri: 'local://drafts/draft-1.md',
-      workingVersion: 1,
-      contentHash: 'draft-hash',
-      createdBy: 'user-1',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-    const promptPackage: PromptPackageRecord = {
-      id: 'prompt-1',
-      recordingId: 'recording-1',
-      transcriptId: 'transcript-1',
-      studentId: 'student-1',
-      profilePath: '/profiles/p1.md',
-      templateVersion: '/templates/t1.md',
-      notes: null,
-      storageUri: 'local://prompt-packages/prompt-1.txt',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-
-    const updateDraftLink = vi.fn().mockResolvedValue({
-      id: 'job-1',
-      state: 'awaiting_approval',
-      md: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    const confirmedText = 'CONFIRMED DRAFT TEXT';
-    const confirmedUri = 'local://drafts/draft-1/content/confirmed.md';
-    const response = await materializeDraft(
-      {
-        draftId: draft.id,
-        jobId: 'job-1',
-        sourceStorageUri: confirmedUri,
-        expectedContentHash: createHash('sha256').update(confirmedText).digest('hex'),
-      },
-      {
-        uploadDir,
-        localExport: true,
-        storage: createStorageStub({
-          getText: async (uri) => {
-            expect(uri).toBe(confirmedUri);
-            return confirmedText;
-          },
-        }),
-        drafts: {
-          getById: async () => draft,
-        },
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: async () => promptPackage,
-        },
-        jobs: {
-          getById: vi.fn().mockResolvedValue({
-            id: 'job-1',
-            state: 'awaiting_approval',
-            md: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }),
-          updateDraftLink,
-        },
-      },
-    );
-
-    expect(response).toEqual({
-      draftId: 'draft-1',
-      jobId: 'job-1',
-      mdPath: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
-      mdStorageUri: confirmedUri,
-    });
-
-    const stored = await fs.readFile(path.resolve(uploadDir, 'drafts', 'draft-1.md'), 'utf8');
-    expect(stored).toContain('x_esl_student_id: student-1');
-    expect(stored).toContain('x_esl_prompt_package_id: prompt-1');
-    expect(stored).toContain(confirmedText);
-    expect(updateDraftLink).toHaveBeenCalledWith({
-      id: 'job-1',
-      expectedState: 'awaiting_approval',
-      md: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
-      mdStorageUri: confirmedUri,
-      draftId: 'draft-1',
-    });
-  });
-
-  it('materializes a draft and creates an approval job when jobId is missing', async () => {
-    const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
-    const draft: DraftRecord = {
-      id: 'draft-2',
-      promptPackageId: 'prompt-2',
-      studentId: 'student-2',
-      storageUri: 'local://drafts/draft-2.md',
-      workingVersion: 1,
-      contentHash: 'draft-hash',
-      createdBy: 'user-2',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-    const promptPackage: PromptPackageRecord = {
-      id: 'prompt-2',
-      recordingId: 'recording-2',
-      transcriptId: 'transcript-2',
-      studentId: 'student-2',
-      profilePath: '/profiles/p2.md',
-      templateVersion: '/templates/t2.md',
-      notes: 'Notes',
-      storageUri: 'local://prompt-packages/prompt-2.txt',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-
-    const createApprovalJob = vi.fn().mockResolvedValue({
-      id: 'job-2',
-      state: 'awaiting_approval',
-      md: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    const updateDraftLink = vi.fn().mockResolvedValue({
-      id: 'job-2',
-      state: 'awaiting_approval',
-      md: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    const response = await materializeDraft(
-      { draftId: draft.id },
-      {
-        uploadDir,
-        localExport: true,
-        storage: createStorageStub({
-          getText: async () => 'DRAFT TEXT',
-        }),
-        drafts: {
-          getById: async () => draft,
-        },
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: async () => promptPackage,
-        },
-        createApprovalJob,
-        jobs: {
-          updateDraftLink,
-        },
-      },
-    );
-
-    expect(response).toEqual({
-      draftId: 'draft-2',
-      jobId: 'job-2',
-      mdPath: path.resolve(uploadDir, 'drafts', 'draft-2.md'),
-      mdStorageUri: 'local://drafts/draft-2.md',
-    });
-    expect(createApprovalJob).toHaveBeenCalledWith({ draft, promptPackage });
-    expect(updateDraftLink).toHaveBeenCalledWith({
-      id: 'job-2',
-      expectedState: 'awaiting_approval',
-      md: path.resolve(uploadDir, 'drafts', 'draft-2.md'),
-      mdStorageUri: 'local://drafts/draft-2.md',
-      draftId: 'draft-2',
-    });
-  });
-
-  it('forwards learningPresetId in jobOverrides when creating approval job', async () => {
-    const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
-    const draft: DraftRecord = {
-      id: 'draft-2b',
-      promptPackageId: 'prompt-2b',
-      studentId: 'student-2',
-      storageUri: 'local://drafts/draft-2b.md',
-      workingVersion: 1,
-      contentHash: 'draft-hash',
-      createdBy: 'user-2',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-    const promptPackage: PromptPackageRecord = {
-      id: 'prompt-2b',
-      recordingId: 'recording-2',
-      transcriptId: 'transcript-2',
-      studentId: 'student-2',
-      profilePath: '/profiles/p2.md',
-      templateVersion: '/templates/t2.md',
-      notes: 'Notes',
-      storageUri: 'local://prompt-packages/prompt-2.txt',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-
-    const createApprovalJob = vi.fn().mockResolvedValue({
-      id: 'job-2b',
-      state: 'awaiting_approval',
-      md: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    const updateDraftLink = vi.fn().mockResolvedValue({
-      id: 'job-2b',
-      state: 'awaiting_approval',
-      md: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    const response = await materializeDraft(
-      {
-        draftId: draft.id,
-        jobOverrides: { learningPresetId: 'general-english' },
-      },
-      {
-        uploadDir,
-        localExport: true,
-        storage: createStorageStub({
-          getText: async () => 'DRAFT TEXT',
-        }),
-        drafts: {
-          getById: async () => draft,
-        },
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: async () => promptPackage,
-        },
-        createApprovalJob,
-        jobs: {
-          updateDraftLink,
-        },
-      },
-    );
-
-    expect(response?.jobId).toBe('job-2b');
-    expect(createApprovalJob).toHaveBeenCalledWith({
-      draft,
-      promptPackage,
-      jobOverrides: { learningPresetId: 'general-english' },
-    });
-  });
-
-  it('does not substitute a new approval job when the provided job is not awaiting approval', async () => {
-    const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
-    const draft: DraftRecord = {
-      id: 'draft-3',
-      promptPackageId: 'prompt-3',
-      studentId: 'student-3',
-      storageUri: 'local://drafts/draft-3.md',
-      workingVersion: 1,
-      contentHash: 'draft-hash',
-      createdBy: 'user-3',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-    const promptPackage: PromptPackageRecord = {
-      id: 'prompt-3',
-      recordingId: 'recording-3',
-      transcriptId: 'transcript-3',
-      studentId: 'student-3',
-      profilePath: '/profiles/p3.md',
-      templateVersion: '/templates/t3.md',
-      notes: null,
-      storageUri: 'local://prompt-packages/prompt-3.txt',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-
-    const getById = vi.fn().mockResolvedValue({
-      id: 'job-finished',
-      state: 'succeeded',
-      md: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    const createApprovalJob = vi.fn().mockResolvedValue({
-      id: 'job-new',
-      state: 'awaiting_approval',
-      md: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    const updateDraftLink = vi.fn().mockResolvedValue({
-      id: 'job-new',
-      state: 'awaiting_approval',
-      md: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    const response = await materializeDraft(
-      { draftId: draft.id, jobId: 'job-finished' },
-      {
-        uploadDir,
-        localExport: true,
-        storage: createStorageStub({
-          getText: async () => 'DRAFT TEXT',
-        }),
-        drafts: {
-          getById: async () => draft,
-        },
-        promptPackages: {
-          isSourceCanonical: async () => true,
-          getById: async () => promptPackage,
-        },
-        createApprovalJob,
-        jobs: {
-          getById,
-          updateDraftLink,
-        },
-      },
-    );
-
-    expect(response).toBeNull();
-    expect(getById).toHaveBeenCalledWith('job-finished');
-    expect(createApprovalJob).not.toHaveBeenCalled();
-    expect(updateDraftLink).not.toHaveBeenCalled();
-  });
-
-  it('returns null when draft is missing during materialization', async () => {
-    const response = await materializeDraft(
-      { draftId: 'missing', jobId: 'job-1' },
-      {
-        uploadDir: '/tmp',
-        localExport: true,
-        storage: createStorageStub(),
-        drafts: {
-          getById: async () => null,
-        },
-        jobs: {
-          updateDraftLink: vi.fn(),
-        },
-      },
-    );
-
-    expect(response).toBeNull();
-  });
-
-  it('materializes a draft and auto-publishes if requested', async () => {
-    const drafts = { getById: vi.fn() };
-    const promptPackages = { getById: vi.fn(), isSourceCanonical: vi.fn().mockResolvedValue(true) };
-    const createApprovalJob = vi.fn();
-    const jobs = { updateDraftLink: vi.fn() };
-    const approvals = { approveForPipeline: vi.fn() };
-    const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
-    const storage = createStorageStub({
-      getText: vi.fn().mockResolvedValue('markdown content'),
-    });
-
-    drafts.getById.mockResolvedValue({
-      id: 'draft-1',
-      storageUri: 'file:///tmp/draft.json',
-      promptPackageId: 'pp-1',
-    });
-
-    promptPackages.getById.mockResolvedValue({
-      recordingId: 'rec-1',
-      transcriptId: 'tx-1',
-    });
-
-    jobs.updateDraftLink.mockResolvedValue({ id: 'job-1' });
-    approvals.approveForPipeline.mockResolvedValue({ id: 'job-1' });
-
-    await materializeDraft(
-      { draftId: 'draft-1', jobId: 'job-1', jobOverrides: { autoPublish: true } },
-      {
-        drafts,
-        promptPackages,
-        createApprovalJob,
-        jobs,
-        approvals,
-        uploadDir,
-        storage,
-        localExport: true,
-      },
-    );
-
-    expect(approvals.approveForPipeline).toHaveBeenCalledWith('job-1', {
-      md: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
-      mdStorageUri: 'file:///tmp/draft.json',
-    });
+    for (const operation of [read, createApprovalJob, publish])
+      expect(operation).not.toHaveBeenCalled();
   });
 });
-
-function createStorageStub(overrides: Partial<TranscriptionStorage> = {}): TranscriptionStorage {
-  return {
-    putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1, sha256: '0' }),
-    putTranscript: async () => ({
-      uri: 'local://transcripts/transcript.txt',
-      bytes: 1,
-      sha256: '0',
-    }),
-    putRawResponse: async () => ({
-      uri: 'local://transcripts/transcript.json',
-      bytes: 1,
-      sha256: '0',
-    }),
-    putPromptPackage: async () => ({
-      uri: 'local://prompt-packages/prompt.txt',
-      bytes: 1,
-      sha256: '0',
-    }),
-    putDraft: async () => ({ uri: 'local://drafts/draft.md', bytes: 1, sha256: '0' }),
-    getText: async () => '',
-    getStream: async () => Readable.from(['']),
-    delete: async () => {},
-    ...overrides,
-  };
-}
-
-function createDraftRecord(): DraftRecord {
-  return {
-    id: 'draft-1',
-    promptPackageId: 'prompt-1',
-    studentId: 'student-1',
-    lessonId: null,
-    storageUri: 'local://drafts/draft-1/content/a.md',
-    workingVersion: 1,
-    contentHash: 'a'.repeat(64),
-    createdBy: 'user-1',
-    createdAt: new Date('2024-01-01T00:00:00Z'),
-    updatedAt: new Date('2024-01-01T00:00:00Z'),
-  };
-}

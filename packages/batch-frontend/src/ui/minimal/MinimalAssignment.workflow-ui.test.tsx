@@ -30,6 +30,11 @@ import {
   testWithin as within,
 } from './MinimalAssignment.test-harness';
 import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
+import {
+  makeAssignmentText,
+  requestEnvelope,
+  typedDraftFields,
+} from './MinimalAssignment.typed-test-fixtures';
 
 describe('MinimalAssignment - staged workflow UI', () => {
   beforeEach(() => {
@@ -270,14 +275,15 @@ describe('MinimalAssignment - staged workflow UI', () => {
   it('adopts the winning draft CAS base without discarding the losing local text', async () => {
     const { user } = await renderPreviewReadyAssignment();
     await user.click(screen.getByRole('button', { name: /Create/i }));
-    const editor = screen.getByRole('textbox', { name: /Draft markdown/i });
+    const editor = screen.getByRole('textbox', { name: /Assignment JSON/i });
     const latest = {
+      ...typedDraftFields(makeAssignmentText('# Remote winning draft')),
       id: 'draft-1',
       promptPackageId: 'pkg-1',
       studentId: 'student-alex',
       storageUri: 'memory://drafts/draft-1/remote',
       createdBy: 'user-1',
-      text: '# Remote winning draft',
+      text: makeAssignmentText('# Remote winning draft'),
       workingVersion: 2,
       contentHash: 'e'.repeat(64),
       createdAt: new Date().toISOString(),
@@ -291,11 +297,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
     );
     vi.mocked(api.fetchDraft).mockResolvedValueOnce(latest);
 
-    fireEvent.change(editor, { target: { value: '# My local draft' } });
+    fireEvent.change(editor, { target: { value: makeAssignmentText('# My local draft') } });
     await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
     await waitFor(() => expect(api.fetchDraft).toHaveBeenCalledWith('draft-1'));
-    expect((editor as HTMLTextAreaElement).value).toBe('# My local draft');
+    expect((editor as HTMLTextAreaElement).value).toBe(makeAssignmentText('# My local draft'));
     expect(screen.getByText(/Newer saved artifact content was found/i)).toBeTruthy();
   });
 
@@ -330,6 +336,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     });
     vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
     vi.mocked(api.fetchPromptPackage).mockResolvedValueOnce({
+      requestEnvelope,
       id: 'pkg-1',
       recordingId: 'rec-1',
       transcriptId: 'tx-1',
@@ -347,7 +354,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     const user = createMinimalUser();
     renderMinimalAssignment();
 
-    await screen.findByDisplayValue('# Draft markdown');
+    await screen.findByDisplayValue(makeAssignmentText('# Draft markdown'));
     vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
     await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
@@ -494,6 +501,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
         makeAssignmentSession({
           id: 'session-resumed',
           studentId: 'student-alex',
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          promptPackageId: 'pkg-1',
+          confirmedStep: 'context',
           teacherNotes: 'First queued edit.',
           revision: 2,
         }),
@@ -510,6 +521,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
         makeAssignmentSession({
           id: 'session-resumed',
           studentId: 'student-alex',
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          promptPackageId: 'pkg-1',
+          confirmedStep: 'context',
           teacherNotes: 'Second queued edit.',
           revision: 3,
         }),
@@ -644,13 +659,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
     const completed = makeAssignmentSession({ ...reserved, confirmedStep: 'share', revision: 5 });
     vi.mocked(api.fetchAssignmentSession).mockResolvedValue(reserved);
     vi.mocked(api.fetchDraft).mockResolvedValue({
+      ...typedDraftFields(makeAssignmentText('# Draft markdown')),
       id: 'draft-1',
       promptPackageId: 'pkg-1',
       studentId: 'student-alex',
       lessonId: null,
       storageUri: 'memory://drafts/confirmed',
       createdBy: 'user-1',
-      text: '# Draft markdown',
+      text: makeAssignmentText('# Draft markdown'),
       workingVersion: 1,
       contentHash: 'b'.repeat(64),
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -1211,13 +1227,13 @@ describe('MinimalAssignment - staged workflow UI', () => {
       });
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
-      await screen.findByDisplayValue('# Generated assignment draft');
+      await screen.findByDisplayValue(makeAssignmentText('# Generated assignment draft'));
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
 
       await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
-      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-        target: { value: '# Final lesson assignment' },
+      fireEvent.change(screen.getByRole('textbox', { name: /Assignment JSON/i }), {
+        target: { value: makeAssignmentText('# Final lesson assignment') },
       });
       await user.click(screen.getByRole('button', { name: /Step 5Review & share/i }));
 
@@ -1272,7 +1288,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       ).toBe('complete');
       await user.click(screen.getByRole('button', { name: /Step 5Review & share/i }));
       await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
-      expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toBeTruthy();
+      expect(screen.getByRole('textbox', { name: /Assignment JSON/i })).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -1331,7 +1347,9 @@ describe('MinimalAssignment - staged workflow UI', () => {
           model: 'gpt-5.2',
         });
       });
-      expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
+      expect(
+        await screen.findByDisplayValue(makeAssignmentText('# Generated assignment draft')),
+      ).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -2017,7 +2035,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
   it('lands resumed work in a later stage with progress markers', async () => {
     await renderResumedAssignment(
       {
-        draftText: '# Draft markdown',
+        draftText: makeAssignmentText('# Draft markdown'),
       },
       { waitFor: 'none' },
     );
@@ -2185,7 +2203,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
   it('keeps the assignment overview header to title, focus, and compact progress', async () => {
     await renderPublishedAssignment(
       {
-        draftText: '# Draft markdown',
+        draftText: makeAssignmentText('# Draft markdown'),
         status: {
           studentId: 'student-alex',
         },
@@ -2212,7 +2230,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       const user = createMinimalUser();
       await renderPublishedAssignment(
         {
-          draftText: '# Draft markdown',
+          draftText: makeAssignmentText('# Draft markdown'),
           status: {
             studentId: 'student-alex',
           },
@@ -2263,7 +2281,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       vi.mocked(api.fetchAssignmentSession).mockResolvedValue(completed);
       await renderPublishedAssignment(
         {
-          draftText: '# Retained assignment markdown',
+          draftText: makeAssignmentText('# Retained assignment markdown'),
           status: {
             jobId: 'job-rerun',
             studentId: 'student-alex',
@@ -2285,7 +2303,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.getByRole('textbox', { name: /Transcript text/i })).toBeTruthy();
       expect(screen.queryByRole('button', { name: /Replace audio/i })).toBeNull();
       await user.click(createStep);
-      expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toBeTruthy();
+      expect(screen.getByRole('textbox', { name: /Assignment JSON/i })).toBeTruthy();
 
       vi.mocked(api.getJobStatus).mockClear();
       await act(async () => {
@@ -2303,7 +2321,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       const user = createMinimalUser();
       await renderPublishedAssignment(
         {
-          draftText: '# Draft markdown',
+          draftText: makeAssignmentText('# Draft markdown'),
           status: {
             studentId: 'student-alex',
             htmlUrl: '/assignments/job-1',
@@ -2362,7 +2380,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
       await renderPublishedAssignment(
         {
-          draftText: '# Draft markdown',
+          draftText: makeAssignmentText('# Draft markdown'),
           status: {
             studentId: 'student-alex',
             htmlUrl: '/assignments/job-1',
@@ -2437,7 +2455,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     async () => {
       await renderPublishedAssignment(
         {
-          draftText: '# Draft markdown',
+          draftText: makeAssignmentText('# Draft markdown'),
           status: {
             studentId: 'student-alex',
           },
@@ -2518,7 +2536,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     const user = createMinimalUser();
     await renderPublishedAssignment(
       {
-        draftText: '# Draft markdown',
+        draftText: makeAssignmentText('# Draft markdown'),
         status: {
           studentId: 'student-alex',
         },

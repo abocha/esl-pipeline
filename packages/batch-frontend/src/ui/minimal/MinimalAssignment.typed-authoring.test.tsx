@@ -14,7 +14,6 @@ vi.mock('../../utils/api', async () => ({
   ...(await vi.importActual('../../utils/api')),
   updateDraft: vi.fn(),
   fetchDraft: vi.fn(),
-  validateMarkdown: vi.fn(),
   renderHtmlPreview: vi.fn(),
 }));
 
@@ -111,9 +110,8 @@ const params = {
   onDraftPronunciationModeDetected: vi.fn(),
   onTeacherNotesResolved: vi.fn(),
 };
-function setup() {
+function setup(saved = draft()) {
   const hook = renderHook(() => useMinimalAssignmentAuthoringController(params));
-  const saved = draft();
   act(() =>
     hook.result.current.applyHydrationSnapshot({
       publishTarget: 'html',
@@ -151,7 +149,31 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('temporary AssignmentV1 JSON bridge', () => {
+describe('AssignmentV1 authoring and historical access', () => {
+  it('keeps original Markdown inspectable and rejects edits, autosave, preview, and regeneration', async () => {
+    const historical = {
+      ...draft(),
+      format: 'markdown' as const,
+      artifact: undefined,
+      assignment: undefined,
+      text: '# Original historical bytes',
+    };
+    const { result } = setup(historical);
+    expect(result.current.draftText).toBe(historical.text);
+    expect(result.current.draftValid).toBe(false);
+    expect(result.current.canPublishWithPreview).toBe(false);
+    act(() => result.current.setDraftText('# Attempted edit'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+      await result.current.previewDraft();
+      await result.current.saveDraft();
+    });
+    expect(api.updateDraft).not.toHaveBeenCalled();
+    expect(api.renderHtmlPreview).not.toHaveBeenCalled();
+    expect(result.current.draft?.text).toBe(historical.text);
+    expect(await result.current.generateAssignment()).toBeNull();
+    expect(result.current.previewError).toMatch(/validation/i);
+  });
   it('does not flush an older autosave after another valid edit and retains the newer local buffer', async () => {
     const { result } = setup();
     const first = structuredClone(assignment);
@@ -276,7 +298,6 @@ describe('temporary AssignmentV1 JSON bridge', () => {
     expect(api.renderHtmlPreview).toHaveBeenCalledWith(
       expect.objectContaining({ assignment, promptPackageId: 'prompt-1' }),
     );
-    expect(api.validateMarkdown).not.toHaveBeenCalled();
     act(() => result.current.setDraftText(serializeAssignmentV1(assignment)));
     expect(result.current.draftDirty).toBe(false);
     expect(result.current.previewReadyForCurrentDraft).toBe(true);

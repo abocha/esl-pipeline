@@ -169,13 +169,14 @@ function buildJob(jobId) {
   return {
     jobId: safeJobId,
     studentId: 'student-smoke',
-    md: [
-      '## Student homework package',
-      '',
-      '[Audio recording: Study Text](https://cdn.smoke.example/audio/final/smoke-study.mp3)',
-      '',
-      'Pronunciation track intentionally omitted in markdown to validate HTML fallback.',
-    ].join('\n'),
+    md: 'historical-assignment.md',
+    publication: {
+      title: 'Quiet Reading Pack',
+      icon: '\u{1F4D8}',
+      studyTextAudioUrl: 'https://cdn.smoke.example/audio/final/smoke-study.mp3',
+      pronunciationAudioUrl:
+        'https://cdn.smoke.example/audio/pronunciation/smoke-pronunciation.mp3',
+    },
     mdStorageUri: null,
     recordingId: 'recording-smoke-1',
     transcriptId: 'transcript-smoke-1',

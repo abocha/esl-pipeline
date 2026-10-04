@@ -1,3 +1,4 @@
+import { assignmentArtifactFixture } from './assignment-v1.test-harness.js';
 import './support/bootstrap-pg-test-env.js';
 
 import { randomUUID } from 'node:crypto';
@@ -52,6 +53,16 @@ async function ensureUsers(userIds: string[]) {
   });
 }
 
+async function insertNativeJob(params: Parameters<typeof insertJob>[0]) {
+  return insertJob({
+    promptPackageId: randomUUID(),
+    draftId: randomUUID(),
+    assignmentArtifact: assignmentArtifactFixture(),
+    assignmentRendererVersion: 2,
+    ...params,
+  });
+}
+
 describe('domain/job-repository', () => {
   beforeAll(async () => {
     await truncateJobs();
@@ -67,7 +78,7 @@ describe('domain/job-repository', () => {
 
   describe('insertJob + getJobById', () => {
     it('inserts a queued job with expected defaults and can be loaded back', async () => {
-      const job = await insertJob({
+      const job = await insertNativeJob({
         md: 'fixtures/ok.md',
       });
 
@@ -85,8 +96,8 @@ describe('domain/job-repository', () => {
       expect(job.htmlUrl).toBeNull();
       expect(job.recordingId).toBeNull();
       expect(job.transcriptId).toBeNull();
-      expect(job.promptPackageId).toBeNull();
-      expect(job.draftId).toBeNull();
+      expect(job.promptPackageId).toBeTruthy();
+      expect(job.draftId).toBeTruthy();
       expect(job.createdAt instanceof Date).toBe(true);
       expect(job.updatedAt instanceof Date).toBe(true);
 
@@ -106,7 +117,7 @@ describe('domain/job-repository', () => {
       const promptPackageId = randomUUID();
       const draftId = randomUUID();
 
-      const job = await insertJob({
+      const job = await insertNativeJob({
         md: 'fixtures/ok.md',
         recordingId,
         transcriptId,
@@ -147,7 +158,7 @@ describe('domain/job-repository', () => {
         );
       });
 
-      const job = await insertJob({
+      const job = await insertNativeJob({
         md: 'fixtures/ok.md',
         studentId,
       });
@@ -179,9 +190,9 @@ describe('domain/job-repository', () => {
           [studentId],
         );
         await client.query(
-          `INSERT INTO jobs (id, user_id, student_id, state, md, created_at, updated_at)
-           VALUES ($1, $3, $4, 'succeeded', 'fixtures/root.md', NOW(), NOW()),
-                  ($2, $3, $4, 'succeeded', 'fixtures/rerun.md', NOW(), NOW())`,
+          `INSERT INTO jobs (id, user_id, student_id, state, md, created_at, updated_at, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
+           VALUES ($1, $3, $4, 'succeeded', 'fixtures/root.md', NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+                  ($2, $3, $4, 'succeeded', 'fixtures/rerun.md', NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())`,
           [rootJobId, rerunJobId, userId, studentId],
         );
         await client.query('UPDATE jobs SET source_job_id = $1 WHERE id = $2', [
@@ -244,8 +255,8 @@ describe('domain/job-repository', () => {
 
         await client.query(
           `
-          INSERT INTO jobs (id, state, md, recording_id, created_at, updated_at)
-          VALUES ($1, 'queued', 'fixtures/ok.md', $2, $3, $3)
+          INSERT INTO jobs (id, state, md, recording_id, created_at, updated_at, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
+          VALUES ($1, 'queued', 'fixtures/ok.md', $2, $3, $3, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())
           `,
           [jobId, recordingId, now],
         );
@@ -280,7 +291,7 @@ describe('domain/job-repository', () => {
     });
 
     it('recomputes full learning preset provenance when learningPresetId is edited', async () => {
-      const job = await insertJob({
+      const job = await insertNativeJob({
         md: 'fixtures/ok.md',
         preset: 'legacy-preset',
         learningPresetVersion: 'legacy-v0',
@@ -309,12 +320,10 @@ describe('domain/job-repository', () => {
 
       await expect(
         withPgClient(async (client) => {
-          await client.query('INSERT INTO jobs (id, md, state, mode) VALUES ($1, $2, $3, $4)', [
-            id,
-            'fixtures/ok.md',
-            'queued',
-            'unsupported-mode',
-          ]);
+          await client.query(
+            `INSERT INTO jobs (id, md, state, mode, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id) VALUES ($1, $2, $3, $4, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())`,
+            [id, 'fixtures/ok.md', 'queued', 'unsupported-mode'],
+          );
         }),
       ).rejects.toThrow(/jobs_mode_check/);
     });
@@ -323,7 +332,7 @@ describe('domain/job-repository', () => {
   describe('updateJobStateAndResult', () => {
     it('performs queued -> running -> succeeded transitions with timestamps, htmlUrl, and manifestPath', async () => {
       const publishedContentHash = 'b'.repeat(64);
-      const job = await insertJob({
+      const job = await insertNativeJob({
         md: 'fixtures/ok.md',
         preset: 'b1-default',
         withTts: true,
@@ -368,13 +377,13 @@ describe('domain/job-repository', () => {
     });
 
     it('assigns a unique lineage-local publication sequence while concurrent corrections succeed', async () => {
-      const root = await insertJob({ md: 'fixtures/root.md', publishTarget: 'html' });
-      const correctionA = await insertJob({
+      const root = await insertNativeJob({ md: 'fixtures/root.md', publishTarget: 'html' });
+      const correctionA = await insertNativeJob({
         md: 'fixtures/correction-a.md',
         publishTarget: 'html',
         sourceJobId: root.id,
       });
-      const correctionB = await insertJob({
+      const correctionB = await insertNativeJob({
         md: 'fixtures/correction-b.md',
         publishTarget: 'html',
         sourceJobId: root.id,
@@ -417,7 +426,7 @@ describe('domain/job-repository', () => {
     });
 
     it('returns null when expectedState does not match (optimistic concurrency / race)', async () => {
-      const job = await insertJob({
+      const job = await insertNativeJob({
         md: 'fixtures/ok.md',
       });
 
@@ -442,7 +451,7 @@ describe('domain/job-repository', () => {
     });
 
     it('throws for invalid transitions based on assertTransition', async () => {
-      const job = await insertJob({
+      const job = await insertNativeJob({
         md: 'fixtures/ok.md',
       });
 
@@ -466,12 +475,12 @@ describe('domain/job-repository', () => {
       await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
         await client.query(
           `
-          INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, finished_at)
+          INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, finished_at, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
           VALUES
-            ($1, 'succeeded', 'html', $5, $7, $7, $8),
-            ($2, 'failed', 'html', $5, $9, $9, $10),
-            ($3, 'succeeded', 'html', $6, $11, $11, $12),
-            ($4, 'queued', 'html', $6, $13, $13, NULL)
+            ($1, 'succeeded', 'html', $5, $7, $7, $8, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($2, 'failed', 'html', $5, $9, $9, $10, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($3, 'succeeded', 'html', $6, $11, $11, $12, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($4, 'queued', 'html', $6, $13, $13, NULL, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())
           `,
           [
             randomUUID(),
@@ -517,17 +526,17 @@ describe('domain/job-repository', () => {
       await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
         await client.query(
           `
-          INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, error)
+          INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, error, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
           VALUES
-            ($1, 'failed', 'html', $7, $10, $10, $13),
-            ($2, 'failed', 'html', $7, $11, $11, $14),
-            ($3, 'failed', 'html', $7, $12, $12, ''),
-            ($4, 'failed', NULL, $7, $10, $10, $15),
-            ($5, 'succeeded', 'html', $7, $10, $10, $16),
-            ($6, 'failed', 'html', $8, $10, $10, $17),
-            ($9, 'failed', 'html', $7, $18, $18, $19),
-            ($20, 'failed', 'html', $7, $21, $21, $22),
-            ($23, 'failed', 'html', $7, $24, $24, $25)
+            ($1, 'failed', 'html', $7, $10, $10, $13, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($2, 'failed', 'html', $7, $11, $11, $14, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($3, 'failed', 'html', $7, $12, $12, '', '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($4, 'failed', NULL, $7, $10, $10, $15, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($5, 'succeeded', 'html', $7, $10, $10, $16, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($6, 'failed', 'html', $8, $10, $10, $17, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($9, 'failed', 'html', $7, $18, $18, $19, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($20, 'failed', 'html', $7, $21, $21, $22, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($23, 'failed', 'html', $7, $24, $24, $25, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())
           `,
           [
             randomUUID(),
@@ -585,10 +594,10 @@ describe('domain/job-repository', () => {
       await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
         await client.query(
           `
-          INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, error)
+          INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, error, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
           VALUES
-            ($1, 'failed', 'html', $3, $5, $5, $7),
-            ($2, 'failed', 'html', $4, $6, $6, $8)
+            ($1, 'failed', 'html', $3, $5, $5, $7, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4()),
+            ($2, 'failed', 'html', $4, $6, $6, $8, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())
           `,
           [
             randomUUID(),

@@ -25,6 +25,12 @@ import {
   testVi as vi,
   testWaitFor as waitFor,
 } from './MinimalAssignment.test-harness';
+import {
+  assignmentArtifact,
+  makeAssignmentText,
+  requestEnvelope,
+  typedDraftFields,
+} from './MinimalAssignment.typed-test-fixtures';
 
 const PROMPT_DRAFT_TEST_TIMEOUT_MS = 15_000;
 
@@ -144,7 +150,7 @@ export function registerPromptEditorTests() {
       expect(
         screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
       ).toBe('step');
-      expect(screen.getByDisplayValue('# Draft markdown')).toBeTruthy();
+      expect(screen.getByDisplayValue(makeAssignmentText('# Draft markdown'))).toBeTruthy();
     });
 
     it('does not let a pending settings save restore stale teacher notes after commit', async () => {
@@ -333,6 +339,7 @@ export function registerPromptEditorTests() {
       );
       vi.mocked(api.createPromptPackage).mockClear();
       vi.mocked(api.createPromptPackage).mockResolvedValueOnce({
+        requestEnvelope,
         id: 'pkg-fresh',
         recordingId: 'rec-1',
         transcriptId: 'tx-1',
@@ -369,7 +376,10 @@ export function registerPromptEditorTests() {
       expect(api.generateDraft).not.toHaveBeenCalledWith(
         expect.objectContaining({ promptPackageId: 'pkg-1' }),
       );
-      expect(api.createDraft).toHaveBeenCalledWith('pkg-fresh', '# Generated assignment draft');
+      expect(api.createDraft).toHaveBeenCalledWith(
+        'pkg-fresh',
+        makeAssignmentText('# Generated assignment draft'),
+      );
       expect(api.updateDraft).not.toHaveBeenCalled();
       expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
         expect.any(String),
@@ -395,7 +405,7 @@ export function registerPromptEditorTests() {
       await screen.findByRole('button', { name: /Generating assignment/i });
 
       expect(
-        (screen.getByRole('textbox', { name: /Draft markdown/i }) as HTMLTextAreaElement).disabled,
+        (screen.getByRole('textbox', { name: /Assignment JSON/i }) as HTMLTextAreaElement).disabled,
       ).toBe(true);
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(screen.getByRole('button', { name: /Create/i }).getAttribute('aria-current')).toBe(
@@ -406,14 +416,15 @@ export function registerPromptEditorTests() {
         value: Awaited<ReturnType<typeof api.generateDraft>>,
       ) => void;
       completeGeneration({
-        text: '# Fresh generated assignment',
+        ...typedDraftFields(makeAssignmentText('# Fresh generated assignment')),
+        text: makeAssignmentText('# Fresh generated assignment'),
         provider: 'openai',
         model: 'gpt-5.2',
         quota: { source: 'hybrid', lastUpdatedAt: now },
       });
       await waitFor(() =>
         expect(
-          (screen.getByRole('textbox', { name: /Draft markdown/i }) as HTMLTextAreaElement)
+          (screen.getByRole('textbox', { name: /Assignment JSON/i }) as HTMLTextAreaElement)
             .disabled,
         ).toBe(false),
       );
@@ -726,7 +737,7 @@ export function registerPromptEditorTests() {
       expect(
         screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }),
       ).toBeTruthy();
-      expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toBeTruthy();
+      expect(screen.getByRole('textbox', { name: /Assignment JSON/i })).toBeTruthy();
     });
 
     it('uses the default prompt template without exposing template selection', async () => {
@@ -820,6 +831,7 @@ export function registerPromptStudentSelectionTests() {
       vi.mocked(api.listUserJobs).mockResolvedValueOnce({
         jobs: [
           {
+            assignmentArtifact,
             jobId: 'job-rerun-1',
             md: '/tmp/rerun.md',
             recordingId: null,

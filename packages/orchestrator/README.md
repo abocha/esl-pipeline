@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and API usage guide.
-- Last Verified Against: 2026-09-27 repository state.
+- Last Verified Against: 2026-10-04 repository state.
 - Owner: orchestrator maintainers + automation agents.
 - Review Cadence: monthly or after major API/runtime changes.
 - Status: `active`.
@@ -85,10 +85,15 @@ pnpm --filter @esl-pipeline/orchestrator test:integration
 
 ## Structured AssignmentV1 execution
 
-`newAssignment` and `rerunAssignment` accept `assignment` with optional pinned `validationContext`.
+`newAssignment` and `rerunAssignment` require `assignment` with optional pinned `validationContext`.
 They validate before execution, resolve typed study/pronunciation fields directly and publish native
-HTML. `md` is required as a stable manifest locator; typed execution never reads or creates that
-file. Native schema-6 manifests carry canonical `assignmentHash` and title/icon/audio publication
-metadata; explicit Markdown calls retain schema-5 writes and all historical readers. Provider cast,
-speech plans and selected audio-family rerun/upload behavior remain shared. See
+HTML. `md` remains a stable manifest locator; execution never reads or creates that file. Native
+schema-6 manifests carry canonical `assignmentHash` and title/icon/audio publication metadata.
+Provider cast, speech plans and selected audio-family rerun/upload behavior remain shared.
+
+Historical Markdown assignments are read-only records. Status and manifest readers preserve source
+hash checks, produced output URLs, audio availability and original manifest evidence. New execution,
+rerun planning, regeneration and publication reject missing AssignmentV1 or historical manifests;
+providing JSON alongside a historical manifest does not convert it. Markdown validation, parsing,
+normalization, source discovery, caching, audio-link insertion and publishing are retired. See
 [AssignmentV1](../../docs/reference/ASSIGNMENT_V1.md) for the source/hash contract.

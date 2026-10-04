@@ -18,22 +18,22 @@ boundary.
 
 ## Engineering and Runtime
 
-| Task                                    | Read first                                            | Then read                                               |
-| --------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
-| Repository orientation                  | `docs/PROJECT_OVERVIEW.md`                            | `docs/reference/agents-ssot.md`                         |
-| Setup or local development              | `docs/QUICK_START.md`                                 | `docs/reference/env.md`                                 |
-| Test selection or test changes          | `docs/reference/TESTING_GUIDELINES.md`                | `docs/reference/agents-ssot.md`                         |
-| Contracts or invariants                 | `docs/reference/agents-ssot.md`                       | owning package README                                   |
-| Frontend workflow or mock-auth sandbox  | `packages/batch-frontend/README.md`                   | `docs/backend-frontend/backend-frontend-alignment.md`   |
-| Backend service or route behavior       | `packages/batch-backend/README.md`                    | `docs/backend-frontend/batch-backend-ssot.md`           |
-| Backend/frontend capability status      | `docs/backend-frontend/backend-frontend-alignment.md` | `docs/backend-frontend/BATCH_SYSTEM.md`                 |
-| Orchestrator ownership or refactor      | `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`        | `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`       |
-| Orchestrator API v2 cutover             | `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`     | `docs/reference/VERSIONING_MODEL.md`                    |
-| Manifest compatibility                  | `docs/reference/pipeline-manifest.md`                 | `docs/reference/agents-ssot.md`                         |
-| Markdown validator rules                | `docs/reference/MD_VALIDATOR_RULESET_CONVENTIONS.md`  | `packages/md-validator/README.md`                       |
-| Generation models, quotas, or providers | `docs/reference/GENERATION_PROVIDER_POLICY.md`        | relevant WS2B provider profile                          |
-| Homework prompt structure               | `docs/reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md`   | `docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md` |
-| Speech planning or TTS rendering        | `docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`     | `docs/reference/pipeline-manifest.md`                   |
+| Task                                            | Read first                                            | Then read                                               |
+| ----------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| Repository orientation                          | `docs/PROJECT_OVERVIEW.md`                            | `docs/reference/agents-ssot.md`                         |
+| Setup or local development                      | `docs/QUICK_START.md`                                 | `docs/reference/env.md`                                 |
+| Test selection or test changes                  | `docs/reference/TESTING_GUIDELINES.md`                | `docs/reference/agents-ssot.md`                         |
+| Contracts or invariants                         | `docs/reference/agents-ssot.md`                       | owning package README                                   |
+| Frontend workflow or mock-auth sandbox          | `packages/batch-frontend/README.md`                   | `docs/backend-frontend/backend-frontend-alignment.md`   |
+| Backend service or route behavior               | `packages/batch-backend/README.md`                    | `docs/backend-frontend/batch-backend-ssot.md`           |
+| Backend/frontend capability status              | `docs/backend-frontend/backend-frontend-alignment.md` | `docs/backend-frontend/BATCH_SYSTEM.md`                 |
+| Orchestrator ownership or refactor              | `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`        | `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`       |
+| Orchestrator API v2 cutover                     | `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`     | `docs/reference/VERSIONING_MODEL.md`                    |
+| Manifest compatibility                          | `docs/reference/pipeline-manifest.md`                 | `docs/reference/agents-ssot.md`                         |
+| Assignment validation and historical retirement | `docs/reference/ASSIGNMENT_V1.md`                     | `packages/contracts/README.md`                          |
+| Generation models, quotas, or providers         | `docs/reference/GENERATION_PROVIDER_POLICY.md`        | relevant WS2B provider profile                          |
+| Homework prompt structure                       | `docs/reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md`   | `docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md` |
+| Speech planning or TTS rendering                | `docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`     | `docs/reference/pipeline-manifest.md`                   |
 
 ## Operations
 

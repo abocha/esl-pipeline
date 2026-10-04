@@ -16,9 +16,9 @@ import type { Accept } from 'react-dropzone';
 import { Link, useInRouterContext } from 'react-router-dom';
 
 import type {
+  AssignmentValidationResponse,
   AudioInputTopology,
   JobStatus,
-  MarkdownValidationResponse,
   RecordingListItem,
   RecordingTranscriptResponse,
   SttProvider,
@@ -374,7 +374,7 @@ interface AssignmentStageSectionProps {
   generationSuccess: string | null;
   draftText: string;
   onDraftTextChange: (value: string) => void;
-  validation: MarkdownValidationResponse | null;
+  validation: AssignmentValidationResponse | null;
   validationError: string | null;
   draftError: string | null;
   structuredDraft?: boolean;
@@ -407,6 +407,7 @@ interface ReviewStageSectionProps {
   jobReady: boolean;
   publishUrl: string | null | undefined;
   completedReferenceMode?: boolean;
+  historicalReadOnly?: boolean;
   correctionAvailable?: boolean;
   publicationRecoveryAvailable?: boolean;
   correctionMode?: boolean;
@@ -1397,6 +1398,7 @@ export function ReviewStageSection({
   jobReady,
   publishUrl,
   completedReferenceMode = false,
+  historicalReadOnly = false,
   correctionAvailable = false,
   publicationRecoveryAvailable = false,
   correctionMode = false,
@@ -1487,11 +1489,17 @@ export function ReviewStageSection({
         </>
       }
     >
+      {historicalReadOnly ? (
+        <p>
+          Read-only historical record. Original sources and already-produced outputs remain
+          available; processing is unsupported.
+        </p>
+      ) : null}
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
-              <h3>Preview before you share</h3>
+              <h3>{historicalReadOnly ? 'Historical assignment' : 'Preview before you share'}</h3>
             </div>
             <div className="minimal-inline">
               <button
@@ -1507,7 +1515,7 @@ export function ReviewStageSection({
                     : ''
                 }`}
                 onClick={onPreviewDraft}
-                disabled={previewing || !draftHasContent}
+                disabled={historicalReadOnly || previewing || !draftHasContent}
               >
                 {previewing
                   ? 'Rendering preview…'

@@ -138,6 +138,7 @@ async function authority(
         JOIN recordings r ON r.id = $4
         JOIN transcripts t ON t.id = $5
         WHERE a.id = $3 AND a.student_id = $2
+          AND NOT historical_assignment_session(a)
           AND a.confirmed_step <> 'share'
           AND b.binding_role = 'confirmed'
           AND b.recording_id = $4 AND b.transcript_id = $5
@@ -293,6 +294,17 @@ async function prepareOrCommit(
   return withTransaction(async (client) => {
     const op = await lockOperation(client, id);
     if (!op) return null;
+    const historical = await client.query<{ historical: boolean }>(
+      'SELECT historical_assignment_session(s) AS historical FROM assignment_sessions s WHERE id = $1',
+      [op.assignment_session_id],
+    );
+    if (historical.rows[0]?.historical) {
+      if (
+        ['waiting_evidence', 'queued', 'submitting', 'result_ready', 'uncertain'].includes(op.state)
+      )
+        await supersede(client, op, 'legacy_assignment_read_only');
+      return null;
+    }
     if (op.state === 'result_ready') {
       await publishReadyResult(client, op);
       return null;
@@ -517,7 +529,17 @@ export async function reconcileProfileInitialEnrichmentOperation(
         if (!claimed) return { skipped: true as const, usage: undefined };
         reserved = claimed;
       }
-      return generate();
+      const valid = await withTransaction(async (client) => {
+        const op = await lockOperation(client, id);
+        if (!op || op.state !== 'submitting' || op.submission_id !== reserved.submissionId)
+          return false;
+        if (!(await authority(client, op)).valid) {
+          await supersede(client, op, 'authority_changed');
+          return false;
+        }
+        return true;
+      });
+      return valid ? generate() : { skipped: true as const, usage: undefined };
     };
     const generated = pacer
       ? await pacer.run({
@@ -636,7 +658,8 @@ export async function enqueuePendingProfileInitialEnrichments(
   const ids = await withPgClient(async (client) => {
     const result = await client.query<{ id: string }>(
       `SELECT op.id FROM profile_initial_enrichment_operations op
-       WHERE op.state = 'result_ready'
+       JOIN assignment_sessions a ON a.id = op.assignment_session_id
+       WHERE NOT historical_assignment_session(a) AND (op.state = 'result_ready'
           OR (op.state = 'queued' AND op.updated_at < NOW() - INTERVAL '1 minute')
           OR (op.state = 'submitting' AND op.submission_reserved_at < NOW() - INTERVAL '15 minutes')
           OR (op.state = 'waiting_evidence' AND (
@@ -664,7 +687,7 @@ export async function enqueuePendingProfileInitialEnrichments(
               ORDER BY e.created_at DESC, e.id DESC LIMIT 1
             ) = 'failed'
           ))
-       ORDER BY op.created_at DESC LIMIT 50`,
+       ) ORDER BY op.created_at DESC LIMIT 50`,
     );
     return result.rows.map((row) => row.id);
   });

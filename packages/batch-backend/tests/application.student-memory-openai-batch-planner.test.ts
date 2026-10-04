@@ -5,6 +5,7 @@ import { buildLessonMemoryEnvelope } from '../src/application/lesson-memory-prom
 import { buildOpenAiResponsesRequestBody } from '../src/application/openai-responses-contract.js';
 import { buildStudentMemoryOpenAiBatchItem } from '../src/application/student-memory-openai-batch-planner.js';
 import { buildStudentMemorySnapshotEnvelope } from '../src/application/student-memory-snapshot-prompt.js';
+import { assignmentFixture } from './assignment-v1.test-harness.js';
 
 describe('application/student-memory-openai-batch-planner', () => {
   it.each([
@@ -16,11 +17,12 @@ describe('application/student-memory-openai-batch-planner', () => {
       'homework_memory',
       buildHomeworkMemoryEnvelope({
         source: {
+          format: 'assignment_v1',
+          assignment: assignmentFixture(),
           assignmentLineageKey: 'job-1',
           publishedAt: new Date('2026-06-01'),
           publishTargets: [],
         },
-        normalizedMarkdown: { frontmatter: null, sections: [], plainText: '# Homework' },
       }),
     ],
     [

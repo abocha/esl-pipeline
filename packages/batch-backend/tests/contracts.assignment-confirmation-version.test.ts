@@ -8,8 +8,8 @@ import type { AssignmentSessionDto } from '../../contracts/src/index.js';
 
 describe('contracts/assignment confirmation contract version', () => {
   it('publishes the current assignment contract versions', () => {
-    expect(API_CONTRACT_VERSION).toBe('8.0.0');
-    expect(DB_CONTRACT_VERSION).toBe('2.0.0');
+    expect(API_CONTRACT_VERSION).toBe('9.0.0');
+    expect(DB_CONTRACT_VERSION).toBe('3.0.0');
   });
 
   it('does not expose a nullable legacy learner on an assignment session', () => {

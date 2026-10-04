@@ -17,6 +17,7 @@ import { approveAssignmentShareJob, recoverAssignmentShareJob } from '../domain/
 import { recoverAssignmentShareQueue } from '../infrastructure/queue-bullmq.js';
 import { toAssignmentSessionDto } from './assignment-sessions.js';
 import { resolveApprovalJobConfig } from './create-approval-job.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 import { jobRecordToDto } from './job-dto.js';
 import { materializeDraft } from './materialize-draft.js';
 
@@ -64,6 +65,7 @@ export async function shareAssignmentSession(args: {
 
   const before = await sessions.getByIdForUser(args.sessionId, args.userId);
   if (!before) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
+  requireTypedAssignment(before.confirmed.create?.artifact);
   const jobConfig = await resolveJobConfig({
     userId: args.userId,
     jobOverrides: sessionJobOverrides(before),

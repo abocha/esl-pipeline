@@ -8,6 +8,7 @@ import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { resolveHomeworkMemorySourceFromSucceededJob } from '../src/application/homework-memory-source.js';
+import { recordStudentMemoryOpenAiBatchRemoteStatus } from '../src/application/student-memory-openai-batch-operations.js';
 import {
   getProfileRevisionById,
   getRecordedProfileRevision,
@@ -1705,10 +1706,9 @@ describe('integration/migrations', () => {
         // Keep the historical cutover assertions at their original boundary, then
         // upgrade the fixture before exercising the current application reader.
         await runMigrations();
-        const source = await resolveHomeworkMemorySourceFromSucceededJob(ids.rerunJob);
-        expect(source.format).toBe('markdown');
-        expect(source.publishedMarkdown).toBe(historicalMarkdown);
-        expect(source.assignmentLineageKey).toBe(ids.rootJob);
+        await expect(
+          resolveHomeworkMemorySourceFromSucceededJob(ids.rerunJob),
+        ).rejects.toMatchObject({ code: 'legacy_assignment_read_only' });
       } finally {
         if (previousStorageDir === undefined) {
           delete process.env.FILESYSTEM_UPLOAD_DIR;
@@ -1824,6 +1824,288 @@ describe('integration/migrations', () => {
           `,
         );
         expect(actionTypes.rows[0]?.action_type).toBe('rerun');
+      });
+    },
+    testTimeout,
+  );
+  it(
+    'sunsets historical Markdown only after quiescence and preserves evidence without conversion',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0063_assignment_native_renderer');
+        const ids = Array.from({ length: 15 }, () => randomUUID());
+        const [
+          user,
+          workspace,
+          student,
+          recording,
+          transcript,
+          prompt,
+          draft,
+          queued,
+          running,
+          published,
+          session,
+          batch,
+          item,
+          claim,
+          typedDraft,
+        ] = ids;
+        const hash = 'a'.repeat(64);
+        await pool.query(
+          `INSERT INTO users(id,email,password_hash,role) VALUES($1,'sunset@example.test','hash','user')`,
+          [user],
+        );
+        await pool.query(`INSERT INTO workspaces(id,name) VALUES($1,'sunset')`, [workspace]);
+        await pool.query(
+          `INSERT INTO students(id,student,workspace_id) VALUES($1,'Historical Student',$2)`,
+          [student, workspace],
+        );
+        await pool.query(
+          `INSERT INTO recordings(id,workspace_id,source,student_id,bytes,status,audio_lifecycle) VALUES($1,$2,'manual_transcript',$3,0,'transcribed','not_retained')`,
+          [recording, workspace, student],
+        );
+        await pool.query(
+          `INSERT INTO transcripts(id,recording_id,storage_uri,mode,model,language,stt_provider,fallback_used) VALUES($1,$2,'local://original/transcript.json','timeline','manual','en','manual',false)`,
+          [transcript, recording],
+        );
+        await pool.query(
+          `INSERT INTO prompt_packages(id,recording_id,transcript_id,student_id,template_version,storage_uri,request_envelope) VALUES($1,$2,$3,$4,'historical-revision','local://original/prompt.txt','{"promptVersion":"assignment_v1"}')`,
+          [prompt, recording, transcript, student],
+        );
+        await pool.query(
+          `INSERT INTO drafts(id,prompt_package_id,format,storage_uri,working_version,content_hash) VALUES($1,$2,'markdown','local://original/homework.md',1,$3),($4,$2,'assignment_v1',$5,1,$3)`,
+          [draft, prompt, hash, typedDraft, `local://drafts/content/${hash}.json`],
+        );
+        await pool.query(
+          `INSERT INTO jobs(id,state,student_id,md_storage_uri,html_url,manifest_path) VALUES($1,'queued',$4,'local://original/queued.md',NULL,NULL),($2,'running',$4,'local://original/running.md',NULL,NULL),($3,'succeeded',$4,'local://original/homework.md','https://example.test/retained.html','local://original/manifest.json')`,
+          [queued, running, published, student],
+        );
+        await pool.query(
+          `INSERT INTO assignment_sessions(id,user_id,student_id,draft_id,prompt_package_id,confirmed_snapshot,confirmed_step,revision) VALUES($1,$2,$3,$4,$5,$6,'student',1)`,
+          [
+            session,
+            user,
+            student,
+            draft,
+            prompt,
+            { student: { studentId: student }, source: null, context: null, create: null },
+          ],
+        );
+        const enrichment = randomUUID();
+        await pool.query(
+          `INSERT INTO profile_initial_enrichment_operations
+          (id,student_id,assignment_session_id,recording_id,transcript_id,transcript_storage_uri,
+          transcript_hash,source_identity_kind,source_fingerprint_scheme,source_fingerprint,state,
+          generation_input,validated_result,result_hash)
+          VALUES($1,$2,$3,$4,$5,'local://original/transcript.json',$6,'manual_transcript',
+          'manual-transcript-text-v1',$6,'queued','{"prompt":"retained input"}','{"retained":"result"}',$6)`,
+          [enrichment, student, session, recording, transcript, hash],
+        );
+        const memory = randomUUID(),
+          action = randomUUID();
+        await pool.query(
+          `INSERT INTO homework_memory_entries(id,student_id,job_id,assignment_lineage_key,schema_version,generated_at,provider,model,status,published_at) VALUES($1,$2,$3,$3,'homework-memory.v1',NOW(),'openai','gpt-5.4-nano','pending',NOW())`,
+          [memory, student, published],
+        );
+        await pool.query(
+          `INSERT INTO job_action_history(id,job_id,action_type,requested_at,outcome,message,created_job_id) VALUES($1,$2,'rerun',NOW(),'succeeded','Queued before sunset',$3)`,
+          [action, published, queued],
+        );
+        await pool.query(
+          `INSERT INTO student_memory_openai_batch_runs(id,workload,model,input_jsonl_sha256,input_bytes,item_count) VALUES($1,'homework_memory','gpt-5.4-nano',$2,10,1)`,
+          [batch, hash],
+        );
+        await pool.query(
+          `INSERT INTO student_memory_openai_batch_items(id,run_id,student_id,workload,model,custom_id,canonical_scope_key,source_version_hash,request_envelope,response_schema_fingerprint,request_body,source_refs) VALUES($1,$2,$3,'homework_memory','gpt-5.4-nano','historical',$4,$5,'{}',$5,'{}',$6)`,
+          [item, batch, student, published, hash, { jobId: published }],
+        );
+        await pool.query(
+          `INSERT INTO student_memory_openai_batch_claims(id,item_id,workload,canonical_scope_key,source_version_hash) VALUES($1,$2,'homework_memory',$3,$4)`,
+          [claim, item, published, hash],
+        );
+        await expect(runMigrations()).rejects.toThrow('quiesced legacy jobs');
+        expect(
+          (await pool.query(`SELECT state FROM jobs WHERE id=$1`, [queued])).rows[0].state,
+        ).toBe('queued');
+        await pool.query(`UPDATE jobs SET state='failed' WHERE id=$1`, [running]);
+        await pool.query(
+          `UPDATE student_memory_openai_batch_runs SET state='submitted',remote_batch_id='remote-history' WHERE id=$1`,
+          [batch],
+        );
+        await expect(runMigrations()).rejects.toThrow(
+          'completed or cancelled remote homework Batch',
+        );
+        await pool.query(
+          `UPDATE student_memory_openai_batch_runs SET state='cancelled' WHERE id=$1`,
+          [batch],
+        );
+        // Old cancellation code could assert cancelled before remote cancellation completed.
+        await expect(runMigrations()).rejects.toThrow('fresh status poll');
+        await recordStudentMemoryOpenAiBatchRemoteStatus({
+          runId: batch!,
+          remote: { id: 'remote-history', status: 'cancelling' },
+        });
+        await expect(runMigrations()).rejects.toThrow('fresh status poll');
+        await recordStudentMemoryOpenAiBatchRemoteStatus({
+          runId: batch!,
+          remote: { id: 'remote-history', status: 'cancelled' },
+        });
+        for (const state of ['submitting', 'uncertain']) {
+          await pool.query(
+            'UPDATE profile_initial_enrichment_operations SET state=$2 WHERE id=$1',
+            [enrichment, state],
+          );
+          await expect(runMigrations()).rejects.toThrow('quiesced profile enrichment submissions');
+        }
+        await pool.query(
+          "UPDATE profile_initial_enrichment_operations SET state='result_ready' WHERE id=$1",
+          [enrichment],
+        );
+        const enrichmentEvidence = (
+          await pool.query(
+            'SELECT generation_input,validated_result,result_hash FROM profile_initial_enrichment_operations WHERE id=$1',
+            [enrichment],
+          )
+        ).rows[0];
+        const evidence = (
+          await pool.query(`SELECT md_storage_uri,html_url,manifest_path FROM jobs WHERE id=$1`, [
+            published,
+          ])
+        ).rows[0];
+        const snapshot = (
+          await pool.query(`SELECT confirmed_snapshot FROM assignment_sessions WHERE id=$1`, [
+            session,
+          ])
+        ).rows[0];
+        await runMigrations();
+        expect(
+          (
+            await pool.query(
+              'SELECT state,failure_code,generation_input,validated_result,result_hash FROM profile_initial_enrichment_operations WHERE id=$1',
+              [enrichment],
+            )
+          ).rows[0],
+        ).toEqual({
+          ...enrichmentEvidence,
+          state: 'superseded',
+          failure_code: 'legacy_assignment_read_only',
+        });
+        await expect(
+          pool.query(
+            "UPDATE profile_initial_enrichment_operations SET state='queued' WHERE id=$1",
+            [enrichment],
+          ),
+        ).rejects.toThrow('legacy_assignment_read_only');
+
+        expect(
+          (
+            await pool.query(`SELECT md_storage_uri,html_url,manifest_path FROM jobs WHERE id=$1`, [
+              published,
+            ])
+          ).rows[0],
+        ).toEqual(evidence);
+        expect(
+          (
+            await pool.query(`SELECT confirmed_snapshot FROM assignment_sessions WHERE id=$1`, [
+              session,
+            ])
+          ).rows[0],
+        ).toEqual(snapshot);
+        expect(
+          (await pool.query(`SELECT state,error FROM jobs WHERE id=$1`, [queued])).rows[0],
+        ).toEqual({ state: 'failed', error: 'legacy_assignment_read_only' });
+        expect(
+          (
+            await pool.query(
+              `SELECT status,generation_notes FROM homework_memory_entries WHERE id=$1`,
+              [memory],
+            )
+          ).rows[0],
+        ).toMatchObject({
+          status: 'failed',
+          generation_notes: { error: 'legacy_assignment_read_only' },
+        });
+        expect(
+          (
+            await pool.query(
+              `SELECT state,claim_state,source_refs FROM student_memory_openai_batch_items WHERE id=$1`,
+              [item],
+            )
+          ).rows[0],
+        ).toEqual({
+          state: 'terminal_failure',
+          claim_state: 'terminal_failure',
+          source_refs: { jobId: published },
+        });
+        expect(
+          (
+            await pool.query(`SELECT state FROM student_memory_openai_batch_claims WHERE id=$1`, [
+              claim,
+            ])
+          ).rows[0].state,
+        ).toBe('terminal_failure');
+        expect(
+          (
+            await pool.query(
+              `SELECT outcome,message,created_job_id FROM job_action_history WHERE id=$1`,
+              [action],
+            )
+          ).rows[0],
+        ).toEqual({
+          outcome: 'succeeded',
+          message: 'Queued before sunset',
+          created_job_id: queued,
+        });
+        for (const [sql, id] of [
+          [`UPDATE jobs SET state='queued' WHERE id=$1`, queued],
+          [`UPDATE jobs SET html_url='https://example.test/replaced.html' WHERE id=$1`, published],
+          [`UPDATE drafts SET storage_uri='local://replacement.md' WHERE id=$1`, draft],
+          [
+            `UPDATE assignment_sessions SET draft_id=NULL,prompt_package_id=NULL WHERE id=$1`,
+            session,
+          ],
+          [
+            `UPDATE student_memory_openai_batch_items SET state='retryable_failure' WHERE id=$1`,
+            item,
+          ],
+        ])
+          await expect(pool.query(sql!, [id])).rejects.toThrow('legacy_assignment_read_only');
+        await expect(
+          pool.query(`INSERT INTO jobs(id,state) VALUES($1,'queued')`, [randomUUID()]),
+        ).rejects.toThrow('legacy_assignment_read_only');
+        const artifact = {
+          format: 'assignment_v1',
+          schemaVersion: 1,
+          serializationVersion: 1,
+          workingVersion: 1,
+          contentHash: hash,
+          storageUri: `local://drafts/content/${hash}.json`,
+        };
+        const typed = randomUUID();
+        await pool.query(
+          `INSERT INTO jobs(id,state,prompt_package_id,draft_id,assignment_artifact,assignment_renderer_version) VALUES($1,'queued',$2,$3,$4,2)`,
+          [typed, prompt, typedDraft, artifact],
+        );
+        await pool.query(`UPDATE jobs SET state='running' WHERE id=$1`, [typed]);
+        expect(
+          (await pool.query(`SELECT state,assignment_artifact FROM jobs WHERE id=$1`, [typed]))
+            .rows[0],
+        ).toEqual({ state: 'running', assignment_artifact: artifact });
+        expect(
+          (
+            await pool.query(
+              `SELECT template_version,storage_uri FROM prompt_packages WHERE id=$1`,
+              [prompt],
+            )
+          ).rows[0],
+        ).toEqual({
+          template_version: 'historical-revision',
+          storage_uri: 'local://original/prompt.txt',
+        });
+        await expect(resolveHomeworkMemorySourceFromSucceededJob(published!)).rejects.toMatchObject(
+          { code: 'legacy_assignment_read_only' },
+        );
       });
     },
     testTimeout,

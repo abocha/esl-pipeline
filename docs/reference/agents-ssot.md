@@ -38,7 +38,7 @@ For deep system maps, prefer the linked docs rather than growing this file again
   - operator control-panel adapter over authenticated `batch-backend` operations
   - no independent pipeline, persistence, or deployment semantics
 - supporting implementation packages
-  - validation/parsing: `md-validator`, `pmd`
+  - domain validation: `contracts` (AssignmentV1)
   - adapters/providers: `html-publisher`, `tts-*`, `stt-*`, `storage-uploader`
   - shared runtime utilities: `provider-runtime`, `shared-infrastructure`, `contracts`
 
@@ -61,7 +61,7 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Manifest behavior is contract-level; changes must be coordinated with tests and docs.
 - New schema-5 study-text voice plans emit `ranked`, `deterministic`, or `fallback` resolution modes.
   Manifests containing the older `resolved` token normalize it to `deterministic` when read.
-- Authored lesson Markdown stays provider-neutral. Provider capability resolution and expressive
+- Authored AssignmentV1 lesson text stays provider-neutral. Provider capability resolution and expressive
   speech rendering happen after TTS provider/model selection.
 - Study-text performance mode is orchestrator-owned: authored `dialogue` stays dialogue, authored
   `tts` stays monologue, and `auto` resolves dialogue only for two or more distinct authored
@@ -287,8 +287,9 @@ Docs-heavy changes also require:
 Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
 HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
 is created. Native renderer 2 / manifest schema 6 carry canonical assignment and publication
-metadata; API 8 / manifest contract 4 identify the typed path/hash changes. Historical Markdown and
-renderer-1 manifest readers remain supported. Editable JSON authority, source authorization, CAS,
+metadata; API 9 / validator 3 retire Markdown processing while manifest contract 4 keeps historical
+read semantics. Historical Markdown and renderer-1 manifests are read-only evidence under ABO-30.
+No correction, retry, rerun, resume, rendering, TTS, publication, memory processing or conversion is supported. Editable JSON authority, source authorization, CAS,
 lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
 [AssignmentV1](ASSIGNMENT_V1.md) for the canonical execution contract.
 Migration 0063 admits renderer-2 job writes while retaining renderer 1 and frozen artifact identity;

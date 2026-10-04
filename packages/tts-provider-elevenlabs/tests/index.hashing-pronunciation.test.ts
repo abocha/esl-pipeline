@@ -3,11 +3,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
-import { assignmentMetadata, assignmentStudySegments } from '@esl-pipeline/contracts';
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import { createElevenLabsTtsProvider } from '../src/adapter.js';
 import { buildStudyTextMp3, hashStudyText } from '../src/index.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 import {
   buildPronunciationShadowSentenceMp3FromPath,
   createTempDir,
@@ -26,36 +25,54 @@ describe('tts elevenlabs integration', () => {
 
   it('buildPronunciationShadowSentenceMp3 preview mode', async () => {
     const dir = await createTempDir('tts-shadow-');
-    const tempMdPath = join(dir, 'lesson-shadow.md');
+    const assignmentPath = join(dir, 'lesson-shadow.md');
     await writeFixture(
-      tempMdPath,
-      `
----
-title: Pronunciation Lesson
-student: Anna
-input_type: generate
----
-
-:::study-text
-Narrator: Main text.
-:::
-
-### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
-:::callout 🗣️
-**Mode:** shadow_sentence
-**Shadow sentence:** I was thinking about working this morning.
-1. thinking — /ˈθɪŋkɪŋ/
-2. working — /ˈwɜːrkɪŋ/
-3. morning — /ˈmɔːrnɪŋ/
-:::
-    `,
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Pronunciation Lesson', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [{ speakerId: 's0', text: 'Main text.' }],
+          },
+          pronunciation: {
+            mode: 'shadow_sentence',
+            target: '',
+            focus: '',
+            action: '',
+            deliverable: '',
+            shadowSentence: 'I was thinking about working this morning.',
+            words: [
+              { text: 'thinking', transcription: '/ˈθɪŋkɪŋ/' },
+              { text: 'working', transcription: '/ˈwɜːrkɪŋ/' },
+              { text: 'morning', transcription: '/ˈmɔːrnɪŋ/' },
+            ],
+          },
+        }),
+      ),
     );
 
     const convertMock = setupClientMock();
-    const result = await buildPronunciationShadowSentenceMp3FromPath(tempMdPath, 'voice_narrator', {
-      outPath: dir,
-      preview: true,
-    });
+    const result = await buildPronunciationShadowSentenceMp3FromPath(
+      assignmentPath,
+      'voice_narrator',
+      {
+        outPath: dir,
+        preview: true,
+      },
+    );
     expect(result.path.endsWith('-shadow-sentence.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
     expect(result.generatedCharacters).toBeGreaterThan(0);
@@ -64,42 +81,64 @@ Narrator: Main text.
 
   it('buildPronunciationShadowSentenceMp3 generates and caches output', async () => {
     const dir = await createTempDir('tts-shadow-cache-');
-    const tempMdPath = join(dir, 'lesson-shadow-cache.md');
+    const assignmentPath = join(dir, 'lesson-shadow-cache.md');
     await writeFixture(
-      tempMdPath,
-      `
----
-title: Pronunciation Lesson
-student: Anna
-input_type: generate
----
-
-:::study-text
-Narrator: Main text.
-:::
-
-### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
-:::callout 🗣️
-**Mode:** shadow_sentence
-**Shadow sentence:** I was thinking about working this morning.
-1. thinking — /ˈθɪŋkɪŋ/
-2. working — /ˈwɜːrkɪŋ/
-3. morning — /ˈmɔːrnɪŋ/
-:::
-    `,
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Pronunciation Lesson', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [{ speakerId: 's0', text: 'Main text.' }],
+          },
+          pronunciation: {
+            mode: 'shadow_sentence',
+            target: '',
+            focus: '',
+            action: '',
+            deliverable: '',
+            shadowSentence: 'I was thinking about working this morning.',
+            words: [
+              { text: 'thinking', transcription: '/ˈθɪŋkɪŋ/' },
+              { text: 'working', transcription: '/ˈwɜːrkɪŋ/' },
+              { text: 'morning', transcription: '/ˈmɔːrnɪŋ/' },
+            ],
+          },
+        }),
+      ),
     );
     const convertMock = setupClientMock();
 
-    const first = await buildPronunciationShadowSentenceMp3FromPath(tempMdPath, 'voice_narrator', {
-      outPath: dir,
-    });
+    const first = await buildPronunciationShadowSentenceMp3FromPath(
+      assignmentPath,
+      'voice_narrator',
+      {
+        outPath: dir,
+      },
+    );
     expect(first.generatedCharacters).toBeGreaterThan(0);
     expect(first.cachedCharacters).toBe(0);
     expect(convertMock).toHaveBeenCalledTimes(1);
 
-    const second = await buildPronunciationShadowSentenceMp3FromPath(tempMdPath, 'voice_narrator', {
-      outPath: dir,
-    });
+    const second = await buildPronunciationShadowSentenceMp3FromPath(
+      assignmentPath,
+      'voice_narrator',
+      {
+        outPath: dir,
+      },
+    );
     expect(second.generatedCharacters).toBe(0);
     expect(second.cachedCharacters).toBeGreaterThan(0);
     expect(convertMock).toHaveBeenCalledTimes(1);
@@ -132,21 +171,15 @@ Narrator: Main text.
   });
 });
 
-it('keeps typed cast and cache identity for unchanged historical speech and preserves literal punctuation', async () => {
+it('keeps typed cast and cache identity for unchanged typed speech and preserves literal punctuation', async () => {
   const assignment = assignmentFixture();
   const dir = await createTempDir('typed-eleven-');
   const voiceMapPath = join(dir, 'voices.yml');
   await writeFixture(voiceMapPath, 'default: voice_narrator');
-  const context = parseMarkdownContext(
-    `---\n${JSON.stringify(assignmentMetadata(assignment))}\n---\n:::study-text\n${assignmentStudySegments(
-      assignment,
-    )
-      .map((s) => `${s.speaker}: ${s.text}`)
-      .join('\n')}\n:::`,
-  );
+  const context = structuredClone(assignment);
   const options = { outPath: dir, voiceMapPath, preview: true, ttsStrategy: 'tts' as const };
   const typed = await buildStudyTextMp3({ assignment }, options);
-  const historical = await buildStudyTextMp3({ context }, options);
+  const historical = await buildStudyTextMp3({ assignment: context }, options);
   expect(typed.hash).toBe(historical.hash);
   expect(typed.voiceAssignments).toEqual(historical.voiceAssignments);
   const convert = setupClientMock();
@@ -159,22 +192,16 @@ it('keeps typed cast and cache identity for unchanged historical speech and pres
 });
 
 it.each(['Mary  Jane', 'Mary_Jane'])(
-  'routes typed dialogue speaker %s to its historical cast',
+  'routes typed dialogue speaker %s to its typed cast',
   async (name) => {
     const assignment = assignmentFixture();
     assignment.input.studyText.speakers[1]!.displayName = name;
     const dir = await createTempDir('typed-speaker-routing-');
     const voiceMapPath = join(dir, 'voices.yml');
     await writeFixture(voiceMapPath, 'default: voice_narrator');
-    const historical = parseMarkdownContext(
-      `---\n${JSON.stringify(assignmentMetadata(assignment))}\n---\n:::study-text\n${assignmentStudySegments(
-        assignment,
-      )
-        .map((s) => `${s.speaker}: ${s.text}`)
-        .join('\n')}\n:::`,
-    );
+    const historical = structuredClone(assignment);
     const options = { outPath: dir, voiceMapPath, preview: true, ttsStrategy: 'dialogue' as const };
-    const prior = await buildStudyTextMp3({ context: historical }, options);
+    const prior = await buildStudyTextMp3({ assignment: historical }, options);
     const native = await buildStudyTextMp3({ assignment }, options);
     expect(native.voiceAssignments).toEqual(prior.voiceAssignments);
     expect(native.hash).toBe(prior.hash);

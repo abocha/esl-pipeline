@@ -10,6 +10,7 @@ import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { getDefaultSettings } from '../domain/settings-model.js';
 import { createDefaultSettings, getSettingsByUserId } from '../domain/settings-repository.js';
 import { draftArtifact } from './assignment-artifact.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 import {
   buildLearningPresetProvenance,
   DEFAULT_LEARNING_PRESET_ID,
@@ -122,6 +123,7 @@ export async function createApprovalJobFromDraft(
   params: CreateApprovalJobParams,
   overrides?: Partial<CreateApprovalJobDependencies>,
 ): Promise<JobRecord> {
+  requireTypedAssignment(draftArtifact(params.draft));
   const jobs = overrides?.jobs ?? { insertApprovalJob };
   const publishEvent = overrides?.publishEvent ?? publishJobEvent;
   const jobConfig = await resolveApprovalJobConfig(

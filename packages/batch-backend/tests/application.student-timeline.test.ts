@@ -99,15 +99,15 @@ describe('student-timeline', () => {
         INSERT INTO drafts (
           id, prompt_package_id, student_id, storage_uri, working_version, content_hash,
           created_at, updated_at
-        )
-        VALUES ($1, $2, $3, 's3://bucket/draft.txt', 1, repeat('a', 64), $4, $4)
+        , format)
+        VALUES ($1, $2, $3, 'local://drafts/content/' ||  repeat('a', 64) || '.json', 1, repeat('a', 64), $4, $4, 'assignment_v1')
         `,
         [draftId, promptPackageId, studentId, times.draft],
       );
       await client.query(
         `
-        INSERT INTO jobs (id, state, recording_id, transcript_id, prompt_package_id, draft_id, created_at, updated_at, finished_at, error)
-        VALUES ($1, 'failed', $2, $3, $4, $5, $6, $6, $6, 'boom')
+        INSERT INTO jobs (id, state, recording_id, transcript_id, prompt_package_id, draft_id, created_at, updated_at, finished_at, error, assignment_artifact, assignment_renderer_version)
+        VALUES ($1, 'failed', $2, $3, $4, $5, $6, $6, $6, 'boom', '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)
         `,
         [jobId, recordingId, transcriptId, promptPackageId, draftId, times.job],
       );
@@ -225,8 +225,8 @@ describe('student-timeline', () => {
           created_at,
           updated_at,
           finished_at
-        )
-        VALUES ($1, 'succeeded', $2, $3, $4, $5, $5, $5)
+        , assignment_artifact, assignment_renderer_version, draft_id)
+        VALUES ($1, 'succeeded', $2, $3, $4, $5, $5, $5, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4())
         `,
         [jobId, recordingId, transcriptId, promptPackageId, eventAt],
       );

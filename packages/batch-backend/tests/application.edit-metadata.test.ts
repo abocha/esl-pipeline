@@ -5,6 +5,7 @@ import { JobActionType } from '../src/domain/job-actions.js';
 import * as jobEvents from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import * as jobRepository from '../src/domain/job-repository.js';
+import { assignmentArtifactFixture } from './assignment-v1.test-harness.js';
 
 describe('application/job-actions/edit-metadata', () => {
   beforeEach(() => {
@@ -12,6 +13,7 @@ describe('application/job-actions/edit-metadata', () => {
   });
 
   const baseJob: JobRecord = {
+    assignmentArtifact: assignmentArtifactFixture(),
     id: 'job-1',
     state: 'awaiting_approval',
     md: 'fixtures/ok.md',

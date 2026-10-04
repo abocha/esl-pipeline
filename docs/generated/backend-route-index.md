@@ -115,6 +115,7 @@
 | GET | `/templates/:id` | `packages/batch-backend/src/transport/extended-routes/templates-routes.ts` |
 | PUT | `/templates/:id` | `packages/batch-backend/src/transport/extended-routes/templates-routes.ts` |
 | POST | `/templates/:id/default` | `packages/batch-backend/src/transport/extended-routes/templates-routes.ts` |
+| POST | `/templates/:id/import-and-activate` | `packages/batch-backend/src/transport/extended-routes/templates-routes.ts` |
 | GET | `/templates/:id/revisions` | `packages/batch-backend/src/transport/extended-routes/templates-routes.ts` |
 | GET | `/templates/:id/revisions/:revisionId` | `packages/batch-backend/src/transport/extended-routes/templates-routes.ts` |
 | POST | `/templates/:id/revisions/:revisionId/activate` | `packages/batch-backend/src/transport/extended-routes/templates-routes.ts` |

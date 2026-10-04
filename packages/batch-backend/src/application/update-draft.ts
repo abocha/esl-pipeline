@@ -11,6 +11,7 @@ import { admitAssignment, assignmentContext } from './assignment-artifact.js';
 import type { DraftResponse } from './create-draft.js';
 import { toDraftResponse } from './create-draft.js';
 import { PromptPackageAssignmentError } from './create-prompt-package.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 
 export interface UpdateDraftParams {
   id: string;
@@ -42,6 +43,7 @@ export async function updateDraft(
 
   const draft = await drafts.getById(params.id);
   if (!draft) return null;
+  requireTypedAssignment(draft.format === 'assignment_v1');
 
   let text = params.text;
   let context;

@@ -171,6 +171,14 @@ describe('formatter', () => {
       {
         jobId: 'job-1',
         studentId: null,
+        publication: {
+          schemaVersion: 1,
+          rendererVersion: 1,
+          title: 'Lesson',
+          icon: '',
+          studyTextAudioUrl: 'https://bucket.s3.amazonaws.com/audio/final/study.mp3',
+          pronunciationAudioUrl: 'https://bucket.s3.amazonaws.com/audio/pronunciation/pron.mp3',
+        },
         md: [
           '# Lesson',
           '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/study.mp3)',
@@ -218,6 +226,14 @@ describe('formatter', () => {
       {
         jobId: 'job-2',
         studentId: null,
+        publication: {
+          schemaVersion: 1,
+          rendererVersion: 1,
+          title: 'Lesson',
+          icon: '',
+          studyTextAudioUrl: 'https://bucket.s3.amazonaws.com/audio/final/study.mp3',
+          pronunciationAudioUrl: null,
+        },
         md: [
           '# Lesson',
           '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/study.mp3)',
@@ -268,6 +284,14 @@ describe('formatter', () => {
     const html = formatJobLinks({
       jobId: 'job-chunks-only',
       studentId: null,
+      publication: {
+        schemaVersion: 1,
+        rendererVersion: 1,
+        title: 'Lesson',
+        icon: '',
+        studyTextAudioUrl: 'https://bucket.s3.amazonaws.com/audio/final/study.mp3',
+        pronunciationAudioUrl: null,
+      },
       md: [
         '# Lesson',
         '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/study.mp3)',

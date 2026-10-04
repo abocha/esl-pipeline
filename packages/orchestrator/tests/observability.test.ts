@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PipelineLogEvent, PipelineLogger, PipelineMetrics } from '../src/observability.js';
+import { assignmentFixture } from './assignment-fixture.js';
 
 vi.mock('@esl-pipeline/tts-core', async () => {
   const actual =
@@ -68,7 +69,7 @@ describe('orchestrator observability', () => {
     const audioPath = join(dir, 'lesson.mp3');
 
     const markdown = await readFile(
-      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      join(import.meta.dirname, '../../contracts/tests/assignment-fixture.json'),
       'utf8',
     );
     await writeFile(mdPath, markdown);
@@ -127,6 +128,7 @@ describe('orchestrator observability', () => {
     const { newAssignment } = await import('../src/index.js');
     await newAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         preset: 'default',
         withTts: true,
@@ -198,7 +200,7 @@ describe('orchestrator observability', () => {
     const audioPath = join(dir, 'lesson.mp3');
 
     const markdown = await readFile(
-      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      join(import.meta.dirname, '../../contracts/tests/assignment-fixture.json'),
       'utf8',
     );
     await writeFile(mdPath, markdown);
@@ -217,6 +219,7 @@ describe('orchestrator observability', () => {
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     await newAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         preset: 'default',
         withTts: true,
@@ -240,6 +243,7 @@ describe('orchestrator observability', () => {
 
     await rerunAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         republishOnly: true,
         upload: 's3',
@@ -286,7 +290,7 @@ describe('orchestrator observability', () => {
     const audioPath = join(dir, 'lesson.mp3');
 
     const markdown = await readFile(
-      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      join(import.meta.dirname, '../../contracts/tests/assignment-fixture.json'),
       'utf8',
     );
     await writeFile(mdPath, markdown);
@@ -350,6 +354,7 @@ describe('orchestrator observability', () => {
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     await newAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         preset: 'default',
         withTts: true,
@@ -366,6 +371,7 @@ describe('orchestrator observability', () => {
 
     await rerunAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         regeneratePronunciationChunkAudio: true,
         upload: 's3',
@@ -401,7 +407,7 @@ describe('orchestrator observability', () => {
     const changedItemPath = join(dir, 'pron-item-changed.mp3');
 
     const markdown = await readFile(
-      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      join(import.meta.dirname, '../../contracts/tests/assignment-fixture.json'),
       'utf8',
     );
     await writeFile(mdPath, markdown);
@@ -472,6 +478,7 @@ describe('orchestrator observability', () => {
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     await newAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         preset: 'default',
         withTts: true,
@@ -488,6 +495,7 @@ describe('orchestrator observability', () => {
 
     await rerunAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         regeneratePronunciationChunkAudio: true,
         upload: 's3',
@@ -507,7 +515,7 @@ describe('orchestrator observability', () => {
     const audioPath = join(dir, 'lesson.mp3');
 
     const markdown = await readFile(
-      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      join(import.meta.dirname, '../../contracts/tests/assignment-fixture.json'),
       'utf8',
     );
     await writeFile(mdPath, markdown);
@@ -592,6 +600,7 @@ describe('orchestrator observability', () => {
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     await newAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         preset: 'default',
         withTts: true,
@@ -606,6 +615,7 @@ describe('orchestrator observability', () => {
 
     await rerunAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         regeneratePronunciationChunkAudio: true,
         upload: 's3',
@@ -632,7 +642,7 @@ describe('orchestrator observability', () => {
     const audioPath = join(dir, 'lesson.mp3');
 
     const markdown = await readFile(
-      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      join(import.meta.dirname, '../../contracts/tests/assignment-fixture.json'),
       'utf8',
     );
     await writeFile(mdPath, markdown);
@@ -701,6 +711,7 @@ describe('orchestrator observability', () => {
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     await newAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         preset: 'default',
         withTts: true,
@@ -715,6 +726,7 @@ describe('orchestrator observability', () => {
 
     await rerunAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         regeneratePronunciationChunkAudio: true,
         upload: 's3',

@@ -1,3 +1,5 @@
+import { ValidationError } from '@esl-pipeline/contracts';
+
 import type { AssignmentManifest } from './manifest.js';
 import { resolveAudioArtifactsFromManifest } from './runtime/audio-artifacts.js';
 import type { RerunPlanRequest, RerunPlanResult, RerunTargetStage } from './types.js';
@@ -25,11 +27,25 @@ function hasAnyRegeneration(requested: RerunPlanResult['requested']): boolean {
   );
 }
 
+export function assertExecutableManifest(manifest: AssignmentManifest): void {
+  if (manifest.schemaVersion !== 6 || !manifest.assignmentHash) {
+    throw new ValidationError(
+      'Historical Markdown assignments are read-only; processing and conversion are retired.',
+    );
+  }
+}
+
 export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
   const missingManifestFields = new Set<string>();
   const errors: string[] = [];
   const requested = buildRequestedSummary(input);
   const regenerationSelected = hasAnyRegeneration(requested);
+
+  if (input.manifest && (input.manifest.schemaVersion !== 6 || !input.manifest.assignmentHash)) {
+    errors.push(
+      'Historical Markdown assignments are read-only; processing and conversion are retired.',
+    );
+  }
 
   if (requested.republishOnly && regenerationSelected) {
     errors.push('Republish-only reruns cannot be combined with regeneration targets.');
