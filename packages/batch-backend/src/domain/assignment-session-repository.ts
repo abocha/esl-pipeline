@@ -1687,7 +1687,7 @@ export async function reserveAssignmentShare(
           md: null,
           mdStorageUri: create.artifact ? null : create.draftStorageUri,
           assignmentArtifact: create.artifact,
-          assignmentRendererVersion: create.artifact ? 1 : undefined,
+          assignmentRendererVersion: create.artifact ? 2 : undefined,
         },
         { client },
       );
@@ -1822,7 +1822,7 @@ export async function publishAssignmentCorrectionJob(
           md: null,
           mdStorageUri: reference ? null : draft.storageUri,
           assignmentArtifact: reference,
-          assignmentRendererVersion: reference ? 1 : undefined,
+          assignmentRendererVersion: reference ? 2 : undefined,
           recordingId: parent.recordingId,
           transcriptId: parent.transcriptId,
           promptPackageId: parent.promptPackageId,

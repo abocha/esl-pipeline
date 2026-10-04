@@ -73,6 +73,30 @@ describe('application/job-actions/rerun', () => {
     await rm(jobDir, { recursive: true, force: true });
   });
 
+  it('does not scrape published HTML to recover a missing native manifest', async () => {
+    await rm(durableManifestPath);
+    const legacyJob = await getJobById('job-1');
+    vi.mocked(getJobById).mockResolvedValue({
+      ...legacyJob,
+      assignmentArtifact: { contentHash: 'a'.repeat(64) },
+      assignmentRendererVersion: 2,
+    } as never);
+    const fetchSpy = vi.fn(() => {
+      throw new Error('native recovery scraped HTML');
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      await rerun('job-1', {
+        type: JobActionType.RERUN,
+        requestedAt,
+        payload: { republishOnly: true },
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('reruns typed publications without a local Markdown source and preserves the frozen reference', async () => {
     vi.stubEnv('FILESYSTEM_UPLOAD_DIR', jobDir);
     const artifact = {
@@ -103,7 +127,7 @@ describe('application/job-actions/rerun', () => {
     expect(insertJob).toHaveBeenCalledWith(
       expect.objectContaining({
         assignmentArtifact: artifact,
-        assignmentRendererVersion: 1,
+        assignmentRendererVersion: 2,
         md: path.join(jobDir, 'assignments', 'job-1.md'),
       }),
     );

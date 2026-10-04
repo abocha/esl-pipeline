@@ -1,6 +1,5 @@
-import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
+import type { SpeakerProfile, VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
 import { ConfigurationError } from '@esl-pipeline/contracts';
-import type { SpeakerProfile } from '@esl-pipeline/pmd';
 import { resolveSpeakerRoutingHint } from '@esl-pipeline/tts-core';
 
 import {

@@ -8,20 +8,23 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import * as yaml from 'js-yaml';
 
 import {
+  assignmentStudySegments,
   ConfigurationError,
+  type Frontmatter,
   InfrastructureError,
   noopLogger,
   ValidationError,
   type VoiceProviderErrorCategory,
 } from '@esl-pipeline/contracts';
-import {
-  extractFrontmatter,
-  extractPronunciationShadowFocus,
-  extractStudyText,
-  type Frontmatter,
-} from '@esl-pipeline/pmd';
 import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
-import { type ElevenLabsTtsModelId, resolveTtsSelection } from '@esl-pipeline/tts-core';
+import {
+  type ElevenLabsTtsModelId,
+  normalizePlainSpeechText,
+  resolveAssignmentMetadata,
+  resolveAssignmentShadowFocus,
+  resolveAssignmentStudyText,
+  resolveTtsSelection,
+} from '@esl-pipeline/tts-core';
 
 import { loadVoicesCatalog } from './assign.js';
 import { estimateDurationFromFileSize } from './audioDuration.js';
@@ -146,6 +149,7 @@ function buildPronunciationOutputFileName(
 function selectTtsStrategy(
   options: BuildStudyTextOptions,
   segments: StudyTextSegment[],
+  plainText = false,
 ): 'dialogue' | 'tts' {
   const envStrategy = process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY as TtsStrategy | undefined;
   const strategy = options.ttsStrategy ?? envStrategy ?? 'auto';
@@ -164,7 +168,7 @@ function selectTtsStrategy(
   if (uniqueSpeakers >= 2) return 'dialogue';
 
   const statsText = segments
-    .map((s) => cleanSpeechText(s.text))
+    .map((s) => (plainText ? normalizePlainSpeechText(s.text) : cleanSpeechText(s.text)))
     .map((t) => (t.length > 0 ? t : '\n\n'))
     .join('\n')
     .replaceAll(/\n{3,}/g, '\n\n')
@@ -288,6 +292,7 @@ function chunkTextForTts(text: string, maxChars: number): string[] {
 function toDialogueInputs(
   segments: StudyTextSegment[],
   voiceAssignments: Map<string, string>,
+  plainText = false,
 ): DialogueInput[] {
   const fallbackSpeaker = voiceAssignments.has('Narrator')
     ? 'Narrator'
@@ -306,7 +311,9 @@ function toDialogueInputs(
           `Available speakers: ${[...voiceAssignments.keys()].join(', ') || '(none)'}`,
       );
     }
-    const sanitizedText = cleanSpeechText(seg.text);
+    const sanitizedText = plainText
+      ? normalizePlainSpeechText(seg.text)
+      : cleanSpeechText(seg.text);
     if (!sanitizedText) continue;
     inputs.push({ text: sanitizedText, voiceId });
   }
@@ -382,11 +389,19 @@ export async function buildStudyTextMp3(
 ): Promise<BuildStudyTextResult> {
   const logger = opts.logger ?? noopLogger;
   resolveTtsProvider(opts.ttsProvider);
-  const frontmatter = extractFrontmatter(input.context);
-  const studyText = extractStudyText(input.context);
-  const segments = resolveStudyTextSegments(studyText.lines, frontmatter);
+  const frontmatter = resolveAssignmentMetadata(input);
+  const studyText = resolveAssignmentStudyText(input);
+  const segments = input.assignment
+    ? assignmentStudySegments(input.assignment).map((s) => ({
+        speaker: s.speaker,
+        text: s.text,
+        raw: `${s.speaker}: ${s.text}`,
+      }))
+    : resolveStudyTextSegments(studyText.lines, frontmatter);
   const sanitizedSegments = segments
-    .map((segment) => cleanSpeechText(segment.text))
+    .map((segment) =>
+      input.assignment ? normalizePlainSpeechText(segment.text) : cleanSpeechText(segment.text),
+    )
     .filter((segment) => segment.length > 0);
   const normalizedText = sanitizedSegments.join('\n');
 
@@ -444,7 +459,7 @@ export async function buildStudyTextMp3(
   }));
 
   // Determine TTS strategy
-  const selectedStrategy = selectTtsStrategy(opts, segments);
+  const selectedStrategy = selectTtsStrategy(opts, segments, Boolean(input.assignment));
   if (isTtsDebugEnabled()) {
     logger.log({
       level: 'debug',
@@ -463,7 +478,7 @@ export async function buildStudyTextMp3(
     const outputDir = resolve(
       opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()),
     );
-    const inputs = toDialogueInputs(segments, speakerVoiceMap);
+    const inputs = toDialogueInputs(segments, speakerVoiceMap, Boolean(input.assignment));
     const hash = buildDialogueHash(inputs, {
       modelId: resolveElevenLabsTtsModel(opts.ttsModel ?? 'eleven_v3'),
       outputFormat: resolveOutputFormat(opts.outputFormat),
@@ -615,7 +630,9 @@ export async function buildStudyTextMp3(
       voiceId = fallbackVoiceId ?? catalog.voices[0]?.id;
     }
 
-    const speechText = cleanSpeechText(segment.text);
+    const speechText = input.assignment
+      ? normalizePlainSpeechText(segment.text)
+      : cleanSpeechText(segment.text);
     if (!speechText) {
       pendingParagraphBreak = true;
       continue;
@@ -743,14 +760,16 @@ export async function buildPronunciationShadowSentenceMp3(
     throw new ValidationError('voiceId is required for pronunciation shadow sentence synthesis.');
   }
   const logger = opts.logger ?? noopLogger;
-  const frontmatter = extractFrontmatter(input.context);
-  const shadowFocus = extractPronunciationShadowFocus(input.context);
+  const frontmatter = resolveAssignmentMetadata(input);
+  const shadowFocus = resolveAssignmentShadowFocus(input);
   if (!shadowFocus) {
     throw new ValidationError(
       'Pronunciation shadow sentence mode not found. Add "**Mode:** shadow_sentence" under section C.',
     );
   }
-  const sentence = cleanSpeechText(shadowFocus.shadowSentence ?? '');
+  const sentence = input.assignment
+    ? normalizePlainSpeechText(shadowFocus.shadowSentence ?? '')
+    : cleanSpeechText(shadowFocus.shadowSentence ?? '');
   if (!sentence) {
     throw new ValidationError(
       'Pronunciation shadow sentence is empty. Add "**Shadow sentence:** <sentence>" under section C.',
@@ -845,7 +864,9 @@ export async function buildPronunciationTextMp3(
   }
 
   const logger = opts.logger ?? noopLogger;
-  const sentence = cleanSpeechText(input.text ?? '');
+  const sentence = input.plainText
+    ? normalizePlainSpeechText(input.text ?? '')
+    : cleanSpeechText(input.text ?? '');
   if (!sentence) {
     throw new ValidationError('Pronunciation synthesis text is empty.');
   }

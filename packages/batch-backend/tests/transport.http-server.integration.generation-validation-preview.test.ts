@@ -34,7 +34,7 @@ describeHttpServerIntegrationSuite(
         promptPackageId: 'prompt-1',
       } as never);
     });
-    it('previews validated typed input through the compatibility projection and rejects invalid domains', async () => {
+    it('previews validated typed input through native rendering and rejects invalid domains', async () => {
       vi.spyOn(promptRepository, 'getPromptPackageById').mockResolvedValue(
         promptPackageFixture() as never,
       );
@@ -45,6 +45,9 @@ describeHttpServerIntegrationSuite(
       });
       expect(valid.statusCode).toBe(200);
       expect(valid.json().html).toContain('Clear demos');
+      expect(valid.json().html).toContain('data-assignment-pronunciation');
+      expect(valid.json().html).not.toContain('assignment_projection');
+      expect(validateMarkdown).not.toHaveBeenCalled();
       const invalid = await app.inject({
         method: 'POST',
         url: '/preview/html',

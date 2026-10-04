@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { JobConfigOverrides } from '@esl-pipeline/contracts';
-import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
 import { readBool } from '@esl-pipeline/shared-infrastructure';
 
 import { getDraftById } from '../domain/draft-repository.js';
@@ -137,7 +137,7 @@ export async function materializeDraft(
     ? await readValidatedAssignment(reference, assignmentContext(promptPackage), storage)
     : undefined;
   const text = assignment
-    ? renderAssignmentToPmd(assignment)
+    ? serializeAssignmentV1(assignment)
     : await storage.getText(sourceStorageUri);
   if (
     params.expectedContentHash &&
@@ -161,12 +161,10 @@ export async function materializeDraft(
     profileRevisionId: promptPackage.resolvedProfileRevisionId ?? null,
     templateRevisionId: promptPackage.resolvedTemplateRevisionId ?? null,
   };
-  const materializedText = injectMaterializationContext(text, context);
-  const mdStorageUri = assignment
-    ? (await storage.putDraft({ draftId: draft.id, text })).uri
-    : sourceStorageUri;
+  const materializedText = assignment ? text : injectMaterializationContext(text, context);
+  const mdStorageUri = sourceStorageUri;
   let mdPath: string | null = null;
-  if (localExport) {
+  if (localExport && !assignment) {
     mdPath = resolveDraftMaterializePath(uploadDir, draft.id);
     await fs.mkdir(path.dirname(mdPath), { recursive: true });
     await fs.writeFile(mdPath, materializedText, 'utf8');

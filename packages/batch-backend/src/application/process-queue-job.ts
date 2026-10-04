@@ -1,3 +1,4 @@
+import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 // packages/batch-backend/src/application/process-queue-job.ts
 // Application service executed by the BullMQ worker.
 // Flow:
@@ -32,7 +33,7 @@ import {
   maybeRunTtsCacheMaintenanceWithPgLock,
   withTtsCacheActivitySharedLock,
 } from '../infrastructure/tts-cache-maintenance-coordinator.js';
-import { projectAssignmentArtifact } from './assignment-artifact.js';
+import { assignmentContext, readAssignmentArtifact } from './assignment-artifact.js';
 import { requestHomeworkMemoryGeneration } from './request-homework-memory-generation.js';
 
 function resolveInheritedVoiceIdForProviderChange(args: {
@@ -252,7 +253,9 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
           ? await runRerunAssignmentJob(
               {
                 jobId,
-                md: markdownInput.mdPath,
+                md: markdownInput.assignment ? canonicalManifestMd : markdownInput.mdPath,
+                assignment: markdownInput.assignment,
+                validationContext: markdownInput.validationContext,
                 manifestMd: canonicalManifestMd,
                 upload: payload.rerun?.upload ?? 's3',
                 republishOnly: payload.rerun?.republishOnly ?? false,
@@ -312,7 +315,9 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
           : await runAssignmentJob(
               {
                 jobId,
-                md: markdownInput.mdPath,
+                md: markdownInput.assignment ? canonicalManifestMd : markdownInput.mdPath,
+                assignment: markdownInput.assignment,
+                validationContext: markdownInput.validationContext,
                 preset: running.preset ?? undefined,
                 learningPresetId: running.learningPresetId ?? undefined,
                 learningPresetVersion: running.learningPresetVersion ?? undefined,
@@ -538,6 +543,8 @@ async function promoteFilesystemManifestPath(
 
 interface ResolvedMarkdownInput {
   mdPath: string;
+  assignment?: import('@esl-pipeline/contracts').AssignmentV1;
+  validationContext?: import('@esl-pipeline/contracts').AssignmentValidationContext;
   contentHash: string;
   cleanup: () => Promise<void>;
 }
@@ -559,6 +566,8 @@ async function resolveMarkdownInput(
   } = {},
 ): Promise<ResolvedMarkdownInput> {
   if (job.assignmentArtifact) {
+    if (job.assignmentRendererVersion !== 1 && job.assignmentRendererVersion !== 2)
+      throw new Error('Unsupported structured assignment renderer version');
     if (!job.promptPackageId) throw new Error('Structured job prompt identity missing');
     if (
       options.expectedAssignmentHash &&
@@ -567,23 +576,19 @@ async function resolveMarkdownInput(
       throw new Error('Correction assignment identity mismatch');
     if (options.expectedContentHash)
       throw new Error('Typed correction cannot use a Markdown identity');
-    const contents = await projectAssignmentArtifact(
-      job.assignmentArtifact,
-      job.promptPackageId,
-      job.assignmentRendererVersion,
-    );
-    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), `esl-job-${sanitizeForFs(job.id)}-`));
-    const mdPath = path.join(
-      baseDir,
-      path.basename(options.materializedFilename ?? 'assignment.md'),
-    );
-    await fs.writeFile(mdPath, contents, 'utf8');
+    const assignment = await readAssignmentArtifact(job.assignmentArtifact, job.promptPackageId);
+    const prompt = await getPromptPackageById(job.promptPackageId);
+    if (!prompt) throw new Error('Structured assignment prompt context not found');
     return {
-      mdPath,
-      contentHash: hashMarkdown(contents),
-      cleanup: async () => {
-        await fs.rm(baseDir, { recursive: true, force: true });
-      },
+      mdPath: path.resolve(
+        process.env.FILESYSTEM_UPLOAD_DIR || './uploads',
+        'assignments',
+        `${sanitizeForFs(job.id)}.md`,
+      ),
+      assignment,
+      validationContext: assignmentContext(prompt),
+      contentHash: job.assignmentArtifact.contentHash,
+      cleanup: async () => {},
     };
   }
   if (options.expectedAssignmentHash)

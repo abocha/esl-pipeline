@@ -1273,6 +1273,8 @@ export async function loadJobDetailsView(
   const sharePayload = await resolveSharePayloadForJob(context, {
     md: job.md,
     htmlUrl: job.htmlUrl,
+    publication: job.publication,
+    typed: Boolean(job.assignmentArtifact),
   });
   return {
     html: formatJobDetails(job, {
@@ -1326,6 +1328,8 @@ async function resolveAssignmentTitleForJob(
   const sharePayload = await resolveSharePayloadForJob(context, {
     md: job.md,
     htmlUrl: job.htmlUrl,
+    publication: job.publication,
+    typed: Boolean(job.assignmentArtifact),
   });
   return sharePayload.assignmentTitle;
 }
@@ -1869,10 +1873,20 @@ interface ResolvedSharePayload {
     markdownSource: 'none' | 'inline' | 'file_path';
     htmlFetched: boolean;
     usedHtmlFallback: boolean;
-    studyAudioSource: 'markdown_label' | 'markdown_path' | 'html_path' | 'missing';
-    pronunciationAudioSource: 'markdown_label' | 'markdown_path' | 'html_path' | 'missing';
-    titleSource: 'markdown_frontmatter' | 'markdown_heading' | 'html_title' | 'missing';
-    emojiSource: 'markdown_frontmatter' | 'html_hero' | 'missing';
+    studyAudioSource: 'publication' | 'markdown_label' | 'markdown_path' | 'html_path' | 'missing';
+    pronunciationAudioSource:
+      | 'publication'
+      | 'markdown_label'
+      | 'markdown_path'
+      | 'html_path'
+      | 'missing';
+    titleSource:
+      | 'publication'
+      | 'markdown_frontmatter'
+      | 'markdown_heading'
+      | 'html_title'
+      | 'missing';
+    emojiSource: 'publication' | 'markdown_frontmatter' | 'html_hero' | 'missing';
     missingStudyAudio: boolean;
     missingPronunciationAudio: boolean;
     missingAudioCount: number;
@@ -1884,8 +1898,33 @@ async function resolveSharePayloadForJob(
   mdOrHtmlSource: {
     md: string | null;
     htmlUrl?: string | null;
+    publication?: JobStatusDto['publication'];
+    typed?: boolean;
   },
 ): Promise<ResolvedSharePayload> {
+  if (mdOrHtmlSource.typed || mdOrHtmlSource.publication) {
+    const p = mdOrHtmlSource.publication;
+    const studyTextAudioUrl = p?.studyTextAudioUrl ?? null;
+    const pronunciationAudioUrl = p?.pronunciationAudioUrl ?? null;
+    return {
+      studyTextAudioUrl,
+      pronunciationAudioUrl,
+      assignmentTitle: p?.title ?? null,
+      assignmentEmoji: p?.icon ?? null,
+      telemetry: {
+        markdownSource: 'none',
+        htmlFetched: false,
+        usedHtmlFallback: false,
+        studyAudioSource: studyTextAudioUrl ? 'publication' : 'missing',
+        pronunciationAudioSource: pronunciationAudioUrl ? 'publication' : 'missing',
+        titleSource: p?.title ? 'publication' : 'missing',
+        emojiSource: p?.icon ? 'publication' : 'missing',
+        missingStudyAudio: !studyTextAudioUrl,
+        missingPronunciationAudio: !pronunciationAudioUrl,
+        missingAudioCount: Number(!studyTextAudioUrl) + Number(!pronunciationAudioUrl),
+      },
+    };
+  }
   let markdown: string | null = mdOrHtmlSource.md;
   let markdownSource: 'none' | 'inline' | 'file_path' = markdown ? 'inline' : 'none';
   let html: string | null = null;
@@ -2200,6 +2239,8 @@ export async function sendShareableJobLinks(
   const sharePayload = await resolveSharePayloadForJob(context, {
     md: job.md,
     htmlUrl: job.htmlUrl,
+    publication: job.publication,
+    typed: Boolean(job.assignmentArtifact),
   });
   const includeShareHeader = context.command === 'share' || context.command === 'links';
 

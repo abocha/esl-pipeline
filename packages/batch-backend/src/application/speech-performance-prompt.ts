@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
 import type {
   PreparedStudyTextSynthesis,
   SpeechPerformancePromptPolicyId,
@@ -141,15 +142,20 @@ export function buildSpeechPlannerRequest(
   _model: string,
 ) {
   const contextual = promptPolicyVersion === 'contextual-bracket-annotation-v1';
-  const assignmentMarkdown = prepared.enhancementContext?.assignmentMarkdown;
-  if (contextual && !assignmentMarkdown) {
-    throw new Error('Contextual speech annotation requires complete assignment Markdown.');
+  const context = prepared.enhancementContext;
+  const assignmentContext =
+    context &&
+    ('assignment' in context
+      ? serializeAssignmentV1(context.assignment)
+      : context.assignmentMarkdown);
+  if (contextual && !assignmentContext) {
+    throw new Error('Contextual speech annotation requires complete assignment context.');
   }
   const prompt = contextual
     ? [
         ...SPEECH_PERFORMANCE_PROMPT_POLICIES[promptPolicyVersion],
         'COMPLETE ASSIGNMENT (READ ONLY):',
-        assignmentMarkdown!,
+        assignmentContext!,
         'ORDERED SPOKEN SEGMENTS:',
         JSON.stringify({ segments: prepared.segments }),
       ].join('\n\n')

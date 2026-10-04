@@ -239,6 +239,66 @@ describe('integration/migrations', () => {
   });
 
   it(
+    '0063 admits native renderer 2 while retaining historical jobs and frozen typed identity',
+    async () => {
+      await withAdminClient(async (pool) => {
+        // Exercise the real cutover SQL against only the columns owned by its constraint.
+        await pool.query(`
+        CREATE TABLE drafts (storage_uri text, working_version integer, content_hash text);
+        CREATE TABLE jobs (id text PRIMARY KEY, prompt_package_id text, draft_id text);
+      `);
+        await pool.query(
+          await fs.readFile(path.join(migrationsPath, '0062_assignment_v1_authority.sql'), 'utf8'),
+        );
+        const artifact = {
+          format: 'assignment_v1',
+          schemaVersion: 1,
+          serializationVersion: 1,
+          workingVersion: 1,
+          contentHash: 'a'.repeat(64),
+          storageUri: `local://drafts/d/content/${'a'.repeat(64)}.json`,
+        };
+        const insert = (id: string, renderer: number | null, value: unknown = artifact) =>
+          pool.query(
+            `INSERT INTO jobs (id, prompt_package_id, draft_id, assignment_artifact, assignment_renderer_version)
+          VALUES ($1, 'prompt', 'draft', $2::jsonb, $3)`,
+            [id, value === null ? null : JSON.stringify(value), renderer],
+          );
+        await insert('markdown', null, null);
+        await insert('historical', 1);
+        const before = (await pool.query('SELECT * FROM jobs ORDER BY id')).rows;
+        await expect(insert('native-before', 2)).rejects.toThrow(
+          'jobs_assignment_artifact_identity',
+        );
+        await pool.query(
+          await fs.readFile(
+            path.join(migrationsPath, '0063_assignment_native_renderer.sql'),
+            'utf8',
+          ),
+        );
+        expect((await pool.query('SELECT * FROM jobs ORDER BY id')).rows).toEqual(before);
+        await insert('native', 2);
+        await expect(insert('unsupported', 3)).rejects.toThrow('jobs_assignment_artifact_identity');
+        await expect(insert('missing-version', null)).rejects.toThrow(
+          'jobs_assignment_artifact_identity',
+        );
+        await expect(insert('incomplete', 2, { ...artifact, contentHash: null })).rejects.toThrow(
+          'jobs_assignment_artifact_identity',
+        );
+        await expect(
+          pool.query("UPDATE jobs SET assignment_renderer_version = 2 WHERE id = 'historical'"),
+        ).rejects.toThrow('Frozen assignment');
+        await expect(
+          pool.query(
+            "UPDATE jobs SET assignment_artifact = NULL, assignment_renderer_version = NULL WHERE id = 'native'",
+          ),
+        ).rejects.toThrow('Frozen assignment');
+      });
+    },
+    testTimeout,
+  );
+
+  it(
     '0062 preserves legacy reads and freezes typed authority without a lossy rollback conversion',
     async () => {
       await withAdminClient(async (pool) => {

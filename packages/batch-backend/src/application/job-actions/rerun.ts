@@ -286,6 +286,9 @@ async function recoverDurableHtmlManifest(
     return;
   }
 
+  // Native publications require their durable manifest. Historical renderer-1 recovery remains supported.
+  if (job.assignmentArtifact && job.assignmentRendererVersion === 2) return;
+
   const response = await fetch(job.htmlUrl);
   if (!response.ok) {
     throw new Error(
@@ -431,7 +434,7 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     autoPublish: job.autoPublish ?? undefined,
     sourceJobId: jobId,
     assignmentArtifact: job.assignmentArtifact,
-    assignmentRendererVersion: job.assignmentRendererVersion,
+    assignmentRendererVersion: job.assignmentArtifact ? 2 : job.assignmentRendererVersion,
   });
 
   publishJobEvent({ type: 'job_created', job: rerunJob });

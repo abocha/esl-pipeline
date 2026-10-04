@@ -116,6 +116,8 @@ async function runAssignmentPipeline(
 ): Promise<PipelineRunResult> {
   const flags: NewAssignmentFlags = {
     md: payload.md,
+    assignment: payload.assignment,
+    validationContext: payload.validationContext,
     preset: payload.preset,
     learningPresetId: payload.learningPresetId,
     learningPresetVersion: payload.learningPresetVersion,
@@ -173,6 +175,8 @@ async function runRerunPipeline(
 ): Promise<PipelineRunResult> {
   const flags: RerunFlags = {
     md: payload.md,
+    assignment: payload.assignment,
+    validationContext: payload.validationContext,
     preset: payload.preset,
     republishOnly: payload.republishOnly ?? false,
     regenerateStudyTextAudio: payload.regenerateStudyTextAudio ?? false,

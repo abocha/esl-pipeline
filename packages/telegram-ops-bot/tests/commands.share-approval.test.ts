@@ -9,6 +9,41 @@ describe('telegram commands - share and approval', () => {
     resetAdvancedControlApprovalsForTests();
   });
 
+  it('shares typed metadata directly without fetching HTML or scraping contradictory Markdown', async () => {
+    const context = createBaseContext({ command: 'share', args: ['typed-job'] });
+    vi.mocked(context.backend.getJob).mockResolvedValue({
+      jobId: 'typed-job',
+      md: '# Incorrect legacy title\n[Study](https://wrong.test/study.mp3)',
+      htmlUrl: 'https://lesson.test/typed',
+      assignmentArtifact: { format: 'assignment_v1' },
+      publication: {
+        schemaVersion: 1,
+        rendererVersion: 2,
+        title: 'Typed lesson',
+        icon: '🎧',
+        studyTextAudioUrl: 'https://audio.test/study.mp3',
+        pronunciationAudioUrl: null,
+      },
+      state: 'succeeded',
+    } as never);
+    const fetch = vi.spyOn(globalThis, 'fetch');
+    try {
+      await createCommandRegistry().resolve('share')!.execute(context);
+      const html = vi
+        .mocked(context.messenger.sendHtmlMessage)
+        .mock.calls.map((c) => c[0].html)
+        .join('\n');
+      expect(html).toContain('Typed lesson');
+      expect(html).toContain('https://audio.test/study.mp3');
+      expect(html).not.toContain('Incorrect legacy title');
+      expect(html).not.toContain('https://wrong.test');
+      expect(html).not.toContain('Listen 2: Pronunciation');
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
   it('routes /links through the /share flow with deprecation copy', async () => {
     const registry = createCommandRegistry();
     const linksCommand = registry.resolve('links');

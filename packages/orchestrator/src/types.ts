@@ -106,7 +106,10 @@ export interface OrchestratorV2ExecutionContext {
 export type PublishTarget = 'html';
 
 export interface NewAssignmentFlags {
+  /** Legacy source path, or stable manifest identity for typed execution. */
   md: string;
+  assignment?: import('@esl-pipeline/contracts').AssignmentV1;
+  validationContext?: import('@esl-pipeline/contracts').AssignmentValidationContext;
   student?: string;
   preset?: string;
   learningPresetId?: string;
@@ -171,6 +174,8 @@ export interface GetAssignmentStatusRequestV2 {
 
 export interface RerunFlags {
   md: string;
+  assignment?: import('@esl-pipeline/contracts').AssignmentV1;
+  validationContext?: import('@esl-pipeline/contracts').AssignmentValidationContext;
   manifestMd?: string;
   preset?: string;
   voices?: string;

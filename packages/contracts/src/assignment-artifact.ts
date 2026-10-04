@@ -64,3 +64,13 @@ export interface AssignmentDraftDto {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Versioned publication metadata; absent on historical DTOs/manifests. */
+export interface AssignmentPublicationMetadata {
+  schemaVersion: 1;
+  rendererVersion: 1 | 2;
+  title: string;
+  icon: string;
+  studyTextAudioUrl: string | null;
+  pronunciationAudioUrl: string | null;
+}

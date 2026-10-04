@@ -441,6 +441,7 @@ export type RecentAssignmentItem =
   | { kind: 'job'; job: JobStatusDto };
 
 export interface JobStatusDto {
+  publication?: import('./assignment-artifact.js').AssignmentPublicationMetadata | null;
   jobId: string;
   assignmentSessionId?: string | null;
   studentId?: string | null;
@@ -1169,6 +1170,8 @@ export interface VersionMetaResponse {
 }
 
 export * from './assignment-artifact.js';
+export * from './assignment-domain.js';
+export * from './assignment-projection.js';
 export * from './assignment-v1.js';
 export * from './contract-versions.js';
 export * from './errors.js';
