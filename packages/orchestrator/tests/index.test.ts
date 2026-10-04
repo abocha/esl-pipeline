@@ -11,6 +11,9 @@ vi.mock('@esl-pipeline/tts-core', async () => {
     await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core');
   return {
     ...actual,
+    prepareStudyTextSynthesis: vi.fn(async (input, options) =>
+      actual.createPreparedStudyTextSynthesis(input, options),
+    ),
     buildStudyTextMp3: vi.fn(),
   };
 });
