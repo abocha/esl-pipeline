@@ -125,7 +125,7 @@ Student browsing behavior:
 - `/students` shows unique students ordered by recent lesson activity, with null activity last
 - each row includes name, short student id, recent lesson time, and pending drafts count when present
 - `/student` highlights latest state, latest UTC time, latest homework title, and recent jobs
-- latest homework resolution matches the `/job` and `/share` title extraction path, including markdown file-path and HTML fallback handling
+- latest homework resolution matches the `/job` and `/share` durable publication metadata path; historical links remain readable, and Markdown/HTML scraping is retired
 
 ## Routing and Transport
 

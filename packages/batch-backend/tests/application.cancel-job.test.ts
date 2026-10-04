@@ -6,6 +6,7 @@ import * as jobEvents from '../src/domain/job-events.js';
 import * as jobRepository from '../src/domain/job-repository.js';
 import * as jobCancellation from '../src/infrastructure/job-cancellation.js';
 import * as queueModule from '../src/infrastructure/queue-bullmq.js';
+import { assignmentArtifactFixture } from './assignment-v1.test-harness.js';
 
 describe('application/job-actions/cancel-job', () => {
   const getJobByIdSpy = vi.spyOn(jobRepository, 'getJobById');
@@ -53,6 +54,7 @@ describe('application/job-actions/cancel-job', () => {
 
   it('returns validation_failed when reason is empty', async () => {
     getJobByIdSpy.mockResolvedValue({
+      assignmentArtifact: assignmentArtifactFixture(),
       id: 'job-1',
       state: 'queued',
     } as never);
@@ -69,6 +71,7 @@ describe('application/job-actions/cancel-job', () => {
 
   it('returns invalid_state when job is not queued or running', async () => {
     getJobByIdSpy.mockResolvedValue({
+      assignmentArtifact: assignmentArtifactFixture(),
       id: 'job-1',
       state: 'succeeded',
     } as never);
@@ -85,6 +88,7 @@ describe('application/job-actions/cancel-job', () => {
 
   it('cancels queued jobs, updates state, emits event, and removes queue entry', async () => {
     getJobByIdSpy.mockResolvedValue({
+      assignmentArtifact: assignmentArtifactFixture(),
       id: 'job-1',
       state: 'queued',
     } as never);
@@ -120,6 +124,7 @@ describe('application/job-actions/cancel-job', () => {
 
   it('cancels running jobs without queue removal (best-effort)', async () => {
     getJobByIdSpy.mockResolvedValue({
+      assignmentArtifact: assignmentArtifactFixture(),
       id: 'job-1',
       state: 'running',
     } as never);
@@ -150,10 +155,12 @@ describe('application/job-actions/cancel-job', () => {
   it('returns invalid_state if update fails due to a race', async () => {
     getJobByIdSpy
       .mockResolvedValueOnce({
+        assignmentArtifact: assignmentArtifactFixture(),
         id: 'job-1',
         state: 'queued',
       } as never)
       .mockResolvedValueOnce({
+        assignmentArtifact: assignmentArtifactFixture(),
         id: 'job-1',
         state: 'running',
       } as never);

@@ -441,7 +441,7 @@ const shareCard = sentMessages.find((entry) =>
 assert(Boolean(shareCard), 'Missing /share assignment card message');
 if (shareCard) {
   assert(shareCard.payload.message_thread_id === jobsThread, 'Share card should route to jobs thread');
-  assert(String(shareCard.payload.text).includes('📘'), 'Share card should include fallback emoji from HTML');
+  assert(String(shareCard.payload.text).includes('📘'), 'Share card should include durable publication emoji');
 }
 
 const studyAudioMessage = sentMessages.find((entry) =>
@@ -455,7 +455,7 @@ if (studyAudioMessage) {
   );
   assert(
     String(studyAudioMessage.payload.text).includes('/audio/final/'),
-    'Study audio should resolve from markdown source',
+    'Study audio should resolve from durable publication metadata',
   );
 }
 
@@ -470,7 +470,7 @@ if (pronunciationAudioMessage) {
   );
   assert(
     String(pronunciationAudioMessage.payload.text).includes('/audio/pronunciation/'),
-    'Pronunciation audio should resolve from HTML fallback',
+    'Pronunciation audio should resolve from durable publication metadata',
   );
 }
 

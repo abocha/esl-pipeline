@@ -50,6 +50,58 @@ BEGIN
   RETURN NEW;
 END $$;
 
+CREATE TABLE public.assignment_sessions (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    recording_id uuid,
+    transcript_id uuid,
+    prompt_package_id uuid,
+    draft_id uuid,
+    publish_target text,
+    selected_tts_provider text,
+    selected_tts_strategy text,
+    selected_tts_model text,
+    selected_preset text,
+    selected_generation_provider text,
+    selected_generation_model text,
+    teacher_notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    lesson_id uuid,
+    revision integer DEFAULT 1 NOT NULL,
+    confirmed_step text NOT NULL,
+    confirmed_snapshot jsonb NOT NULL,
+    creation_request_id text,
+    selected_profile_id text,
+    selected_profile_revision_id uuid,
+    selected_profile_revision_hash text,
+    share_job_id uuid,
+    CONSTRAINT assignment_sessions_completed_share_job_check CHECK (((confirmed_step <> 'share'::text) OR (share_job_id IS NOT NULL))),
+    CONSTRAINT assignment_sessions_confirmed_snapshot_check CHECK (((jsonb_typeof(confirmed_snapshot) = 'object'::text) AND (confirmed_snapshot ?& ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text]) AND (jsonb_typeof((confirmed_snapshot -> 'student'::text)) = 'object'::text) AND (NULLIF((confirmed_snapshot #>> '{student,studentId}'::text[]), ''::text) IS NOT NULL) AND (((confirmed_snapshot #>> '{student,studentId}'::text[]))::uuid = student_id) AND (((confirmed_snapshot -> 'source'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'source'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'context'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'create'::text)) = 'object'::text)))),
+    CONSTRAINT assignment_sessions_confirmed_step_check CHECK ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text, 'share'::text]))),
+    CONSTRAINT assignment_sessions_creation_request_id_check CHECK (((creation_request_id IS NULL) OR (btrim(creation_request_id) <> ''::text))),
+    CONSTRAINT assignment_sessions_generation_provider_check CHECK (((selected_generation_provider IS NULL) OR (selected_generation_provider = ANY (ARRAY['openai'::text, 'google_ai_studio'::text, 'openrouter'::text])))),
+    CONSTRAINT assignment_sessions_publish_target_check CHECK (((publish_target IS NULL) OR (publish_target = 'html'::text))),
+    CONSTRAINT assignment_sessions_revision_check CHECK ((revision > 0)),
+    CONSTRAINT assignment_sessions_selected_profile_revision_hash_check CHECK (((selected_profile_revision_hash IS NULL) OR (selected_profile_revision_hash ~ '^[0-9a-f]{64}$'::text))),
+    CONSTRAINT assignment_sessions_tts_provider_check CHECK (((selected_tts_provider IS NULL) OR (selected_tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text])))),
+    CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
+);
+
+CREATE FUNCTION public.historical_assignment_session(s public.assignment_sessions) RETURNS boolean
+    LANGUAGE plpgsql STABLE
+    AS $$
+BEGIN
+  RETURN (s.confirmed_snapshot -> 'create' IS NOT NULL
+    AND s.confirmed_snapshot -> 'create' <> 'null'::jsonb
+    AND (s.confirmed_snapshot #>> '{create,artifact,format}') IS DISTINCT FROM 'assignment_v1')
+    OR EXISTS (SELECT 1 FROM drafts d WHERE d.id = s.draft_id AND d.format <> 'assignment_v1')
+    OR EXISTS (SELECT 1 FROM prompt_packages p WHERE p.id = s.prompt_package_id
+      AND (p.request_envelope ->> 'promptVersion') IS DISTINCT FROM 'assignment_v1');
+END;
+$$;
+
 CREATE FUNCTION public.lock_canonical_memory_student() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -108,6 +160,40 @@ CREATE FUNCTION public.preserve_assignment_draft_format() RETURNS trigger
 BEGIN
   IF NEW.format IS DISTINCT FROM OLD.format THEN
     RAISE EXCEPTION 'Assignment draft authority format cannot be changed';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.reject_historical_assignment_write() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_TABLE_NAME = 'drafts' THEN
+    IF NEW.format <> 'assignment_v1' THEN RAISE EXCEPTION 'legacy_assignment_read_only'; END IF;
+  ELSIF TG_TABLE_NAME = 'jobs' THEN
+    IF NEW.assignment_artifact IS NULL THEN RAISE EXCEPTION 'legacy_assignment_read_only'; END IF;
+  ELSIF TG_TABLE_NAME = 'assignment_sessions' THEN
+    IF historical_assignment_session(NEW)
+      OR (TG_OP = 'UPDATE' AND historical_assignment_session(OLD)) THEN
+      RAISE EXCEPTION 'legacy_assignment_read_only';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'homework_memory_entries' THEN
+    IF EXISTS (SELECT 1 FROM jobs WHERE id = NEW.job_id AND assignment_artifact IS NULL) THEN
+      RAISE EXCEPTION 'legacy_assignment_read_only';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'profile_initial_enrichment_operations' THEN
+    IF NEW.state IN ('waiting_evidence', 'queued', 'submitting', 'result_ready', 'uncertain', 'succeeded')
+      AND EXISTS (SELECT 1 FROM assignment_sessions s WHERE s.id = NEW.assignment_session_id
+        AND historical_assignment_session(s)) THEN
+      RAISE EXCEPTION 'legacy_assignment_read_only';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'student_memory_openai_batch_items' THEN
+    IF NEW.workload = 'homework_memory'
+      AND (NEW.source_refs ->> 'sourceFormat') IS DISTINCT FROM 'assignment_v1'
+      AND NEW.state IN ('planned', 'submitted', 'completed', 'imported', 'retryable_failure') THEN
+      RAISE EXCEPTION 'legacy_assignment_read_only';
+    END IF;
   END IF;
   RETURN NEW;
 END;
@@ -428,45 +514,6 @@ CREATE TABLE public.alpha_invites (
     CONSTRAINT alpha_invites_email_normalized_check CHECK ((email_normalized = lower(btrim(email_normalized)))),
     CONSTRAINT alpha_invites_expiration_check CHECK ((expires_at > created_at)),
     CONSTRAINT alpha_invites_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'revoked'::text, 'expired'::text])))
-);
-
-CREATE TABLE public.assignment_sessions (
-    id uuid NOT NULL,
-    user_id uuid NOT NULL,
-    student_id uuid NOT NULL,
-    recording_id uuid,
-    transcript_id uuid,
-    prompt_package_id uuid,
-    draft_id uuid,
-    publish_target text,
-    selected_tts_provider text,
-    selected_tts_strategy text,
-    selected_tts_model text,
-    selected_preset text,
-    selected_generation_provider text,
-    selected_generation_model text,
-    teacher_notes text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    lesson_id uuid,
-    revision integer DEFAULT 1 NOT NULL,
-    confirmed_step text NOT NULL,
-    confirmed_snapshot jsonb NOT NULL,
-    creation_request_id text,
-    selected_profile_id text,
-    selected_profile_revision_id uuid,
-    selected_profile_revision_hash text,
-    share_job_id uuid,
-    CONSTRAINT assignment_sessions_completed_share_job_check CHECK (((confirmed_step <> 'share'::text) OR (share_job_id IS NOT NULL))),
-    CONSTRAINT assignment_sessions_confirmed_snapshot_check CHECK (((jsonb_typeof(confirmed_snapshot) = 'object'::text) AND (confirmed_snapshot ?& ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text]) AND (jsonb_typeof((confirmed_snapshot -> 'student'::text)) = 'object'::text) AND (NULLIF((confirmed_snapshot #>> '{student,studentId}'::text[]), ''::text) IS NOT NULL) AND (((confirmed_snapshot #>> '{student,studentId}'::text[]))::uuid = student_id) AND (((confirmed_snapshot -> 'source'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'source'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'context'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'create'::text)) = 'object'::text)))),
-    CONSTRAINT assignment_sessions_confirmed_step_check CHECK ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text, 'share'::text]))),
-    CONSTRAINT assignment_sessions_creation_request_id_check CHECK (((creation_request_id IS NULL) OR (btrim(creation_request_id) <> ''::text))),
-    CONSTRAINT assignment_sessions_generation_provider_check CHECK (((selected_generation_provider IS NULL) OR (selected_generation_provider = ANY (ARRAY['openai'::text, 'google_ai_studio'::text, 'openrouter'::text])))),
-    CONSTRAINT assignment_sessions_publish_target_check CHECK (((publish_target IS NULL) OR (publish_target = 'html'::text))),
-    CONSTRAINT assignment_sessions_revision_check CHECK ((revision > 0)),
-    CONSTRAINT assignment_sessions_selected_profile_revision_hash_check CHECK (((selected_profile_revision_hash IS NULL) OR (selected_profile_revision_hash ~ '^[0-9a-f]{64}$'::text))),
-    CONSTRAINT assignment_sessions_tts_provider_check CHECK (((selected_tts_provider IS NULL) OR (selected_tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text])))),
-    CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
 );
 
 CREATE TABLE public.assignment_source_binding_audit (
@@ -1881,6 +1928,18 @@ CREATE TRIGGER freeze_legacy_profile_revisions BEFORE INSERT OR DELETE OR UPDATE
 
 CREATE TRIGGER freeze_legacy_profiles BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_profiles FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
 
+CREATE TRIGGER historical_drafts_read_only BEFORE INSERT OR UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_homework_batch_read_only BEFORE INSERT OR UPDATE ON public.student_memory_openai_batch_items FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_homework_memory_read_only BEFORE INSERT OR UPDATE ON public.homework_memory_entries FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_jobs_read_only BEFORE INSERT OR UPDATE ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_profile_enrichment_read_only BEFORE INSERT OR UPDATE ON public.profile_initial_enrichment_operations FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_sessions_read_only BEFORE INSERT OR UPDATE ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
 CREATE TRIGGER homework_memory_canonical_student_lock BEFORE INSERT OR DELETE OR UPDATE ON public.homework_memory_entries FOR EACH ROW EXECUTE FUNCTION public.lock_canonical_memory_student();
 
 CREATE TRIGGER lesson_memory_canonical_student_lock BEFORE INSERT OR DELETE OR UPDATE ON public.lesson_memory_entries FOR EACH ROW EXECUTE FUNCTION public.lock_canonical_memory_student();
@@ -2464,5 +2523,6 @@ VALUES
   ('0060_user_settings_owner_key', '80e6ba7ab7e15f5e8049a6114dc2bc6cee6fe43bf16121cec137d4af51f760c3', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0061_ordinary_memory_replay', '0f5da854ddd4ea23025e5f9d78938f5d4e4454c63e5fd9314ac887c4110565ff', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0062_assignment_v1_authority', 'df1b835d96032ecf9afb0d3fe034ee3cfe605dfecdb1dc578d7fb2f2f20c5b4d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0063_assignment_native_renderer', 'e58336ba97dc05926e652b786b370743061f8e4702029bb79fd84ffa7bb88492', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0063_assignment_native_renderer', 'e58336ba97dc05926e652b786b370743061f8e4702029bb79fd84ffa7bb88492', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0064_historical_markdown_read_only', '9a74cf33697ccc187b1674e03d06a1f5b41b79a555e19918d9465fc5f00dd292', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

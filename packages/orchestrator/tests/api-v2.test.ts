@@ -13,8 +13,9 @@ import {
   executeRerunAssignmentV2,
   PipelineCancelledError,
 } from '../src/index.js';
+import { assignmentFixture } from './assignment-fixture.js';
 
-const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+const okFixturePath = join(import.meta.dirname, '../../contracts/tests/assignment-fixture.json');
 
 describe('orchestrator api v2', () => {
   it('executes new assignment with v2 envelope and emits v2 stage events', async () => {
@@ -27,6 +28,7 @@ describe('orchestrator api v2', () => {
     const result = await executeNewAssignmentV2(
       {
         assignment: {
+          assignment: assignmentFixture(),
           md: mdPath,
           skipImport: true,
           skipTts: true,
@@ -67,6 +69,7 @@ describe('orchestrator api v2', () => {
 
     const result = await executeRerunAssignmentV2({
       assignment: {
+        assignment: assignmentFixture(),
         md: mdPath,
         republishOnly: true,
         upload: 's3',

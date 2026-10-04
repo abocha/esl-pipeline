@@ -157,7 +157,8 @@ lands with its authorization evidence; destructive archive removal is a separate
 Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
 HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
 is created. Native renderer 2 / manifest schema 6 carry canonical assignment and publication
-metadata; API 8 / manifest contract 4 identify the typed path/hash changes. Historical Markdown and
-renderer-1 manifest readers remain supported. Editable JSON authority, source authorization, CAS,
+metadata; API 9 / validator 3 retire Markdown processing while manifest contract 4 keeps historical
+read semantics. Historical Markdown and renderer-1 manifests are read-only evidence under ABO-30.
+No correction, retry, rerun, resume, rendering, TTS, publication, memory processing or conversion is supported. Editable JSON authority, source authorization, CAS,
 lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
 [AssignmentV1](../reference/ASSIGNMENT_V1.md) for the canonical execution contract.

@@ -11,9 +11,7 @@ x-dev-backend-workspace-volumes: &dev_backend_workspace_volumes
   - pkg_batch_frontend_node_modules:/app/packages/batch-frontend/node_modules
   - pkg_contracts_node_modules:/app/packages/contracts/node_modules
   - pkg_html_publisher_node_modules:/app/packages/html-publisher/node_modules
-  - pkg_md_validator_node_modules:/app/packages/md-validator/node_modules
   - pkg_orchestrator_node_modules:/app/packages/orchestrator/node_modules
-  - pkg_pmd_node_modules:/app/packages/pmd/node_modules
   - pkg_provider_runtime_node_modules:/app/packages/provider-runtime/node_modules
   - pkg_shared_infrastructure_node_modules:/app/packages/shared-infrastructure/node_modules
   - pkg_storage_uploader_node_modules:/app/packages/storage-uploader/node_modules
@@ -41,9 +39,7 @@ x-dev-upload-workspace-volumes: &dev_upload_workspace_volumes
   - pkg_batch_frontend_node_modules:/app/packages/batch-frontend/node_modules
   - pkg_contracts_node_modules:/app/packages/contracts/node_modules
   - pkg_html_publisher_node_modules:/app/packages/html-publisher/node_modules
-  - pkg_md_validator_node_modules:/app/packages/md-validator/node_modules
   - pkg_orchestrator_node_modules:/app/packages/orchestrator/node_modules
-  - pkg_pmd_node_modules:/app/packages/pmd/node_modules
   - pkg_provider_runtime_node_modules:/app/packages/provider-runtime/node_modules
   - pkg_shared_infrastructure_node_modules:/app/packages/shared-infrastructure/node_modules
   - pkg_storage_uploader_node_modules:/app/packages/storage-uploader/node_modules
@@ -66,9 +62,7 @@ x-dev-workspace-volumes: &dev_workspace_volumes
   - pkg_batch_frontend_node_modules:/app/packages/batch-frontend/node_modules
   - pkg_contracts_node_modules:/app/packages/contracts/node_modules
   - pkg_html_publisher_node_modules:/app/packages/html-publisher/node_modules
-  - pkg_md_validator_node_modules:/app/packages/md-validator/node_modules
   - pkg_orchestrator_node_modules:/app/packages/orchestrator/node_modules
-  - pkg_pmd_node_modules:/app/packages/pmd/node_modules
   - pkg_provider_runtime_node_modules:/app/packages/provider-runtime/node_modules
   - pkg_shared_infrastructure_node_modules:/app/packages/shared-infrastructure/node_modules
   - pkg_storage_uploader_node_modules:/app/packages/storage-uploader/node_modules
@@ -186,7 +180,7 @@ services:
       NPM_CONFIG_STORE_DIR: /pnpm/store
     command: >
       sh -lc "
-        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/md-validator/node_modules /app/packages/orchestrator/node_modules /app/packages/pmd/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/tts-provider-inworld/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
+        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/orchestrator/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/tts-provider-inworld/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
         mkdir -p $$dependency_paths /pnpm/store &&
         chmod -R 0777 $$dependency_paths &&
         pnpm install &&
@@ -427,7 +421,7 @@ services:
       CI: 'false'
     command: >
       sh -lc "
-        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/md-validator/node_modules /app/packages/orchestrator/node_modules /app/packages/pmd/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/tts-provider-inworld/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
+        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/orchestrator/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/tts-provider-inworld/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
         mkdir -p $$dependency_paths /pnpm/store &&
         chmod -R 0777 $$dependency_paths &&
         pnpm install --no-frozen-lockfile &&
@@ -494,9 +488,7 @@ volumes:
   pkg_batch_frontend_node_modules:
   pkg_contracts_node_modules:
   pkg_html_publisher_node_modules:
-  pkg_md_validator_node_modules:
   pkg_orchestrator_node_modules:
-  pkg_pmd_node_modules:
   pkg_provider_runtime_node_modules:
   pkg_shared_infrastructure_node_modules:
   pkg_storage_uploader_node_modules:

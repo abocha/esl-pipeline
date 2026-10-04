@@ -41,8 +41,6 @@
         "@elevenlabs/elevenlabs-js",
         "@google-cloud/text-to-speech",
         "js-yaml",
-        "remark-parse",
-        "unified",
         "zod"
       ]
     },

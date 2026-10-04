@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import multipart, { type MultipartFile } from '@fastify/multipart';
@@ -16,6 +16,7 @@ import { getDraft } from '../../application/get-draft.js';
 import { getPromptPackage, getPromptPackageLineage } from '../../application/get-prompt-package.js';
 import { getRecording } from '../../application/get-recording.js';
 import { getRecordingTranscript } from '../../application/get-recording-transcript.js';
+import { HistoricalAssignmentReadOnlyError } from '../../application/historical-assignment.js';
 import {
   canonicalizeManualTranscriptSource,
   fingerprintManualTranscriptSource,
@@ -130,7 +131,6 @@ export function registerRecordingRoutes(
     authenticate,
     uploadRateLimitMiddleware,
     config,
-    recordingUploadValidationService,
     fileValidationService,
     fileSanitizationService,
     fileStorageService,
@@ -508,6 +508,10 @@ export function registerRecordingRoutes(
           await spooled.cleanup().catch(() => undefined);
         }
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -644,6 +648,10 @@ export function registerRecordingRoutes(
         if (!projection) throw new Error('Manual transcript source has no canonical projection.');
         return reply.code(201).send(projection);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -718,6 +726,10 @@ export function registerRecordingRoutes(
 
         return reply.send(recordings);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -770,6 +782,10 @@ export function registerRecordingRoutes(
 
         return reply.send(recording);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
@@ -850,6 +866,10 @@ export function registerRecordingRoutes(
 
         return reply.send(stream);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
@@ -920,6 +940,10 @@ export function registerRecordingRoutes(
 
         return reply.send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -985,6 +1009,10 @@ export function registerRecordingRoutes(
 
         return reply.send(transcript);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
@@ -1053,6 +1081,10 @@ export function registerRecordingRoutes(
 
         return reply.send(updated);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (isArtifactWorkingConflict(error)) {
           return reply.code(409).send({
             code: 'artifact_working_conflict',
@@ -1143,6 +1175,10 @@ export function registerRecordingRoutes(
 
         return reply.send(promptPackage);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1212,6 +1248,10 @@ export function registerRecordingRoutes(
 
         return reply.send(promptPackage);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
@@ -1254,6 +1294,10 @@ export function registerRecordingRoutes(
 
         return reply.send(lineage);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
@@ -1313,6 +1357,10 @@ export function registerRecordingRoutes(
 
         return reply.send(draft);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1388,6 +1436,10 @@ export function registerRecordingRoutes(
 
         return reply.send(draft);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
@@ -1481,6 +1533,10 @@ export function registerRecordingRoutes(
 
         return reply.send(materialized);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1682,6 +1738,10 @@ export function registerRecordingRoutes(
           throw securityError;
         }
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'upload_failed',
           userId: authenticatedUser?.id,
@@ -1742,6 +1802,10 @@ export function registerRecordingRoutes(
 
         return reply.send(updated);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (isArtifactWorkingConflict(error)) {
           return reply.code(409).send({
             code: 'artifact_working_conflict',
@@ -1985,10 +2049,6 @@ function sanitizeRecordingFilename(filename: string): string {
   const candidate = sanitized || fallback;
   const ext = path.extname(candidate);
   return ext ? candidate : `${candidate}.bin`;
-}
-
-function createContentSha256(content: Buffer): string {
-  return createHash('sha256').update(content).digest('hex');
 }
 
 function buildFilesystemMdReference(uploadDir: string, storageKey: string): string {

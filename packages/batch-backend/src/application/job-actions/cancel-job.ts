@@ -5,6 +5,7 @@ import { getJobById, updateJobStateAndResult } from '../../domain/job-repository
 import { abortRunningJob } from '../../infrastructure/job-cancellation.js';
 import { createJobLogger } from '../../infrastructure/logger.js';
 import { createJobQueue } from '../../infrastructure/queue-bullmq.js';
+import { HistoricalAssignmentReadOnlyError } from '../historical-assignment.js';
 
 function buildCancelError(reason: string | undefined): string {
   return reason ? `cancelled: ${reason}` : 'cancelled';
@@ -36,6 +37,18 @@ export async function cancelJob(jobId: string, action: CancelJobAction): Promise
     };
   }
   const reason = rawReason?.trim();
+
+  if (!job.assignmentArtifact) {
+    const error = new HistoricalAssignmentReadOnlyError();
+    return {
+      success: false,
+      message: error.message,
+      jobId,
+      actionType: action.type,
+      timestamp: new Date(),
+      error: error.code,
+    };
+  }
 
   if (job.state !== 'queued' && job.state !== 'running') {
     return {

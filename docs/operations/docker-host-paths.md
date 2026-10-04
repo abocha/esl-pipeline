@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating local Docker workflows.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-08-14 repo state.
+- Last Verified Against: 2026-10-04 ESL-7 dependency volume reconciliation.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after Docker workflow changes.
 - Status: `runbook`.
@@ -48,6 +48,10 @@ When adding a new `packages/*` workspace package, keep Docker dependency isolati
 4. Add the volume key to `scripts/docker/clean-dev-dependency-volumes.mjs` so
    `pnpm docker:dev:clean-deps` can reset it.
 5. Run `docker compose -p esl-pipeline -f docker-compose.yml config --quiet` after editing Compose.
+
+Retired Markdown parser/validator packages have no dependency mounts, bootstrap paths or active
+cleanup entries. Existing unused dependency volumes may be removed separately under local cleanup
+authorization; they contain no application evidence.
 
 The Inworld TTS provider follows this pattern with
 `pkg_tts_provider_inworld_node_modules` mounted at

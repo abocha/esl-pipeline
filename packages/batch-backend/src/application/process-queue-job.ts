@@ -1,4 +1,5 @@
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
+import { HISTORICAL_ASSIGNMENT_ERROR, requireTypedAssignment } from './historical-assignment.js';
 // packages/batch-backend/src/application/process-queue-job.ts
 // Application service executed by the BullMQ worker.
 // Flow:
@@ -9,9 +10,7 @@ import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 // 5. On success, transition running -> succeeded with manifestPath.
 // 6. On failure, transition running -> failed with error and rethrow so BullMQ can retry.
 
-import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
 import { manifestPathFor } from '@esl-pipeline/orchestrator';
@@ -28,7 +27,6 @@ import { registerRunningJob, unregisterRunningJob } from '../infrastructure/job-
 import { createJobLogger } from '../infrastructure/logger.js';
 import { runAssignmentJob, runRerunAssignmentJob } from '../infrastructure/orchestrator-service.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
-import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import {
   maybeRunTtsCacheMaintenanceWithPgLock,
   withTtsCacheActivitySharedLock,
@@ -64,10 +62,25 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     return;
   }
 
+  if (!job.assignmentArtifact) {
+    if (job.state === 'queued' || job.state === 'running' || job.state === 'awaiting_approval') {
+      const terminal = await updateJobStateAndResult({
+        id: job.id,
+        expectedState: job.state,
+        nextState: 'failed',
+        error: HISTORICAL_ASSIGNMENT_ERROR,
+        finishedAt: new Date(),
+      });
+      if (terminal) publishJobEvent({ type: 'job_state_changed', job: terminal });
+    }
+    log.info('Historical Markdown delivery skipped', { event: HISTORICAL_ASSIGNMENT_ERROR });
+    return;
+  }
+
   if (job.state === 'failed' && payload.executionMode === 'correction') {
     if (
       !payload.sourceJobId ||
-      !(payload.correction?.expectedAssignmentHash || payload.correction?.expectedMarkdownHash) ||
+      !payload.correction?.expectedAssignmentHash ||
       !payload.correction.manifestMd
     ) {
       throw new Error('Corrupted correction retry payload');
@@ -76,7 +89,6 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       jobId,
       sourceJobId: payload.sourceJobId,
       expectedAssignmentHash: payload.correction.expectedAssignmentHash,
-      expectedMarkdownHash: payload.correction.expectedMarkdownHash,
     });
     if (reset) {
       job = reset;
@@ -134,10 +146,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         'Corrupted rerun queue payload: rerun jobs must include executionMode="rerun" and rerun metadata.',
       );
     }
-    if (
-      payload.executionMode === 'correction' &&
-      !(payload.correction?.expectedAssignmentHash || payload.correction?.expectedMarkdownHash)
-    ) {
+    if (payload.executionMode === 'correction' && !payload.correction?.expectedAssignmentHash) {
       throw new Error(
         'Corrupted correction queue payload: correction jobs must include the expected markdown hash.',
       );
@@ -168,15 +177,10 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     const isRerunExecution = payload.executionMode === 'rerun';
     const isCorrectionExecution = payload.executionMode === 'correction';
-    const markdownInput = await resolveMarkdownInput(running, {
-      preferFilesystemMd: isRerunExecution,
+    const markdownInput = await resolveAssignmentInput(running, {
       expectedAssignmentHash: isCorrectionExecution
         ? payload.correction?.expectedAssignmentHash
         : undefined,
-      expectedContentHash: isCorrectionExecution
-        ? payload.correction?.expectedMarkdownHash
-        : undefined,
-      materializedFilename: isCorrectionExecution ? `${sanitizeForFs(jobId)}.md` : undefined,
     });
 
     const uploadFlag = resolveUploadTarget(running.upload, config.storage.provider);
@@ -253,7 +257,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
           ? await runRerunAssignmentJob(
               {
                 jobId,
-                md: markdownInput.assignment ? canonicalManifestMd : markdownInput.mdPath,
+                md: canonicalManifestMd,
                 assignment: markdownInput.assignment,
                 validationContext: markdownInput.validationContext,
                 manifestMd: canonicalManifestMd,
@@ -315,7 +319,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
           : await runAssignmentJob(
               {
                 jobId,
-                md: markdownInput.assignment ? canonicalManifestMd : markdownInput.mdPath,
+                md: canonicalManifestMd,
                 assignment: markdownInput.assignment,
                 validationContext: markdownInput.validationContext,
                 preset: running.preset ?? undefined,
@@ -488,17 +492,6 @@ function buildMarkdownPathCandidates(mdPath: string): string[] {
   return [...candidates];
 }
 
-async function resolveMarkdownPath(mdPath: string): Promise<string> {
-  const candidates = buildMarkdownPathCandidates(mdPath);
-  for (const candidate of candidates) {
-    if (await fileExists(candidate)) {
-      return candidate;
-    }
-  }
-
-  throw new Error(`Markdown file not found: ${mdPath.trim()}`);
-}
-
 async function resolveManifestMdPath(
   rawManifestMd: string | null | undefined,
   fallbackMdPath: string,
@@ -541,15 +534,15 @@ async function promoteFilesystemManifestPath(
   return durableManifestPath;
 }
 
-interface ResolvedMarkdownInput {
+interface ResolvedAssignmentInput {
   mdPath: string;
-  assignment?: import('@esl-pipeline/contracts').AssignmentV1;
+  assignment: import('@esl-pipeline/contracts').AssignmentV1;
   validationContext?: import('@esl-pipeline/contracts').AssignmentValidationContext;
   contentHash: string;
   cleanup: () => Promise<void>;
 }
 
-async function resolveMarkdownInput(
+async function resolveAssignmentInput(
   job: {
     id: string;
     md: string | null;
@@ -559,12 +552,9 @@ async function resolveMarkdownInput(
     promptPackageId?: string | null;
   },
   options: {
-    preferFilesystemMd?: boolean;
-    expectedContentHash?: string;
     expectedAssignmentHash?: string;
-    materializedFilename?: string;
   } = {},
-): Promise<ResolvedMarkdownInput> {
+): Promise<ResolvedAssignmentInput> {
   if (job.assignmentArtifact) {
     if (job.assignmentRendererVersion !== 1 && job.assignmentRendererVersion !== 2)
       throw new Error('Unsupported structured assignment renderer version');
@@ -574,8 +564,6 @@ async function resolveMarkdownInput(
       options.expectedAssignmentHash !== job.assignmentArtifact.contentHash
     )
       throw new Error('Correction assignment identity mismatch');
-    if (options.expectedContentHash)
-      throw new Error('Typed correction cannot use a Markdown identity');
     const assignment = await readAssignmentArtifact(job.assignmentArtifact, job.promptPackageId);
     const prompt = await getPromptPackageById(job.promptPackageId);
     if (!prompt) throw new Error('Structured assignment prompt context not found');
@@ -591,73 +579,8 @@ async function resolveMarkdownInput(
       cleanup: async () => {},
     };
   }
-  if (options.expectedAssignmentHash)
-    throw new Error('Legacy correction cannot use an AssignmentV1 identity');
-  if (options.preferFilesystemMd) {
-    if (!job.md) {
-      throw new Error('Rerun job is missing an approved markdown source');
-    }
-
-    const resolvedMdPath = await resolveMarkdownPath(job.md);
-    return {
-      mdPath: resolvedMdPath,
-      contentHash: await hashMarkdownFile(resolvedMdPath),
-      cleanup: async () => {},
-    };
-  }
-
-  if (job.mdStorageUri) {
-    return materializeMarkdownFromStorage(
-      job.id,
-      job.mdStorageUri,
-      options.expectedContentHash,
-      options.materializedFilename,
-    );
-  }
-
-  if (job.md) {
-    const resolvedMdPath = await resolveMarkdownPath(job.md);
-    return {
-      mdPath: resolvedMdPath,
-      contentHash: await hashMarkdownFile(resolvedMdPath),
-      cleanup: async () => {},
-    };
-  }
-
-  throw new Error('Job is missing an approved markdown source');
-}
-
-async function materializeMarkdownFromStorage(
-  jobId: string,
-  storageUri: string,
-  expectedContentHash?: string,
-  materializedFilename = 'assignment.md',
-): Promise<ResolvedMarkdownInput> {
-  const storage = createTranscriptionStorageForUri(storageUri);
-  const contents = await storage.getText(storageUri);
-  const contentHash = hashMarkdown(contents);
-  if (expectedContentHash && contentHash !== expectedContentHash) {
-    throw new Error('Correction markdown content hash mismatch');
-  }
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), `esl-job-${sanitizeForFs(jobId)}-`));
-  const mdPath = path.join(baseDir, path.basename(materializedFilename));
-  await fs.writeFile(mdPath, contents, 'utf8');
-
-  return {
-    mdPath,
-    contentHash,
-    cleanup: async () => {
-      await fs.rm(baseDir, { recursive: true, force: true });
-    },
-  };
-}
-
-async function hashMarkdownFile(mdPath: string): Promise<string> {
-  return hashMarkdown(await fs.readFile(mdPath, 'utf8'));
-}
-
-function hashMarkdown(contents: string): string {
-  return createHash('sha256').update(contents, 'utf8').digest('hex');
+  requireTypedAssignment(job.assignmentArtifact);
+  throw new Error('AssignmentV1 authority missing');
 }
 
 function resolveCorrectionManifestMd(

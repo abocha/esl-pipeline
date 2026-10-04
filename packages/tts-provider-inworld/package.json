@@ -30,13 +30,12 @@
     "test": "pnpm run test:unit",
     "test:unit": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:unit:prebuilt": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
-    "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/pmd build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/tts-core build",
+    "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/tts-core build",
     "test:watch": "vitest --config ../../vitest.config.ts --dir .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
-    "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/tts-core": "workspace:*",
     "@inworld/tts": "^1.1.1",
     "js-yaml": "^5.4.1"

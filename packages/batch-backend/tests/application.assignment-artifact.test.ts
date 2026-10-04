@@ -174,7 +174,7 @@ describe('durable AssignmentV1 authority', () => {
     expect(put).not.toHaveBeenCalled();
   });
 
-  it('freezes canonical input after a later edit, projects PMD separately and detects corruption', async () => {
+  it('freezes canonical input after a later edit and detects corruption', async () => {
     const f = await fixture();
     const frozen = draftArtifact(f.durable)!;
     const edited = assignmentFixture();

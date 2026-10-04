@@ -3,6 +3,7 @@
 import { publishJobEvent } from '../domain/job-events.js';
 import { approveJob, getJobById } from '../domain/job-repository.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 
 export interface ApproveJobForPipelineDependencies {
   jobs: { approve: typeof approveJob; getById: typeof getJobById };
@@ -18,6 +19,9 @@ export async function approveJobForPipeline(
   const jobs = overrides?.jobs ?? { approve: approveJob, getById: getJobById };
   const queue = overrides?.queue ?? createJobQueue();
   const publishEvent = overrides?.publishEvent ?? publishJobEvent;
+  const original = await jobs.getById(jobId);
+  if (!original) return null;
+  requireTypedAssignment(original.assignmentArtifact);
   let approved = await jobs.approve({
     id: jobId,
     expectedState: 'awaiting_approval',

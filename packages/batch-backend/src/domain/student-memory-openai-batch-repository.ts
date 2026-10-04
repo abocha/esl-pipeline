@@ -283,6 +283,7 @@ export async function updateStudentMemoryOpenAiBatchRunRemoteStatus(params: {
   remoteErrorFileId?: string | null;
   requestCounts?: Record<string, unknown>;
   remoteError?: Record<string, unknown>;
+  remoteStatusConfirmation?: { batchId: string; status: string };
 }): Promise<void> {
   const timestampColumn: Record<typeof params.state, string> = {
     in_progress: 'in_progress_at',
@@ -297,14 +298,19 @@ export async function updateStudentMemoryOpenAiBatchRunRemoteStatus(params: {
       `
         UPDATE student_memory_openai_batch_runs
         SET
-          state = $2,
+          state = CASE WHEN state = 'reconciled' AND $2 IN ('completed','failed','expired','cancelled') THEN state ELSE $2 END,
           remote_output_file_id = COALESCE($3, remote_output_file_id),
           remote_error_file_id = COALESCE($4, remote_error_file_id),
           remote_request_counts = COALESCE($5::jsonb, remote_request_counts),
           remote_error = COALESCE($6::jsonb, remote_error),
+          operator_audit = CASE WHEN $7::text IS NULL
+            THEN operator_audit - 'remoteStatusConfirmation'
+            ELSE COALESCE(operator_audit, '{}'::jsonb) || jsonb_build_object(
+              'remoteStatusConfirmation', jsonb_build_object('batchId', $8::text,
+                'status', $7::text, 'checkedAt', NOW())) END,
           ${timestampColumn[params.state]} = NOW()
         WHERE id = $1
-          AND state NOT IN ('reconciled')
+          AND ($8::text IS NULL OR remote_batch_id = $8)
       `,
       [
         params.runId,
@@ -313,6 +319,8 @@ export async function updateStudentMemoryOpenAiBatchRunRemoteStatus(params: {
         params.remoteErrorFileId ?? null,
         params.requestCounts ? JSON.stringify(params.requestCounts) : null,
         params.remoteError ? JSON.stringify(params.remoteError) : null,
+        params.remoteStatusConfirmation?.status ?? null,
+        params.remoteStatusConfirmation?.batchId ?? null,
       ],
     );
     if (result.rowCount !== 1)

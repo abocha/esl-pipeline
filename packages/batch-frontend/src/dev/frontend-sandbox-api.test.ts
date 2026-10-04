@@ -375,7 +375,8 @@ describe('frontend sandbox API adapter', () => {
       draftId: 'draft-sandbox',
     });
     expect(prompt.data.text).toContain('[STUDENT_MEMORY_SNAPSHOT]');
-    expect(draft.data.text).toContain('Workplace Update Practice');
+    expect(draft.data.format).toBe('assignment_v1');
+    expect(JSON.parse(draft.data.text).schemaVersion).toBe(1);
     expect(provenance.data).toMatchObject({
       job: expect.objectContaining({ id: 'job-sandbox', state: 'succeeded' }),
       promptPackage: expect.objectContaining({ id: 'prompt-sandbox' }),

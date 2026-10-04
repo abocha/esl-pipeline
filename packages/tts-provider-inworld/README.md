@@ -62,3 +62,6 @@ provider body.
 The previously observed `non-retryable streaming request` message after `stage.add-audio.start`
 remains an unconfirmed, separate anomaly. This SDK reliability work does not claim to fix it unless
 it is reproduced through the adapter and classification tests.
+
+Assignment synthesis accepts typed AssignmentV1 only. Historical Markdown execution and cleanup
+are retired. Speech fields and pronunciation text remain plain text, including literal punctuation.

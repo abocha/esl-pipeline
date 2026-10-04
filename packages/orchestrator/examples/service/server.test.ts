@@ -1,14 +1,19 @@
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import Fastify from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import type { AssignmentV1 } from '@esl-pipeline/contracts';
+
 import { createPipeline, noopLogger, noopMetrics } from '../../src/index.js';
+import { assignmentFixture } from '../../tests/assignment-fixture.js';
 
 const fastify = Fastify({ logger: false });
+let fixturesDir: string;
 
 beforeAll(async () => {
-  const fixturesDir = fileURLToPath(new URL('fixtures', import.meta.url));
+  fixturesDir = await mkdtemp(join(tmpdir(), 'esl-service-example-'));
   const pipeline = createPipeline({
     cwd: fixturesDir,
     logger: noopLogger,
@@ -16,12 +21,13 @@ beforeAll(async () => {
   });
 
   fastify.post('/jobs', async (request, reply) => {
-    const body = request.body as { md?: string };
-    if (!body.md) {
+    const body = request.body as { md?: string; assignment?: AssignmentV1 };
+    if (!body.md || !body.assignment) {
       reply.code(400);
       return { error: 'Missing md path' };
     }
     const result = await pipeline.newAssignment({
+      assignment: body.assignment,
       md: resolve(fixturesDir, body.md ?? 'lesson.md'),
       withTts: false,
       dryRun: true,
@@ -37,16 +43,25 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await fastify.close();
+  await rm(fixturesDir, { recursive: true, force: true });
 });
 
 describe('service example', () => {
+  it('rejects legacy Markdown-only input', async () => {
+    const response = await fastify.inject({
+      method: 'POST',
+      url: '/jobs',
+      payload: { md: 'lesson.md' },
+    });
+    expect(response.statusCode).toBe(400);
+  });
   it('accepts a job payload', async () => {
     const addr = fastify.server.address();
     const port = typeof addr === 'object' && addr ? addr.port : 0;
     const response = await fetch(`http://127.0.0.1:${port}/jobs`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ md: 'lesson.md' }),
+      body: JSON.stringify({ md: 'lesson.json', assignment: assignmentFixture() }),
     });
     expect(response.status).toBe(200);
     const data = (await response.json()) as { result: { steps: string[]; manifestPath?: string } };

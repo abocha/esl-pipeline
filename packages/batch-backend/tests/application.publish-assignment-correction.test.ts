@@ -15,6 +15,14 @@ const childJob: JobRecord = {
   state: 'queued',
   md: null,
   mdStorageUri: `local://drafts/${request.draftId}/content/${request.draftHash}.md`,
+  assignmentArtifact: {
+    format: 'assignment_v1',
+    schemaVersion: 1,
+    serializationVersion: 1,
+    workingVersion: 3,
+    contentHash: request.draftHash,
+    storageUri: `local://drafts/content/${request.draftHash}.json`,
+  },
   draftId: request.draftId,
   sourceJobId: '33333333-3333-4333-8333-333333333333',
   createdAt: new Date('2026-08-14T00:00:00Z'),
@@ -49,7 +57,7 @@ describe('application/publish-assignment-correction', () => {
       executionMode: 'correction',
       sourceJobId: childJob.sourceJobId,
       correction: {
-        expectedMarkdownHash: request.draftHash,
+        expectedAssignmentHash: request.draftHash,
         manifestMd: `corrections/${childJob.id}.md`,
       },
     });

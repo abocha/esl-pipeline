@@ -12,9 +12,10 @@ function buildDraft(): DraftRecord {
     id: 'draft-1',
     promptPackageId: 'prompt-1',
     studentId: 'student-1',
-    storageUri: 'local://drafts/draft-1.md',
+    format: 'assignment_v1',
+    storageUri: `local://drafts/content/${'a'.repeat(64)}.json`,
     workingVersion: 1,
-    contentHash: 'draft-hash',
+    contentHash: 'a'.repeat(64),
     createdBy: 'user-1',
     createdAt: new Date('2024-01-01T00:00:00Z'),
     updatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -110,6 +111,15 @@ describe('application/create-approval-job', () => {
     );
 
     expect(insertApprovalJob).toHaveBeenCalledWith({
+      assignmentArtifact: {
+        format: 'assignment_v1',
+        schemaVersion: 1,
+        serializationVersion: 1,
+        workingVersion: 1,
+        contentHash: draft.contentHash,
+        storageUri: draft.storageUri,
+      },
+      assignmentRendererVersion: 2,
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
       promptPackageId: 'prompt-1',

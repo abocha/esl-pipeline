@@ -8,7 +8,7 @@ import {
 
 export type AssignmentFormat = 'markdown' | 'assignment_v1';
 
-/** Frozen canonical input. PMD, HTML and audio identities remain separate. */
+/** Frozen canonical input. HTML and audio identities remain separate. */
 export const AssignmentArtifactReferenceSchema = z.strictObject({
   format: z.literal('assignment_v1'),
   schemaVersion: z.literal(1),
@@ -55,7 +55,7 @@ export interface AssignmentDraftDto {
   workingVersion: number | null;
   contentHash: string | null;
   createdBy: string | null;
-  /** Explicit legacy text or pretty-printed validated JSON; never an invalid saved buffer. */
+  /** Historical read-only Markdown bytes or pretty-printed validated AssignmentV1 JSON. */
   text: string;
   format?: AssignmentFormat;
   artifact?: AssignmentArtifactReference;

@@ -17,6 +17,7 @@ import {
   isStructuredPrompt,
 } from './assignment-artifact.js';
 import { PromptPackageAssignmentError } from './create-prompt-package.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 
 export interface CreateDraftParams {
   promptPackageId: string;
@@ -60,7 +61,8 @@ export async function createDraft(
     );
   }
 
-  const format = isStructuredPrompt(promptPackage) ? 'assignment_v1' : 'markdown';
+  requireTypedAssignment(isStructuredPrompt(promptPackage));
+  const format = 'assignment_v1';
   const context = format === 'assignment_v1' ? assignmentContext(promptPackage) : undefined;
   const assignment = context ? admitAssignment(params.text, context) : undefined;
   const text = assignment ? serializeAssignmentV1(assignment) : params.text;

@@ -10,7 +10,6 @@ import type {
   VoiceProviderErrorCategory,
   VoiceSelectionDiagnostics,
 } from '@esl-pipeline/contracts';
-import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 
 import type { TtsRequestControl } from './errors.js';
 
@@ -60,9 +59,9 @@ export interface TtsSelection<
   model: ModelId;
 }
 
-export type AssignmentExecutionInput =
-  | { assignment: AssignmentV1; context?: never }
-  | { context: ParsedMarkdownContext; assignment?: never };
+export interface AssignmentExecutionInput {
+  assignment: AssignmentV1;
+}
 
 export type BuildStudyTextInput = AssignmentExecutionInput & { mdPath?: string };
 
@@ -131,7 +130,7 @@ export interface PreparedStudyTextSynthesis {
   voices: VoiceSelectionSummary[];
   voiceAssignments: Record<string, string>;
   voicePlan?: VoicePlan;
-  enhancementContext?: { assignment: AssignmentV1 } | { assignmentMarkdown: string };
+  enhancementContext?: { assignment: AssignmentV1 };
 }
 
 export interface VoiceAssignmentCapabilities {
@@ -227,7 +226,6 @@ export type BuildPronunciationShadowSentenceInput = AssignmentExecutionInput & {
 };
 
 export interface BuildPronunciationTextInput {
-  plainText?: boolean;
   text: string;
   voiceId: string;
   mdPath?: string;

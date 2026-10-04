@@ -43,6 +43,12 @@ Prior assignment count is not part of the rule. An abandoned assignment, an assi
 while enrichment was unavailable, or migrated history must not permanently prevent the learner's
 first evidence-based enrichment.
 
+Historical Markdown assignment sessions are read-only under ABO-30. They cannot admit or recover
+initial-profile enrichment, dispatch a provider request, or publish a recovered profile revision.
+Their original seed/evidence/results remain inspectable. This does not disqualify the learner from
+initial enrichment through a new eligible native AssignmentV1 workflow. Migration 0064 retires
+unfinished historical enrichment after verified provider quiescence.
+
 Eligibility must come from durable profile provenance. It must not be inferred from profile prose,
 an asynchronously loaded frontend list, assignment count, or whether a component currently has a
 profile preview.

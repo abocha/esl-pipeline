@@ -25,6 +25,7 @@ import {
   testWaitFor as waitFor,
   testWithin as within,
 } from './MinimalAssignment.test-harness';
+import { makeAssignmentText } from './MinimalAssignment.typed-test-fixtures';
 
 function getCustomRerunSettingsGroup(name: RegExp): HTMLElement {
   const heading = screen.getByText(name);
@@ -61,46 +62,42 @@ export function registerPublishValidationTests() {
 
     it('prevents Create confirmation when automatic draft validation fails', async () => {
       const user = createMinimalUser();
-      vi.mocked(api.validateMarkdown).mockResolvedValueOnce({
-        ok: false,
-        errors: ['Missing study text block'],
-        warnings: [],
-      });
 
       await renderDraftReadyAssignment();
 
-      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      const draftTextarea = screen.getByRole('textbox', { name: /Assignment JSON/i });
       expect(draftTextarea).toBeTruthy();
       if (!draftTextarea) {
         throw new Error('Expected draft textarea to be rendered');
       }
-      fireEvent.change(draftTextarea, { target: { value: '# Broken draft' } });
+      fireEvent.change(draftTextarea, { target: { value: '{ broken JSON' } });
 
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
-
-      await screen.findByText('Fix validation errors before saving.');
+      expect(screen.getByRole('button', { name: /Confirm and continue/i })).toHaveProperty(
+        'disabled',
+        true,
+      );
       expect(api.createDraft).not.toHaveBeenCalled();
     }, 30_000);
 
     it('publishes a valid draft and displays the resulting job link', async () => {
       const { user } = await renderPromptReadyAssignment();
 
-      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      const draftTextarea = screen.getByRole('textbox', { name: /Assignment JSON/i });
       expect(draftTextarea).toBeTruthy();
       if (!draftTextarea) {
         throw new Error('Expected draft textarea to be rendered');
       }
-      fireEvent.change(draftTextarea, { target: { value: '# Final draft' } });
+      fireEvent.change(draftTextarea, { target: { value: makeAssignmentText('# Final draft') } });
       await previewCurrentDraft(user);
       await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
       await waitFor(() => {
-        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Final draft', 1);
+        expect(api.updateDraft).toHaveBeenCalledWith(
+          'draft-1',
+          makeAssignmentText('# Final draft'),
+          1,
+        );
       });
-      const validationCall = vi.mocked(api.validateMarkdown).mock.calls.at(-1);
-      expect(validationCall?.[0]).toBe('# Final draft');
-      expect(validationCall?.[1]).toBe(true);
-      expect(validationCall?.[2]).toBeUndefined();
       await waitFor(() => {
         expect(api.shareAssignmentSession).toHaveBeenCalledWith(
           'session-1',
@@ -117,8 +114,8 @@ export function registerPublishValidationTests() {
 
     it('disables Share while its submission is in flight', async () => {
       const { user } = await renderPromptReadyAssignment();
-      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-        target: { value: '# Final draft' },
+      fireEvent.change(screen.getByRole('textbox', { name: /Assignment JSON/i }), {
+        target: { value: makeAssignmentText('# Final draft') },
       });
       await previewCurrentDraft(user);
       let resolveShare!: (value: Awaited<ReturnType<typeof api.shareAssignmentSession>>) => void;
@@ -147,8 +144,8 @@ export function registerPublishValidationTests() {
 
     it('reconciles dirty profile recovery and returns to Teaching context after Share rejects it', async () => {
       const { user } = await renderPromptReadyAssignment();
-      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-        target: { value: '# Final draft' },
+      fireEvent.change(screen.getByRole('textbox', { name: /Assignment JSON/i }), {
+        target: { value: makeAssignmentText('# Final draft') },
       });
       await previewCurrentDraft(user);
 
@@ -188,8 +185,8 @@ export function registerPublishValidationTests() {
 
     it('keeps Share disabled while confirmed Context recovery is dirty', async () => {
       const { user } = await renderPromptReadyAssignment();
-      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-        target: { value: '# Final draft' },
+      fireEvent.change(screen.getByRole('textbox', { name: /Assignment JSON/i }), {
+        target: { value: makeAssignmentText('# Final draft') },
       });
       await previewCurrentDraft(user);
 
@@ -242,8 +239,10 @@ export function registerJobActionTests() {
         await renderPreviewReadyAssignment();
 
         await user.click(screen.getByRole('button', { name: /Create/i }));
-        const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-        fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft' } });
+        const draftTextarea = screen.getByRole('textbox', { name: /Assignment JSON/i });
+        fireEvent.change(draftTextarea, {
+          target: { value: makeAssignmentText('# Preview gated draft') },
+        });
         await user.click(screen.getByRole('button', { name: /Review & share/i }));
         expect(screen.getByRole('heading', { name: /Create assignment/i })).toBeTruthy();
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));

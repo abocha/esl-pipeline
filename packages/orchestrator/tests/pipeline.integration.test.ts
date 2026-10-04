@@ -5,9 +5,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type AssignmentProgressEvent, createPipeline } from '../src/index.js';
+import { assignmentFixture } from './assignment-fixture.js';
 
 const sampleMarkdown = readFileSync(
-  new URL('../examples/service/fixtures/lesson.md', import.meta.url),
+  new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
   'utf8',
 );
 
@@ -116,6 +117,7 @@ describe('pipeline integration', () => {
 
     const result = await pipeline.newAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         preset: 'b1-default',
         withTts: true,
@@ -202,6 +204,7 @@ describe('pipeline integration', () => {
     const events: AssignmentProgressEvent[] = [];
     const result = await pipeline.newAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         preset: 'b1-default',
         withTts: true,
@@ -280,6 +283,7 @@ describe('pipeline integration', () => {
     });
 
     const result = await pipeline.newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       preset: 'b1-default',
       withTts: true,

@@ -841,10 +841,20 @@ export const MinimalAssignment: React.FC = () => {
   ]);
 
   const assignmentSessionWritesAllowed = useCallback(() => {
+    const session = activeAssignmentSessionRef.current;
+    if (
+      session?.historicalReadOnly ||
+      (session?.confirmed.create && !session.confirmed.create.artifact) ||
+      (jobStatus && !jobStatus.assignmentArtifact) ||
+      (authoring.draft && authoring.draft.format !== 'assignment_v1') ||
+      (authoring.promptPackage &&
+        authoring.promptPackage.requestEnvelope?.promptVersion !== 'assignment_v1')
+    )
+      return false;
     return (
       !assignmentSessionPersistenceSuppressedRef.current || assignmentSessionUserEditedRef.current
     );
-  }, []);
+  }, [jobStatus, authoring.draft, authoring.promptPackage]);
 
   const saveAssignmentSessionProgress = useCallback(
     async (
@@ -1188,7 +1198,12 @@ export const MinimalAssignment: React.FC = () => {
 
   useEffect(() => {
     const session = activeAssignmentSessionRef.current;
-    if (!session || session.confirmedStep === 'share') return;
+    if (
+      !session ||
+      session.confirmedStep === 'share' ||
+      (session.confirmed.create && !session.confirmed.create.artifact)
+    )
+      return;
     const repairingPartialProfileLineage = Boolean(
       session.selectedProfileId &&
         (!session.selectedProfileRevisionId || !session.selectedProfileRevisionHash) &&
@@ -1352,7 +1367,12 @@ export const MinimalAssignment: React.FC = () => {
     assignmentSessionMilestoneRef.current.recordingId = recordingId;
     if (!assignmentSessionWritesAllowed()) return;
     const session = activeAssignmentSessionRef.current;
-    if (!session || session.confirmedStep === 'share') return;
+    if (
+      !session ||
+      session.confirmedStep === 'share' ||
+      (session.confirmed.create && !session.confirmed.create.artifact)
+    )
+      return;
     void ensureAssignmentSourceAttached(recordingId, transcriptId);
   }, [
     assignmentSessionWritesAllowed,
@@ -1777,21 +1797,28 @@ export const MinimalAssignment: React.FC = () => {
   const jobReady = Boolean(jobStatus?.jobId);
   const hasPublishedHandout =
     jobStatus?.state === 'succeeded' && Boolean(jobStatus.htmlUrl?.trim());
-  const completedReferenceMode = isCompletedAssignmentSession(activeAssignmentSession);
+  const historicalReadOnly = Boolean(
+    activeAssignmentSession?.historicalReadOnly ||
+      (activeAssignmentSession?.confirmed.create &&
+        !activeAssignmentSession.confirmed.create.artifact) ||
+      (jobStatus && !jobStatus.assignmentArtifact) ||
+      (authoring.draft && authoring.draft.format !== 'assignment_v1') ||
+      (authoring.promptPackage &&
+        authoring.promptPackage.requestEnvelope?.promptVersion !== 'assignment_v1'),
+  );
+  const completedReferenceMode =
+    historicalReadOnly || isCompletedAssignmentSession(activeAssignmentSession);
   const effectivePublicationParent = isValidAssignmentPublicationParent(
     activeAssignmentSession,
     jobStatus,
   )
     ? jobStatus
     : publicationParentJob;
-  const validPublicationParent = isValidAssignmentPublicationParent(
-    activeAssignmentSession,
-    effectivePublicationParent,
-  );
-  const publicationRecoveryAvailable = canRetryAssignmentPublication(
-    activeAssignmentSession,
-    jobStatus,
-  );
+  const validPublicationParent =
+    !historicalReadOnly &&
+    isValidAssignmentPublicationParent(activeAssignmentSession, effectivePublicationParent);
+  const publicationRecoveryAvailable =
+    !historicalReadOnly && canRetryAssignmentPublication(activeAssignmentSession, jobStatus);
   useEffect(() => {
     let cancelled = false;
     if (!completedReferenceMode || !activeAssignmentSession) {
@@ -2315,6 +2342,7 @@ export const MinimalAssignment: React.FC = () => {
     const current = activeAssignmentSessionRef.current;
     if (
       !current ||
+      historicalReadOnly ||
       !canRetryAssignmentPublication(current, jobStatus) ||
       shareReconciliationInFlightRef.current
     ) {
@@ -2364,7 +2392,7 @@ export const MinimalAssignment: React.FC = () => {
       shareReconciliationInFlightRef.current = false;
       setSharingAssignment(false);
     }
-  }, [jobStatus, resume, setActiveAssignmentSession]);
+  }, [jobStatus, resume, setActiveAssignmentSession, historicalReadOnly]);
 
   const exitCorrectionMode = useCallback(() => {
     correctionModeRef.current = false;
@@ -3018,7 +3046,9 @@ export const MinimalAssignment: React.FC = () => {
               headingRef={reviewHeadingRef}
               previewButtonRef={reviewPreviewButtonRef}
               onPublish={() => void handleShareAssignment()}
-              shareAvailable={activeAssignmentSession?.confirmedStep === 'create'}
+              shareAvailable={
+                !historicalReadOnly && activeAssignmentSession?.confirmedStep === 'create'
+              }
               onCancelJob={() => void advancedActions.handleCancelJob()}
               canPublishWithPreview={authoring.canPublishWithPreview && shareRecoveryReady}
               cancelEnabled={advancedActions.cancelEnabled}
@@ -3041,6 +3071,7 @@ export const MinimalAssignment: React.FC = () => {
               jobReady={Boolean(jobReady)}
               publishUrl={publishUrl}
               onCopyPublishedUrl={(url) => void navigator.clipboard?.writeText(url)}
+              historicalReadOnly={historicalReadOnly}
               completedReferenceMode={completedReferenceMode}
               correctionAvailable={validPublicationParent}
               publicationRecoveryAvailable={

@@ -101,7 +101,7 @@ async function listSucceededHomeworkReplayCandidates(args: {
     const filters = [
       `j.state = 'succeeded'`,
       'j.student_id IS NOT NULL',
-      '(j.md IS NOT NULL OR j.md_storage_uri IS NOT NULL)',
+      'j.assignment_artifact IS NOT NULL',
       'j.source_job_id IS NULL',
     ];
 

@@ -113,7 +113,7 @@ async function seedJobsForPlanChecks(): Promise<void> {
         created_at,
         updated_at,
         finished_at
-      )
+      , assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
       SELECT
         uuid_generate_v4(),
         CASE
@@ -142,7 +142,7 @@ async function seedJobsForPlanChecks(): Promise<void> {
             THEN NOW() - ((gs - 1)::text || ' minutes')::interval
           ELSE NULL
         END
-      FROM generate_series(1, 6000) AS gs
+      , '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4() FROM generate_series(1, 6000) AS gs
       `,
       [TARGET_STUDENT_ID, OTHER_STUDENT_ID, THIRD_STUDENT_ID, TARGET_USER_ID, OTHER_USER_ID],
     );
@@ -158,7 +158,7 @@ async function seedJobsForPlanChecks(): Promise<void> {
         created_at,
         updated_at,
         finished_at
-      )
+      , assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
       VALUES (
         $1::uuid,
         'succeeded',
@@ -169,7 +169,7 @@ async function seedJobsForPlanChecks(): Promise<void> {
         NOW() - interval '2 hours',
         NOW() - interval '1 hour',
         NOW() - interval '1 hour'
-      )
+      , '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())
       ON CONFLICT (id) DO NOTHING
       `,
       [TARGET_HOMEWORK_JOB_ID, TARGET_STUDENT_ID, TARGET_USER_ID],

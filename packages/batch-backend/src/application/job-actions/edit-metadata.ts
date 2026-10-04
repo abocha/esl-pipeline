@@ -10,6 +10,7 @@ import { JobActionType } from '../../domain/job-actions.js';
 import { publishJobEvent } from '../../domain/job-events.js';
 import type { JobRecord } from '../../domain/job-model.js';
 import { getJobById, updateJobMetadata } from '../../domain/job-repository.js';
+import { HistoricalAssignmentReadOnlyError } from '../historical-assignment.js';
 import {
   collectPublishStudyTextOverrideIssues,
   publishTtsModelSchema,
@@ -130,6 +131,18 @@ export async function editMetadata(
       actionType: JobActionType.EDIT_METADATA,
       timestamp: new Date(),
       error: 'not_found',
+    };
+  }
+
+  if (!job.assignmentArtifact) {
+    const error = new HistoricalAssignmentReadOnlyError();
+    return {
+      success: false,
+      message: error.message,
+      jobId,
+      actionType: action.type,
+      timestamp: new Date(),
+      error: error.code,
     };
   }
 

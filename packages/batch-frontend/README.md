@@ -202,3 +202,11 @@ remains available for explicit activation if only the import completed.
 pnpm --filter @esl-pipeline/batch-frontend build
 pnpm --filter @esl-pipeline/batch-frontend test
 ```
+
+## Historical assignment access (ESL-7)
+
+AssignmentV1 is the only editable/executable assignment format. Historical Markdown jobs, drafts,
+and prompt-backed sessions open as read-only evidence with original text and produced output links.
+Correction, regeneration, preview rendering, retry/recovery, rerun and autosave are unavailable for
+these records. The backend rejects legacy processing even when an old client requests it; no
+conversion is attempted. See [AssignmentV1 retirement](../../docs/reference/ASSIGNMENT_V1.md).

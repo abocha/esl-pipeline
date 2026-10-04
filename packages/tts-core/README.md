@@ -22,10 +22,10 @@ import { createGoogleTtsProvider } from '@esl-pipeline/tts-provider-google';
 registerTtsProvider(createElevenLabsTtsProvider());
 registerTtsProvider(createGoogleTtsProvider());
 
-await buildStudyTextMp3({ context, mdPath }, { voiceMapPath, outPath, ttsProvider: 'google' });
+await buildStudyTextMp3({ assignment }, { voiceMapPath, outPath, ttsProvider: 'google' });
 ```
 
-Adapters own provider syntax. Authored Markdown and orchestrator manifests carry neutral speaker
+Adapters own provider syntax. AssignmentV1 fields and orchestrator manifests carry neutral speaker
 profiles and optional speech-performance plans.
 
 ## Speech Policy Compatibility
@@ -45,9 +45,12 @@ profiles and optional speech-performance plans.
   restoration. One invalid segment rejects the complete enhancement and selects schema-v1 identity
   fallback.
 - Provider synthesis revalidates exact plan selection, source hash, and ordered segment coverage.
-  Authored or rendered lexical provider-control markup is rejected before cache or synthesis.
+  Unsafe performance cues and authored-word changes are rejected before cache or synthesis.
 - Inworld TTS-2 converts only validated reserved spans to square-bracket annotations, uses
   `BALANCED`, and omits speaking-rate control. Validated synthesis text and enhancer version are
   part of complete and chunk cache identity; schema-v1 rendering remains compatible.
 - Pronunciation input/options never accept a speech planner, performance plan, or performance
   source context.
+
+Study-text and shadow-sentence execution require AssignmentV1. Historical Markdown input is rejected
+before provider execution. Pronunciation text is plain text; formatting characters are preserved.
