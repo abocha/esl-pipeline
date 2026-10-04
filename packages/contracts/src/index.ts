@@ -271,6 +271,8 @@ export interface AssignmentConfirmedSnapshot {
 }
 
 export interface AssignmentSessionDto {
+  /** Backend-authoritative history classification; inspection must not trigger processing. */
+  historicalReadOnly?: boolean;
   id: string;
   userId: string;
   studentId: string;
@@ -1074,59 +1076,14 @@ export interface VoiceProviderErrorDetails {
   actionableHint?: string;
 }
 
-export interface MarkdownValidationVoiceDiagnostics {
-  errors?: string[];
-  warnings?: string[];
-  compatibilityMode?: {
-    enabled: boolean;
-    reason?: string;
-  };
-  shadowMode?: {
-    enabled: boolean;
-    mismatchClasses?: Record<string, number>;
-    mismatchTotal?: number;
-  };
-}
-
-export type MarkdownValidationIssueSeverity = 'error' | 'warning' | 'advisory';
-export type MarkdownValidationIssueCategory = 'runtime' | 'contract' | 'quality' | 'voice';
-
-export interface MarkdownValidationIssue {
-  code: string;
-  ruleId: string;
-  severity: MarkdownValidationIssueSeverity;
-  message: string;
-  line?: number;
-  category: MarkdownValidationIssueCategory;
-  blockingInStrict: boolean;
-}
-
-export interface MarkdownValidationRuleSetInfo {
-  id: string;
-  version: string;
-  requestedId?: string | null;
-  requestedVersion?: string | null;
-  fallbackApplied?: boolean;
-  fallbackReason?: string;
-}
-
-export interface MarkdownValidationResponse {
+export interface AssignmentValidationResponse {
   ok: boolean;
   errors: string[];
   warnings: string[];
-  issues?: MarkdownValidationIssue[];
-  ruleset?: MarkdownValidationRuleSetInfo;
-  voiceDiagnostics?: MarkdownValidationVoiceDiagnostics;
-  meta?: {
-    title: string;
-    student: string;
-    level: string;
-    topic: string | string[];
-    input_type: ContentSource;
-    study_text_type?: StudyTextType;
-    speaker_labels?: string[];
-    speaker_profiles?: SpeakerProfile[];
-  };
+  meta?: Pick<
+    import('./assignment-v1.js').AssignmentV1['metadata'],
+    'title' | 'student' | 'level' | 'topic'
+  >;
 }
 
 export type JobEventType = 'job_created' | 'job_state_changed';

@@ -27,8 +27,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@esl-pipeline/contracts": "workspace:*",
-    "@esl-pipeline/pmd": "workspace:*"
+    "@esl-pipeline/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.4",

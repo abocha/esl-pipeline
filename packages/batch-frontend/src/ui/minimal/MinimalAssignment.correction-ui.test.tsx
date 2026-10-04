@@ -13,6 +13,12 @@ import {
   testVi as vi,
   testWaitFor as waitFor,
 } from './MinimalAssignment.test-harness';
+import {
+  assignmentArtifact,
+  makeAssignmentText,
+  requestEnvelope,
+  typedDraftFields,
+} from './MinimalAssignment.typed-test-fixtures';
 
 function prepareCompletedSession() {
   const status = makeJobStatus({
@@ -38,6 +44,7 @@ function prepareCompletedSession() {
   vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
   vi.mocked(api.getJobStatus).mockResolvedValue(status);
   vi.mocked(api.fetchPromptPackage).mockResolvedValue({
+    requestEnvelope,
     id: 'prompt-1',
     recordingId: 'rec-1',
     transcriptId: 'tx-1',
@@ -52,13 +59,14 @@ function prepareCompletedSession() {
     updatedAt: '2026-08-14T00:00:00.000Z',
   });
   vi.mocked(api.fetchDraft).mockResolvedValue({
+    ...typedDraftFields(makeAssignmentText('# Published draft')),
     id: 'draft-1',
     promptPackageId: 'prompt-1',
     studentId: 'student-alex',
     lessonId: null,
     storageUri: 'memory://draft-1',
     createdBy: 'user-1',
-    text: '# Published draft',
+    text: makeAssignmentText('# Published draft'),
     workingVersion: 1,
     contentHash: 'b'.repeat(64),
     createdAt: '2026-08-14T00:00:00.000Z',
@@ -68,6 +76,46 @@ function prepareCompletedSession() {
 }
 
 describe('MinimalAssignment post-share correction UI', () => {
+  it('keeps legacy output accessible without correction, retry, rendering, or regeneration controls', async () => {
+    setupMinimalAssignmentTest();
+    const status = { ...prepareCompletedSession(), assignmentArtifact: undefined };
+    vi.mocked(api.listUserJobs).mockResolvedValue({
+      jobs: [status],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+    vi.mocked(api.getJobStatus).mockResolvedValue(status);
+    vi.mocked(api.fetchAssignmentSession).mockRejectedValue(
+      new Error('History snapshot unavailable'),
+    );
+    const user = createMinimalUser();
+    renderMinimalAssignment();
+    await user.click(await screen.findByRole('button', { name: /Resume recent work/i }));
+    await user.click((await screen.findAllByRole('radio'))[0]!);
+    await user.click(
+      screen.getByRole('button', { name: /Review assignment|Review progress|Open assignment/i }),
+    );
+    await screen.findByRole('heading', { name: /Review and share/i });
+    expect(
+      screen
+        .getAllByRole('link', { name: /Open shared assignment/i })
+        .some((link) => link.getAttribute('href') === status.htmlUrl),
+    ).toBe(true);
+    expect(
+      screen.queryByRole('button', {
+        name: /Correct published assignment|Retry publication|Generate assignment/i,
+      }),
+    ).toBeNull();
+    for (const button of screen.queryAllByRole('button', {
+      name: /Regenerate|Preview assignment|Republish/i,
+    }))
+      expect(button).toHaveProperty('disabled', true);
+    expect(api.publishAssignmentCorrection).not.toHaveBeenCalled();
+    expect(api.shareAssignmentSession).not.toHaveBeenCalled();
+    expect(api.renderHtmlPreview).not.toHaveBeenCalled();
+    expect(api.generateDraft).not.toHaveBeenCalled();
+  });
   it('opens a completed session in reference mode with an explicit correction entry', async () => {
     setupMinimalAssignmentTest();
     const user = createMinimalUser();
@@ -86,11 +134,11 @@ describe('MinimalAssignment post-share correction UI', () => {
     });
     expect(screen.queryByRole('button', { name: /Confirm and continue/i })).toBeNull();
     await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
-    const referenceDraft = screen.getByRole('textbox', { name: /Draft markdown/i });
+    const referenceDraft = screen.getByRole('textbox', { name: /Assignment JSON/i });
     expect((referenceDraft as HTMLTextAreaElement).disabled).toBe(true);
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
     await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
-    const correctionDraft = screen.getByRole('textbox', { name: /Draft markdown/i });
+    const correctionDraft = screen.getByRole('textbox', { name: /Assignment JSON/i });
     expect((correctionDraft as HTMLTextAreaElement).disabled).toBe(false);
     expect(screen.queryByRole('button', { name: /Generate assignment/i })).toBeNull();
   });
@@ -203,6 +251,7 @@ describe('MinimalAssignment post-share correction UI', () => {
     const root = prepareCompletedSession();
     const user = createMinimalUser();
     const failedChild = makeJobStatus({
+      assignmentArtifact,
       jobId: 'child-1',
       assignmentSessionId: 'session-completed',
       sourceJobId: 'job-1',
@@ -249,13 +298,14 @@ describe('MinimalAssignment post-share correction UI', () => {
     prepareCompletedSession();
     const user = createMinimalUser();
     const updatedDraft = {
+      ...typedDraftFields(makeAssignmentText('# Corrected draft')),
       id: 'draft-1',
       promptPackageId: 'prompt-1',
       studentId: 'student-alex',
       lessonId: null,
       storageUri: 'memory://draft-1',
       createdBy: 'user-1',
-      text: '# Corrected draft',
+      text: makeAssignmentText('# Corrected draft'),
       workingVersion: 2,
       contentHash: 'c'.repeat(64),
       createdAt: '2026-08-14T00:00:00.000Z',
@@ -276,8 +326,8 @@ describe('MinimalAssignment post-share correction UI', () => {
     );
     await screen.findByRole('heading', { name: /Review and share/i });
     await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-      target: { value: '# Corrected draft' },
+    fireEvent.change(screen.getByRole('textbox', { name: /Assignment JSON/i }), {
+      target: { value: makeAssignmentText('# Corrected draft') },
     });
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
     await screen.findByRole('heading', { name: /Review and share/i });
@@ -288,9 +338,9 @@ describe('MinimalAssignment post-share correction UI', () => {
     await user.click(screen.getByRole('button', { name: /Publish corrected version/i }));
     await screen.findByText(/Network Error/i);
     await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
-    expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toHaveProperty(
+    expect(screen.getByRole('textbox', { name: /Assignment JSON/i })).toHaveProperty(
       'value',
-      '# Corrected draft',
+      makeAssignmentText('# Corrected draft'),
     );
     const firstRequest = vi.mocked(api.publishAssignmentCorrection).mock.calls[0]?.[1];
     expect(firstRequest).toMatchObject({
@@ -320,13 +370,14 @@ describe('MinimalAssignment post-share correction UI', () => {
     prepareCompletedSession();
     const user = createMinimalUser();
     vi.mocked(api.updateDraft).mockResolvedValue({
+      ...typedDraftFields(makeAssignmentText('# Corrected draft')),
       id: 'draft-1',
       promptPackageId: 'prompt-1',
       studentId: 'student-alex',
       lessonId: null,
       storageUri: 'memory://draft-1-v2',
       createdBy: 'user-1',
-      text: '# Corrected draft',
+      text: makeAssignmentText('# Corrected draft'),
       workingVersion: 2,
       contentHash: 'c'.repeat(64),
       createdAt: '2026-08-14T00:00:00.000Z',
@@ -336,13 +387,14 @@ describe('MinimalAssignment post-share correction UI', () => {
       new Error('HTTP 409: assignment_correction_draft_conflict'),
     );
     vi.mocked(api.fetchDraft).mockResolvedValue({
+      ...typedDraftFields(makeAssignmentText('# Newer saved draft')),
       id: 'draft-1',
       promptPackageId: 'prompt-1',
       studentId: 'student-alex',
       lessonId: null,
       storageUri: 'memory://draft-1-v3',
       createdBy: 'user-1',
-      text: '# Newer saved draft',
+      text: makeAssignmentText('# Newer saved draft'),
       workingVersion: 3,
       contentHash: 'd'.repeat(64),
       createdAt: '2026-08-14T00:00:00.000Z',
@@ -357,8 +409,8 @@ describe('MinimalAssignment post-share correction UI', () => {
     );
     await screen.findByRole('heading', { name: /Review and share/i });
     await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-      target: { value: '# Corrected draft' },
+    fireEvent.change(screen.getByRole('textbox', { name: /Assignment JSON/i }), {
+      target: { value: makeAssignmentText('# Corrected draft') },
     });
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
     await waitFor(() => {
@@ -371,9 +423,9 @@ describe('MinimalAssignment post-share correction UI', () => {
     await screen.findByText(/assignment_correction_draft_conflict/i);
     await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
 
-    expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toHaveProperty(
+    expect(screen.getByRole('textbox', { name: /Assignment JSON/i })).toHaveProperty(
       'value',
-      '# Corrected draft',
+      makeAssignmentText('# Corrected draft'),
     );
     expect(screen.getByText(/Newer saved draft work was found/i)).toBeTruthy();
     expect(api.fetchDraft).toHaveBeenCalledWith('draft-1');

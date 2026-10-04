@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
 
 import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
@@ -11,27 +11,18 @@ import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
 import { buildStudyTextMp3 } from '../src/index.js';
 import type { DialogueInput } from '../src/types.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 
 const buildStudyTextMp3FromPath = async (
   mdPath: string,
   ...args: Parameters<typeof buildStudyTextMp3> extends [any, ...infer Rest] ? Rest : never
 ) => {
-  const markdown = await readFile(mdPath, 'utf8');
-  const context = parseMarkdownContext(markdown);
-  return buildStudyTextMp3({ context, mdPath }, ...args);
+  const source = await readFile(mdPath, 'utf8');
+  const context = JSON.parse(source) as FixtureAssignmentV1;
+  return buildStudyTextMp3({ assignment: context, mdPath }, ...args);
 };
 
 const encoder = new TextEncoder();
-
-const baseFrontmatter = [
-  '---',
-  'title: "Test Lesson"',
-  'student: "Test Student"',
-  'level: "A1"',
-  'topic: "test"',
-  'input_type: "generate"',
-  '---',
-].join('\n');
 
 const makeMockStream = (payload: string) =>
   new ReadableStream<Uint8Array>({
@@ -129,21 +120,39 @@ describe('integration tests', () => {
   describe('fixture file processing', () => {
     it('should process monologue fixture similar to existing fixtures', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'ok.md'); // Use name similar to existing fixtures
+      const assignmentPath = join(dir, 'ok.md'); // Use name similar to existing fixtures
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
       // Create fixture similar to existing test fixtures
-      const fixtureContent = `${baseFrontmatter}
 
-# Lesson 1: Greetings
-
-:::study-text
-Hello! Welcome to our English lesson.
-Today we'll practice greetings and introductions.
-:::
-      `;
-
-      await writeFile(tempMdPath, fixtureContent.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
+            studyText: {
+              type: 'monologue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Narrator',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [
+                { speakerId: 's0', text: 'Hello! Welcome to our English lesson.' },
+                { speakerId: 's0', text: "Today we'll practice greetings and introductions." },
+              ],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -156,7 +165,7 @@ auto: true
       const convertMock = setupClientMock();
       mockConcat();
 
-      const result = await buildStudyTextMp3FromPath(tempMdPath, {
+      const result = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'tts',
@@ -175,24 +184,52 @@ auto: true
 
     it('should process dialogue fixture with multiple speakers', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'dialogue.md');
+      const assignmentPath = join(dir, 'dialogue.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
       // Create dialogue fixture
-      const dialogueContent = `${baseFrontmatter}
 
-# Conversation Practice
-
-:::study-text
-Teacher: Good morning! How are you today?
-Student: Good morning! I'm fine, thank you. And you?
-Teacher: I'm very well, thank you. What's your name?
-Student: My name is Sarah. Nice to meet you!
-Teacher: Nice to meet you too, Sarah!
-:::
-      `;
-
-      await writeFile(tempMdPath, dialogueContent.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
+            studyText: {
+              type: 'dialogue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Teacher',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+                {
+                  id: 's1',
+                  displayName: 'Student',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [
+                { speakerId: 's0', text: 'Good morning! How are you today?' },
+                { speakerId: 's1', text: "Good morning! I'm fine, thank you. And you?" },
+                { speakerId: 's0', text: "I'm very well, thank you. What's your name?" },
+                { speakerId: 's1', text: 'My name is Sarah. Nice to meet you!' },
+                { speakerId: 's0', text: 'Nice to meet you too, Sarah!' },
+              ],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -204,7 +241,7 @@ Student: voice_student_female
       const convertMock = setupClientMock();
       mockConcat();
 
-      const result = await buildStudyTextMp3FromPath(tempMdPath, {
+      const result = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'tts', // Force TTS to test strategy behavior
@@ -229,22 +266,49 @@ Student: voice_student_female
       expect(convertMock).toHaveBeenCalledTimes(5); // 5 dialogue lines
     });
 
-    it('sanitizes dialogue inputs before synthesis', async () => {
+    it('preserves plain typed dialogue inputs before synthesis', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'dialogue-sanitize.md');
+      const assignmentPath = join(dir, 'dialogue-sanitize.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const dialogueContent = `${baseFrontmatter}
-
-# Markdown Noise
-
-:::study-text
-Teacher: **Hello** *there*.
-Student: This is \`code\` and ~~strikethrough~~.
-:::
-      `;
-
-      await writeFile(tempMdPath, dialogueContent.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
+            studyText: {
+              type: 'dialogue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Teacher',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+                {
+                  id: 's1',
+                  displayName: 'Student',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [
+                { speakerId: 's0', text: '**Hello** *there*.' },
+                { speakerId: 's1', text: 'This is `code` and ~~strikethrough~~.' },
+              ],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -267,7 +331,7 @@ Student: voice_student_female
           };
         });
 
-      const result = await buildStudyTextMp3FromPath(tempMdPath, {
+      const result = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'dialogue',
@@ -281,50 +345,71 @@ Student: voice_student_female
       if (!first || !second) {
         throw new Error('Expected two dialogue inputs.');
       }
-      expect(first.text).toBe('Hello there.');
-      expect(second.text).toBe('This is code and strikethrough.');
-      for (const input of capturedInputs) {
-        expect(input.text).not.toMatch(/[*_`~]/);
-      }
+      expect(first.text).toBe('**Hello** *there*.');
+      expect(second.text).toBe('This is `code` and ~~strikethrough~~.');
     });
 
     it('should handle fixtures with speaker profiles in frontmatter', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'lesson.md');
+      const assignmentPath = join(dir, 'assignment.json');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
       // Create fixture with detailed frontmatter
-      const lessonContent = `
----
-title: "Advanced Conversation"
-student: "Maria"
-level: "B2"
-topic: "expressing opinions"
-input_type: "dialogue"
-speaker_labels: ["Instructor", "Student"]
-speaker_profiles:
-  - id: "Instructor"
-    role: "teacher"
-    gender: "female"
-    accent: "american"
-    style: "professional"
-  - id: "Student"
-    role: "learner"
-    gender: "female"
-    age: "adult"
----
 
-# Expressing Opinions
-
-:::study-text
-Instructor: Today we'll practice expressing opinions. What's your opinion about remote work?
-Student: I think it's great! It gives me more flexibility with my schedule.
-Instructor: That's a valid point. How do you feel about work-life balance?
-Student: I believe remote work improves it significantly.
-:::
-      `;
-
-      await writeFile(tempMdPath, lessonContent.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: {
+              title: 'Advanced Conversation',
+              student: 'Maria',
+              level: 'B2',
+              topic: 'expressing opinions',
+            },
+            studyText: {
+              type: 'dialogue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Instructor',
+                  role: 'teacher',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'female',
+                  age: null,
+                  accent: 'american',
+                },
+                {
+                  id: 's1',
+                  displayName: 'Student',
+                  role: 'learner',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'female',
+                  age: 'adult',
+                  accent: null,
+                },
+              ],
+              turns: [
+                {
+                  speakerId: 's0',
+                  text: "Today we'll practice expressing opinions. What's your opinion about remote work?",
+                },
+                {
+                  speakerId: 's1',
+                  text: "I think it's great! It gives me more flexibility with my schedule.",
+                },
+                {
+                  speakerId: 's0',
+                  text: "That's a valid point. How do you feel about work-life balance?",
+                },
+                { speakerId: 's1', text: 'I believe remote work improves it significantly.' },
+              ],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -337,7 +422,7 @@ auto: true
       const convertMock = setupClientMock();
       mockConcat();
 
-      const result = await buildStudyTextMp3FromPath(tempMdPath, {
+      const result = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'tts', // Force TTS to test strategy behavior
@@ -360,27 +445,55 @@ auto: true
 
     it('should process both monologue and dialogue modes from same fixture', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'mixed.md');
+      const assignmentPath = join(dir, 'mixed.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
       // Create fixture that could work in both modes
-      const mixedContent = `${baseFrontmatter}
 
-# Lesson: Daily Routines
-
-:::study-text
-Teacher: Let's talk about daily routines.
-Student: Okay, I'm ready to learn!
-Teacher: What time do you wake up?
-Student: I wake up at 7 AM every day.
-Teacher: That's early! What do you do after waking up?
-Student: I brush my teeth and have breakfast.
-Teacher: Excellent! Tell me about your breakfast.
-Student: I usually have toast and coffee.
-:::
-      `;
-
-      await writeFile(tempMdPath, mixedContent.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
+            studyText: {
+              type: 'dialogue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Teacher',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+                {
+                  id: 's1',
+                  displayName: 'Student',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [
+                { speakerId: 's0', text: "Let's talk about daily routines." },
+                { speakerId: 's1', text: "Okay, I'm ready to learn!" },
+                { speakerId: 's0', text: 'What time do you wake up?' },
+                { speakerId: 's1', text: 'I wake up at 7 AM every day.' },
+                { speakerId: 's0', text: "That's early! What do you do after waking up?" },
+                { speakerId: 's1', text: 'I brush my teeth and have breakfast.' },
+                { speakerId: 's0', text: 'Excellent! Tell me about your breakfast.' },
+                { speakerId: 's1', text: 'I usually have toast and coffee.' },
+              ],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -394,7 +507,7 @@ Student: voice_student_female
       mockConcat();
 
       // TTS strategy
-      const monologueResult = await buildStudyTextMp3FromPath(tempMdPath, {
+      const monologueResult = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'tts',
@@ -408,7 +521,7 @@ Student: voice_student_female
 
       // Dialogue strategy
       const dialogueMock = mockDialogue();
-      const dialogueResult = await buildStudyTextMp3FromPath(tempMdPath, {
+      const dialogueResult = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'dialogue',
@@ -444,7 +557,7 @@ Student: voice_student_female
 
     it('should handle orchestrator-style configuration', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'orchestrator-test.md');
+      const assignmentPath = join(dir, 'orchestrator-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
       // Test configuration similar to what orchestrator would provide
@@ -460,17 +573,37 @@ Student: voice_student_female
         dialogueSeed: 12_345, // New field
       };
 
-      const lessonContent = `${baseFrontmatter}
-
-# Orchestrator Test
-
-:::study-text
-This is a test for orchestrator integration.
-We need to ensure all configuration options work properly.
-:::
-      `;
-
-      await writeFile(tempMdPath, lessonContent.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
+            studyText: {
+              type: 'monologue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Narrator',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [
+                { speakerId: 's0', text: 'This is a test for orchestrator integration.' },
+                {
+                  speakerId: 's0',
+                  text: 'We need to ensure all configuration options work properly.',
+                },
+              ],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -483,7 +616,7 @@ auto: true
       const convertMock = setupClientMock();
       mockConcat();
 
-      const result = await buildStudyTextMp3FromPath(tempMdPath, orchestratorConfig);
+      const result = await buildStudyTextMp3FromPath(assignmentPath, orchestratorConfig);
 
       expect(result.path).toBeDefined();
       expect(result.hash).toBeDefined();
@@ -493,19 +626,39 @@ auto: true
 
     it('should work with orchestrator manifest-style output', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'manifest-test.md');
+      const assignmentPath = join(dir, 'manifest-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const lessonContent = `${baseFrontmatter}
-
-# Manifest Test
-
-:::study-text
-This should produce output compatible with orchestrator manifests.
-:::
-      `;
-
-      await writeFile(tempMdPath, lessonContent.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
+            studyText: {
+              type: 'monologue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Narrator',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [
+                {
+                  speakerId: 's0',
+                  text: 'This should produce output compatible with orchestrator manifests.',
+                },
+              ],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -518,7 +671,7 @@ auto: true
       const _convertMock = setupClientMock();
       mockConcat();
 
-      const result = await buildStudyTextMp3FromPath(tempMdPath, {
+      const result = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'tts',
@@ -542,19 +695,34 @@ auto: true
   describe('CLI integration', () => {
     it('should handle CLI-style flag combinations', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'cli-test.md');
+      const assignmentPath = join(dir, 'cli-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const lessonContent = `${baseFrontmatter}
-
-# CLI Flag Test
-
-:::study-text
-This tests CLI-style flag handling.
-:::
-      `;
-
-      await writeFile(tempMdPath, lessonContent.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
+            studyText: {
+              type: 'monologue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Narrator',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [{ speakerId: 's0', text: 'This tests CLI-style flag handling.' }],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -623,13 +791,13 @@ auto: true
 
       for (const scenario of previewScenarios) {
         convertMock.mockClear();
-        await buildStudyTextMp3FromPath(tempMdPath, scenario.options);
+        await buildStudyTextMp3FromPath(assignmentPath, scenario.options);
         expect(convertMock).not.toHaveBeenCalled();
       }
 
       for (const scenario of generationScenarios) {
         convertMock.mockClear();
-        const result = await buildStudyTextMp3FromPath(tempMdPath, scenario.options);
+        const result = await buildStudyTextMp3FromPath(assignmentPath, scenario.options);
         expect(result.path).toMatch(/\.mp3$/);
       }
     });
@@ -669,19 +837,34 @@ auto: true
 
     it('should handle environment variable overrides like CLI would', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'env-test.md');
+      const assignmentPath = join(dir, 'env-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const lessonContent = `${baseFrontmatter}
-
-# Environment Override Test
-
-:::study-text
-This tests environment variable handling.
-:::
-      `;
-
-      await writeFile(tempMdPath, lessonContent.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
+            studyText: {
+              type: 'monologue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Narrator',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [{ speakerId: 's0', text: 'This tests environment variable handling.' }],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -700,7 +883,7 @@ auto: true
 
       try {
         // Call without specifying strategy - should use env var
-        const result = await buildStudyTextMp3FromPath(tempMdPath, {
+        const result = await buildStudyTextMp3FromPath(assignmentPath, {
           voiceMapPath: tempVoiceMapPath,
           outPath: dir,
         });
@@ -718,40 +901,63 @@ auto: true
   describe('end-to-end workflow', () => {
     it('should complete full workflow from markdown to MP3', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'full-workflow.md');
+      const assignmentPath = join(dir, 'full-workflow.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const fullLesson = `
----
-title: "Complete Lesson"
-student: "Test Student"
-level: "A2"
-topic: "ordering food"
-input_type: "dialogue"
-speaker_labels: ["Waiter", "Customer"]
-speaker_profiles:
-  - id: "Waiter"
-    role: "server"
-    gender: "male"
-  - id: "Customer"
-    role: "diner"
-    gender: "female"
----
-
-# Ordering at a Restaurant
-
-:::study-text
-Waiter: Good evening! Welcome to our restaurant. Do you have a reservation?
-Customer: Yes, I do. Table for two under Johnson.
-Waiter: Perfect! Right this way, please.
-Customer: Thank you. Could I see the menu, please?
-Waiter: Of course! Here you are. Can I get you something to drink first?
-Customer: I'll have a glass of water, please.
-Waiter: Certainly! Take your time looking at the menu.
-:::
-      `;
-
-      await writeFile(tempMdPath, fullLesson.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: {
+              title: 'Complete Lesson',
+              student: 'Test Student',
+              level: 'A2',
+              topic: 'ordering food',
+            },
+            studyText: {
+              type: 'dialogue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Waiter',
+                  role: 'server',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'male',
+                  age: null,
+                  accent: null,
+                },
+                {
+                  id: 's1',
+                  displayName: 'Customer',
+                  role: 'diner',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'female',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [
+                {
+                  speakerId: 's0',
+                  text: 'Good evening! Welcome to our restaurant. Do you have a reservation?',
+                },
+                { speakerId: 's1', text: 'Yes, I do. Table for two under Johnson.' },
+                { speakerId: 's0', text: 'Perfect! Right this way, please.' },
+                { speakerId: 's1', text: 'Thank you. Could I see the menu, please?' },
+                {
+                  speakerId: 's0',
+                  text: 'Of course! Here you are. Can I get you something to drink first?',
+                },
+                { speakerId: 's1', text: "I'll have a glass of water, please." },
+                { speakerId: 's0', text: 'Certainly! Take your time looking at the menu.' },
+              ],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -764,7 +970,7 @@ Customer: voice_student_female
       mockConcat();
 
       // Complete workflow
-      const result = await buildStudyTextMp3FromPath(tempMdPath, {
+      const result = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'tts', // Force TTS for testing
@@ -795,23 +1001,56 @@ Customer: voice_student_female
 
     it('should handle both modes end-to-end for same content', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const tempMdPath = join(dir, 'mode-comparison.md');
+      const assignmentPath = join(dir, 'mode-comparison.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const comparisonLesson = `${baseFrontmatter}
-
-# Mode Comparison Lesson
-
-:::study-text
-Teacher: Let's compare different teaching methods.
-Student: I'd like to hear about different approaches.
-Teacher: We can use traditional lecture style or interactive dialogue.
-Student: Which method do you think is more effective?
-Teacher: That depends on the learning objectives and student preferences.
-:::
-      `;
-
-      await writeFile(tempMdPath, comparisonLesson.trim());
+      await writeFile(
+        assignmentPath,
+        JSON.stringify(
+          createTtsAssignment({
+            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
+            studyText: {
+              type: 'dialogue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Teacher',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+                {
+                  id: 's1',
+                  displayName: 'Student',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [
+                { speakerId: 's0', text: "Let's compare different teaching methods." },
+                { speakerId: 's1', text: "I'd like to hear about different approaches." },
+                {
+                  speakerId: 's0',
+                  text: 'We can use traditional lecture style or interactive dialogue.',
+                },
+                { speakerId: 's1', text: 'Which method do you think is more effective?' },
+                {
+                  speakerId: 's0',
+                  text: 'That depends on the learning objectives and student preferences.',
+                },
+              ],
+            },
+            pronunciation: null,
+          }),
+        ),
+      );
       await writeFile(
         tempVoiceMapPath,
         `
@@ -826,7 +1065,7 @@ Student: voice_student_female
       const dialogueMock = mockDialogue();
 
       // TTS strategy
-      const monologueResult = await buildStudyTextMp3FromPath(tempMdPath, {
+      const monologueResult = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'tts' as const,
@@ -837,7 +1076,7 @@ Student: voice_student_female
       expect(convertMock).toHaveBeenCalled(); // Used TTS path
 
       // Dialogue strategy
-      const dialogueResult = await buildStudyTextMp3FromPath(tempMdPath, {
+      const dialogueResult = await buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'dialogue' as const,

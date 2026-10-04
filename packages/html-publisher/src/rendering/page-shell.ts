@@ -1,11 +1,23 @@
-import type { Frontmatter } from './frontmatter.js';
-import { formatCurrentDate } from './frontmatter.js';
 import type { ResolvedRenderOptions } from './options.js';
 import { escapeHtml } from './shared.js';
 
+interface PageMetadata {
+  title?: string;
+  icon?: string;
+  student?: string;
+  topic?: string;
+}
+function formatCurrentDate(): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date());
+}
+
 export interface PageShellInput {
   resolvedTitle: string;
-  frontmatter: Frontmatter;
+  frontmatter: PageMetadata;
   resolved: ResolvedRenderOptions;
   bodyHtml: string;
   css: string;
@@ -14,7 +26,7 @@ export interface PageShellInput {
 
 function renderHeader(
   title: string,
-  frontmatter: Frontmatter,
+  frontmatter: PageMetadata,
   options: ResolvedRenderOptions,
 ): string {
   const iconValue = frontmatter.icon?.trim() || '📘';

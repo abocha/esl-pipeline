@@ -3,6 +3,7 @@ import './support/bootstrap-pg-test-env.js';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { recordStudentMemoryOpenAiBatchRemoteStatus } from '../src/application/student-memory-openai-batch-operations.js';
 import {
   createStudentMemoryOpenAiBatchRun,
   getStudentMemoryOpenAiBatchRunById,
@@ -47,6 +48,72 @@ describeIfPg('domain/student-memory-openai-batch-repository', () => {
   afterAll(async () => {
     await truncateBatchReplayTables();
     await closePgPool();
+  });
+
+  it('refreshes stale cancellation and reconciled states using matching remote evidence', async () => {
+    const id = randomUUID();
+    await withPgClient((client) =>
+      client.query(
+        `INSERT INTO student_memory_openai_batch_runs
+      (id,workload,model,state,input_jsonl_sha256,input_bytes,item_count,remote_batch_id,operator_audit)
+      VALUES($1,'lesson_memory','test-model','cancelled',$2,1,1,'remote-batch','{"reason":"retained"}')`,
+        [id, 'a'.repeat(64)],
+      ),
+    );
+    await recordStudentMemoryOpenAiBatchRemoteStatus({
+      runId: id,
+      remote: { id: 'remote-batch', status: 'cancelling' },
+    });
+    const read = () =>
+      withPgClient(
+        async (client) =>
+          (
+            await client.query(
+              'SELECT state,operator_audit FROM student_memory_openai_batch_runs WHERE id=$1',
+              [id],
+            )
+          ).rows[0],
+      );
+    const cancelling = await read();
+    expect(cancelling).toMatchObject({
+      state: 'in_progress',
+      operator_audit: {
+        reason: 'retained',
+        remoteStatusConfirmation: {
+          batchId: 'remote-batch',
+          status: 'cancelling',
+          checkedAt: expect.any(String),
+        },
+      },
+    });
+    await expect(
+      recordStudentMemoryOpenAiBatchRemoteStatus({
+        runId: id,
+        remote: { id: 'different-batch', status: 'cancelled' },
+      }),
+    ).rejects.toThrow('cannot record remote status');
+    expect(await read()).toEqual(cancelling);
+    await withPgClient((client) =>
+      client.query("UPDATE student_memory_openai_batch_runs SET state='reconciled' WHERE id=$1", [
+        id,
+      ]),
+    );
+    await recordStudentMemoryOpenAiBatchRemoteStatus({
+      runId: id,
+      remote: { id: 'remote-batch', status: 'cancelled' },
+    });
+    expect(await read()).toMatchObject({
+      state: 'reconciled',
+      operator_audit: { reason: 'retained', remoteStatusConfirmation: { status: 'cancelled' } },
+    });
+    await recordStudentMemoryOpenAiBatchRemoteStatus({
+      runId: id,
+      remote: { id: 'remote-batch', status: 'cancelling' },
+    });
+    expect(await read()).toMatchObject({
+      state: 'in_progress',
+      operator_audit: { remoteStatusConfirmation: { status: 'cancelling' } },
+    });
   });
 
   it('persists an immutable item snapshot and lets fresh online work supersede its active claim', async () => {

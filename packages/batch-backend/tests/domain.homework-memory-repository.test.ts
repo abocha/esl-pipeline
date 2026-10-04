@@ -88,8 +88,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         `
         INSERT INTO drafts (
           id, prompt_package_id, storage_uri, working_version, content_hash, created_at, updated_at
-        )
-        VALUES ($1, $2, 'local://drafts/draft.md', 1, repeat('a', 64), NOW(), NOW())
+        , format)
+        VALUES ($1, $2, 'local://drafts/content/' ||  repeat('a', 64) || '.json', 1, repeat('a', 64), NOW(), NOW(), 'assignment_v1')
         `,
         [draftId, promptPackageId],
       );
@@ -98,8 +98,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         INSERT INTO jobs (
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           publish_target, finished_at, created_at, updated_at
-        )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW())
+        , assignment_artifact, assignment_renderer_version)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)
         `,
         [rootJobId, studentId, recordingId, transcriptId, promptPackageId, draftId],
       );
@@ -108,8 +108,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         INSERT INTO jobs (
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           source_job_id, publish_target, finished_at, created_at, updated_at
-        )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW())
+        , assignment_artifact, assignment_renderer_version)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)
         `,
         [
           correctionAJobId,
@@ -126,8 +126,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         INSERT INTO jobs (
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           source_job_id, publish_target, finished_at, created_at, updated_at
-        )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW())
+        , assignment_artifact, assignment_renderer_version)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)
         `,
         [
           correctionBJobId,
@@ -307,8 +307,8 @@ describeIfPg('domain/homework-memory-repository', () => {
           INSERT INTO jobs (
             id, state, md, student_id, source_job_id, publish_target,
             publication_sequence, finished_at, created_at, updated_at
-          )
-          VALUES ($1, 'succeeded', 'lesson.md', $2, $3, 'html', $4, $5, NOW(), NOW())
+          , assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
+          VALUES ($1, 'succeeded', 'lesson.md', $2, $3, 'html', $4, $5, NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())
           `,
           [id, studentId, sourceJobId, publicationSequence, publishedAt],
         );
@@ -422,8 +422,8 @@ describeIfPg('domain/homework-memory-repository', () => {
       );
       await client.query(
         `
-        INSERT INTO jobs (id, state, md, student_id, publish_target, publication_sequence, finished_at, created_at, updated_at)
-        VALUES ($1, 'succeeded', 'lesson.md', $2, 'html', 1, $3, NOW(), NOW())
+        INSERT INTO jobs (id, state, md, student_id, publish_target, publication_sequence, finished_at, created_at, updated_at, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, 'html', 1, $3, NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())
         `,
         [rootJobId, studentId, publishedAt],
       );
@@ -540,8 +540,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         `
         INSERT INTO drafts (
           id, prompt_package_id, storage_uri, working_version, content_hash, created_at, updated_at
-        )
-        VALUES ($1, $2, 'local://drafts/draft.md', 1, repeat('a', 64), NOW(), NOW())
+        , format)
+        VALUES ($1, $2, 'local://drafts/content/' ||  repeat('a', 64) || '.json', 1, repeat('a', 64), NOW(), NOW(), 'assignment_v1')
         `,
         [draftId, promptPackageId],
       );
@@ -550,8 +550,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         INSERT INTO jobs (
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           publish_target, finished_at, created_at, updated_at
-        )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW())
+        , assignment_artifact, assignment_renderer_version)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)
         `,
         [rootJobId, studentId, recordingId, transcriptId, promptPackageId, draftId],
       );
@@ -560,8 +560,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         INSERT INTO jobs (
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           source_job_id, publish_target, finished_at, created_at, updated_at
-        )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW())
+        , assignment_artifact, assignment_renderer_version)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)
         `,
         [rerunJobId, studentId, recordingId, transcriptId, promptPackageId, draftId, rootJobId],
       );
@@ -683,8 +683,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         `
         INSERT INTO drafts (
           id, prompt_package_id, storage_uri, working_version, content_hash, created_at, updated_at
-        )
-        VALUES ($1, $2, 'local://drafts/draft.md', 1, repeat('a', 64), NOW(), NOW())
+        , format)
+        VALUES ($1, $2, 'local://drafts/content/' ||  repeat('a', 64) || '.json', 1, repeat('a', 64), NOW(), NOW(), 'assignment_v1')
         `,
         [draftId, promptPackageId],
       );
@@ -693,8 +693,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         INSERT INTO jobs (
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           publish_target, finished_at, created_at, updated_at
-        )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW())
+        , assignment_artifact, assignment_renderer_version)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)
         `,
         [rootJobId, studentId, recordingId, transcriptId, promptPackageId, draftId],
       );
@@ -703,8 +703,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         INSERT INTO jobs (
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           source_job_id, publish_target, finished_at, created_at, updated_at
-        )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW())
+        , assignment_artifact, assignment_renderer_version)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)
         `,
         [replayJobId, studentId, recordingId, transcriptId, promptPackageId, draftId, rootJobId],
       );
@@ -804,8 +804,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         `
         INSERT INTO drafts (
           id, prompt_package_id, storage_uri, working_version, content_hash, created_at, updated_at
-        )
-        VALUES ($1, $2, 'local://drafts/draft.md', 1, repeat('a', 64), NOW(), NOW())
+        , format)
+        VALUES ($1, $2, 'local://drafts/content/' ||  repeat('a', 64) || '.json', 1, repeat('a', 64), NOW(), NOW(), 'assignment_v1')
         `,
         [draftId, promptPackageId],
       );
@@ -814,8 +814,8 @@ describeIfPg('domain/homework-memory-repository', () => {
         INSERT INTO jobs (
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           publish_target, finished_at, created_at, updated_at
-        )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW())
+        , assignment_artifact, assignment_renderer_version)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)
         `,
         [rootJobId, studentId, recordingId, transcriptId, promptPackageId, draftId],
       );

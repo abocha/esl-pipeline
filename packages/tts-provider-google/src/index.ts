@@ -30,7 +30,6 @@ import {
   normalizePlainSpeechText,
   resolveAssignmentMetadata,
   resolveAssignmentShadowFocus,
-  resolveAssignmentStudyText,
   resolveSpeakerRoutingHint,
   resolveTtsSelection,
   type SpeakerVoiceAssignment,
@@ -114,21 +113,6 @@ interface GoogleCatalogCacheEntry {
 type GoogleAccentSelectionTier = 'exact' | 'regional_close' | 'en_us_fallback' | 'general_en';
 
 let googleCatalogCache: GoogleCatalogCacheEntry | null = null;
-
-const MARKDOWN_STRIPPERS: [RegExp, string][] = [
-  [/\r?\n/g, ' '],
-  [/^\s*[-*+]\s+/, ''],
-  [/^\s*\d+[.)]\s+/, ''],
-  [/\*\*(.+?)\*\*/g, '$1'],
-  [/__(.+?)__/g, '$1'],
-  [/\*(.+?)\*/g, '$1'],
-  [/_([^_]+)_/g, '$1'],
-  [/~~(.+?)~~/g, '$1'],
-  [/`{1,3}([^`]+)`{1,3}/g, '$1'],
-  [/!\[(.*?)\]\([^)]*\)/g, '$1'],
-  [/\[(.+?)\]\((.+?)\)/g, '$1'],
-  [/<[^>]+>/g, ''],
-] as const;
 
 export function resolveGoogleTtsModel(model?: string): GoogleTtsModel {
   const raw = model?.trim();
@@ -703,26 +687,8 @@ export function resetGoogleVoiceCatalogCacheForTests(): void {
   googleCatalogCache = null;
 }
 
-function cleanSpeechText(text: string): string {
-  let sanitized = text;
-  for (const [pattern, replacement] of MARKDOWN_STRIPPERS) {
-    sanitized = sanitized.replace(pattern, replacement);
-  }
-  sanitized = sanitized.replaceAll(/[*_`~>#]/g, '');
-  sanitized = sanitized.replaceAll(/\s+/g, ' ').trim();
-  return sanitized;
-}
-
 function cleanSpeakerName(name: string): string {
-  return cleanSpeechText(name);
-}
-
-function parseSpeaker(line: string): { speaker?: string; text: string } {
-  const idx = line.indexOf(':');
-  if (idx > 0 && idx < 40) {
-    return { speaker: line.slice(0, idx).trim(), text: line.slice(idx + 1).trim() };
-  }
-  return { text: line.trim() };
+  return normalizePlainSpeechText(name);
 }
 
 function collectSpeakers(segments: StudyTextSegment[], frontmatter: Frontmatter): string[] {
@@ -768,34 +734,6 @@ function collectSpeakers(segments: StudyTextSegment[], frontmatter: Frontmatter)
   }
 
   return ordered;
-}
-
-function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): StudyTextSegment[] {
-  const segments: StudyTextSegment[] = [];
-  const labelOrder = Array.isArray(frontmatter.speaker_labels)
-    ? frontmatter.speaker_labels
-        .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
-        .filter(Boolean)
-    : [];
-  const nonNarratorFallback = labelOrder.find((label) => label.toLowerCase() !== 'narrator');
-  const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;
-  let lastSpeaker: string | undefined;
-
-  for (const raw of lines) {
-    const { speaker, text } = parseSpeaker(raw);
-    let resolvedSpeaker = speaker ? cleanSpeakerName(speaker) : undefined;
-    if (!resolvedSpeaker && lastSpeaker) {
-      resolvedSpeaker = lastSpeaker;
-    } else if (!resolvedSpeaker && !lastSpeaker) {
-      resolvedSpeaker = nonNarratorFallback ?? singleFallback;
-    }
-    if (resolvedSpeaker) {
-      lastSpeaker = resolvedSpeaker;
-    }
-    segments.push({ speaker: resolvedSpeaker, text, raw });
-  }
-
-  return segments;
 }
 
 function splitIntoSentences(text: string): string[] {
@@ -997,18 +935,13 @@ async function resolveStudyTextPlan(
   opts: BuildStudyTextOptions,
 ): Promise<ResolvedStudyTextPlan> {
   const frontmatter = resolveAssignmentMetadata(input);
-  const studyText = resolveAssignmentStudyText(input);
-  const segments = input.assignment
-    ? assignmentStudySegments(input.assignment).map((s) => ({
-        speaker: s.speaker,
-        text: s.text,
-        raw: `${s.speaker}: ${s.text}`,
-      }))
-    : resolveStudyTextSegments(studyText.lines, frontmatter);
+  const segments = assignmentStudySegments(input.assignment).map((s) => ({
+    speaker: s.speaker,
+    text: s.text,
+    raw: `${s.speaker}: ${s.text}`,
+  }));
   const sanitizedSegments = segments
-    .map((segment) =>
-      input.assignment ? normalizePlainSpeechText(segment.text) : cleanSpeechText(segment.text),
-    )
+    .map((segment) => normalizePlainSpeechText(segment.text))
     .filter((segment) => segment.length > 0);
   const normalizedText = sanitizedSegments.join('\n');
 
@@ -1426,9 +1359,7 @@ export async function buildStudyTextMp3Google(
       voiceName = defaultVoice;
     }
 
-    const speechText = input.assignment
-      ? normalizePlainSpeechText(segment.text)
-      : cleanSpeechText(segment.text);
+    const speechText = normalizePlainSpeechText(segment.text);
     if (!speechText) {
       pendingParagraphBreak = true;
       continue;
@@ -1562,9 +1493,7 @@ export async function buildPronunciationShadowSentenceMp3Google(
     );
   }
 
-  const sentence = input.assignment
-    ? normalizePlainSpeechText(shadowFocus.shadowSentence ?? '')
-    : cleanSpeechText(shadowFocus.shadowSentence ?? '');
+  const sentence = normalizePlainSpeechText(shadowFocus.shadowSentence ?? '');
   if (!sentence) {
     throw new ValidationError(
       'Pronunciation shadow sentence is empty. Add "**Shadow sentence:** <sentence>" under section C.',
@@ -1671,9 +1600,7 @@ export async function buildPronunciationTextMp3Google(
   }
 
   const logger = opts.logger ?? noopLogger;
-  const sentence = input.plainText
-    ? normalizePlainSpeechText(input.text ?? '')
-    : cleanSpeechText(input.text ?? '');
+  const sentence = normalizePlainSpeechText(input.text ?? '');
   if (!sentence) {
     throw new ValidationError('Pronunciation synthesis text is empty.');
   }

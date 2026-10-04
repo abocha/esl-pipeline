@@ -21,11 +21,12 @@ export async function listRecoverableMemoryDeliveries(
     }>(
       `WITH deliveries AS (SELECT 'homework' AS family, h.id, h.student_id, h.job_id, h.provider, h.model, h.generation_notes
       FROM homework_memory_entries h
-      WHERE h.status = 'pending' OR (h.status = 'superseded' AND EXISTS (
+      WHERE EXISTS (SELECT 1 FROM jobs j WHERE j.id = h.job_id AND j.assignment_artifact IS NOT NULL)
+      AND (h.status = 'pending' OR (h.status = 'superseded' AND EXISTS (
         SELECT 1 FROM homework_memory_entries ready WHERE ready.id = h.superseded_by_id
         AND ready.status = 'ready' AND ready.generation_notes ->> 'pendingEntryId' = h.id::text
         AND NOT EXISTS (SELECT 1 FROM student_memory_snapshots s WHERE s.student_id = h.student_id
-          AND (s.generation_notes ->> 'sourceEntryId' = ready.id::text OR ready.id = ANY(s.homework_memory_entry_ids)))))
+          AND (s.generation_notes ->> 'sourceEntryId' = ready.id::text OR ready.id = ANY(s.homework_memory_entry_ids))))))
       UNION ALL
       SELECT 'snapshot', s.id, s.student_id, NULL, s.provider, s.model, s.generation_notes
       FROM student_memory_snapshots s

@@ -22,6 +22,7 @@ import { getStudentById } from '../domain/student-repository.js';
 import { getTranscriptByIdForWorkspace } from '../domain/transcript-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { isHistoricalAssignmentSession } from './historical-assignment.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 import { completeElapsedScheduledLessonForHomework } from './student-schedule-billing.js';
 import { resolvePrimaryWorkspaceIdForUser } from './workspace-context.js';
@@ -89,7 +90,12 @@ export async function getAssignmentSessionForUser(
   config?: BatchBackendConfig,
 ): Promise<AssignmentSessionDto | null> {
   const requested = await getAssignmentSessionByIdForUser(sessionId, userId);
+  if (requested && (await isHistoricalAssignmentSession(requested))) {
+    return { ...toAssignmentSessionDto(requested), historicalReadOnly: true };
+  }
   const session = requested ? await resolveCanonicalSourceSession(userId, requested) : null;
+  if (session && (await isHistoricalAssignmentSession(session)))
+    return { ...toAssignmentSessionDto(session), historicalReadOnly: true };
   if (session && config) await reconcileConfirmedSourceMemory(session, config);
   return session ? toAssignmentSessionDto(session) : null;
 }
@@ -103,7 +109,16 @@ export async function listAssignmentSessionsForUserDto(
     listAssignmentSessionsForUser(userId, boundedLimit),
     countAssignmentSessionsForUser(userId),
   ]);
-  return { sessions: sessions.map(toAssignmentSessionDto), total, limit: boundedLimit };
+  return {
+    sessions: await Promise.all(
+      sessions.map(async (session) => ({
+        ...toAssignmentSessionDto(session),
+        historicalReadOnly: await isHistoricalAssignmentSession(session),
+      })),
+    ),
+    total,
+    limit: boundedLimit,
+  };
 }
 
 export function toAssignmentSessionDto(session: AssignmentSessionRecord): AssignmentSessionDto {

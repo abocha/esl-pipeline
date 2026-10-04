@@ -1,5 +1,6 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
+import { assertAssignmentInput } from './assignment-input.js';
 import {
   resolveDefaultTtsProvider,
   resolveTtsProviderOrder,
@@ -86,6 +87,7 @@ export class DefaultTtsEngine implements TtsEngine {
     input: BuildStudyTextInput,
     options: BuildStudyTextOptions,
   ): Promise<BuildStudyTextResult> {
+    assertAssignmentInput(input);
     const providerId = this.resolveProviderId(options.ttsProvider);
     const ttsModel = this.validateExplicitModel(providerId, options.ttsModel);
     const provider = this.resolveProviderOrThrow(providerId);
@@ -100,6 +102,7 @@ export class DefaultTtsEngine implements TtsEngine {
     input: BuildStudyTextInput,
     options: BuildStudyTextOptions,
   ): Promise<PreparedStudyTextSynthesis> {
+    assertAssignmentInput(input);
     const providerId = this.resolveProviderId(options.ttsProvider);
     const ttsModel = this.validateExplicitModel(providerId, options.ttsModel);
     const provider = this.resolveProviderOrThrow(providerId);
@@ -135,6 +138,7 @@ export class DefaultTtsEngine implements TtsEngine {
     input: BuildPronunciationShadowSentenceInput,
     options: BuildPronunciationShadowSentenceOptions,
   ): Promise<BuildPronunciationShadowSentenceResult> {
+    assertAssignmentInput(input);
     const providerId = this.resolveProviderId(options.ttsProvider);
     const ttsModel = this.validateExplicitModel(providerId, options.ttsModel);
     const provider = this.resolveProviderOrThrow(providerId);

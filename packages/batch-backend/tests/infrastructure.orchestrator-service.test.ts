@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { assignmentFixture } from './assignment-v1.test-harness.js';
+
 const ORCHESTRATOR_SERVICE_TEST_TIMEOUT_MS = 45_000;
 
 /**
@@ -147,6 +149,7 @@ describe('infrastructure/orchestrator-service', () => {
     const resultPromise = runAssignmentJob(
       {
         jobId: 'job-1',
+        assignment: assignmentFixture(),
         md: 'fixtures/ok.md',
         preset: 'b1-default',
         withTts: true,
@@ -166,6 +169,7 @@ describe('infrastructure/orchestrator-service', () => {
       executionMode: 'new_assignment',
       payload: {
         jobId: 'job-1',
+        assignment: assignmentFixture(),
         md: 'fixtures/ok.md',
         preset: 'b1-default',
         withTts: true,
@@ -197,6 +201,7 @@ describe('infrastructure/orchestrator-service', () => {
     const resultPromise = runAssignmentJob(
       {
         jobId: 'job-1',
+        assignment: assignmentFixture(),
         md: 'fixtures/ok.md',
       },
       'run-2',
@@ -219,6 +224,7 @@ describe('infrastructure/orchestrator-service', () => {
       runAssignmentJob(
         {
           jobId: 'job-1',
+          assignment: assignmentFixture(),
           md: 'fixtures/ok.md',
         },
         'run-aborted',
@@ -237,6 +243,7 @@ describe('infrastructure/orchestrator-service', () => {
     const resultPromise = runAssignmentJob(
       {
         jobId: 'job-1',
+        assignment: assignmentFixture(),
         md: 'fixtures/ok.md',
       },
       'run-cancel',
@@ -266,6 +273,7 @@ describe('infrastructure/orchestrator-service', () => {
     const resultPromise = runRerunAssignmentJob(
       {
         jobId: 'job-rerun-1',
+        assignment: assignmentFixture(),
         md: 'fixtures/ok.md',
         manifestMd: 'fixtures/source.md',
         republishOnly: true,
@@ -283,6 +291,7 @@ describe('infrastructure/orchestrator-service', () => {
       executionMode: 'rerun',
       payload: {
         jobId: 'job-rerun-1',
+        assignment: assignmentFixture(),
         md: 'fixtures/ok.md',
         manifestMd: 'fixtures/source.md',
         republishOnly: true,

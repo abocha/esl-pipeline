@@ -20,29 +20,14 @@ import {
 import { loadConfig } from '../src/config/env.js';
 
 function createPrepared() {
-  const assignmentMarkdown = `---
-title: Deadline conversation
-study_text_type: dialogue
-speaker_profiles:
-  - id: Maya
-    role: project manager
-    persona: warm, practical, and direct
-    voice_direction: calm conversational voice
-  - id: Leo
-    role: colleague
----
-
-:::study-text
-Maya: We need a clearer deadline.
-Leo: I can revise the plan today.
-:::`;
+  const assignment = assignmentFixture();
   return {
     selection: { provider: 'inworld' as const, model: 'inworld-tts-2' as const },
     sourceHash: 'source-hash',
     segments: [{ id: 'segment-1', speaker: 'Maya', text: 'We need a clearer deadline.' }],
     voices: [],
     voiceAssignments: {},
-    enhancementContext: { assignmentMarkdown },
+    enhancementContext: { assignment },
     voicePlan: {
       schemaVersion: 1 as const,
       mode: 'deterministic' as const,
@@ -108,7 +93,7 @@ describe('application/speech-performance-planner', () => {
       'id',
       'synthesisText',
     ]);
-    expect(request.prompt).toContain(prepared.enhancementContext.assignmentMarkdown);
+    expect(request.prompt).toContain(serializeAssignmentV1(prepared.enhancementContext.assignment));
     expect(request.prompt).toContain(SPEECH_ANNOTATION_OPEN);
     expect(request.prompt).not.toContain('speakerEnvelopes');
     expect(request.prompt).not.toContain('turnAdjustment');
@@ -386,7 +371,7 @@ describe('application/speech-performance-planner', () => {
       }),
     );
     const prompt = executor.mock.calls[0]?.[0].request.prompt;
-    expect(prompt).toContain(createPrepared().enhancementContext.assignmentMarkdown);
+    expect(prompt).toContain(serializeAssignmentV1(createPrepared().enhancementContext.assignment));
     expect(prompt).toContain('Unchanged synthesisText is completely valid.');
   });
 

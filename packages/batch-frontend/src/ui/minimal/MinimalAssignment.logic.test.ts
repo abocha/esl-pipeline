@@ -10,6 +10,7 @@ import {
   hasActiveGenerationQuotaSelection,
   hashDraftText,
 } from './MinimalAssignment.logic';
+import { makeAssignmentText } from './MinimalAssignment.typed-test-fixtures';
 
 describe('MinimalAssignment logic helpers', () => {
   it('builds publish overrides for google tts and learning presets', () => {
@@ -253,11 +254,11 @@ describe('MinimalAssignment logic helpers', () => {
   });
 
   it('tracks preview readiness and invalidates it after draft edits', () => {
-    const hash = hashDraftText('# Draft');
-    expect(hash).toBe(hashDraftText('# Draft'));
+    const hash = hashDraftText(makeAssignmentText('# Draft'));
+    expect(hash).toBe(hashDraftText(makeAssignmentText('# Draft')));
     expect(
       getDraftPreviewGate({
-        draftText: '  # Draft  ',
+        draftText: '  ' + makeAssignmentText('# Draft') + '  ',
         previewHtml: '<html></html>',
         lastPreviewedDraftHash: hash,
       }),
@@ -269,12 +270,12 @@ describe('MinimalAssignment logic helpers', () => {
     });
     expect(
       getDraftPreviewGate({
-        draftText: '# Draft\nOne more line',
+        draftText: makeAssignmentText('# Draft\nOne more line'),
         previewHtml: '<html></html>',
         lastPreviewedDraftHash: hash,
       }),
     ).toEqual({
-      draftHash: hashDraftText('# Draft\nOne more line'),
+      draftHash: hashDraftText(makeAssignmentText('# Draft\nOne more line')),
       hasDraftText: true,
       previewReady: false,
       previewRequired: true,

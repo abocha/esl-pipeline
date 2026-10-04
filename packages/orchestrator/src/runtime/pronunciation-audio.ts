@@ -57,17 +57,7 @@ const DEFAULT_GOOGLE_CHUNK_VOICE_BY_MODEL: Record<GoogleTtsModel, string> = {
   wavenet: 'en-US-Wavenet-F',
 };
 
-function normalizeSpeechText(value: string): string {
-  return String(value || '')
-    .replaceAll('**', '')
-    .replaceAll('`', '')
-    .replaceAll('|', ' ')
-    .replaceAll(/["“”]/g, '')
-    .replaceAll(/\s+/g, ' ')
-    .trim();
-}
-
-function normalizeConnectedSpeechText(value: string, normalize = normalizeSpeechText): string {
+function normalizeConnectedSpeechText(value: string, normalize = normalizePlainSpeechText): string {
   return normalize(value).replaceAll(/\s*->\s*/g, ' ');
 }
 
@@ -78,7 +68,7 @@ function looksLikeIpaTranscription(value: string): boolean {
 function resolveConnectedSpeechSpeechText(
   line: Extract<PronunciationFocus, { mode: 'connected_speech' }>['lines'][number],
   logger?: PipelineLogger,
-  normalize = normalizeSpeechText,
+  normalize = normalizePlainSpeechText,
 ): string {
   const careful = normalize(line.careful);
   const connected = normalizeConnectedSpeechText(line.connected, normalize);
@@ -258,7 +248,6 @@ async function synthesizeProviderClip(
     result = await buildPronunciationTextMp3(
       {
         text: clip.text,
-        plainText: Boolean(options.assignment),
         voiceId: config.voiceId.trim(),
         mdPath: options.mdPath,
         title: options.title ?? undefined,
@@ -301,11 +290,7 @@ async function synthesizeShadowPrimary(
   options: PronunciationAudioSynthesisOptions,
 ): Promise<PronunciationClipRecord | null> {
   throwIfTtsCancelled(options);
-  const normalizedText = focus.shadowSentence
-    ? options.assignment
-      ? normalizePlainSpeechText(focus.shadowSentence)
-      : normalizeSpeechText(focus.shadowSentence)
-    : '';
+  const normalizedText = focus.shadowSentence ? normalizePlainSpeechText(focus.shadowSentence) : '';
   const baseClip: PronunciationAudioClip = {
     id: 'primary-shadow-sentence',
     kind: 'shadow_sentence',
@@ -331,7 +316,7 @@ async function synthesizeShadowPrimary(
   try {
     result = await buildPronunciationShadowSentenceMp3(
       {
-        ...(options.assignment ? { assignment: options.assignment } : { context: options.context }),
+        assignment: options.assignment,
         mdPath: options.mdPath,
         voiceId: options.primaryVoiceId.trim(),
       },
@@ -368,7 +353,7 @@ async function synthesizeShadowPrimary(
 
 function buildGenericPrimaryText(
   focus: PronunciationFocus,
-  normalize = normalizeSpeechText,
+  normalize = normalizePlainSpeechText,
 ): string | null {
   switch (focus.mode) {
     case 'shadow_sentence': {
@@ -421,7 +406,7 @@ export async function synthesizePronunciationAudio(
     return undefined;
   }
 
-  const normalize = options.assignment ? normalizePlainSpeechText : normalizeSpeechText;
+  const normalize = normalizePlainSpeechText;
   let primaryClip: PronunciationClipRecord | null = null;
   const itemClips: PronunciationClipRecord[] = [];
   const warnings: PronunciationAudioWarning[] = [];

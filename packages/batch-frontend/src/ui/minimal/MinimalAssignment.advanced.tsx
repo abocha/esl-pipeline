@@ -159,7 +159,8 @@ export function useAdvancedActionsController({
   const cancelImplemented =
     actionCapabilities.find((capability) => capability.type === 'cancel')?.implemented ?? false;
   const cancelAllowedState = jobStatus?.state === 'queued' || jobStatus?.state === 'running';
-  const rerunEnabled = Boolean(jobStatus?.jobId) && rerunImplemented && actionBusy === null;
+  const rerunEnabled =
+    Boolean(jobStatus?.assignmentArtifact) && rerunImplemented && actionBusy === null;
   const cancelEnabled =
     Boolean(jobStatus?.jobId) && cancelImplemented && cancelAllowedState && actionBusy === null;
   const customRerunHasSelection =

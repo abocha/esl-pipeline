@@ -112,7 +112,6 @@ export type BuildPronunciationShadowSentenceInput = AssignmentExecutionInput & {
 };
 
 export interface BuildPronunciationTextInput {
-  plainText?: boolean;
   text: string;
   voiceId: string;
   mdPath?: string;

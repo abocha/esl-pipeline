@@ -39,7 +39,7 @@ from the retained logs rather than running a repository-wide approximation.
   API, and workers.
 - `packages/orchestrator` is the canonical pipeline library for validation, rendering, speech,
   upload, and manifest behavior.
-- `packages/contracts`, `shared-infrastructure`, provider packages, `md-validator`, `pmd`,
+- `packages/contracts`, `shared-infrastructure`, provider packages,
   `html-publisher`, and `storage-uploader` support those product boundaries.
 
 Read [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) for the package map and

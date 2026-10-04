@@ -4,17 +4,21 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { newAssignment, rerunAssignment } from '../src/index.js';
+import { assignmentFixture } from './assignment-fixture.js';
 
 vi.mock('@esl-pipeline/tts-core', async () => {
   const actual =
     await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core');
   return {
     ...actual,
+    prepareStudyTextSynthesis: vi.fn(async (input, options) =>
+      actual.createPreparedStudyTextSynthesis(input, options),
+    ),
     buildStudyTextMp3: vi.fn(),
   };
 });
 
-const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+const okFixturePath = join(import.meta.dirname, '../../contracts/tests/assignment-fixture.json');
 
 describe('orchestrator stub', () => {
   it('produces manifest and step summary', async () => {
@@ -45,6 +49,7 @@ default: voice_id_default
     const deadlineAtMs = Date.now() + 60_000;
     const result = await newAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         preset: 'default',
         withTts: true,
@@ -59,7 +64,7 @@ default: voice_id_default
     expect(result.steps).toContain('import');
     expect(result.manifestPath).toBeDefined();
     expect(result.audio?.url).toMatch(
-      /^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/final\/[a-f0-9]+\/Conditionals%20Type%202%20-%20Study%20Text\.mp3$/,
+      /^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/final\/[a-f0-9]+\/Clear%20demos%20-%20Study%20Text\.mp3$/,
     );
     expect(buildStudyTextMp3).toHaveBeenCalledWith(
       expect.any(Object),
@@ -92,6 +97,7 @@ default: voice_id_default
     });
 
     const baseFlags = {
+      assignment: assignmentFixture(),
       md: mdPath,
       withTts: true,
       upload: 's3' as const,
@@ -148,6 +154,7 @@ default: voice_id_default
     await expect(
       newAssignment(
         {
+          assignment: assignmentFixture(),
           md: mdPath,
           withTts: false,
           dryRun: true,
@@ -188,6 +195,7 @@ default: voice_id_default
     });
 
     await newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       withTts: true,
       upload: 's3',
@@ -200,6 +208,7 @@ default: voice_id_default
     const deadlineAtMs = Date.now() + 60_000;
     await rerunAssignment(
       {
+        assignment: assignmentFixture(),
         md: mdPath,
         regenerateStudyTextAudio: true,
         upload: 's3',
@@ -219,6 +228,7 @@ default: voice_id_default
     await expect(
       rerunAssignment(
         {
+          assignment: assignmentFixture(),
           md: mdPath,
           regenerateStudyTextAudio: true,
           regeneratePronunciationMainAudio: true,
@@ -235,7 +245,7 @@ default: voice_id_default
     });
   });
 
-  it('supports rerun using manifestMd when markdown is materialized to a temp path', async () => {
+  it('supports a stable manifestMd locator when the typed execution locator differs', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-manifest-md-'));
     const mdPath = join(dir, 'lesson.md');
     const tempMdPath = join(dir, 'temp-assignment.md');
@@ -262,6 +272,7 @@ default: voice_id_default
     });
 
     const initial = await newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       withTts: true,
       upload: 's3',
@@ -271,6 +282,7 @@ default: voice_id_default
     });
 
     const rerun = await rerunAssignment({
+      assignment: assignmentFixture(),
       md: tempMdPath,
       manifestMd: mdPath,
       republishOnly: true,

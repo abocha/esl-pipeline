@@ -39,7 +39,7 @@
 3. Worker writes transcript artifacts and status.
 4. User reviews and optionally edits transcript.
 5. User generates prompt package from template/profile/transcript.
-6. User saves draft markdown.
+6. User saves validated AssignmentV1 JSON.
 7. Backend materializes draft and creates/updates approval job.
 8. User approves job; orchestrator runs publish pipeline.
 

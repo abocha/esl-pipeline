@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { validateAssignmentV1 } from '@esl-pipeline/contracts';
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import {
   analyzeSpeechPlanCandidate,
@@ -28,6 +27,7 @@ import {
   validateVoicePlan,
   withVoicePlan,
 } from '../src/index.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 
 describe('TTS request cancellation', () => {
   it('throws a stable cancellation error for an aborted caller signal', () => {
@@ -529,14 +529,44 @@ describe('speech performance plans', () => {
     });
   });
 
-  it('prepares stable segments from learner markdown', () => {
-    const context = parseMarkdownContext(
-      `---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: We need a clearer deadline.\nLeo: I can revise the plan today.\n:::`,
-    );
+  it('prepares stable segments from typed learner turns', () => {
+    const context = createTtsAssignment({
+      metadata: { title: 'Test', student: 'Alex', level: 'B1', topic: 'work' },
+      studyText: {
+        type: 'dialogue',
+        speakers: [
+          {
+            id: 's0',
+            displayName: 'Maya',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+          {
+            id: 's1',
+            displayName: 'Leo',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+        ],
+        turns: [
+          { speakerId: 's0', text: 'We need a clearer deadline.' },
+          { speakerId: 's1', text: 'I can revise the plan today.' },
+        ],
+      },
+      pronunciation: null,
+    });
 
     expect(
       createPreparedStudyTextSynthesis(
-        { context },
+        { assignment: context },
         { voiceMapPath: 'voices.yml', outPath: '/tmp', ttsProvider: 'inworld' },
       ),
     ).toMatchObject({
@@ -546,75 +576,6 @@ describe('speech performance plans', () => {
         { id: 'segment-2', speaker: 'Leo', text: 'I can revise the plan today.' },
       ],
     });
-  });
-
-  it('preserves normalized speaker labels for frontmatter-only speaker universes', () => {
-    const context = parseMarkdownContext(
-      `---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\nspeaker_labels: ["[Alex]", "Alex"]\nspeaker_profiles:\n  - id: alex\n---\n\n:::study-text\nWe need a clearer deadline.\n:::`,
-    );
-
-    const prepared = createPreparedStudyTextSynthesis(
-      { context },
-      { voiceMapPath: 'voices.yml', outPath: '/tmp', ttsProvider: 'inworld' },
-    );
-
-    expect(prepared.speakerLabels).toEqual(['Alex']);
-    expect(() =>
-      validateVoicePlan(prepared, {
-        schemaVersion: 1,
-        mode: 'deterministic',
-        provider: 'inworld',
-        model: 'inworld-tts-2',
-        sourceHash: prepared.sourceHash,
-        assignments: [
-          {
-            speaker: 'Alex',
-            voiceId: 'Ashley',
-            source: 'auto',
-            capabilities: {
-              supportsMetadataInstructions: true,
-              supportsNonVerbals: true,
-              supportsUppercaseEmphasis: true,
-              supportsFreeFormDirection: true,
-            },
-          },
-        ],
-      }),
-    ).not.toThrow();
-  });
-
-  it('falls back to the first speaker profile when unlabeled study text has no speaker prefixes', () => {
-    const context = parseMarkdownContext(
-      `---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\nspeaker_profiles:\n  - id: "[Narrator]"\n---\n\n:::study-text\nWe need a clearer deadline.\n:::`,
-    );
-
-    expect(
-      createPreparedStudyTextSynthesis(
-        { context },
-        { voiceMapPath: 'voices.yml', outPath: '/tmp', ttsProvider: 'inworld' },
-      ).speakerLabels,
-    ).toEqual(['Narrator']);
-  });
-
-  it('carries the active monologue speaker across unlabeled paragraphs', () => {
-    const context = parseMarkdownContext(
-      `---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: travel\ninput_type: generate\nstudy_text_type: monologue\nspeaker_labels: [Lena]\n---\n\n:::study-text\nLena: I expected a quiet weekend.\nThe schedule was full from morning to evening.\nBy Sunday, I had changed my mind.\n:::`,
-    );
-
-    const prepared = createPreparedStudyTextSynthesis(
-      { context },
-      { voiceMapPath: 'voices.yml', outPath: '/tmp', ttsProvider: 'inworld' },
-    );
-
-    expect(prepared.segments).toEqual([
-      { id: 'segment-1', speaker: 'Lena', text: 'I expected a quiet weekend.' },
-      {
-        id: 'segment-2',
-        speaker: 'Lena',
-        text: 'The schedule was full from morning to evening.',
-      },
-      { id: 'segment-3', speaker: 'Lena', text: 'By Sunday, I had changed my mind.' },
-    ]);
   });
 
   it('accepts expressive cues while preserving authored words', () => {

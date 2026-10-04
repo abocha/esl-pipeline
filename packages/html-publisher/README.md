@@ -1,34 +1,21 @@
 # @esl-pipeline/html-publisher
 
-Shared HTML renderer/publisher for the pipeline's html-only publish path.
+Native AssignmentV1 HTML rendering and publication.
 
 ## Exports
 
-- `renderToHtml(markdown, title, options)`
-- `renderAssignmentToHtml(assignment, options)`: native validated AssignmentV1 handout with direct
-  field escaping, shared responsive shell, safe media and deterministic pronunciation controls.
-- `renderAndPublishAssignmentToS3({ assignment, ...options })`: native typed publication.
-- `ASSIGNMENT_HTML_RENDERER_VERSION`: `2`. No active AssignmentV1-to-PMD adapter remains.
-- `createStaticPageHtml(markdown, title, options)`
-- `publishHtmlToS3(html, options)`
-- `renderAndPublishMarkdownToS3({ markdown, title, ...options })`
+- `renderAssignmentToHtml(assignment, options)`: typed handout with escaped plain fields,
+  a responsive shell, safe media, and explicit pronunciation controls.
+- `renderAndPublishAssignmentToS3({ assignment, ...options })`: typed publication.
+- `publishHtmlToS3(html, options)`: upload already-rendered HTML.
+- `ASSIGNMENT_HTML_RENDERER_VERSION`: `2`.
+- `RenderOptions`, `FeatureFlags`, and `ThemeTokens`: shared typed presentation options.
 
-## Historical Markdown Preprocessing Notes
+Historical Markdown assignments are read-only records. This package has no Markdown rendering,
+normalization, parsing, or publication API. Already-produced historical HTML and audio remain
+available through persisted URLs; they are never scraped or regenerated.
 
-- Single-backtick inline snippets render as `<code>` and can include rich inline Markdown formatting
-  (for example `` `**Bold cue:** *slowly*` ``).
-- Multi-backtick inline code spans are preserved as literal code (for example ` `a` ` and
-  ` `a `b` c` `).
-- Fenced code blocks remain untouched by preprocessing.
-- Pronunciation micro-focus content receives additional normalization to clean LLM-variant bullet/code wrappers.
+## URL and media safety
 
-## URL and Media Safety
-
-- `href` and `src` values are sanitized to block unsafe schemes (for example `javascript:`).
-- Safe relative URLs are preserved, including:
-  - root-relative (`/assets/file.png`)
-  - dot-relative (`./file.md`, `../audio/clip.mp3`)
-  - bare relative paths (`lesson-2.md`, `images/pic.png`)
-- `:::video` URLs are normalized for known variants:
-  - YouTube `watch`, `youtu.be`, `embed`, and `shorts` forms map to `youtube.com/embed/<id>`.
-  - Vimeo direct, `video`, `channels`, `groups/.../videos/...`, and `album/.../video/...` forms map to `player.vimeo.com/video/<id>`.
+Links and media reject unsafe URL schemes. Typed video fields support YouTube and Vimeo embeds.
+Pronunciation playback binds explicit clip IDs from typed rendering to serialized audio metadata.

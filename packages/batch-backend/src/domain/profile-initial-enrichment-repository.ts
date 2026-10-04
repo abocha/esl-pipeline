@@ -13,9 +13,10 @@ export async function reconcileInitialEnrichmentIntent(
 
   const canonical = await client.query(
     `SELECT 1 FROM assignment_source_bindings b
+     JOIN assignment_sessions a ON a.id = b.assignment_session_id
      JOIN recordings r ON r.id = b.recording_id
      JOIN transcripts t ON t.id = b.transcript_id
-     WHERE b.assignment_session_id = $1 AND b.binding_role = 'confirmed'
+     WHERE NOT historical_assignment_session(a) AND b.assignment_session_id = $1 AND b.binding_role = 'confirmed'
        AND b.user_id = $2 AND b.student_id = $3
        AND b.recording_id = $4 AND b.transcript_id = $5
        AND b.source_identity_kind = $6 AND b.source_fingerprint_scheme = $7

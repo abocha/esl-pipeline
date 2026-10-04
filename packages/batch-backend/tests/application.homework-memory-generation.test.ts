@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { generateHomeworkMemoryFromSource } from '../src/application/homework-memory-generation.js';
 import type { HomeworkMemoryRecord } from '../src/domain/homework-memory-model.js';
+import { assignmentFixture } from './assignment-v1.test-harness.js';
 
 describe('application/homework-memory-generation', () => {
   it('persists extracted homework memory with published-delivery provenance', async () => {
@@ -91,7 +92,7 @@ describe('application/homework-memory-generation', () => {
           recordingId: 'recording-1',
           transcriptId: 'transcript-1',
           publishedAt: new Date('2026-03-20T15:30:00.000Z'),
-          publishedMarkdown: '# homework',
+
           contentHash: 'sha-123',
           publishTargets: [
             {
@@ -101,11 +102,8 @@ describe('application/homework-memory-generation', () => {
               publishedAt: '2026-03-20T15:30:00.000Z',
             },
           ],
-          normalizedMarkdown: {
-            frontmatter: null,
-            sections: [],
-            plainText: '# homework',
-          },
+          format: 'assignment_v1' as const,
+          assignment: assignmentFixture(),
         },
         pendingEntryId: 'pending-1',
         pendingGenerationNotes: {

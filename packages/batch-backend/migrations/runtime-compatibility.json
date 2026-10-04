@@ -63,6 +63,7 @@
     "0060_user_settings_owner_key": "incompatible",
     "0061_ordinary_memory_replay": "incompatible",
     "0062_assignment_v1_authority": "incompatible",
-    "0063_assignment_native_renderer": "incompatible"
+    "0063_assignment_native_renderer": "incompatible",
+    "0064_historical_markdown_read_only": "incompatible"
   }
 }

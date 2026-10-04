@@ -15,9 +15,7 @@
 | `@esl-pipeline/batch-frontend` | @esl-pipeline/batch-frontend | yes | `packages/batch-frontend/README.md` |
 | `@esl-pipeline/contracts` | @esl-pipeline/contracts | no | `packages/contracts/README.md` |
 | `@esl-pipeline/html-publisher` | @esl-pipeline/html-publisher | no | `packages/html-publisher/README.md` |
-| `@esl-pipeline/md-validator` | @esl-pipeline/md-validator | no | `packages/md-validator/README.md` |
 | `@esl-pipeline/orchestrator` | @esl-pipeline/orchestrator | yes | `packages/orchestrator/README.md` |
-| `@esl-pipeline/pmd` | @esl-pipeline/pmd | no | `packages/pmd/README.md` |
 | `@esl-pipeline/provider-runtime` | @esl-pipeline/provider-runtime | yes | `packages/provider-runtime/README.md` |
 | `@esl-pipeline/shared-infrastructure` | @esl-pipeline/shared-infrastructure | no | `packages/shared-infrastructure/README.md` |
 | `@esl-pipeline/storage-uploader` | @esl-pipeline/storage-uploader | no | `packages/storage-uploader/README.md` |

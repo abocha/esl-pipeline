@@ -3,10 +3,49 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createAndSubmitStudentMemoryOpenAiBatchPlan,
   createStudentMemoryOpenAiBatchPlan,
+  recordStudentMemoryOpenAiBatchRemoteStatus,
 } from '../src/application/student-memory-openai-batch-operations.js';
 import { loadConfig } from '../src/config/env.js';
 
 describe('application/student-memory-openai-batch-operations', () => {
+  it.each(['cancelling', 'validating', 'unexpected', undefined])(
+    'records remote %s as blocking rather than asserting cancellation completed',
+    async (status) => {
+      const recordStatus = vi.fn();
+      expect(
+        await recordStudentMemoryOpenAiBatchRemoteStatus({
+          runId: 'run',
+          remote: { id: 'batch', status },
+          recordStatus,
+        }),
+      ).toBe('in_progress');
+      expect(recordStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          state: 'in_progress',
+          remoteStatusConfirmation: { batchId: 'batch', status: status ?? 'unknown' },
+        }),
+      );
+    },
+  );
+  it.each(['cancelled', 'completed', 'expired', 'failed'] as const)(
+    'records confirmed terminal remote %s',
+    async (status) => {
+      const recordStatus = vi.fn();
+      expect(
+        await recordStudentMemoryOpenAiBatchRemoteStatus({
+          runId: 'run',
+          remote: { id: 'batch', status },
+          recordStatus,
+        }),
+      ).toBe(status);
+      expect(recordStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          state: status,
+          remoteStatusConfirmation: { batchId: 'batch', status },
+        }),
+      );
+    },
+  );
   it('builds a source-text-free dry-run summary without persistence or transport', async () => {
     const createRun = vi.fn();
     const plan = await createStudentMemoryOpenAiBatchPlan({

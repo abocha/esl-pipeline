@@ -143,11 +143,7 @@ export function buildSpeechPlannerRequest(
 ) {
   const contextual = promptPolicyVersion === 'contextual-bracket-annotation-v1';
   const context = prepared.enhancementContext;
-  const assignmentContext =
-    context &&
-    ('assignment' in context
-      ? serializeAssignmentV1(context.assignment)
-      : context.assignmentMarkdown);
+  const assignmentContext = context ? serializeAssignmentV1(context.assignment) : undefined;
   if (contextual && !assignmentContext) {
     throw new Error('Contextual speech annotation requires complete assignment context.');
   }

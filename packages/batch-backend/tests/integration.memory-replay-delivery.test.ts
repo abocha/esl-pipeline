@@ -1,3 +1,4 @@
+import { assignmentFixture } from './assignment-v1.test-harness.js';
 import './support/bootstrap-pg-test-env.js';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'bullmq';
@@ -88,8 +89,8 @@ async function seed() {
       studentId,
     ]);
     await client.query(
-      `INSERT INTO jobs (id, student_id, state, md, publication_sequence, finished_at)
-      VALUES ($1, $2, 'succeeded', '# Homework', 1, $3)`,
+      `INSERT INTO jobs (id, student_id, state, md, publication_sequence, finished_at, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
+      VALUES ($1, $2, 'succeeded', '# Homework', 1, $3, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())`,
       [jobId, studentId, publishedAt],
     );
   });
@@ -103,8 +104,8 @@ async function seed() {
     contentHash: 'a'.repeat(64),
     publishedAt,
     publishTargets: [],
-    normalizedMarkdown: { frontmatter: null, sections: [], plainText: '# Homework' },
-    publishedMarkdown: '# Homework',
+    format: 'assignment_v1' as const,
+    assignment: assignmentFixture(),
   };
 }
 
@@ -1083,6 +1084,7 @@ describe('ordinary replay transactions and DB → BullMQ delivery', () => {
     expect(await listRecoverableMemoryDeliveries()).toHaveLength(0);
     await processHomeworkMemoryJob({
       config,
+      overrides: { sourceResolver: vi.fn().mockResolvedValue(source) },
       payload: {
         kind: 'homework-memory-generate',
         pendingEntryId: pending.id,
@@ -1160,7 +1162,7 @@ describe('ordinary replay transactions and DB → BullMQ delivery', () => {
     await processHomeworkMemoryJob({
       config,
       payload: delivery.data as never,
-      overrides: { generator },
+      overrides: { generator, sourceResolver: vi.fn().mockResolvedValue(source) },
     });
     expect(generator).not.toHaveBeenCalled();
     expect(

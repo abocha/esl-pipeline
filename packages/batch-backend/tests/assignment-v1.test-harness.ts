@@ -50,3 +50,14 @@ export function assignmentFixture(): FixtureAssignmentV1 {
     ),
   ) as FixtureAssignmentV1;
 }
+
+export function assignmentArtifactFixture() {
+  return {
+    format: 'assignment_v1' as const,
+    schemaVersion: 1 as const,
+    serializationVersion: 1 as const,
+    workingVersion: 1,
+    contentHash: 'a'.repeat(64),
+    storageUri: `local://drafts/content/${'a'.repeat(64)}.json`,
+  };
+}

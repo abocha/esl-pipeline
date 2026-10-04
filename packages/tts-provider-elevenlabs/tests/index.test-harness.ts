@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, vi } from 'vitest';
 
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
 
 import type { VoiceCatalog } from '../src/assign.js';
 import * as assign from '../src/assign.js';
@@ -11,6 +11,7 @@ import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
 import { buildPronunciationShadowSentenceMp3, buildStudyTextMp3 } from '../src/index.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 
 const encoder = new TextEncoder();
 type Tail<T extends readonly unknown[]> = T extends readonly [unknown, ...infer Rest]
@@ -35,9 +36,9 @@ export const writeFixture = async (filePath: string, contents: string) => {
 };
 
 export const buildStudyTextMp3FromPath = async (mdPath: string, ...args: StudyTextTailArgs) => {
-  const markdown = await readFile(mdPath, 'utf8');
-  const context = parseMarkdownContext(markdown);
-  return buildStudyTextMp3({ context, mdPath }, ...args);
+  const source = await readFile(mdPath, 'utf8');
+  const context = JSON.parse(source) as FixtureAssignmentV1;
+  return buildStudyTextMp3({ assignment: context, mdPath }, ...args);
 };
 
 export const buildPronunciationShadowSentenceMp3FromPath = async (
@@ -45,27 +46,38 @@ export const buildPronunciationShadowSentenceMp3FromPath = async (
   voiceId: string,
   ...args: ShadowSentenceTailArgs
 ) => {
-  const markdown = await readFile(mdPath, 'utf8');
-  const context = parseMarkdownContext(markdown);
-  return buildPronunciationShadowSentenceMp3({ context, mdPath, voiceId }, ...args);
+  const source = await readFile(mdPath, 'utf8');
+  const context = JSON.parse(source) as FixtureAssignmentV1;
+  return buildPronunciationShadowSentenceMp3({ assignment: context, mdPath, voiceId }, ...args);
 };
 
 export const writeBasicMonologueFixture = async (dir: string) => {
-  const tempMdPath = join(dir, 'lesson-basic.md');
+  const assignmentPath = join(dir, 'assignment-basic.json');
   const tempVoiceMapPath = join(dir, 'voices.yml');
   await writeFixture(
-    tempMdPath,
-    `
----
-title: Retry Test
-student: Anna
-input_type: monologue
----
-
-:::study-text
-This is a short line for retry behavior checks.
-:::
-    `,
+    assignmentPath,
+    JSON.stringify(
+      createTtsAssignment({
+        metadata: { title: 'Retry Test', student: 'Anna', level: 'B1', topic: 'test' },
+        studyText: {
+          type: 'monologue',
+          speakers: [
+            {
+              id: 's0',
+              displayName: 'Narrator',
+              role: 'student',
+              persona: null,
+              voiceDirection: null,
+              gender: 'neutral',
+              age: null,
+              accent: null,
+            },
+          ],
+          turns: [{ speakerId: 's0', text: 'This is a short line for retry behavior checks.' }],
+        },
+        pronunciation: null,
+      }),
+    ),
   );
   await writeFixture(
     tempVoiceMapPath,
@@ -73,7 +85,7 @@ This is a short line for retry behavior checks.
 default: voice_id_default
     `,
   );
-  return { tempMdPath, tempVoiceMapPath };
+  return { assignmentPath, tempVoiceMapPath };
 };
 
 const catalogMock: VoiceCatalog = {

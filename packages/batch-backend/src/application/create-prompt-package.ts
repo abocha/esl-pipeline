@@ -35,6 +35,10 @@ import {
   deriveFoundationalProfileFromMarkdown,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
+import {
+  HistoricalAssignmentReadOnlyError,
+  isHistoricalAssignmentSession,
+} from './historical-assignment.js';
 import { stitchPromptEnvelope, stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptTemplateSelection } from './prompt-options.js';
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
@@ -230,6 +234,8 @@ export async function createPromptPackage(
       'Assignment session was not found',
     );
   }
+  if (assignmentSession && (await isHistoricalAssignmentSession(assignmentSession)))
+    throw new HistoricalAssignmentReadOnlyError();
   if (assignmentSession && (params.notes !== undefined || params.lessonId !== undefined)) {
     throw new PromptPackageAssignmentError(
       'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID',

@@ -8,12 +8,12 @@ import {
 } from '@esl-pipeline/contracts';
 
 import type {
+  AssignmentValidationResponse,
   DraftResponse,
   GenerateDraftRequest,
   GenerateDraftResponse,
   JobOptionsResponse,
   JobStatus,
-  MarkdownValidationResponse,
   PromptPackageResponse,
 } from '../../utils/api';
 import {
@@ -28,7 +28,6 @@ import {
   materializeDraft,
   renderHtmlPreview,
   updateDraft,
-  validateMarkdown,
 } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/clipboard';
 import {
@@ -106,20 +105,6 @@ function formatAbsoluteTimestamp(timestamp: string): string {
   return parsed.toLocaleString();
 }
 
-function detectPronunciationModeFromDraft(text: string): PronunciationMode | null {
-  const match = text.match(/\*\*Mode:\*\*\s*([a-z_]+)/i);
-  if (!match) return null;
-  const mode = match[1]?.trim().toLowerCase();
-  return mode === 'shadow_sentence' ||
-    mode === 'connected_speech' ||
-    mode === 'intonation' ||
-    mode === 'rhythm_chunking' ||
-    mode === 'sentence_stress' ||
-    mode === 'minimal_pair'
-    ? mode
-    : null;
-}
-
 const DEFAULT_TTS_PROVIDER: UiTtsProvider = 'inworld';
 const DEFAULT_TTS_STRATEGY: UiPublishTtsStrategy = 'auto';
 const DEFAULT_PUBLISH_TARGET: MinimalPublishTarget = 'html';
@@ -146,7 +131,7 @@ export interface AuthoringHydrationSnapshot {
   previewHtml: string | null;
   previewError: string | null;
   lastPreviewedDraftHash: string | null;
-  validation: MarkdownValidationResponse | null;
+  validation: AssignmentValidationResponse | null;
   validationError: string | null;
 }
 
@@ -206,7 +191,7 @@ export type AuthoringAction =
     }
   | { type: 'draft_save_failed'; payload: { error: string } }
   | { type: 'validation_started' }
-  | { type: 'validation_succeeded'; payload: { validation: MarkdownValidationResponse } }
+  | { type: 'validation_succeeded'; payload: { validation: AssignmentValidationResponse } }
   | { type: 'validation_failed'; payload: { error: string } }
   | { type: 'validation_cleared' }
   | { type: 'preview_started' }
@@ -587,7 +572,7 @@ export interface AuthoringController extends AuthoringState {
     forceFreshPrompt?: boolean;
   }) => Promise<GenerateDraftResponse | null>;
   generateDraft: () => Promise<GenerateDraftResponse | null>;
-  runValidation: () => Promise<MarkdownValidationResponse>;
+  runValidation: () => Promise<AssignmentValidationResponse>;
   saveDraft: () => Promise<DraftResponse | null>;
   flushDraftAutosave: () => Promise<DraftResponse | null>;
   refreshDraftPreservingLocal: (options?: { forcePreserveLocal?: boolean }) => Promise<void>;
@@ -687,14 +672,19 @@ export function useMinimalAssignmentAuthoringController({
   const structuredDraft = state.draft
     ? state.draft.format === 'assignment_v1'
     : state.draftFormat === 'assignment_v1' ||
-      state.promptPackage?.requestEnvelope?.promptVersion === 'assignment_v1';
+      !state.promptPackage ||
+      state.promptPackage.requestEnvelope?.promptVersion === 'assignment_v1';
   const validationContext =
     state.draft?.validationContext ??
     state.promptPackage?.requestEnvelope?.assignmentContext ??
     state.generatedValidationContext;
   const typedDraft = useMemo(() => {
     if (!structuredDraft)
-      return { assignment: null, canonical: state.draftText.trim(), error: null };
+      return {
+        assignment: null,
+        canonical: state.draftText.trim(),
+        error: 'Historical Markdown assignments are read-only.',
+      };
     try {
       if (!validationContext)
         throw new Error('Assignment validation context is missing. Reload the saved draft.');
@@ -710,7 +700,7 @@ export function useMinimalAssignmentAuthoringController({
   }, [structuredDraft, state.draftText, validationContext]);
   const draftValid = !typedDraft.error;
   const isCurrentDraftValid = useCallback(() => {
-    if (!structuredDraft) return true;
+    if (!structuredDraft) return false;
     if (!validationContext) return false;
     try {
       parseAssignmentV1(draftTextRef.current, validationContext);
@@ -721,7 +711,7 @@ export function useMinimalAssignmentAuthoringController({
   }, [structuredDraft, validationContext]);
   const isCurrentDraftSaved = useCallback(
     (draft: DraftResponse | null | undefined) => {
-      if (!structuredDraft) return true;
+      if (!structuredDraft) return false;
       if (!draft?.assignment || !validationContext) return false;
       try {
         return (
@@ -735,20 +725,20 @@ export function useMinimalAssignmentAuthoringController({
     [structuredDraft, validationContext],
   );
   const draftDirty = useMemo(() => {
-    const original = state.draft?.text ?? '';
     const lineageChanged = Boolean(
       state.draft?.id &&
         state.promptPackage?.id &&
         state.draft.promptPackageId !== state.promptPackage.id,
     );
     if (structuredDraft) {
+      if (!state.draftText.trim() && !state.draft?.id) return false;
       if (!typedDraft.assignment) return true;
       if (!state.draft?.assignment) return true;
       return (
         lineageChanged || typedDraft.canonical !== serializeAssignmentV1(state.draft.assignment)
       );
     }
-    return lineageChanged || state.draftText.trim() !== original.trim();
+    return false;
   }, [
     structuredDraft,
     typedDraft,
@@ -926,48 +916,25 @@ export function useMinimalAssignmentAuthoringController({
     dispatch({ type: 'prompt_error_set', payload: { error: value } });
   }, []);
 
-  const runValidation = useCallback(async (): Promise<MarkdownValidationResponse> => {
+  const runValidation = useCallback(async (): Promise<AssignmentValidationResponse> => {
     if (structuredDraft) {
       const response = {
         ok: draftValid,
         errors: typedDraft.error ? [typedDraft.error] : [],
         warnings: [],
         meta: typedDraft.assignment?.metadata,
-      } as MarkdownValidationResponse;
+      } as AssignmentValidationResponse;
       dispatch({ type: 'validation_succeeded', payload: { validation: response } });
       return response;
     }
-    if (!state.draftText.trim()) {
-      dispatch({ type: 'validation_cleared' });
-      return { ok: false, errors: [], warnings: [] } as MarkdownValidationResponse;
-    }
-    dispatch({ type: 'validation_started' });
-    try {
-      const selectedValidationPreset =
-        state.selectedPreset && presetOptionIds.includes(state.selectedPreset)
-          ? state.selectedPreset
-          : null;
-      const response = await validateMarkdown(
-        state.draftText.trim(),
-        true,
-        learningPresetCatalogEnabled ? { learningPresetId: selectedValidationPreset } : undefined,
-      );
-      dispatch({ type: 'validation_succeeded', payload: { validation: response } });
-      return response;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to validate markdown.';
-      dispatch({ type: 'validation_failed', payload: { error: message } });
-      return { ok: false, errors: [message], warnings: [] } as MarkdownValidationResponse;
-    }
-  }, [
-    structuredDraft,
-    draftValid,
-    typedDraft,
-    learningPresetCatalogEnabled,
-    presetOptionIds,
-    state.draftText,
-    state.selectedPreset,
-  ]);
+    const response = {
+      ok: false,
+      errors: ['Historical Markdown assignments are read-only.'],
+      warnings: [],
+    };
+    dispatch({ type: 'validation_succeeded', payload: { validation: response } });
+    return response;
+  }, [structuredDraft, draftValid, typedDraft]);
 
   useEffect(() => {
     draftTextRef.current = state.draftText;
@@ -984,6 +951,7 @@ export function useMinimalAssignmentAuthoringController({
       } = {},
     ): Promise<DraftResponse | null> => {
       const typed = options.format ? options.format === 'assignment_v1' : structuredDraft;
+      if (!typed) throw new Error('Historical Markdown assignments are read-only.');
       if (typed) {
         const context = options.validationContext ?? validationContext;
         if (!context) throw new Error('Assignment validation context is missing');
@@ -1028,10 +996,7 @@ export function useMinimalAssignmentAuthoringController({
         type: 'draft_save_succeeded',
         payload: { draft: response, preserveCurrentText },
       });
-      onDraftPronunciationModeDetected(
-        response.assignment?.pronunciation?.mode ??
-          detectPronunciationModeFromDraft(response.text ?? text),
-      );
+      onDraftPronunciationModeDetected(response.assignment?.pronunciation?.mode ?? null);
       return response;
     },
     [
@@ -1332,11 +1297,13 @@ export function useMinimalAssignmentAuthoringController({
       });
       return null;
     }
+    if (!structuredDraft) return null;
     return generateDraftForPromptPackageId(state.promptPackage.id);
-  }, [generateDraftForPromptPackageId, state.promptPackage?.id]);
+  }, [generateDraftForPromptPackageId, state.promptPackage?.id, structuredDraft]);
 
   const generateAssignment = useCallback(
     async (options?: { forceFreshPrompt?: boolean }): Promise<GenerateDraftResponse | null> => {
+      if (!structuredDraft) return null;
       const promptPackage =
         !options?.forceFreshPrompt && state.promptPackage?.id
           ? state.promptPackage
@@ -1344,7 +1311,7 @@ export function useMinimalAssignmentAuthoringController({
       if (!promptPackage?.id) return null;
       return generateDraftForPromptPackageId(promptPackage.id);
     },
-    [generateDraftForPromptPackageId, generatePrompt, state.promptPackage],
+    [generateDraftForPromptPackageId, generatePrompt, state.promptPackage, structuredDraft],
   );
 
   const previewDraft = useCallback(async () => {
@@ -1352,7 +1319,7 @@ export function useMinimalAssignmentAuthoringController({
     if (!normalizedDraft) {
       dispatch({
         type: 'preview_failed',
-        payload: { error: 'Paste the assignment markdown first.' },
+        payload: { error: 'Create the assignment first.' },
       });
       return;
     }
@@ -1370,10 +1337,10 @@ export function useMinimalAssignmentAuthoringController({
         state.selectedPreset && presetOptionIds.includes(state.selectedPreset)
           ? state.selectedPreset
           : null;
+      if (!typedDraft.assignment) throw new Error('Historical Markdown assignments are read-only.');
       const htmlResponse = await renderHtmlPreview({
-        ...(typedDraft.assignment
-          ? { assignment: typedDraft.assignment, promptPackageId: state.promptPackage?.id }
-          : { text: normalizedDraft }),
+        assignment: typedDraft.assignment,
+        promptPackageId: state.promptPackage?.id,
         title: validationResult.meta?.title?.trim() || undefined,
         learningPresetId: learningPresetCatalogEnabled ? validPreset : null,
       });

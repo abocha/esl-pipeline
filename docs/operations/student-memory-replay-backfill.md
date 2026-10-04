@@ -32,7 +32,7 @@
 
 ## Disabled OpenAI Batch Replay
 
-Use the Batch tool only for explicit, non-urgent historical replay after separate maintainer
+Use the Batch tool only for explicit, non-urgent replay of eligible lesson evidence or native AssignmentV1 history after separate maintainer
 authorization. It never replaces fresh online student-memory work.
 
 ```bash
@@ -74,6 +74,27 @@ docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml
 
 If replay commands request work but the worker is absent or stopped, memory rows may remain pending
 and the student workspace can look stale even though the replay command accepted the request.
+
+### ESL-7 historical Batch cutover
+
+Historical Markdown homework is read-only under ABO-30. Do not submit, retry, reconcile/import or
+regenerate it. Before migration 0064, refresh every remotely submitted historical homework Batch
+run with the updated tool's `status` or `poll` action, including rows already labelled `cancelled` or
+`reconciled`. This is a separately authorized provider-status read plus local status/audit update.
+It does not authorize paid generation or historical result import.
+
+```bash
+pnpm --filter @esl-pipeline/batch-backend student-memory:batch -- status --run-id <run-uuid>
+```
+
+Use the approved target DB/provider configuration with automatic migration disabled until quiescence
+is verified. The existing Batch access gate still applies. Cancellation requests can return OpenAI
+`cancelling` while requests remain in flight; the tool persists that as blocking `in_progress` and
+reports the raw status. Poll until an actual terminal response is recorded. The audit stores
+`remoteStatusConfirmation` with matching Batch id, raw status and observation time. Migration 0064
+rejects a remotely submitted historical run without matching terminal evidence, even when its old
+state says `cancelled`. A confirmed terminal response preserves `reconciled` bookkeeping; a
+nonterminal refresh makes the run blocking again. Unknown statuses remain blocking.
 
 ## Homework Memory Replay
 
@@ -136,7 +157,8 @@ after reviewing why the original attempt became obsolete. No new provider work i
 recover downstream delivery of an already current canonical result.
 
 Homework memory is canonical only after publish succeeds, so replay operates from succeeded publish
-jobs and the canonical published markdown source.
+jobs and the frozen native AssignmentV1 artifact. Historical Markdown jobs remain available for
+inspection and export but cannot be replayed or regenerated.
 
 Host-run command:
 

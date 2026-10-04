@@ -13,6 +13,7 @@ import {
 import { buildHomeworkMemoryEnvelope } from '../src/application/homework-memory-prompt.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
+import { assignmentFixture } from './assignment-v1.test-harness.js';
 
 function createGenerationConfig(): BatchBackendConfig['generation'] {
   return loadConfig().generation;
@@ -88,8 +89,9 @@ describe('application/homework-memory-content-schema', () => {
 describe('application/homework-memory-extraction', () => {
   it('builds a labelled published-assignment envelope', () => {
     const envelope = buildHomeworkMemoryEnvelope({
-      normalizedMarkdown: { frontmatter: null, sections: [], plainText: 'Practice articles.' },
       source: {
+        format: 'assignment_v1',
+        assignment: assignmentFixture(),
         assignmentLineageKey: 'assignment-1',
         publishTargets: [],
         publishedAt: new Date('2026-06-19T00:00:00.000Z'),
