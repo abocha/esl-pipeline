@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [17.0.0] - 2026-10-04
+
+### Changed
+
+- Automated release from PR #337: feat(assignments)!: retire historical Markdown execution (https://github.com/abocha/esl-pipeline/pull/337)
+
 ## [16.0.0] - 2026-10-04
 
 ### Changed
