@@ -334,7 +334,9 @@ describe('integration/migrations', () => {
           `INSERT INTO drafts (id, prompt_package_id, storage_uri, working_version, content_hash) VALUES ($1, $2, 'local://legacy.md', 1, repeat('b', 64))`,
           [legacyId, promptId],
         );
-        await runMigrations();
+        await pool.query(
+          await fs.readFile(path.join(migrationsPath, '0062_assignment_v1_authority.sql'), 'utf8'),
+        );
         expect(
           (await pool.query(`SELECT format, storage_uri FROM drafts WHERE id = $1`, [legacyId]))
             .rows[0],
