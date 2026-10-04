@@ -6,17 +6,23 @@ import path from 'node:path';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
+
+import { approveJobForPipeline } from '../src/application/approve-job.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as submitJobModule from '../src/application/submit-job.js';
+import { insertApprovalJob } from '../src/domain/job-repository.js';
 import { withPgClient } from '../src/infrastructure/db.js';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
+import { FilesystemTranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
 import { startWorker } from '../src/transport/worker-runner.js';
+import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 import { requirePgTestEnv, requireRedisTestEnv, resolveTestTimeout } from './support/test-env.js';
 
 /**
  * Intent:
  * - High-value, slower integration that approximates the full flow:
- *   POST /jobs -> insertJob + BullMQ enqueue -> worker -> processQueueJob -> runAssignmentJob -> DB state.
+ *   Native approval -> BullMQ enqueue -> worker -> processQueueJob -> runAssignmentJob -> DB state.
  * - Uses:
  *   - Real Postgres + Redis/BullMQ, as configured for tests (e.g. via docker-compose).
  *   - Mocked orchestrator (runAssignmentJob) to keep deterministic and fast.
@@ -42,67 +48,81 @@ vi.mock('../src/infrastructure/logger', () => ({
   }),
 }));
 
-// Use real submitJob/getJobStatus implementations (no mocks) to exercise actual flow.
+// Use real approval/getJobStatus implementations (no mocks) to exercise actual flow.
 const runAssignmentJobMock = vi.spyOn(orchestratorService, 'runAssignmentJob');
 
 let app: ReturnType<typeof Fastify>;
 let workerStop: (() => Promise<void>) | null = null;
-let markdownFixtureDir: string | null = null;
-let markdownFixturePath = '';
-const integrationFixtureMarkdown = `---
-title: 'Worker Runner Integration Fixture'
-student: Integration Student
-level: A2
-topic: Integration Pipeline
-input_type: generate
-speaker_labels: [Alex, Mara]
----
+let assignmentFixtureDir: string | null = null;
 
-## 1. This Week's Mission Briefing
-text
-
-## 2. Input Material: The Source
-:::study-text
-[Alex]: Hi!
-[Mara]: Hello!
-:::
-
-### Comprehension Check
-1. question
-2. question
-
-## 3. Language Toolkit: Useful Language
-text
-
-## 4. Practice & Pronunciation
-### A. Controlled Practice
-1. one
-2. two
-3. three
-4. four
-5. five
-6. six
-7. seven
-8. eight
-### B. Pronunciation Micro-Focus
-text
-
-## 5. Your Turn: Complete the Mission!
-text
-
-## 6. Why This Mission Helps You
-text
-
-## 7. Answer Key & Sample Mission
-:::toggle Answer Key
-notes
-:::
-
-## 8. Teacher's Follow-up Plan
-:::toggle Teacher's Follow-up Plan
-notes
-:::
-`;
+async function seedNativeApproval() {
+  const workspaceId = randomUUID();
+  const studentId = randomUUID();
+  const recordingId = randomUUID();
+  const transcriptId = randomUUID();
+  const promptPackageId = randomUUID();
+  const draftId = randomUUID();
+  const storage = new FilesystemTranscriptionStorage(assignmentFixtureDir!);
+  const artifact = await storage.putDraft({
+    draftId,
+    format: 'assignment_v1',
+    text: serializeAssignmentV1(assignmentFixture()),
+  });
+  await withPgClient(async (client) => {
+    await client.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Worker test')`, [
+      workspaceId,
+    ]);
+    await client.query(
+      `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Eval Persona One', $2)`,
+      [studentId, workspaceId],
+    );
+    await client.query(
+      `INSERT INTO recordings (id, student_id, source, storage_uri, bytes, status)
+       VALUES ($1, $2, 'upload', 'local://test.mp3', 1, 'transcribed')`,
+      [recordingId, studentId],
+    );
+    await client.query(
+      `INSERT INTO transcripts (id, recording_id, storage_uri, stt_provider, mode, model, language, fallback_used)
+       VALUES ($1, $2, 'local://test.txt', 'deepgram', 'timeline', 'nova-3', 'auto', false)`,
+      [transcriptId, recordingId],
+    );
+    await client.query(
+      `INSERT INTO prompt_packages (id, recording_id, transcript_id, student_id, template_version, storage_uri, request_envelope)
+       VALUES ($1, $2, $3, $4, 'assignment-v1', 'local://prompt.txt', $5::jsonb)`,
+      [
+        promptPackageId,
+        recordingId,
+        transcriptId,
+        studentId,
+        JSON.stringify(promptPackageFixture().requestEnvelope),
+      ],
+    );
+    await client.query(
+      `INSERT INTO drafts (id, prompt_package_id, student_id, format, storage_uri, working_version, content_hash)
+       VALUES ($1, $2, $3, 'assignment_v1', $4, 1, $5)`,
+      [draftId, promptPackageId, studentId, artifact.uri, artifact.sha256],
+    );
+  });
+  return insertApprovalJob({
+    recordingId,
+    transcriptId,
+    promptPackageId,
+    draftId,
+    studentId,
+    mdStorageUri: artifact.uri,
+    assignmentArtifact: {
+      format: 'assignment_v1',
+      schemaVersion: 1,
+      serializationVersion: 1,
+      workingVersion: 1,
+      storageUri: artifact.uri,
+      contentHash: artifact.sha256,
+    },
+    assignmentRendererVersion: 2,
+    withTts: false,
+    upload: 'none',
+  });
+}
 
 async function truncateJobs() {
   await withPgClient(async (client) => {
@@ -122,9 +142,8 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
     await truncateJobs();
     const testTmpRoot = path.join(process.cwd(), '.tmp');
     await fs.mkdir(testTmpRoot, { recursive: true });
-    markdownFixtureDir = await fs.mkdtemp(path.join(testTmpRoot, 'worker-runner-integration-'));
-    markdownFixturePath = path.join(markdownFixtureDir, 'ok.md');
-    await fs.writeFile(markdownFixturePath, integrationFixtureMarkdown, 'utf8');
+    assignmentFixtureDir = await fs.mkdtemp(path.join(testTmpRoot, 'worker-runner-integration-'));
+    vi.stubEnv('FILESYSTEM_UPLOAD_DIR', assignmentFixtureDir);
 
     // Start HTTP server on ephemeral port.
     // http-server.ts currently binds directly; for tests we simulate by creating Fastify
@@ -132,30 +151,10 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
     app = Fastify({ logger: false });
 
     app.post(
-      '/jobs',
-      async (
-        request: FastifyRequest<{
-          Body: {
-            md: string;
-            withTts?: boolean;
-            upload?: 'auto' | 's3' | 'none';
-          };
-        }>,
-        reply: FastifyReply,
-      ) => {
-        try {
-          const body = request.body;
-          const result = await submitJobModule.submitJob({
-            md: body?.md,
-            withTts: body?.withTts,
-            upload: body?.upload,
-          });
-          return reply.code(202).send(result);
-        } catch (error: unknown) {
-          return reply
-            .code(400)
-            .send({ error: error instanceof Error ? error.message : 'Failed to submit job' });
-        }
+      '/jobs/:jobId/approve',
+      async (request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) => {
+        const job = await approveJobForPipeline(request.params.jobId);
+        return reply.code(job ? 202 : 404).send({ jobId: job?.id });
       },
     );
 
@@ -199,13 +198,23 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
     if (app) {
       await app.close();
     }
-    if (markdownFixtureDir) {
-      await fs.rm(markdownFixtureDir, { recursive: true, force: true });
-      markdownFixtureDir = null;
-      markdownFixturePath = '';
+    if (assignmentFixtureDir) {
+      await fs.rm(assignmentFixtureDir, { recursive: true, force: true });
+      assignmentFixtureDir = null;
     }
+    vi.unstubAllEnvs();
     await truncateJobs();
   }, integrationTimeout);
+
+  it('rejects retired Markdown submission before queue or provider execution', async () => {
+    runAssignmentJobMock.mockClear();
+    await expect(submitJobModule.submitJob({ md: 'historical.md' })).rejects.toMatchObject({
+      code: 'legacy_assignment_read_only',
+    });
+    const count = await withPgClient((client) => client.query('SELECT count(*) FROM jobs'));
+    expect(Number(count.rows[0].count)).toBe(0);
+    expect(runAssignmentJobMock).not.toHaveBeenCalled();
+  });
 
   it(
     'runs job to succeeded when orchestrator succeeds',
@@ -214,10 +223,10 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
         manifestPath: '/manifests/integration.json',
       });
 
+      const approvalJob = await seedNativeApproval();
       const submitRes = await app.inject({
         method: 'POST',
-        url: '/jobs',
-        payload: { md: markdownFixturePath },
+        url: `/jobs/${approvalJob.id}/approve`,
       });
 
       expect(submitRes.statusCode).toBe(202);
@@ -257,10 +266,10 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
     async () => {
       runAssignmentJobMock.mockRejectedValue(new Error('orchestrator down'));
 
+      const approvalJob = await seedNativeApproval();
       const submitRes = await app.inject({
         method: 'POST',
-        url: '/jobs',
-        payload: { md: markdownFixturePath },
+        url: `/jobs/${approvalJob.id}/approve`,
       });
 
       expect(submitRes.statusCode).toBe(202);
