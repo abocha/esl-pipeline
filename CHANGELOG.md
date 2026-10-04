@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [16.0.0] - 2026-10-04
+
+### Changed
+
+- Automated release from PR #336: feat(assignments)!: execute AssignmentV1 natively (ESL-6) (https://github.com/abocha/esl-pipeline/pull/336)
+
 ## [15.0.0] - 2026-10-03
 
 ### Changed
