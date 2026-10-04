@@ -1,5 +1,8 @@
+import { readFileSync as readAssignmentFixture } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
 import {
   SPEECH_ANNOTATION_OPEN,
   SpeechPerformancePlannerInvalidOutputError,
@@ -75,6 +78,24 @@ function createDialoguePrepared() {
 }
 
 describe('application/speech-performance-planner', () => {
+  it('provides complete typed context deterministically without Markdown', () => {
+    const assignment = assignmentFixture();
+    const prepared = { ...createPrepared(), enhancementContext: { assignment } };
+    const first = buildSpeechPlannerRequest(
+      prepared,
+      'contextual-bracket-annotation-v1',
+      'gpt-5.6-luna',
+    );
+    const next = buildSpeechPlannerRequest(
+      prepared,
+      'contextual-bracket-annotation-v1',
+      'gpt-5.6-luna',
+    );
+    expect(first).toEqual(next);
+    expect(first.prompt).toContain(serializeAssignmentV1(assignment));
+    expect(first.prompt).not.toContain(':::study-text');
+    expect(first.prompt).toContain(assignment.toolkit.grammar[0]!.name);
+  });
   it('builds the immutable contextual-annotation request from complete assignment context', () => {
     const prepared = createDialoguePrepared();
     const request = buildSpeechPlannerRequest(
@@ -509,4 +530,13 @@ function createEnabledConfig() {
       debugLogPlan: false,
     },
   };
+}
+
+function assignmentFixture(): FixtureAssignmentV1 {
+  return JSON.parse(
+    readAssignmentFixture(
+      new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+      'utf8',
+    ),
+  ) as FixtureAssignmentV1;
 }

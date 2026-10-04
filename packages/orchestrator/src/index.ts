@@ -4,12 +4,18 @@ import { access } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 
 import {
+  assignmentPronunciation,
   FfmpegNotFoundError,
   InfrastructureError,
   ManifestError,
+  serializeAssignmentV1,
   ValidationError,
+  validateAssignmentV1,
 } from '@esl-pipeline/contracts';
-import { renderAndPublishMarkdownToS3 } from '@esl-pipeline/html-publisher';
+import {
+  renderAndPublishAssignmentToS3,
+  renderAndPublishMarkdownToS3,
+} from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
@@ -525,7 +531,13 @@ export async function newAssignment(
   });
 
   const steps: string[] = [];
-  const mdContents = await readMarkdownCached(flags.md);
+  const assignment =
+    flags.assignment !== undefined
+      ? validateAssignmentV1(flags.assignment, flags.validationContext)
+      : undefined;
+  const mdContents = assignment
+    ? serializeAssignmentV1(assignment)
+    : await readMarkdownCached(flags.md);
   const markdownHash = hashStudyText(mdContents);
   const previousManifest = await manifestStore.readManifest(flags.md);
   const publishTarget = normalizeManifestPublishTarget(
@@ -552,15 +564,18 @@ export async function newAssignment(
     throwIfCancelled(signal, 'validate');
     emitStage('validate', 'start');
     steps.push('validate');
-    const markdownContext = parseMarkdownContext(mdContents);
-    const validation = await validateMarkdown({
-      context: markdownContext,
-      path: flags.md,
-      strict: false,
-      learningPresetId: flags.learningPresetId,
-      learningPresetVersion: flags.learningPresetVersion,
-      preset: flags.preset,
-    });
+    const markdownContext = assignment ? undefined : parseMarkdownContext(mdContents);
+    const executionInput = assignment ? { assignment } : { context: markdownContext! };
+    const validation = assignment
+      ? { ok: true, errors: [], warnings: [], meta: assignment.metadata }
+      : await validateMarkdown({
+          context: markdownContext!,
+          path: flags.md,
+          strict: false,
+          learningPresetId: flags.learningPresetId,
+          learningPresetVersion: flags.learningPresetVersion,
+          preset: flags.preset,
+        });
     throwIfCancelled(signal, 'validate');
     if (!validation.ok) {
       const msg = ['Validation failed:', ...validation.errors.map((e) => `- ${e}`)].join('\n');
@@ -614,7 +629,7 @@ export async function newAssignment(
         steps.push('voice-plan');
         throwIfCancelled(signal, 'voice-plan');
         const prepared = await prepareStudyTextSynthesis(
-          { context: markdownContext, mdPath: flags.md },
+          { ...executionInput, mdPath: flags.md },
           {
             voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
             outPath: flags.out ?? dirname(flags.md),
@@ -683,7 +698,7 @@ export async function newAssignment(
         try {
           ttsResult = await buildStudyTextMp3(
             {
-              context: markdownContext,
+              ...executionInput,
               mdPath: flags.md,
             },
             {
@@ -782,10 +797,12 @@ export async function newAssignment(
 
         const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
         const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
-        const detectedPronunciationFocus = extractPronunciationFocus(markdownContext);
+        const detectedPronunciationFocus = assignment
+          ? assignmentPronunciation(assignment)
+          : extractPronunciationFocus(markdownContext!);
         const defaultChunkProvider = resolveDefaultChunkProvider(detectedPronunciationFocus?.mode);
         audioArtifacts.pronunciation = await synthesizePronunciationAudio({
-          context: markdownContext,
+          ...executionInput,
           mdPath: flags.md,
           outPath: flags.out ?? dirname(flags.md),
           title: validation.meta?.title ?? basename(flags.md).replace(/\.[^.]+$/, ''),
@@ -820,12 +837,14 @@ export async function newAssignment(
         artifact,
       })),
     ];
-    const studentFacingAudioTitle = resolveMarkdownTitle(
-      mdContents,
-      basename(flags.md).replace(/\.[^.]+$/, ''),
-      validation.meta?.title ?? null,
-      true,
-    );
+    const studentFacingAudioTitle =
+      assignment?.metadata.title ??
+      resolveMarkdownTitle(
+        mdContents,
+        basename(flags.md).replace(/\.[^.]+$/, ''),
+        validation.meta?.title ?? null,
+        true,
+      );
     const uploadableArtifacts = artifactEntries.filter((entry) => entry.artifact?.path);
     if (flags.upload === 's3' && uploadableArtifacts.length > 0) {
       if (flags.skipUpload) {
@@ -910,22 +929,34 @@ export async function newAssignment(
           );
         }
 
-        const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
-          studyTextUrl: studyTextAudioUrl,
-          pronunciationAudioUrl,
-          pronunciationAudio: audioArtifacts.pronunciation,
-        });
-        const publishTitle = resolveMarkdownTitle(
-          mdContents,
-          basename(flags.md).replace(/\.[^.]+$/, ''),
-          validation.meta?.title ?? null,
-        );
-        const publishResult = await renderAndPublishMarkdownToS3({
-          headingTheme,
-          title: publishTitle,
-          markdown: publishMarkdown,
-          pronunciationAudio: audioArtifacts.pronunciation,
-        });
+        const publishMarkdown = assignment
+          ? undefined
+          : insertGeneratedAudioLinks(mdContents, {
+              studyTextUrl: studyTextAudioUrl,
+              pronunciationAudioUrl,
+              pronunciationAudio: audioArtifacts.pronunciation,
+            });
+        const publishTitle =
+          assignment?.metadata.title ??
+          resolveMarkdownTitle(
+            mdContents,
+            basename(flags.md).replace(/\.[^.]+$/, ''),
+            validation.meta?.title ?? null,
+          );
+        const publishResult = assignment
+          ? await renderAndPublishAssignmentToS3({
+              assignment,
+              headingTheme,
+              studyTextAudioUrl,
+              pronunciationAudioUrl,
+              pronunciationAudio: audioArtifacts.pronunciation,
+            })
+          : await renderAndPublishMarkdownToS3({
+              headingTheme,
+              title: publishTitle,
+              markdown: publishMarkdown!,
+              pronunciationAudio: audioArtifacts.pronunciation,
+            });
         throwIfCancelled(signal, 'add-audio');
         htmlUrl = publishResult.url;
         htmlHash = publishResult.renderHash;
@@ -946,7 +977,22 @@ export async function newAssignment(
     }
 
     const manifest: AssignmentManifest = {
-      schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
+      schemaVersion: assignment ? CURRENT_MANIFEST_SCHEMA_VERSION : 5,
+      ...(assignment
+        ? {
+            assignmentHash: hashStudyText(serializeAssignmentV1(assignment)),
+            publication: {
+              schemaVersion: 1 as const,
+              rendererVersion: 2 as const,
+              title: assignment.metadata.title,
+              icon: '🎧',
+              studyTextAudioUrl: audioArtifacts.studyText?.url ?? null,
+              pronunciationAudioUrl: assignment.pronunciation
+                ? (audioArtifacts.pronunciation?.primaryClip?.url ?? null)
+                : null,
+            },
+          }
+        : {}),
       mdHash: markdownHash,
       publishTarget,
       htmlUrl,
@@ -1181,12 +1227,22 @@ export async function rerunAssignment(
       throw new ValidationError(`No manifest found for ${manifestMd}. Run the pipeline first.`);
     }
 
-    const mdContents = await readMarkdownCached(flags.md);
-    const markdownContext = rerunPlan.executable.includes('tts')
-      ? parseMarkdownContext(mdContents)
-      : null;
+    const assignment =
+      flags.assignment !== undefined
+        ? validateAssignmentV1(flags.assignment, flags.validationContext)
+        : undefined;
+    const mdContents = assignment
+      ? serializeAssignmentV1(assignment)
+      : await readMarkdownCached(flags.md);
+    const markdownContext =
+      !assignment && rerunPlan.executable.includes('tts') ? parseMarkdownContext(mdContents) : null;
+    const executionInput = assignment ? { assignment } : { context: markdownContext! };
     const detectedPronunciationMode =
-      (markdownContext ? extractPronunciationFocus(markdownContext)?.mode : null) ??
+      (assignment
+        ? assignment.pronunciation?.mode
+        : markdownContext
+          ? extractPronunciationFocus(markdownContext)?.mode
+          : null) ??
       rerunPlan.detectedPronunciationMode ??
       null;
     const audioArtifacts = resolveAudioArtifactsFromManifest(manifest);
@@ -1201,12 +1257,9 @@ export async function rerunAssignment(
     const effectiveStudyTextDialogueSeed = flags.studyTextDialogueSeed ?? manifest.dialogueSeed;
     const effectivePreset = flags.preset ?? manifest.preset;
     const effectiveStudyTextTitleFallback = basename(manifestMd).replace(/\.[^.]+$/, '');
-    const studentFacingAudioTitle = resolveMarkdownTitle(
-      mdContents,
-      effectiveStudyTextTitleFallback,
-      null,
-      true,
-    );
+    const studentFacingAudioTitle =
+      assignment?.metadata.title ??
+      resolveMarkdownTitle(mdContents, effectiveStudyTextTitleFallback, null, true);
     const previousPrimaryProvider = normalizePrimaryPronunciationProviderFromManifest(
       previousPrimaryClip?.tts?.provider,
     );
@@ -1236,14 +1289,14 @@ export async function rerunAssignment(
     let htmlReused = manifest.htmlReused;
 
     if (stepsToRun.has('tts')) {
-      if (!markdownContext) {
+      if (!assignment && !markdownContext) {
         throw new ValidationError('Cannot regenerate audio without parseable markdown context.');
       }
       if (flags.regenerateStudyTextAudio) {
         emitStage('voice-plan', 'start');
         throwIfCancelled(signal, 'voice-plan');
         const prepared = await prepareStudyTextSynthesis(
-          { context: markdownContext, mdPath: flags.md },
+          { ...executionInput, mdPath: flags.md },
           {
             voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
             outPath: flags.out ?? dirname(flags.md),
@@ -1315,7 +1368,7 @@ export async function rerunAssignment(
         try {
           ttsResult = await buildStudyTextMp3(
             {
-              context: markdownContext,
+              ...executionInput,
               mdPath: flags.md,
             },
             {
@@ -1421,12 +1474,9 @@ export async function rerunAssignment(
             provider: audioArtifacts.pronunciation?.primaryClip?.tts?.provider,
           },
         ];
-        const pronunciationTitle = resolveMarkdownTitle(
-          mdContents,
-          effectiveStudyTextTitleFallback,
-          null,
-          true,
-        );
+        const pronunciationTitle =
+          assignment?.metadata.title ??
+          resolveMarkdownTitle(mdContents, effectiveStudyTextTitleFallback, null, true);
         const effectivePrimaryProvider =
           flags.pronunciationMainTtsProvider ?? previousPrimaryProvider;
         const effectiveChunkProvider =
@@ -1509,7 +1559,7 @@ export async function rerunAssignment(
           );
         }
         const generatedPronunciation = await synthesizePronunciationAudio({
-          context: markdownContext,
+          ...executionInput,
           mdPath: flags.md,
           outPath: flags.out ?? dirname(flags.md),
           title: pronunciationTitle,
@@ -1720,23 +1770,30 @@ export async function rerunAssignment(
           headingTheme = await loadHeadingThemeForPreset(effectivePreset, DEFAULT_PRESETS_PATH);
         }
 
-        const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
-          studyTextUrl: studyTextAudioUrl,
-          pronunciationAudioUrl,
-          pronunciationAudio: audioArtifacts.pronunciation,
-        });
-        const publishTitle = resolveMarkdownTitle(
-          mdContents,
-          effectiveStudyTextTitleFallback,
-          null,
-          true,
-        );
-        const publishResult = await renderAndPublishMarkdownToS3({
-          headingTheme,
-          title: publishTitle,
-          markdown: publishMarkdown,
-          pronunciationAudio: audioArtifacts.pronunciation,
-        });
+        const publishMarkdown = assignment
+          ? undefined
+          : insertGeneratedAudioLinks(mdContents, {
+              studyTextUrl: studyTextAudioUrl,
+              pronunciationAudioUrl,
+              pronunciationAudio: audioArtifacts.pronunciation,
+            });
+        const publishTitle =
+          assignment?.metadata.title ??
+          resolveMarkdownTitle(mdContents, effectiveStudyTextTitleFallback, null, true);
+        const publishResult = assignment
+          ? await renderAndPublishAssignmentToS3({
+              assignment,
+              headingTheme,
+              studyTextAudioUrl,
+              pronunciationAudioUrl,
+              pronunciationAudio: audioArtifacts.pronunciation,
+            })
+          : await renderAndPublishMarkdownToS3({
+              headingTheme,
+              title: publishTitle,
+              markdown: publishMarkdown!,
+              pronunciationAudio: audioArtifacts.pronunciation,
+            });
         throwIfCancelled(signal, 'add-audio');
         htmlUrl = publishResult.url;
         htmlHash = publishResult.renderHash;
@@ -1768,7 +1825,22 @@ export async function rerunAssignment(
       };
     const updatedManifest: AssignmentManifest = {
       ...manifestWithoutLegacyAudio,
-      schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
+      schemaVersion: assignment ? CURRENT_MANIFEST_SCHEMA_VERSION : 5,
+      ...(assignment
+        ? {
+            assignmentHash: hashStudyText(serializeAssignmentV1(assignment)),
+            publication: {
+              schemaVersion: 1 as const,
+              rendererVersion: 2 as const,
+              title: assignment.metadata.title,
+              icon: '🎧',
+              studyTextAudioUrl: audioArtifacts.studyText?.url ?? null,
+              pronunciationAudioUrl: assignment.pronunciation
+                ? (audioArtifacts.pronunciation?.primaryClip?.url ?? null)
+                : null,
+            },
+          }
+        : {}),
       mdHash: hashStudyText(mdContents),
       publishTarget,
       htmlUrl,

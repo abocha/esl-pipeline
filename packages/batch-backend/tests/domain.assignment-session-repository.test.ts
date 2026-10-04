@@ -301,6 +301,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       };
       const reserved = await repo.reserveAssignmentShare(reserve);
       expect(reserved.job.assignmentArtifact).toEqual(draft.artifact);
+      expect(reserved.job.assignmentRendererVersion).toBe(2);
       expect(reserved.job.mdStorageUri).toBeNull();
       const edited = structuredClone(original);
       edited.metadata.title = 'Correction title';
@@ -323,7 +324,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
         },
         { localExport: false },
       ))!;
-      expect(materialized.mdStorageUri).toMatch(/\.md$/);
+      expect(materialized.mdStorageUri).toBe(draft.artifact!.storageUri);
+      expect(materialized.mdStorageUri).not.toBe(corrected.artifact!.storageUri);
+      expect(materialized.mdPath).toBeNull();
       const jobs = await import('../src/domain/job-repository.js');
       await jobs.approveAssignmentShareJob({
         id: requestId,
@@ -363,6 +366,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       ).rejects.toMatchObject({ code: 'ASSIGNMENT_CORRECTION_DRAFT_CONFLICT' });
       const child = await repo.publishAssignmentCorrectionJob(correction);
       expect(child.job.assignmentArtifact).toEqual(corrected.artifact);
+      expect(child.job.assignmentRendererVersion).toBe(2);
       const later = structuredClone(edited);
       later.metadata.title = 'Unpublished later draft';
       await updateDraft({ id: draft.id, text: JSON.stringify(later), expectedWorkingVersion: 2 });

@@ -206,7 +206,7 @@ export function normalizeBulletedNumberedListLine(line: string): string {
   return `${indent}${number}. ${rest}`;
 }
 
-function buildVideoEmbed(url: string): string {
+export function buildVideoEmbed(url: string): string {
   const parsed = parseHttpUrl(url);
   if (!parsed) {
     return `<p><a href="#">Video link is invalid</a></p>`;

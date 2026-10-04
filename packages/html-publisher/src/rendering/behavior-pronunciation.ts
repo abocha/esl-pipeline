@@ -9,6 +9,14 @@ export function buildPronunciationBehaviorScript(): string {
         pronunciationAudio = null;
       }
     }
+    if (document.querySelector('[data-assignment-pronunciation]')) {
+      const clips = Array.isArray(pronunciationAudio?.itemClips) ? pronunciationAudio.itemClips : [];
+      document.querySelectorAll('[data-pronunciation-clip]').forEach(button => {
+        const clip = clips.find(c => c.id === button.dataset.pronunciationClip);
+        if (!clip?.url || button.disabled) return;
+        button.addEventListener('click', () => { void new Audio(clip.url).play().catch(() => {}); });
+      });
+    } else {
     const normalizeText = (value) =>
       String(value || '')
         .toLowerCase()
@@ -682,6 +690,7 @@ export function buildPronunciationBehaviorScript(): string {
           }
         });
       }
+    }
     }
   } catch {}
 `;

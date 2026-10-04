@@ -135,7 +135,7 @@ export async function createApprovalJobFromDraft(
     promptPackageId: params.promptPackage.id,
     draftId: params.draft.id,
     assignmentArtifact: draftArtifact(params.draft),
-    assignmentRendererVersion: draftArtifact(params.draft) ? 1 : undefined,
+    assignmentRendererVersion: draftArtifact(params.draft) ? 2 : undefined,
     studentId: params.draft.studentId ?? params.promptPackage.studentId ?? null,
     lessonId: params.draft.lessonId ?? params.promptPackage.lessonId ?? null,
     userId: params.draft.createdBy ?? undefined,

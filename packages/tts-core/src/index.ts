@@ -67,6 +67,13 @@ export async function loadVoicesCatalog(provider?: TtsProviderId): Promise<Voice
 }
 
 export {
+  normalizePlainSpeechText,
+  resolveAssignmentMetadata,
+  resolveAssignmentPronunciation,
+  resolveAssignmentShadowFocus,
+  resolveAssignmentStudyText,
+} from './assignment-input.js';
+export {
   buildDefaultTtsModelByProvider,
   buildTtsModelOptionsByProvider,
   ELEVENLABS_TTS_DESCRIPTOR,
@@ -126,6 +133,7 @@ export {
   normalizeSpeechCueText,
 } from './speech-plan-analysis.js';
 export type {
+  AssignmentExecutionInput,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,

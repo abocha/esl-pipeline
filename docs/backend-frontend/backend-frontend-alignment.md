@@ -84,7 +84,7 @@ revision content/history are preserved.
   buffers stay local, suppress preview/confirmation/publication/correction, and disappear on reload.
   The API returns the same validated object and pinned context used by preview. Canonical sorted-key
   JSON defines the saved hash independently of textarea formatting. Frozen Create/job references
-  carry format, schema/serialization version, working version, URI and hash; PMD renderer version and
+  carry format, schema/serialization version, working version, URI and hash; native renderer version and
   publication/media identities remain separate. Homework-memory extraction reads frozen typed input
   directly, preserving lineage, dedup and publication ordering. Historical Markdown and pending
   memory work dispatch explicitly by stored format. Migration 0062 is classified incompatible for
@@ -151,3 +151,13 @@ lands with its authorization evidence; destructive archive removal is a separate
 - [`packages/batch-backend/README.md`](../../packages/batch-backend/README.md)
 - [`packages/telegram-ops-bot/README.md`](../../packages/telegram-ops-bot/README.md)
 - [`docs/PIPELINE_INTEGRATION_VISION.md`](../PIPELINE_INTEGRATION_VISION.md)
+
+### AssignmentV1 native execution (ESL-6)
+
+Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
+HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
+is created. Native renderer 2 / manifest schema 6 carry canonical assignment and publication
+metadata; API 8 / manifest contract 4 identify the typed path/hash changes. Historical Markdown and
+renderer-1 manifest readers remain supported. Editable JSON authority, source authorization, CAS,
+lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
+[AssignmentV1](../reference/ASSIGNMENT_V1.md) for the canonical execution contract.

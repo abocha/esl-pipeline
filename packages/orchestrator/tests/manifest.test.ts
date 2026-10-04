@@ -5,6 +5,37 @@ import { createResolvedVoicePlan, type PreparedStudyTextSynthesis } from '@esl-p
 import { sanitizeAssignmentManifest } from '../src/manifest.js';
 
 describe('assignment manifest voice plans', () => {
+  it('round-trips native source and publication metadata without changing historical schemas', () => {
+    const publication = {
+      schemaVersion: 1 as const,
+      rendererVersion: 2 as const,
+      title: 'Typed lesson',
+      icon: '🎧',
+      studyTextAudioUrl: 'https://audio/study',
+      pronunciationAudioUrl: null,
+    };
+    const base = {
+      mdHash: 'canonical',
+      timestamp: 'now',
+      audioArtifacts: { studyText: { url: 'https://audio/study' } },
+    };
+    expect(
+      sanitizeAssignmentManifest({
+        ...base,
+        schemaVersion: 6,
+        assignmentHash: 'canonical',
+        publication,
+      }),
+    ).toMatchObject({
+      schemaVersion: 6,
+      mdHash: 'canonical',
+      assignmentHash: 'canonical',
+      publication,
+    });
+    expect(sanitizeAssignmentManifest({ ...base, schemaVersion: 5 }).schemaVersion).toBe(5);
+    expect(sanitizeAssignmentManifest(base).assignmentHash).toBeUndefined();
+  });
+
   it('round-trips accepted contextual annotations and enhancer provenance', () => {
     const synthesisText = '<tts-annotation>Trying not to sound accusatory</tts-annotation>Hello.';
     const manifest = sanitizeAssignmentManifest({
