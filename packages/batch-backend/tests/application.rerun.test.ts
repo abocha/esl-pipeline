@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { manifestPathFor } from '@esl-pipeline/orchestrator';
 
 import { JobActionType } from '../src/domain/job-actions.js';
+import { assignmentArtifactFixture } from './assignment-v1.test-harness.js';
 
 vi.mock('../src/domain/job-repository.js', () => ({
   getJobById: vi.fn(),
@@ -40,7 +41,9 @@ describe('application/job-actions/rerun', () => {
     await writeFile(
       durableManifestPath,
       JSON.stringify({
-        schemaVersion: 3,
+        schemaVersion: 6,
+        assignmentHash: 'a'.repeat(64),
+        assignmentRendererVersion: 2,
         mdHash: 'existing-hash',
         publishTarget: 'html',
         audioArtifacts: {
@@ -51,6 +54,10 @@ describe('application/job-actions/rerun', () => {
       'utf8',
     );
     vi.mocked(getJobById).mockResolvedValue({
+      assignmentArtifact: assignmentArtifactFixture(),
+      assignmentRendererVersion: 2,
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
       id: 'job-1',
       state: 'succeeded',
       md: jobMdPath,
@@ -77,6 +84,8 @@ describe('application/job-actions/rerun', () => {
     await rm(durableManifestPath);
     const legacyJob = await getJobById('job-1');
     vi.mocked(getJobById).mockResolvedValue({
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
       ...legacyJob,
       assignmentArtifact: { contentHash: 'a'.repeat(64) },
       assignmentRendererVersion: 2,
@@ -108,6 +117,8 @@ describe('application/job-actions/rerun', () => {
       storageUri: `local://drafts/draft-1/content/${'a'.repeat(64)}.json`,
     };
     vi.mocked(getJobById).mockResolvedValue({
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
       id: 'job-1',
       state: 'succeeded',
       md: null,
@@ -200,6 +211,10 @@ describe('application/job-actions/rerun', () => {
 
   it('rejects inherited dialogue strategy when the explicit study-text model is not eleven_v3', async () => {
     vi.mocked(getJobById).mockResolvedValue({
+      assignmentArtifact: assignmentArtifactFixture(),
+      assignmentRendererVersion: 2,
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
       id: 'job-1',
       state: 'succeeded',
       md: '/tmp/job.md',
@@ -230,6 +245,10 @@ describe('application/job-actions/rerun', () => {
 
   it('rejects inherited auto strategy when an explicit study-text elevenlabs model is provided', async () => {
     vi.mocked(getJobById).mockResolvedValue({
+      assignmentArtifact: assignmentArtifactFixture(),
+      assignmentRendererVersion: 2,
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
       id: 'job-1',
       state: 'succeeded',
       md: '/tmp/job.md',
@@ -283,8 +302,10 @@ describe('application/job-actions/rerun', () => {
     );
   });
 
-  it('queues audio reruns from the approved markdown path with the source student id', async () => {
+  it('queues native audio reruns from the frozen assignment with the source student id', async () => {
     vi.mocked(getJobById).mockResolvedValue({
+      assignmentArtifact: assignmentArtifactFixture(),
+      assignmentRendererVersion: 2,
       id: 'job-1',
       state: 'succeeded',
       md: jobMdPath,
@@ -341,8 +362,8 @@ describe('application/job-actions/rerun', () => {
       expect.objectContaining({
         recordingId: null,
         transcriptId: null,
-        promptPackageId: null,
-        draftId: null,
+        promptPackageId: 'prompt-1',
+        draftId: 'draft-1',
         sourceJobId: 'job-1',
       }),
     );
@@ -350,6 +371,10 @@ describe('application/job-actions/rerun', () => {
 
   it('forwards inherited study-text model defaults into the rerun queue payload', async () => {
     vi.mocked(getJobById).mockResolvedValue({
+      assignmentArtifact: assignmentArtifactFixture(),
+      assignmentRendererVersion: 2,
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
       id: 'job-1',
       state: 'succeeded',
       md: jobMdPath,
@@ -418,57 +443,5 @@ describe('application/job-actions/rerun', () => {
         }),
       }),
     );
-  });
-
-  it('recovers a durable html manifest from the published artifact when the source manifest is missing', async () => {
-    await rm(durableManifestPath, { force: true });
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        text: async () =>
-          [
-            '<figure class="audio-figure"><audio controls src="https://example.com/study.mp3"></audio><figcaption><a href="https://example.com/study.mp3">Audio recording: Study Text</a></figcaption></figure>',
-            '<script id="esl-pronunciation-audio" type="application/json">',
-            JSON.stringify({
-              mode: 'minimal_pair',
-              primaryClip: null,
-              itemClips: [
-                {
-                  id: 'clip-1',
-                  itemIndex: 0,
-                  kind: 'pair_left',
-                  engine: 'provider',
-                  text: 'pan',
-                  path: '/tmp/stale.mp3',
-                  url: 'https://example.com/pron-1.mp3',
-                },
-              ],
-            }),
-            '</script>',
-          ].join(''),
-      }),
-    );
-
-    try {
-      const result = await rerun('job-1', {
-        type: JobActionType.RERUN,
-        requestedAt,
-        payload: {
-          regeneratePronunciationChunkAudio: true,
-        },
-      });
-
-      expect(result.success).toBe(true);
-      const recoveredManifest = JSON.parse(await readFile(durableManifestPath, 'utf8'));
-      expect(recoveredManifest.publishTarget).toBe('html');
-      expect(recoveredManifest.audioArtifacts.studyText.url).toBe('https://example.com/study.mp3');
-      expect(recoveredManifest.audioArtifacts.pronunciation.itemClips[0].url).toBe(
-        'https://example.com/pron-1.mp3',
-      );
-      expect(recoveredManifest.audioArtifacts.pronunciation.itemClips[0].path).toBeUndefined();
-    } finally {
-      vi.unstubAllGlobals();
-    }
   });
 });

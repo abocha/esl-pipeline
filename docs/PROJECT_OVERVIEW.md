@@ -39,7 +39,7 @@
 
 ## Component Map
 
-- Pipeline: `orchestrator`, `md-validator`, and `pmd` own execution, validation, and parsing.
+- Pipeline: `orchestrator` owns execution; `contracts` owns AssignmentV1 validation. Historical Markdown is read-only.
 - Provider runtime: `provider-runtime`, `tts-core`, `tts-provider-*`, `stt-core`, and
   `stt-provider-*` own provider contracts and adapters.
 - Product runtime: `contracts`, `shared-infrastructure`, `batch-backend`, `batch-frontend`, and

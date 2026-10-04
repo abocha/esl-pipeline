@@ -74,3 +74,6 @@ import { createGoogleTtsProvider } from '@esl-pipeline/tts-provider-google';
 
 registerTtsProvider(createGoogleTtsProvider());
 ```
+
+Assignment synthesis accepts typed AssignmentV1 only. Historical Markdown execution and cleanup
+are retired. Speech fields and pronunciation text remain plain text, including literal punctuation.

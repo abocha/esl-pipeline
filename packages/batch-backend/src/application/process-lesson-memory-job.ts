@@ -17,6 +17,7 @@ import {
   type GenerateLessonMemoryEntryDependencies,
   generateLessonMemoryEntry,
 } from './generate-lesson-memory-entry.js';
+import { isHistoricalAssignmentSessionId } from './historical-assignment.js';
 import { buildLessonMemoryEnvelope, buildLessonMemoryPrompt } from './lesson-memory-prompt.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 import {
@@ -91,6 +92,12 @@ export async function processLessonMemoryJob(args: {
   ) {
     return;
   }
+
+  if (
+    pendingEntry.assignmentSessionId &&
+    (await isHistoricalAssignmentSessionId(pendingEntry.assignmentSessionId))
+  )
+    return;
 
   try {
     const storage = storageFactory(args.payload.sourceStorageUri);

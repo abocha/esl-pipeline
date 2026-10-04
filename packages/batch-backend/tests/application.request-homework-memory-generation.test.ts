@@ -60,14 +60,11 @@ describe('application/request-homework-memory-generation', () => {
       assignmentLineageKey: 'job-2',
       studentId: 'student-1',
       publishedAt: new Date('2026-03-20T00:00:00.000Z'),
-      publishedMarkdown: '# Homework',
+
       contentHash: 'hash-1',
       publishTargets: [],
-      normalizedMarkdown: {
-        frontmatter: null,
-        sections: [],
-        plainText: '# Homework',
-      },
+      format: 'assignment_v1' as const,
+      assignment: assignmentFixture(),
     });
     ensurePendingHomeworkMemoryEntryMock.mockImplementation(async (params) => ({
       outcome: 'created',
@@ -286,14 +283,11 @@ describe('application/request-homework-memory-generation', () => {
       assignmentLineageKey: 'job-root',
       studentId: 'student-1',
       publishedAt: new Date('2026-03-20T01:00:00.000Z'),
-      publishedMarkdown: '# Corrected homework',
+
       contentHash: 'hash-correction',
       publishTargets: [],
-      normalizedMarkdown: {
-        frontmatter: null,
-        sections: [],
-        plainText: '# Corrected homework',
-      },
+      format: 'assignment_v1' as const,
+      assignment: assignmentFixture(),
     });
 
     await requestHomeworkMemoryGeneration({
@@ -330,14 +324,11 @@ describe('application/request-homework-memory-generation', () => {
       assignmentLineageKey: 'job-root',
       studentId: 'student-1',
       publishedAt: new Date('2026-03-20T00:00:00.000Z'),
-      publishedMarkdown: '# Homework',
+
       contentHash: 'hash-1',
       publishTargets: [],
-      normalizedMarkdown: {
-        frontmatter: null,
-        sections: [],
-        plainText: '# Homework',
-      },
+      format: 'assignment_v1' as const,
+      assignment: assignmentFixture(),
     });
 
     const result = await requestHomeworkMemoryGeneration({

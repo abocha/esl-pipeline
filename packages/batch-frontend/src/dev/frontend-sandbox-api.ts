@@ -1,6 +1,9 @@
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { AxiosError } from 'axios';
 
+import { parseAssignmentV1 } from '@esl-pipeline/contracts';
+
+import assignmentFixture from './assignment-fixture.json';
 import type { FrontendSandboxScenario } from './frontend-sandbox';
 
 const now = '2026-07-03T00:00:00.000Z';
@@ -183,6 +186,8 @@ function assignmentSession(overrides: Record<string, unknown> = {}) {
 function jobStatus(overrides: Record<string, unknown> = {}) {
   return {
     jobId: 'job-sandbox',
+    assignmentArtifact: sandboxArtifact,
+    assignmentRendererVersion: 2,
     studentId: 'student-alex',
     studentName: 'Alex',
     lessonId: null,
@@ -894,7 +899,23 @@ function scheduleBillingSurface() {
   };
 }
 
+const sandboxAssignment = parseAssignmentV1(JSON.stringify(assignmentFixture));
+const sandboxContext = {
+  studentName: 'Alex',
+  inputKind: sandboxAssignment.input.kind,
+  suppliedUrls: [],
+};
+const sandboxArtifact = {
+  format: 'assignment_v1' as const,
+  schemaVersion: 1 as const,
+  serializationVersion: 1 as const,
+  workingVersion: 1,
+  storageUri: 'memory://sandbox/content/' + 'b'.repeat(64) + '.json',
+  contentHash: 'b'.repeat(64),
+};
+
 const promptPackage = {
+  requestEnvelope: { promptVersion: 'assignment_v1', assignmentContext: sandboxContext },
   id: 'prompt-sandbox',
   recordingId: 'recording-sandbox',
   transcriptId: 'transcript-sandbox',
@@ -924,15 +945,11 @@ const draft = {
   lessonId: null,
   storageUri: 'memory://sandbox/draft-sandbox',
   createdBy: 'sandbox-tutor',
-  text: [
-    '# Alex - Workplace Update Practice',
-    '',
-    '## Warm-up',
-    'Practice three ways to connect ideas: first, also, as a result.',
-    '',
-    '## Mission',
-    'Write a short project update and one polite follow-up question.',
-  ].join('\n'),
+  format: 'assignment_v1',
+  assignment: sandboxAssignment,
+  validationContext: { ...sandboxContext, studentName: 'Alex' },
+  artifact: sandboxArtifact,
+  text: JSON.stringify(sandboxAssignment, null, 2),
   workingVersion: 1,
   contentHash: 'b'.repeat(64),
   createdAt: now,
@@ -940,6 +957,10 @@ const draft = {
 };
 
 const firstProfilePromptPackage = {
+  requestEnvelope: {
+    promptVersion: 'assignment_v1',
+    assignmentContext: { ...sandboxContext, studentName: 'Cora' },
+  },
   id: 'prompt-cora',
   recordingId: sandboxFirstProfileRecordingId,
   transcriptId: sandboxFirstProfileTranscriptId,
@@ -969,15 +990,18 @@ const firstProfileDraft = {
   lessonId: null,
   storageUri: 'memory://sandbox/draft-cora',
   createdBy: 'sandbox-tutor',
-  text: [
-    '# Cora - Short Client Update',
-    '',
-    '## Warm-up',
-    'Practice one clear sentence for what changed today.',
-    '',
-    '## Mission',
-    'Write a short client update and one clarification question.',
-  ].join('\n'),
+  format: 'assignment_v1',
+  assignment: {
+    ...sandboxAssignment,
+    metadata: { ...sandboxAssignment.metadata, student: 'Cora' },
+  },
+  validationContext: { ...sandboxContext, studentName: 'Cora' },
+  artifact: sandboxArtifact,
+  text: JSON.stringify(
+    { ...sandboxAssignment, metadata: { ...sandboxAssignment.metadata, student: 'Cora' } },
+    null,
+    2,
+  ),
   workingVersion: 1,
   contentHash: 'c'.repeat(64),
   createdAt: now,
@@ -1824,9 +1848,7 @@ export function createFrontendSandboxApiAdapter(
       const body = readRequestBody(config.data);
       if (body.promptPackageId === firstProfilePromptPackage.id) {
         return responseFor(config, {
-          id: firstProfileDraft.id,
-          promptPackageId: firstProfileDraft.promptPackageId,
-          text: firstProfileDraft.text,
+          ...firstProfileDraft,
           provider: 'openai',
           model: 'gpt-5.2',
           quota: {
@@ -1837,9 +1859,7 @@ export function createFrontendSandboxApiAdapter(
       }
 
       return responseFor(config, {
-        id: draft.id,
-        promptPackageId: draft.promptPackageId,
-        text: draft.text,
+        ...draft,
         provider: 'openai',
         model: 'gpt-5.2',
         quota: {
@@ -1882,6 +1902,7 @@ export function createFrontendSandboxApiAdapter(
       return responseFor(config, {
         ...draft,
         text: readRequestText(config.data, draft.text),
+        assignment: parseAssignmentV1(readRequestText(config.data, draft.text), sandboxContext),
         workingVersion: 2,
         contentHash: 'f'.repeat(64),
         updatedAt: now,
@@ -1889,26 +1910,21 @@ export function createFrontendSandboxApiAdapter(
     }
 
     if (method === 'post' && path === '/validation/markdown') {
-      return responseFor(config, { ok: true, errors: [], warnings: [] });
+      throw scenarioErrorFor(config, 'legacy_assignment_read_only');
     }
 
     if (method === 'post' && path === '/prompt-packages/prompt-sandbox/draft') {
+      const text = readRequestText(config.data, draft.text);
       return responseFor(config, {
-        id: 'draft-sandbox',
-        promptPackageId: 'prompt-sandbox',
-        studentId: 'student-alex',
-        lessonId: null,
-        storageUri: 'memory://sandbox/draft-sandbox',
-        createdBy: 'sandbox-tutor',
-        text: readRequestText(config.data, '# Alex - Workplace Update Practice'),
-        workingVersion: 1,
-        contentHash: 'b'.repeat(64),
-        createdAt: now,
-        updatedAt: now,
+        ...draft,
+        text,
+        assignment: parseAssignmentV1(text, sandboxContext),
       });
     }
 
     if (method === 'post' && path === '/preview/html') {
+      if (!readRequestBody(config.data).assignment)
+        throw scenarioErrorFor(config, 'legacy_assignment_read_only');
       return responseFor(config, {
         html: '<article><h1>Alex - Workplace Update Practice</h1><p>Sandbox preview.</p></article>',
       });

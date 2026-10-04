@@ -11,6 +11,7 @@ import {
 import {
   createAndSubmitStudentMemoryOpenAiBatchPlan,
   createStudentMemoryOpenAiBatchPlan,
+  recordStudentMemoryOpenAiBatchRemoteStatus,
   submitStudentMemoryOpenAiBatchPlan,
 } from '../application/student-memory-openai-batch-operations.js';
 import { reconcileStudentMemoryOpenAiBatchRun } from '../application/student-memory-openai-batch-run-reconcile.js';
@@ -20,7 +21,6 @@ import {
   getStudentMemoryOpenAiBatchRunById,
   hasStudentMemoryOpenAiBatchRetryChild,
   listStudentMemoryOpenAiBatchItems,
-  updateStudentMemoryOpenAiBatchRunRemoteStatus,
 } from '../domain/student-memory-openai-batch-repository.js';
 
 type Action = 'dry-run' | 'submit' | 'status' | 'poll' | 'reconcile' | 'retry' | 'cancel';
@@ -173,15 +173,8 @@ async function run(): Promise<void> {
       model: batchRun.model,
       batchId: batchRun.remoteBatchId,
     });
-    await updateStudentMemoryOpenAiBatchRunRemoteStatus({
-      runId: batchRun.id,
-      state: 'cancelled',
-      remoteOutputFileId: remote.output_file_id ?? null,
-      remoteErrorFileId: remote.error_file_id ?? null,
-      requestCounts: remote.request_counts,
-      remoteError: safeRemoteError(remote.errors),
-    });
-    console.log(JSON.stringify({ runId: batchRun.id, state: 'cancelled' }));
+    const state = await recordStudentMemoryOpenAiBatchRemoteStatus({ runId: batchRun.id, remote });
+    console.log(JSON.stringify({ runId: batchRun.id, state, remoteStatus: remote.status ?? null }));
     return;
   }
   const remote = await transport.getBatch({
@@ -189,15 +182,7 @@ async function run(): Promise<void> {
     model: batchRun.model,
     batchId: batchRun.remoteBatchId,
   });
-  const state = mapRemoteState(remote.status);
-  await updateStudentMemoryOpenAiBatchRunRemoteStatus({
-    runId: batchRun.id,
-    state,
-    remoteOutputFileId: remote.output_file_id ?? null,
-    remoteErrorFileId: remote.error_file_id ?? null,
-    requestCounts: remote.request_counts,
-    remoteError: safeRemoteError(remote.errors),
-  });
+  const state = await recordStudentMemoryOpenAiBatchRemoteStatus({ runId: batchRun.id, remote });
   if (options.action === 'status' || options.action === 'poll') {
     console.log(
       JSON.stringify({ runId: batchRun.id, state, requestCounts: remote.request_counts ?? null }),
@@ -249,24 +234,6 @@ function requireWorkload(value: string | undefined): StudentMemoryBatchWorkload 
     return value;
   throw new Error('Invalid --workload');
 }
-function mapRemoteState(
-  value: string | undefined,
-): 'in_progress' | 'finalizing' | 'completed' | 'failed' | 'expired' | 'cancelled' {
-  if (
-    value === 'in_progress' ||
-    value === 'finalizing' ||
-    value === 'completed' ||
-    value === 'failed' ||
-    value === 'expired' ||
-    value === 'cancelled'
-  )
-    return value;
-  return 'in_progress';
-}
-function safeRemoteError(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' ? { present: true } : undefined;
-}
-
 void run().catch((error) => {
   console.error(
     `[student-memory:batch] failed: ${error instanceof Error ? error.message : String(error)}`,

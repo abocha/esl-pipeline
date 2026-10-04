@@ -1,8 +1,8 @@
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { processQueueJob } from '../src/application/process-queue-job.js';
 import * as h from './application.process-queue-job.test-harness.js';
+import { assignmentFixture } from './assignment-v1.test-harness.js';
 
 const {
   makeJob,
@@ -95,11 +95,8 @@ describe('application/process-queue-job', () => {
       voiceAccent: initial.voiceAccent,
       voiceId: initial.voiceId,
     });
-    expect(path.isAbsolute(payload.md)).toBe(true);
-    if (initial.md == null) {
-      throw new Error('expected fixture job md path');
-    }
-    expect(payload.md.replaceAll('\\', '/').endsWith(initial.md.replaceAll('\\', '/'))).toBe(true);
+    expect(payload.assignment).toBeDefined();
+    expect(payload.assignment).toEqual(assignmentFixture());
     expect(typeof runId).toBe('string');
     expect(runId.length).toBeGreaterThan(0);
     expect(withTtsCacheActivitySharedLockSpy).toHaveBeenCalledTimes(1);
@@ -114,7 +111,7 @@ describe('application/process-queue-job', () => {
       nextState: 'succeeded',
       manifestPath: '/manifests/job-1.json',
       htmlUrl: 'https://cdn.example.com/job-1.html',
-      publishedContentHash: '7e0dbde9d430421784b20c164a0c601a2cd2e6b84c2445fb1cbcc24c46026ee8',
+      publishedContentHash: makeJob().assignmentArtifact!.contentHash,
       finishedAt: expect.any(Date),
     });
 
@@ -245,7 +242,7 @@ describe('application/process-queue-job', () => {
       nextState: 'succeeded',
       manifestPath: '/manifests/job-1.json',
       htmlUrl: 'https://cdn.example.com/job-1.html',
-      publishedContentHash: '7e0dbde9d430421784b20c164a0c601a2cd2e6b84c2445fb1cbcc24c46026ee8',
+      publishedContentHash: makeJob().assignmentArtifact!.contentHash,
       finishedAt: expect.any(Date),
     });
     expect(publishJobEventSpy).toHaveBeenCalledTimes(1);

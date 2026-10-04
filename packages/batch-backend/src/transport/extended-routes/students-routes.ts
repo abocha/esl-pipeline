@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { HistoricalAssignmentReadOnlyError } from '../../application/historical-assignment.js';
 import {
   InitializeStudentProfileDraftError,
   initializeStudentProfileDraft,
@@ -111,6 +112,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       });
       if (!student) errorResponse(reply, 'not_found');
     } catch (error) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       if (workspaceContextErrorResponse(reply, error)) return;
       logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
@@ -323,6 +328,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           scheduleBilling,
         });
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -402,6 +411,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           candidates,
         });
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -481,6 +494,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           homeworkMemory,
         });
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -529,6 +546,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(surface);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -575,6 +596,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           ),
         );
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
@@ -606,6 +631,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           ),
         );
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
@@ -631,6 +660,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             await createStudentLesson(workspaceId, params.id, body, authenticatedUser?.id ?? null),
           );
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
@@ -663,6 +696,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           ),
         );
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
@@ -696,6 +733,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           ),
         );
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
@@ -725,6 +766,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           ),
         );
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
@@ -750,6 +795,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             await addStudentPackage(workspaceId, params.id, body, authenticatedUser?.id ?? null),
           );
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
@@ -775,6 +824,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             await adjustStudentCredits(workspaceId, params.id, body, authenticatedUser?.id ?? null),
           );
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
@@ -800,6 +853,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             await recordStudentPayment(workspaceId, params.id, body, authenticatedUser?.id ?? null),
           );
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
@@ -865,6 +922,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -927,6 +988,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(candidate);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -993,6 +1058,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(candidate);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1059,6 +1128,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(candidate);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1136,6 +1209,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           draftRevision: result.draftRevision,
         });
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1218,6 +1295,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           usage: result.usage,
         });
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1281,6 +1362,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           draftRevision: result.draftRevision,
         });
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1343,6 +1428,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1403,6 +1492,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1453,6 +1546,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(profile);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1520,6 +1617,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(overview);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1571,6 +1672,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(health);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1641,6 +1746,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1711,6 +1820,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1781,6 +1894,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1838,6 +1955,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.code(201).send(created);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1913,6 +2034,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(updated);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1983,6 +2108,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(archived);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -2048,6 +2177,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(restored);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -2114,6 +2247,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.code(204).send();
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -2203,6 +2340,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
         return reply.send(timeline);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',

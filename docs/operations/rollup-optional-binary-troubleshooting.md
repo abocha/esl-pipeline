@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents debugging local build/test runtime issues.
 - Authority Level: operations troubleshooting runbook.
-- Last Verified Against: 2026-08-14 repo state.
+- Last Verified Against: 2026-10-04 ESL-7 focused-command reconciliation.
 - Owner: maintainer + automation agents.
 - Review Cadence: quarterly or after tooling upgrades.
 - Status: `runbook`.
@@ -18,8 +18,8 @@ Running tests or Vitest-based commands fails with:
 Typical examples:
 
 - `pnpm --filter @esl-pipeline/html-publisher test`
-- `pnpm --filter @esl-pipeline/md-validator test`
-- `pnpm --filter @esl-pipeline/pmd test`
+- `pnpm --filter @esl-pipeline/orchestrator test`
+- `pnpm --filter @esl-pipeline/tts-core test`
 - `pnpm --filter @esl-pipeline/batch-backend exec vitest ...`
 
 ## Cause
@@ -78,7 +78,7 @@ from changing dependency resolution.
 2. Re-run a targeted command to verify:
 
 ```bash
-corepack pnpm --filter @esl-pipeline/html-publisher test -- tests/rendering.test.ts
+corepack pnpm --filter @esl-pipeline/html-publisher test -- tests/assignment-rendering.test.ts
 ```
 
 If the failure occurs inside the Docker dev stack, removing host `node_modules` does not affect the

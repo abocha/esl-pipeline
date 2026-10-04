@@ -5,6 +5,7 @@ import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import { commitCanonicalReadyHomeworkMemoryEntry } from '../domain/homework-memory-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
 import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 import {
   type ExtractHomeworkMemoryContentRequest,
   extractHomeworkMemoryContent,
@@ -44,6 +45,7 @@ export async function generateHomeworkMemoryFromSource(args: {
   request: GenerateHomeworkMemoryFromSourceRequest;
   overrides?: Partial<HomeworkMemoryGenerationDependencies>;
 }): Promise<GenerateHomeworkMemoryFromSourceResult> {
+  requireTypedAssignment(args.request.source.assignment);
   const extractor = args.overrides?.extractor ?? extractHomeworkMemoryContent;
   const repository = args.overrides?.repository ?? {
     commitCanonicalReady: commitCanonicalReadyHomeworkMemoryEntry,

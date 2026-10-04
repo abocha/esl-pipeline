@@ -1,8 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as uploader from '@esl-pipeline/storage-uploader';
 
-import { publishHtmlToS3, renderAndPublishMarkdownToS3 } from '../src/publish.js';
+import { publishHtmlToS3, renderAndPublishAssignmentToS3 } from '../src/publish.js';
 
 const uploadState = {
   seenKeys: new Set<string>(),
@@ -50,9 +51,13 @@ describe('publish', () => {
   });
 
   it('propagates render hash metadata from render-and-publish flow', async () => {
-    const result = await renderAndPublishMarkdownToS3({
-      title: 'Lesson',
-      markdown: '# Hello',
+    const result = await renderAndPublishAssignmentToS3({
+      assignment: JSON.parse(
+        readFileSync(
+          new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+          'utf8',
+        ),
+      ),
     });
     expect(result.html).toContain('<h1');
     expect(result.renderHash).toHaveLength(64);
@@ -60,9 +65,13 @@ describe('publish', () => {
   });
 
   it('forwards explicit key and renderHash in render-and-publish flow', async () => {
-    const result = await renderAndPublishMarkdownToS3({
-      title: 'Lesson',
-      markdown: '# Hello',
+    const result = await renderAndPublishAssignmentToS3({
+      assignment: JSON.parse(
+        readFileSync(
+          new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+          'utf8',
+        ),
+      ),
       key: 'materials/html/manual/custom-key.html',
       renderHash: 'f'.repeat(64),
     });

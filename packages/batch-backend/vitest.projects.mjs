@@ -28,7 +28,6 @@ const postgresFiles = [
   'domain.student-repository.workspace.test.ts',
   'integration.recording-tenant-authority.test.ts',
   'application.assignment-step-confirmation.test.ts',
-  'application.homework-memory-source.test.ts',
   'application.student-timeline.test.ts',
   'application.student-schedule-billing.test.ts',
   'application.alpha-invites.registration.test.ts',

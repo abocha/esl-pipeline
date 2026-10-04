@@ -3,7 +3,6 @@ import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { CONTRACT_VERSIONS } from '@esl-pipeline/contracts';
-import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as assignmentLearnerContextModule from '../src/application/assignment-learner-context.js';
@@ -192,12 +191,6 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
   };
   return {
     getJobOptionsFromOrchestrator: vi.fn().mockResolvedValue(orchestratorJobOptionsMock),
-  };
-});
-
-vi.mock('@esl-pipeline/md-validator', () => {
-  return {
-    validateMarkdown: vi.fn(),
   };
 });
 
@@ -1285,7 +1278,6 @@ export function describeHttpServerIntegrationSuite(
       vi,
       httpRequest,
       Readable,
-      validateMarkdown,
       CONTRACT_VERSIONS,
       assignmentSessionsModule,
       assignmentLearnerContextModule,

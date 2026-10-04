@@ -22,14 +22,15 @@ type JobRequestBody = PipelineNewAssignmentOptions & { jobId?: string };
 
 fastify.post('/jobs', async (request, reply) => {
   const body = request.body as Partial<JobRequestBody>;
-  if (!body?.md) {
+  if (!body?.md || !body.assignment) {
     reply.code(400);
-    return { error: 'Missing md path' };
+    return { error: 'Missing md locator or AssignmentV1 payload' };
   }
   try {
     const mdPath = resolve(pipelineRoot, body.md);
     const result = await pipeline.newAssignment({
       ...body,
+      assignment: body.assignment,
       md: mdPath,
       withTts: false,
       dryRun: true,

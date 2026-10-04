@@ -5,8 +5,6 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
-import { assignmentMetadata, assignmentStudySegments } from '@esl-pipeline/contracts';
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
 import {
   hashStudyText,
   type SpeechPerformancePlan,
@@ -27,11 +25,29 @@ import {
   resolveInworldTtsModel,
   resolveInworldVoiceCapabilities,
 } from '../src/index.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 
 function createPreviewContext() {
-  return parseMarkdownContext(
-    '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: We need a clearer deadline.\n:::',
-  );
+  return createTtsAssignment({
+    metadata: { title: 'Test', student: 'Alex', level: 'B1', topic: 'work' },
+    studyText: {
+      type: 'dialogue',
+      speakers: [
+        {
+          id: 's0',
+          displayName: 'Maya',
+          role: 'student',
+          persona: null,
+          voiceDirection: null,
+          gender: 'neutral',
+          age: null,
+          accent: null,
+        },
+      ],
+      turns: [{ speakerId: 's0', text: 'We need a clearer deadline.' }],
+    },
+    pronunciation: null,
+  });
 }
 
 function createPreviewVoicePlan(
@@ -149,7 +165,7 @@ describe('inworld provider adapter basics', () => {
 
     try {
       const result = await buildStudyTextMp3Inworld(
-        { context: createPreviewContext() },
+        { assignment: createPreviewContext() },
         { voiceMapPath: 'voices.yml', outPath, force: true, ttsModel: 'inworld-tts-2' },
         { apiKey: 'test-api-key', sdkFactory },
       );
@@ -174,7 +190,7 @@ describe('inworld provider adapter basics', () => {
 
     await expect(
       buildStudyTextMp3Inworld(
-        { context: createPreviewContext() },
+        { assignment: createPreviewContext() },
         {
           voiceMapPath: 'voices.yml',
           outPath: '/path-that-must-not-be-created',
@@ -373,11 +389,11 @@ describe('inworld provider adapter basics', () => {
 
     try {
       await buildStudyTextMp3Inworld(
-        { context: createPreviewContext() },
+        { assignment: createPreviewContext() },
         { ...options, force: true },
         { apiKey: 'test-api-key', sdkFactory },
       );
-      await buildStudyTextMp3Inworld({ context: createPreviewContext() }, options, {
+      await buildStudyTextMp3Inworld({ assignment: createPreviewContext() }, options, {
         apiKey: 'test-api-key',
         sdkFactory,
       });
@@ -1120,7 +1136,7 @@ describe('inworld provider adapter basics', () => {
     const context = createPreviewContext();
     const buildHash = (language: string, rendererPolicyVersion = INWORLD_RENDERER_POLICY_VERSION) =>
       buildStudyTextMp3Inworld(
-        { context },
+        { assignment: context },
         {
           voiceMapPath: 'voices.yml',
           outPath: '/tmp',
@@ -1162,7 +1178,7 @@ describe('inworld provider adapter basics', () => {
     const buildHash = async (synthesisText: string) =>
       (
         await buildStudyTextMp3Inworld(
-          { context },
+          { assignment: context },
           {
             voiceMapPath: 'voices.yml',
             outPath: '/tmp',
@@ -1189,7 +1205,7 @@ describe('inworld provider adapter basics', () => {
 
     await expect(
       buildStudyTextMp3Inworld(
-        { context },
+        { assignment: context },
         {
           voiceMapPath: 'voices.yml',
           outPath: '/path-that-must-not-be-created',
@@ -1200,27 +1216,6 @@ describe('inworld provider adapter basics', () => {
         { synthesizeChunk },
       ),
     ).rejects.toThrow('freeFormDirection contains an unsafe markup delimiter');
-    expect(synthesizeChunk).not.toHaveBeenCalled();
-  });
-
-  it('blocks authored provider-control markup before calling injected synthesis', async () => {
-    const synthesizeChunk = vi.fn();
-    const context = parseMarkdownContext(
-      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: [whisper] Do not share the answer.\n:::',
-    );
-
-    await expect(
-      buildStudyTextMp3Inworld(
-        { context },
-        {
-          voiceMapPath: 'voices.yml',
-          outPath: '/path-that-must-not-be-created',
-          force: true,
-          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
-        },
-        { synthesizeChunk },
-      ),
-    ).rejects.toThrow('authored_markup_delimiter:segment-1');
     expect(synthesizeChunk).not.toHaveBeenCalled();
   });
 
@@ -1238,9 +1233,39 @@ describe('inworld provider adapter basics', () => {
     'blocks a %s speech plan before calling injected synthesis',
     async (_caseName, mutateSegments) => {
       const synthesizeChunk = vi.fn();
-      const context = parseMarkdownContext(
-        '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: First authored line.\n[Leo]: Second authored line.\n:::',
-      );
+      const context = createTtsAssignment({
+        metadata: { title: 'Test', student: 'Alex', level: 'B1', topic: 'work' },
+        studyText: {
+          type: 'dialogue',
+          speakers: [
+            {
+              id: 's0',
+              displayName: 'Maya',
+              role: 'student',
+              persona: null,
+              voiceDirection: null,
+              gender: 'neutral',
+              age: null,
+              accent: null,
+            },
+            {
+              id: 's1',
+              displayName: 'Leo',
+              role: 'student',
+              persona: null,
+              voiceDirection: null,
+              gender: 'neutral',
+              age: null,
+              accent: null,
+            },
+          ],
+          turns: [
+            { speakerId: 's0', text: 'First authored line.' },
+            { speakerId: 's1', text: 'Second authored line.' },
+          ],
+        },
+        pronunciation: null,
+      });
       const sourceSegments = [
         { id: 'segment-1', speaker: 'Maya', text: 'First authored line.' },
         { id: 'segment-2', speaker: 'Leo', text: 'Second authored line.' },
@@ -1256,7 +1281,7 @@ describe('inworld provider adapter basics', () => {
 
       await expect(
         buildStudyTextMp3Inworld(
-          { context },
+          { assignment: context },
           {
             voiceMapPath: 'voices.yml',
             outPath: '/path-that-must-not-be-created',
@@ -1283,7 +1308,7 @@ describe('inworld provider adapter basics', () => {
 
       await expect(
         buildStudyTextMp3Inworld(
-          { context },
+          { assignment: context },
           {
             voiceMapPath: 'voices.yml',
             outPath: '/path-that-must-not-be-created',
@@ -1301,7 +1326,7 @@ describe('inworld provider adapter basics', () => {
   it('keeps preview cache hashes stable when only ranker timestamps change', async () => {
     const context = createPreviewContext();
     const first = await buildStudyTextMp3Inworld(
-      { context },
+      { assignment: context },
       {
         voiceMapPath: 'voices.yml',
         outPath: '/tmp',
@@ -1310,7 +1335,7 @@ describe('inworld provider adapter basics', () => {
       },
     );
     const second = await buildStudyTextMp3Inworld(
-      { context },
+      { assignment: context },
       {
         voiceMapPath: 'voices.yml',
         outPath: '/tmp',
@@ -1325,7 +1350,7 @@ describe('inworld provider adapter basics', () => {
   it('normalizes bracketed segment speakers before resolving rendered voice assignments', async () => {
     const context = createPreviewContext();
     const bracketed = await buildStudyTextMp3Inworld(
-      { context },
+      { assignment: context },
       {
         voiceMapPath: 'voices.yml',
         outPath: '/tmp',
@@ -1334,7 +1359,7 @@ describe('inworld provider adapter basics', () => {
       },
     );
     const unbracketed = await buildStudyTextMp3Inworld(
-      { context },
+      { assignment: context },
       {
         voiceMapPath: 'voices.yml',
         outPath: '/tmp',
@@ -1354,7 +1379,7 @@ describe('inworld provider adapter basics', () => {
     ) =>
       (
         await buildStudyTextMp3Inworld(
-          { context },
+          { assignment: context },
           { voiceMapPath: 'voices.yml', outPath: '/tmp', preview: true, speechPlan, voicePlan },
         )
       ).hash;
@@ -1411,15 +1436,9 @@ describe('inworld provider adapter basics', () => {
   });
 });
 
-it('keeps native typed cast and cache identity for unchanged historical speech', async () => {
+it('keeps native typed cast and cache identity for unchanged typed speech', async () => {
   const assignment = assignmentFixture();
-  const context = parseMarkdownContext(
-    `---\n${JSON.stringify(assignmentMetadata(assignment))}\n---\n:::study-text\n${assignmentStudySegments(
-      assignment,
-    )
-      .map((s) => `${s.speaker}: ${s.text}`)
-      .join('\n')}\n:::`,
-  );
+  const context = structuredClone(assignment);
   const voicePlan = {
     ...createPreviewVoicePlan('fixed'),
     assignments: ['Alex', 'Jo'].map((speaker) => ({
@@ -1429,7 +1448,7 @@ it('keeps native typed cast and cache identity for unchanged historical speech',
   };
   const options = { outPath: tmpdir(), voiceMapPath: '/unused', preview: true, voicePlan };
   const typed = await buildStudyTextMp3Inworld({ assignment }, options);
-  const historical = await buildStudyTextMp3Inworld({ context }, options);
+  const historical = await buildStudyTextMp3Inworld({ assignment: context }, options);
   expect(typed.hash).toBe(historical.hash);
   expect(typed.voiceAssignments).toEqual(historical.voiceAssignments);
   assignment.input.studyText.turns[0]!.text = '**First**, open the app.';
@@ -1437,7 +1456,6 @@ it('keeps native typed cast and cache identity for unchanged historical speech',
   expect(literal.hash).not.toBe(typed.hash);
   expect(
     renderInworldSpeechSegment({
-      plainText: true,
       model: 'inworld-tts-2',
       segment: { id: 'segment-1', text: '**literal** <tag> `code`' },
     }).lexicalText,

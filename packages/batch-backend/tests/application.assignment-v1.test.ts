@@ -9,11 +9,6 @@ import {
   validateAssignmentV1,
 } from '@esl-pipeline/contracts';
 import { renderAssignmentToHtml } from '@esl-pipeline/html-publisher';
-import {
-  extractPronunciationFocus,
-  extractStudyText,
-  parseMarkdownContext,
-} from '@esl-pipeline/pmd';
 import { createPreparedStudyTextSynthesis } from '@esl-pipeline/tts-core';
 
 import { generateDraft } from '../src/application/generate-draft.js';
@@ -294,22 +289,6 @@ describe('AssignmentV1 domain and native projection', () => {
         suppliedUrls: ['https://example.test/source', 'https://example.test/video'],
       }),
     ).toEqual(a);
-  });
-
-  it('keeps historical numeric-escape speech and missing-transcription parsing unchanged', async () => {
-    const a = assignmentFixture();
-    a.input.studyText.turns[0]!.text = 'A & B';
-    a.pronunciation = {
-      ...common,
-      mode: 'shadow_sentence',
-      words: [{ text: 'first', transcription: null }],
-      shadowSentence: 'First.',
-    };
-    const text =
-      '---\ntitle: History\nstudent: Legacy\nlevel: B1\ntopic: Speech\ninput_type: generate\n---\n\n:::study-text Transcript\nAlex: A &#38; B\n:::\n\n### B. Pronunciation Micro-Focus\n**Mode:** shadow_sentence\n1. first\n**Shadow sentence:** First.';
-    const p = await parseMarkdownContext(text);
-    expect(extractStudyText(p).lines[0]).toBe('Alex: A &#38; B');
-    expect(extractPronunciationFocus(p)?.issues[0]?.code).toBe('invalid_word_item_format');
   });
 });
 

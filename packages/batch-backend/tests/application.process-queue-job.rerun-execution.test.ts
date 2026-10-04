@@ -41,7 +41,7 @@ describe('application/process-queue-job', () => {
       sourceJobId: failed.sourceJobId!,
       executionMode: 'correction',
       correction: {
-        expectedMarkdownHash: 'a'.repeat(64),
+        expectedAssignmentHash: makeJob().assignmentArtifact!.contentHash,
         manifestMd: `corrections/${failed.id}.md`,
       },
     });
@@ -49,7 +49,7 @@ describe('application/process-queue-job', () => {
     expect(resetFailedAssignmentCorrectionJobSpy).toHaveBeenCalledWith({
       jobId: failed.id,
       sourceJobId: failed.sourceJobId,
-      expectedMarkdownHash: 'a'.repeat(64),
+      expectedAssignmentHash: makeJob().assignmentArtifact!.contentHash,
     });
     expect(runAssignmentJobSpy).toHaveBeenCalledWith(
       expect.objectContaining({ jobId: failed.id }),
@@ -93,7 +93,7 @@ describe('application/process-queue-job', () => {
       sourceJobId: 'job-published-parent',
       executionMode: 'correction',
       correction: {
-        expectedMarkdownHash: 'a'.repeat(64),
+        expectedAssignmentHash: makeJob().assignmentArtifact!.contentHash,
         manifestMd: 'corrections/job-1.md',
       },
     });

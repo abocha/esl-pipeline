@@ -13,25 +13,17 @@ import {
   serializeAssignmentV1,
 } from '@esl-pipeline/contracts';
 
-import { newAssignment, rerunAssignment } from '../src/index.js';
+import {
+  getAssignmentStatus,
+  newAssignment,
+  planRerunAssignment,
+  rerunAssignment,
+} from '../src/index.js';
 import type { AssignmentManifest, ManifestStore } from '../src/manifest.js';
 import { synthesizePronunciationAudio } from '../src/runtime/pronunciation-audio.js';
 
 const audioFiles = vi.hoisted(() => ({ study: '', directory: '' }));
 
-vi.mock('@esl-pipeline/pmd', () => ({
-  parseMarkdownContext: vi.fn(() => {
-    throw new Error('Typed execution reached PMD');
-  }),
-  extractPronunciationFocus: vi.fn(() => {
-    throw new Error('Typed pronunciation reached PMD');
-  }),
-}));
-vi.mock('@esl-pipeline/md-validator', () => ({
-  validateMarkdown: vi.fn(() => {
-    throw new Error('Typed execution reached Markdown validation');
-  }),
-}));
 vi.mock('@esl-pipeline/tts-core', async () => {
   const actual =
     await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core');
@@ -83,9 +75,6 @@ vi.mock('@esl-pipeline/html-publisher', async () => {
   );
   return {
     ...actual,
-    renderAndPublishMarkdownToS3: vi.fn(() => {
-      throw new Error('Typed publication reached Markdown');
-    }),
     renderAndPublishAssignmentToS3: vi.fn(async (options) => ({
       html: await actual.renderAssignmentToHtml(options.assignment, options),
       url: 'https://html.test/lesson',
@@ -173,6 +162,73 @@ describe('native typed execution', () => {
     vi.unstubAllEnvs();
     await rm(audioFiles.directory, { recursive: true, force: true });
   });
+
+  it('rejects missing typed input before reading manifests or performing execution', async () => {
+    const readManifest = vi.spyOn(store, 'readManifest');
+    await expect(
+      newAssignment({ md: '/historical/lesson.md' } as never, {}, { manifestStore: store }),
+    ).rejects.toThrow('read-only');
+    await expect(
+      rerunAssignment({ md: '/historical/lesson.md' } as never, { manifestStore: store }),
+    ).rejects.toThrow('read-only');
+    expect(readManifest).not.toHaveBeenCalled();
+    expect(store.writeManifest).not.toHaveBeenCalled();
+    const core = await import('@esl-pipeline/tts-core');
+    const html = await import('@esl-pipeline/html-publisher');
+    expect(core.buildStudyTextMp3).not.toHaveBeenCalled();
+    expect(html.renderAndPublishAssignmentToS3).not.toHaveBeenCalled();
+  });
+
+  it.each([1, 2, 3, 4, 5])(
+    'keeps schema-%i historical evidence readable while rejecting every rerun target and conversion',
+    async (schemaVersion) => {
+      const md = `${audioFiles.directory}/historical.md`;
+      const originalBytes = '# Original historical evidence\n';
+      await writeFile(md, originalBytes);
+      persisted = {
+        schemaVersion,
+        mdHash: createHash('sha256').update(originalBytes).digest('hex'),
+        htmlUrl: 'https://historical.test/output',
+        audioArtifacts: {
+          studyText: { path: audioFiles.study, url: 'https://historical.test/audio' },
+        },
+        timestamp: '2026-01-01T00:00:00.000Z',
+      };
+      const originalManifest = structuredClone(persisted);
+      const status = await getAssignmentStatus(md, { manifestStore: store });
+      expect(status).toMatchObject({
+        manifest: originalManifest,
+        mdHashMatches: true,
+        audioFileExists: true,
+      });
+      for (const target of [
+        { republishOnly: true },
+        { regenerateStudyTextAudio: true },
+        { regeneratePronunciationMainAudio: true },
+        { regeneratePronunciationChunkAudio: true },
+      ]) {
+        await expect(
+          rerunAssignment(
+            { md, assignment: assignmentFixture(), ...target },
+            { manifestStore: store },
+          ),
+        ).rejects.toThrow('read-only');
+        const plan = await planRerunAssignment({ md, ...target }, { manifestStore: store });
+        expect(plan.executable).toEqual([]);
+        expect(plan.errors.join(' ')).toContain('read-only');
+      }
+      await expect(
+        newAssignment({ md, assignment: assignmentFixture() }, {}, { manifestStore: store }),
+      ).rejects.toThrow('read-only');
+      expect(persisted).toEqual(originalManifest);
+      expect(readAssignmentFixture(md, 'utf8')).toBe(originalBytes);
+      expect(store.writeManifest).not.toHaveBeenCalled();
+      const core = await import('@esl-pipeline/tts-core');
+      const html = await import('@esl-pipeline/html-publisher');
+      expect(core.buildStudyTextMp3).not.toHaveBeenCalled();
+      expect(html.renderAndPublishAssignmentToS3).not.toHaveBeenCalled();
+    },
+  );
 
   it('publishes directly with validated canonical identity, typed speech context and no source file', async () => {
     const assignment = assignmentFixture();

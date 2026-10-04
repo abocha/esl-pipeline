@@ -1,5 +1,4 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 
 import type {
   JobListResponse,
@@ -1271,10 +1270,7 @@ export async function loadJobDetailsView(
 }> {
   const job = await context.backend.getJob(jobId);
   const sharePayload = await resolveSharePayloadForJob(context, {
-    md: job.md,
-    htmlUrl: job.htmlUrl,
     publication: job.publication,
-    typed: Boolean(job.assignmentArtifact),
   });
   return {
     html: formatJobDetails(job, {
@@ -1326,10 +1322,7 @@ async function resolveAssignmentTitleForJob(
     return null;
   }
   const sharePayload = await resolveSharePayloadForJob(context, {
-    md: job.md,
-    htmlUrl: job.htmlUrl,
     publication: job.publication,
-    typed: Boolean(job.assignmentArtifact),
   });
   return sharePayload.assignmentTitle;
 }
@@ -1870,355 +1863,43 @@ interface ResolvedSharePayload {
   assignmentTitle: string | null;
   assignmentEmoji: string | null;
   telemetry: {
-    markdownSource: 'none' | 'inline' | 'file_path';
-    htmlFetched: boolean;
-    usedHtmlFallback: boolean;
-    studyAudioSource: 'publication' | 'markdown_label' | 'markdown_path' | 'html_path' | 'missing';
-    pronunciationAudioSource:
-      | 'publication'
-      | 'markdown_label'
-      | 'markdown_path'
-      | 'html_path'
-      | 'missing';
-    titleSource:
-      | 'publication'
-      | 'markdown_frontmatter'
-      | 'markdown_heading'
-      | 'html_title'
-      | 'missing';
-    emojiSource: 'publication' | 'markdown_frontmatter' | 'html_hero' | 'missing';
+    markdownSource: 'none';
+    htmlFetched: false;
+    usedHtmlFallback: false;
+    studyAudioSource: 'publication' | 'missing';
+    pronunciationAudioSource: 'publication' | 'missing';
+    titleSource: 'publication' | 'missing';
+    emojiSource: 'publication' | 'missing';
     missingStudyAudio: boolean;
     missingPronunciationAudio: boolean;
     missingAudioCount: number;
   };
 }
-
 async function resolveSharePayloadForJob(
-  context: CommandContext,
-  mdOrHtmlSource: {
-    md: string | null;
-    htmlUrl?: string | null;
-    publication?: JobStatusDto['publication'];
-    typed?: boolean;
-  },
+  _context: CommandContext,
+  source: { publication?: JobStatusDto['publication'] },
 ): Promise<ResolvedSharePayload> {
-  if (mdOrHtmlSource.typed || mdOrHtmlSource.publication) {
-    const p = mdOrHtmlSource.publication;
-    const studyTextAudioUrl = p?.studyTextAudioUrl ?? null;
-    const pronunciationAudioUrl = p?.pronunciationAudioUrl ?? null;
-    return {
-      studyTextAudioUrl,
-      pronunciationAudioUrl,
-      assignmentTitle: p?.title ?? null,
-      assignmentEmoji: p?.icon ?? null,
-      telemetry: {
-        markdownSource: 'none',
-        htmlFetched: false,
-        usedHtmlFallback: false,
-        studyAudioSource: studyTextAudioUrl ? 'publication' : 'missing',
-        pronunciationAudioSource: pronunciationAudioUrl ? 'publication' : 'missing',
-        titleSource: p?.title ? 'publication' : 'missing',
-        emojiSource: p?.icon ? 'publication' : 'missing',
-        missingStudyAudio: !studyTextAudioUrl,
-        missingPronunciationAudio: !pronunciationAudioUrl,
-        missingAudioCount: Number(!studyTextAudioUrl) + Number(!pronunciationAudioUrl),
-      },
-    };
-  }
-  let markdown: string | null = mdOrHtmlSource.md;
-  let markdownSource: 'none' | 'inline' | 'file_path' = markdown ? 'inline' : 'none';
-  let html: string | null = null;
-
-  if (markdown && looksLikeMarkdownFilePath(markdown)) {
-    markdownSource = 'file_path';
-    try {
-      markdown = await readFile(markdown, 'utf8');
-    } catch {
-      // Ignore filesystem read errors; we'll try HTML fallback.
-      markdown = null;
-    }
-  }
-
-  let studyTextAudioUrl: string | null = null;
-  let studyAudioSource: ResolvedSharePayload['telemetry']['studyAudioSource'] = 'missing';
-  const studyTextLabeledUrl = extractLabeledMarkdownAudioUrl(
-    markdown,
-    'Audio recording: Study Text',
-  );
-  if (studyTextLabeledUrl) {
-    studyTextAudioUrl = studyTextLabeledUrl;
-    studyAudioSource = 'markdown_label';
-  } else {
-    const studyTextFallbackUrl = extractAudioUrlByPathHint(markdown, '/audio/final/');
-    if (studyTextFallbackUrl) {
-      studyTextAudioUrl = studyTextFallbackUrl;
-      studyAudioSource = 'markdown_path';
-    }
-  }
-
-  let pronunciationAudioUrl: string | null = null;
-  let pronunciationAudioSource: ResolvedSharePayload['telemetry']['pronunciationAudioSource'] =
-    'missing';
-  const pronunciationLabeledUrl = extractLabeledMarkdownAudioUrl(
-    markdown,
-    'Audio recording: Pronunciation Practice',
-  );
-  if (pronunciationLabeledUrl) {
-    pronunciationAudioUrl = pronunciationLabeledUrl;
-    pronunciationAudioSource = 'markdown_label';
-  } else {
-    const pronunciationFallbackUrl = extractAudioUrlByPathHints(markdown, [
-      '/audio/pronunciation/',
-    ]);
-    if (pronunciationFallbackUrl) {
-      pronunciationAudioUrl = pronunciationFallbackUrl;
-      pronunciationAudioSource = 'markdown_path';
-    }
-  }
-
-  const markdownTitle = extractAssignmentTitleFromMarkdown(markdown);
-  const markdownEmoji = extractAssignmentEmojiFromMarkdown(markdown);
-  const markdownTitleSource = detectMarkdownTitleSource(markdownTitle, markdown);
-  const markdownEmojiSource = detectMarkdownEmojiSource(markdownEmoji, markdown);
-  let htmlFetched = false;
-
-  if ((!studyTextAudioUrl || !pronunciationAudioUrl || !markdownTitle) && mdOrHtmlSource.htmlUrl) {
-    html = await fetchTextWithTimeout(mdOrHtmlSource.htmlUrl, context.config.backendTimeoutMs);
-    htmlFetched = html !== null;
-    if (html) {
-      if (!studyTextAudioUrl) {
-        const htmlStudyTextAudioUrl = extractAudioUrlByPathHint(html, '/audio/final/');
-        if (htmlStudyTextAudioUrl) {
-          studyTextAudioUrl = htmlStudyTextAudioUrl;
-          studyAudioSource = 'html_path';
-        }
-      }
-      if (!pronunciationAudioUrl) {
-        const htmlPronunciationAudioUrl = extractAudioUrlByPathHints(html, [
-          '/audio/pronunciation/',
-        ]);
-        if (htmlPronunciationAudioUrl) {
-          pronunciationAudioUrl = htmlPronunciationAudioUrl;
-          pronunciationAudioSource = 'html_path';
-        }
-      }
-    }
-  }
-
-  const htmlTitle = extractAssignmentTitleFromHtml(html);
-  const htmlEmoji = extractAssignmentEmojiFromHtml(html);
-
-  const assignmentTitle = markdownTitle ?? htmlTitle ?? null;
-  const assignmentEmoji = markdownEmoji ?? htmlEmoji ?? null;
-  const titleSource: ResolvedSharePayload['telemetry']['titleSource'] = markdownTitle
-    ? (markdownTitleSource ?? 'missing')
-    : htmlTitle
-      ? 'html_title'
-      : 'missing';
-  const emojiSource: ResolvedSharePayload['telemetry']['emojiSource'] = markdownEmoji
-    ? (markdownEmojiSource ?? 'missing')
-    : htmlEmoji
-      ? 'html_hero'
-      : 'missing';
-  const missingStudyAudio = studyTextAudioUrl === null;
-  const missingPronunciationAudio = pronunciationAudioUrl === null;
-  const missingAudioCount = Number(missingStudyAudio) + Number(missingPronunciationAudio);
-  const usedHtmlFallback =
-    studyAudioSource === 'html_path' ||
-    pronunciationAudioSource === 'html_path' ||
-    titleSource === 'html_title';
-
+  const p = source.publication;
+  const studyTextAudioUrl = p?.studyTextAudioUrl ?? null;
+  const pronunciationAudioUrl = p?.pronunciationAudioUrl ?? null;
   return {
     studyTextAudioUrl,
     pronunciationAudioUrl,
-    assignmentTitle,
-    assignmentEmoji,
+    assignmentTitle: p?.title ?? null,
+    assignmentEmoji: p?.icon ?? null,
     telemetry: {
-      markdownSource,
-      htmlFetched,
-      usedHtmlFallback,
-      studyAudioSource,
-      pronunciationAudioSource,
-      titleSource,
-      emojiSource,
-      missingStudyAudio,
-      missingPronunciationAudio,
-      missingAudioCount,
+      markdownSource: 'none',
+      htmlFetched: false,
+      usedHtmlFallback: false,
+      studyAudioSource: studyTextAudioUrl ? 'publication' : 'missing',
+      pronunciationAudioSource: pronunciationAudioUrl ? 'publication' : 'missing',
+      titleSource: p?.title ? 'publication' : 'missing',
+      emojiSource: p?.icon ? 'publication' : 'missing',
+      missingStudyAudio: !studyTextAudioUrl,
+      missingPronunciationAudio: !pronunciationAudioUrl,
+      missingAudioCount: Number(!studyTextAudioUrl) + Number(!pronunciationAudioUrl),
     },
   };
-}
-
-function looksLikeMarkdownFilePath(value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed.toLowerCase().endsWith('.md')) return false;
-  return (
-    trimmed.startsWith('/') ||
-    trimmed.startsWith('./') ||
-    trimmed.startsWith('../') ||
-    /^[A-Za-z]:[\\/]/.test(trimmed)
-  );
-}
-
-function extractLabeledMarkdownAudioUrl(
-  markdown: string | null | undefined,
-  label: string,
-): string | null {
-  if (!markdown) return null;
-  const pattern = new RegExp(String.raw`\[${escapeRegExp(label)}\]\((https?:\/\/[^\s)]+)\)`, 'i');
-  const match = markdown.match(pattern);
-  return match?.[1] ?? null;
-}
-
-function extractAudioUrlByPathHint(
-  input: string | null | undefined,
-  pathHint: string,
-): string | null {
-  if (!input) return null;
-  const pattern = new RegExp(
-    String.raw`(https?:\/\/[^\s<>"')\]]*${escapeRegExp(pathHint)}[^\s<>"')\]]*\.mp3(?:\?[^\s<>"')\]]*)?)`,
-    'i',
-  );
-  const match = input.match(pattern);
-  return match?.[1] ?? null;
-}
-
-function extractAudioUrlByPathHints(
-  input: string | null | undefined,
-  pathHints: readonly string[],
-): string | null {
-  for (const pathHint of pathHints) {
-    const match = extractAudioUrlByPathHint(input, pathHint);
-    if (match) {
-      return match;
-    }
-  }
-
-  return null;
-}
-
-function extractAssignmentTitleFromMarkdown(markdown: string | null | undefined): string | null {
-  if (!markdown) return null;
-  const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
-  if (frontmatterMatch?.[1]) {
-    const titleMatch = frontmatterMatch[1].match(/^\s*title:\s*(.+)\s*$/im);
-    if (titleMatch?.[1]) {
-      const cleaned = cleanupTitleToken(titleMatch[1]);
-      if (cleaned) return cleaned;
-    }
-  }
-
-  const headingMatch = markdown.match(/^#\s+(.+)$/m);
-  if (headingMatch?.[1]) {
-    return cleanupTitleToken(headingMatch[1]);
-  }
-  return null;
-}
-
-function extractAssignmentEmojiFromMarkdown(markdown: string | null | undefined): string | null {
-  if (!markdown) return null;
-  const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
-  if (!frontmatterMatch?.[1]) return null;
-  const iconMatch = frontmatterMatch[1].match(/^\s*icon:\s*(.+)\s*$/im);
-  if (!iconMatch?.[1]) return null;
-  return cleanupIconToken(iconMatch[1]);
-}
-
-function detectMarkdownTitleSource(
-  title: string | null,
-  markdown: string | null | undefined,
-): 'markdown_frontmatter' | 'markdown_heading' | null {
-  if (!title || !markdown) return null;
-  const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
-  if (frontmatterMatch?.[1]) {
-    const titleMatch = frontmatterMatch[1].match(/^\s*title:\s*(.+)\s*$/im);
-    if (titleMatch?.[1] && cleanupTitleToken(titleMatch[1]) === title) {
-      return 'markdown_frontmatter';
-    }
-  }
-  const headingMatch = markdown.match(/^#\s+(.+)$/m);
-  if (headingMatch?.[1] && cleanupTitleToken(headingMatch[1]) === title) {
-    return 'markdown_heading';
-  }
-  return null;
-}
-
-function detectMarkdownEmojiSource(
-  emoji: string | null,
-  markdown: string | null | undefined,
-): 'markdown_frontmatter' | null {
-  if (!emoji || !markdown) return null;
-  const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
-  if (!frontmatterMatch?.[1]) return null;
-  const iconMatch = frontmatterMatch[1].match(/^\s*icon:\s*(.+)\s*$/im);
-  if (iconMatch?.[1] && cleanupIconToken(iconMatch[1]) === emoji) {
-    return 'markdown_frontmatter';
-  }
-  return null;
-}
-
-function extractAssignmentTitleFromHtml(html: string | null | undefined): string | null {
-  if (!html) return null;
-  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  if (!titleMatch?.[1]) return null;
-  const decoded = decodeHtmlEntities(titleMatch[1]);
-  return cleanupTitleToken(decoded);
-}
-
-function extractAssignmentEmojiFromHtml(html: string | null | undefined): string | null {
-  if (!html) return null;
-  const iconMatch = html.match(
-    /<div[^>]*class=["'][^"']*hero-emoji[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
-  );
-  if (!iconMatch?.[1]) return null;
-  const decoded = decodeHtmlEntities(stripTags(iconMatch[1]));
-  return cleanupIconToken(decoded);
-}
-
-function decodeHtmlEntities(value: string): string {
-  return value
-    .replaceAll('&amp;', '&')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&#39;', "'");
-}
-
-function cleanupTitleToken(value: string): string | null {
-  const trimmed = value.trim().replaceAll(/^['"]|['"]$/g, '');
-  if (!trimmed) return null;
-  return trimmed.replaceAll(/^homework\s+ass+i?ignment\s*:\s*/gi, '').trim() || null;
-}
-
-function cleanupIconToken(value: string): string | null {
-  const trimmed = value.trim().replaceAll(/^['"]|['"]$/g, '');
-  if (!trimmed) return null;
-  return trimmed;
-}
-
-function stripTags(value: string): string {
-  return value.replaceAll(/<[^>]*>/g, '');
-}
-
-function escapeRegExp(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-}
-
-async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<string | null> {
-  const controller = new AbortController();
-  const safeTimeoutMs = Math.max(1_000, Math.min(15_000, timeoutMs));
-  const timer = setTimeout(() => controller.abort(), safeTimeoutMs);
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    return await response.text();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 export async function sendShareableJobLinks(
@@ -2237,10 +1918,7 @@ export async function sendShareableJobLinks(
 
   const job = await context.backend.getJob(jobId);
   const sharePayload = await resolveSharePayloadForJob(context, {
-    md: job.md,
-    htmlUrl: job.htmlUrl,
     publication: job.publication,
-    typed: Boolean(job.assignmentArtifact),
   });
   const includeShareHeader = context.command === 'share' || context.command === 'links';
 
@@ -2260,21 +1938,6 @@ export async function sendShareableJobLinks(
     },
   });
 
-  for (const [kind, source] of [
-    ['study', sharePayload.telemetry.studyAudioSource],
-    ['pronunciation', sharePayload.telemetry.pronunciationAudioSource],
-  ] as const) {
-    if (source === 'markdown_label' || source === 'markdown_path' || source === 'html_path') {
-      emitBotMetricCounter({
-        audit: context.audit,
-        metric: 'share_extraction_source',
-        labels: {
-          kind,
-          source,
-        },
-      });
-    }
-  }
   if (sharePayload.telemetry.missingStudyAudio) {
     emitBotMetricCounter({
       audit: context.audit,

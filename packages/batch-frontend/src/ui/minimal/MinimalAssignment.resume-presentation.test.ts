@@ -6,9 +6,11 @@ import {
   buildRecentAssignmentItems,
   buildRecentAssignmentLineages,
 } from './MinimalAssignment.resume-presentation';
+import { assignmentArtifact } from './MinimalAssignment.typed-test-fixtures';
 
 function createJob(overrides: Partial<JobStatus> = {}): JobStatus {
   return {
+    assignmentArtifact,
     jobId: 'job-raw-identifier',
     studentId: 'student-cora',
     md: null,

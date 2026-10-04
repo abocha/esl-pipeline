@@ -2,8 +2,8 @@
 
 This Fastify-based example exposes a simple `/jobs` endpoint that invokes the orchestrator pipeline.
 It always runs with `dryRun: true` and skips import/TTS/upload so you can exercise the job flow
-without publish-service or cloud-storage credentials. Point `PIPELINE_CWD` at a directory with Markdown lessons (the
-fixtures provided in this workspace work out of the box).
+without publish-service or cloud-storage credentials. The request must carry AssignmentV1 JSON and a stable `md` manifest locator. Historical Markdown
+input is read-only and cannot execute.
 
 ## Run locally
 
@@ -20,8 +20,11 @@ POST a job:
 ```bash
 curl -X POST http://localhost:8080/jobs \
   -H 'Content-Type: application/json' \
-  -d '{"md":"lesson.md"}'
+  --data-binary @job.json
 ```
+
+`job.json` contains `{ "md": "lesson.json", "assignment": <AssignmentV1 JSON> }`. The locator
+need not exist as a source file.
 
 ### Queue/worker integration
 

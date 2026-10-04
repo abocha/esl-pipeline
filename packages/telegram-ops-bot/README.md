@@ -87,3 +87,8 @@ bash scripts/smoke/run-telegram-ops-compose-smoke.sh
 
 - [`packages/batch-backend/README.md`](../batch-backend/README.md)
 - [`docs/operations/telegram-ops-control-panel.md`](../../docs/operations/telegram-ops-control-panel.md)
+
+Historical assignments are read-only. Sharing uses persisted publication title, icon, and primary
+audio URLs plus the already-produced HTML URL. Missing metadata stays missing: the bot does not read
+Markdown files, parse Markdown, fetch or scrape HTML, regenerate outputs, or convert historical
+assignments to AssignmentV1.

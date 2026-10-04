@@ -1,3 +1,4 @@
+import { promptPackageFixture } from './assignment-v1.test-harness.js';
 import './support/bootstrap-pg-test-env.js';
 
 import { randomUUID } from 'node:crypto';
@@ -353,8 +354,8 @@ async function insertSucceededHomeworkJob(params: {
         finished_at,
         created_at,
         updated_at
-      )
-      VALUES ($1, 'succeeded', $2, $3, 'html', $4, NOW(), NOW(), NOW())
+      , assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
+      VALUES ($1, 'succeeded', $2, $3, 'html', $4, NOW(), NOW(), NOW(), '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())
       `,
       [jobId, params.studentId, params.lessonId, params.htmlUrl ?? 'https://example.test/hw'],
     );
@@ -377,7 +378,7 @@ async function insertFailedHomeworkJob(params: { studentId: string; lessonId: st
         finished_at,
         created_at,
         updated_at
-      )
+      , assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
       VALUES (
         $1,
         'failed',
@@ -388,7 +389,7 @@ async function insertFailedHomeworkJob(params: { studentId: string; lessonId: st
         NOW() + INTERVAL '1 minute',
         NOW() + INTERVAL '1 minute',
         NOW() + INTERVAL '1 minute'
-      )
+      , '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())
       `,
       [jobId, params.studentId, params.lessonId],
     );
@@ -1283,8 +1284,8 @@ describeIfPg('application/student-schedule-billing', () => {
       );
       await client.query(
         `INSERT INTO prompt_packages (
-           id, recording_id, transcript_id, student_id, lesson_id, template_version, storage_uri
-         ) VALUES ($1, $2, $3, $4, $5, 'v1', $6)`,
+           id, recording_id, transcript_id, student_id, lesson_id, template_version, storage_uri, request_envelope
+         ) VALUES ($1, $2, $3, $4, $5, 'v1', $6, $7::jsonb)`,
         [
           promptPackageId,
           recordingId,
@@ -1292,13 +1293,14 @@ describeIfPg('application/student-schedule-billing', () => {
           studentId,
           lessonId,
           `s3://prompt-packages/${promptPackageId}.txt`,
+          JSON.stringify(promptPackageFixture().requestEnvelope),
         ],
       );
       await client.query(
         `INSERT INTO drafts (
            id, prompt_package_id, student_id, lesson_id, storage_uri, created_by,
            working_version, content_hash
-         ) VALUES ($1, $2, $3, $4, $5, $6, 1, $7)`,
+         , format) VALUES ($1, $2, $3, $4, CASE WHEN $5::text IS NOT NULL THEN 'local://drafts/content/' || $7 || '.json' ELSE NULL END, $6, 1, $7, 'assignment_v1')`,
         [
           draftId,
           promptPackageId,
@@ -1351,8 +1353,8 @@ describeIfPg('application/student-schedule-billing', () => {
     const shareJobId = randomUUID();
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
-        `INSERT INTO jobs (id, state, student_id, lesson_id, user_id)
-         VALUES ($1, 'queued', $2, $3, $4)`,
+        `INSERT INTO jobs (id, state, student_id, lesson_id, user_id, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
+         VALUES ($1, 'queued', $2, $3, $4, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())`,
         [shareJobId, studentId, lessonId, userId],
       );
       await client.query(

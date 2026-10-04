@@ -10,6 +10,7 @@ import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import { AssignmentArtifactReferenceSchema } from '@esl-pipeline/contracts';
 import { parseTtsModelId } from '@esl-pipeline/tts-core';
 
+import { requireTypedAssignment } from '../application/historical-assignment.js';
 import { buildLearningPresetProvenance } from '../application/learning-preset.js';
 import { createPgPool, withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
@@ -368,6 +369,7 @@ async function insertJobWithState(
   state: JobState,
   options?: { client?: PoolClient },
 ): Promise<JobRecord> {
+  requireTypedAssignment(params.assignmentArtifact);
   const id = params.id ?? randomUUID();
   const now = new Date();
 
@@ -651,8 +653,7 @@ export async function resetFailedAssignmentCorrectionJob(
   params: {
     jobId: string;
     sourceJobId: string;
-    expectedMarkdownHash?: string;
-    expectedAssignmentHash?: string;
+    expectedAssignmentHash: string;
   },
   options?: { client?: PoolClient },
 ): Promise<JobRecord | null> {
@@ -666,7 +667,7 @@ export async function resetFailedAssignmentCorrectionJob(
         AND j.state = 'failed'
         AND j.source_job_id = $2
         AND j.md IS NULL
-        AND ((j.assignment_artifact IS NOT NULL AND $5 = 'assignment_v1' AND j.assignment_artifact ->> 'contentHash' = $3) OR (j.assignment_artifact IS NULL AND $5 = 'markdown' AND right(j.md_storage_uri, length('/content/' || $3 || '.md')) = '/content/' || $3 || '.md'))
+        AND j.assignment_artifact IS NOT NULL AND j.assignment_artifact ->> 'contentHash' = $3
         AND EXISTS (
           SELECT 1
           FROM job_action_history h
@@ -683,13 +684,7 @@ export async function resetFailedAssignmentCorrectionJob(
         )
       RETURNING j.id
       `,
-      [
-        params.jobId,
-        params.sourceJobId,
-        params.expectedAssignmentHash ?? params.expectedMarkdownHash,
-        JobActionType.RERUN,
-        params.expectedAssignmentHash ? 'assignment_v1' : 'markdown',
-      ],
+      [params.jobId, params.sourceJobId, params.expectedAssignmentHash, JobActionType.RERUN],
     );
     if (!result.rows[0]) return null;
     return getJobById(params.jobId, { client });

@@ -17,6 +17,12 @@ import {
   type NavigationGuard,
 } from '../shell/assignment-navigation-guard';
 import { MinimalAssignment } from './MinimalAssignment';
+import {
+  assignmentArtifact,
+  makeAssignmentText,
+  requestEnvelope,
+  typedDraftFields,
+} from './MinimalAssignment.typed-test-fixtures';
 
 vi.mock('../../utils/api', () => ({
   activateProfileRevision: vi.fn(),
@@ -119,7 +125,6 @@ vi.mock('../../utils/api', () => ({
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
   uploadRecording: vi.fn(),
-  validateMarkdown: vi.fn(),
 }));
 
 vi.mock('../shared/DropZone', () => ({
@@ -168,6 +173,7 @@ configure({ asyncUtilTimeout: UI_WAIT_TIMEOUT_MS });
 
 export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobStatus {
   return {
+    assignmentArtifact,
     jobId: 'job-1',
     studentId: null,
     md: '/tmp/assignment.md',
@@ -252,6 +258,7 @@ export function makeAssignmentSession(
           ? {
               promptPackageId,
               draftId,
+              artifact: assignmentArtifact,
               draftWorkingVersion: 1,
               draftStorageUri: 'memory://drafts/confirmed',
               draftHash: 'b'.repeat(64),
@@ -507,7 +514,7 @@ export async function preparePromptReady(user: ReturnType<typeof userEvent.setup
 
   fireEvent.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
   await screen.findByDisplayValue(
-    '# Generated assignment draft',
+    makeAssignmentText('# Generated assignment draft'),
     {},
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
@@ -558,6 +565,7 @@ function hydrateResumedAssignment(
   });
   vi.mocked(api.getJobStatus).mockResolvedValue(status as never);
   vi.mocked(api.fetchPromptPackage).mockResolvedValue({
+    requestEnvelope,
     id: status.promptPackageId ?? 'pkg-1',
     recordingId: status.recordingId ?? 'rec-1',
     transcriptId: status.transcriptId ?? 'tx-1',
@@ -573,6 +581,7 @@ function hydrateResumedAssignment(
   });
   if (overrides.draftText) {
     vi.mocked(api.fetchDraft).mockResolvedValue({
+      ...typedDraftFields(overrides.draftText),
       id: status.draftId ?? 'draft-1',
       promptPackageId: status.promptPackageId ?? 'pkg-1',
       studentId: status.studentId ?? null,
@@ -622,7 +631,7 @@ async function waitForResumedPromptReady(user: ReturnType<typeof userEvent.setup
     { name: /^(Generate assignment|Regenerate)$/i },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
-  await screen.findByRole('textbox', { name: /Draft markdown/i }, { timeout: UI_WAIT_TIMEOUT_MS });
+  await screen.findByRole('textbox', { name: /Assignment JSON/i }, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
 async function waitForJobActionsReady(jobId = 'job-1', hasPublishedHandout = true) {
@@ -748,7 +757,7 @@ export async function renderDraftReadyAssignment(
   return renderResumedAssignment(
     {
       ...overrides,
-      draftText: overrides.draftText ?? '# Draft markdown',
+      draftText: overrides.draftText ?? makeAssignmentText('# Draft markdown'),
     },
     options,
   );
@@ -789,7 +798,7 @@ export async function renderGenerationReadyAssignment(
   return renderResumedAssignment(
     {
       ...overrides,
-      draftText: overrides.draftText ?? '# Draft markdown',
+      draftText: overrides.draftText ?? makeAssignmentText('# Draft markdown'),
     },
     { user: createMinimalUser(), waitFor: 'promptReady' },
   );
@@ -837,7 +846,7 @@ export async function renderPublishedAssignment(
   return renderResumedAssignment(
     {
       ...overrides,
-      draftText: overrides.draftText ?? '# Draft markdown',
+      draftText: overrides.draftText ?? makeAssignmentText('# Draft markdown'),
       historicalOutput: true,
       status: {
         state: 'succeeded',
@@ -1109,6 +1118,7 @@ export function setupMinimalAssignmentTest() {
         create: {
           promptPackageId: request.promptPackageId,
           draftId: request.draftId,
+          artifact: { ...assignmentArtifact, workingVersion: request.draftWorkingVersion },
           draftWorkingVersion: request.draftWorkingVersion,
           draftStorageUri: 'memory://drafts/confirmed',
           draftHash: 'b'.repeat(64),
@@ -1303,6 +1313,7 @@ export function setupMinimalAssignmentTest() {
   vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(makeTranscript());
 
   vi.mocked(api.createPromptPackage).mockResolvedValue({
+    requestEnvelope,
     id: 'pkg-1',
     recordingId: 'rec-1',
     transcriptId: 'tx-1',
@@ -1317,6 +1328,7 @@ export function setupMinimalAssignmentTest() {
     updatedAt: now,
   });
   vi.mocked(api.fetchPromptPackage).mockResolvedValue({
+    requestEnvelope,
     id: 'pkg-1',
     recordingId: 'rec-1',
     transcriptId: 'tx-1',
@@ -1331,7 +1343,8 @@ export function setupMinimalAssignmentTest() {
     updatedAt: now,
   });
   vi.mocked(api.generateDraft).mockResolvedValue({
-    text: '# Generated assignment draft',
+    ...typedDraftFields(makeAssignmentText('# Generated assignment draft')),
+    text: makeAssignmentText('# Generated assignment draft'),
     provider: 'openai',
     model: 'gpt-5.2',
     quota: {
@@ -1340,13 +1353,8 @@ export function setupMinimalAssignmentTest() {
     },
   });
 
-  vi.mocked(api.validateMarkdown).mockResolvedValue({
-    ok: true,
-    errors: [],
-    warnings: [],
-  });
-
   vi.mocked(api.createDraft).mockImplementation(async (promptPackageId, text) => ({
+    ...typedDraftFields(text),
     id: 'draft-1',
     promptPackageId,
     studentId: null,
@@ -1360,13 +1368,14 @@ export function setupMinimalAssignmentTest() {
     updatedAt: now,
   }));
   vi.mocked(api.fetchDraft).mockResolvedValue({
+    ...typedDraftFields(makeAssignmentText('# Draft markdown')),
     id: 'draft-1',
     promptPackageId: 'pkg-1',
     studentId: null,
     lessonId: null,
     storageUri: 'memory://drafts/draft-1',
     createdBy: 'user-1',
-    text: '# Draft markdown',
+    text: makeAssignmentText('# Draft markdown'),
     workingVersion: 1,
     contentHash: 'a'.repeat(64),
     createdAt: now,
@@ -1374,6 +1383,7 @@ export function setupMinimalAssignmentTest() {
   });
 
   vi.mocked(api.updateDraft).mockImplementation(async (id, text) => ({
+    ...typedDraftFields(text),
     id,
     promptPackageId: 'pkg-1',
     studentId: null,
@@ -1397,6 +1407,7 @@ export function setupMinimalAssignmentTest() {
   vi.mocked(api.approveJob).mockResolvedValue({ jobId: 'job-1' } as never);
   vi.mocked(api.getJobStatus).mockResolvedValue({
     jobId: 'job-1',
+    assignmentArtifact,
     state: 'succeeded',
     publishTarget: 'html',
     htmlUrl: 'https://example.com/published-assignment.html',
