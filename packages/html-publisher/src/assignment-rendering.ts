@@ -26,8 +26,8 @@ const heading = (level: number, text: string, id?: string) =>
   `<h${level}${id ? ` id="${id}"` : ''}><span class="heading-text">${e(text)}</span></h${level}>`;
 const disclosure = (label: string, body: string, cls = '') =>
   `<details${cls ? ` class="${cls}"` : ''}><summary>${e(label)}</summary><div class="content"><div class="content-inner">${body}</div></div></details>`;
-const answer = (q: { answer: string; explanation: string | null }) =>
-  `${e(q.answer)}${q.explanation === null ? '' : ` — ${e(q.explanation)}`}`;
+const answer = (q: { prompt: string; answer: string; explanation: string | null }) =>
+  `<div class="answer-key-item">${para(q.prompt)}${field('Answer', q.answer)}${q.explanation === null ? '' : field('Explanation', q.explanation)}</div>`;
 
 function safeAudio(payload?: PronunciationAudioPayload | null): PronunciationAudioPayload | null {
   if (!payload) return null;
@@ -110,7 +110,7 @@ export async function renderAssignmentToHtml(
     "1. 🎯 This Week's Mission Briefing",
     '2. 🎧 Input Material: The Source',
     '3. 🛠️ Language Toolkit: Useful Language',
-    '4. ✍️ Practice & Pronunciation',
+    a.pronunciation ? '4. ✍️ Practice & Pronunciation' : '4. ✍️ Practice',
     '5. ✅ Your Turn: Complete the Mission!',
     '6. 🧠 Why This Mission Helps You',
     '7. 🔑 Answer Key & Sample Mission',
@@ -126,12 +126,17 @@ export async function renderAssignmentToHtml(
       .join('');
   const names = new Map(a.input.studyText.speakers.map((s) => [s.id, s.displayName]));
   const body = [
-    `<details class="toc-shell"><summary>Table of contents</summary><nav class="table-of-contents"><ul>${titles.map((t, i) => `<li><a href="#assignment-section-${i + 1}">${e(t)}</a></li>`).join('')}</ul></nav></details>`,
     h2(0),
-    `<aside class="callout"><div class="icon">🎯</div><div class="content">${field('Your Goal This Week', a.mission.goal)}${field('Key Language You Will Use', a.mission.keyLanguage.join('; '))}</div></aside>`,
+    `<aside class="callout"><div class="icon">🎯</div><div class="content">${field('Your Goal This Week', a.mission.goal)}<p><strong>Key Language You Will Use:</strong></p><ul class="mission-key-language">${a.mission.keyLanguage.map((item) => `<li>${e(item)}</li>`).join('')}</ul></div></aside>`,
     h2(1),
     heading(3, a.input.kind === 'authentic' ? '🌐 Authentic Material' : '🤖 Generated Material'),
-    a.input.source.title ? field('Title/Source', a.input.source.title) : '',
+    a.input.source.title
+      ? a.input.kind === 'authentic'
+        ? field('Title/Source', a.input.source.title)
+        : a.input.source.title === a.metadata.title || a.input.source.title === a.metadata.topic
+          ? ''
+          : `<p class="source-caption">${e(a.input.source.title)}</p>`
+      : '',
     a.input.source.attribution ? para(a.input.source.attribution) : '',
     a.input.source.url
       ? `<p><strong>Source Link:</strong> <a href="${e(sanitizeLinkHref(a.input.source.url))}" target="_blank" rel="noopener noreferrer">${e(a.input.source.url)}</a></p>`
@@ -139,23 +144,23 @@ export async function renderAssignmentToHtml(
     ...a.input.media.map((m) =>
       m.kind === 'video' ? buildVideoEmbed(m.url) : renderAudioFigure(m.url),
     ),
-    disclosure(
-      'Study Text: Transcript',
-      a.input.studyText.turns.map((t) => para(`${names.get(t.speakerId)}: ${t.text}`)).join(''),
-      'study-text',
-    ),
     options.studyTextAudioUrl
       ? renderAudioFigure(options.studyTextAudioUrl)
       : options.preview && a.input.kind === 'generate'
         ? renderAudioPlaceholder()
         : '',
+    disclosure(
+      'Study Text: Transcript',
+      a.input.studyText.turns.map((t) => para(`${names.get(t.speakerId)}: ${t.text}`)).join(''),
+      'study-text',
+    ),
     heading(3, '🤔 Comprehension Check'),
     list(a.input.comprehension.map((q) => e(q.prompt))),
     h2(2),
     heading(3, 'A. 👀 Notice the Grammar'),
     ...a.toolkit.grammar.map(
       (g) =>
-        `<div class="grammar-card"><p><strong>${e(g.name)}</strong></p>${g.form ? field('Form', g.form) : ''}${para(g.explanation)}<ul>${g.examples.map((ex) => `<li><em>${e(ex)}</em></li>`).join('')}${g.uses.map((u) => `<li><strong>${e(u.label)}:</strong> ${e(u.example)}</li>`).join('')}${g.traps.map((t) => `<li>⚠️ ${e(t.original)} → ${e(t.improved)}. ${e(t.explanation)}</li>`).join('')}</ul></div>`,
+        `<div class="grammar-card"><p><strong>${e(g.name)}</strong></p>${g.form ? field('Form', g.form) : ''}${para(g.explanation)}<ul>${g.examples.map((ex) => `<li><em>${e(ex)}</em></li>`).join('')}${g.uses.map((u) => `<li><strong>${e(u.label)}:</strong> ${e(u.example)}</li>`).join('')}</ul>${g.traps.length ? `<ul class="grammar-traps">${g.traps.map((t) => `<li class="grammar-trap">${field('Wrong', t.original)}${field('Corrected', t.improved)}${field('Explanation', t.explanation)}</li>`).join('')}</ul>` : ''}</div>`,
     ),
     heading(3, 'B. 🗣️ Useful Chunks & Vocabulary'),
     `<div class="table-scroll"><table><thead><tr><th>Expression</th><th>Meaning</th><th>Example</th></tr></thead><tbody>${a.toolkit.vocabulary.map((v) => `<tr><td>${e(v.expression)}</td><td>${e(v.meaning)}</td><td>${e(v.example)}</td></tr>`).join('')}</tbody></table></div>`,
@@ -174,7 +179,7 @@ export async function renderAssignmentToHtml(
     h2(6),
     disclosure(
       'Answer Key',
-      heading(3, 'Comprehension Answers') +
+      heading(3, 'Comprehension Check Answers') +
         list(a.input.comprehension.map(answer)) +
         heading(3, 'A. Controlled Practice Answers') +
         practice(true) +
