@@ -15,8 +15,10 @@ inheriting upload or publication-version responsibilities.
 `LearnerHandout.tsx` composes the full eight-section surface, with local input/toolkit/practice/answer
 components. `Pronunciation.tsx` handles the six existing modes. `primitives.tsx` owns escaped plain
 text, fields, native disclosures, audio and safe source links/video. Domain text is never interpreted
-as HTML or Markdown. The existing root `rationale` and heading are rendered only for current parity;
-this does not resolve their audience suitability. ABO-32 owns that later contract decision.
+as HTML or Markdown. Section 6 renders only new-shape `learnerRationale`. Legacy root `rationale`
+is audience-ambiguous, so section 6 is omitted entirely. `teacherRationale` is retained in typed data
+and never emitted into learner HTML, including attributes, scripts, comments or serialized data.
+The other section IDs and labels remain stable.
 
 ## Public seam
 
@@ -126,8 +128,9 @@ The html-publisher adapter passes study audio, pronunciation primary/item clips 
 explicitly. Structured primary URLs take precedence over the separate URL fallback. h2/h3 preset
 colors are explicit hex presentation inputs, applied as heading accents; broader legacy theme and
 feature options are retired. Preview missing-audio placeholders say "Audio track generating...";
-publication unavailable states and disabled item controls remain explicit. Root `rationale` and
-Teacher’s Follow-up Plan remain unchanged pending the next ABO-32 audience slice.
+publication unavailable states and disabled item controls remain explicit. Teacher’s Follow-up Plan
+remains unchanged; teacher rationale is never copied into it. Static/Vite fixtures use the separate
+new-shape rationale fixture; the ESL-20 legacy fixture and identity baseline remain untouched.
 
 The package ships only `dist`, including CSS and playback JavaScript. React/React DOM are runtime
 dependencies. Production builds traverse the workspace graph; orchestrator keeps publication

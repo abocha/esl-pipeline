@@ -8,8 +8,9 @@ import type {
 } from '@esl-pipeline/contracts';
 import {
   ASSIGNMENT_RESPONSE_SCHEMA,
+  ASSIGNMENT_TEMPLATE_CONTRACT,
   ASSIGNMENT_TEMPLATE_ID,
-  validateAssignmentV1,
+  validateFreshAssignmentV1,
 } from '@esl-pipeline/contracts';
 import {
   classifyProviderRuntimeFailure,
@@ -149,11 +150,12 @@ export async function generateDraft(
     envelope.promptVersion !== 'assignment_v1' ||
     !envelope.assignmentContext ||
     promptPackage.templateSnapshot?.resolvedTemplateId !== ASSIGNMENT_TEMPLATE_ID ||
+    envelope.instructions.split(/\r?\n/, 1)[0] !== ASSIGNMENT_TEMPLATE_CONTRACT ||
     !isDeepStrictEqual(envelope.responseSchema, ASSIGNMENT_RESPONSE_SCHEMA)
   ) {
     throw new PromptPackageAssignmentError(
       'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED',
-      'This prompt package does not pin AssignmentV1. Activate the structured homework template and recreate the prompt package before generation.',
+      'This prompt package does not pin the supported AssignmentV1 rationale contract. Activate a compatible homework template revision and recreate the prompt package before generation.',
     );
   }
 
@@ -243,7 +245,7 @@ export async function generateDraft(
     } catch {
       throw new Error('AssignmentV1 response must contain direct JSON without wrappers or fences');
     }
-    assignment = validateAssignmentV1(output, envelope.assignmentContext);
+    assignment = validateFreshAssignmentV1(output, envelope.assignmentContext);
     text = JSON.stringify(assignment, null, 2);
   } catch (error) {
     throw new GenerateDraftProviderError({

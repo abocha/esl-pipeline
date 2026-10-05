@@ -11,6 +11,22 @@ const readTemplate = () =>
   );
 
 describe('structured homework bootstrap template', () => {
+  it('separates learner benefit from nullable teacher analysis under the revised marker', async () => {
+    const template = await readTemplate();
+    expect(template).toContain(
+      '`learnerRationale`: speak directly to the learner and explain the practical benefit',
+    );
+    expect(template).toContain(
+      '`teacherRationale`: required nullable field for lesson-evidence analysis, pedagogical diagnosis, teacher reasoning',
+    );
+    expect(template).toContain(
+      'Do not put this analysis in `learnerRationale` or emit root `rationale`',
+    );
+    expect(template).not.toContain(
+      'Rationale: explain why this mission helps this learner with supported evidence.',
+    );
+  });
+
   it('pins the domain contract without generated Markdown layout instructions', async () => {
     const template = await readTemplate();
     expect(template.split(/\r?\n/)[0]).toBe(ASSIGNMENT_TEMPLATE_CONTRACT);

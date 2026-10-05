@@ -3,6 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 
+import { validateAssignmentV1 } from '@esl-pipeline/contracts';
+
+import legacyFixture from '../../contracts/tests/assignment-fixture.json';
+import rationaleFixture from '../../contracts/tests/assignment-rationale-fixture.json';
 import { createFixture, pronunciationModes } from '../preview/fixtures.js';
 import { renderLearnerHandoutDocument } from '../src/server.js';
 
@@ -10,6 +14,37 @@ const documentFor = (props = createFixture()) =>
   new JSDOM(renderLearnerHandoutDocument(props)).window.document;
 
 describe('React learner handout static foundation', () => {
+  it.each(['teacher', 'null', 'legacy'] as const)(
+    'publishes only learner rationale for %s, with no hidden rationale copies',
+    (shape) => {
+      const legacySentinel = 'ESL24_AMBIGUOUS_LEGACY_ONLY';
+      const props = createFixture();
+      props.assignment = validateAssignmentV1(
+        shape === 'legacy'
+          ? { ...legacyFixture, rationale: legacySentinel }
+          : {
+              ...rationaleFixture,
+              teacherRationale: shape === 'null' ? null : rationaleFixture.teacherRationale,
+            },
+      );
+      const before = JSON.stringify(props.assignment);
+      const html = renderLearnerHandoutDocument(props);
+      const doc = new JSDOM(html).window.document;
+      // Entire emitted bytes cover scripts, attributes, comments, disclosures and serialized data.
+      expect(html).not.toContain('ESL24_TEACHER_ONLY');
+      expect(html).not.toContain(legacySentinel);
+      expect(doc.querySelector('#assignment-section-6') !== null).toBe(shape !== 'legacy');
+      expect(html.includes('Why This Mission Helps You')).toBe(shape !== 'legacy');
+      expect(html.includes(rationaleFixture.learnerRationale)).toBe(shape !== 'legacy');
+      expect(
+        doc.querySelector('#assignment-section-6')?.nextElementSibling?.textContent ?? null,
+      ).toBe(shape === 'legacy' ? null : rationaleFixture.learnerRationale);
+      expect(doc.querySelector('#assignment-section-7')?.textContent).toContain('7.');
+      expect(doc.querySelector('#assignment-section-8')?.textContent).toContain('8.');
+      expect(JSON.stringify(props.assignment)).toBe(before);
+    },
+  );
+
   it.each(['shadow_sentence', 'none'] as const)(
     'renders the complete surface with pronunciation=%s',
     (mode) => {
@@ -36,7 +71,7 @@ describe('React learner handout static foundation', () => {
       expect(doc.querySelector('.grammar-card')?.textContent).toContain(
         a.toolkit.grammar[0]!.uses[0]!.example,
       );
-      expect(doc.querySelector('main')?.textContent).toContain(a.rationale);
+      expect(doc.querySelector('main')?.textContent).toContain(rationaleFixture.learnerRationale);
       expect(doc.querySelector('main')?.textContent).toContain(a.outputTask.task);
       const key = [...doc.querySelectorAll('details')].find(
         (d) => d.querySelector('summary')?.textContent === 'Answer Key',

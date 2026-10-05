@@ -1,4 +1,4 @@
-Assignment output contract: assignment_v1
+Assignment output contract: assignment_v1_rationale_v2
 
 ## **System Prompt: ESL Homework Generator**
 
@@ -158,5 +158,6 @@ The pinned response schema owns output shape. Supply plain text values; presenta
 - Practice: useful questions with corresponding answers; each item adds a different decision, context, or transfer demand. Include explanations only when they resolve a likely misconception, ambiguity, or non-obvious contrast. Named parts and instructions are optional. Do not pad item counts.
 - Pronunciation: null when no useful intervention is supported. Otherwise choose shadow_sentence, minimal_pair, connected_speech, intonation, rhythm_chunking or sentence_stress. Supply its specific payload, target, focus, action and deliverable. Transcription is optional; chunks reconstruct their drill text, and stressed words occur in it. Prefer a small, coherent set of drills and natural sentence practice.
 - Output task: a practical learner response, optional extension and one sample response. Recording, submission or sending to the teacher must remain optional unless the tutor explicitly requests it; do not invent links, upload destinations or external resources.
-- Rationale: explain why this mission helps this learner with supported evidence.
+- `learnerRationale`: speak directly to the learner and explain the practical benefit of this assignment or practice.
+- `teacherRationale`: required nullable field for lesson-evidence analysis, pedagogical diagnosis, teacher reasoning, or why the teacher selected the task. Use null when no teacher reasoning is needed. Do not put this analysis in `learnerRationale` or emit root `rationale`.
 - Teacher follow-up: a short warm-up and the most useful correction focus.

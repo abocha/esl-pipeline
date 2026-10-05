@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1';
+export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_rationale_v2';
 export const ASSIGNMENT_TEMPLATE_ID = 'hw_prompt_assignment_v1.md';
-export const ASSIGNMENT_TEMPLATE_CONTRACT = 'Assignment output contract: assignment_v1';
+export const ASSIGNMENT_TEMPLATE_CONTRACT =
+  'Assignment output contract: assignment_v1_rationale_v2';
 
 const text = z.string();
 const optionalText = text.nullable();
@@ -45,8 +46,8 @@ const pronunciation = z.union([
   ),
 ]);
 
-/** Canonical generation and durable editable assignment domain. */
-export const AssignmentV1Schema = z.strictObject({
+// Both read shapes share the unchanged definitions for every non-rationale field.
+const assignmentFields = {
   schemaVersion: z.literal(1),
   metadata: z.strictObject({ title: text, student: text, level: text, topic: text }),
   mission: z.strictObject({ goal: text, keyLanguage: texts }),
@@ -96,16 +97,25 @@ export const AssignmentV1Schema = z.strictObject({
   ),
   pronunciation: pronunciation.nullable(),
   outputTask: z.strictObject({ task: text, extension: optionalText, sampleResponse: text }),
-  rationale: text,
   teacherFollowUp: z.strictObject({ warmUp: text, correctionFocus: text }),
+};
+
+export const LegacyAssignmentV1Schema = z.strictObject({ ...assignmentFields, rationale: text });
+export const FreshAssignmentV1Schema = z.strictObject({
+  ...assignmentFields,
+  learnerRationale: text,
+  teacherRationale: optionalText,
 });
+/** Durable runtime/read admission, without normalization or inserted defaults. */
+export const AssignmentV1Schema = z.union([LegacyAssignmentV1Schema, FreshAssignmentV1Schema]);
 
 export type AssignmentV1 = z.infer<typeof AssignmentV1Schema>;
+export type FreshAssignmentV1 = z.infer<typeof FreshAssignmentV1Schema>;
 export type AssignmentSpeaker = AssignmentV1['input']['studyText']['speakers'][number];
 export type AssignmentPronunciation = NonNullable<AssignmentV1['pronunciation']>;
 
-// One schema definition owns runtime admission, TypeScript and the provider projection.
-const { $schema: _dialect, ...providerSchema } = z.toJSONSchema(AssignmentV1Schema);
+// Fresh generation projects only the new shape, never the legacy read alternative.
+const { $schema: _dialect, ...providerSchema } = z.toJSONSchema(FreshAssignmentV1Schema);
 export const ASSIGNMENT_RESPONSE_SCHEMA = {
   name: ASSIGNMENT_RESPONSE_SCHEMA_NAME,
   description: 'One complete ESL homework assignment with plain text domain fields.',
@@ -131,16 +141,43 @@ function lexicalWords(value: string): string[] {
   );
 }
 
+function schemaIssues(issues: readonly z.core.$ZodIssue[]): string {
+  return issues
+    .map((issue) =>
+      issue.code === 'invalid_union'
+        ? issue.errors.map(schemaIssues).join('; ')
+        : `${issue.path.join('.')}: ${issue.message}`,
+    )
+    .join('; ');
+}
+
 export function validateAssignmentV1(
   output: unknown,
   context: AssignmentValidationContext = {},
 ): AssignmentV1 {
   const parsed = AssignmentV1Schema.safeParse(output);
   if (!parsed.success)
+    throw new Error(`AssignmentV1 schema validation failed: ${schemaIssues(parsed.error.issues)}`);
+  return validateAssignmentDomain(parsed.data, context);
+}
+
+/** Application-side post-provider admission must not use the backward-compatible read union. */
+export function validateFreshAssignmentV1(
+  output: unknown,
+  context: AssignmentValidationContext = {},
+): FreshAssignmentV1 {
+  const parsed = FreshAssignmentV1Schema.safeParse(output);
+  if (!parsed.success)
     throw new Error(
-      `AssignmentV1 schema validation failed: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`,
+      `AssignmentV1 fresh-generation schema validation failed: ${schemaIssues(parsed.error.issues)}`,
     );
-  const assignment = parsed.data;
+  return validateAssignmentDomain(parsed.data, context);
+}
+
+function validateAssignmentDomain<T extends AssignmentV1>(
+  assignment: T,
+  context: AssignmentValidationContext,
+): T {
   const errors: string[] = [];
   function meaningful(value: unknown, path: string): void {
     if (typeof value === 'string' && !value.trim())

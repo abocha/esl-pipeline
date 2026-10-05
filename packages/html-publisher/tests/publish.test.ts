@@ -43,6 +43,39 @@ describe('publish', () => {
     expect(second.reused).toBe(true);
   });
 
+  it.each(['teacher', 'null', 'legacy'] as const)(
+    'uploads learner-safe HTML bytes for %s rationale',
+    async (shape) => {
+      const fresh = JSON.parse(
+        readFileSync(
+          new URL('../../contracts/tests/assignment-rationale-fixture.json', import.meta.url),
+          'utf8',
+        ),
+      );
+      const legacy = JSON.parse(
+        readFileSync(
+          new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+          'utf8',
+        ),
+      );
+      const assignment =
+        shape === 'legacy'
+          ? { ...legacy, rationale: 'ESL24_AMBIGUOUS_LEGACY_ONLY' }
+          : { ...fresh, teacherRationale: shape === 'null' ? null : fresh.teacherRationale };
+      let uploadedHtml = '';
+      vi.mocked(uploader.uploadFile).mockImplementationOnce(async (localPath, options) => {
+        uploadedHtml = readFileSync(localPath, 'utf8');
+        return { url: 'https://bucket.test/result', key: options.key!, sha256: options.sha256! };
+      });
+      const result = await renderAndPublishAssignmentToS3({ assignment });
+      expect(uploadedHtml).toBe(result.html);
+      expect(uploadedHtml).not.toContain('ESL24_TEACHER_ONLY');
+      expect(uploadedHtml).not.toContain('ESL24_AMBIGUOUS_LEGACY_ONLY');
+      expect(uploadedHtml.includes('assignment-section-6')).toBe(shape !== 'legacy');
+      expect(uploadedHtml.includes(fresh.learnerRationale)).toBe(shape !== 'legacy');
+    },
+  );
+
   it('supports stable explicit filename keys when requested', async () => {
     const html = '<html><body><p>Named</p></body></html>';
     const result = await publishHtmlToS3(html, {
