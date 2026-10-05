@@ -13,6 +13,7 @@ import type {
   TtsProviderId,
   TtsStrategy,
 } from '@esl-pipeline/contracts';
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
 
 import { draftArtifact, readAssignmentArtifact } from '../application/assignment-artifact.js';
 import {
@@ -1702,7 +1703,7 @@ export async function reserveAssignmentShare(
           md: null,
           mdStorageUri: null,
           assignmentArtifact: create.artifact,
-          assignmentRendererVersion: 2,
+          assignmentRendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
         },
         { client },
       );
@@ -1839,7 +1840,7 @@ export async function publishAssignmentCorrectionJob(
           md: null,
           mdStorageUri: null,
           assignmentArtifact: reference,
-          assignmentRendererVersion: 2,
+          assignmentRendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
           recordingId: parent.recordingId,
           transcriptId: parent.transcriptId,
           promptPackageId: parent.promptPackageId,

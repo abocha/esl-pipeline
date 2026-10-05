@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as uploader from '@esl-pipeline/storage-uploader';
 
+import { renderAssignmentToHtml } from '../src/index.js';
 import { publishHtmlToS3, renderAndPublishAssignmentToS3 } from '../src/publish.js';
 
 const uploadState = {
@@ -50,18 +52,28 @@ describe('publish', () => {
     expect(result.key).toBe('materials/custom/lesson.html');
   });
 
-  it('propagates render hash metadata from render-and-publish flow', async () => {
-    const result = await renderAndPublishAssignmentToS3({
-      assignment: JSON.parse(
-        readFileSync(
-          new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
-          'utf8',
-        ),
+  it('uploads exact React HTML UTF-8 bytes with the existing html-v1 hash and default object key', async () => {
+    const assignment = JSON.parse(
+      readFileSync(
+        new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+        'utf8',
       ),
+    );
+    let bytes!: Buffer;
+    vi.mocked(uploader.uploadFile).mockImplementationOnce(async (localPath, options) => {
+      bytes = readFileSync(localPath);
+      return { url: 'https://bucket.test/result', key: options.key!, sha256: options.sha256! };
     });
-    expect(result.html).toContain('<h1');
-    expect(result.renderHash).toHaveLength(64);
-    expect(result.key).toContain(result.renderHash);
+    const result = await renderAndPublishAssignmentToS3({ assignment });
+    expect(result.html).toBe(await renderAssignmentToHtml(assignment));
+    expect(bytes).toEqual(Buffer.from(result.html, 'utf8'));
+    const hash = createHash('sha256').update('html-v1:').update(bytes).digest('hex');
+    expect(result.renderHash).toBe(hash);
+    expect(result.key).toBe(`materials/html/artifacts/${hash}.html`);
+    expect(uploader.uploadFile).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ sha256: hash, key: result.key }),
+    );
   });
 
   it('forwards explicit key and renderHash in render-and-publish flow', async () => {

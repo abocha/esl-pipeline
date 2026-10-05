@@ -28,6 +28,11 @@ export interface HandoutMediaInputs {
 export interface LearnerHandoutProps {
   assignment: AssignmentV1;
   media?: HandoutMediaInputs;
+  presentation?: {
+    preview?: boolean;
+    /** Explicit resolved hex colors from the caller's preset. */
+    headingTheme?: { h2?: string; h3?: string };
+  };
   publication?: {
     /** Already formatted by the caller. Never parsed or inferred from the clock. */
     displayDate?: string;

@@ -20,6 +20,36 @@ const job = {
 afterEach(() => vi.clearAllMocks());
 
 describe('typed publication metadata', () => {
+  it.each(['absent', 'missing', 'unreadable'] as const)(
+    'reports a v3 job truthfully when publication metadata is %s',
+    async (state) => {
+      vi.mocked(readAssignmentArtifact).mockResolvedValue(assignmentFixture());
+      const read =
+        state === 'unreadable'
+          ? vi.fn().mockRejectedValue(new Error('Missing manifest'))
+          : vi.fn().mockResolvedValue('{}');
+      vi.mocked(createTranscriptionStorageForUri).mockReturnValue({ getText: read } as never);
+      const result = await getTypedJobPublication({
+        ...job,
+        assignmentRendererVersion: 3,
+        manifestPath: state === 'absent' ? null : job.manifestPath,
+      });
+      expect(result?.publication).toMatchObject({
+        schemaVersion: 1,
+        rendererVersion: 3,
+        studyTextAudioUrl: null,
+        pronunciationAudioUrl: null,
+      });
+    },
+  );
+
+  it('reads explicit v3 publication metadata', async () => {
+    vi.mocked(readAssignmentArtifact).mockResolvedValue(assignmentFixture());
+    vi.mocked(createTranscriptionStorageForUri).mockReturnValue({
+      getText: vi.fn().mockResolvedValue(JSON.stringify({ publication: { rendererVersion: 3 } })),
+    } as never);
+    expect((await getTypedJobPublication(job))?.publication.rendererVersion).toBe(3);
+  });
   it.each([
     {
       schemaVersion: 6,

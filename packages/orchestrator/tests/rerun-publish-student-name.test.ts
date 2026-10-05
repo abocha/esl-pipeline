@@ -131,8 +131,8 @@ describe('rerun publish typed student metadata', () => {
     });
 
     expect(publishedHtml).toHaveLength(1);
-    expect(publishedHtml[0]).toContain('<span class="tag">Alice Nguyen</span>');
-    expect(publishedHtml[0]).not.toContain('<span class="tag">student</span>');
+    expect(publishedHtml[0]).toContain('<p class="page-tags">Alice Nguyen ·');
+    expect(publishedHtml[0]).not.toContain('<p class="page-tags">student ·');
   }, 90000);
 
   it('preserves the normal yellow heading theme when a rerun receives the persisted preset', async () => {
@@ -194,7 +194,7 @@ describe('rerun publish typed student metadata', () => {
     });
 
     expect(publishedHtml).toHaveLength(1);
-    expect(publishedHtml[0]).toContain('--theme-h2: #f2c94c;');
-    expect(publishedHtml[0]).toContain('--theme-h3: #9b51e0;');
+    expect(publishedHtml[0]).toContain('--theme-h2:#f2c94c');
+    expect(publishedHtml[0]).toContain('--theme-h3:#9b51e0');
   }, 90000);
 });

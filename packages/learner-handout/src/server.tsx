@@ -32,3 +32,4 @@ export function renderLearnerHandoutDocument(props: LearnerHandoutProps): string
 }
 
 export type { HandoutMediaInputs, LearnerHandoutProps, PronunciationClipInput } from './types.js';
+export { safeMediaUrl } from './urls.js';
