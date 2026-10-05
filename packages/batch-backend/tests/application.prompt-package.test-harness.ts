@@ -180,14 +180,14 @@ export function createTemplateRevisionRepositoryStub(
       (async (templateId: string) => {
         const contentByTemplateId: Record<string, string> = {
           'hw_prompt_assignment_v1.md': [
-            'Assignment output contract: assignment_v1',
+            'Assignment output contract: assignment_v1_rationale_v2',
             'Header',
             'Use descriptive speaker profiles with stable role and persona text.',
           ].join('\n'),
         };
         const content =
           contentByTemplateId[templateId] ??
-          'Assignment output contract: assignment_v1\nHello\nFooter\n';
+          'Assignment output contract: assignment_v1_rationale_v2\nHello\nFooter\n';
         return {
           id: `active-${templateId}`,
           templateId,

@@ -1,6 +1,9 @@
 import { readFileSync as readAssignmentFixture } from 'node:fs';
 
-import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
+import type {
+  AssignmentV1 as FixtureAssignmentV1,
+  FreshAssignmentV1,
+} from '@esl-pipeline/contracts';
 import { ASSIGNMENT_TEMPLATE_CONTRACT, ASSIGNMENT_TEMPLATE_ID } from '@esl-pipeline/contracts';
 
 import { stitchPromptEnvelope } from '../src/application/prompt-assembly.js';
@@ -25,7 +28,7 @@ export function promptPackageFixture() {
   };
 }
 
-export function openAiAssignmentPayload(text: string = JSON.stringify(assignmentFixture())) {
+export function openAiAssignmentPayload(text: string = JSON.stringify(freshAssignmentFixture())) {
   return {
     id: 'resp-assignment',
     model: 'gpt-6.1-sol',
@@ -49,6 +52,15 @@ export function assignmentFixture(): FixtureAssignmentV1 {
       'utf8',
     ),
   ) as FixtureAssignmentV1;
+}
+
+export function freshAssignmentFixture(): FreshAssignmentV1 {
+  return JSON.parse(
+    readAssignmentFixture(
+      new URL('../../contracts/tests/assignment-rationale-fixture.json', import.meta.url),
+      'utf8',
+    ),
+  ) as FreshAssignmentV1;
 }
 
 export function assignmentArtifactFixture() {

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-import type { AssignmentV1 } from '@esl-pipeline/contracts';
+import { type AssignmentV1, validateAssignmentV1 } from '@esl-pipeline/contracts';
 import { renderLearnerHandoutDocument } from '@esl-pipeline/learner-handout/server';
 import type { PronunciationAudioPayload } from '@esl-pipeline/shared-infrastructure';
 
@@ -25,6 +25,39 @@ const primary = (url?: string) => ({
 });
 
 describe('native React publication adapter', () => {
+  it.each(['teacher', 'null', 'legacy'] as const)(
+    'excludes all internal/ambiguous rationale from the entire %s publication HTML',
+    async (shape) => {
+      const fresh = JSON.parse(
+        readFileSync(
+          new URL('../../contracts/tests/assignment-rationale-fixture.json', import.meta.url),
+          'utf8',
+        ),
+      );
+      const assignment = validateAssignmentV1(
+        shape === 'legacy'
+          ? { ...fixture(), rationale: 'ESL24_AMBIGUOUS_LEGACY_ONLY' }
+          : { ...fresh, teacherRationale: shape === 'null' ? null : fresh.teacherRationale },
+      );
+      const before = JSON.stringify(assignment);
+      for (const preview of [false, true]) {
+        const html = await renderAssignmentToHtml(assignment, { preview });
+        expect(html).not.toContain('ESL24_TEACHER_ONLY');
+        expect(html).not.toContain('ESL24_AMBIGUOUS_LEGACY_ONLY');
+        const doc = new JSDOM(html).window.document;
+        expect(doc.querySelector('#assignment-section-6') !== null).toBe(shape !== 'legacy');
+        expect(html.includes('Why This Mission Helps You')).toBe(shape !== 'legacy');
+        expect(html.includes(fresh.learnerRationale)).toBe(shape !== 'legacy');
+        expect(
+          doc.querySelector('#assignment-section-6')?.nextElementSibling?.textContent ?? null,
+        ).toBe(shape === 'legacy' ? null : fresh.learnerRationale);
+        expect(doc.querySelector('#assignment-section-7')?.textContent).toContain('7.');
+        expect(doc.querySelector('#assignment-section-8')?.textContent).toContain('8.');
+      }
+      expect(JSON.stringify(assignment)).toBe(before);
+    },
+  );
+
   it('delegates the full document to learner-handout and keeps renderer identity separate', async () => {
     const assignment = fixture();
     const before = JSON.stringify(assignment);

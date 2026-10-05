@@ -494,7 +494,13 @@ pnpm docs:check
 ## Structured assignment generation
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
-`AssignmentV1` response schema in the existing prompt-package envelope. Only OpenAI GPT-6.1 Sol
+`assignment_v1_rationale_v2` response schema and matching first-line template marker in the existing
+prompt-package envelope. Runtime reads accept legacy root rationale without normalization or the
+new learner/teacher shape; post-provider fresh admission requires `learnerRationale` and required
+nullable `teacherRationale`, with no root `rationale`. Old pinned schemas and old active template
+markers fail before generation/package creation and require recreation after an explicit template
+activation. This slice changes the repository template source only; it does not activate a revision.
+Only OpenAI GPT-6.1 Sol
 is admitted in this slice. Completed, non-refusal direct JSON is validated locally and returned
 as AssignmentV1 with a pretty-printed JSON text bridge. Native execution is downstream of validated
 typed authority. Old packages require recreation; historical Markdown workflows remain usable

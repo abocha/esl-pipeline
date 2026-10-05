@@ -18,6 +18,10 @@ that input supplies the fallback when the structured primary URL is absent. Item
 IDs, indices and minimal-pair side. Learner-handout admits safe URLs and disables unavailable controls.
 Unsafe structured URLs are discarded before precedence selection, preserving the safe URL fallback.
 
+Section 6 publishes only `learnerRationale` from the new shape. Legacy root `rationale` omits the
+whole section, and `teacherRationale` is absent from all emitted/uploaded HTML bytes. Adapter and
+mock-upload tests cover non-null teacher rationale, null teacher rationale and ambiguous legacy text.
+
 HTML artifact identity is unchanged: SHA-256 over UTF-8 `html-v1:` followed by the exact emitted HTML.
 The default object key remains `materials/html/artifacts/<renderHash>.html`, with existing optional
 prefix/key/filename overrides. The same HTML bytes are written to the temporary upload file.

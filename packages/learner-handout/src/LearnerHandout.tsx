@@ -224,8 +224,12 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         {a.outputTask.extension && (
           <Field label="Optional extension">{a.outputTask.extension}</Field>
         )}
-        <h2 id="assignment-section-6">6. 🧠 Why This Mission Helps You</h2>
-        <Text>{a.rationale}</Text>
+        {'learnerRationale' in a && (
+          <>
+            <h2 id="assignment-section-6">6. 🧠 Why This Mission Helps You</h2>
+            <Text>{a.learnerRationale}</Text>
+          </>
+        )}
         <h2 id="assignment-section-7">7. 🔑 Answer Key & Sample Mission</h2>
         <Disclosure label="Answer Key">
           <h3>Comprehension Check Answers</h3>

@@ -327,7 +327,7 @@ export async function createPromptPackage(
   ) {
     throw new PromptPackageAssignmentError(
       'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED',
-      'Activate the AssignmentV1 structured homework template and recreate the prompt package. The selected active template has an unsupported output contract.',
+      'Activate a homework template revision with the supported AssignmentV1 rationale contract and recreate the prompt package. The selected active template has an unsupported output contract.',
     );
   }
   const payload = stitchPromptPayload({

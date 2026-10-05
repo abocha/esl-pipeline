@@ -1,6 +1,6 @@
 import type { AssignmentPronunciation, AssignmentV1 } from '@esl-pipeline/contracts';
 
-import base from '../../contracts/tests/assignment-fixture.json';
+import base from '../../contracts/tests/assignment-rationale-fixture.json';
 import type { LearnerHandoutProps, PronunciationClipInput } from '../src/types.js';
 
 export const pronunciationModes = [

@@ -1,4 +1,4 @@
-import { validateAssignmentV1 } from '@esl-pipeline/contracts';
+import { validateFreshAssignmentV1 } from '@esl-pipeline/contracts';
 
 import { validateFoundationalProfileOutput } from './foundational-profile.js';
 import type { GenerationEvalFixture } from './generation-eval-fixtures.js';
@@ -301,7 +301,7 @@ function validateStructuredWorkloadOutput(fixture: GenerationEvalFixture, output
       validateProfileCandidatePatch(output);
       return;
     case 'assignment_draft':
-      validateAssignmentV1(output, {
+      validateFreshAssignmentV1(output, {
         studentName: 'Eval Persona One',
         inputKind: 'generate',
         suppliedUrls: [],

@@ -4,7 +4,10 @@ import { GenerateDraftProviderError, generateDraft } from '../src/application/ge
 import { ProviderExecutionError } from '../src/application/generation-providers.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
-import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
+import {
+  freshAssignmentFixture as assignmentFixture,
+  promptPackageFixture,
+} from './assignment-v1.test-harness.js';
 
 function createConfig(
   overrides: Partial<BatchBackendConfig['generation']> = {},
