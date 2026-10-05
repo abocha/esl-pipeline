@@ -15,6 +15,14 @@ Historical Markdown assignments are read-only records. This package has no Markd
 normalization, parsing, or publication API. Already-produced historical HTML and audio remain
 available through persisted URLs; they are never scraped or regenerated.
 
+The native handout has no table of contents. Mission key language is itemized, study audio precedes
+the collapsed transcript, and grammar traps separate wrong, corrected and explanation text without
+adding sentence punctuation. Generated source titles use compact captions (exact duplicates of the
+assignment title/topic are omitted); authentic titles, attribution and source links remain visible.
+The practice heading reflects pronunciation presence. The collapsed answer key follows comprehension,
+matching practice parts and sample mission order, repeating each question with its labeled answer
+and optional explanation. These presentation choices retain renderer version 2 and canonical identity.
+
 ## URL and media safety
 
 Links and media reject unsafe URL schemes. Typed video fields support YouTube and Vimeo embeds.

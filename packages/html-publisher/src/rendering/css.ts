@@ -599,6 +599,28 @@ details:not(.study-text) {
 .callout .content > :last-child {
   margin-bottom: 0;
 }
+.source-caption {
+  color: var(--page-muted);
+  font-size: 0.9em;
+}
+.markdown-body .grammar-traps {
+  list-style: none;
+  padding-left: 0;
+}
+.markdown-body .grammar-trap {
+  border-left: 3px solid var(--callout-border);
+  padding: 8px 14px;
+  margin: 12px 0;
+  background: var(--callout-bg);
+  overflow-wrap: anywhere;
+}
+.grammar-trap p,
+.answer-key-item p {
+  margin: 4px 0;
+}
+.answer-key-item {
+  margin: 12px 0;
+}
 .study-text {
   padding: 0;
   margin: 18px 0;

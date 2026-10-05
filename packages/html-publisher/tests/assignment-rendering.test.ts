@@ -10,6 +10,123 @@ import { renderAssignmentToHtml } from '../src/assignment-rendering.js';
 import { createRenderedDocument } from './rendering.test-harness.js';
 
 describe('native typed assignment rendering', () => {
+  it.each([false, true])(
+    'keeps native reading order with pronunciation present=%s',
+    async (present) => {
+      const a = assignmentFixture();
+      if (!present) a.pronunciation = null;
+      const original = JSON.stringify(a);
+      const doc = createRenderedDocument(
+        await renderAssignmentToHtml(a, {
+          preview: true,
+          studyTextAudioUrl: 'http://localhost/study.wav',
+        }),
+      );
+      expect(doc.querySelector('.toc-shell, .table-of-contents')).toBeNull();
+      expect(
+        [...doc.querySelectorAll('.mission-key-language > li')].map((li) => li.textContent),
+      ).toEqual(a.mission.keyLanguage);
+      expect(doc.querySelector('#assignment-section-4')?.textContent).toBe(
+        present ? '4. ✍️ Practice & Pronunciation' : '4. ✍️ Practice',
+      );
+      const transcript = doc.querySelector<HTMLDetailsElement>('details.study-text')!;
+      expect(transcript.open).toBe(false);
+      expect(transcript.previousElementSibling?.matches('.audio-figure')).toBe(true);
+      expect(transcript.textContent).toContain(a.input.studyText.turns[0]!.text);
+      const placeholder = createRenderedDocument(
+        await renderAssignmentToHtml(a, { preview: true }),
+      );
+      expect(
+        placeholder
+          .querySelector('details.study-text')
+          ?.previousElementSibling?.matches('.audio-placeholder'),
+      ).toBe(true);
+
+      const key = [...doc.querySelectorAll('details')].find(
+        (d) => d.querySelector('summary')?.textContent === 'Answer Key',
+      )!;
+      expect([...key.querySelectorAll('h3')].map((h) => h.textContent)).toEqual([
+        'Comprehension Check Answers',
+        'A. Controlled Practice Answers',
+        'Sample Mission',
+      ]);
+      const questions = [...a.input.comprehension, ...a.practice.flatMap((part) => part.items)];
+      expect(
+        [...key.querySelectorAll('.answer-key-item')].map((item) =>
+          [...item.querySelectorAll('p')].map((p) => p.textContent),
+        ),
+      ).toEqual(
+        questions.map((q) => [
+          q.prompt,
+          `Answer: ${q.answer}`,
+          ...(q.explanation === null ? [] : [`Explanation: ${q.explanation}`]),
+        ]),
+      );
+      const parts = a.practice.map(
+        (part, i) => `Part ${i + 1}${part.title ? `: ${part.title}` : ''}`,
+      );
+      expect([...doc.querySelectorAll('main > h4')].map((h) => h.textContent)).toEqual(parts);
+      expect([...key.querySelectorAll('h4')].map((h) => h.textContent)).toEqual(parts);
+      expect(JSON.stringify(a)).toBe(original);
+    },
+  );
+
+  it('preserves authored trap punctuation and separates wrong, corrected and explanation roles', async () => {
+    const a = assignmentFixture();
+    a.toolkit.grammar[0]!.traps = [
+      {
+        original: 'He ride a bike.',
+        improved: 'He rides a bike.',
+        explanation: 'Use third-person -s.',
+      },
+      { original: 'Does he rides?', improved: 'Does he ride?', explanation: 'Use the base verb!' },
+      { original: '<wrong>', improved: 'Wait...', explanation: 'Authored ellipsis remains...' },
+    ];
+    const doc = createRenderedDocument(await renderAssignmentToHtml(a));
+    expect(
+      [...doc.querySelectorAll('.grammar-trap')].map((trap) =>
+        [...trap.querySelectorAll('p')].map((p) => p.textContent),
+      ),
+    ).toEqual(
+      a.toolkit.grammar[0]!.traps.map((t) => [
+        `Wrong: ${t.original}`,
+        `Corrected: ${t.improved}`,
+        `Explanation: ${t.explanation}`,
+      ]),
+    );
+    expect(doc.querySelector('.grammar-traps')?.textContent).not.toContain('bike..');
+    expect(doc.querySelector('.grammar-traps wrong')).toBeNull();
+  });
+
+  it('uses compact generated captions, omits exact duplicates and preserves source attribution', async () => {
+    const a = assignmentFixture();
+    a.input.source = {
+      title: 'A useful demo',
+      attribution: 'Demo contributor',
+      url: 'https://example.com/source?a=1&b=2',
+    };
+    const generated = createRenderedDocument(await renderAssignmentToHtml(a));
+    expect(generated.querySelector('.source-caption')?.textContent).toBe(a.input.source.title);
+    expect(generated.querySelector('main')?.textContent).not.toContain('Title/Source');
+    for (const title of [a.metadata.title, a.metadata.topic]) {
+      a.input.source.title = title;
+      expect(
+        createRenderedDocument(await renderAssignmentToHtml(a)).querySelector('.source-caption'),
+      ).toBeNull();
+    }
+    a.input.kind = 'authentic';
+    const authentic = createRenderedDocument(await renderAssignmentToHtml(a));
+    expect(authentic.querySelector('main')?.textContent).toContain(
+      `Title/Source: ${a.input.source.title}`,
+    );
+    for (const doc of [generated, authentic]) {
+      expect(doc.querySelector('main')?.textContent).toContain(a.input.source.attribution);
+      expect(
+        doc.querySelector('a[href="https://example.com/source?a=1&b=2"]')?.getAttribute('rel'),
+      ).toBe('noopener noreferrer');
+    }
+  });
+
   it('preserves sections, disclosures, ordered answers, grammar, vocabulary and responsive shell', async () => {
     const a = assignmentFixture();
     const doc = createRenderedDocument(await renderAssignmentToHtml(a, { preview: true }));
