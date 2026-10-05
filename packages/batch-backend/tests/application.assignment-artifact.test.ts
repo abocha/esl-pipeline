@@ -67,6 +67,53 @@ async function fixture() {
 }
 
 describe('durable AssignmentV1 authority', () => {
+  it('preserves unextended native canonical bytes and the frozen content hash through validation and read', async () => {
+    // This is a pre-extension identity baseline, not a value derived from the validator.
+    // Keep the snapshot and hash fixed when adding optional runtime read fields.
+    const frozenHash = 'c133b81eee1415b9dc874670279acf9cb89a52a72a45894a524936da9af7b9db';
+    const original = assignmentFixture();
+    const canonical = serializeAssignmentV1(original);
+    const frozenBytes = Buffer.from(canonical, 'utf8');
+    expect(canonical).toMatchSnapshot('unextended AssignmentV1 canonical serialization v1');
+    expect(assignmentHash(original)).toBe(frozenHash);
+
+    const context = assignmentContext(promptPackageFixture());
+    // The existing fixture has unsorted keys; formatting and key order must not affect identity.
+    const validated = parseAssignmentV1(JSON.stringify(original, null, 4), context);
+    expect(Buffer.from(serializeAssignmentV1(validated), 'utf8')).toEqual(frozenBytes);
+    expect(assignmentHash(validated)).toBe(frozenHash);
+    expect(serializeAssignmentV1(parseAssignmentV1(canonical, context))).toBe(canonical);
+
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-assignment-compatibility-'));
+    directories.push(dir);
+    const storage = new FilesystemTranscriptionStorage(dir);
+    // Persist the original bytes, before validation can insert or normalize anything.
+    const stored = await storage.putDraft({
+      draftId: 'unextended-native',
+      format: 'assignment_v1',
+      text: canonical,
+    });
+    expect(stored.sha256).toBe(frozenHash);
+    expect(stored.bytes).toBe(frozenBytes.length);
+    expect(stored.uri).toBe(`local://drafts/unextended-native/content/${frozenHash}.json`);
+    expect(Buffer.from(await storage.getText(stored.uri), 'utf8')).toEqual(frozenBytes);
+
+    const read = await readValidatedAssignment(
+      {
+        format: 'assignment_v1',
+        schemaVersion: 1,
+        serializationVersion: 1,
+        workingVersion: 1,
+        storageUri: stored.uri,
+        contentHash: frozenHash,
+      },
+      context,
+      storage,
+    );
+    expect(Buffer.from(serializeAssignmentV1(read), 'utf8')).toEqual(frozenBytes);
+    expect(assignmentHash(read)).toBe(frozenHash);
+  });
+
   it('rejects materializing a typed draft into a legacy job before writing or relinking', async () => {
     const f = await fixture();
     const put = vi.spyOn(f.storage, 'putDraft');
