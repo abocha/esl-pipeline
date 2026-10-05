@@ -27,3 +27,11 @@ and optional explanation. These presentation choices retain renderer version 2 a
 
 Links and media reject unsafe URL schemes. Typed video fields support YouTube and Vimeo embeds.
 Pronunciation playback binds explicit clip IDs from typed rendering to serialized audio metadata.
+
+## React transition foundation (ESL-22)
+
+[`learner-handout`](../learner-handout/README.md) owns the new isolated React component surface,
+Vite fixture loop and deterministic Node static document entry. It has no production caller yet.
+This package remains the production rendering/publication authority with the existing renderer 2
+and unchanged publication identity. A later adapter can consume the React document renderer while
+retaining publication versioning and upload ownership here.
