@@ -1,0 +1,275 @@
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { JSDOM } from 'jsdom';
+import { describe, expect, it, vi } from 'vitest';
+
+import { createFixture, pronunciationModes } from '../preview/fixtures.js';
+import { renderLearnerHandoutDocument } from '../src/server.js';
+
+const documentFor = (props = createFixture()) =>
+  new JSDOM(renderLearnerHandoutDocument(props)).window.document;
+
+describe('React learner handout static foundation', () => {
+  it.each(['shadow_sentence', 'none'] as const)(
+    'renders the complete surface with pronunciation=%s',
+    (mode) => {
+      const props = createFixture(mode);
+      const before = JSON.stringify(props);
+      const doc = documentFor(props);
+      const a = props.assignment;
+      expect(doc.querySelectorAll('main > h2')).toHaveLength(8);
+      expect(doc.querySelectorAll('nav, .toc-shell, .table-of-contents')).toHaveLength(0);
+      expect(
+        [...doc.querySelectorAll('.mission-key-language li')].map((li) => li.textContent),
+      ).toEqual(a.mission.keyLanguage);
+      expect(doc.querySelector('#assignment-section-4')?.textContent).toBe(
+        mode === 'none' ? '4. ✍️ Practice' : '4. ✍️ Practice & Pronunciation',
+      );
+      expect(doc.querySelector('[data-assignment-pronunciation]') !== null).toBe(mode !== 'none');
+      const transcript = doc.querySelector<HTMLDetailsElement>('details.study-text')!;
+      expect(transcript.open).toBe(false);
+      expect(transcript.previousElementSibling?.matches('.audio-figure')).toBe(true);
+      expect(transcript.textContent).toContain(a.input.studyText.turns[0]!.text);
+      expect(doc.querySelector('table tbody')?.textContent).toContain(
+        a.toolkit.vocabulary[0]!.example,
+      );
+      expect(doc.querySelector('.grammar-card')?.textContent).toContain(
+        a.toolkit.grammar[0]!.uses[0]!.example,
+      );
+      expect(doc.querySelector('main')?.textContent).toContain(a.rationale);
+      expect(doc.querySelector('main')?.textContent).toContain(a.outputTask.task);
+      const key = [...doc.querySelectorAll('details')].find(
+        (d) => d.querySelector('summary')?.textContent === 'Answer Key',
+      )!;
+      expect(key.open).toBe(false);
+      expect([...key.querySelectorAll('h3')].map((h) => h.textContent)).toEqual([
+        'Comprehension Check Answers',
+        'A. Controlled Practice Answers',
+        'Sample Mission',
+      ]);
+      expect(
+        [...key.querySelectorAll('.answer-key-item')].map((item) =>
+          [...item.querySelectorAll('p')].map((p) => p.textContent),
+        ),
+      ).toEqual(
+        [...a.input.comprehension, ...a.practice.flatMap((part) => part.items)].map((q) => [
+          q.prompt,
+          `Answer: ${q.answer}`,
+          ...(q.explanation === null ? [] : [`Explanation: ${q.explanation}`]),
+        ]),
+      );
+      const parts = a.practice.map(
+        (part, i) => `Part ${i + 1}${part.title ? `: ${part.title}` : ''}`,
+      );
+      expect([...key.querySelectorAll('h4')].map((h) => h.textContent)).toEqual(parts);
+      expect(
+        [...doc.querySelectorAll('main > .practice-part h4')].map((h) => h.textContent),
+      ).toEqual(parts);
+      expect(key.textContent).toContain(a.outputTask.sampleResponse);
+      expect(doc.querySelector('details:last-child')?.textContent).toContain(
+        a.teacherFollowUp.correctionFocus,
+      );
+      expect(JSON.stringify(props)).toBe(before);
+    },
+  );
+
+  it('preserves trap punctuation and compact generated titles, plus authentic source attribution', () => {
+    const props = createFixture();
+    props.assignment.toolkit.grammar[0]!.traps = [
+      { original: 'Does he rides?', improved: 'Does he ride?', explanation: 'Use the base verb!' },
+      { original: '<wrong>', improved: 'Wait...', explanation: 'Authored ellipsis...' },
+    ];
+    const doc = documentFor(props);
+    expect(
+      [...doc.querySelectorAll('.grammar-trap')].map((t) =>
+        [...t.querySelectorAll('p')].map((p) => p.textContent),
+      ),
+    ).toEqual(
+      props.assignment.toolkit.grammar[0]!.traps.map((t) => [
+        `Wrong: ${t.original}`,
+        `Corrected: ${t.improved}`,
+        `Explanation: ${t.explanation}`,
+      ]),
+    );
+    expect(doc.querySelector('.source-caption')?.textContent).toBe('A useful demo');
+    for (const title of [props.assignment.metadata.title, props.assignment.metadata.topic]) {
+      props.assignment.input.source.title = title;
+      expect(documentFor(props).querySelector('.source-caption')).toBeNull();
+    }
+    props.assignment.input.kind = 'authentic';
+    const authentic = documentFor(props);
+    expect(authentic.querySelector('main')?.textContent).toContain(
+      `Title/Source: ${props.assignment.input.source.title}`,
+    );
+    expect(authentic.querySelector('main')?.textContent).toContain('Local demonstration fixture');
+    expect(authentic.querySelector('a')?.getAttribute('href')).toBe(
+      'https://example.com/source?a=1&b=2',
+    );
+    expect(authentic.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it.each(pronunciationModes)(
+    'renders %s available, absent clip, and unavailable audio states',
+    (mode) => {
+      const available = documentFor(createFixture(mode, 'available'));
+      expect(
+        available
+          .querySelector('[data-assignment-pronunciation]')
+          ?.getAttribute('data-assignment-pronunciation'),
+      ).toBe(mode);
+      expect(
+        available.querySelectorAll('[data-pronunciation-clip]:not(:disabled)').length,
+      ).toBeGreaterThan(0);
+      const unavailable = documentFor(createFixture(mode, 'unavailable'));
+      expect(unavailable.querySelectorAll('[data-pronunciation-clip]:not(:disabled)')).toHaveLength(
+        0,
+      );
+      expect(
+        unavailable.querySelectorAll('[data-pronunciation-clip]:disabled').length,
+      ).toBeGreaterThan(0);
+      expect(unavailable.querySelector('.audio-placeholder')).not.toBeNull();
+      const props = createFixture(mode);
+      props.media = {};
+      expect(
+        documentFor(props).querySelectorAll('[data-assignment-pronunciation] button:disabled')
+          .length,
+      ).toBeGreaterThan(0);
+    },
+  );
+
+  it('keeps punctuation-aware stress, chunk boundaries and safe source embeds', () => {
+    const stressed = documentFor(createFixture('sentence_stress'));
+    expect(stressed.querySelector('.pronunciation-line-text strong')?.textContent).toBe('First');
+    expect(
+      documentFor(createFixture('rhythm_chunking')).querySelector('.pronunciation-line-text')
+        ?.textContent,
+    ).toBe('First, | save it.');
+    const props = createFixture();
+    props.assignment.input.media = [
+      { kind: 'video', url: 'https://youtu.be/abcdefghijk' },
+      { kind: 'video', url: 'https://vimeo.com/123456?x=1&y=2' },
+    ];
+    expect([...documentFor(props).querySelectorAll('iframe')].map((f) => f.src)).toEqual([
+      'https://www.youtube.com/embed/abcdefghijk',
+      'https://player.vimeo.com/video/123456?x=1&y=2',
+    ]);
+  });
+
+  it('escapes plain text and rejects unsafe links, embeds, and every audio input', () => {
+    const props = createFixture('minimal_pair');
+    const hostile = '</script><script>evil()</script><img src=x onerror=evil()> **plain**';
+    props.assignment.metadata.title = hostile;
+    props.assignment.input.studyText.turns[0]!.text = hostile;
+    props.assignment.toolkit.vocabulary[0]!.expression = hostile;
+    props.publication = { displayDate: hostile };
+    props.assignment.input.source.url = 'javascript:evil()';
+    props.assignment.input.media = [
+      { kind: 'audio', url: 'data:audio/wav,evil' },
+      { kind: 'video', url: 'https://youtube.com.evil.test/embed/abcdefghijk' },
+    ];
+    props.media!.studyTextAudioUrl = 'https://audio.test/a.wav?x=1&y=2';
+    props.media!.pronunciationAudio!.primaryClip!.url = 'javascript:evil()';
+    for (const url of [
+      'javascript:evil()',
+      'data:text/html,evil',
+      '//evil.test/a.wav',
+      'https://user:pass@evil.test/a.wav',
+      '/\\evil.test/a.wav',
+      'file:///a.wav',
+    ]) {
+      props.media!.pronunciationAudio!.itemClips = [
+        { id: hostile, itemIndex: 0, kind: 'pair_left', text: hostile, url },
+      ];
+      const html = renderLearnerHandoutDocument(props);
+      const doc = new JSDOM(html).window.document;
+      expect(doc.querySelector('h1')?.textContent).toBe(hostile);
+      expect(doc.querySelectorAll('img, object, embed')).toHaveLength(0);
+      expect(doc.querySelectorAll('iframe')).toHaveLength(0);
+      expect(doc.querySelectorAll('script')).toHaveLength(1);
+      expect(doc.querySelector('audio')?.getAttribute('src')).toBe(
+        'https://audio.test/a.wav?x=1&y=2',
+      );
+      expect(doc.querySelector('[data-pronunciation-clip]')?.hasAttribute('disabled')).toBe(true);
+      expect(
+        doc.querySelector('[data-pronunciation-clip]')?.getAttribute('data-audio-url'),
+      ).toBeNull();
+      expect(doc.querySelector('a[href^="javascript:"]')).toBeNull();
+      expect(html).not.toContain('</script><script>evil()');
+    }
+  });
+
+  it('is byte-identical across repeated renders and different mocked ambient clocks', () => {
+    const props = createFixture();
+    const original = renderLearnerHandoutDocument(props);
+    vi.useFakeTimers();
+    try {
+      for (const time of ['2000-01-01T00:00:00Z', '2040-12-31T23:59:59Z']) {
+        vi.setSystemTime(new Date(time));
+        expect(renderLearnerHandoutDocument(props)).toBe(original);
+        expect(renderLearnerHandoutDocument(props)).toBe(original);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('runs compiled server JavaScript in plain Node with no DOM, Vite, network, clock, random, or timezone inputs', () => {
+    const props = createFixture();
+    const script = `import {readFileSync} from 'node:fs';
+      const props = JSON.parse(readFileSync(0, 'utf8'));
+      if (typeof window !== 'undefined' || typeof document !== 'undefined') throw new Error('DOM leaked');
+      const {renderLearnerHandoutDocument} = await import('@esl-pipeline/learner-handout/server');
+      globalThis.fetch = () => { throw new Error('Network read'); };
+      globalThis.Date = class { constructor() { throw new Error('Clock read'); } static now() { throw new Error('Clock read'); } };
+      Math.random = () => { throw new Error('Random read'); };
+      process.stdout.write(renderLearnerHandoutDocument(props));`;
+    for (const TZ of ['UTC', 'Pacific/Honolulu', 'Asia/Saigon']) {
+      expect(
+        execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+          cwd: fileURLToPath(new URL('..', import.meta.url)),
+          input: JSON.stringify(props),
+          env: { ...process.env, TZ, HANDOUT_BASE_URL: `https://${TZ.replace('/', '-')}.invalid` },
+          encoding: 'utf8',
+        }),
+      ).toBe(renderLearnerHandoutDocument(props));
+    }
+  });
+
+  it('saved output binds clips by item/side, handles disabled controls and reports playback failure without hydration', async () => {
+    const props = createFixture('minimal_pair', 'mixed');
+    props.media!.pronunciationAudio!.itemClips = props.media!.pronunciationAudio!.itemClips!.map(
+      (clip, i) => ({ ...clip, url: clip.url ? `https://audio.test/${i}-${clip.kind}.wav` : null }),
+    );
+    const dom = new JSDOM(renderLearnerHandoutDocument(props), { runScripts: 'dangerously' });
+    const urls: string[] = [];
+    const play = vi.fn().mockResolvedValue(undefined);
+    const pause = vi.fn();
+    dom.window.Audio = class extends dom.window.EventTarget {
+      constructor(url: string) {
+        super();
+        urls.push(url);
+      }
+      play = play;
+      pause = pause;
+    } as unknown as typeof dom.window.Audio;
+    const buttons = [
+      ...dom.window.document.querySelectorAll<HTMLButtonElement>('[data-pronunciation-clip]'),
+    ];
+    expect(buttons.map((b) => b.dataset.pronunciationClip)).toEqual(
+      props.media!.pronunciationAudio!.itemClips!.map((c) => c.id),
+    );
+    buttons[2]!.click();
+    expect(urls).toEqual(['https://audio.test/2-pair_left.wav']);
+    expect(play).toHaveBeenCalledTimes(1);
+    buttons[1]!.click();
+    expect(play).toHaveBeenCalledTimes(1);
+    play.mockRejectedValueOnce(new Error('Missing audio'));
+    buttons[0]!.click();
+    await Promise.resolve();
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(dom.window.document.querySelector('[role="status"]')?.textContent).toBe(
+      'Audio unavailable. Try again.',
+    );
+    dom.window.close();
+  });
+});

@@ -38,6 +38,8 @@ For deep system maps, prefer the linked docs rather than growing this file again
   - operator control-panel adapter over authenticated `batch-backend` operations
   - no independent pipeline, persistence, or deployment semantics
 - supporting implementation packages
+  - learner presentation foundation: `learner-handout` (React components, Node static documents,
+    local Vite fixtures; no production cutover or publication identity ownership)
   - domain validation: `contracts` (AssignmentV1)
   - adapters/providers: `html-publisher`, `tts-*`, `stt-*`, `storage-uploader`
   - shared runtime utilities: `provider-runtime`, `shared-infrastructure`, `contracts`
