@@ -385,7 +385,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       };
       const reserved = await repo.reserveAssignmentShare(reserve);
       expect(reserved.job.assignmentArtifact).toEqual(draft.artifact);
-      expect(reserved.job.assignmentRendererVersion).toBe(2);
+      expect(reserved.job.assignmentRendererVersion).toBe(3);
       expect(reserved.job.mdStorageUri).toBeNull();
       const edited = structuredClone(original);
       edited.metadata.title = 'Correction title';
@@ -419,6 +419,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
         expectedState: 'awaiting_approval',
         mdStorageUri: materialized.mdStorageUri,
       });
+      expect((await jobs.getJobById(requestId))?.assignmentRendererVersion).toBe(3);
       await repo.completeAssignmentShare({
         sessionId: f.sessionId,
         userId: f.userId,
@@ -450,7 +451,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       ).rejects.toMatchObject({ code: 'ASSIGNMENT_CORRECTION_DRAFT_CONFLICT' });
       const child = await repo.publishAssignmentCorrectionJob(correction);
       expect(child.job.assignmentArtifact).toEqual(corrected.artifact);
-      expect(child.job.assignmentRendererVersion).toBe(2);
+      expect(child.job.assignmentRendererVersion).toBe(3);
       const later = structuredClone(edited);
       later.metadata.title = 'Unpublished later draft';
       await updateDraft({ id: draft.id, text: JSON.stringify(later), expectedWorkingVersion: 2 });
@@ -458,6 +459,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
         client.query(`UPDATE jobs SET state = 'failed' WHERE id = $1`, [child.job.id]),
       );
       const replay = await repo.publishAssignmentCorrectionJob(correction);
+      expect(replay.job.assignmentRendererVersion).toBe(3);
       expect(replay).toMatchObject({
         created: false,
         job: { state: 'queued', assignmentArtifact: corrected.artifact },

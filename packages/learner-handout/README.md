@@ -1,8 +1,8 @@
 # @esl-pipeline/learner-handout
 
-React learner components and a deterministic, unhydrated Node document renderer. This is the ESL-22
-transition foundation. **`html-publisher` remains the production publication authority** and continues
-to use its existing string renderer (renderer 2). No production caller uses this package yet.
+React learner components and the sole deterministic, unhydrated Node document renderer for native
+AssignmentV1 preview/publication (renderer 3). **`html-publisher` remains the publication authority**
+for renderer identity, HTML artifact hashing, object keys and S3 uploads. Vite is development-only.
 
 ## Ownership and component organization
 
@@ -98,7 +98,7 @@ second command serves only those fixture files on `http://127.0.0.1:5175`; it us
 production role. `/` opens `shadow_sentence-mixed.html`. Names are `<mode>-<audio>.html`, including
 `none-available.html` and `shadow_sentence-unavailable.html`.
 
-## Focused evidence and cutover constraints
+## Focused evidence
 
 ```sh
 pnpm --filter @esl-pipeline/learner-handout test:unit
@@ -122,7 +122,13 @@ HMR were verified while retaining the selected pronunciation-null fixture. This 
 evidence, not validation of provider speech quality. The existing ESL-20 frozen-artifact suite and
 ESL-21 string-renderer suite also passed without changing the snapshot, pinned hash or production code.
 
-A later `html-publisher` adapter must keep canonical AssignmentV1 serialization and publication
-identity/version ownership in their current owners, pass resolved media explicitly, package the
-renderer CSS/script, and deliberately reconcile existing theme/feature options. This slice does not
-implement those options, production routing/hosting, historical migration, or audience-safe rationale.
+The html-publisher adapter passes study audio, pronunciation primary/item clips and preview state
+explicitly. Structured primary URLs take precedence over the separate URL fallback. h2/h3 preset
+colors are explicit hex presentation inputs, applied as heading accents; broader legacy theme and
+feature options are retired. Preview missing-audio placeholders say "Audio track generating...";
+publication unavailable states and disabled item controls remain explicit. Root `rationale` and
+Teacher’s Follow-up Plan remain unchanged pending the next ABO-32 audience slice.
+
+The package ships only `dist`, including CSS and playback JavaScript. React/React DOM are runtime
+dependencies. Production builds traverse the workspace graph; orchestrator keeps publication
+external to its bundle to preserve package-relative asset lookup.

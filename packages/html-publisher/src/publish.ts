@@ -6,7 +6,7 @@ import { basename, extname, join } from 'node:path';
 import type { AssignmentV1 } from '@esl-pipeline/contracts';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 
-import { type AssignmentRenderOptions, renderAssignmentToHtml } from './assignment-rendering.js';
+import { type AssignmentRenderOptions, renderAssignmentToHtml } from './assignment-adapter.js';
 
 export interface PublishHtmlOptions {
   keyPrefix?: string;

@@ -99,30 +99,31 @@ JSON containing the complete assignment; authored segments remain immutable. All
 modes use deterministic ordinal clip IDs and item-index/side associations, with existing primary,
 chunk, upload replacement and unselected-family reuse semantics.
 
-`renderAssignmentToHtml` builds the eight-section handout directly. It shares the existing page
-shell, responsive styles, disclosures and media URL policy; domain text is HTML-escaped, safe video
-URLs use the existing embed builder, and pronunciation JSON escapes script delimiters. Grammar,
-vocabulary, comprehension, ordered answers, stress/chunk layouts and audio controls remain present.
-Typed preview validates and renders the same object, with disabled unavailable clip controls.
-Markdown rendering, `rawHtml`, textual pronunciation fallbacks and output scraping are retired.
+`renderAssignmentToHtml` delegates the eight-section handout to learner-handout's deterministic
+React Node document renderer. Domain text is escaped, safe source/media URLs are admitted explicitly,
+and pronunciation clips bind by item index and minimal-pair side. Typed preview uses the same renderer
+with generating placeholders and disabled unavailable controls. h2/h3 preset colors remain explicit
+presentation inputs. The old native string renderer and its theme/features system are removed.
 
-New typed jobs pin renderer version 2. Native manifests use schema 6 with `assignmentHash` and
-versioned `publication` (title, icon and nullable study/main-pronunciation URLs). In schema 6,
-`mdHash` equals the canonical AssignmentV1 hash; schemas 1–5 keep their historical Markdown hash
-meaning. Typed job DTOs expose publication metadata; the bot uses it directly and never scrapes
-Markdown or HTML for typed jobs. Historical renderer-1 manifests/audio shapes remain readable.
-Native reruns require a durable schema-6 manifest. Missing-manifest reconstruction and legacy recovery are retired; schema 1–5 output is history only.
-New rerun jobs pin renderer 2 even when their source publication used renderer 1; the source job's
-frozen renderer and artifact identity remain unchanged.
+New typed Create/approval, correction/retry and rerun jobs pin renderer version 3. Worker execution
+admits v3 only. Both native manifest producers record v3; publication readback uses the stored job
+renderer when manifest publication metadata is absent, so v3 cannot fall back to v1. Native manifests
+retain schema 6, canonical `assignmentHash`, and publication schema 1 (title, icon and nullable
+study/main-pronunciation URLs). `mdHash` equals the canonical AssignmentV1 hash. Native reruns require
+a durable schema-6 manifest; missing-manifest reconstruction and legacy recovery remain retired.
 
-API contract 8 and manifest contract 4 explicitly identify the typed source/path and schema changes.
-Assignment schema/serialization version 1, prompt 3, validator 2.1 and DB 2 remain unchanged.
-Migration 0063 expands the job identity constraint to admit renderer 2 alongside renderer 1,
-preserving all artifact checks, historical rows and the frozen-identity trigger. It must precede
-native Create/correction/rerun writes. Prior Slice 2 executors reject renderer-2 jobs, so its runtime
-compatibility metadata blocks previous-image recovery after native writes. Legacy-data retirement
-and Slice 4 remain outside this change. Focused offline regression coverage is local evidence;
-hosted PR CI and a separately authorized rollout remain later gates.
+Migration 0065 expands database admission to v3 without rewriting historical migrations, job/artifact
+identity or test artifacts. The frozen-identity trigger remains unchanged. Runtime compatibility is
+incompatible because previous executors cannot execute renderer 3. Assignment schema/serialization
+version 1, publication schema 1 and manifest schema 6 are unchanged. ESL-20's frozen snapshot/hash
+remains authoritative. HTML artifact hashing still uses SHA-256 of UTF-8 `html-v1:` plus exact emitted
+HTML bytes and the existing default hash-derived key; renderer v3 does not version that namespace.
+
+Learner-handout ships React runtime dependencies and CSS/playback assets beside its compiled module.
+Orchestrator keeps html-publisher external to its bundle to preserve asset lookup. Compiled package
+checks render through built html-publisher in plain Node without Vite, DOM, network or clock inputs.
+Root `rationale` and the teacher follow-up disclosure remain unchanged for the next ABO-32 audience
+slice. Already-issued legacy standalone HTML is independent of this path. No deployment is implied.
 
 ## ESL-6 local completion evidence (2026-10-04)
 

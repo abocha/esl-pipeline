@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 import type { AssignmentV1 } from '@esl-pipeline/contracts';
 
 import { Pronunciation } from './Pronunciation.js';
@@ -55,7 +57,7 @@ function PracticeParts({
   );
 }
 
-function InputMaterial({ assignment: a, media }: LearnerHandoutProps) {
+function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutProps) {
   const names = new Map(a.input.studyText.speakers.map((s) => [s.id, s.displayName]));
   const source = a.input.source;
   return (
@@ -82,7 +84,11 @@ function InputMaterial({ assignment: a, media }: LearnerHandoutProps) {
         ),
       )}
       {(media?.studyTextAudioUrl || a.input.kind === 'generate') && (
-        <AudioPlayer url={media?.studyTextAudioUrl} label="Study audio" />
+        <AudioPlayer
+          url={media?.studyTextAudioUrl}
+          label="Study audio"
+          preview={presentation?.preview}
+        />
       )}
       <Disclosure label="Study Text: Transcript" className="study-text">
         {a.input.studyText.turns.map((turn, i) => (
@@ -164,9 +170,15 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
 
 /** AssignmentV1 is plain text. Audience/contract evolution remains outside this presentation seam. */
 export function LearnerHandout(props: LearnerHandoutProps) {
-  const { assignment: a, media, publication } = props;
+  const { assignment: a, media, publication, presentation } = props;
+  const headingStyle: CSSProperties & Record<string, string> = {};
+  for (const level of ['h2', 'h3'] as const) {
+    const color = presentation?.headingTheme?.[level];
+    if (color && /^#(?:[a-f\d]{3}|[a-f\d]{4}|[a-f\d]{6}|[a-f\d]{8})$/i.test(color))
+      headingStyle[`--theme-${level}`] = color;
+  }
   return (
-    <article className="learner-handout">
+    <article className="learner-handout" style={headingStyle}>
       <header>
         <p className="eyebrow">English practice · {a.metadata.level}</p>
         <h1>{a.metadata.title}</h1>
@@ -200,7 +212,11 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         {a.pronunciation && (
           <>
             <h3>B. 🎙️ Pronunciation Micro-Focus (≈1 min)</h3>
-            <Pronunciation pronunciation={a.pronunciation} media={media} />
+            <Pronunciation
+              pronunciation={a.pronunciation}
+              media={media}
+              preview={presentation?.preview}
+            />
           </>
         )}
         <h2 id="assignment-section-5">5. ✅ Your Turn: Complete the Mission!</h2>

@@ -261,6 +261,9 @@ importers:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@esl-pipeline/learner-handout':
+        specifier: workspace:*
+        version: link:../learner-handout
       '@esl-pipeline/shared-infrastructure':
         specifier: workspace:*
         version: link:../shared-infrastructure
@@ -268,6 +271,9 @@ importers:
         specifier: workspace:*
         version: link:../storage-uploader
     devDependencies:
+      '@types/jsdom':
+        specifier: ^30.0.0
+        version: 30.0.0
       '@types/node':
         specifier: ^24.13.4
         version: 24.13.4
@@ -332,6 +338,9 @@ importers:
       '@elevenlabs/elevenlabs-js':
         specifier: ^2.67.0
         version: 2.67.0
+      '@esl-pipeline/html-publisher':
+        specifier: workspace:*
+        version: link:../html-publisher
       '@google-cloud/text-to-speech':
         specifier: ^6.4.1
         version: 6.4.1
@@ -345,9 +354,6 @@ importers:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@esl-pipeline/html-publisher':
-        specifier: workspace:*
-        version: link:../html-publisher
       '@esl-pipeline/shared-infrastructure':
         specifier: workspace:*
         version: link:../shared-infrastructure

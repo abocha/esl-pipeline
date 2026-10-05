@@ -240,6 +240,56 @@ describe('integration/migrations', () => {
   });
 
   it(
+    '0065 admits React renderer 3 without changing frozen artifact identity',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await pool.query(`CREATE TABLE drafts (storage_uri text, working_version integer, content_hash text);
+        CREATE TABLE jobs (id text PRIMARY KEY, prompt_package_id text, draft_id text);`);
+        for (const filename of [
+          '0062_assignment_v1_authority.sql',
+          '0063_assignment_native_renderer.sql',
+        ])
+          await pool.query(await fs.readFile(path.join(migrationsPath, filename), 'utf8'));
+        const artifact = {
+          format: 'assignment_v1',
+          schemaVersion: 1,
+          serializationVersion: 1,
+          workingVersion: 1,
+          contentHash: 'a'.repeat(64),
+          storageUri: `local://drafts/content/${'a'.repeat(64)}.json`,
+        };
+        const insert = (renderer: number | null, value = artifact) =>
+          pool.query(
+            `INSERT INTO jobs(id,prompt_package_id,draft_id,assignment_artifact,assignment_renderer_version)
+         VALUES($1,'prompt','draft',$2::jsonb,$3)`,
+            [randomUUID(), JSON.stringify(value), renderer],
+          );
+        await expect(insert(3)).rejects.toThrow('jobs_assignment_artifact_identity');
+        await pool.query(
+          await fs.readFile(
+            path.join(migrationsPath, '0065_assignment_react_renderer.sql'),
+            'utf8',
+          ),
+        );
+        await insert(3);
+        expect(
+          (await pool.query('SELECT assignment_artifact,assignment_renderer_version FROM jobs'))
+            .rows,
+        ).toEqual([{ assignment_artifact: artifact, assignment_renderer_version: 3 }]);
+        await expect(insert(4)).rejects.toThrow('jobs_assignment_artifact_identity');
+        await expect(insert(null)).rejects.toThrow('jobs_assignment_artifact_identity');
+        await expect(insert(3, { ...artifact, schemaVersion: 2 })).rejects.toThrow(
+          'jobs_assignment_artifact_identity',
+        );
+        await expect(pool.query('UPDATE jobs SET assignment_renderer_version=2')).rejects.toThrow(
+          'Frozen assignment',
+        );
+      });
+    },
+    testTimeout,
+  );
+
+  it(
     '0063 admits native renderer 2 while retaining historical jobs and frozen typed identity',
     async () => {
       await withAdminClient(async (pool) => {

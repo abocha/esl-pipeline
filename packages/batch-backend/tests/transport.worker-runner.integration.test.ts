@@ -118,7 +118,7 @@ async function seedNativeApproval() {
       storageUri: artifact.uri,
       contentHash: artifact.sha256,
     },
-    assignmentRendererVersion: 2,
+    assignmentRendererVersion: 3,
     withTts: false,
     upload: 'none',
   });
@@ -256,6 +256,7 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
 
       expect(finalStatus).not.toBeNull();
       expect(finalStatus.state).toBe('succeeded');
+      expect(finalStatus.assignmentRendererVersion).toBe(3);
       expect(finalStatus.manifestPath).toBe('/manifests/integration.json');
     },
     integrationTimeout,
@@ -298,6 +299,7 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
 
       expect(finalStatus).not.toBeNull();
       expect(finalStatus.state).toBe('failed');
+      expect(finalStatus.assignmentRendererVersion).toBe(3);
       expect(finalStatus.error).toContain('orchestrator down');
     },
     integrationTimeout,

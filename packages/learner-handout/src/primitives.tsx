@@ -31,7 +31,15 @@ export function Disclosure({
   );
 }
 
-export function AudioPlayer({ url, label }: { url?: string | null; label: string }) {
+export function AudioPlayer({
+  url,
+  label,
+  preview,
+}: {
+  url?: string | null;
+  label: string;
+  preview?: boolean;
+}) {
   const safe = safeMediaUrl(url);
   return safe ? (
     <figure className="audio-figure">
@@ -39,7 +47,9 @@ export function AudioPlayer({ url, label }: { url?: string | null; label: string
       <audio controls preload="none" src={safe} aria-label={label} />
     </figure>
   ) : (
-    <p className="audio-placeholder">{label}: audio unavailable</p>
+    <p className="audio-placeholder">
+      {preview ? `${label}: Audio track generating...` : `${label}: audio unavailable`}
+    </p>
   );
 }
 

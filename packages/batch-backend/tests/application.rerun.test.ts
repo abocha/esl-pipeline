@@ -43,7 +43,7 @@ describe('application/job-actions/rerun', () => {
       JSON.stringify({
         schemaVersion: 6,
         assignmentHash: 'a'.repeat(64),
-        assignmentRendererVersion: 2,
+        assignmentRendererVersion: 3,
         mdHash: 'existing-hash',
         publishTarget: 'html',
         audioArtifacts: {
@@ -55,7 +55,7 @@ describe('application/job-actions/rerun', () => {
     );
     vi.mocked(getJobById).mockResolvedValue({
       assignmentArtifact: assignmentArtifactFixture(),
-      assignmentRendererVersion: 2,
+      assignmentRendererVersion: 3,
       promptPackageId: 'prompt-1',
       draftId: 'draft-1',
       id: 'job-1',
@@ -88,7 +88,7 @@ describe('application/job-actions/rerun', () => {
       draftId: 'draft-1',
       ...legacyJob,
       assignmentArtifact: { contentHash: 'a'.repeat(64) },
-      assignmentRendererVersion: 2,
+      assignmentRendererVersion: 3,
     } as never);
     const fetchSpy = vi.fn(() => {
       throw new Error('native recovery scraped HTML');
@@ -138,7 +138,7 @@ describe('application/job-actions/rerun', () => {
     expect(insertJob).toHaveBeenCalledWith(
       expect.objectContaining({
         assignmentArtifact: artifact,
-        assignmentRendererVersion: 2,
+        assignmentRendererVersion: 3,
         md: path.join(jobDir, 'assignments', 'job-1.md'),
       }),
     );
@@ -212,7 +212,7 @@ describe('application/job-actions/rerun', () => {
   it('rejects inherited dialogue strategy when the explicit study-text model is not eleven_v3', async () => {
     vi.mocked(getJobById).mockResolvedValue({
       assignmentArtifact: assignmentArtifactFixture(),
-      assignmentRendererVersion: 2,
+      assignmentRendererVersion: 3,
       promptPackageId: 'prompt-1',
       draftId: 'draft-1',
       id: 'job-1',
@@ -246,7 +246,7 @@ describe('application/job-actions/rerun', () => {
   it('rejects inherited auto strategy when an explicit study-text elevenlabs model is provided', async () => {
     vi.mocked(getJobById).mockResolvedValue({
       assignmentArtifact: assignmentArtifactFixture(),
-      assignmentRendererVersion: 2,
+      assignmentRendererVersion: 3,
       promptPackageId: 'prompt-1',
       draftId: 'draft-1',
       id: 'job-1',
@@ -305,7 +305,7 @@ describe('application/job-actions/rerun', () => {
   it('queues native audio reruns from the frozen assignment with the source student id', async () => {
     vi.mocked(getJobById).mockResolvedValue({
       assignmentArtifact: assignmentArtifactFixture(),
-      assignmentRendererVersion: 2,
+      assignmentRendererVersion: 3,
       id: 'job-1',
       state: 'succeeded',
       md: jobMdPath,
@@ -372,7 +372,7 @@ describe('application/job-actions/rerun', () => {
   it('forwards inherited study-text model defaults into the rerun queue payload', async () => {
     vi.mocked(getJobById).mockResolvedValue({
       assignmentArtifact: assignmentArtifactFixture(),
-      assignmentRendererVersion: 2,
+      assignmentRendererVersion: 3,
       promptPackageId: 'prompt-1',
       draftId: 'draft-1',
       id: 'job-1',

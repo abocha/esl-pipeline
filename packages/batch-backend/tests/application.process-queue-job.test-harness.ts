@@ -91,7 +91,7 @@ export function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
       contentHash: assignmentHash(assignmentFixture()),
       storageUri: `local://drafts/content/${assignmentHash(assignmentFixture())}.json`,
     },
-    assignmentRendererVersion: 2,
+    assignmentRendererVersion: 3,
     promptPackageId: 'prompt-1',
     state: 'queued',
     md: path.resolve(import.meta.dirname, '../../../fixtures/ok.md'),

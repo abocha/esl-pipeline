@@ -1,3 +1,5 @@
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
+
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import { HISTORICAL_ASSIGNMENT_ERROR, requireTypedAssignment } from './historical-assignment.js';
 // packages/batch-backend/src/application/process-queue-job.ts
@@ -556,7 +558,7 @@ async function resolveAssignmentInput(
   } = {},
 ): Promise<ResolvedAssignmentInput> {
   if (job.assignmentArtifact) {
-    if (job.assignmentRendererVersion !== 1 && job.assignmentRendererVersion !== 2)
+    if (job.assignmentRendererVersion !== ASSIGNMENT_HTML_RENDERER_VERSION)
       throw new Error('Unsupported structured assignment renderer version');
     if (!job.promptPackageId) throw new Error('Structured job prompt identity missing');
     if (

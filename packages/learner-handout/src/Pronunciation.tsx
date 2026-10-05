@@ -57,9 +57,11 @@ function ClipControls({ clips }: { clips: readonly PronunciationClipInput[] }) {
 export function Pronunciation({
   pronunciation: p,
   media,
+  preview,
 }: {
   pronunciation: AssignmentPronunciation;
   media?: HandoutMediaInputs;
+  preview?: boolean;
 }) {
   const clips = media?.pronunciationAudio?.itemClips ?? [];
   const controls = (index: number, kind?: PronunciationClipInput['kind']) => (
@@ -139,6 +141,7 @@ export function Pronunciation({
           <AudioPlayer
             url={media?.pronunciationAudio?.primaryClip?.url}
             label="Pronunciation sentence audio"
+            preview={preview}
           />
         </>
       )}

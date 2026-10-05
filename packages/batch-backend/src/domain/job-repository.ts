@@ -8,6 +8,7 @@ import { PoolClient } from 'pg';
 
 import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import { AssignmentArtifactReferenceSchema } from '@esl-pipeline/contracts';
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
 import { parseTtsModelId } from '@esl-pipeline/tts-core';
 
 import { requireTypedAssignment } from '../application/historical-assignment.js';
@@ -483,7 +484,7 @@ async function insertJobWithState(
         params.userId ?? null,
         params.studentId ?? null,
         params.assignmentArtifact ? JSON.stringify(params.assignmentArtifact) : null,
-        params.assignmentRendererVersion ?? null,
+        params.assignmentRendererVersion ?? ASSIGNMENT_HTML_RENDERER_VERSION,
       ],
     );
     return result.rows[0];

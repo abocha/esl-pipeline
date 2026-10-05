@@ -12,7 +12,10 @@ import {
   ValidationError,
   validateAssignmentV1,
 } from '@esl-pipeline/contracts';
-import { renderAndPublishAssignmentToS3 } from '@esl-pipeline/html-publisher';
+import {
+  ASSIGNMENT_HTML_RENDERER_VERSION,
+  renderAndPublishAssignmentToS3,
+} from '@esl-pipeline/html-publisher';
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
 import {
   buildStudyTextMp3,
@@ -922,7 +925,7 @@ export async function newAssignment(
       assignmentHash: hashStudyText(serializeAssignmentV1(assignment)),
       publication: {
         schemaVersion: 1 as const,
-        rendererVersion: 2 as const,
+        rendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
         title: assignment.metadata.title,
         icon: '🎧',
         studyTextAudioUrl: audioArtifacts.studyText?.url ?? null,
@@ -1728,7 +1731,7 @@ export async function rerunAssignment(
       assignmentHash: hashStudyText(serializeAssignmentV1(assignment)),
       publication: {
         schemaVersion: 1 as const,
-        rendererVersion: 2 as const,
+        rendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
         title: assignment.metadata.title,
         icon: '🎧',
         studyTextAudioUrl: audioArtifacts.studyText?.url ?? null,
