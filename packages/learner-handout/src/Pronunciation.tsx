@@ -124,7 +124,7 @@ export function Pronunciation({
       <Field label="Focus">{p.focus}</Field>
       <Field label="Action">{p.action}</Field>
       <Field label="Deliverable">{p.deliverable}</Field>
-      <ol>
+      <ol lang="en">
         {items.map((item, i) => (
           <li className="pronunciation-item" data-pronunciation-item={i} key={i}>
             {item}
@@ -134,6 +134,7 @@ export function Pronunciation({
       {sentence && (
         <>
           <Field
+            lang="en"
             label={p.mode === 'shadow_sentence' ? 'Shadow sentence' : 'Natural sentence practice'}
           >
             {sentence}

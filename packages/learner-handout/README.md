@@ -20,6 +20,12 @@ is audience-ambiguous, so section 6 is omitted entirely. `teacherRationale` is r
 and never emitted into learner HTML, including attributes, scripts, comments or serialized data.
 The other section IDs and labels remain stable.
 
+Authored `metadata.instructionLanguage` sets the language of the static HTML document and shared
+React article. English target text and fixed English presentation labels are marked separately;
+authored explanations and vocabulary meanings inherit the support language. This does not translate
+the fixed UI labels. Missing metadata falls back to English in static presentation without inserting
+fields into older assignments or changing canonical data.
+
 Section 5 renders the structured mission as one emphasized task callout, followed by lightweight
 Prepare, Include in your response, How to do it and Before you finish headings with lists or text.
 Empty lists and null delivery omit their headings. Optional extension stays inline; sampleResponse

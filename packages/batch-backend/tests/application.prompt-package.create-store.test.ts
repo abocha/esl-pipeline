@@ -51,7 +51,12 @@ async function writeVoiceCatalog(
 }
 
 describe('application/prompt-package', () => {
-  it.each(['assignment_v1', 'assignment_v1_rationale_v2'])(
+  it.each([
+    'assignment_v1',
+    'assignment_v1_rationale_v2',
+    'assignment_v1_mission_v3',
+    'assignment_v1_grammar_v4',
+  ])(
     'rejects fresh package creation against old active template %s without writing a package',
     async (identity) => {
       const transcript = createTranscriptRecord();
@@ -118,7 +123,7 @@ describe('application/prompt-package', () => {
 
     await fs.writeFile(
       templatePath,
-      'Assignment output contract: assignment_v1_grammar_v4\nHello\nFooter\n',
+      'Assignment output contract: assignment_v1_generation_v5\nHello\nFooter\n',
       'utf8',
     );
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
