@@ -51,58 +51,62 @@ async function writeVoiceCatalog(
 }
 
 describe('application/prompt-package', () => {
-  it('rejects fresh package creation against an old active rationale template without writing a package', async () => {
-    const transcript = createTranscriptRecord();
-    const templateRevisions = createTemplateRevisionRepositoryStub();
-    const old = (await templateRevisions.getActive('hw_prompt_assignment_v1.md'))!;
-    old.content =
-      'Assignment output contract: assignment_v1\nRationale: explain why this mission helps this learner with supported evidence.';
-    const before = JSON.stringify(old);
-    const insert = vi.fn();
-    const putPromptPackage = vi.fn();
-    const provider = vi.fn(() => {
-      throw new Error('Unexpected provider invocation');
-    });
-    vi.stubGlobal('fetch', provider);
-    try {
-      await expect(
-        createPromptPackage(
-          {
-            recordingId: transcript.recordingId,
-            workspaceId: 'workspace-1',
-            templateId: 'hw_prompt_assignment_v1.md',
-          },
-          {
-            config: createConfig('hw_prompt_assignment_v1.md', 'profile.md'),
-            storage: createStorageStub({
-              getText: async () => 'TRANSCRIPT BODY',
-              putPromptPackage,
-            }),
-            transcripts: { getByRecordingId: async () => transcript },
-            recordings: {
-              getById: async () =>
-                ({
-                  id: transcript.recordingId,
-                  workspaceId: 'workspace-1',
-                  studentId: 'student-1',
-                }) as never,
+  it.each(['assignment_v1', 'assignment_v1_rationale_v2'])(
+    'rejects fresh package creation against old active template %s without writing a package',
+    async (identity) => {
+      const transcript = createTranscriptRecord();
+      const templateRevisions = createTemplateRevisionRepositoryStub();
+      const old = (await templateRevisions.getActive('hw_prompt_assignment_v1.md'))!;
+      old.content = `Assignment output contract: ${identity}\nOutput task: a practical learner response.`;
+      const before = JSON.stringify(old);
+      const insert = vi.fn();
+      const putPromptPackage = vi.fn();
+      const provider = vi.fn(() => {
+        throw new Error('Unexpected provider invocation');
+      });
+      vi.stubGlobal('fetch', provider);
+      try {
+        await expect(
+          createPromptPackage(
+            {
+              recordingId: transcript.recordingId,
+              workspaceId: 'workspace-1',
+              templateId: 'hw_prompt_assignment_v1.md',
             },
-            students: { getById: async () => ({ id: 'student-1', student: 'Student One' }) },
-            promptPackages: { ...createPromptPackageRepositoryStub(), insert },
-            profileRevisions: createProfileRevisionRepositoryStub(),
-            templateRevisions: createTemplateRevisionRepositoryStub({ getActive: async () => old }),
-            promptOptions: createPromptOptionsStub(),
-          },
-        ),
-      ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED' });
-      expect(insert).not.toHaveBeenCalled();
-      expect(putPromptPackage).not.toHaveBeenCalled();
-      expect(provider).not.toHaveBeenCalled();
-      expect(JSON.stringify(old)).toBe(before);
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
+            {
+              config: createConfig('hw_prompt_assignment_v1.md', 'profile.md'),
+              storage: createStorageStub({
+                getText: async () => 'TRANSCRIPT BODY',
+                putPromptPackage,
+              }),
+              transcripts: { getByRecordingId: async () => transcript },
+              recordings: {
+                getById: async () =>
+                  ({
+                    id: transcript.recordingId,
+                    workspaceId: 'workspace-1',
+                    studentId: 'student-1',
+                  }) as never,
+              },
+              students: { getById: async () => ({ id: 'student-1', student: 'Student One' }) },
+              promptPackages: { ...createPromptPackageRepositoryStub(), insert },
+              profileRevisions: createProfileRevisionRepositoryStub(),
+              templateRevisions: createTemplateRevisionRepositoryStub({
+                getActive: async () => old,
+              }),
+              promptOptions: createPromptOptionsStub(),
+            },
+          ),
+        ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED' });
+        expect(insert).not.toHaveBeenCalled();
+        expect(putPromptPackage).not.toHaveBeenCalled();
+        expect(provider).not.toHaveBeenCalled();
+        expect(JSON.stringify(old)).toBe(before);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
 
   it('creates a prompt package with canonical ordering', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
@@ -114,7 +118,7 @@ describe('application/prompt-package', () => {
 
     await fs.writeFile(
       templatePath,
-      'Assignment output contract: assignment_v1_rationale_v2\nHello\nFooter\n',
+      'Assignment output contract: assignment_v1_mission_v3\nHello\nFooter\n',
       'utf8',
     );
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');

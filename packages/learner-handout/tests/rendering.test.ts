@@ -3,9 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 
-import { validateAssignmentV1 } from '@esl-pipeline/contracts';
+import { type FreshAssignmentV1, validateAssignmentV1 } from '@esl-pipeline/contracts';
 
 import legacyFixture from '../../contracts/tests/assignment-fixture.json';
+import missionFixture from '../../contracts/tests/assignment-mission-fixture.json';
 import rationaleFixture from '../../contracts/tests/assignment-rationale-fixture.json';
 import { createFixture, pronunciationModes } from '../preview/fixtures.js';
 import { renderLearnerHandoutDocument } from '../src/server.js';
@@ -14,6 +15,105 @@ const documentFor = (props = createFixture()) =>
   new JSDOM(renderLearnerHandoutDocument(props)).window.document;
 
 describe('React learner handout static foundation', () => {
+  it('renders the structured mission in teaching order with one prominent task and separate sample', () => {
+    const props = createFixture();
+    const before = JSON.stringify(props);
+    const doc = documentFor(props);
+    const mission = doc.querySelector('.output-mission')!;
+    expect(mission.getAttribute('aria-labelledby')).toBe('assignment-section-5');
+    expect(mission.firstElementChild?.classList.contains('mission-task')).toBe(true);
+    expect(mission.querySelector('.mission-task')?.textContent).toBe(
+      missionFixture.outputTask.task,
+    );
+    expect([...mission.querySelectorAll('h3')].map((h) => h.textContent)).toEqual([
+      'Prepare',
+      'Include in your response',
+      'How to do it',
+      'Before you finish',
+    ]);
+    expect(
+      [...mission.querySelectorAll('ul')].map((list) =>
+        [...list.querySelectorAll('li')].map((li) => li.textContent),
+      ),
+    ).toEqual([
+      missionFixture.outputTask.preparation,
+      missionFixture.outputTask.requirements,
+      missionFixture.outputTask.selfCheck,
+    ]);
+    expect(mission.textContent).toContain(missionFixture.outputTask.delivery);
+    expect(mission.textContent).toContain(
+      `Optional extension: ${missionFixture.outputTask.extension}`,
+    );
+    expect(mission.textContent).not.toContain(missionFixture.outputTask.sampleResponse);
+    expect(doc.querySelector('#assignment-section-7 + details')?.textContent).toContain(
+      missionFixture.outputTask.sampleResponse,
+    );
+    expect(mission.querySelectorAll('.callout')).toHaveLength(1);
+    expect(JSON.stringify(props)).toBe(before);
+  });
+
+  it.each(['preparation', 'requirements', 'delivery', 'selfCheck', 'all'] as const)(
+    'omits empty supporting roles without empty headings: %s',
+    (absent) => {
+      const props = createFixture();
+      const outputTask: FreshAssignmentV1['outputTask'] = structuredClone(
+        missionFixture.outputTask,
+      );
+      for (const field of ['preparation', 'requirements', 'selfCheck'] as const)
+        if (absent === field || absent === 'all') outputTask[field] = [];
+      if (absent === 'delivery' || absent === 'all') outputTask.delivery = null;
+      outputTask.extension = null;
+      props.assignment = validateAssignmentV1({ ...missionFixture, outputTask });
+      const mission = documentFor(props).querySelector('.output-mission')!;
+      const roles = [
+        ['preparation', 'Prepare'],
+        ['requirements', 'Include in your response'],
+        ['delivery', 'How to do it'],
+        ['selfCheck', 'Before you finish'],
+      ];
+      expect([...mission.querySelectorAll('h3')].map((h) => h.textContent)).toEqual(
+        roles.filter(([field]) => absent !== field && absent !== 'all').map(([, label]) => label),
+      );
+      expect(mission.textContent).toContain(outputTask.task);
+      expect(mission.textContent).not.toContain('Optional extension');
+    },
+  );
+
+  it.each([legacyFixture, rationaleFixture])(
+    'renders legacy output-task without inferring mission roles',
+    (assignment) => {
+      const props = createFixture();
+      props.assignment = validateAssignmentV1(assignment);
+      const before = JSON.stringify(props.assignment);
+      const mission = documentFor(props).querySelector('.output-mission')!;
+      expect(mission.querySelector('.mission-task')?.textContent).toBe(assignment.outputTask.task);
+      expect(mission.querySelectorAll('h3, ul')).toHaveLength(0);
+      expect(JSON.stringify(props.assignment)).toBe(before);
+    },
+  );
+
+  it('escapes every structured mission role as authored plain text', () => {
+    const props = createFixture();
+    const hostile = '<img src=x onerror=evil()> **plain**';
+    props.assignment = validateAssignmentV1({
+      ...missionFixture,
+      outputTask: {
+        task: hostile,
+        preparation: [hostile],
+        requirements: [hostile],
+        delivery: hostile,
+        selfCheck: [hostile],
+        extension: hostile,
+        sampleResponse: hostile,
+      },
+    });
+    const doc = documentFor(props);
+    expect(doc.querySelectorAll('img')).toHaveLength(0);
+    expect(
+      [...doc.querySelectorAll('.output-mission .plain-text')].map((p) => p.textContent),
+    ).toEqual([hostile, hostile, hostile, hostile, hostile, `Optional extension: ${hostile}`]);
+  });
+
   it.each(['teacher', 'null', 'legacy'] as const)(
     'publishes only learner rationale for %s, with no hidden rationale copies',
     (shape) => {

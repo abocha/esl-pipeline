@@ -14,7 +14,7 @@
 [ESL-4](https://linear.app/abocha/issue/ESL-4) /
 [GitHub #308](https://github.com/abocha/esl-pipeline/issues/308) implements Slice 1.
 `packages/contracts/src/assignment-v1.ts` owns the Zod schema, inferred TypeScript domain and
-provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_rationale_v2`, and the
+provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_mission_v3`, and the
 repository prompt compatibility version is `3.0.0` because old generation packages must be recreated.
 
 The object contains metadata, mission, one input source, declared speakers and turns,
@@ -25,7 +25,7 @@ six existing modes. Gender is male/female/neutral; child is represented by age, 
 
 The backend preserves source ownership checks before generation. Fresh packages must select the
 active `hw_prompt_assignment_v1.md` revision with the exact first-line declaration
-`Assignment output contract: assignment_v1_rationale_v2`. The envelope retains the read-format
+`Assignment output contract: assignment_v1_mission_v3`. The envelope retains the read-format
 discriminator `promptVersion: assignment_v1` and pins
 the full strict schema and trusted validation context (canonical student display text, known input
 kind and exact URLs supplied in notes/transcript). Revision ID/hash and existing profile, memory,
@@ -33,18 +33,19 @@ student and source lineage remain unchanged. An unsupported package returns
 `PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED`, instructing the tutor to activate the structured
 template and recreate the package. Historical snapshots are never rewritten.
 
-ESL-24 uses two explicit closed read shapes sharing every other field definition: legacy requires
+ESL-24 uses two explicit closed rationale read shapes: legacy requires
 root `rationale` and forbids both new fields; new requires `learnerRationale` and nullable
 `teacherRationale`, forbidding root `rationale`. Mixed, absent and partial forms are rejected.
 `validateAssignmentV1` accepts either complete shape without defaults or normalization.
-`validateFreshAssignmentV1` admits only the new shape after provider receipt (also in generation
-evaluation); requesting a strict provider schema alone is insufficient. Learner rationale speaks
+`validateFreshAssignmentV1` admits only the new rationale and structured mission shape after
+provider receipt (also in generation evaluation); requesting a strict provider schema alone is
+insufficient. Learner rationale speaks
 directly to the learner about practical benefit; lesson evidence, diagnosis and teacher selection
 reasoning belong in teacher rationale. Teacher rationale remains typed data only.
 
-The rationale generation identity revision changes the response schema name and template marker
-to `assignment_v1_rationale_v2`; it does not change AssignmentV1 schema/serialization versions or
-the envelope's read-format discriminator. Generation checks both pinned schema equality and the
+The ESL-24 rationale generation identity was `assignment_v1_rationale_v2`; ESL-25 advances the
+response schema name and template marker to `assignment_v1_mission_v3`. Neither changes AssignmentV1
+schema/serialization versions or the envelope's read-format discriminator. Generation checks both pinned schema equality and the
 instruction marker. Old stored packages, including mismatched schema/instructions, fail before
 provider dispatch; fresh package creation against an old active template fails before package
 storage. No stored package is repinned and no template revision is activated by this change.
@@ -52,6 +53,37 @@ Native section 6 renders only learner rationale; legacy rationale omits the whol
 renumbering sections 7/8. Whole-document and mock-upload sentinel checks ensure no teacher or
 ambiguous legacy text appears in learner HTML, including hidden or serialized copies. The ESL-20
 fixture, snapshot and pinned canonical hash remain the unchanged compatibility guard.
+
+### Structured mission composition (ESL-25)
+
+`outputTask` owns teaching roles, not layout blocks:
+
+| Field            | Type           | Meaning                                                 |
+| ---------------- | -------------- | ------------------------------------------------------- |
+| `task`           | string         | Concise core learner task                               |
+| `preparation`    | string[]       | Things to prepare or note before starting               |
+| `requirements`   | string[]       | Independent, meaning-based things the response includes |
+| `delivery`       | string or null | How to perform or submit the mission                    |
+| `selfCheck`      | string[]       | Short checks, including useful noticing/correction      |
+| `extension`      | string or null | Existing optional extension                             |
+| `sampleResponse` | string         | Existing sample in the answer key                       |
+
+The closed legacy outputTask contains only task/extension/sampleResponse. Runtime admission accepts
+it or the complete structured form independently of rationale, preserving both pre-ESL-24 and
+ESL-24 frozen assignments. Partial role sets, wrong types and extra fields fail. Reads never insert
+defaults, nulls, empty arrays or normalized data. Canonical serialization remains version 1.
+
+Fresh provider projection and post-provider admission require all seven mission fields. Lists can
+be empty and delivery can be null when unnecessary; nonempty text must be meaningful. The concise
+task must not absorb preparation, requirements, delivery or self-check. Recording/submission stays
+optional under the existing tutor-intent rule. The representative mission fixture is separate from
+the untouched ESL-20 fixture and ESL-24 rationale fixture.
+
+React section 5 presents one prominent task callout, then populated preparation, requirements,
+delivery and self-check in that order using headings, paragraphs and lists. Empty roles have no
+heading. Extension remains lightweight; the sample stays in section 7. Legacy tasks render directly
+without inferring roles. The single-column composition uses the existing desktop/mobile shell.
+The shipped template source changes only mission instructions; no revision is activated.
 
 Assignment generation admits only the existing OpenAI `gpt-6.1-sol` target in this slice. Other
 assignment overrides fail before budget reservation or dispatch; their other workloads remain

@@ -11,6 +11,22 @@ const readTemplate = () =>
   );
 
 describe('structured homework bootstrap template', () => {
+  it('composes mission roles without padding or losing self-correction', async () => {
+    const template = await readTemplate();
+    for (const rule of [
+      '`task` is the concise core learner task',
+      'Keep preparation, response requirements, delivery and self-check instructions out of `task`',
+      '`preparation`: a list',
+      '`requirements`: independently scannable, meaning-based',
+      '`delivery`: nullable text',
+      '`selfCheck`: a short list',
+      'Use empty lists or null delivery when a role is unnecessary',
+      'do not add artificial filler or repeat the task',
+      'notice a problem and try a correction',
+      'sample belongs in the answer key, not the mission instructions',
+    ])
+      expect(template).toContain(rule);
+  });
   it('separates learner benefit from nullable teacher analysis under the revised marker', async () => {
     const template = await readTemplate();
     expect(template).toContain(
