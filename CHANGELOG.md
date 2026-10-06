@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [19.0.0] - 2026-10-06
+
+### Changed
+
+- Automated release from PR #353: feat(handout): polish learner experience and require authored emoji (https://github.com/abocha/esl-pipeline/pull/353)
+
 ## [18.0.0] - 2026-10-06
 
 ### Changed
