@@ -1,0 +1,22 @@
+.fixture-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  max-width: 960px;
+  margin: 16px auto;
+  padding: 12px 16px;
+  border: 1px dashed #9fb6cd;
+  font-size: 0.875rem;
+}
+.fixture-controls label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.fixture-controls select {
+  font: inherit;
+  padding: 6px;
+  max-width: 100%;
+}

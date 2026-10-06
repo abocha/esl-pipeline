@@ -1,0 +1,51 @@
+{
+  "name": "@esl-pipeline/learner-handout",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated React learner components and deterministic Node static rendering.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./handout.css": "./dist/handout.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "dev": "vite",
+    "fixture:serve": "node scripts/serve-fixtures.mjs",
+    "fixture:static": "pnpm build && tsx scripts/emit-fixtures.ts",
+    "test:unit": "pnpm build && pnpm test:unit:prebuilt",
+    "test:unit:prebuilt": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^24.13.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.0.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=24.15.0"
+  }
+}

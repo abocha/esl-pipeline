@@ -68,7 +68,7 @@ export interface AssignmentDraftDto {
 /** Versioned publication metadata; absent on historical DTOs/manifests. */
 export interface AssignmentPublicationMetadata {
   schemaVersion: 1;
-  rendererVersion: 1 | 2;
+  rendererVersion: 1 | 2 | 3;
   title: string;
   icon: string;
   studyTextAudioUrl: string | null;

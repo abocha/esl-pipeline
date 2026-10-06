@@ -119,7 +119,7 @@ describe('application/create-approval-job', () => {
         contentHash: draft.contentHash,
         storageUri: draft.storageUri,
       },
-      assignmentRendererVersion: 2,
+      assignmentRendererVersion: 3,
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
       promptPackageId: 'prompt-1',

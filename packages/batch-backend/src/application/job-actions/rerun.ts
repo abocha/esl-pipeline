@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { z } from 'zod';
 
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
 import { isTtsModelForProvider } from '@esl-pipeline/tts-core';
 
 import type { JobActionResult, RerunAction } from '../../domain/job-actions.js';
@@ -317,7 +318,9 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     autoPublish: job.autoPublish ?? undefined,
     sourceJobId: jobId,
     assignmentArtifact: job.assignmentArtifact,
-    assignmentRendererVersion: job.assignmentArtifact ? 2 : job.assignmentRendererVersion,
+    assignmentRendererVersion: job.assignmentArtifact
+      ? ASSIGNMENT_HTML_RENDERER_VERSION
+      : job.assignmentRendererVersion,
   });
 
   publishJobEvent({ type: 'job_created', job: rerunJob });

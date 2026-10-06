@@ -16,7 +16,7 @@ import {
   validateStructuredEvalOutput,
 } from '../src/application/generation-evaluator.js';
 import { stitchPromptEnvelope } from '../src/application/prompt-assembly.js';
-import { assignmentFixture } from './assignment-v1.test-harness.js';
+import { freshAssignmentFixture as assignmentFixture } from './assignment-v1.test-harness.js';
 
 describe('application/generation-evaluator', () => {
   it('routes assignment evals to Sol and every other OpenAI eval to Luna', () => {

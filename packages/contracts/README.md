@@ -12,8 +12,11 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
 - Job action types (`JobActionType`, `JobActionRequest`, `JobActionResponse`, `ActionCapability`)
 - Job options metadata payload types (`JobOptionsPayload`, `VoiceOption`)
 - WS2B generation DTOs (`GenerateDraftRequest`, `GenerateDraftResponse`, provider/model/quota types)
-- Transient `AssignmentV1` schema, inferred types, strict provider projection and local domain
-  validation; see [the Slice 1 contract](../../docs/reference/ASSIGNMENT_V1.md).
+- `AssignmentV1` runtime/read union (legacy root rationale or explicit learner/teacher rationale,
+  independently accepting legacy output tasks or structured mission roles, and each grammar item
+  as closed legacy scalar form or structured form blocks with paired contrasts),
+  new-shape-only fresh-generation admission and strict provider projection; see
+  [the assignment contract](../../docs/reference/ASSIGNMENT_V1.md).
 - Shared errors (`PipelineError`, `ConfigurationError`, etc.)
 - Shared observability shapes (`PipelineLogEvent`, `PipelineLogger`, `noopLogger`)
 - Semantic contract version registry (`CONTRACT_VERSIONS`)

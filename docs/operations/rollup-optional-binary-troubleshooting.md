@@ -78,7 +78,7 @@ from changing dependency resolution.
 2. Re-run a targeted command to verify:
 
 ```bash
-corepack pnpm --filter @esl-pipeline/html-publisher test -- tests/assignment-rendering.test.ts
+corepack pnpm --filter @esl-pipeline/html-publisher test -- tests/assignment-adapter.test.ts
 ```
 
 If the failure occurs inside the Docker dev stack, removing host `node_modules` does not affect the
