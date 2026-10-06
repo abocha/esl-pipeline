@@ -13,8 +13,10 @@ function Answers({ questions }: { questions: Question[] }) {
     <ol>
       {questions.map((q, i) => (
         <li className="answer-key-item" key={i}>
-          <Text>{q.prompt}</Text>
-          <Field label="Answer">{q.answer}</Field>
+          <Text lang="en">{q.prompt}</Text>
+          <Field label="Answer" lang="en">
+            {q.answer}
+          </Field>
           {q.explanation !== null && <Field label="Explanation">{q.explanation}</Field>}
         </li>
       ))}
@@ -43,7 +45,7 @@ function PracticeParts({
           {answers ? (
             <Answers questions={part.items} />
           ) : (
-            <ol>
+            <ol lang="en">
               {part.items.map((q, j) => (
                 <li key={j} className="plain-text">
                   {q.prompt}
@@ -62,7 +64,9 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
   const source = a.input.source;
   return (
     <>
-      <h3>{a.input.kind === 'authentic' ? '🌐 Authentic Material' : '🤖 Generated Material'}</h3>
+      <h3 lang="en">
+        {a.input.kind === 'authentic' ? '🌐 Authentic Material' : '🤖 Generated Material'}
+      </h3>
       {source.title &&
         (a.input.kind === 'authentic' ? (
           <Field label="Title/Source">{source.title}</Field>
@@ -92,11 +96,14 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
       )}
       <Disclosure label="Study Text: Transcript" className="study-text">
         {a.input.studyText.turns.map((turn, i) => (
-          <Text key={i}>{`${names.get(turn.speakerId) ?? turn.speakerId}: ${turn.text}`}</Text>
+          <Text
+            key={i}
+            lang="en"
+          >{`${names.get(turn.speakerId) ?? turn.speakerId}: ${turn.text}`}</Text>
         ))}
       </Disclosure>
-      <h3>🤔 Comprehension Check</h3>
-      <ol>
+      <h3 lang="en">🤔 Comprehension Check</h3>
+      <ol lang="en">
         {a.input.comprehension.map((q, i) => (
           <li className="plain-text" key={i}>
             {q.prompt}
@@ -110,21 +117,27 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
 function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
   return (
     <>
-      <h3>A. 👀 Notice the Grammar</h3>
+      <h3 lang="en">A. 👀 Notice the Grammar</h3>
       {a.toolkit.grammar.map((g, i) => (
         <div className="grammar-card" key={i}>
           <h4 className="grammar-topic">{g.name}</h4>
           <Text>{g.explanation}</Text>
           {'form' in g ? (
-            g.form && <Field label="Form">{g.form}</Field>
+            g.form && (
+              <Field label="Form" lang="en">
+                {g.form}
+              </Field>
+            )
           ) : (
             <>
               <div className="grammar-forms">
                 {g.formBlocks.map((block, j) => (
                   <section className="grammar-form" key={j}>
                     <h5>{block.label}</h5>
-                    <Field label="Pattern">{block.pattern}</Field>
-                    <ul>
+                    <Field label="Pattern" lang="en">
+                      {block.pattern}
+                    </Field>
+                    <ul lang="en">
                       {block.examples.map((example, k) => (
                         <li className="plain-text" key={k}>
                           <em>{example}</em>
@@ -142,7 +155,7 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
                       <div className="grammar-alternative" key={k}>
                         <h6>{alternative.label}</h6>
                         <p className="plain-text">
-                          <em>{alternative.example}</em>
+                          <em lang="en">{alternative.example}</em>
                         </p>
                         <Text>{alternative.explanation}</Text>
                       </div>
@@ -156,12 +169,12 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
             <ul className="grammar-guidance">
               {g.examples.map((ex, j) => (
                 <li key={j}>
-                  <em>{ex}</em>
+                  <em lang="en">{ex}</em>
                 </li>
               ))}
               {g.uses.map((u, j) => (
                 <li key={`use-${j}`}>
-                  <strong>{u.label}:</strong> {u.example}
+                  <strong>{u.label}:</strong> <span lang="en">{u.example}</span>
                 </li>
               ))}
             </ul>
@@ -170,8 +183,12 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
             <ul className="grammar-traps">
               {g.traps.map((t, j) => (
                 <li className="grammar-trap" key={j}>
-                  <Field label="Wrong">{t.original}</Field>
-                  <Field label="Corrected">{t.improved}</Field>
+                  <Field label="Wrong" lang="en">
+                    {t.original}
+                  </Field>
+                  <Field label="Corrected" lang="en">
+                    {t.improved}
+                  </Field>
                   <Field label="Explanation">{t.explanation}</Field>
                 </li>
               ))}
@@ -179,10 +196,10 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
           )}
         </div>
       ))}
-      <h3>B. 🗣️ Useful Chunks & Vocabulary</h3>
+      <h3 lang="en">B. 🗣️ Useful Chunks & Vocabulary</h3>
       <div className="table-scroll" role="region" aria-label="Vocabulary" tabIndex={0}>
         <table>
-          <thead>
+          <thead lang="en">
             <tr>
               <th>Expression</th>
               <th>Meaning</th>
@@ -192,9 +209,9 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
           <tbody>
             {a.toolkit.vocabulary.map((v, i) => (
               <tr key={i}>
-                <td>{v.expression}</td>
+                <td lang="en">{v.expression}</td>
                 <td>{v.meaning}</td>
-                <td>{v.example}</td>
+                <td lang="en">{v.example}</td>
               </tr>
             ))}
           </tbody>
@@ -208,7 +225,7 @@ function MissionList({ label, items }: { label: string; items: string[] }) {
   if (!items.length) return null;
   return (
     <>
-      <h3>{label}</h3>
+      <h3 lang="en">{label}</h3>
       <ul>
         {items.map((item, i) => (
           <li className="plain-text" key={i}>
@@ -232,7 +249,7 @@ function OutputMission({ mission }: { mission: AssignmentV1['outputTask'] }) {
           <MissionList label="Include in your response" items={mission.requirements} />
           {mission.delivery !== null && (
             <>
-              <h3>How to do it</h3>
+              <h3 lang="en">How to do it</h3>
               <Text>{mission.delivery}</Text>
             </>
           )}
@@ -254,9 +271,11 @@ export function LearnerHandout(props: LearnerHandoutProps) {
       headingStyle[`--theme-${level}`] = color;
   }
   return (
-    <article className="learner-handout" style={headingStyle}>
+    <article className="learner-handout" style={headingStyle} lang={a.metadata.instructionLanguage}>
       <header>
-        <p className="eyebrow">English practice · {a.metadata.level}</p>
+        <p className="eyebrow" lang="en">
+          English practice · {a.metadata.level}
+        </p>
         <h1>{a.metadata.title}</h1>
         <p className="page-tags">
           {a.metadata.student} · {a.metadata.topic}
@@ -264,30 +283,36 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         {publication?.displayDate && <p>{publication.displayDate}</p>}
       </header>
       <main>
-        <h2 id="assignment-section-1">1. 🎯 This Week's Mission Briefing</h2>
+        <h2 id="assignment-section-1" lang="en">
+          1. 🎯 This Week's Mission Briefing
+        </h2>
         <aside className="callout">
           <Field label="Your Goal This Week">{a.mission.goal}</Field>
           <p>
-            <strong>Key Language You Will Use:</strong>
+            <strong lang="en">Key Language You Will Use:</strong>
           </p>
-          <ul className="mission-key-language">
+          <ul className="mission-key-language" lang="en">
             {a.mission.keyLanguage.map((item, i) => (
               <li key={i}>{item}</li>
             ))}
           </ul>
         </aside>
-        <h2 id="assignment-section-2">2. 🎧 Input Material: The Source</h2>
+        <h2 id="assignment-section-2" lang="en">
+          2. 🎧 Input Material: The Source
+        </h2>
         <InputMaterial {...props} />
-        <h2 id="assignment-section-3">3. 🛠️ Language Toolkit: Useful Language</h2>
+        <h2 id="assignment-section-3" lang="en">
+          3. 🛠️ Language Toolkit: Useful Language
+        </h2>
         <LanguageToolkit assignment={a} />
-        <h2 id="assignment-section-4">
+        <h2 id="assignment-section-4" lang="en">
           {a.pronunciation ? '4. ✍️ Practice & Pronunciation' : '4. ✍️ Practice'}
         </h2>
-        <h3>A. 🔩 Controlled Practice</h3>
+        <h3 lang="en">A. 🔩 Controlled Practice</h3>
         <PracticeParts assignment={a} />
         {a.pronunciation && (
           <>
-            <h3>B. 🎙️ Pronunciation Micro-Focus (≈1 min)</h3>
+            <h3 lang="en">B. 🎙️ Pronunciation Micro-Focus (≈1 min)</h3>
             <Pronunciation
               pronunciation={a.pronunciation}
               media={media}
@@ -295,24 +320,32 @@ export function LearnerHandout(props: LearnerHandoutProps) {
             />
           </>
         )}
-        <h2 id="assignment-section-5">5. ✅ Your Turn: Complete the Mission!</h2>
+        <h2 id="assignment-section-5" lang="en">
+          5. ✅ Your Turn: Complete the Mission!
+        </h2>
         <OutputMission mission={a.outputTask} />
         {'learnerRationale' in a && (
           <>
-            <h2 id="assignment-section-6">6. 🧠 Why This Mission Helps You</h2>
+            <h2 id="assignment-section-6" lang="en">
+              6. 🧠 Why This Mission Helps You
+            </h2>
             <Text>{a.learnerRationale}</Text>
           </>
         )}
-        <h2 id="assignment-section-7">7. 🔑 Answer Key & Sample Mission</h2>
+        <h2 id="assignment-section-7" lang="en">
+          7. 🔑 Answer Key & Sample Mission
+        </h2>
         <Disclosure label="Answer Key">
-          <h3>Comprehension Check Answers</h3>
+          <h3 lang="en">Comprehension Check Answers</h3>
           <Answers questions={a.input.comprehension} />
-          <h3>A. Controlled Practice Answers</h3>
+          <h3 lang="en">A. Controlled Practice Answers</h3>
           <PracticeParts assignment={a} answers />
-          <h3>Sample Mission</h3>
-          <Text>{a.outputTask.sampleResponse}</Text>
+          <h3 lang="en">Sample Mission</h3>
+          <Text lang="en">{a.outputTask.sampleResponse}</Text>
         </Disclosure>
-        <h2 id="assignment-section-8">8. 👨‍🏫 Teacher's Follow-up Plan</h2>
+        <h2 id="assignment-section-8" lang="en">
+          8. 👨‍🏫 Teacher's Follow-up Plan
+        </h2>
         <Disclosure label="Teacher’s Follow-up Plan">
           <Field label="Warm-up">{a.teacherFollowUp.warmUp}</Field>
           <Field label="Correction focus">{a.teacherFollowUp.correctionFocus}</Field>

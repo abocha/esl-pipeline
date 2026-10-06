@@ -55,12 +55,14 @@ export function assignmentFixture(): FixtureAssignmentV1 {
 }
 
 export function freshAssignmentFixture(): FreshAssignmentV1 {
-  return JSON.parse(
+  const assignment = JSON.parse(
     readAssignmentFixture(
       new URL('../../contracts/tests/assignment-grammar-fixture.json', import.meta.url),
       'utf8',
     ),
   ) as FreshAssignmentV1;
+  assignment.metadata.instructionLanguage = 'en';
+  return assignment;
 }
 
 export function assignmentArtifactFixture() {

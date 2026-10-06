@@ -4,7 +4,7 @@
 
 - Audience: maintainers, prompt authors and implementing agents.
 - Authority Level: generation and execution contract reference.
-- Last Verified Against: 2026-10-05 ESL-7 local completion.
+- Last Verified Against: 2026-10-06 ESL-27 local generation-policy checks.
 - Owner: backend maintainer + founder-maintainer.
 - Review Cadence: after assignment schema, renderer or prompt cutover changes.
 - Status: `reference`.
@@ -14,7 +14,7 @@
 [ESL-4](https://linear.app/abocha/issue/ESL-4) /
 [GitHub #308](https://github.com/abocha/esl-pipeline/issues/308) implements Slice 1.
 `packages/contracts/src/assignment-v1.ts` owns the Zod schema, inferred TypeScript domain and
-provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_grammar_v4`, and the
+provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v5`, and the
 repository prompt compatibility version is `3.0.0` because old generation packages must be recreated.
 
 The object contains metadata, mission, one input source, declared speakers and turns,
@@ -25,7 +25,7 @@ six existing modes. Gender is male/female/neutral; child is represented by age, 
 
 The backend preserves source ownership checks before generation. Fresh packages must select the
 active `hw_prompt_assignment_v1.md` revision with the exact first-line declaration
-`Assignment output contract: assignment_v1_grammar_v4`. The envelope retains the read-format
+`Assignment output contract: assignment_v1_generation_v5`. The envelope retains the read-format
 discriminator `promptVersion: assignment_v1` and pins
 the full strict schema and trusted validation context (canonical student display text, known input
 kind and exact URLs supplied in notes/transcript). Revision ID/hash and existing profile, memory,
@@ -37,7 +37,7 @@ ESL-24 uses two explicit closed rationale read shapes: legacy requires
 root `rationale` and forbids both new fields; new requires `learnerRationale` and nullable
 `teacherRationale`, forbidding root `rationale`. Mixed, absent and partial forms are rejected.
 `validateAssignmentV1` accepts either complete shape without defaults or normalization.
-`validateFreshAssignmentV1` admits only the new rationale, structured mission and structured grammar shape after
+`validateFreshAssignmentV1` admits only explicit instruction-language metadata, new rationale, structured mission and structured grammar after
 provider receipt (also in generation evaluation); requesting a strict provider schema alone is
 insufficient. Learner rationale speaks
 directly to the learner about practical benefit; lesson evidence, diagnosis and teacher selection
@@ -45,7 +45,7 @@ reasoning belong in teacher rationale. Teacher rationale remains typed data only
 
 The ESL-24 rationale generation identity was `assignment_v1_rationale_v2`; ESL-25 advances the
 response schema name and template marker to `assignment_v1_mission_v3`; ESL-26 advances them to
-`assignment_v1_grammar_v4`. These changes preserve AssignmentV1
+`assignment_v1_grammar_v4`; ESL-27 advances them to `assignment_v1_generation_v5`. These changes preserve AssignmentV1
 schema/serialization versions or the envelope's read-format discriminator. Generation checks both pinned schema equality and the
 instruction marker. Old stored packages, including mismatched schema/instructions, fail before
 provider dispatch; fresh package creation against an old active template fails before package
@@ -54,6 +54,51 @@ Native section 6 renders only learner rationale; legacy rationale omits the whol
 renumbering sections 7/8. Whole-document and mock-upload sentinel checks ensure no teacher or
 ambiguous legacy text appears in learner HTML, including hidden or serialized copies. The ESL-20
 fixture, snapshot and pinned canonical hash remain the unchanged compatibility guard.
+
+### Fresh teaching policy and support language (ESL-27)
+
+Fresh metadata requires `instructionLanguage`, a conventional language tag such as `en`, `ru` or
+`pt-BR` (lowercase two/three-letter language, optional hyphenated subtags). Runtime reads accept its
+absence without inserting a default into older objects. Schema/serialization versions remain 1;
+the pre-language grammar fixture and ESL-20 canonical identity remain unchanged.
+
+The repository template defines economy as the **smallest complete teaching sequence for the
+learner and lesson evidence**. Scaffolding must make the objective usable outside the lesson;
+there are no vocabulary/exercise quotas, filler roles or item-count parity targets. Grammar forms
+teach independently useful patterns, paired comparisons explain a real choice concisely, broader
+examples/uses add distinct value, and traps address plausible learner mistakes. Vocabulary/chunks
+support the input, target, practice or mission, with support-language glosses where useful.
+Controlled practice progresses from recognition/choice toward production when supported, tests
+taught distinctions and avoids copying/answer leakage. Pronunciation is conditional on a concrete
+teachable target in English/chunks, evidence or likely difficulty; transcript evidence is not an
+acoustic diagnosis. The six modes and null behavior are unchanged. Structured mission roles stay
+separate with concrete self-checks, and learner benefit never duplicates internal teacher analysis.
+
+Language selection uses this precedence, considering only supplied evidence:
+
+1. Current assignment tutor guidance in `TEACHER_NOTES`.
+2. Durable learner preference in `FOUNDATIONAL_PROFILE` (including Study Preferences) or an
+   explicit durable preference in `STUDENT_MEMORY_SNAPSHOT`.
+3. Strong learner-level evidence in `LATEST_TRANSCRIPT` or `RECENT_LESSON_MEMORY`, especially A1/A2.
+4. English default.
+
+A Russian-speaking teacher, incidental Russian text or beginner level alone does not identify
+Russian support. Russian may scaffold instructions, explanations, meaning distinctions and glosses;
+target phrases, English examples/patterns, study text, practice language, answers and sample response
+remain English. Avoid translating independent learner targets or duplicating everything bilingually.
+
+`createPromptPackage` already selects confirmed teacher notes and the recorded profile revision
+when using a confirmed session; otherwise it uses request notes and the student's active revision.
+`renderPromptProfileContent` renders existing structured preferences into `FOUNDATIONAL_PROFILE`.
+The source transcript and existing memory retrieval supply current/recent evidence through
+`stitchPromptEnvelope`; absent/disabled retrieval stays explicitly unavailable. No second profile
+system, new source block or evidence-fetching infrastructure is introduced.
+
+Static HTML and the shared React handout use the authored language tag, with English target text
+and fixed English presentation labels marked separately. Older documents fall back to English at
+presentation time without mutating their metadata. This is language annotation, not a UI translation
+system. Optional authored icons are deferred. No stored packages, active database template revisions,
+provider execution or production settings are changed; quality evaluation/activation remain later work.
 
 ### Structured mission composition (ESL-25)
 

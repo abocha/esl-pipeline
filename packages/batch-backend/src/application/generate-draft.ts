@@ -155,7 +155,7 @@ export async function generateDraft(
   ) {
     throw new PromptPackageAssignmentError(
       'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED',
-      'This prompt package does not pin the supported AssignmentV1 mission contract. Activate a compatible homework template revision and recreate the prompt package before generation.',
+      'This prompt package does not pin the supported AssignmentV1 generation contract. Activate a compatible homework template revision and recreate the prompt package before generation.',
     );
   }
 

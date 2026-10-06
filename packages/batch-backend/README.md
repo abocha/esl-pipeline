@@ -494,7 +494,7 @@ pnpm docs:check
 ## Structured assignment generation
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
-`assignment_v1_grammar_v4` response schema and matching first-line template marker in the existing
+`assignment_v1_generation_v5` response schema and matching first-line template marker in the existing
 prompt-package envelope. Runtime reads accept legacy root rationale without normalization or the
 new learner/teacher shape; post-provider fresh admission requires `learnerRationale` and required
 nullable `teacherRationale`, with no root `rationale`, plus a structured outputTask with task text,
@@ -513,3 +513,14 @@ as AssignmentV1 with a pretty-printed JSON text bridge. Native execution is down
 typed authority. Old packages require recreation; historical Markdown workflows remain usable
 through explicit legacy reads. There is no model-driven
 Markdown repair. See [contract and rollout](../../docs/reference/ASSIGNMENT_V1.md).
+
+Fresh generation additionally requires `metadata.instructionLanguage` (for example `en` or `ru`).
+The shipped policy chooses current tutor notes, durable learner preferences in the rendered profile
+or snapshot, strong current/recent learner-level evidence, then English. Russian scaffolding can
+support instructions, explanations and glosses; English targets, practice, answers and samples stay
+English. Existing confirmed notes/profile provenance, transcript and memory blocks supply the
+evidence; unavailable sources stay unavailable. Economy is the smallest complete teaching sequence,
+with useful vocabulary/chunks, progressive practice, distinct structured grammar roles, conditional
+pronunciation, concrete mission self-checks and separate rationale audiences. The v5 identity pins
+this material policy change; old v4 packages/templates also fail without rewriting their pins.
+Optional authored icons and live quality evaluation are deferred.

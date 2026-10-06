@@ -2,14 +2,26 @@ import type { ReactNode } from 'react';
 
 import { safeLinkUrl, safeMediaUrl, videoEmbedUrl } from './urls.js';
 
-export function Text({ children }: { children: string }) {
-  return <p className="plain-text">{children}</p>;
+export function Text({ children, lang }: { children: string; lang?: string }) {
+  return (
+    <p className="plain-text" lang={lang}>
+      {children}
+    </p>
+  );
 }
 
-export function Field({ label, children }: { label: string; children: string }) {
+export function Field({
+  label,
+  children,
+  lang,
+}: {
+  label: string;
+  children: string;
+  lang?: string;
+}) {
   return (
     <p className="plain-text">
-      <strong>{label}:</strong> {children}
+      <strong lang="en">{label}:</strong> {lang ? <span lang={lang}>{children}</span> : children}
     </p>
   );
 }
@@ -25,7 +37,7 @@ export function Disclosure({
 }) {
   return (
     <details className={className}>
-      <summary>{label}</summary>
+      <summary lang="en">{label}</summary>
       <div className="disclosure-content">{children}</div>
     </details>
   );

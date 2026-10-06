@@ -13,7 +13,7 @@ export function renderLearnerHandoutDocument(props: LearnerHandoutProps): string
   return (
     '<!doctype html>' +
     renderToStaticMarkup(
-      <html lang="en">
+      <html lang={props.assignment.metadata.instructionLanguage ?? 'en'}>
         <head>
           <meta charSet="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />

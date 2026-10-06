@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_grammar_v4';
+export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_generation_v5';
 export const ASSIGNMENT_TEMPLATE_ID = 'hw_prompt_assignment_v1.md';
-export const ASSIGNMENT_TEMPLATE_CONTRACT = 'Assignment output contract: assignment_v1_grammar_v4';
+export const ASSIGNMENT_TEMPLATE_CONTRACT =
+  'Assignment output contract: assignment_v1_generation_v5';
 
 const text = z.string();
 const optionalText = text.nullable();
@@ -83,10 +84,20 @@ const structuredGrammar = z.strictObject({
   ),
 });
 
-// Rationale and mission read forms evolve independently, without rewriting older objects.
+// Conventional language tags for authored support text, e.g. en, ru, pt-BR.
+const instructionLanguage = z.string().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/);
+const metadata = z.strictObject({
+  title: text,
+  student: text,
+  level: text,
+  topic: text,
+  instructionLanguage: instructionLanguage.optional(),
+});
+
+// Metadata, rationale and mission read forms evolve independently, without rewriting older objects.
 const assignmentFields = {
   schemaVersion: z.literal(1),
-  metadata: z.strictObject({ title: text, student: text, level: text, topic: text }),
+  metadata,
   mission: z.strictObject({ goal: text, keyLanguage: texts }),
   input: z.strictObject({
     kind: z.enum(['generate', 'authentic']),
@@ -135,6 +146,7 @@ const learnerRationaleAssignment = z.strictObject({
   teacherRationale: optionalText,
 });
 export const FreshAssignmentV1Schema = learnerRationaleAssignment.extend({
+  metadata: metadata.extend({ instructionLanguage }),
   outputTask: structuredOutputTask,
   toolkit: assignmentFields.toolkit.extend({ grammar: z.array(structuredGrammar) }),
 });

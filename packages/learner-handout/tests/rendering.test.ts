@@ -3,7 +3,11 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 
-import { type FreshAssignmentV1, validateAssignmentV1 } from '@esl-pipeline/contracts';
+import {
+  type FreshAssignmentV1,
+  serializeAssignmentV1,
+  validateAssignmentV1,
+} from '@esl-pipeline/contracts';
 
 import legacyFixture from '../../contracts/tests/assignment-fixture.json';
 import grammarFixture from '../../contracts/tests/assignment-grammar-fixture.json';
@@ -16,6 +20,34 @@ const documentFor = (props = createFixture()) =>
   new JSDOM(renderLearnerHandoutDocument(props)).window.document;
 
 describe('React learner handout static foundation', () => {
+  it('uses authored support language in static and React roots while keeping target English explicit', () => {
+    const assignment = validateAssignmentV1({
+      ...grammarFixture,
+      metadata: { ...grammarFixture.metadata, instructionLanguage: 'ru' },
+      learnerRationale: 'Это поможет вам объяснять свои планы.',
+      teacherRationale: 'INTERNAL_LANGUAGE_SELECTION_SENTINEL',
+    });
+    assignment.toolkit.vocabulary[0]!.meaning = 'сначала';
+    const before = serializeAssignmentV1(assignment);
+    const doc = documentFor({ assignment });
+    expect(doc.documentElement.lang).toBe('ru');
+    expect(doc.querySelector('.learner-handout')?.getAttribute('lang')).toBe('ru');
+    expect(doc.querySelector('.mission-key-language')?.getAttribute('lang')).toBe('en');
+    expect(doc.querySelector('.study-text p')?.getAttribute('lang')).toBe('en');
+    expect(doc.querySelector('.grammar-form p span')?.getAttribute('lang')).toBe('en');
+    const cells = doc.querySelectorAll('tbody tr:first-child td');
+    expect(cells[0]?.getAttribute('lang')).toBe('en');
+    expect(cells[1]?.getAttribute('lang')).toBeNull();
+    expect(cells[1]?.textContent).toBe('сначала');
+    expect(cells[2]?.getAttribute('lang')).toBe('en');
+    expect(doc.querySelector('#assignment-section-1')?.getAttribute('lang')).toBe('en');
+    expect(doc.body.textContent).toContain('Это поможет вам объяснять свои планы.');
+    expect(doc.documentElement.outerHTML).not.toContain('INTERNAL_LANGUAGE_SELECTION_SENTINEL');
+    expect(serializeAssignmentV1(assignment)).toBe(before);
+    expect(
+      documentFor({ assignment: validateAssignmentV1(legacyFixture) }).documentElement.lang,
+    ).toBe('en');
+  });
   it('renders forms, paired meaning contrasts and distinct trap roles without changing data', () => {
     const assignment = validateAssignmentV1(grammarFixture);
     const before = JSON.stringify(assignment);

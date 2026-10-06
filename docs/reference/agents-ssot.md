@@ -289,7 +289,7 @@ Docs-heavy changes also require:
 AssignmentV1 runtime/read admission accepts exactly the closed legacy root `rationale` shape or
 the new required `learnerRationale` plus required nullable `teacherRationale` shape. Mixed, missing
 and partial shapes fail. Fresh generation admits only the new shape after provider receipt; the
-provider schema and template marker identify `assignment_v1_grammar_v4`. Stored prompt pins and
+provider schema and template marker identify `assignment_v1_generation_v5`. Stored prompt pins and
 old active template markers fail the existing unsupported-contract path before dispatch. Reads
 never normalize old assignments or add fields; canonical serialization 1 and frozen hashes remain
 unchanged. Native learner HTML renders only learner rationale; ambiguous legacy rationale omits
@@ -309,6 +309,14 @@ each with example/explanation. Mixed or partial item shapes fail. Fresh generati
 grammar item to be structured; reads never convert legacy grammar or insert fields. General examples,
 uses and original/improved/explanation traps retain their distinct roles without array padding.
 Schema/serialization version 1 and frozen legacy identities remain unchanged.
+
+Fresh metadata requires `instructionLanguage` as a language tag; runtime reads accept absence
+without inserting fields into older objects. The generation policy selects current tutor guidance,
+durable learner preference/profile, strong current/recent learner-level evidence, then English.
+Support-language scaffolding stays separate from target English. Economy is the smallest complete
+teaching sequence, with no fixed vocabulary/exercise quotas or omission of useful scaffolding for
+JSON brevity. The existing prompt context sources own this evidence; no second profile system is
+introduced. See [AssignmentV1 policy](ASSIGNMENT_V1.md#fresh-teaching-policy-and-support-language-esl-27).
 
 Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
 HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
