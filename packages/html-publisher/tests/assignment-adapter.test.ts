@@ -4,7 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-import { type AssignmentV1, validateAssignmentV1 } from '@esl-pipeline/contracts';
+import {
+  type AssignmentV1,
+  validateAssignmentV1,
+  validateFreshAssignmentV1,
+} from '@esl-pipeline/contracts';
 import { renderLearnerHandoutDocument } from '@esl-pipeline/learner-handout/server';
 import type { PronunciationAudioPayload } from '@esl-pipeline/shared-infrastructure';
 
@@ -25,6 +29,81 @@ const primary = (url?: string) => ({
 });
 
 describe('native React publication adapter', () => {
+  it('keeps Russian scaffolding separate from English practice cues in preview and publication', async () => {
+    const input = JSON.parse(
+      readFileSync(
+        new URL('../../contracts/tests/assignment-grammar-fixture.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    input.metadata.instructionLanguage = 'ru';
+    input.input.comprehension = [
+      {
+        prompt: 'Где она работает на этой неделе?',
+        answer: 'She is working from home this week.',
+        explanation: 'Это временное место работы.',
+      },
+    ];
+    input.practice = [
+      {
+        title: null,
+        instructions: 'Опишите ситуации. Затем исправьте ошибку.',
+        items: [
+          {
+            prompt: 'A temporary arrangement this week. Nina / work / from home.',
+            answer: 'Nina is working from home this week.',
+            explanation: 'Ситуация временная, поэтому нужен present continuous.',
+          },
+          {
+            prompt: 'Correct the error: Nina working from home this week.',
+            answer: 'Nina is working from home this week.',
+            explanation: 'В этой конструкции перед working нужен is.',
+          },
+        ],
+      },
+    ];
+    const assignment = validateFreshAssignmentV1(input);
+    const before = JSON.stringify(assignment);
+    expect(ASSIGNMENT_HTML_RENDERER_VERSION).toBe(3);
+    for (const preview of [true, false]) {
+      const doc = new JSDOM(await renderAssignmentToHtml(assignment, { preview })).window.document;
+      const languageOf = (element: Element) => element.closest('[lang]')?.getAttribute('lang');
+      const instructions = doc.querySelector('.practice-part > p')!;
+      expect(instructions.textContent).toBe(assignment.practice[0]!.instructions);
+      expect(languageOf(instructions)).toBe('ru');
+      const prompts = [...doc.querySelectorAll('.practice-part li.plain-text')];
+      const copies = [...doc.querySelectorAll('.practice-part .answer-key-item')];
+      expect(prompts.map((p) => p.textContent)).toEqual(
+        assignment.practice[0]!.items.map((q) => q.prompt),
+      );
+      expect(copies).toHaveLength(prompts.length);
+      for (const [index, prompt] of prompts.entries()) {
+        expect(languageOf(prompt)).toBe('en');
+        expect(prompt.textContent).not.toMatch(/\p{Script=Cyrillic}/u);
+        const copy = copies[index]!;
+        expect(copy.querySelector('p')?.textContent).toBe(prompt.textContent);
+        expect(languageOf(copy.querySelector('p')!)).toBe('en');
+        expect(languageOf(copy.querySelector('p:nth-child(2) span')!)).toBe('en');
+        const explanation = copy.querySelector('p:nth-child(3)')!;
+        expect(explanation.textContent).toContain(
+          assignment.practice[0]!.items[index]!.explanation,
+        );
+        expect(languageOf(explanation)).toBe('ru');
+      }
+      const comprehension = assignment.input.comprehension[0]!;
+      const question = [...doc.querySelectorAll('li.plain-text')].find(
+        (li) => li.textContent === comprehension.prompt,
+      )!;
+      expect(languageOf(question)).toBe('ru');
+      const key = doc.querySelector('.answer-key-item')!;
+      expect(key.querySelector('p')?.textContent).toBe(comprehension.prompt);
+      expect(languageOf(key.querySelector('p')!)).toBe('ru');
+      expect(languageOf(key.querySelector('p:nth-child(2) span')!)).toBe('en');
+      expect(key.querySelector('p:nth-child(3)')?.textContent).toContain(comprehension.explanation);
+      expect(languageOf(key.querySelector('p:nth-child(3)')!)).toBe('ru');
+    }
+    expect(JSON.stringify(assignment)).toBe(before);
+  });
   it.each([
     { instructionLanguage: 'ru', prompt: 'Что она делает на этой неделе?', expectedLanguage: 'ru' },
     {

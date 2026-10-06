@@ -39,7 +39,7 @@ describe('AssignmentV1 generation policy boundary', () => {
 
   it('requires a language tag in the closed fresh provider metadata', () => {
     const metadata = (ASSIGNMENT_RESPONSE_SCHEMA.schema as any).properties.metadata;
-    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v6');
+    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v7');
     expect(metadata.required).toContain('instructionLanguage');
     expect(metadata.additionalProperties).toBe(false);
     for (const language of ['en', 'ru', 'pt-BR']) {
@@ -133,6 +133,12 @@ describe('AssignmentV1 generation policy boundary', () => {
       'Put the full structural formula in `pattern` and illustrative sentences in `examples`',
       'do not repeat either inside `label`',
       'Questions and explanations use the selected instruction/support language',
+      'Every `practice[].items[].prompt` must be entirely English',
+      'including situation/direction text, bare lexical cues and target excerpts used for error repair',
+      'Put support-language practice directions in `practice[].instructions`',
+      'support-language explanations in `practice[].items[].explanation`',
+      'do not mix support-language text into an item prompt',
+      'Keep English situations simple and understandable without supplying the tested grammatical form',
     ])
       expect(envelope.instructions).toContain(policy);
     for (const [label, content] of [
@@ -155,20 +161,31 @@ describe('AssignmentV1 generation policy boundary', () => {
     'v4 schema',
     'old schema with new name',
     'v5 package',
-    'v5 marker with v6 schema',
-    'v6 marker with v5 schema',
-    'v6 non-strict schema',
+    'v5 marker with v7 schema',
+    'v7 marker with v5 schema',
+    'v6 package',
+    'v6 marker with v7 schema',
+    'v7 marker with v6 schema',
+    'v7 non-strict schema',
   ])('rejects %s before dispatch without rewriting pins', async (kind) => {
     const prompt = promptPackageFixture();
     if (kind.startsWith('v5'))
       prompt.requestEnvelope.instructions =
         'Assignment output contract: assignment_v1_generation_v5\nOld policy.';
-    if (kind === 'v5 package' || kind === 'v6 marker with v5 schema')
+    if (kind === 'v5 package' || kind === 'v7 marker with v5 schema')
       prompt.requestEnvelope.responseSchema = {
         ...ASSIGNMENT_RESPONSE_SCHEMA,
         name: 'assignment_v1_generation_v5',
       };
-    if (kind === 'v6 non-strict schema')
+    if (kind.startsWith('v6'))
+      prompt.requestEnvelope.instructions =
+        'Assignment output contract: assignment_v1_generation_v6\nOld policy.';
+    if (kind === 'v6 package' || kind === 'v7 marker with v6 schema')
+      prompt.requestEnvelope.responseSchema = {
+        ...ASSIGNMENT_RESPONSE_SCHEMA,
+        name: 'assignment_v1_generation_v6',
+      };
+    if (kind === 'v7 non-strict schema')
       prompt.requestEnvelope.responseSchema = { ...ASSIGNMENT_RESPONSE_SCHEMA, strict: false };
     if (kind === 'v4 package' || kind === 'v4 template')
       prompt.requestEnvelope.instructions =
@@ -207,48 +224,51 @@ describe('AssignmentV1 generation policy boundary', () => {
     expect(JSON.stringify(prompt)).toBe(before);
   });
 
-  it('rejects an old active v5 template before storing a fresh package', async () => {
-    const transcript = createTranscriptRecord();
-    const revision = (await createTemplateRevisionRepositoryStub().getActive(
-      ASSIGNMENT_TEMPLATE_ID,
-    ))!;
-    const content = 'Assignment output contract: assignment_v1_generation_v5\nOld policy.';
-    const insert = vi.fn();
-    await expect(
-      createPromptPackage(
-        {
-          recordingId: transcript.recordingId,
-          workspaceId: 'workspace-1',
-          templateId: ASSIGNMENT_TEMPLATE_ID,
-        },
-        {
-          config: createConfig(ASSIGNMENT_TEMPLATE_ID, 'profile.md'),
-          storage: createStorageStub({ getText: async () => 'Lesson context' }),
-          transcripts: { getByRecordingId: async () => transcript },
-          recordings: {
-            getById: async () =>
-              ({
-                id: transcript.recordingId,
-                workspaceId: 'workspace-1',
-                studentId: 'student-1',
-              }) as never,
+  it.each(['v5', 'v6'])(
+    'rejects an old active %s template before storing a fresh package',
+    async (version) => {
+      const transcript = createTranscriptRecord();
+      const revision = (await createTemplateRevisionRepositoryStub().getActive(
+        ASSIGNMENT_TEMPLATE_ID,
+      ))!;
+      const content = `Assignment output contract: assignment_v1_generation_${version}\nOld policy.`;
+      const insert = vi.fn();
+      await expect(
+        createPromptPackage(
+          {
+            recordingId: transcript.recordingId,
+            workspaceId: 'workspace-1',
+            templateId: ASSIGNMENT_TEMPLATE_ID,
           },
-          students: { getById: async () => ({ id: 'student-1', student: 'Student One' }) },
-          promptPackages: { ...createPromptPackageRepositoryStub(), insert },
-          profileRevisions: createProfileRevisionRepositoryStub(),
-          templateRevisions: createTemplateRevisionRepositoryStub({
-            getActive: async () => ({
-              ...revision,
-              content,
-              contentHash: createHash('sha256').update(content).digest('hex'),
+          {
+            config: createConfig(ASSIGNMENT_TEMPLATE_ID, 'profile.md'),
+            storage: createStorageStub({ getText: async () => 'Lesson context' }),
+            transcripts: { getByRecordingId: async () => transcript },
+            recordings: {
+              getById: async () =>
+                ({
+                  id: transcript.recordingId,
+                  workspaceId: 'workspace-1',
+                  studentId: 'student-1',
+                }) as never,
+            },
+            students: { getById: async () => ({ id: 'student-1', student: 'Student One' }) },
+            promptPackages: { ...createPromptPackageRepositoryStub(), insert },
+            profileRevisions: createProfileRevisionRepositoryStub(),
+            templateRevisions: createTemplateRevisionRepositoryStub({
+              getActive: async () => ({
+                ...revision,
+                content,
+                contentHash: createHash('sha256').update(content).digest('hex'),
+              }),
             }),
-          }),
-          promptOptions: createPromptOptionsStub(),
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED' });
-    expect(insert).not.toHaveBeenCalled();
-  });
+            promptOptions: createPromptOptionsStub(),
+          },
+        ),
+      ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED' });
+      expect(insert).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects fresh output missing the selected language after mocked provider receipt', async () => {
     const assignment = freshAssignmentFixture();

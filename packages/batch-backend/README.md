@@ -494,7 +494,7 @@ pnpm docs:check
 ## Structured assignment generation
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
-`assignment_v1_generation_v6` response schema and matching first-line template marker in the existing
+`assignment_v1_generation_v7` response schema and matching first-line template marker in the existing
 prompt-package envelope. Runtime reads accept legacy root rationale without normalization or the
 new learner/teacher shape; post-provider fresh admission requires `learnerRationale` and required
 nullable `teacherRationale`, with no root `rationale`, plus a structured outputTask with task text,
@@ -524,7 +524,12 @@ with useful vocabulary/chunks, progressive practice, distinct structured grammar
 pronunciation, concrete mission self-checks and separate rationale audiences. ESL-30's v6 identity
 pins the tightened cue-leakage policy, construction-scoped grammar self-checks and short form-block
 labels. Comprehension questions/explanations use the selected support language while answers stay
-English. Old v5 (and earlier) packages/templates fail without rewriting their pins.
+English. The ESL-31 bounded repair advances generation identity to v7 and requires every
+`practice[].items[].prompt` to be entirely English, including situation/direction text and target
+excerpts. Support-language directions belong in `practice[].instructions` and explanations in
+`practice[].items[].explanation`; simple English context and bare lexical cues must still preserve
+the tested grammatical decision. Old v6 (and earlier) packages/templates fail without rewriting
+their pins. AssignmentV1 schema/serialization 1 and renderer publication identity 3 stay unchanged.
 Optional authored icons are deferred. The bounded
 [ESL-28 learner-quality evaluation](../../docs/operations/assignment-quality-evaluation.md) is prepared
 and completed against the shipped v5 template after explicit paid-call authorization. Its three real

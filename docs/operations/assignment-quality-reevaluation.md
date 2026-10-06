@@ -193,3 +193,28 @@ Exactly two calls were made, with no retry, extra case, paid evaluator, TTS, act
 The fixed evidence is sufficient for this concrete CHANGE decision; no additional paid evidence is
 justified merely to strengthen confidence. This conclusion concerns the sampled direct-send gate,
 not universal reliability or learner outcomes.
+
+## Bounded E31-01 repair and offline validation
+
+The subsequently authorized local repair makes `practice[].items[].prompt` entirely English,
+including situation/direction text, bare lexical cues and error-repair excerpts. Support-language
+practice directions belong in `practice[].instructions` and useful support-language explanations
+in `practice[].items[].explanation`. Simple English context must preserve the learner's grammatical
+decision rather than supplying the tested form. The shipped template and fresh-package policy
+checks name these exact fields.
+
+Generation schema name and first-line marker advance together to `assignment_v1_generation_v7`.
+AssignmentV1 schema/serialization 1, renderer publication identity 3, renderer implementation and
+stored assignments remain unchanged. Old v6 package pins, mismatched marker/schema pins and old
+active templates continue to fail before provider dispatch or fresh-package storage.
+
+Focused offline evidence: contracts and learner-handout builds passed; five backend test files
+passed (87 tests), covering shipped policy in a fresh package, old-package/template rejection and
+adjacent mission/grammar/package behavior. The publication-adapter file passed (20 tests), including
+a synthetic fresh Russian-support assignment in preview and publication: Russian part instructions,
+practice explanations and comprehension questions/copies/explanations, with entirely English
+practice prompts/copies and English target answers. These are mocked/synthetic checks, not newly
+generated quality evidence or observed model adherence to v7.
+
+The completed v6 evaluation, its CHANGE decision and private evidence remain unchanged. No paid
+call, retry, extra case, activation or deployment is part of this repair. Hosted CI remains unverified.
