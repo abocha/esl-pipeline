@@ -8,6 +8,59 @@ import { createFixture } from '../preview/fixtures.js';
 import { renderLearnerHandoutDocument } from '../src/server.js';
 
 describe('ESL-32 shared learner surface', () => {
+  it('renders plain pattern alternatives and authored chunks as escaped cues without mutating data', () => {
+    const props = createFixture();
+    props.assignment = validateAssignmentV1(grammar);
+    const topic = props.assignment.toolkit.grammar[0]!;
+    if (!('formBlocks' in topic)) throw new Error('Structured grammar required');
+    const plain = 'before + subject + present simple, imperative; subject + cannot + base verb';
+    const authored =
+      '`if + subject + present simple`, `subject + will + base verb`;\n`<img src=x onerror=evil()>` `open';
+    topic.formBlocks[0]!.pattern = plain;
+    topic.formBlocks[1]!.pattern = authored;
+    const before = JSON.stringify(props);
+    const doc = new JSDOM(renderLearnerHandoutDocument(props)).window.document;
+    const patterns = doc.querySelectorAll('.grammar-pattern');
+    expect(patterns[0]!.textContent).toBe(`Pattern: ${plain}`);
+    expect(patterns[0]!.querySelectorAll('.pattern-line')).toHaveLength(2);
+    expect([...patterns[0]!.querySelectorAll('code')].map((cue) => cue.textContent)).toEqual([
+      'before + subject + present simple',
+      'imperative',
+      'subject + cannot + base verb',
+    ]);
+    expect([...patterns[1]!.querySelectorAll('code')].map((cue) => cue.textContent)).toEqual([
+      'if + subject + present simple',
+      'subject + will + base verb',
+      '<img src=x onerror=evil()>',
+      '`open',
+    ]);
+    expect(doc.querySelector('code code, img')).toBeNull();
+    expect(JSON.stringify(props)).toBe(before);
+  });
+
+  it('keeps vocabulary column relationships and transcript speakers in the shared document', () => {
+    const props = createFixture();
+    const doc = new JSDOM(renderLearnerHandoutDocument(props)).window.document;
+    const row = doc.querySelector('.vocabulary-table tbody tr')!;
+    expect([...row.querySelectorAll('td')].map((cell) => cell.getAttribute('headers'))).toEqual([
+      'vocabulary-expression',
+      'vocabulary-meaning',
+      'vocabulary-example',
+    ]);
+    expect(
+      [...row.querySelectorAll('.vocabulary-cell-label')].every(
+        (label) => label.getAttribute('aria-hidden') === 'true',
+      ),
+    ).toBe(true);
+    expect(doc.querySelector('.transcript-speaker')?.textContent).toBe(
+      `${props.assignment.input.studyText.speakers[0]!.displayName}:`,
+    );
+    expect(doc.querySelector('.listening-panel audio')?.getAttribute('preload')).toBe('none');
+    expect(doc.querySelector('.sample-mission')?.textContent).toBe(
+      props.assignment.outputTask.sampleResponse,
+    );
+  });
+
   it('formats direct strings and Text/Field with escaped highlights and one part number', () => {
     const props = createFixture();
     props.assignment = validateAssignmentV1(grammar);
@@ -102,10 +155,11 @@ describe('ESL-32 shared learner surface', () => {
   });
 
   it('keeps per-button completion/retry truthful through switching and late events', async () => {
-    const dom = new JSDOM(
-      renderLearnerHandoutDocument(createFixture('minimal_pair', 'available')),
-      { runScripts: 'dangerously' },
-    );
+    const props = createFixture('minimal_pair', 'available');
+    props.media!.pronunciationAudio!.itemClips!.forEach((clip) => {
+      clip.label = 'Word';
+    });
+    const dom = new JSDOM(renderLearnerHandoutDocument(props), { runScripts: 'dangerously' });
     const audios: any[] = [];
     const play = vi.fn().mockResolvedValue(undefined);
     dom.window.Audio = class extends dom.window.EventTarget {
@@ -119,20 +173,29 @@ describe('ESL-32 shared learner surface', () => {
     const buttons = [
       ...dom.window.document.querySelectorAll<HTMLButtonElement>('[data-pronunciation-clip]'),
     ];
-    buttons[0]!.click();
+    expect(buttons[0]!.textContent).toBe('Play');
+    const icons = buttons[0]!.querySelectorAll('svg');
+    expect(icons).toHaveLength(4);
+    // Clicking a nested SVG must still trigger delegated playback.
+    icons[0]!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     expect(buttons[0]!.textContent).toBe('Playing…');
+    expect(buttons[0]!.dataset.playbackState).toBe('playing');
     buttons[1]!.click();
     expect(audios[0].pause).toHaveBeenCalledOnce();
     audios[0].dispatchEvent(new dom.window.Event('ended'));
     audios[0].dispatchEvent(new dom.window.Event('error'));
     expect(buttons[0]!.textContent).toBe('Play');
+    expect(buttons[0]!.dataset.playbackState).toBe('play');
+    expect(buttons[0]!.querySelectorAll('svg')).toHaveLength(4);
     expect(buttons[1]!.textContent).toBe('Playing…');
     audios[1].dispatchEvent(new dom.window.Event('ended'));
     expect(buttons[1]!.textContent).toBe('Replay');
+    expect(buttons[1]!.dataset.playbackState).toBe('replay');
     play.mockRejectedValueOnce(new Error('offline'));
     buttons[1]!.click();
     await Promise.resolve();
     expect(buttons[1]!.textContent).toBe('Retry');
+    expect(buttons[1]!.dataset.playbackState).toBe('retry');
     expect(buttons[1]!.getAttribute('aria-label')).toContain('Retry pronunciation for sheep');
     buttons[1]!.click();
     await Promise.resolve();

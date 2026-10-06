@@ -20,6 +20,60 @@ export function Inline({ children }: { children: string }) {
   );
 }
 
+/** Pattern fields are formulas even when their author omitted cue delimiters. */
+export function GrammarPattern({ label, children }: { label: string; children: string }) {
+  const rows: { text: string; highlighted: boolean }[][] = [[]];
+  for (const part of assignmentInlineParts(children)) {
+    if (part.highlighted) {
+      rows[rows.length - 1]!.push(part);
+      continue;
+    }
+    // Only unmarked pattern text is split. Explicit cues retain their authored boundaries.
+    for (const token of part.text.split(/([,;]|\r\n|\r|\n)/)) {
+      const row = rows[rows.length - 1]!;
+      if (/^(?:;|\r\n|\r|\n)$/.test(token)) {
+        row.push({ text: token, highlighted: false });
+        rows.push([]);
+      } else if (token === ',' || !token.trim()) {
+        row.push({ text: token, highlighted: false });
+      } else {
+        const [, before, text, after] = token.match(/^(\s*)([\s\S]*?)(\s*)$/)!;
+        row.push(
+          { text: before!, highlighted: false },
+          { text: text!, highlighted: true },
+          { text: after!, highlighted: false },
+        );
+      }
+    }
+  }
+  // Consecutive separators retain their text without creating empty visual rows.
+  const lines: typeof rows = [];
+  for (const row of rows) {
+    if (row.some((part) => part.text.trim()) || !lines.length) lines.push(row);
+    else lines[lines.length - 1]!.push(...row);
+  }
+  return (
+    <p className="plain-text grammar-pattern">
+      <strong lang="en">{label}:</strong>{' '}
+      <span lang="en" className="pattern-lines">
+        {lines.map((row, i) => (
+          <span className="pattern-line" key={i}>
+            {row.map((part, j) =>
+              part.highlighted ? (
+                <code className="linguistic-highlight" key={j}>
+                  {part.text}
+                </code>
+              ) : (
+                part.text
+              ),
+            )}
+          </span>
+        ))}
+      </span>
+    </p>
+  );
+}
+
 export function RevealField({
   label,
   children,
@@ -44,9 +98,17 @@ export function RevealField({
   );
 }
 
-export function Text({ children, lang }: { children: string; lang?: string }) {
+export function Text({
+  children,
+  lang,
+  className,
+}: {
+  children: string;
+  lang?: string;
+  className?: string;
+}) {
   return (
-    <p className="plain-text" lang={lang}>
+    <p className={`plain-text${className ? ` ${className}` : ''}`} lang={lang}>
       <Inline>{children}</Inline>
     </p>
   );
@@ -56,13 +118,15 @@ export function Field({
   label,
   children,
   lang,
+  className,
 }: {
   label: string;
   children: string;
   lang?: string;
+  className?: string;
 }) {
   return (
-    <p className="plain-text">
+    <p className={`plain-text${className ? ` ${className}` : ''}`}>
       <strong lang="en">{label}:</strong>{' '}
       <span lang={lang}>
         <Inline>{children}</Inline>

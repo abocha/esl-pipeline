@@ -1,3 +1,4 @@
+import { Play, RefreshCw, RotateCcw, Volume2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import {
@@ -32,10 +33,34 @@ function StressedText({ text, words }: { text: string; words: string[] }) {
 }
 
 function ClipControls({ clips }: { clips: readonly PronunciationClipInput[] }) {
+  const icons = (
+    <>
+      <span className="clip-icon clip-icon-play" aria-hidden="true">
+        <Play size={18} />
+      </span>
+      <span className="clip-icon clip-icon-playing" aria-hidden="true">
+        <Volume2 size={18} />
+      </span>
+      <span className="clip-icon clip-icon-replay" aria-hidden="true">
+        <RotateCcw size={18} />
+      </span>
+      <span className="clip-icon clip-icon-retry" aria-hidden="true">
+        <RefreshCw size={18} />
+      </span>
+      <span className="clip-status sr-only">Play</span>
+    </>
+  );
   if (!clips.length)
     return (
-      <button type="button" disabled title="Audio clip not generated yet">
-        Play
+      <button
+        className="clip-button"
+        type="button"
+        disabled
+        data-playback-state="play"
+        aria-label="Pronunciation audio unavailable"
+        title="Audio clip not generated yet"
+      >
+        {icons}
       </button>
     );
   return (
@@ -46,17 +71,22 @@ function ClipControls({ clips }: { clips: readonly PronunciationClipInput[] }) {
           <button
             key={i}
             type="button"
+            className="clip-button"
             disabled={!url}
             data-pronunciation-clip={clip.id}
             data-audio-url={url ?? undefined}
             data-clip-text={assignmentPlainText(clip.text)}
-            data-play-label={clip.label ?? 'Play'}
+            data-playback-state="play"
             aria-label={`Play pronunciation for ${assignmentPlainText(clip.text)}`}
             aria-live="polite"
             aria-atomic="true"
-            title={url ? undefined : 'Audio clip not generated yet'}
+            title={
+              url
+                ? `Play pronunciation for ${assignmentPlainText(clip.text)}`
+                : 'Audio clip not generated yet'
+            }
           >
-            {clip.label ?? 'Play'}
+            {icons}
           </button>
         );
       })}
@@ -144,7 +174,9 @@ export function Pronunciation({
     'shadowSentence' in p ? p.shadowSentence : 'naturalSentence' in p ? p.naturalSentence : null;
   return (
     <section data-assignment-pronunciation={p.mode}>
-      <Field label="Target">{p.target}</Field>
+      <Field label="Target" className="pronunciation-target">
+        {p.target}
+      </Field>
       <Field label="Focus">{p.focus}</Field>
       <Field label="Action">{p.action}</Field>
       <Field label="Deliverable">{p.deliverable}</Field>

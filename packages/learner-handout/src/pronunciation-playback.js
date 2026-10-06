@@ -3,15 +3,25 @@
   let currentAudio;
   let currentButton;
   const state = (button, label) => {
-    button.textContent = label;
-    button.setAttribute('aria-label', `${label} pronunciation for ${button.dataset.clipText}`);
+    button.querySelector('.clip-status').textContent = label;
+    button.dataset.playbackState = {
+      Play: 'play',
+      'Playing…': 'playing',
+      Replay: 'replay',
+      Retry: 'retry',
+    }[label];
+    const name = `${label} pronunciation for ${button.dataset.clipText}`;
+    button.setAttribute('aria-label', name);
+    button.title = name;
   };
   document.addEventListener('click', (event) => {
     const button =
-      event.target instanceof Element ? event.target.closest('button[data-audio-url]') : null;
+      event.target instanceof Element
+        ? event.target.closest('button[data-pronunciation-clip][data-audio-url]')
+        : null;
     if (!button || button.disabled) return;
     currentAudio?.pause();
-    if (currentButton) state(currentButton, currentButton.dataset.playLabel ?? 'Play');
+    if (currentButton) state(currentButton, 'Play');
     const audio = new Audio(button.dataset.audioUrl);
     currentAudio = audio;
     currentButton = button;

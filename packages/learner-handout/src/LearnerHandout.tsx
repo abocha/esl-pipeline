@@ -7,6 +7,7 @@ import {
   AudioPlayer,
   Disclosure,
   Field,
+  GrammarPattern,
   Inline,
   RevealField,
   SourceLink,
@@ -36,11 +37,17 @@ function Answers({
     <ol>
       {questions.map((q, i) => (
         <li className="answer-key-item" key={i}>
-          <Text lang={questionLanguage(q.prompt, promptLanguage)}>{q.prompt}</Text>
-          <Field label="Answer" lang="en">
+          <Text className="answer-question" lang={questionLanguage(q.prompt, promptLanguage)}>
+            {q.prompt}
+          </Text>
+          <Field label="Answer" lang="en" className="answer-content">
             {q.answer}
           </Field>
-          {q.explanation !== null && <Field label="Explanation">{q.explanation}</Field>}
+          {q.explanation !== null && (
+            <Field label="Explanation" className="answer-explanation">
+              {q.explanation}
+            </Field>
+          )}
         </li>
       ))}
     </ol>
@@ -60,7 +67,7 @@ function PracticeParts({
         <div className="practice-part" key={i}>
           {(part.title !== null || assignment.practice.length > 1) && (
             <h4>
-              Part {i + 1}
+              <span className="practice-part-number">Part {i + 1}</span>
               {part.title && (
                 <>
                   :{' '}
@@ -94,43 +101,48 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
   const source = a.input.source;
   return (
     <>
-      <h3 lang="en">Listen first</h3>
-      <p lang="en">Listen for the main idea. Use the transcript below whenever it helps.</p>
-      {source.title && (
-        <h4 className="source-title">
-          <Inline>{source.title}</Inline>
-        </h4>
-      )}
-      {source.attribution && <Text>{source.attribution}</Text>}
-      {source.url && (
-        <p>
-          <strong>Source Link:</strong> <SourceLink url={source.url} />
-        </p>
-      )}
-      {a.input.media.map((m, i) =>
-        m.kind === 'video' ? (
-          <SourceVideo key={i} url={m.url} />
-        ) : (
-          <AudioPlayer key={i} url={m.url} label="Source audio" />
-        ),
-      )}
-      {(media?.studyTextAudioUrl || a.input.kind === 'generate') && (
-        <AudioPlayer
-          url={media?.studyTextAudioUrl}
-          label="Study audio"
-          preview={presentation?.preview}
-        />
-      )}
-      <Disclosure label="Study Text: Transcript" className="study-text">
-        {a.input.studyText.turns.map((turn, i) => (
-          <p key={i} lang="en" className="plain-text">
-            {names.get(turn.speakerId) ?? turn.speakerId}: <Inline>{turn.text}</Inline>
+      <section className="listening-panel" aria-label="Listening material">
+        <h3 lang="en">Listen first</h3>
+        <p lang="en">Listen for the main idea. Use the transcript below whenever it helps.</p>
+        {source.title && (
+          <h4 className="source-title">
+            <Inline>{source.title}</Inline>
+          </h4>
+        )}
+        {source.attribution && <Text>{source.attribution}</Text>}
+        {source.url && (
+          <p>
+            <strong>Source Link:</strong> <SourceLink url={source.url} />
           </p>
-        ))}
-      </Disclosure>
-      <p className="source-caption" lang="en">
-        {a.input.kind === 'authentic' ? 'Authentic material' : 'Generated material'}
-      </p>
+        )}
+        {a.input.media.map((m, i) =>
+          m.kind === 'video' ? (
+            <SourceVideo key={i} url={m.url} />
+          ) : (
+            <AudioPlayer key={i} url={m.url} label="Source audio" />
+          ),
+        )}
+        {(media?.studyTextAudioUrl || a.input.kind === 'generate') && (
+          <AudioPlayer
+            url={media?.studyTextAudioUrl}
+            label="Study audio"
+            preview={presentation?.preview}
+          />
+        )}
+        <Disclosure label="Study Text: Transcript" className="study-text">
+          {a.input.studyText.turns.map((turn, i) => (
+            <p key={i} lang="en" className="plain-text transcript-turn">
+              <strong className="transcript-speaker">
+                {names.get(turn.speakerId) ?? turn.speakerId}:
+              </strong>{' '}
+              <Inline>{turn.text}</Inline>
+            </p>
+          ))}
+        </Disclosure>
+        <p className="source-caption" lang="en">
+          {a.input.kind === 'authentic' ? 'Authentic material' : 'Generated material'}
+        </p>
+      </section>
       <h3 lang="en">🤔 Comprehension Check</h3>
       <ol lang={a.metadata.instructionLanguage ?? 'en'}>
         {a.input.comprehension.map((q, i) => (
@@ -158,11 +170,7 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
           </h4>
           <Text>{g.explanation}</Text>
           {'form' in g ? (
-            g.form && (
-              <Field label="Form" lang="en">
-                {g.form}
-              </Field>
-            )
+            g.form && <GrammarPattern label="Form">{g.form}</GrammarPattern>
           ) : (
             <>
               <div className="grammar-forms">
@@ -171,9 +179,7 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
                     <h5>
                       <Inline>{block.label}</Inline>
                     </h5>
-                    <Field label="Pattern" lang="en">
-                      {block.pattern}
-                    </Field>
+                    <GrammarPattern label="Pattern">{block.pattern}</GrammarPattern>
                     <ul lang="en">
                       {block.examples.map((example, k) => (
                         <li className="plain-text" key={k}>
@@ -259,26 +265,40 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
       ))}
       <h3 lang="en">B. 🗣️ Useful Chunks & Vocabulary</h3>
       <div className="table-scroll" role="region" aria-label="Vocabulary" tabIndex={0}>
-        <table>
-          <thead lang="en">
-            <tr>
-              <th>Expression</th>
-              <th>Meaning</th>
-              <th>Example</th>
+        <table className="vocabulary-table" role="table">
+          <thead lang="en" role="rowgroup">
+            <tr role="row">
+              <th id="vocabulary-expression" scope="col" role="columnheader">
+                Expression
+              </th>
+              <th id="vocabulary-meaning" scope="col" role="columnheader">
+                Meaning
+              </th>
+              <th id="vocabulary-example" scope="col" role="columnheader">
+                Example
+              </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             {a.toolkit.vocabulary.map((v, i) => (
-              <tr key={i}>
-                <td lang="en">
+              <tr key={i} role="row">
+                <td lang="en" role="cell" headers="vocabulary-expression">
                   <strong>
                     <Inline>{v.expression}</Inline>
                   </strong>
                 </td>
-                <td>
-                  <Inline>{v.meaning}</Inline>
+                <td role="cell" headers="vocabulary-meaning">
+                  <span className="vocabulary-cell-label" aria-hidden="true" lang="en">
+                    Meaning
+                  </span>
+                  <span className="vocabulary-value">
+                    <Inline>{v.meaning}</Inline>
+                  </span>
                 </td>
-                <td lang="en">
+                <td lang="en" role="cell" headers="vocabulary-example">
+                  <span className="vocabulary-cell-label" aria-hidden="true" lang="en">
+                    Example
+                  </span>
                   <em>
                     <Inline>{v.example}</Inline>
                   </em>
@@ -404,10 +424,10 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         <OutputMission mission={a.outputTask} />
         {'learnerRationale' in a && (
           <>
-            <h2 id="assignment-section-6" lang="en">
+            <h2 id="assignment-section-6" className="rationale-heading" lang="en">
               6. 🧠 Why This Mission Helps You
             </h2>
-            <Text>{a.learnerRationale}</Text>
+            <Text className="learner-rationale">{a.learnerRationale}</Text>
           </>
         )}
         <h2 id="assignment-section-7" lang="en">
@@ -422,7 +442,9 @@ export function LearnerHandout(props: LearnerHandoutProps) {
           <h3 lang="en">A. Controlled Practice Answers</h3>
           <PracticeParts assignment={a} answers />
           <h3 lang="en">Sample Mission</h3>
-          <Text lang="en">{a.outputTask.sampleResponse}</Text>
+          <Text lang="en" className="sample-mission">
+            {a.outputTask.sampleResponse}
+          </Text>
         </Disclosure>
       </main>
     </article>
