@@ -1,5 +1,11 @@
 # AssignmentV1 activation preparation (ESL-29)
 
+> ESL-32 local implementation supersedes the v7 source identity described in this dated preparation
+> record with v8 (required authored emoji and inline highlights). The production observations and
+> recorded v7 hashes below remain historical evidence. Before any later activation, re-read shipped
+> template/schema bytes and refresh the concrete activation handoff under separate authorization;
+> do not activate v7 against v8 workers or reuse this record's source hashes.
+
 ## Meta
 
 - Audience: maintainer and production operator.

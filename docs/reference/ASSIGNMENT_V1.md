@@ -14,7 +14,7 @@
 [ESL-4](https://linear.app/abocha/issue/ESL-4) /
 [GitHub #308](https://github.com/abocha/esl-pipeline/issues/308) implements Slice 1.
 `packages/contracts/src/assignment-v1.ts` owns the Zod schema, inferred TypeScript domain and
-provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v7`, and the
+provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v8`, and the
 repository prompt compatibility version is `3.0.0` because old generation packages must be recreated.
 
 The object contains metadata, mission, one input source, declared speakers and turns,
@@ -25,7 +25,7 @@ six existing modes. Gender is male/female/neutral; child is represented by age, 
 
 The backend preserves source ownership checks before generation. Fresh packages must select the
 active `hw_prompt_assignment_v1.md` revision with the exact first-line declaration
-`Assignment output contract: assignment_v1_generation_v7`. The envelope retains the read-format
+`Assignment output contract: assignment_v1_generation_v8`. The envelope retains the read-format
 discriminator `promptVersion: assignment_v1` and pins
 the full strict schema and trusted validation context (canonical student display text, known input
 kind and exact URLs supplied in notes/transcript). Revision ID/hash and existing profile, memory,
@@ -53,9 +53,49 @@ instruction marker. Old stored packages, including mismatched schema/instruction
 provider dispatch; fresh package creation against an old active template fails before package
 storage. No stored package is repinned and no template revision is activated by this change.
 Native section 6 renders only learner rationale; legacy rationale omits the whole section without
-renumbering sections 7/8. Whole-document and mock-upload sentinel checks ensure no teacher or
+renumbering section 7; ESL-32 removes the teacher follow-up section. Whole-document and mock-upload sentinel checks ensure no teacher or
 ambiguous legacy text appears in learner HTML, including hidden or serialized copies. The ESL-20
 fixture, snapshot and pinned canonical hash remain the unchanged compatibility guard.
+
+### Learner handout convention and authored emoji (ESL-32)
+
+Fresh v8 generation requires `metadata.icon`: one suitable LLM-authored emoji. The strict provider
+schema requires the nonempty string; post-provider admission checks a bounded emoji sequence,
+including ZWJ families, modifiers, flags and keycaps. Runtime reads permit absence without adding
+fields. The hero and initial/resumed publication/share metadata use the authored icon, with 🎧 only
+as a display fallback. There is no backfill, historical upgrade, rewrite or republication.
+
+Content fields remain strings. Paired single backticks mark nonempty, single-line linguistic
+fragments: `will`, `-s`, or `subject + will + base verb`. The renderer escapes both ordinary and
+highlighted text; unmatched delimiters remain literal. Only this convention is interpreted, not
+Markdown, HTML, links or code blocks. Highlights wrap, retain expression bold/example italic,
+and apply to learner content and answer copies. Machine IDs, enum values, URLs, speaker identity
+and media bindings are excluded. Generation authors selective cues without revealing the choice
+being tested. Practice titles are descriptive and unnumbered; rendering removes a bounded existing
+numeric prefix and supplies one part number. Canonical values stay exact. Derived study speech and
+pronunciation projections remove paired delimiters; chunk reconstruction and lexical checks compare
+the derived text without mutating stored strings.
+
+The source starts with Listen first and a bounded instruction; freely available transcript support
+follows audio. Attribution and links remain. Natural sentence practice groups the existing sentence
+and audio in a callout, with no new pedagogy. Internal pronunciation mode stays out of learner text.
+Item buttons report Play / Playing… / Replay / Retry, reset on clip switching and ignore stale events.
+Native full-track controls retain their existing preload behavior.
+
+Wrong grammar remains visible. Bold Corrected: and Explanation: labels are always visible; each
+following content line is independently blurred and excluded from screen-reader output until its
+native button is activated by pointer or keyboard. Reveal is permanent for the page session. Cheap
+print CSS removes blur. Native disclosures retain the consolidated Answer Key & Sample Mission,
+with packaged opening/closing animation, rapid-toggle cancellation and reduced-motion fallback.
+Both `teacherFollowUp` and `teacherRationale` stay in typed teacher data and are absent from complete
+learner HTML bytes, including hidden/serialized output. Ambiguous legacy rationale stays excluded.
+
+Generation identity advances from v7 to v8; old pins fail before dispatch without repinning. The
+existing prompt envelope/registry, schema/serialization 1, renderer 3 and manifest 6 remain unchanged:
+this evolves authored content and presentation within the current native publication architecture.
+HTML identity remains the publisher's exact-byte hash; the frozen ESL-20 fixture/snapshot/hash are
+unchanged. No database migration is required. Template activation, package recreation, hosted CI,
+paid generation/TTS and deployment are separate follow-up actions, not local completion evidence.
 
 ### Fresh teaching policy and support language (ESL-27)
 

@@ -54,11 +54,14 @@ p {
 .plain-text {
   white-space: pre-wrap;
 }
+.inline-text,
+.pronunciation-line-text {
+  white-space: pre-wrap;
+}
 .eyebrow,
 .page-tags,
 .source-caption,
-.transcription,
-.playback-status {
+.transcription {
   color: #596777;
 }
 .eyebrow {
@@ -167,7 +170,7 @@ summary {
   background: #eef2f6;
   border-radius: 8px;
 }
-.disclosure-content {
+.disclosure-inner {
   padding: 8px 20px 16px;
 }
 .audio-figure {
@@ -242,8 +245,39 @@ button:disabled {
 .answer-key-item p {
   margin: 4px 0;
 }
-.playback-status:empty {
-  display: none;
+.linguistic-highlight {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.95em;
+  font-weight: inherit;
+  font-style: inherit;
+  background: #e8edf3;
+  border-radius: 4px;
+  padding: 0.08em 0.22em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  box-decoration-break: clone;
+}
+.pronunciation-sentence {
+  margin: 20px 0;
+}
+.reveal-target {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+.reveal-content:not(.is-revealed) {
+  filter: blur(5px);
+  user-select: none;
+}
+[data-grammar-reveal] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 @media (max-width: 600px) {
   .learner-handout {
@@ -267,7 +301,7 @@ button:disabled {
   }
   .grammar-card,
   .callout,
-  .disclosure-content {
+  .disclosure-inner {
     padding-left: 12px;
     padding-right: 12px;
   }
@@ -280,8 +314,11 @@ button:disabled {
     border: 0;
   }
   button,
-  audio,
-  .playback-status {
+  audio {
     display: none;
+  }
+  .reveal-content:not(.is-revealed) {
+    filter: none;
+    user-select: auto;
   }
 }

@@ -62,6 +62,10 @@ describe('publish', () => {
         shape === 'legacy'
           ? { ...legacy, rationale: 'ESL24_AMBIGUOUS_LEGACY_ONLY' }
           : { ...fresh, teacherRationale: shape === 'null' ? null : fresh.teacherRationale };
+      assignment.teacherFollowUp = {
+        warmUp: 'ESL32_WARMUP_PRIVATE',
+        correctionFocus: 'ESL32_CORRECTION_PRIVATE',
+      };
       let uploadedHtml = '';
       vi.mocked(uploader.uploadFile).mockImplementationOnce(async (localPath, options) => {
         uploadedHtml = readFileSync(localPath, 'utf8');
@@ -69,6 +73,8 @@ describe('publish', () => {
       });
       const result = await renderAndPublishAssignmentToS3({ assignment });
       expect(uploadedHtml).toBe(result.html);
+      expect(uploadedHtml).not.toContain('ESL32_WARMUP_PRIVATE');
+      expect(uploadedHtml).not.toContain('ESL32_CORRECTION_PRIVATE');
       expect(uploadedHtml).not.toContain('ESL24_TEACHER_ONLY');
       expect(uploadedHtml).not.toContain('ESL24_AMBIGUOUS_LEGACY_ONLY');
       expect(uploadedHtml.includes('assignment-section-6')).toBe(shape !== 'legacy');

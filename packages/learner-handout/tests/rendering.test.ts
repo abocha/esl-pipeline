@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  assignmentPlainText,
   type FreshAssignmentV1,
   serializeAssignmentV1,
   validateAssignmentV1,
@@ -247,7 +248,7 @@ describe('React learner handout static foundation', () => {
         doc.querySelector('#assignment-section-6')?.nextElementSibling?.textContent ?? null,
       ).toBe(shape === 'legacy' ? null : rationaleFixture.learnerRationale);
       expect(doc.querySelector('#assignment-section-7')?.textContent).toContain('7.');
-      expect(doc.querySelector('#assignment-section-8')?.textContent).toContain('8.');
+      expect(doc.querySelector('#assignment-section-8')).toBeNull();
       expect(JSON.stringify(props.assignment)).toBe(before);
     },
   );
@@ -259,7 +260,7 @@ describe('React learner handout static foundation', () => {
       const before = JSON.stringify(props);
       const doc = documentFor(props);
       const a = props.assignment;
-      expect(doc.querySelectorAll('main > h2')).toHaveLength(8);
+      expect(doc.querySelectorAll('main > h2')).toHaveLength(7);
       expect(doc.querySelectorAll('nav, .toc-shell, .table-of-contents')).toHaveLength(0);
       expect(
         [...doc.querySelectorAll('.mission-key-language li')].map((li) => li.textContent),
@@ -273,7 +274,7 @@ describe('React learner handout static foundation', () => {
       expect(transcript.previousElementSibling?.matches('.audio-figure')).toBe(true);
       expect(transcript.textContent).toContain(a.input.studyText.turns[0]!.text);
       expect(doc.querySelector('table tbody')?.textContent).toContain(
-        a.toolkit.vocabulary[0]!.example,
+        assignmentPlainText(a.toolkit.vocabulary[0]!.example),
       );
       expect(doc.querySelector('.grammar-card')?.textContent).toContain(
         a.toolkit.grammar[0]!.uses[0]!.example,
@@ -295,22 +296,21 @@ describe('React learner handout static foundation', () => {
         ),
       ).toEqual(
         [...a.input.comprehension, ...a.practice.flatMap((part) => part.items)].map((q) => [
-          q.prompt,
+          assignmentPlainText(q.prompt),
           `Answer: ${q.answer}`,
           ...(q.explanation === null ? [] : [`Explanation: ${q.explanation}`]),
         ]),
       );
       const parts = a.practice.map(
-        (part, i) => `Part ${i + 1}${part.title ? `: ${part.title}` : ''}`,
+        (part, i) =>
+          `Part ${i + 1}${part.title ? `: ${assignmentPlainText(part.title).replace(/^\d+\.\s*/, '')}` : ''}`,
       );
       expect([...key.querySelectorAll('h4')].map((h) => h.textContent)).toEqual(parts);
       expect(
         [...doc.querySelectorAll('main > .practice-part h4')].map((h) => h.textContent),
       ).toEqual(parts);
       expect(key.textContent).toContain(a.outputTask.sampleResponse);
-      expect(doc.querySelector('details:last-child')?.textContent).toContain(
-        a.teacherFollowUp.correctionFocus,
-      );
+      expect(doc.documentElement.outerHTML).not.toContain(a.teacherFollowUp.correctionFocus);
       expect(JSON.stringify(props)).toBe(before);
     },
   );
@@ -333,15 +333,15 @@ describe('React learner handout static foundation', () => {
         `Explanation: ${t.explanation}`,
       ]),
     );
-    expect(doc.querySelector('.source-caption')?.textContent).toBe('A useful demo');
+    expect(doc.querySelector('.source-title')?.textContent).toBe('A useful demo');
     for (const title of [props.assignment.metadata.title, props.assignment.metadata.topic]) {
       props.assignment.input.source.title = title;
-      expect(documentFor(props).querySelector('.source-caption')).toBeNull();
+      expect(documentFor(props).querySelector('.source-title')?.textContent).toBe(title);
     }
     props.assignment.input.kind = 'authentic';
     const authentic = documentFor(props);
     expect(authentic.querySelector('main')?.textContent).toContain(
-      `Title/Source: ${props.assignment.input.source.title}`,
+      props.assignment.input.source.title!,
     );
     expect(authentic.querySelector('main')?.textContent).toContain('Local demonstration fixture');
     expect(authentic.querySelector('a')?.getAttribute('href')).toBe(
@@ -424,7 +424,7 @@ describe('React learner handout static foundation', () => {
       ];
       const html = renderLearnerHandoutDocument(props);
       const doc = new JSDOM(html).window.document;
-      expect(doc.querySelector('h1')?.textContent).toBe(hostile);
+      expect(doc.querySelector('h1')?.textContent).toBe('🧭 ' + hostile);
       expect(doc.querySelectorAll('img, object, embed')).toHaveLength(0);
       expect(doc.querySelectorAll('iframe')).toHaveLength(0);
       expect(doc.querySelectorAll('script')).toHaveLength(1);
@@ -509,9 +509,9 @@ describe('React learner handout static foundation', () => {
     buttons[0]!.click();
     await Promise.resolve();
     expect(pause).toHaveBeenCalledTimes(1);
-    expect(dom.window.document.querySelector('[role="status"]')?.textContent).toBe(
-      'Audio unavailable. Try again.',
-    );
+    expect(buttons[0]!.textContent).toBe('Retry');
+    expect(buttons[2]!.textContent).toBe('Play');
+    expect(dom.window.document.querySelector('.playback-status')).toBeNull();
     dom.window.close();
   });
 });

@@ -262,6 +262,7 @@ describe('native typed execution', () => {
 
   it('publishes directly with validated canonical identity, typed speech context and no source file', async () => {
     const assignment = assignmentFixture();
+    assignment.metadata.icon = '🌦️';
     assignment.pronunciation = null;
     const result = await newAssignment(
       {
@@ -284,7 +285,7 @@ describe('native typed execution', () => {
         schemaVersion: 1,
         rendererVersion: 3,
         title: assignment.metadata.title,
-        icon: '🎧',
+        icon: '🌦️',
       },
     });
     const core = await import('@esl-pipeline/tts-core');
@@ -353,6 +354,7 @@ describe('native typed execution', () => {
 
   it('keeps unchecked audio history while suppressing absent pronunciation in publication metadata', async () => {
     const assignment = assignmentFixture();
+    assignment.metadata.icon = '🧭';
     await newAssignment(
       {
         md: '/virtual/optional',
@@ -373,6 +375,7 @@ describe('native typed execution', () => {
     expect(persisted?.audioArtifacts?.pronunciation).toEqual(previous);
     expect(persisted?.publication?.pronunciationAudioUrl).toBeNull();
     expect(persisted?.publication?.rendererVersion).toBe(3);
+    expect(persisted?.publication?.icon).toBe('🧭');
   });
 
   it('regenerates and replaces selected changed clips while preserving unchecked families and defaults', async () => {

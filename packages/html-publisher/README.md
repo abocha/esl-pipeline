@@ -19,7 +19,7 @@ IDs, indices and minimal-pair side. Learner-handout admits safe URLs and disable
 Unsafe structured URLs are discarded before precedence selection, preserving the safe URL fallback.
 
 Section 6 publishes only `learnerRationale` from the new shape. Legacy root `rationale` omits the
-whole section, and `teacherRationale` is absent from all emitted/uploaded HTML bytes. Adapter and
+whole section, and `teacherRationale` plus `teacherFollowUp` are absent from all emitted/uploaded HTML bytes. Adapter and
 mock-upload tests cover non-null teacher rationale, null teacher rationale and ambiguous legacy text.
 
 HTML artifact identity is unchanged: SHA-256 over UTF-8 `html-v1:` followed by the exact emitted HTML.
@@ -41,3 +41,8 @@ the compiled import check isolates the bundle with only declared production depe
 `pnpm --filter @esl-pipeline/html-publisher test:unit` covers adapter mapping, exact upload bytes/hash/key,
 and plain-Node execution through the built package entry across timezones and production/development
 React runtimes. The compiled check requires no Vite, DOM, network, ambient clock or hydration.
+
+ESL-32 uses authored `metadata.icon` (display-only 🎧 fallback), selective escaped paired-backtick
+highlights, independent permanent grammar reveals and animated native disclosures through the same
+learner-handout renderer. Publication/share metadata carries the same authored emoji. The publisher
+continues hashing complete HTML bytes; renderer identity stays 3, with no historical republication.
