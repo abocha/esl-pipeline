@@ -25,6 +25,45 @@ const primary = (url?: string) => ({
 });
 
 describe('native React publication adapter', () => {
+  it.each(['ru', 'pt-BR', 'en', undefined])(
+    'annotates comprehension support text with %s in preview and publication while preserving target English',
+    async (instructionLanguage) => {
+      const assignment = fixture();
+      if (instructionLanguage) assignment.metadata.instructionLanguage = instructionLanguage;
+      const prompt =
+        instructionLanguage === 'ru' ? 'Что она делает на этой неделе?' : 'Support question';
+      const explanation =
+        instructionLanguage === 'ru' ? 'Это временное занятие.' : 'Support explanation';
+      assignment.input.comprehension = [
+        { prompt, answer: 'She is working from home this week.', explanation },
+      ];
+      const before = JSON.stringify(assignment);
+      for (const preview of [true, false]) {
+        const doc = new JSDOM(await renderAssignmentToHtml(assignment, { preview })).window
+          .document;
+        const languageOf = (element: Element) => element.closest('[lang]')?.getAttribute('lang');
+        const question = [...doc.querySelectorAll('li.plain-text')].find(
+          (li) => li.textContent === prompt,
+        )!;
+        expect(languageOf(question)).toBe(instructionLanguage ?? 'en');
+        const key = doc.querySelector('.answer-key-item')!;
+        expect(key.querySelector('p')?.textContent).toBe(prompt);
+        expect(languageOf(key.querySelector('p')!)).toBe(instructionLanguage ?? 'en');
+        expect(key.querySelector('p:nth-child(3)')?.textContent).toContain(explanation);
+        expect(languageOf(key.querySelector('p:nth-child(3)')!)).toBe(instructionLanguage ?? 'en');
+        expect(languageOf(key.querySelector('p:nth-child(2) span')!)).toBe('en');
+        expect(languageOf(doc.querySelector('.study-text p')!)).toBe('en');
+        expect(languageOf(doc.querySelector('.mission-key-language li')!)).toBe('en');
+        const practice = doc.querySelector('.practice-part ol li')!;
+        expect(languageOf(practice)).toBe('en');
+        const practiceAnswer = doc.querySelector('.practice-part .answer-key-item p')!;
+        expect(languageOf(practiceAnswer)).toBe('en');
+      }
+      expect(JSON.stringify(assignment)).toBe(before);
+      expect(ASSIGNMENT_HTML_RENDERER_VERSION).toBe(3);
+    },
+  );
+
   it.each(['teacher', 'null', 'legacy'] as const)(
     'excludes all internal/ambiguous rationale from the entire %s publication HTML',
     async (shape) => {

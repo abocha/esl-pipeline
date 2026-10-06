@@ -4,7 +4,7 @@
 
 - Audience: maintainers, prompt authors and implementing agents.
 - Authority Level: generation and execution contract reference.
-- Last Verified Against: 2026-10-06 ESL-27 local generation-policy checks.
+- Last Verified Against: 2026-10-06 ESL-30 local remediation checks.
 - Owner: backend maintainer + founder-maintainer.
 - Review Cadence: after assignment schema, renderer or prompt cutover changes.
 - Status: `reference`.
@@ -14,7 +14,7 @@
 [ESL-4](https://linear.app/abocha/issue/ESL-4) /
 [GitHub #308](https://github.com/abocha/esl-pipeline/issues/308) implements Slice 1.
 `packages/contracts/src/assignment-v1.ts` owns the Zod schema, inferred TypeScript domain and
-provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v5`, and the
+provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v6`, and the
 repository prompt compatibility version is `3.0.0` because old generation packages must be recreated.
 
 The object contains metadata, mission, one input source, declared speakers and turns,
@@ -25,7 +25,7 @@ six existing modes. Gender is male/female/neutral; child is represented by age, 
 
 The backend preserves source ownership checks before generation. Fresh packages must select the
 active `hw_prompt_assignment_v1.md` revision with the exact first-line declaration
-`Assignment output contract: assignment_v1_generation_v5`. The envelope retains the read-format
+`Assignment output contract: assignment_v1_generation_v6`. The envelope retains the read-format
 discriminator `promptVersion: assignment_v1` and pins
 the full strict schema and trusted validation context (canonical student display text, known input
 kind and exact URLs supplied in notes/transcript). Revision ID/hash and existing profile, memory,
@@ -45,7 +45,8 @@ reasoning belong in teacher rationale. Teacher rationale remains typed data only
 
 The ESL-24 rationale generation identity was `assignment_v1_rationale_v2`; ESL-25 advances the
 response schema name and template marker to `assignment_v1_mission_v3`; ESL-26 advances them to
-`assignment_v1_grammar_v4`; ESL-27 advances them to `assignment_v1_generation_v5`. These changes preserve AssignmentV1
+`assignment_v1_grammar_v4`; ESL-27 advances them to `assignment_v1_generation_v5`, and ESL-30 to
+`assignment_v1_generation_v6`. These changes preserve AssignmentV1
 schema/serialization versions or the envelope's read-format discriminator. Generation checks both pinned schema equality and the
 instruction marker. Old stored packages, including mismatched schema/instructions, fail before
 provider dispatch; fresh package creation against an old active template fails before package
@@ -86,6 +87,18 @@ A Russian-speaking teacher, incidental Russian text or beginner level alone does
 Russian support. Russian may scaffold instructions, explanations, meaning distinctions and glosses;
 target phrases, English examples/patterns, study text, practice language, answers and sample response
 remain English. Avoid translating independent learner targets or duplicating everything bilingually.
+
+ESL-30 tightens the same generation policy without changing shape: controlled-practice cues may
+establish context, time frame and meaning but cannot supply the tested auxiliary/construction,
+near-complete answer frame or adjacent wording that resolves the choice. Beginner scaffolding
+remains clear and useful. Mission grammar self-checks explicitly apply to the intended construction;
+a present-continuous check for `be + verb-ing` does not generalize to every `-ing` sentence.
+Form-block labels are short identifying names; formulas belong in `pattern`, sentences in `examples`.
+Comprehension questions and explanations use the authored instruction/support language, including
+their answer-key copies; target-English answers retain English annotations. Learner-handout owns
+these annotations in both preview and publication, with English fallback for missing old metadata.
+Renderer publication identity remains 3. ESL-28's fixed v5 CHANGE evidence remains sufficient;
+ESL-30 uses local synthetic checks only and does not activate a revision or rerun that evaluation.
 
 `createPromptPackage` already selects confirmed teacher notes and the recorded profile revision
 when using a confirmed session; otherwise it uses request notes and the student's active revision.

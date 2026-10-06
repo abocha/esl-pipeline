@@ -39,7 +39,7 @@ describe('AssignmentV1 generation policy boundary', () => {
 
   it('requires a language tag in the closed fresh provider metadata', () => {
     const metadata = (ASSIGNMENT_RESPONSE_SCHEMA.schema as any).properties.metadata;
-    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v5');
+    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v6');
     expect(metadata.required).toContain('instructionLanguage');
     expect(metadata.additionalProperties).toBe(false);
     for (const language of ['en', 'ru', 'pt-BR']) {
@@ -120,6 +120,21 @@ describe('AssignmentV1 generation policy boundary', () => {
     if (!isGenerationRequestEnvelope(envelope)) throw new Error('Missing generation envelope');
     expect(envelope.instructions.split(/\r?\n/)[0]).toBe(ASSIGNMENT_TEMPLATE_CONTRACT);
     expect(envelope.responseSchema).toEqual(ASSIGNMENT_RESPONSE_SCHEMA);
+    for (const policy of [
+      'cues may establish context, time frame and intended meaning',
+      'must not disclose the grammatical decision being tested',
+      'decisive auxiliary, target construction, near-complete answer frame, or adjacent wording',
+      'Preserve appropriate beginner scaffolding',
+      'Scope every grammatical check explicitly to the construction being practised',
+      'For each sentence where you intend present continuous',
+      'Do not imply that all sentences containing an -ing form require be',
+      'Avoid broad grammar mnemonics that become false outside the immediate construction',
+      '`label` is a short identifying name',
+      'Put the full structural formula in `pattern` and illustrative sentences in `examples`',
+      'do not repeat either inside `label`',
+      'Questions and explanations use the selected instruction/support language',
+    ])
+      expect(envelope.instructions).toContain(policy);
     for (const [label, content] of [
       ['TEACHER_NOTES', notes],
       ['FOUNDATIONAL_PROFILE', 'Use Russian explanations for difficult grammar'],
@@ -134,47 +149,106 @@ describe('AssignmentV1 generation policy boundary', () => {
     expect(envelope.input).toContain('canonical student-memory retrieval is disabled');
   });
 
-  it.each(['v4 package', 'v4 template', 'v4 schema', 'old schema with new name'])(
-    'rejects %s before dispatch without rewriting pins',
-    async (kind) => {
-      const prompt = promptPackageFixture();
-      if (kind === 'v4 package' || kind === 'v4 template')
-        prompt.requestEnvelope.instructions =
-          'Assignment output contract: assignment_v1_grammar_v4\nOld policy.';
-      if (kind !== 'v4 template') {
-        const schema = structuredClone(ASSIGNMENT_RESPONSE_SCHEMA.schema) as any;
-        delete schema.properties.metadata.properties.instructionLanguage;
-        schema.properties.metadata.required = schema.properties.metadata.required.filter(
-          (field: string) => field !== 'instructionLanguage',
-        );
-        prompt.requestEnvelope.responseSchema = {
-          ...ASSIGNMENT_RESPONSE_SCHEMA,
-          name:
-            kind === 'old schema with new name'
-              ? ASSIGNMENT_RESPONSE_SCHEMA.name
-              : 'assignment_v1_grammar_v4',
-          schema,
-        };
-      }
-      const before = JSON.stringify(prompt);
-      const execute = vi.fn();
-      await expect(
-        generateDraft(
-          { promptPackageId: prompt.id },
-          {
-            config: loadConfig(),
-            promptPackages: {
-              getById: vi.fn().mockResolvedValue(prompt),
-              isSourceCanonical: async () => true,
-            },
-            executors: { openai: execute },
+  it.each([
+    'v4 package',
+    'v4 template',
+    'v4 schema',
+    'old schema with new name',
+    'v5 package',
+    'v5 marker with v6 schema',
+    'v6 marker with v5 schema',
+    'v6 non-strict schema',
+  ])('rejects %s before dispatch without rewriting pins', async (kind) => {
+    const prompt = promptPackageFixture();
+    if (kind.startsWith('v5'))
+      prompt.requestEnvelope.instructions =
+        'Assignment output contract: assignment_v1_generation_v5\nOld policy.';
+    if (kind === 'v5 package' || kind === 'v6 marker with v5 schema')
+      prompt.requestEnvelope.responseSchema = {
+        ...ASSIGNMENT_RESPONSE_SCHEMA,
+        name: 'assignment_v1_generation_v5',
+      };
+    if (kind === 'v6 non-strict schema')
+      prompt.requestEnvelope.responseSchema = { ...ASSIGNMENT_RESPONSE_SCHEMA, strict: false };
+    if (kind === 'v4 package' || kind === 'v4 template')
+      prompt.requestEnvelope.instructions =
+        'Assignment output contract: assignment_v1_grammar_v4\nOld policy.';
+    if ((kind.startsWith('v4') && kind !== 'v4 template') || kind === 'old schema with new name') {
+      const schema = structuredClone(ASSIGNMENT_RESPONSE_SCHEMA.schema) as any;
+      delete schema.properties.metadata.properties.instructionLanguage;
+      schema.properties.metadata.required = schema.properties.metadata.required.filter(
+        (field: string) => field !== 'instructionLanguage',
+      );
+      prompt.requestEnvelope.responseSchema = {
+        ...ASSIGNMENT_RESPONSE_SCHEMA,
+        name:
+          kind === 'old schema with new name'
+            ? ASSIGNMENT_RESPONSE_SCHEMA.name
+            : 'assignment_v1_grammar_v4',
+        schema,
+      };
+    }
+    const before = JSON.stringify(prompt);
+    const execute = vi.fn();
+    await expect(
+      generateDraft(
+        { promptPackageId: prompt.id },
+        {
+          config: loadConfig(),
+          promptPackages: {
+            getById: vi.fn().mockResolvedValue(prompt),
+            isSourceCanonical: async () => true,
           },
-        ),
-      ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED' });
-      expect(execute).not.toHaveBeenCalled();
-      expect(JSON.stringify(prompt)).toBe(before);
-    },
-  );
+          executors: { openai: execute },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(JSON.stringify(prompt)).toBe(before);
+  });
+
+  it('rejects an old active v5 template before storing a fresh package', async () => {
+    const transcript = createTranscriptRecord();
+    const revision = (await createTemplateRevisionRepositoryStub().getActive(
+      ASSIGNMENT_TEMPLATE_ID,
+    ))!;
+    const content = 'Assignment output contract: assignment_v1_generation_v5\nOld policy.';
+    const insert = vi.fn();
+    await expect(
+      createPromptPackage(
+        {
+          recordingId: transcript.recordingId,
+          workspaceId: 'workspace-1',
+          templateId: ASSIGNMENT_TEMPLATE_ID,
+        },
+        {
+          config: createConfig(ASSIGNMENT_TEMPLATE_ID, 'profile.md'),
+          storage: createStorageStub({ getText: async () => 'Lesson context' }),
+          transcripts: { getByRecordingId: async () => transcript },
+          recordings: {
+            getById: async () =>
+              ({
+                id: transcript.recordingId,
+                workspaceId: 'workspace-1',
+                studentId: 'student-1',
+              }) as never,
+          },
+          students: { getById: async () => ({ id: 'student-1', student: 'Student One' }) },
+          promptPackages: { ...createPromptPackageRepositoryStub(), insert },
+          profileRevisions: createProfileRevisionRepositoryStub(),
+          templateRevisions: createTemplateRevisionRepositoryStub({
+            getActive: async () => ({
+              ...revision,
+              content,
+              contentHash: createHash('sha256').update(content).digest('hex'),
+            }),
+          }),
+          promptOptions: createPromptOptionsStub(),
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED' });
+    expect(insert).not.toHaveBeenCalled();
+  });
 
   it('rejects fresh output missing the selected language after mocked provider receipt', async () => {
     const assignment = freshAssignmentFixture();
