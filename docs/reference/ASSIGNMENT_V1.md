@@ -14,7 +14,7 @@
 [ESL-4](https://linear.app/abocha/issue/ESL-4) /
 [GitHub #308](https://github.com/abocha/esl-pipeline/issues/308) implements Slice 1.
 `packages/contracts/src/assignment-v1.ts` owns the Zod schema, inferred TypeScript domain and
-provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v6`, and the
+provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v7`, and the
 repository prompt compatibility version is `3.0.0` because old generation packages must be recreated.
 
 The object contains metadata, mission, one input source, declared speakers and turns,
@@ -25,7 +25,7 @@ six existing modes. Gender is male/female/neutral; child is represented by age, 
 
 The backend preserves source ownership checks before generation. Fresh packages must select the
 active `hw_prompt_assignment_v1.md` revision with the exact first-line declaration
-`Assignment output contract: assignment_v1_generation_v6`. The envelope retains the read-format
+`Assignment output contract: assignment_v1_generation_v7`. The envelope retains the read-format
 discriminator `promptVersion: assignment_v1` and pins
 the full strict schema and trusted validation context (canonical student display text, known input
 kind and exact URLs supplied in notes/transcript). Revision ID/hash and existing profile, memory,
@@ -45,8 +45,9 @@ reasoning belong in teacher rationale. Teacher rationale remains typed data only
 
 The ESL-24 rationale generation identity was `assignment_v1_rationale_v2`; ESL-25 advances the
 response schema name and template marker to `assignment_v1_mission_v3`; ESL-26 advances them to
-`assignment_v1_grammar_v4`; ESL-27 advances them to `assignment_v1_generation_v5`, and ESL-30 to
-`assignment_v1_generation_v6`. These changes preserve AssignmentV1
+`assignment_v1_grammar_v4`; ESL-27 advances them to `assignment_v1_generation_v5`, ESL-30 to
+`assignment_v1_generation_v6`, and the ESL-31 bounded repair to
+`assignment_v1_generation_v7`. These changes preserve AssignmentV1
 schema/serialization versions or the envelope's read-format discriminator. Generation checks both pinned schema equality and the
 instruction marker. Old stored packages, including mismatched schema/instructions, fail before
 provider dispatch; fresh package creation against an old active template fails before package
@@ -94,6 +95,14 @@ near-complete answer frame or adjacent wording that resolves the choice. Beginne
 remains clear and useful. Mission grammar self-checks explicitly apply to the intended construction;
 a present-continuous check for `be + verb-ing` does not generalize to every `-ing` sentence.
 Form-block labels are short identifying names; formulas belong in `pattern`, sentences in `examples`.
+The ESL-31 bounded repair makes the practice field-language convention explicit:
+`practice[].items[].prompt` is entirely English, including situation/direction text, bare lexical
+cues and English excerpts used for error repair. Support-language directions belong in
+`practice[].instructions`, and support-language explanations in `practice[].items[].explanation`.
+Keep context simple and understandable without supplying the grammatical form being tested.
+This fits the existing English annotations for live practice prompts and answer-key copies; no
+new fields, translation, language parser or rendering change is introduced. Generation identity
+advances to v7; schema/serialization 1 and renderer publication identity 3 remain unchanged.
 Comprehension questions and explanations use the authored instruction/support language, including
 their answer-key copies; target-English answers retain English annotations. Learner-handout owns
 these annotations in both preview and publication, with English fallback for missing old metadata.

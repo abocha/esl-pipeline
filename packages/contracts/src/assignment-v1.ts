@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
-export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_generation_v6';
+export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_generation_v7';
 export const ASSIGNMENT_TEMPLATE_ID = 'hw_prompt_assignment_v1.md';
 export const ASSIGNMENT_TEMPLATE_CONTRACT =
-  'Assignment output contract: assignment_v1_generation_v6';
+  'Assignment output contract: assignment_v1_generation_v7';
 
 const text = z.string();
 const optionalText = text.nullable();
