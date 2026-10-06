@@ -1,7 +1,9 @@
+// biome-ignore-all lint/nursery/noConditionalExpect: This CLI has explicit experiment modes, not conditional unit tests.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,38 +22,57 @@ import {
 import { PROMPT_SCHEMA_VERSION } from '../../packages/contracts/src/contract-versions.js';
 import { renderAssignmentToHtml } from '../../packages/html-publisher/src/assignment-adapter.js';
 
-// One bounded ESL-28 experiment, deliberately separate from the general generation evaluator.
+// Two fixed experiments, deliberately separate from the general generation evaluator.
+// ESL-31 has its own root and authorization; completed ESL-28 records remain untouched.
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const root = path.join(repo, '.tmp/esl-28');
-const ids = ['beginner-support', 'everyday-contrast', 'technical-transfer'] as const;
+const evaluationFlags = process.argv.slice(2).filter((arg) => arg.startsWith('--evaluation='));
+assert(evaluationFlags.length <= 1, 'Select exactly one evaluation identity.');
+const evaluation = evaluationFlags[0]?.split('=')[1] ?? 'ESL-28';
+assert(['ESL-28', 'ESL-31'].includes(evaluation), 'Only ESL-28 or ESL-31 is supported.');
+const changedPolicy = evaluation === 'ESL-31';
+const version = changedPolicy ? 'esl-31-v1' : 'esl-28-v1';
+const root = path.join(repo, changedPolicy ? '.tmp/esl-31' : '.tmp/esl-28');
+type CaseId = 'beginner-support' | 'everyday-contrast' | 'technical-transfer';
+const ids: CaseId[] = changedPolicy
+  ? ['everyday-contrast', 'beginner-support']
+  : ['beginner-support', 'everyday-contrast', 'technical-transfer'];
 const model = 'gpt-6.1-sol';
 const maxOutputTokens = 12_000;
 const timeoutMs = 240_000;
 const templatePath = 'packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md';
-const rubric = [
-  'instruction/support-language correctness',
-  'separation of support language from target English',
-  'learner scaffolding adequacy',
-  'grammar usefulness and meaningful contrasts',
-  'vocabulary/chunk usefulness',
-  'controlled-practice progression',
-  'pronunciation relevance and restraint',
-  'mission scanability',
-  'actionable self-checks',
-  'learner rationale quality',
-  'teacher rationale audience separation',
-  'answer leakage',
-  'unnecessary repetition/filler',
-  'direct-send usability',
-];
-type CaseId = (typeof ids)[number];
+const rubric = changedPolicy
+  ? [
+      'cue integrity: full cues preserve the tested grammatical decision',
+      'self-check accuracy: construction-scoped, true and actionable',
+      'grammar-label economy: short labels, separate patterns/examples',
+      'language annotation: support questions/copies/explanations and English targets',
+      'teaching regression: scaffolding, contrasts, practice progression and mission usability',
+      'audience separation: learner rationale useful, teacher rationale absent from HTML',
+      'direct-send usability',
+    ]
+  : [
+      'instruction/support-language correctness',
+      'separation of support language from target English',
+      'learner scaffolding adequacy',
+      'grammar usefulness and meaningful contrasts',
+      'vocabulary/chunk usefulness',
+      'controlled-practice progression',
+      'pronunciation relevance and restraint',
+      'mission scanability',
+      'actionable self-checks',
+      'learner rationale quality',
+      'teacher rationale audience separation',
+      'answer leakage',
+      'unnecessary repetition/filler',
+      'direct-send usability',
+    ];
 type Envelope = ReturnType<typeof stitchPromptEnvelope>;
 interface CaseLock {
   id: CaseId;
   files: Record<string, string>;
 }
 interface Lock {
-  version: 'esl-28-v1';
+  version: 'esl-28-v1' | 'esl-31-v1';
   sourceCommit: string;
   codeFiles: Record<string, string>;
   cases: CaseLock[];
@@ -104,7 +125,9 @@ function assessmentTemplate(id: string): string {
     '\n\nDirect-send verdict: PENDING (YES / NO / UNASSESSABLE). No numeric average overrides this judgment.\n\n' +
     'Concrete defects: location, learner consequence, smallest necessary repair, severity (blocking / minor), and classification.\n\n' +
     'Classifications: prompt/policy; model variance (suspected, not established by one sample); missing context; schema/contract limitation; renderer; legitimate pedagogical variation.\n\n' +
-    'Pronunciation: explain inclusion OR omission from supplied evidence; no acoustic diagnosis from transcript.\n\n' +
+    (changedPolicy
+      ? ''
+      : 'Pronunciation: explain inclusion OR omission from supplied evidence; no acoustic diagnosis from transcript.\n\n') +
     'Additional evidence: name the specific decision another case/call could change before requesting it.\n'
   );
 }
@@ -132,7 +155,10 @@ function prepare(sourceIndexPath: string): void {
     template.split('\n')[0],
     `Assignment output contract: ${ASSIGNMENT_RESPONSE_SCHEMA.name}`,
   );
-  assert.equal(ASSIGNMENT_RESPONSE_SCHEMA.name, 'assignment_v1_generation_v5');
+  assert.equal(
+    ASSIGNMENT_RESPONSE_SCHEMA.name,
+    changedPolicy ? 'assignment_v1_generation_v6' : 'assignment_v1_generation_v5',
+  );
   const codeFiles = codeIdentity();
   // Validate every input before creating the immutable experiment directory.
   const prepared = ids.map((id) => {
@@ -206,7 +232,7 @@ function prepare(sourceIndexPath: string): void {
     };
   });
   const lock: Lock = {
-    version: 'esl-28-v1',
+    version,
     sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], {
       cwd: repo,
       encoding: 'utf8',
@@ -227,8 +253,8 @@ function prepare(sourceIndexPath: string): void {
   writeFileSync(path.join(root, 'lock.sha256'), hash(json(lock)), { flag: 'wx' });
   writeFileSync(
     path.join(root, 'decision.md'),
-    '# ESL-28 activation decision — PENDING\n\n' +
-      'No paid generation or quality assessment yet. Final KEEP / CHANGE / DEFER must cite all three case verdicts and concrete artifact locations.\n',
+    `# ${evaluation} activation decision — PENDING\n\n` +
+      `No paid generation or quality assessment yet. Final KEEP / CHANGE / DEFER must cite all ${ids.length} case verdicts and concrete artifact locations.\n`,
     { flag: 'wx' },
   );
   console.log(
@@ -242,7 +268,7 @@ function verify(): Lock {
     hash(readFileSync(path.join(root, 'lock.json'))),
     readFileSync(path.join(root, 'lock.sha256'), 'utf8'),
   );
-  assert.equal(lock.version, 'esl-28-v1');
+  assert.equal(lock.version, version);
   assert.deepEqual(
     lock.cases.map((entry) => entry.id),
     ids,
@@ -337,7 +363,20 @@ async function smoke(): Promise<void> {
     path.join(repo, 'packages/contracts/tests/assignment-grammar-fixture.json'),
   );
   Object.assign(fixture.metadata as object, { instructionLanguage: 'ru' });
-  const sentinel = 'TEACHER_ONLY_ESL28_SENTINEL';
+  if (changedPolicy)
+    (fixture.input as Record<string, unknown>).comprehension = [
+      {
+        prompt: 'Как долго работает батарея?',
+        answer: 'It lasts eight hours.',
+        explanation: 'Ответ есть в тексте.',
+      },
+      {
+        prompt: 'How long does the battery last?',
+        answer: 'It lasts eight hours.',
+        explanation: 'Ответ есть в тексте.',
+      },
+    ];
+  const sentinel = `TEACHER_ONLY_${evaluation}_SENTINEL`;
   fixture.teacherRationale = sentinel;
   const payload = {
     id: 'fixture-only-not-a-provider-response',
@@ -359,12 +398,46 @@ async function smoke(): Promise<void> {
   assert(html.startsWith('<!doctype html>'));
   assert(html.includes('<html lang="ru">'));
   assert(html.includes('lang="en"'));
+  if (changedPolicy) {
+    const require = createRequire(path.join(repo, 'packages/html-publisher/package.json'));
+    const { JSDOM } = require('jsdom');
+    const document = new JSDOM(html).window.document as Document;
+    const languageOf = (element: Element | null) =>
+      element?.closest('[lang]')?.getAttribute('lang');
+    // Select authored cues by exact text, independent of section wrapper structure.
+    for (const [prompt, language] of [
+      ['Как долго работает батарея?', 'ru'],
+      ['How long does the battery last?', 'en'],
+    ]) {
+      const cue = [...document.querySelectorAll('li.plain-text')].find(
+        (element) => element.textContent === prompt,
+      );
+      assert.equal(languageOf(cue ?? null), language);
+      const answer = [...document.querySelectorAll('.answer-key-item')].find(
+        (element) => element.querySelector('p')?.textContent === prompt,
+      );
+      assert(answer);
+      assert.equal(languageOf(answer.querySelector('p')), language);
+      assert.equal(languageOf(answer.querySelector('p:nth-child(2) span')), 'en');
+      assert.equal(languageOf(answer.querySelector('p:nth-child(3)')), 'ru');
+    }
+    assert.equal(languageOf(document.querySelector('.study-text p')), 'en');
+    assert.equal(languageOf(document.querySelector('.mission-key-language li')), 'en');
+    assert.equal(languageOf(document.querySelector('.practice-part ol li')), 'en');
+  }
   const rejected = path.join(dir, 'incomplete');
   mkdirSync(rejected, { recursive: true });
   assert.equal(await capture(rejected, { ...payload, status: 'incomplete' }, undefined), false);
   assert(!existsSync(path.join(rejected, 'learner.html')));
   assert(readFileSync(path.join(rejected, 'output.raw.txt'), 'utf8').length > 0);
   await assert.rejects(run(ids[0], []), /Paid calls require/);
+  if (changedPolicy) {
+    await assert.rejects(run(ids[0], ['--live', '--authorize=ESL-28']), /Paid calls require/);
+    await assert.rejects(
+      run('technical-transfer', ['--live', '--authorize=ESL-31']),
+      /Only the fixed evaluation cases/,
+    );
+  }
   assert.throws(
     () => checkPriorAttempts(ids[0], () => ({ state: 'dispatched' })),
     /Already attempted/,
@@ -416,11 +489,11 @@ function checkPriorAttempts(
 
 async function run(id: CaseId, flags: string[]): Promise<void> {
   assert(
-    flags.includes('--live') && flags.includes('--authorize=ESL-28'),
-    'Paid calls require --live --authorize=ESL-28 and explicit human authorization in the chat.',
+    flags.includes('--live') && flags.includes(`--authorize=${evaluation}`),
+    `Paid calls require --live --authorize=${evaluation} and explicit human authorization in the chat.`,
   );
   const lock = verify();
-  assert(ids.includes(id), 'Only the three frozen cases are allowed.');
+  assert(ids.includes(id), 'Only the fixed evaluation cases are allowed.');
   // One attempt file per case is the ledger. Unknown prior usage blocks subsequent calls.
   checkPriorAttempts(id, (prior) => {
     const attemptPath = path.join(caseDir(prior), 'attempt.json');
@@ -463,6 +536,22 @@ async function run(id: CaseId, flags: string[]): Promise<void> {
       finishReason: parsed.finishReason,
     });
     const artifactsReady = await capture(dir, payload, readJson(path.join(dir, 'context.json')));
+    if (changedPolicy) {
+      assert.equal(
+        payload.status,
+        'completed',
+        'Response incomplete or failed; stop without retry.',
+      );
+      assert(
+        !parsed.contractError,
+        `Provider response contract failed; stop without retry: ${parsed.contractError}`,
+      );
+      assert.notEqual(
+        readJson<{ stage?: string }>(path.join(dir, 'validation.json')).stage,
+        'renderer',
+        'Renderer failure; stop before any further call.',
+      );
+    }
     assert(
       Number.isInteger(parsed.usage?.totalTokens),
       'Usage unavailable; stop before any further call.',
@@ -505,7 +594,9 @@ async function run(id: CaseId, flags: string[]): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const [mode, argument, ...flags] = process.argv.slice(2);
+  const [mode, argument, ...flags] = process.argv
+    .slice(2)
+    .filter((arg) => !arg.startsWith('--evaluation='));
   if (mode === 'prepare') {
     if (!argument) throw new Error('Provide private source-index JSON.');
     prepare(path.resolve(argument));
@@ -530,7 +621,7 @@ async function main(): Promise<void> {
     await capture(dir, response, readJson(path.join(dir, 'context.json')));
   } else
     throw new Error(
-      'Use prepare <private-index>, verify, smoke, run <case> --live --authorize=ESL-28, or capture <case>.',
+      `Use prepare <private-index>, verify, smoke, run <case> --live --authorize=${evaluation}, or capture <case>. Select ESL-31 with --evaluation=ESL-31.`,
     );
 }
 
