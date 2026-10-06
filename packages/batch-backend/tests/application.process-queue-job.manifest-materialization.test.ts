@@ -22,6 +22,16 @@ const {
 } = h;
 
 describe('application/process-queue-job', () => {
+  it('rejects unsupported native renderer identity before reading or rendering', async () => {
+    const initial = makeJob({ assignmentRendererVersion: 4 });
+    getJobByIdSpy.mockResolvedValue(initial);
+    updateJobStateAndResultSpy.mockResolvedValue({ ...initial, state: 'running' });
+    await expect(processQueueJob({ jobId: initial.id })).rejects.toThrow(
+      'Unsupported structured assignment renderer version',
+    );
+    expect(createTranscriptionStorageForUriSpy).not.toHaveBeenCalled();
+    expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+  });
   it('retains the initial typed filesystem manifest without a temporary projection', async () => {
     const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-typed-manifest-'));
     vi.stubEnv('FILESYSTEM_UPLOAD_DIR', uploadDir);
@@ -37,7 +47,7 @@ describe('application/process-queue-job', () => {
         contentHash: hash,
         storageUri: `local://drafts/test/content/${hash}.json`,
       },
-      assignmentRendererVersion: 1,
+      assignmentRendererVersion: 3,
       promptPackageId: 'prompt-1',
     });
     getJobByIdSpy.mockResolvedValue(initial);
@@ -88,7 +98,7 @@ describe('application/process-queue-job', () => {
       md: '/unrelated-later-draft.md',
       mdStorageUri: 'local://unreadable-projection.md',
       assignmentArtifact: artifact,
-      assignmentRendererVersion: 1,
+      assignmentRendererVersion: 3,
       promptPackageId: 'prompt-1',
       studentId: 'student-1',
       sourceJobId: 'job-parent',
@@ -138,7 +148,7 @@ describe('application/process-queue-job', () => {
         storageUri: `local://drafts/test/content/${hash}.json`,
         contentHash: hash,
       },
-      assignmentRendererVersion: 1,
+      assignmentRendererVersion: 3,
       promptPackageId: 'prompt-1',
       sourceJobId: 'job-parent',
     });

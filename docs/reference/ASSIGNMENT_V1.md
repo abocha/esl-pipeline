@@ -4,7 +4,7 @@
 
 - Audience: maintainers, prompt authors and implementing agents.
 - Authority Level: generation and execution contract reference.
-- Last Verified Against: 2026-10-05 ESL-7 local completion.
+- Last Verified Against: 2026-10-06 ESL-30 local remediation checks.
 - Owner: backend maintainer + founder-maintainer.
 - Review Cadence: after assignment schema, renderer or prompt cutover changes.
 - Status: `reference`.
@@ -14,23 +14,195 @@
 [ESL-4](https://linear.app/abocha/issue/ESL-4) /
 [GitHub #308](https://github.com/abocha/esl-pipeline/issues/308) implements Slice 1.
 `packages/contracts/src/assignment-v1.ts` owns the Zod schema, inferred TypeScript domain and
-provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1`, and the
+provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v7`, and the
 repository prompt compatibility version is `3.0.0` because old generation packages must be recreated.
 
 The object contains metadata, mission, one input source, declared speakers and turns,
 comprehension question/answer pairs, grammar and vocabulary, ordered practice parts with answers,
-nullable pronunciation, output task/sample, rationale and teacher follow-up. Optional values are
+nullable pronunciation, output task/sample, explicit rationale and teacher follow-up. Optional values are
 required nullable properties; every object is closed. Pronunciation uses nested alternatives for
 six existing modes. Gender is male/female/neutral; child is represented by age, in the typed speaker profile. Existing legacy gender values and provider catalogs remain supported.
 
 The backend preserves source ownership checks before generation. Fresh packages must select the
 active `hw_prompt_assignment_v1.md` revision with the exact first-line declaration
-`Assignment output contract: assignment_v1`. The envelope pins `promptVersion: assignment_v1`,
+`Assignment output contract: assignment_v1_generation_v7`. The envelope retains the read-format
+discriminator `promptVersion: assignment_v1` and pins
 the full strict schema and trusted validation context (canonical student display text, known input
 kind and exact URLs supplied in notes/transcript). Revision ID/hash and existing profile, memory,
 student and source lineage remain unchanged. An unsupported package returns
 `PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED`, instructing the tutor to activate the structured
 template and recreate the package. Historical snapshots are never rewritten.
+
+ESL-24 uses two explicit closed rationale read shapes: legacy requires
+root `rationale` and forbids both new fields; new requires `learnerRationale` and nullable
+`teacherRationale`, forbidding root `rationale`. Mixed, absent and partial forms are rejected.
+`validateAssignmentV1` accepts either complete shape without defaults or normalization.
+`validateFreshAssignmentV1` admits only explicit instruction-language metadata, new rationale, structured mission and structured grammar after
+provider receipt (also in generation evaluation); requesting a strict provider schema alone is
+insufficient. Learner rationale speaks
+directly to the learner about practical benefit; lesson evidence, diagnosis and teacher selection
+reasoning belong in teacher rationale. Teacher rationale remains typed data only.
+
+The ESL-24 rationale generation identity was `assignment_v1_rationale_v2`; ESL-25 advances the
+response schema name and template marker to `assignment_v1_mission_v3`; ESL-26 advances them to
+`assignment_v1_grammar_v4`; ESL-27 advances them to `assignment_v1_generation_v5`, ESL-30 to
+`assignment_v1_generation_v6`, and the ESL-31 bounded repair to
+`assignment_v1_generation_v7`. These changes preserve AssignmentV1
+schema/serialization versions or the envelope's read-format discriminator. Generation checks both pinned schema equality and the
+instruction marker. Old stored packages, including mismatched schema/instructions, fail before
+provider dispatch; fresh package creation against an old active template fails before package
+storage. No stored package is repinned and no template revision is activated by this change.
+Native section 6 renders only learner rationale; legacy rationale omits the whole section without
+renumbering sections 7/8. Whole-document and mock-upload sentinel checks ensure no teacher or
+ambiguous legacy text appears in learner HTML, including hidden or serialized copies. The ESL-20
+fixture, snapshot and pinned canonical hash remain the unchanged compatibility guard.
+
+### Fresh teaching policy and support language (ESL-27)
+
+Fresh metadata requires `instructionLanguage`, a conventional language tag such as `en`, `ru` or
+`pt-BR` (lowercase two/three-letter language, optional hyphenated subtags). Runtime reads accept its
+absence without inserting a default into older objects. Schema/serialization versions remain 1;
+the pre-language grammar fixture and ESL-20 canonical identity remain unchanged.
+
+The repository template defines economy as the **smallest complete teaching sequence for the
+learner and lesson evidence**. Scaffolding must make the objective usable outside the lesson;
+there are no vocabulary/exercise quotas, filler roles or item-count parity targets. Grammar forms
+teach independently useful patterns, paired comparisons explain a real choice concisely, broader
+examples/uses add distinct value, and traps address plausible learner mistakes. Vocabulary/chunks
+support the input, target, practice or mission, with support-language glosses where useful.
+Controlled practice progresses from recognition/choice toward production when supported, tests
+taught distinctions and avoids copying/answer leakage. Pronunciation is conditional on a concrete
+teachable target in English/chunks, evidence or likely difficulty; transcript evidence is not an
+acoustic diagnosis. The six modes and null behavior are unchanged. Structured mission roles stay
+separate with concrete self-checks, and learner benefit never duplicates internal teacher analysis.
+
+Language selection uses this precedence, considering only supplied evidence:
+
+1. Current assignment tutor guidance in `TEACHER_NOTES`.
+2. Durable learner preference in `FOUNDATIONAL_PROFILE` (including Study Preferences) or an
+   explicit durable preference in `STUDENT_MEMORY_SNAPSHOT`.
+3. Strong learner-level evidence in `LATEST_TRANSCRIPT` or `RECENT_LESSON_MEMORY`, especially A1/A2.
+4. English default.
+
+A Russian-speaking teacher, incidental Russian text or beginner level alone does not identify
+Russian support. Russian may scaffold instructions, explanations, meaning distinctions and glosses;
+target phrases, English examples/patterns, study text, practice language, answers and sample response
+remain English. Avoid translating independent learner targets or duplicating everything bilingually.
+
+ESL-30 tightens the same generation policy without changing shape: controlled-practice cues may
+establish context, time frame and meaning but cannot supply the tested auxiliary/construction,
+near-complete answer frame or adjacent wording that resolves the choice. Beginner scaffolding
+remains clear and useful. Mission grammar self-checks explicitly apply to the intended construction;
+a present-continuous check for `be + verb-ing` does not generalize to every `-ing` sentence.
+Form-block labels are short identifying names; formulas belong in `pattern`, sentences in `examples`.
+The ESL-31 bounded repair makes the practice field-language convention explicit:
+`practice[].items[].prompt` is entirely English, including situation/direction text, bare lexical
+cues and English excerpts used for error repair. Support-language directions belong in
+`practice[].instructions`, and support-language explanations in `practice[].items[].explanation`.
+Keep context simple and understandable without supplying the grammatical form being tested.
+This fits the existing English annotations for live practice prompts and answer-key copies; no
+new fields, translation, language parser or rendering change is introduced. Generation identity
+advances to v7; schema/serialization 1 and renderer publication identity 3 remain unchanged.
+Comprehension questions and explanations use the authored instruction/support language, including
+their answer-key copies; target-English answers retain English annotations. Learner-handout owns
+these annotations in both preview and publication, with English fallback for missing old metadata.
+For existing Russian-support assignments whose questions are English, a bounded rendering heuristic
+tags question text English when it contains no Cyrillic character, consistently in the exercise and
+answer-key copy. Questions containing Cyrillic retain the authored Russian tag; explanations remain
+independently in the support language and answers English. Other support languages keep the existing
+metadata-based annotation. No assignment data is rewritten or multilingual model introduced.
+Renderer publication identity remains 3. ESL-28's fixed v5 CHANGE evidence remains sufficient;
+ESL-30 uses local synthetic checks only and does not activate a revision or rerun that evaluation.
+
+`createPromptPackage` already selects confirmed teacher notes and the recorded profile revision
+when using a confirmed session; otherwise it uses request notes and the student's active revision.
+`renderPromptProfileContent` renders existing structured preferences into `FOUNDATIONAL_PROFILE`.
+The source transcript and existing memory retrieval supply current/recent evidence through
+`stitchPromptEnvelope`; absent/disabled retrieval stays explicitly unavailable. No second profile
+system, new source block or evidence-fetching infrastructure is introduced.
+
+Static HTML and the shared React handout use the authored language tag, with English target text
+and fixed English presentation labels marked separately. Older documents fall back to English at
+presentation time without mutating their metadata. This is language annotation, not a UI translation
+system. Optional authored icons are deferred. No stored packages, active database template revisions,
+provider execution or production settings are changed; quality evaluation/activation remain later work.
+
+### Structured mission composition (ESL-25)
+
+`outputTask` owns teaching roles, not layout blocks:
+
+| Field            | Type           | Meaning                                                 |
+| ---------------- | -------------- | ------------------------------------------------------- |
+| `task`           | string         | Concise core learner task                               |
+| `preparation`    | string[]       | Things to prepare or note before starting               |
+| `requirements`   | string[]       | Independent, meaning-based things the response includes |
+| `delivery`       | string or null | How to perform or submit the mission                    |
+| `selfCheck`      | string[]       | Short checks, including useful noticing/correction      |
+| `extension`      | string or null | Existing optional extension                             |
+| `sampleResponse` | string         | Existing sample in the answer key                       |
+
+The closed legacy outputTask contains only task/extension/sampleResponse. Runtime admission accepts
+it or the complete structured form independently of rationale, preserving both pre-ESL-24 and
+ESL-24 frozen assignments. Partial role sets, wrong types and extra fields fail. Reads never insert
+defaults, nulls, empty arrays or normalized data. Canonical serialization remains version 1.
+
+Fresh provider projection and post-provider admission require all seven mission fields. Lists can
+be empty and delivery can be null when unnecessary; nonempty text must be meaningful. The concise
+task must not absorb preparation, requirements, delivery or self-check. Recording/submission stays
+optional under the existing tutor-intent rule. The representative mission fixture is separate from
+the untouched ESL-20 fixture and ESL-24 rationale fixture.
+
+React section 5 presents one prominent task callout, then populated preparation, requirements,
+delivery and self-check in that order using headings, paragraphs and lists. Empty roles have no
+heading. Extension remains lightweight; the sample stays in section 7. Legacy tasks render directly
+without inferring roles. The single-column composition uses the existing desktop/mobile shell.
+The shipped template source changes only mission instructions; no revision is activated.
+
+### Structured grammar composition (ESL-26)
+
+Grammar compatibility belongs to each item, independently of rationale and mission read forms.
+The closed legacy item retains `name`, nullable scalar `form`, `explanation`, `examples`, `uses`
+and `traps`. The closed structured item retains those roles except `form`, replacing it with:
+
+| Field                                         | Type and cardinality                                   | Teaching role                                                     |
+| --------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------- |
+| `formBlocks`                                  | Required array, at least one block                     | Independently teachable forms                                     |
+| Block `label`, `pattern`                      | Required meaningful strings                            | Name the form and show its construction                           |
+| Block `examples`                              | Required string array, at least one meaningful example | Illustrate that block's pattern                                   |
+| `comparisons`                                 | Required array, may be empty                           | Actual meaning/use contrasts only                                 |
+| Comparison `label`                            | Required meaningful string                             | Name one contrast                                                 |
+| Comparison `alternatives`                     | Exactly two closed objects                             | Keep both sides of the relationship together                      |
+| Alternative `label`, `example`, `explanation` | Required meaningful strings                            | Name the choice, illustrate it, and explain when/why to choose it |
+
+General `examples` and `uses` (label/example) remain required arrays but can be empty when they add
+no distinct broader teaching value. `traps` retains original/improved/explanation and can be empty.
+The template forbids duplicating teaching facts across block examples, general examples, uses and
+comparison alternatives, and forbids manufacturing comparisons to fill a quota. No IDs, references,
+layout nodes or graphs are introduced.
+
+Runtime admission rejects an item mixing `form` (including null) with either structured field,
+missing either structured field, empty form blocks/examples, or comparisons with other than two
+complete alternatives. Reads do not transform items or insert fields. One assignment can contain
+both legacy and structured items. Fresh provider projection and post-provider admission require
+every grammar item to be structured. The existing pinned schema equality and first-line marker
+checks reject stale ESL-25 packages and mismatched schema/template contracts before provider dispatch,
+without repinning packages. Legacy grammar in fresh output fails after receipt.
+
+The separate `assignment-grammar-fixture.json` demonstrates two affirmative forms, one routine vs
+temporary arrangement contrast, one distinct time-frame use, no general-example padding and one
+missing-be trap. The ESL-20 fixture/snapshot/hash and ESL-25 mission fixture remain untouched.
+Focused tests preserve the ESL-20 hash
+`c133b81eee1415b9dc874670279acf9cb89a52a72a45894a524936da9af7b9db` and pin the post-ESL-25
+legacy-grammar canonical hash `35cefa61cd8a753041cd12cdbcb28b680f9f4fde554a9ba4ad9e8efbbaac9f02`.
+Schema and canonical serialization versions remain 1.
+
+React grammar composition uses a topic heading, lightweight labeled form sections with patterns
+and examples, a single labeled comparison group with two alternatives, and separate Wrong,
+Corrected and Explanation trap lines. Alternatives sit side by side on desktop and stack within
+the same group on mobile. Legacy items render directly without inferred blocks. On 6 October 2026,
+the emitted `out/learner-handout/grammar.html` was inspected at 1280 and 390 CSS pixels: hierarchy,
+wrapping, spacing and label/example/explanation scanability passed, with no horizontal overflow.
+No unrelated media matrix, live generation or template activation was performed.
 
 Assignment generation admits only the existing OpenAI `gpt-6.1-sol` target in this slice. Other
 assignment overrides fail before budget reservation or dispatch; their other workloads remain
@@ -99,30 +271,31 @@ JSON containing the complete assignment; authored segments remain immutable. All
 modes use deterministic ordinal clip IDs and item-index/side associations, with existing primary,
 chunk, upload replacement and unselected-family reuse semantics.
 
-`renderAssignmentToHtml` builds the eight-section handout directly. It shares the existing page
-shell, responsive styles, disclosures and media URL policy; domain text is HTML-escaped, safe video
-URLs use the existing embed builder, and pronunciation JSON escapes script delimiters. Grammar,
-vocabulary, comprehension, ordered answers, stress/chunk layouts and audio controls remain present.
-Typed preview validates and renders the same object, with disabled unavailable clip controls.
-Markdown rendering, `rawHtml`, textual pronunciation fallbacks and output scraping are retired.
+`renderAssignmentToHtml` delegates the eight-section handout to learner-handout's deterministic
+React Node document renderer. Domain text is escaped, safe source/media URLs are admitted explicitly,
+and pronunciation clips bind by item index and minimal-pair side. Typed preview uses the same renderer
+with generating placeholders and disabled unavailable controls. h2/h3 preset colors remain explicit
+presentation inputs. The old native string renderer and its theme/features system are removed.
 
-New typed jobs pin renderer version 2. Native manifests use schema 6 with `assignmentHash` and
-versioned `publication` (title, icon and nullable study/main-pronunciation URLs). In schema 6,
-`mdHash` equals the canonical AssignmentV1 hash; schemas 1–5 keep their historical Markdown hash
-meaning. Typed job DTOs expose publication metadata; the bot uses it directly and never scrapes
-Markdown or HTML for typed jobs. Historical renderer-1 manifests/audio shapes remain readable.
-Native reruns require a durable schema-6 manifest. Missing-manifest reconstruction and legacy recovery are retired; schema 1–5 output is history only.
-New rerun jobs pin renderer 2 even when their source publication used renderer 1; the source job's
-frozen renderer and artifact identity remain unchanged.
+New typed Create/approval, correction/retry and rerun jobs pin renderer version 3. Worker execution
+admits v3 only. Both native manifest producers record v3; publication readback uses the stored job
+renderer when manifest publication metadata is absent, so v3 cannot fall back to v1. Native manifests
+retain schema 6, canonical `assignmentHash`, and publication schema 1 (title, icon and nullable
+study/main-pronunciation URLs). `mdHash` equals the canonical AssignmentV1 hash. Native reruns require
+a durable schema-6 manifest; missing-manifest reconstruction and legacy recovery remain retired.
 
-API contract 8 and manifest contract 4 explicitly identify the typed source/path and schema changes.
-Assignment schema/serialization version 1, prompt 3, validator 2.1 and DB 2 remain unchanged.
-Migration 0063 expands the job identity constraint to admit renderer 2 alongside renderer 1,
-preserving all artifact checks, historical rows and the frozen-identity trigger. It must precede
-native Create/correction/rerun writes. Prior Slice 2 executors reject renderer-2 jobs, so its runtime
-compatibility metadata blocks previous-image recovery after native writes. Legacy-data retirement
-and Slice 4 remain outside this change. Focused offline regression coverage is local evidence;
-hosted PR CI and a separately authorized rollout remain later gates.
+Migration 0065 expands database admission to v3 without rewriting historical migrations, job/artifact
+identity or test artifacts. The frozen-identity trigger remains unchanged. Runtime compatibility is
+incompatible because previous executors cannot execute renderer 3. Assignment schema/serialization
+version 1, publication schema 1 and manifest schema 6 are unchanged. ESL-20's frozen snapshot/hash
+remains authoritative. HTML artifact hashing still uses SHA-256 of UTF-8 `html-v1:` plus exact emitted
+HTML bytes and the existing default hash-derived key; renderer v3 does not version that namespace.
+
+Learner-handout ships React runtime dependencies and CSS/playback assets beside its compiled module.
+Orchestrator keeps html-publisher external to its bundle to preserve asset lookup. Compiled package
+checks render through built html-publisher in plain Node without Vite, DOM, network or clock inputs.
+Root `rationale` and the teacher follow-up disclosure remain unchanged for the next ABO-32 audience
+slice. Already-issued legacy standalone HTML is independent of this path. No deployment is implied.
 
 ## ESL-6 local completion evidence (2026-10-04)
 

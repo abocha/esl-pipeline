@@ -332,7 +332,7 @@ describe('OpenAI assignment request and outcome admission', () => {
         verbosity: 'medium',
         format: {
           type: 'json_schema',
-          name: 'assignment_v1',
+          name: ASSIGNMENT_RESPONSE_SCHEMA.name,
           schema: ASSIGNMENT_RESPONSE_SCHEMA.schema,
           strict: true,
         },

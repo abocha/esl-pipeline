@@ -29,7 +29,8 @@ export async function getTypedJobPublication(job: JobRecord) {
   const publication: AssignmentPublicationMetadata = {
     schemaVersion: 1,
     rendererVersion:
-      manifest?.publication?.rendererVersion ?? (job.assignmentRendererVersion === 2 ? 2 : 1),
+      manifest?.publication?.rendererVersion ??
+      (job.assignmentRendererVersion === 3 ? 3 : job.assignmentRendererVersion === 2 ? 2 : 1),
     title: assignment.metadata.title,
     icon: '🎧',
     studyTextAudioUrl: manifest?.audioArtifacts?.studyText?.url ?? legacy?.audio?.url ?? null,

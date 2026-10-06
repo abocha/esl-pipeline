@@ -38,6 +38,8 @@ For deep system maps, prefer the linked docs rather than growing this file again
   - operator control-panel adapter over authenticated `batch-backend` operations
   - no independent pipeline, persistence, or deployment semantics
 - supporting implementation packages
+  - learner presentation: `learner-handout` (sole native React renderer, deterministic Node static
+    documents and local Vite fixtures; html-publisher owns publication identity)
   - domain validation: `contracts` (AssignmentV1)
   - adapters/providers: `html-publisher`, `tts-*`, `stt-*`, `storage-uploader`
   - shared runtime utilities: `provider-runtime`, `shared-infrastructure`, `contracts`
@@ -284,13 +286,46 @@ Docs-heavy changes also require:
 
 ### AssignmentV1 native execution (ESL-6)
 
+AssignmentV1 runtime/read admission accepts exactly the closed legacy root `rationale` shape or
+the new required `learnerRationale` plus required nullable `teacherRationale` shape. Mixed, missing
+and partial shapes fail. Fresh generation admits only the new shape after provider receipt; the
+provider schema and template marker identify `assignment_v1_generation_v7`. Stored prompt pins and
+old active template markers fail the existing unsupported-contract path before dispatch. Reads
+never normalize old assignments or add fields; canonical serialization 1 and frozen hashes remain
+unchanged. Native learner HTML renders only learner rationale; ambiguous legacy rationale omits
+section 6 entirely and teacher rationale is never emitted anywhere in the document.
+
+Output-task runtime admission independently accepts either the closed legacy task/extension/sample
+shape or the complete structured mission: task text, preparation/requirements/selfCheck text lists,
+nullable delivery text and unchanged extension/sampleResponse fields. Partial mission roles fail.
+Fresh generation requires all structured role fields, permitting empty lists and null delivery
+when unnecessary. Reads insert no defaults. Learner HTML emphasizes the task first, then displays
+only populated supporting roles; the sample remains in the answer key.
+
+Grammar read admission independently accepts each closed legacy scalar-form item or complete
+structured item with required nonempty formBlocks (label/pattern/nonempty examples) and required
+comparisons (possibly empty). Each comparison contains a label and exactly two labeled alternatives,
+each with example/explanation. Mixed or partial item shapes fail. Fresh generation requires every
+grammar item to be structured; reads never convert legacy grammar or insert fields. General examples,
+uses and original/improved/explanation traps retain their distinct roles without array padding.
+Schema/serialization version 1 and frozen legacy identities remain unchanged.
+
+Fresh metadata requires `instructionLanguage` as a language tag; runtime reads accept absence
+without inserting fields into older objects. The generation policy selects current tutor guidance,
+durable learner preference/profile, strong current/recent learner-level evidence, then English.
+Support-language scaffolding stays separate from target English. Economy is the smallest complete
+teaching sequence, with no fixed vocabulary/exercise quotas or omission of useful scaffolding for
+JSON brevity. The existing prompt context sources own this evidence; no second profile system is
+introduced. See [AssignmentV1 policy](ASSIGNMENT_V1.md#fresh-teaching-policy-and-support-language-esl-27).
+
 Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
 HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
-is created. Native renderer 2 / manifest schema 6 carry canonical assignment and publication
+is created. Native React renderer 3 / manifest schema 6 carry canonical assignment and publication
 metadata; API 9 / validator 3 retire Markdown processing while manifest contract 4 keeps historical
 read semantics. Historical Markdown and renderer-1 manifests are read-only evidence under ABO-30.
 No correction, retry, rerun, resume, rendering, TTS, publication, memory processing or conversion is supported. Editable JSON authority, source authorization, CAS,
 lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
 [AssignmentV1](ASSIGNMENT_V1.md) for the canonical execution contract.
-Migration 0063 admits renderer-2 job writes while retaining renderer 1 and frozen artifact identity;
-it is required before native execution writes and marks prior executors incompatible with native jobs.
+Migration 0065 admits renderer-3 job writes with existing artifact checks and the frozen-identity
+trigger unchanged. It must precede new native execution writes and blocks previous-image recovery
+that cannot truthfully execute renderer 3. No v1/v2 executable renderer is retained.

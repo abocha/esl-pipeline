@@ -187,7 +187,7 @@ function jobStatus(overrides: Record<string, unknown> = {}) {
   return {
     jobId: 'job-sandbox',
     assignmentArtifact: sandboxArtifact,
-    assignmentRendererVersion: 2,
+    assignmentRendererVersion: 3,
     studentId: 'student-alex',
     studentName: 'Alex',
     lessonId: null,

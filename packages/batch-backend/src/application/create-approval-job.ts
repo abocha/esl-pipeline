@@ -1,4 +1,5 @@
 import type { JobConfigOverrides } from '@esl-pipeline/contracts';
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
@@ -137,7 +138,9 @@ export async function createApprovalJobFromDraft(
     promptPackageId: params.promptPackage.id,
     draftId: params.draft.id,
     assignmentArtifact: draftArtifact(params.draft),
-    assignmentRendererVersion: draftArtifact(params.draft) ? 2 : undefined,
+    assignmentRendererVersion: draftArtifact(params.draft)
+      ? ASSIGNMENT_HTML_RENDERER_VERSION
+      : undefined,
     studentId: params.draft.studentId ?? params.promptPackage.studentId ?? null,
     lessonId: params.draft.lessonId ?? params.promptPackage.lessonId ?? null,
     userId: params.draft.createdBy ?? undefined,

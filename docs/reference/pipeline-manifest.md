@@ -34,7 +34,7 @@ This document captures the canonical schema so remote stores and services can va
   "mdHash": "<same canonical AssignmentV1 sha256>",
   "publication": {
     "schemaVersion": 1,
-    "rendererVersion": 2,
+    "rendererVersion": 3,
     "title": "Homework Assignment: Clear demos",
     "icon": "🎧",
     "studyTextAudioUrl": "https://...", // null when absent

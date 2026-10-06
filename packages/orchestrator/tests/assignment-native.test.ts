@@ -1,8 +1,10 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync as readAssignmentFixture } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
@@ -141,6 +143,34 @@ const expectedIds = [
 ];
 
 describe('native typed execution', () => {
+  it('imports the built orchestrator using only its declared production dependencies and package-owned assets', async () => {
+    const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+    const manifest = JSON.parse(readAssignmentFixture(join(packageRoot, 'package.json'), 'utf8'));
+    const isolated = await mkdtemp(join(tmpdir(), 'esl-orchestrator-runtime-'));
+    try {
+      await writeFile(join(isolated, 'package.json'), JSON.stringify({ type: 'module' }));
+      await copyFile(join(packageRoot, 'dist/index.js'), join(isolated, 'index.js'));
+      for (const name of Object.keys(manifest.dependencies)) {
+        const link = join(isolated, 'node_modules', name);
+        await mkdir(dirname(link), { recursive: true });
+        await symlink(await realpath(join(packageRoot, 'node_modules', name)), link, 'junction');
+      }
+      execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `
+        globalThis.fetch = () => { throw new Error('Network read'); };
+        await import('./index.js');
+      `,
+        ],
+        { cwd: isolated },
+      );
+    } finally {
+      await rm(isolated, { recursive: true, force: true });
+    }
+  }, 15_000);
   let persisted: AssignmentManifest | null;
   let store: ManifestStore;
   beforeEach(async () => {
@@ -252,7 +282,7 @@ describe('native typed execution', () => {
       mdHash: hash,
       publication: {
         schemaVersion: 1,
-        rendererVersion: 2,
+        rendererVersion: 3,
         title: assignment.metadata.title,
         icon: '🎧',
       },
@@ -342,6 +372,7 @@ describe('native typed execution', () => {
     );
     expect(persisted?.audioArtifacts?.pronunciation).toEqual(previous);
     expect(persisted?.publication?.pronunciationAudioUrl).toBeNull();
+    expect(persisted?.publication?.rendererVersion).toBe(3);
   });
 
   it('regenerates and replaces selected changed clips while preserving unchecked families and defaults', async () => {

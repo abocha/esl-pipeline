@@ -494,9 +494,45 @@ pnpm docs:check
 ## Structured assignment generation
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
-`AssignmentV1` response schema in the existing prompt-package envelope. Only OpenAI GPT-6.1 Sol
+`assignment_v1_generation_v7` response schema and matching first-line template marker in the existing
+prompt-package envelope. Runtime reads accept legacy root rationale without normalization or the
+new learner/teacher shape; post-provider fresh admission requires `learnerRationale` and required
+nullable `teacherRationale`, with no root `rationale`, plus a structured outputTask with task text,
+preparation/requirements/selfCheck text lists and nullable delivery. Empty lists and null delivery
+avoid filler. Runtime reads independently retain the old task/extension/sampleResponse shape without
+inserting fields. Each grammar item independently admits either closed legacy scalar `form` or
+structured `formBlocks` and `comparisons`. Fresh generation requires structured grammar everywhere:
+at least one labeled pattern with nonempty examples, and a possibly empty list of contrasts, each
+with exactly two labeled example/explanation alternatives. General examples, uses and traps retain
+their distinct roles; reads never convert legacy grammar. Old pinned schemas and old active template
+markers fail before generation/package creation and require recreation after an explicit template
+activation. This slice changes the repository template source only; it does not activate a revision.
+Only OpenAI GPT-6.1 Sol
 is admitted in this slice. Completed, non-refusal direct JSON is validated locally and returned
 as AssignmentV1 with a pretty-printed JSON text bridge. Native execution is downstream of validated
 typed authority. Old packages require recreation; historical Markdown workflows remain usable
 through explicit legacy reads. There is no model-driven
 Markdown repair. See [contract and rollout](../../docs/reference/ASSIGNMENT_V1.md).
+
+Fresh generation additionally requires `metadata.instructionLanguage` (for example `en` or `ru`).
+The shipped policy chooses current tutor notes, durable learner preferences in the rendered profile
+or snapshot, strong current/recent learner-level evidence, then English. Russian scaffolding can
+support instructions, explanations and glosses; English targets, practice, answers and samples stay
+English. Existing confirmed notes/profile provenance, transcript and memory blocks supply the
+evidence; unavailable sources stay unavailable. Economy is the smallest complete teaching sequence,
+with useful vocabulary/chunks, progressive practice, distinct structured grammar roles, conditional
+pronunciation, concrete mission self-checks and separate rationale audiences. ESL-30's v6 identity
+pins the tightened cue-leakage policy, construction-scoped grammar self-checks and short form-block
+labels. Comprehension questions/explanations use the selected support language while answers stay
+English. The ESL-31 bounded repair advances generation identity to v7 and requires every
+`practice[].items[].prompt` to be entirely English, including situation/direction text and target
+excerpts. Support-language directions belong in `practice[].instructions` and explanations in
+`practice[].items[].explanation`; simple English context and bare lexical cues must still preserve
+the tested grammatical decision. Old v6 (and earlier) packages/templates fail without rewriting
+their pins. AssignmentV1 schema/serialization 1 and renderer publication identity 3 stay unchanged.
+Optional authored icons are deferred. The bounded
+[ESL-28 learner-quality evaluation](../../docs/operations/assignment-quality-evaluation.md) is prepared
+and completed against the shipped v5 template after explicit paid-call authorization. Its three real
+cases remain private. The activation recommendation is CHANGE: repair a cue that leaks the target
+aspect and an overgeneralized learner self-check, with minor label and language-annotation findings
+recorded separately. No template activation or deployment is part of that evaluation.
