@@ -1,4 +1,5 @@
 import type { Frontmatter, PronunciationFocus, StudyText } from './assignment-domain.js';
+import { assignmentPlainText } from './assignment-inline.js';
 import type { AssignmentV1 } from './assignment-v1.js';
 
 /** Keep the established voice labels stable when executing Slice 2 publications. */
@@ -40,7 +41,7 @@ export function assignmentStudySegments(a: AssignmentV1) {
     id: `segment-${i + 1}`,
     // Match the established speech speaker token without parsing authored turn text.
     speaker: byId.get(turn.speakerId)!.replaceAll('_', '').replaceAll(/\s+/g, ' ').trim(),
-    text: turn.text,
+    text: assignmentPlainText(turn.text),
   }));
 }
 
@@ -56,20 +57,25 @@ export function assignmentPronunciation(a: AssignmentV1): PronunciationFocus | n
   const p = a.pronunciation;
   if (!p) return null;
   const common = {
-    target: p.target,
-    focus: p.focus,
-    action: p.action,
-    deliverable: p.deliverable,
+    target: assignmentPlainText(p.target),
+    focus: assignmentPlainText(p.focus),
+    action: assignmentPlainText(p.action),
+    deliverable: assignmentPlainText(p.deliverable),
     sectionStartLine: 0,
     issues: [],
   };
   const word = (w: { text: string; transcription: string | null }, i: number) => ({
-    text: w.text,
-    transcription: w.transcription ?? '',
+    text: assignmentPlainText(w.text),
+    transcription: w.transcription === null ? '' : assignmentPlainText(w.transcription),
     line: i + 1,
   });
   if (p.mode === 'shadow_sentence')
-    return { ...common, mode: p.mode, shadowSentence: p.shadowSentence, words: p.words.map(word) };
+    return {
+      ...common,
+      mode: p.mode,
+      shadowSentence: assignmentPlainText(p.shadowSentence),
+      words: p.words.map(word),
+    };
   if (p.mode === 'minimal_pair')
     return {
       ...common,
@@ -84,21 +90,23 @@ export function assignmentPronunciation(a: AssignmentV1): PronunciationFocus | n
     return {
       ...common,
       mode: p.mode,
-      naturalSentence: p.naturalSentence,
+      naturalSentence: assignmentPlainText(p.naturalSentence),
       lines: p.lines.map((line, i) => ({
-        careful: line.careful,
-        connected: line.spoken,
+        careful: assignmentPlainText(line.careful),
+        connected: assignmentPlainText(line.spoken),
         line: i + 1,
       })),
     };
   return {
     ...common,
     mode: p.mode,
-    naturalSentence: p.naturalSentence,
-    ...(p.contourCue === null ? {} : { contourCue: p.contourCue }),
+    naturalSentence: assignmentPlainText(p.naturalSentence),
+    ...(p.contourCue === null ? {} : { contourCue: assignmentPlainText(p.contourCue) }),
     drills: p.drills.map((drill, i) => ({
-      text: drill.text,
-      ...(drill.transcription === null ? {} : { transcription: drill.transcription }),
+      text: assignmentPlainText(drill.text),
+      ...(drill.transcription === null
+        ? {}
+        : { transcription: assignmentPlainText(drill.transcription) }),
       line: i + 1,
     })),
   };

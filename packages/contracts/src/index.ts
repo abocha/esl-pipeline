@@ -1128,6 +1128,7 @@ export interface VersionMetaResponse {
 
 export * from './assignment-artifact.js';
 export * from './assignment-domain.js';
+export * from './assignment-inline.js';
 export * from './assignment-projection.js';
 export * from './assignment-v1.js';
 export * from './contract-versions.js';

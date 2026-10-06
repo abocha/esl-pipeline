@@ -303,7 +303,7 @@ default: voice_id_default
     );
   });
 
-  it('preserves literal formatting characters in typed speech', async () => {
+  it('strips paired highlight markers while preserving other literal formatting in typed speech', async () => {
     const dir = await createTempDir('tts-');
     const assignmentPath = join(dir, 'assignment.json');
     const tempVoiceMapPath = join(dir, 'voices.yml');
@@ -348,7 +348,7 @@ default: voice_id_default
     });
     expect(convertMock).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ text: 'I **really** _love_ `code`!' }),
+      expect.objectContaining({ text: 'I **really** _love_ code!' }),
     );
   });
 });

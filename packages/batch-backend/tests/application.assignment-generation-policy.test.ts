@@ -39,7 +39,7 @@ describe('AssignmentV1 generation policy boundary', () => {
 
   it('requires a language tag in the closed fresh provider metadata', () => {
     const metadata = (ASSIGNMENT_RESPONSE_SCHEMA.schema as any).properties.metadata;
-    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v7');
+    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v8');
     expect(metadata.required).toContain('instructionLanguage');
     expect(metadata.additionalProperties).toBe(false);
     for (const language of ['en', 'ru', 'pt-BR']) {
@@ -161,18 +161,18 @@ describe('AssignmentV1 generation policy boundary', () => {
     'v4 schema',
     'old schema with new name',
     'v5 package',
-    'v5 marker with v7 schema',
-    'v7 marker with v5 schema',
+    'v5 marker with v8 schema',
+    'v8 marker with v5 schema',
     'v6 package',
-    'v6 marker with v7 schema',
-    'v7 marker with v6 schema',
-    'v7 non-strict schema',
+    'v6 marker with v8 schema',
+    'v8 marker with v6 schema',
+    'v8 non-strict schema',
   ])('rejects %s before dispatch without rewriting pins', async (kind) => {
     const prompt = promptPackageFixture();
     if (kind.startsWith('v5'))
       prompt.requestEnvelope.instructions =
         'Assignment output contract: assignment_v1_generation_v5\nOld policy.';
-    if (kind === 'v5 package' || kind === 'v7 marker with v5 schema')
+    if (kind === 'v5 package' || kind === 'v8 marker with v5 schema')
       prompt.requestEnvelope.responseSchema = {
         ...ASSIGNMENT_RESPONSE_SCHEMA,
         name: 'assignment_v1_generation_v5',
@@ -180,12 +180,12 @@ describe('AssignmentV1 generation policy boundary', () => {
     if (kind.startsWith('v6'))
       prompt.requestEnvelope.instructions =
         'Assignment output contract: assignment_v1_generation_v6\nOld policy.';
-    if (kind === 'v6 package' || kind === 'v7 marker with v6 schema')
+    if (kind === 'v6 package' || kind === 'v8 marker with v6 schema')
       prompt.requestEnvelope.responseSchema = {
         ...ASSIGNMENT_RESPONSE_SCHEMA,
         name: 'assignment_v1_generation_v6',
       };
-    if (kind === 'v7 non-strict schema')
+    if (kind === 'v8 non-strict schema')
       prompt.requestEnvelope.responseSchema = { ...ASSIGNMENT_RESPONSE_SCHEMA, strict: false };
     if (kind === 'v4 package' || kind === 'v4 template')
       prompt.requestEnvelope.instructions =

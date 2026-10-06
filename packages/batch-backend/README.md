@@ -494,7 +494,7 @@ pnpm docs:check
 ## Structured assignment generation
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
-`assignment_v1_generation_v7` response schema and matching first-line template marker in the existing
+`assignment_v1_generation_v8` response schema and matching first-line template marker in the existing
 prompt-package envelope. Runtime reads accept legacy root rationale without normalization or the
 new learner/teacher shape; post-provider fresh admission requires `learnerRationale` and required
 nullable `teacherRationale`, with no root `rationale`, plus a structured outputTask with task text,
@@ -530,7 +530,11 @@ excerpts. Support-language directions belong in `practice[].instructions` and ex
 `practice[].items[].explanation`; simple English context and bare lexical cues must still preserve
 the tested grammatical decision. Old v6 (and earlier) packages/templates fail without rewriting
 their pins. AssignmentV1 schema/serialization 1 and renderer publication identity 3 stay unchanged.
-Optional authored icons are deferred. The bounded
+ESL-32 advances generation to v8 and requires an authored `metadata.icon` emoji. Old packages
+and active markers fail without repinning. Read fallback is display-only; no history is rewritten.
+Paired backticks highlight linguistic fragments in learner content; derived speech strips only that
+syntax. Teacher follow-up remains typed teacher-only data and is omitted from whole learner HTML.
+The bounded
 [ESL-28 learner-quality evaluation](../../docs/operations/assignment-quality-evaluation.md) is prepared
 and completed against the shipped v5 template after explicit paid-call authorization. Its three real
 cases remain private. The activation recommendation is CHANGE: repair a cue that leaks the target
