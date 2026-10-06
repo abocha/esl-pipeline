@@ -2,7 +2,7 @@
   color-scheme: light;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #1d2935;
-  background: #f7f9fc;
+  background: #fafbfc;
   line-height: 1.65;
   font-size: 16px;
 }
@@ -15,20 +15,40 @@ body {
 .learner-handout {
   font-weight: 400;
   --handout-accent: #315f85;
-  --handout-line: #dbe4ee;
   --handout-muted: #526477;
-  max-width: 960px;
-  margin: 32px auto;
-  padding: 36px 44px;
-  background: white;
-  border: 1px solid var(--handout-line);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px #1d293508;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 56px 32px 80px;
   overflow-wrap: break-word;
 }
 .learner-handout header {
-  padding: 4px 0 24px;
-  border-bottom: 1px solid var(--handout-line);
+  max-width: 72ch;
+  margin-inline: auto;
+}
+.learner-handout main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 72ch) minmax(0, 1fr);
+}
+:where(.learner-handout main) > * {
+  grid-column: 2;
+  min-width: 0;
+}
+:where(.learner-handout main) > .grammar-card,
+:where(.learner-handout main) > .table-scroll {
+  grid-column: 1 / -1;
+}
+.grammar-card,
+.grammar-comparison {
+  display: grid;
+  grid-template-columns: subgrid;
+}
+:where(.grammar-card, .grammar-comparison) > * {
+  grid-column: 2;
+  min-width: 0;
+}
+:where(.grammar-card) > .grammar-comparison,
+:where(.grammar-comparison) > .grammar-alternatives {
+  grid-column: 1 / -1;
 }
 h1 {
   font-weight: 700;
@@ -44,18 +64,15 @@ h2 {
   font-size: 1.35rem;
   font-weight: 700;
   line-height: 1.45;
-  background: #edf4fb;
-  border: 1px solid color-mix(in srgb, var(--theme-h2, #315f85) 18%, #dbe4ee);
-  padding: 12px 16px;
-  border-radius: 10px;
-  margin: 40px 0 24px;
+  margin: 64px 0 20px;
+}
+.learner-handout main > h2:first-child {
+  margin-top: 48px;
 }
 h3 {
   font-size: 1.1rem;
   font-weight: 600;
   margin: 28px 0 14px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--theme-h3, #315f85) 18%, #dbe4ee);
 }
 h4 {
   font-size: 1.05rem;
@@ -70,7 +87,6 @@ p {
 }
 .plain-text {
   white-space: pre-wrap;
-  max-width: 72ch;
 }
 .inline-text,
 .pronunciation-line-text {
@@ -84,7 +100,7 @@ p {
 }
 .eyebrow {
   font-size: 0.8rem;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.05em;
 }
 .page-tags {
@@ -95,10 +111,10 @@ p {
   margin: 12px 0 0;
 }
 .callout {
-  padding: 20px 24px;
-  background: #f7f9fc;
-  border: 1px solid var(--handout-line);
-  border-radius: 10px;
+  padding: 0;
+}
+aside.callout > p:first-child {
+  font-size: 1.05rem;
 }
 .mission-key-language {
   margin: 12px 0 0;
@@ -106,8 +122,6 @@ p {
 .mission-task {
   font-size: 1.1rem;
   font-weight: 600;
-  background: #edf4fb;
-  border-left: 4px solid var(--handout-accent);
 }
 .mission-task p {
   margin: 0;
@@ -122,18 +136,15 @@ p {
   font-weight: inherit;
 }
 .practice-part + .practice-part {
-  margin-top: 28px;
-  padding-top: 8px;
-  border-top: 1px solid var(--handout-line);
+  margin-top: 32px;
 }
 ul,
 ol {
-  padding-left: 26px;
+  padding-left: 24px;
 }
 li {
-  padding-left: 4px;
+  padding-left: 0;
   margin: 10px 0;
-  max-width: 72ch;
 }
 li::marker {
   color: var(--handout-muted);
@@ -155,14 +166,13 @@ li::marker {
 }
 .transcript-speaker {
   color: var(--handout-accent);
-  font-weight: 650;
+  font-weight: 600;
 }
 .grammar-card {
-  margin: 20px 0 32px;
+  margin: 8px 0 24px;
 }
 .grammar-card + .grammar-card {
-  padding-top: 24px;
-  border-top: 1px solid var(--handout-line);
+  margin-top: 40px;
 }
 .grammar-topic {
   font-size: 1.25rem;
@@ -171,8 +181,6 @@ li::marker {
   margin: 4px 0 12px;
 }
 .grammar-form {
-  padding-left: 16px;
-  border-left: 2px solid var(--handout-line);
   margin: 24px 0;
 }
 .grammar-card h5,
@@ -182,10 +190,11 @@ li::marker {
   margin: 0 0 10px;
 }
 .grammar-form ul {
+  margin-top: 8px;
   margin-bottom: 0;
 }
 .grammar-pattern {
-  max-width: none;
+  margin: 8px 0;
 }
 .pattern-lines {
   display: inline-flex;
@@ -200,24 +209,22 @@ li::marker {
   white-space: normal;
 }
 .grammar-comparison {
-  margin: 28px 0;
+  margin: 32px 0;
   padding: 0;
+}
+.grammar-comparison > h5 {
+  margin-bottom: 16px;
 }
 .grammar-alternatives {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
-}
-.grammar-alternative + .grammar-alternative {
-  border-left: 1px solid var(--handout-line);
-  padding-left: 24px;
+  gap: 40px;
 }
 .grammar-alternative h6 {
   color: var(--handout-accent);
 }
 .grammar-traps {
-  padding-top: 12px;
-  border-top: 1px solid var(--handout-line);
+  margin-top: 16px;
 }
 .grammar-trap {
   margin: 20px 0;
@@ -235,41 +242,40 @@ li::marker {
 }
 .vocabulary-table th,
 .vocabulary-table td {
-  padding: 16px;
-  border-bottom: 1px solid var(--handout-line);
+  padding: 16px 20px 16px 0;
   text-align: left;
   vertical-align: top;
 }
 .vocabulary-table th {
-  background: #edf4fb;
   font-size: 0.9rem;
-  font-weight: 650;
+  font-weight: 600;
 }
 .vocabulary-table th:first-child {
   width: 24%;
-  border-radius: 8px 0 0 0;
 }
 .vocabulary-table th:nth-child(2) {
   width: 44%;
 }
 .vocabulary-table th:last-child {
   width: 32%;
-  border-radius: 0 8px 0 0;
+}
+.vocabulary-table th:last-child,
+.vocabulary-table td:last-child {
+  padding-right: 0;
 }
 .vocabulary-cell-label {
   display: none;
 }
 details {
-  border: 1px solid var(--handout-line);
-  border-radius: 8px;
   margin: 20px 0;
-  background: white;
 }
 summary {
-  padding: 12px 16px;
+  width: fit-content;
+  min-height: 44px;
+  padding: 8px 12px;
   font-weight: 600;
   cursor: pointer;
-  background: #f7f9fc;
+  border: 1px solid #aec6df;
   border-radius: 8px;
   color: var(--handout-accent);
 }
@@ -277,7 +283,7 @@ summary:hover {
   background: #edf4fb;
 }
 .disclosure-inner {
-  padding: 8px 20px 20px;
+  padding: 16px 0 0;
 }
 .audio-figure {
   margin: 24px 0;
@@ -351,7 +357,7 @@ button:disabled {
 }
 .pronunciation-target > span {
   font-size: 1.1rem;
-  font-weight: 650;
+  font-weight: 600;
 }
 .transcription {
   font-size: 0.9rem;
@@ -419,12 +425,8 @@ button:disabled {
   border: 0;
 }
 .answer-key-item {
-  padding: 16px 0;
-  margin: 0;
-  border-bottom: 1px solid var(--handout-line);
-}
-.answer-key-item:last-child {
-  border: 0;
+  padding: 0;
+  margin: 28px 0;
 }
 .answer-key-item p {
   margin: 8px 0;
@@ -438,15 +440,9 @@ button:disabled {
   font-weight: 400;
 }
 .sample-mission {
-  padding: 0 0 0 16px;
-  border-left: 2px solid var(--handout-line);
+  padding: 0;
 }
 .rationale-heading {
-  background: none;
-  border: 0;
-  border-bottom: 1px solid var(--handout-line);
-  border-radius: 0;
-  padding: 0 0 12px;
   font-size: 1.1rem;
 }
 .learner-rationale {
@@ -480,11 +476,6 @@ button:disabled {
 }
 .pronunciation-sentence {
   margin: 24px 0;
-  padding: 0 0 0 16px;
-  border: 0;
-  border-left: 2px solid var(--handout-line);
-  border-radius: 0;
-  background: none;
 }
 .reveal-target {
   position: relative;
@@ -500,30 +491,15 @@ button:disabled {
 }
 @media (max-width: 600px) {
   .learner-handout {
-    margin: 0;
     padding: 24px 16px 32px;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
   }
   h2 {
     font-size: 1.15rem;
-    padding: 12px;
-    margin-top: 32px;
+    margin-top: 48px;
   }
   .grammar-alternatives {
     grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-  }
-  .grammar-alternative + .grammar-alternative {
-    border-left: 0;
-    border-top: 1px solid var(--handout-line);
-    padding: 16px 0 0;
-  }
-  .callout,
-  .disclosure-inner {
-    padding-left: 16px;
-    padding-right: 16px;
+    gap: 24px;
   }
   .vocabulary-table,
   .vocabulary-table tbody {
@@ -541,7 +517,6 @@ button:disabled {
     display: grid;
     gap: 12px;
     padding: 20px 0;
-    border-bottom: 1px solid var(--handout-line);
   }
   .vocabulary-table td {
     display: block;
@@ -554,7 +529,7 @@ button:disabled {
   .vocabulary-cell-label {
     display: block;
     font-size: 0.75rem;
-    font-weight: 650;
+    font-weight: 600;
     color: var(--handout-muted);
     letter-spacing: 0.03em;
     margin-bottom: 4px;
@@ -565,8 +540,6 @@ button:disabled {
     margin: 0;
     padding: 0;
     max-width: none;
-    border: 0;
-    box-shadow: none;
   }
   button,
   .clip-button,
