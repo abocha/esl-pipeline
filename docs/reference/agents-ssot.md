@@ -289,11 +289,18 @@ Docs-heavy changes also require:
 AssignmentV1 runtime/read admission accepts exactly the closed legacy root `rationale` shape or
 the new required `learnerRationale` plus required nullable `teacherRationale` shape. Mixed, missing
 and partial shapes fail. Fresh generation admits only the new shape after provider receipt; the
-provider schema and template marker identify `assignment_v1_rationale_v2`. Stored prompt pins and
+provider schema and template marker identify `assignment_v1_mission_v3`. Stored prompt pins and
 old active template markers fail the existing unsupported-contract path before dispatch. Reads
 never normalize old assignments or add fields; canonical serialization 1 and frozen hashes remain
 unchanged. Native learner HTML renders only learner rationale; ambiguous legacy rationale omits
 section 6 entirely and teacher rationale is never emitted anywhere in the document.
+
+Output-task runtime admission independently accepts either the closed legacy task/extension/sample
+shape or the complete structured mission: task text, preparation/requirements/selfCheck text lists,
+nullable delivery text and unchanged extension/sampleResponse fields. Partial mission roles fail.
+Fresh generation requires all structured role fields, permitting empty lists and null delivery
+when unnecessary. Reads insert no defaults. Learner HTML emphasizes the task first, then displays
+only populated supporting roles; the sample remains in the answer key.
 
 Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
 HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source

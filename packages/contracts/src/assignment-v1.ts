@@ -1,9 +1,8 @@
 import { z } from 'zod';
 
-export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_rationale_v2';
+export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_mission_v3';
 export const ASSIGNMENT_TEMPLATE_ID = 'hw_prompt_assignment_v1.md';
-export const ASSIGNMENT_TEMPLATE_CONTRACT =
-  'Assignment output contract: assignment_v1_rationale_v2';
+export const ASSIGNMENT_TEMPLATE_CONTRACT = 'Assignment output contract: assignment_v1_mission_v3';
 
 const text = z.string();
 const optionalText = text.nullable();
@@ -46,7 +45,22 @@ const pronunciation = z.union([
   ),
 ]);
 
-// Both read shapes share the unchanged definitions for every non-rationale field.
+const legacyOutputTask = z.strictObject({
+  task: text,
+  extension: optionalText,
+  sampleResponse: text,
+});
+const structuredOutputTask = z.strictObject({
+  task: text,
+  preparation: texts,
+  requirements: texts,
+  delivery: optionalText,
+  selfCheck: texts,
+  extension: optionalText,
+  sampleResponse: text,
+});
+
+// Rationale and mission read forms evolve independently, without rewriting older objects.
 const assignmentFields = {
   schemaVersion: z.literal(1),
   metadata: z.strictObject({ title: text, student: text, level: text, topic: text }),
@@ -96,18 +110,21 @@ const assignmentFields = {
     }),
   ),
   pronunciation: pronunciation.nullable(),
-  outputTask: z.strictObject({ task: text, extension: optionalText, sampleResponse: text }),
+  outputTask: z.union([legacyOutputTask, structuredOutputTask]),
   teacherFollowUp: z.strictObject({ warmUp: text, correctionFocus: text }),
 };
 
 export const LegacyAssignmentV1Schema = z.strictObject({ ...assignmentFields, rationale: text });
-export const FreshAssignmentV1Schema = z.strictObject({
+const learnerRationaleAssignment = z.strictObject({
   ...assignmentFields,
   learnerRationale: text,
   teacherRationale: optionalText,
 });
+export const FreshAssignmentV1Schema = learnerRationaleAssignment.extend({
+  outputTask: structuredOutputTask,
+});
 /** Durable runtime/read admission, without normalization or inserted defaults. */
-export const AssignmentV1Schema = z.union([LegacyAssignmentV1Schema, FreshAssignmentV1Schema]);
+export const AssignmentV1Schema = z.union([LegacyAssignmentV1Schema, learnerRationaleAssignment]);
 
 export type AssignmentV1 = z.infer<typeof AssignmentV1Schema>;
 export type FreshAssignmentV1 = z.infer<typeof FreshAssignmentV1Schema>;

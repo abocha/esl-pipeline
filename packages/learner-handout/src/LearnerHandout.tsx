@@ -168,6 +168,46 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
   );
 }
 
+function MissionList({ label, items }: { label: string; items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <>
+      <h3>{label}</h3>
+      <ul>
+        {items.map((item, i) => (
+          <li className="plain-text" key={i}>
+            {item}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function OutputMission({ mission }: { mission: AssignmentV1['outputTask'] }) {
+  return (
+    <section className="output-mission" aria-labelledby="assignment-section-5">
+      <div className="callout mission-task">
+        <Text>{mission.task}</Text>
+      </div>
+      {'preparation' in mission && (
+        <>
+          <MissionList label="Prepare" items={mission.preparation} />
+          <MissionList label="Include in your response" items={mission.requirements} />
+          {mission.delivery !== null && (
+            <>
+              <h3>How to do it</h3>
+              <Text>{mission.delivery}</Text>
+            </>
+          )}
+          <MissionList label="Before you finish" items={mission.selfCheck} />
+        </>
+      )}
+      {mission.extension && <Field label="Optional extension">{mission.extension}</Field>}
+    </section>
+  );
+}
+
 /** AssignmentV1 is plain text. Audience/contract evolution remains outside this presentation seam. */
 export function LearnerHandout(props: LearnerHandoutProps) {
   const { assignment: a, media, publication, presentation } = props;
@@ -220,10 +260,7 @@ export function LearnerHandout(props: LearnerHandoutProps) {
           </>
         )}
         <h2 id="assignment-section-5">5. ✅ Your Turn: Complete the Mission!</h2>
-        <Text>{a.outputTask.task}</Text>
-        {a.outputTask.extension && (
-          <Field label="Optional extension">{a.outputTask.extension}</Field>
-        )}
+        <OutputMission mission={a.outputTask} />
         {'learnerRationale' in a && (
           <>
             <h2 id="assignment-section-6">6. 🧠 Why This Mission Helps You</h2>

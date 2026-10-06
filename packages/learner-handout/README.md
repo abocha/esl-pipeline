@@ -20,6 +20,12 @@ is audience-ambiguous, so section 6 is omitted entirely. `teacherRationale` is r
 and never emitted into learner HTML, including attributes, scripts, comments or serialized data.
 The other section IDs and labels remain stable.
 
+Section 5 renders the structured mission as one emphasized task callout, followed by lightweight
+Prepare, Include in your response, How to do it and Before you finish headings with lists or text.
+Empty lists and null delivery omit their headings. Optional extension stays inline; sampleResponse
+stays in section 7's answer key. Legacy task/extension/sampleResponse objects render directly with
+no inferred roles or data mutation. The single-column layout uses the existing responsive shell.
+
 ## Public seam
 
 ```tsx
@@ -130,7 +136,14 @@ colors are explicit hex presentation inputs, applied as heading accents; broader
 feature options are retired. Preview missing-audio placeholders say "Audio track generating...";
 publication unavailable states and disabled item controls remain explicit. Teacher’s Follow-up Plan
 remains unchanged; teacher rationale is never copied into it. Static/Vite fixtures use the separate
-new-shape rationale fixture; the ESL-20 legacy fixture and identity baseline remain untouched.
+structured mission fixture (including learner/teacher rationale); the ESL-20 legacy fixture,
+ESL-24 rationale fixture and identity baseline remain untouched.
+
+ESL-25 local inspection on 6 October 2026 covered the complete representative mission through the
+compiled standalone renderer at 1280 px desktop and 390 px mobile. The task remains visually primary,
+supporting roles wrap in a single column, and neither viewport has page-level horizontal overflow.
+Focused DOM tests cover all roles, independently absent roles, a minimal mission, both legacy read
+forms, escaped role text and unchanged inputs. No provider call or template activation was used.
 
 The package ships only `dist`, including CSS and playback JavaScript. React/React DOM are runtime
 dependencies. Production builds traverse the workspace graph; orchestrator keeps publication

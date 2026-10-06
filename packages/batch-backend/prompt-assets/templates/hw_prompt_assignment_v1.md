@@ -1,4 +1,4 @@
-Assignment output contract: assignment_v1_rationale_v2
+Assignment output contract: assignment_v1_mission_v3
 
 ## **System Prompt: ESL Homework Generator**
 
@@ -157,7 +157,13 @@ The pinned response schema owns output shape. Supply plain text values; presenta
 - Toolkit: practical grammar names, forms, explanations and examples for the chosen concept, with uses and error traps only where useful. Choose vocabulary worth actively using in this assignment, with meanings and examples reusing the input; do not target a preferred item count.
 - Practice: useful questions with corresponding answers; each item adds a different decision, context, or transfer demand. Include explanations only when they resolve a likely misconception, ambiguity, or non-obvious contrast. Named parts and instructions are optional. Do not pad item counts.
 - Pronunciation: null when no useful intervention is supported. Otherwise choose shadow_sentence, minimal_pair, connected_speech, intonation, rhythm_chunking or sentence_stress. Supply its specific payload, target, focus, action and deliverable. Transcription is optional; chunks reconstruct their drill text, and stressed words occur in it. Prefer a small, coherent set of drills and natural sentence practice.
-- Output task: a practical learner response, optional extension and one sample response. Recording, submission or sending to the teacher must remain optional unless the tutor explicitly requests it; do not invent links, upload destinations or external resources.
+- Output task: compose a structured mission rather than one procedural paragraph. `task` is the concise core learner task: what the listener or reader should understand or accomplish. Keep preparation, response requirements, delivery and self-check instructions out of `task` and in their own roles.
+  - `preparation`: a list of things to prepare or note before starting.
+  - `requirements`: independently scannable, meaning-based things the response should include. Let the learner choose how to express those meanings; do not supply target answers or force grammatical forms.
+  - `delivery`: nullable text describing how to perform or submit the mission. Recording, submission or sending to the teacher must remain optional unless the tutor explicitly requests it; do not invent links, upload destinations or external resources.
+  - `selfCheck`: a short list of learner-facing checks before finishing. Preserve useful self-noticing and self-correction: where relevant, ask the learner to notice a problem and try a correction.
+  - All four role fields are structurally required. Use empty lists or null delivery when a role is unnecessary; do not add artificial filler or repeat the task. Keep each useful item brief.
+  - Keep the existing optional `extension` (null when unnecessary) and one `sampleResponse`; the sample belongs in the answer key, not the mission instructions.
 - `learnerRationale`: speak directly to the learner and explain the practical benefit of this assignment or practice.
 - `teacherRationale`: required nullable field for lesson-evidence analysis, pedagogical diagnosis, teacher reasoning, or why the teacher selected the task. Use null when no teacher reasoning is needed. Do not put this analysis in `learnerRationale` or emit root `rationale`.
 - Teacher follow-up: a short warm-up and the most useful correction focus.
