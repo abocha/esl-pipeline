@@ -171,7 +171,7 @@ describe('tts elevenlabs integration', () => {
   });
 });
 
-it('keeps typed cast and cache identity for unchanged typed speech and preserves literal punctuation', async () => {
+it('keeps typed cast and cache identity and strips only paired highlight markers from speech', async () => {
   const assignment = assignmentFixture();
   const dir = await createTempDir('typed-eleven-');
   const voiceMapPath = join(dir, 'voices.yml');
@@ -184,11 +184,15 @@ it('keeps typed cast and cache identity for unchanged typed speech and preserves
   expect(typed.voiceAssignments).toEqual(historical.voiceAssignments);
   const convert = setupClientMock();
   mockConcat();
-  assignment.input.studyText.turns[0]!.text = '**literal** <tag> `code`';
+  assignment.input.studyText.turns[0]!.text = '**literal** <tag> `code` and a lone `';
+  const stored = JSON.stringify(assignment);
   await buildStudyTextMp3({ assignment }, { ...options, preview: false });
   expect(
-    convert.mock.calls.some(([, request]) => request.text.includes('**literal** <tag> `code`')),
+    convert.mock.calls.some(([, request]) =>
+      request.text.includes('**literal** <tag> code and a lone `'),
+    ),
   ).toBe(true);
+  expect(JSON.stringify(assignment)).toBe(stored);
 });
 
 it.each(['Mary  Jane', 'Mary_Jane'])(
