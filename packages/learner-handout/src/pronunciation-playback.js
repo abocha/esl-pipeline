@@ -4,6 +4,7 @@
   let currentButton;
   const state = (button, label) => {
     button.querySelector('.clip-status').textContent = label;
+    button.parentElement.querySelector('.clip-error').hidden = label !== 'Retry';
     button.dataset.playbackState = {
       Play: 'play',
       'Playing…': 'playing',

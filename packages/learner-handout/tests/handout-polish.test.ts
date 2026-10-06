@@ -4,10 +4,49 @@ import { describe, expect, it, vi } from 'vitest';
 import { validateAssignmentV1 } from '@esl-pipeline/contracts';
 
 import grammar from '../../contracts/tests/assignment-grammar-fixture.json';
-import { createFixture } from '../preview/fixtures.js';
+import { createFixture, createPolishFixture } from '../preview/fixtures.js';
 import { renderLearnerHandoutDocument } from '../src/server.js';
 
 describe('ESL-32 shared learner surface', () => {
+  it('keeps only explicitly authored bracket cues attached without changing their text', () => {
+    const props = createFixture();
+    const prompt =
+      'Use (`sail`), (`-ing`) and (`subject + a long sentence that may wrap`). Plain (sail), (ordinary prose `cue`), (`<img src=x>`). (`open and unmatched stay literal.';
+    props.assignment.practice[0]!.items[0]!.prompt = prompt;
+    const before = JSON.stringify(props);
+    const doc = new JSDOM(renderLearnerHandoutDocument(props)).window.document;
+    const item = doc.querySelector('.practice-part li')!;
+    expect([...item.querySelectorAll('.bracketed-cue')].map((c) => c.textContent)).toEqual([
+      '(sail)',
+      '(-ing)',
+      '(subject + a long sentence that may wrap)',
+      '(<img src=x>)',
+    ]);
+    for (const cue of item.querySelectorAll('.bracketed-cue')) {
+      expect(cue.firstChild?.textContent).toBe('(');
+      expect(cue.lastChild?.textContent).toBe(')');
+      expect(cue.querySelector('code')?.textContent).not.toMatch(/[()]/);
+    }
+    expect(item.textContent).toBe(
+      'Use (sail), (-ing) and (subject + a long sentence that may wrap). Plain (sail), (ordinary prose cue), (<img src=x>). (`open and unmatched stay literal.',
+    );
+    expect(item.querySelector('img')).toBeNull();
+    expect(JSON.stringify(props)).toBe(before);
+  });
+
+  it('admits the full retained lesson without shortening the visual fixture', () => {
+    const props = createPolishFixture();
+    expect(() => validateAssignmentV1(props.assignment)).not.toThrow();
+    expect(props.assignment.input.studyText.turns).toHaveLength(6);
+    const g = props.assignment.toolkit.grammar[0]!;
+    if (!('formBlocks' in g)) throw new Error('Structured grammar required');
+    expect(g.formBlocks).toHaveLength(3);
+    expect(g.comparisons).toHaveLength(2);
+    expect(props.assignment.toolkit.vocabulary).toHaveLength(5);
+    expect(props.assignment.practice.map((p) => p.items.length)).toEqual([5, 3, 3]);
+    expect(props.assignment.practice[0]!.items[0]!.prompt).toContain('(be)');
+    expect(props.assignment.practice[0]!.items[0]!.prompt).not.toContain('`be`');
+  });
   it('renders plain pattern alternatives and authored chunks as escaped cues without mutating data', () => {
     const props = createFixture();
     props.assignment = validateAssignmentV1(grammar);
@@ -173,33 +212,48 @@ describe('ESL-32 shared learner surface', () => {
     const buttons = [
       ...dom.window.document.querySelectorAll<HTMLButtonElement>('[data-pronunciation-clip]'),
     ];
-    expect(buttons[0]!.textContent).toBe('Play');
+    const status = (i: number) => buttons[i]!.querySelector('.clip-status')!.textContent;
+    const error = (i: number) =>
+      buttons[i]!.parentElement!.querySelector<HTMLElement>('.clip-error')!;
+    expect(status(0)).toBe('Play');
+    expect(error(0).hidden).toBe(true);
     const icons = buttons[0]!.querySelectorAll('svg');
     expect(icons).toHaveLength(4);
     // Clicking a nested SVG must still trigger delegated playback.
     icons[0]!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-    expect(buttons[0]!.textContent).toBe('Playing…');
+    expect(status(0)).toBe('Playing…');
     expect(buttons[0]!.dataset.playbackState).toBe('playing');
     buttons[1]!.click();
     expect(audios[0].pause).toHaveBeenCalledOnce();
     audios[0].dispatchEvent(new dom.window.Event('ended'));
     audios[0].dispatchEvent(new dom.window.Event('error'));
-    expect(buttons[0]!.textContent).toBe('Play');
+    expect(status(0)).toBe('Play');
+    expect(error(0).hidden).toBe(true);
     expect(buttons[0]!.dataset.playbackState).toBe('play');
     expect(buttons[0]!.querySelectorAll('svg')).toHaveLength(4);
-    expect(buttons[1]!.textContent).toBe('Playing…');
+    expect(status(1)).toBe('Playing…');
     audios[1].dispatchEvent(new dom.window.Event('ended'));
-    expect(buttons[1]!.textContent).toBe('Replay');
+    expect(status(1)).toBe('Replay');
     expect(buttons[1]!.dataset.playbackState).toBe('replay');
     play.mockRejectedValueOnce(new Error('offline'));
     buttons[1]!.click();
     await Promise.resolve();
-    expect(buttons[1]!.textContent).toBe('Retry');
+    expect(status(1)).toBe('Retry');
+    expect(error(1).hidden).toBe(false);
+    expect(error(1).textContent).toBe("Couldn't play audio.");
+    expect(buttons[1]!.querySelector('.clip-retry-label')?.textContent).toBe('Retry');
     expect(buttons[1]!.dataset.playbackState).toBe('retry');
     expect(buttons[1]!.getAttribute('aria-label')).toContain('Retry pronunciation for sheep');
     buttons[1]!.click();
     await Promise.resolve();
-    expect(buttons[1]!.textContent).toBe('Playing…');
+    expect(status(1)).toBe('Playing…');
+    expect(error(1).hidden).toBe(true);
+    audios[3].dispatchEvent(new dom.window.Event('error'));
+    expect(error(1).hidden).toBe(false);
+    buttons[0]!.click();
+    audios[3].dispatchEvent(new dom.window.Event('error'));
+    expect(error(1).hidden).toBe(true);
+    expect(error(0).hidden).toBe(true);
     dom.window.close();
   });
 
