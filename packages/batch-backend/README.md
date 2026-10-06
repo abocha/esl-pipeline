@@ -523,4 +523,7 @@ evidence; unavailable sources stay unavailable. Economy is the smallest complete
 with useful vocabulary/chunks, progressive practice, distinct structured grammar roles, conditional
 pronunciation, concrete mission self-checks and separate rationale audiences. The v5 identity pins
 this material policy change; old v4 packages/templates also fail without rewriting their pins.
-Optional authored icons and live quality evaluation are deferred.
+Optional authored icons are deferred. The bounded
+[ESL-28 learner-quality evaluation](../../docs/operations/assignment-quality-evaluation.md) is prepared
+against the shipped v5 template; its three real cases remain private, and paid generation requires
+explicit authorization before execution. No template activation is part of that evaluation.
