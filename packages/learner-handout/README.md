@@ -6,7 +6,7 @@ for renderer identity, HTML artifact hashing, object keys and S3 uploads. Vite i
 
 ## Ownership and component organization
 
-Runtime dependencies are React, React DOM and `contracts`, which owns the bounded inline-text
+Runtime dependencies are React, React DOM, Lucide icons and `contracts`, which owns the bounded inline-text
 convention as well as AssignmentV1 types. The package has no operator frontend, authentication, backend, orchestrator, storage,
 upload, provider or TTS dependency. Keeping it separate from `batch-frontend` avoids tutor application
 providers/routing. Keeping it separate from `html-publisher` allows presentation to evolve without
@@ -14,8 +14,10 @@ inheriting upload or publication-version responsibilities.
 
 `LearnerHandout.tsx` composes the full seven-section surface, with local input/toolkit/practice/answer
 components. `Pronunciation.tsx` handles the six existing modes. `primitives.tsx` owns escaped plain
-text, fields, native disclosures, audio and safe source links/video. Domain text is escaped; only paired-backtick linguistic fragments are highlighted, with no HTML
-or general Markdown interpretation. Section 6 renders only new-shape `learnerRationale`. Legacy root `rationale`
+text, fields, native disclosures, audio and safe source links/video. Domain text is escaped; ordinary
+inline text uses only paired-backtick linguistic highlights. Formula fields also have the bounded
+cue fallback described below. Neither path interprets HTML or general Markdown.
+Section 6 renders only new-shape `learnerRationale`. Legacy root `rationale`
 is audience-ambiguous, so section 6 is omitted entirely. `teacherRationale` is retained in typed data
 and never emitted into learner HTML, including attributes, scripts, comments or serialized data.
 Section 7 remains stable; section 8 is removed. `teacherFollowUp` stays typed teacher-only data
@@ -124,13 +126,16 @@ pnpm --filter @esl-pipeline/learner-handout fixture:static
 pnpm --filter @esl-pipeline/learner-handout fixture:serve
 ```
 
-The first command emits 22 complete documents and the local tone into `out/learner-handout`, through
+The first command emits 23 complete documents and the local tone into `out/learner-handout`, through
 the compiled Node renderer. Each HTML can be opened directly with its sibling tone file. The optional
 second command serves only those fixture files on `http://127.0.0.1:5175`; it uses no Vite and has no
 production role. `/` opens `shadow_sentence-mixed.html`. Names are `<mode>-<audio>.html`, including
 `none-available.html` and `shadow_sentence-unavailable.html`. `grammar.html` uses the separate compact
 structured grammar fixture: present simple vs continuous, two form blocks, one paired routine vs
 temporary contrast, distinct time-frame guidance and a missing-be trap.
+`polish.html` is the synthetic ESL-33 fixture for unmarked/authored formula chunks, alternative
+rows, bracketed practice hints, suffix wrapping and longer vocabulary expressions. Vite exposes
+the same content through its ESL-33 polish fixture checkbox. All audio remains the local test tone.
 
 ## Focused evidence
 
@@ -158,7 +163,7 @@ ESL-21 string-renderer suite also passed without changing the snapshot, pinned h
 
 The html-publisher adapter passes study audio, pronunciation primary/item clips and preview state
 explicitly. Structured primary URLs take precedence over the separate URL fallback. h2/h3 preset
-colors are explicit hex presentation inputs, applied as heading accents; broader legacy theme and
+colors are explicit hex presentation inputs, applied as subdued heading border accents; broader legacy theme and
 feature options are retired. Preview missing-audio placeholders say "Audio track generating...";
 publication unavailable states and disabled item controls remain explicit. Teacher’s Follow-up Plan is removed from learner output; both teacher follow-up and rationale stay
 in typed teacher data. Static/Vite fixtures use the separate
@@ -206,3 +211,28 @@ Fresh schema/template identity is v8; see [the canonical contract](../../docs/re
 Renderer 3 remains the native architecture identity; changed HTML gets a new exact-byte publisher
 hash. Frozen fixtures/snapshots are unchanged. The local fixture deliberately demonstrates selective
 highlights, wrapping formulas, numbered authored titles and an emoji using only local audio.
+
+## Visual and cue follow-up (ESL-33)
+
+Grammar `pattern`/legacy `form` fields always render as escaped cues, even without authored
+backticks. Unmarked clause chunks separate at commas; semicolons and newlines start alternative
+rows. Explicitly marked fragments retain their authored boundaries, including internal punctuation.
+This transformation is confined to formula presentation and never rewrites canonical strings.
+Ordinary inline content still requires explicit backticks; parentheses alone do not imply a cue.
+Blue bordered cues are atomic inline boxes: short endings stay together while long formulas wrap.
+
+The shared palette uses blue surfaces, quieter heading accents, an open grammar toolkit, a grouped
+listening panel, emphasized transcript speakers, and distinct mission/answer/sample typography.
+Vocabulary uses balanced desktop columns and stacked narrow-screen rows. Explicit table roles,
+column-header associations and English target annotations remain; mobile field labels are visual
+duplicates excluded from assistive text. Teacher-only content remains absent from the whole document.
+
+Clip buttons show Lucide play/speaker/replay/retry icons. Accessible names, tooltips and a visually
+hidden live status describe each action/state. Switching resets the previous icon and late events
+cannot overwrite current state. Native full-track players and preload semantics remain unchanged.
+
+Local inspection on 7 October 2026 covered emitted `polish.html` at an observed 1067px desktop and
+355px narrow viewport: formula alternatives, cue wrapping, the complete stacked vocabulary,
+expanded transcript/answer key, sample mission, and local-tone play/playing/replay. The vocabulary
+region's scroll width equaled its visible width; `-ing` occupied one intact inline box. This is
+local presentation/control evidence, not provider speech quality, hosted CI or production activation.

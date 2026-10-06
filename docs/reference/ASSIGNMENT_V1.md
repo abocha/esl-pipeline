@@ -76,6 +76,14 @@ numeric prefix and supplies one part number. Canonical values stay exact. Derive
 pronunciation projections remove paired delimiters; chunk reconstruction and lexical checks compare
 the derived text without mutating stored strings.
 
+ESL-33 makes grammar `pattern`/legacy `form` presentation consistently cue-styled, with fallback
+chunks for unmarked formulas and separate rows for unmarked semicolon/newline alternatives.
+Explicit cue boundaries are preserved. The general inline convention does not infer cues from
+parentheses: fresh instructions require backticks around supplied bracketed lexical hints without
+introducing the tested grammatical choice. Content fields, generation schema v8, stored prompt pins
+and serialization identity remain unchanged. The shipped instruction refinement takes effect only
+through normal explicit template activation; no active revision or frozen package is repinned.
+
 The source starts with Listen first and a bounded instruction; freely available transcript support
 follows audio. Attribution and links remain. Natural sentence practice groups the existing sentence
 and audio in a callout, with no new pedagogy. Internal pronunciation mode stays out of learner text.

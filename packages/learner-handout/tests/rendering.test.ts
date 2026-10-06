@@ -39,7 +39,7 @@ describe('React learner handout static foundation', () => {
     const cells = doc.querySelectorAll('tbody tr:first-child td');
     expect(cells[0]?.getAttribute('lang')).toBe('en');
     expect(cells[1]?.getAttribute('lang')).toBeNull();
-    expect(cells[1]?.textContent).toBe('сначала');
+    expect(cells[1]?.querySelector('.vocabulary-value')?.textContent).toBe('сначала');
     expect(cells[2]?.getAttribute('lang')).toBe('en');
     expect(doc.querySelector('#assignment-section-1')?.getAttribute('lang')).toBe('en');
     expect(doc.body.textContent).toContain('Это поможет вам объяснять свои планы.');
