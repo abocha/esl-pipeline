@@ -4,7 +4,7 @@
 
 - Audience: maintainer and the agent executing ESL-31.
 - Authority Level: task-specific evaluation procedure.
-- Last Verified Against: 2026-10-06 offline preparation after ESL-30 and its language-annotation follow-up.
+- Last Verified Against: 2026-10-06 fixed two-call evaluation after ESL-30 and its language-annotation follow-up.
 - Owner: founder-maintainer.
 - Review Cadence: when this fixed reevaluation changes or concludes.
 - Status: `active`.
@@ -14,10 +14,10 @@
 After ESL-30, does the fixed sample support activating the repaired AssignmentV1 generation policy
 for direct learner use without routine manual repair? This is a changed-policy gate, not another
 full ESL-28 benchmark. The existing [ESL-28 conclusion](assignment-quality-evaluation.md) remains
-CHANGE for v5. This new evaluation is **prepared offline; quality assessment is pending**.
+CHANGE for v5. This new evaluation is **complete: CHANGE before activation**.
 
-No provider request has been made for ESL-31. Explicit human authorization for the exact two-call
-experiment below must precede execution. Earlier ESL-28 authorization does not authorize ESL-31.
+The user explicitly authorized the exact two-call experiment below in the same chat after offline
+preparation. Both requests completed once on 2026-10-06. Earlier ESL-28 authorization was not reused.
 No retries, extra cases, paid evaluators, TTS, template activation, publication or deployment.
 Production activation belongs to ESL-29 and needs separate authorization.
 
@@ -102,7 +102,8 @@ Russian explanations, English target answers/text/practice, teacher exclusion, p
 retention, missing/wrong authorization rejection, third-case rejection and no-repeat guards.
 Helper typechecking and Biome checks pass. No broader invariant suite or paid evaluation was run.
 
-These commands are **prepared, not authorized or executed**:
+These two commands were executed once, in this order, after explicit authorization. They are
+historical execution evidence; do not rerun their completed attempts:
 
 ```powershell
 pnpm exec tsx --tsconfig packages/batch-backend/tsconfig.json scripts/evaluation/assignment-quality.ts run everyday-contrast --evaluation=ESL-31 --live --authorize=ESL-31
@@ -136,3 +137,59 @@ Do not average away one blocking defect. Do not infer model variance from one sa
 contract without a demonstrated limitation. Stop once the fixed evidence supports a decision.
 Token accounting must include per-case input/output/total and cached/reasoning tokens when returned.
 Private `decision.md` preserves exact evidence; commit only privacy-safe support/conclusions.
+
+## Completed reevaluation outcome
+
+**CHANGE:** the sample resolves the original instructional blockers, but a concrete practice-language
+delivery mismatch still prevents recommending activation for direct learner use as-is. Both outputs
+completed on `gpt-6.1-sol`, passed fresh v6 admission and emitted native renderer-3 learner HTML.
+Exact provider output/transport fidelity, JSON and learner DOM were inspected. Desktop/mobile
+handouts and separately opened answer disclosures were reviewed; no document horizontal overflow
+was observed. Internal teacher rationale is absent from the whole DOM in both cases.
+
+| Case                | Direct-send verdict                                      | Changed-risk evidence                                                                                                                                                                                                                                                         |
+| ------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `everyday-contrast` | NO for the complete artifact; teaching content is usable | Meaning-led cues preserve independent forms, continuous self-check scope is accurate, labels are economical and comprehension annotations are correct. Eight Russian-led practice cues and their answer-key copies are incorrectly tagged English.                            |
+| `beginner-support`  | YES                                                      | Russian scaffolding remains useful; routine/past/agreement retrieval and keyword retelling are coherent; self-checks are scoped; labels remain separate from patterns/examples; Russian comprehension and English target/practice content receive their expected annotations. |
+
+The blocking residual E31-01 is located at `practice[0].items[0..5].prompt` and
+`practice[1].items[0..1].prompt` in everyday-contrast. These contain Russian situation/direction text
+with English word cues or English error-repair excerpts. `PracticeParts` still puts the live list
+under `lang="en"`, and its `Answers` call uses the default English prompt annotation. All eight cue
+copies therefore have the same mismatch. Comprehension uses its repaired support-language path and
+is correct; target-English answers remain English. This is established from native DOM annotations,
+not from a simulated screen-reader or a conjecture based on appearance.
+
+Classification: a generation-policy/rendering language-boundary mismatch exposed by the changed
+cue behavior. It is an adjacent regression relevant to direct-send delivery, not evidence of a
+schema limitation or a need to redesign rendering. One sample does not establish model variance.
+
+The smallest repair is to clarify the existing field convention: `practice[].items[].prompt` must
+be entirely English, including its situation/direction text, while Russian scaffolding belongs in
+`practice[].instructions` and explanations. Preserve simple context and bare lexical cues without
+supplying the tested form. This fits current English practice rendering without new fields,
+translation or a localization framework. Simply marking a mixed Russian/English prompt wholly
+Russian would instead mislabel the embedded English skill text. No repair was implemented during
+this evaluation and no preserved output was modified.
+
+Original cue/self-check defects did not recur. Form labels in both cases identify their roles
+briefly, and useful patterns/examples remain in dedicated fields. All six comprehension questions
+and their answer-key copies are Russian in the DOM; the two non-null comprehension explanations
+are Russian, and all comprehension answers are English. No obvious teaching progression, mission
+or rationale-audience regression was found. The full-cue review distinguishes deliberate error
+correction from independent form selection; a faulty form shown for repair is legitimate task
+material. Counts are reported to locate affected artifacts, not used as quality proxies.
+
+| Case                | Input tokens | Output tokens | Total tokens | Cached input | Reasoning output |
+| ------------------- | -----------: | ------------: | -----------: | -----------: | ---------------: |
+| `everyday-contrast` |       26,926 |         4,329 |       31,255 |            0 |              283 |
+| `beginner-support`  |       22,423 |         3,623 |       26,046 |        5,872 |              516 |
+| Total               |       49,349 |         7,952 |       57,301 |        5,872 |              799 |
+
+Cached and reasoning tokens are subsets, not additional usage. Exact response IDs, raw provider
+responses, admitted assignments, learner HTML, native DOM audit, screenshots and seven-row case
+assessments remain private under `.tmp/esl-31/`. All 82 ESL-28 evidence files remain unchanged.
+Exactly two calls were made, with no retry, extra case, paid evaluator, TTS, activation or deployment.
+The fixed evidence is sufficient for this concrete CHANGE decision; no additional paid evidence is
+justified merely to strengthen confidence. This conclusion concerns the sampled direct-send gate,
+not universal reliability or learner outcomes.
