@@ -14,7 +14,9 @@
 After ESL-30, does the fixed sample support activating the repaired AssignmentV1 generation policy
 for direct learner use without routine manual repair? This is a changed-policy gate, not another
 full ESL-28 benchmark. The existing [ESL-28 conclusion](assignment-quality-evaluation.md) remains
-CHANGE for v5. This new evaluation is **complete: CHANGE before activation**.
+CHANGE for v5. This fixed v6 evaluation is **complete: CHANGE before activation**. The final
+campaign activation decision after subsequent remediation is **KEEP**, recorded below;
+the earlier run remains preserved.
 
 The user explicitly authorized the exact two-call experiment below in the same chat after offline
 preparation. Both requests completed once on 2026-10-06. Earlier ESL-28 authorization was not reused.
@@ -218,3 +220,15 @@ generated quality evidence or observed model adherence to v7.
 
 The completed v6 evaluation, its CHANGE decision and private evidence remain unchanged. No paid
 call, retry, extra case, activation or deployment is part of this repair. Hosted CI remains unverified.
+
+## Final campaign activation decision
+
+The maintainer's final ESL-31 conclusion on 2026-10-06 at 10:36:27 UTC is **KEEP** after the
+remediation iterations, supporting direct-send activation without further evidence expansion.
+ESL-31 is Done in Linear. The current ESL-29 instruction explicitly accepts that final gate;
+the earlier v6 CHANGE record and private artifacts above remain unchanged historical evidence.
+This annotation does not claim a new provider run or invent missing evaluation artifacts.
+
+Use [ESL-29 activation preparation](assignment-v1-activation.md) for exact v7 identity, renderer-3
+migration/deployment ordering, production default change and rollback. Production activation,
+deployment and any live work remain separately authorized.
