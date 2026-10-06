@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [18.0.0] - 2026-10-06
+
+### Changed
+
+- Automated release from PR #351: feat(assignment): deliver learner-ready v7 generation and React handouts (https://github.com/abocha/esl-pipeline/pull/351)
+
 ## [17.0.0] - 2026-10-04
 
 ### Changed
