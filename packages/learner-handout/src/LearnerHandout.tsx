@@ -8,6 +8,14 @@ import type { LearnerHandoutProps } from './types.js';
 
 type Question = AssignmentV1['input']['comprehension'][number];
 
+// Russian support metadata also occurs on older assignments with English questions.
+// This bounded script heuristic applies only to question text, never explanations or answers.
+function questionLanguage(prompt: string, supportLanguage: string): string {
+  return supportLanguage.split('-')[0] === 'ru' && !/\p{Script=Cyrillic}/u.test(prompt)
+    ? 'en'
+    : supportLanguage;
+}
+
 function Answers({
   questions,
   promptLanguage = 'en',
@@ -19,7 +27,7 @@ function Answers({
     <ol>
       {questions.map((q, i) => (
         <li className="answer-key-item" key={i}>
-          <Text lang={promptLanguage}>{q.prompt}</Text>
+          <Text lang={questionLanguage(q.prompt, promptLanguage)}>{q.prompt}</Text>
           <Field label="Answer" lang="en">
             {q.answer}
           </Field>
@@ -111,7 +119,11 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
       <h3 lang="en">🤔 Comprehension Check</h3>
       <ol lang={a.metadata.instructionLanguage ?? 'en'}>
         {a.input.comprehension.map((q, i) => (
-          <li className="plain-text" key={i}>
+          <li
+            className="plain-text"
+            key={i}
+            lang={questionLanguage(q.prompt, a.metadata.instructionLanguage ?? 'en')}
+          >
             {q.prompt}
           </li>
         ))}

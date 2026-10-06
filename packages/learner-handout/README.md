@@ -28,6 +28,13 @@ explicitly English. This does not translate
 the fixed UI labels. Missing metadata falls back to English in static presentation without inserting
 fields into older assignments or changing canonical data.
 
+Russian support metadata can accompany older English comprehension questions. For these question
+texts only, the renderer uses a bounded heuristic: a Cyrillic character retains the authored Russian
+language tag; otherwise the question is tagged English. The same rule applies to answer-key question
+copies. Explanations independently inherit the support language and target answers stay English.
+This is script-based presentation guidance, not general language detection; mixed text and other
+support languages are not classified by this rule.
+
 Section 5 renders the structured mission as one emphasized task callout, followed by lightweight
 Prepare, Include in your response, How to do it and Before you finish headings with lists or text.
 Empty lists and null delivery omit their headings. Optional extension stays inline; sampleResponse
