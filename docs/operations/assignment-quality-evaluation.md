@@ -4,7 +4,7 @@
 
 - Audience: maintainer and the agent executing ESL-28.
 - Authority Level: task-specific evaluation procedure.
-- Last Verified Against: 2026-10-06 ESL-27 commit `5daaf6b2c310856e6c2eb09c425939d38b36f8d8` and offline plumbing.
+- Last Verified Against: 2026-10-06 fixed three-call evaluation of ESL-27 commit `5daaf6b2c310856e6c2eb09c425939d38b36f8d8`.
 - Owner: founder-maintainer.
 - Review Cadence: when this fixed evaluation changes or concludes.
 - Status: `active`.
@@ -16,10 +16,15 @@ manual repair? Assess the current shipped v5 teaching policy and native learner 
 Markdown output is not the quality target. This procedure does not activate templates, deploy,
 publish, generate audio, change contracts, or process historical assignments.
 
-**Preparation is complete; paid generation and quality judgments are pending.** Explicit human
-authorization in the same chat must precede the first `run` command. CLI flags record that boundary;
-they do not themselves constitute human authorization. The fixed allocation is three generation
-requests, one per case, with no automatic retry or paid evaluator.
+**Evaluation is complete: CHANGE before activation.** The user authorized the paid calls in the
+same chat, and all three fixed requests completed once on 2026-10-06. The everyday-contrast output
+requires instructional repair. See the outcome below and the private `.tmp/esl-28/decision.md` for
+exact response IDs, artifact locations and full case assessments. No additional call is authorized
+or needed for this decision.
+
+Explicit human authorization must precede live execution. CLI flags record that boundary; they do
+not themselves constitute human authorization. The fixed allocation was three generation requests,
+one per case, with no automatic retry or paid evaluator.
 
 ## Fixed real cases
 
@@ -107,7 +112,8 @@ annotations, teacher exclusion, incomplete-response rejection/raw retention, mis
 refusal, duplicate-dispatch refusal, uncertain-dispatch refusal and unknown-usage refusal. They are
 **not learner-quality evidence** and remain separate from the three real cases.
 
-Only after explicit authorization, run each frozen case once, sequentially:
+The following three commands were executed once, sequentially, after explicit authorization.
+They document the exact execution path; do not rerun attempted cases:
 
 ```powershell
 pnpm exec tsx --tsconfig packages/batch-backend/tsconfig.json scripts/evaluation/assignment-quality.ts run beginner-support --live --authorize=ESL-28
@@ -181,3 +187,46 @@ the changed experiment. Imperfection or a desire for more confidence alone is in
 Commit only privacy-safe helper/docs and any appropriately anonymized final conclusions. Keep real
 learner contexts, raw responses, assignments and handouts ignored. Activation/deployment belongs to
 ESL-29 and is outside this evaluation.
+
+## Completed evaluation outcome
+
+**CHANGE:** the fixed evidence does not support activating the current shipped policy as-is.
+All three responses completed on the requested model, passed fresh v5 admission and emitted native
+renderer-3 learner HTML. Full JSON and learner DOM were inspected, with desktop and 390px mobile
+screenshots and a separate answer-key inspection. Teacher rationale is absent from each complete
+learner document, including closed disclosures. No mobile document horizontal overflow was observed.
+
+| Case                 | Direct-send assessment               | Concrete residual issue                                                                                                                                                         |
+| -------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `beginner-support`   | Visually sendable with minor defects | Grammar labels repeat their complete patterns/examples; Russian comprehension cues are marked English in HTML. The visual verdict does not certify assistive-language delivery. |
+| `everyday-contrast`  | Repair required                      | An independent question cue supplies the target continuous construction; a self-check incorrectly applies the need for be to every new sentence containing -ing.                |
+| `technical-transfer` | Sendable with minor clutter          | Grammar labels repeat complete patterns/examples. The teaching sequence and meaning-based mission remain useful.                                                                |
+
+Activation-blocking authored defects in the everyday case are preserved at
+`practice[1].items[2].prompt` and `outputTask.selfCheck[1]` (zero-based indices) in its private admitted
+JSON and unchanged learner HTML. The cue partially leaks aspect rather than supplying the entire
+finished answer. The self-check must refer to intended continuous forms; a sentence such as
+`I enjoy swimming` legitimately contains an -ing form without be. These are prompt/policy-quality
+defects. One sample does not establish model variance or prove that a particular prompt rewrite
+will resolve them.
+
+The duplicated headings in the other two cases are minor authored presentation-policy defects,
+not a quality judgment based on output length or item counts. A short label, separate pattern and
+separate examples are already expressible; the everyday case demonstrates that under the same
+schema/settings. The Russian comprehension language-tag mismatch is a distinct renderer annotation
+issue: live questions inherit English from their list, and answer-key copies explicitly receive
+English. Resolve the cue-language convention and renderer annotation narrowly; actual screen-reader
+audio was not tested. No schema limitation or need to redesign native rendering is demonstrated.
+
+Preserve the useful teaching design. The next bounded work should address full-cue integrity and
+semantic scope of self-checks, with label economy and comprehension-language annotation handled by
+their owners. This evaluation implements no corrective policy/renderer change. The fixed sample is
+sufficient for CHANGE; a later changed-policy evaluation needs its own specific decision and paid
+authorization. There were no extra cases, retries, paid evaluators, TTS, activation or deployment.
+
+Exact accounting: **84,020 total tokens**, comprising 72,879 input and 11,141 output. Output includes
+931 reported reasoning tokens; 11,148 input tokens were reported cached. This is usage accounting,
+not a quality score. Per-case raw responses, usage, artifact hashes, all fourteen rubric dimensions,
+screenshots and the decision remain ignored under `.tmp/esl-28/`. Only this privacy-safe conclusion
+is committed. The evidence establishes sampled direct-send quality, not learner outcomes or universal
+generation reliability.

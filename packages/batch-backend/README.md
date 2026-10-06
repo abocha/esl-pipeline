@@ -525,5 +525,7 @@ pronunciation, concrete mission self-checks and separate rationale audiences. Th
 this material policy change; old v4 packages/templates also fail without rewriting their pins.
 Optional authored icons are deferred. The bounded
 [ESL-28 learner-quality evaluation](../../docs/operations/assignment-quality-evaluation.md) is prepared
-against the shipped v5 template; its three real cases remain private, and paid generation requires
-explicit authorization before execution. No template activation is part of that evaluation.
+and completed against the shipped v5 template after explicit paid-call authorization. Its three real
+cases remain private. The activation recommendation is CHANGE: repair a cue that leaks the target
+aspect and an overgeneralized learner self-check, with minor label and language-annotation findings
+recorded separately. No template activation or deployment is part of that evaluation.
