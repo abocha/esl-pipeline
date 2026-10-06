@@ -13,6 +13,7 @@ body {
   margin: 0;
 }
 .learner-handout {
+  font-weight: 400;
   --handout-accent: #315f85;
   --handout-line: #dbe4ee;
   --handout-muted: #526477;
@@ -30,6 +31,7 @@ body {
   border-bottom: 1px solid var(--handout-line);
 }
 h1 {
+  font-weight: 700;
   font-size: clamp(1.6rem, 4vw, 2.25rem);
   line-height: 1.25;
   letter-spacing: -0.025em;
@@ -40,7 +42,7 @@ h1 {
 }
 h2 {
   font-size: 1.35rem;
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.45;
   background: #edf4fb;
   border: 1px solid color-mix(in srgb, var(--theme-h2, #315f85) 18%, #dbe4ee);
@@ -50,17 +52,21 @@ h2 {
 }
 h3 {
   font-size: 1.1rem;
-  font-weight: 650;
+  font-weight: 600;
   margin: 28px 0 14px;
   padding-bottom: 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--theme-h3, #315f85) 18%, #dbe4ee);
 }
 h4 {
   font-size: 1.05rem;
+  font-weight: 600;
   margin: 24px 0 10px;
 }
 p {
   margin: 12px 0;
+}
+.field-label {
+  font-weight: 600;
 }
 .plain-text {
   white-space: pre-wrap;
@@ -112,9 +118,8 @@ p {
   margin-top: 28px;
 }
 .practice-part-number {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--handout-muted);
+  font-size: inherit;
+  font-weight: inherit;
 }
 .practice-part + .practice-part {
   margin-top: 28px;
@@ -134,10 +139,7 @@ li::marker {
   color: var(--handout-muted);
 }
 .listening-panel {
-  padding: 20px 24px;
-  border: 1px solid var(--handout-line);
-  border-radius: 10px;
-  background: #f7f9fc;
+  padding: 0;
 }
 .listening-panel h3 {
   border: 0;
@@ -163,17 +165,20 @@ li::marker {
   border-top: 1px solid var(--handout-line);
 }
 .grammar-topic {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--handout-accent);
   margin: 4px 0 12px;
 }
 .grammar-form {
-  padding-top: 16px;
-  border-top: 1px solid var(--handout-line);
+  padding-left: 16px;
+  border-left: 2px solid var(--handout-line);
   margin: 24px 0;
 }
 .grammar-card h5,
 .grammar-card h6 {
   font-size: 1rem;
+  font-weight: 600;
   margin: 0 0 10px;
 }
 .grammar-form ul {
@@ -196,9 +201,7 @@ li::marker {
 }
 .grammar-comparison {
   margin: 28px 0;
-  padding: 20px;
-  background: #f7f9fc;
-  border-radius: 10px;
+  padding: 0;
 }
 .grammar-alternatives {
   display: grid;
@@ -362,8 +365,30 @@ button:disabled {
   justify-content: center;
   flex: 0 0 auto;
 }
+.clip-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.clip-error {
+  font-size: 0.875rem;
+  color: #805619;
+}
 .clip-icon {
   display: none;
+}
+.clip-retry-label {
+  display: none;
+}
+.clip-button[data-playback-state="retry"] {
+  width: auto;
+  padding: 0 10px;
+  gap: 6px;
+}
+[data-playback-state="retry"] .clip-retry-label {
+  display: inline;
 }
 .clip-icon svg {
   display: block;
@@ -405,16 +430,16 @@ button:disabled {
   margin: 8px 0;
 }
 .answer-content {
-  font-weight: 550;
+  font-weight: 400;
 }
 .answer-explanation {
   color: var(--handout-muted);
-  font-size: 0.95rem;
+  font-size: 1rem;
+  font-weight: 400;
 }
 .sample-mission {
-  padding: 20px;
-  background: #f7f9fc;
-  border-radius: 8px;
+  padding: 0 0 0 16px;
+  border-left: 2px solid var(--handout-line);
 }
 .rationale-heading {
   background: none;
@@ -444,8 +469,22 @@ button:disabled {
   overflow-wrap: anywhere;
   vertical-align: baseline;
 }
+.bracketed-cue {
+  display: inline-flex;
+  align-items: last baseline;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.bracketed-cue > .linguistic-highlight {
+  min-width: 0;
+}
 .pronunciation-sentence {
   margin: 24px 0;
+  padding: 0 0 0 16px;
+  border: 0;
+  border-left: 2px solid var(--handout-line);
+  border-radius: 0;
+  background: none;
 }
 .reveal-target {
   position: relative;
@@ -454,26 +493,9 @@ button:disabled {
   vertical-align: top;
 }
 .reveal-content:not(.is-revealed) {
-  filter: blur(5px);
-  user-select: none;
+  display: none;
 }
 [data-grammar-reveal] {
-  position: absolute;
-  inset: -3px;
-  width: calc(100% + 6px);
-  min-height: 0;
-  padding: 0;
-  border: 1px solid var(--handout-line);
-  background: #f7f9fc88;
-}
-[data-grammar-reveal]::after {
-  content: "Reveal";
-  color: var(--handout-accent);
-  background: #edf4fb;
-  border: 1px solid #aec6df;
-  padding: 2px 8px;
-  border-radius: 5px;
-  font-size: 0.75rem;
   font-weight: 600;
 }
 @media (max-width: 600px) {
@@ -499,8 +521,6 @@ button:disabled {
     padding: 16px 0 0;
   }
   .callout,
-  .listening-panel,
-  .grammar-comparison,
   .disclosure-inner {
     padding-left: 16px;
     padding-right: 16px;
@@ -554,7 +574,6 @@ button:disabled {
     display: none;
   }
   .reveal-content:not(.is-revealed) {
-    filter: none;
-    user-select: auto;
+    display: inline;
   }
 }

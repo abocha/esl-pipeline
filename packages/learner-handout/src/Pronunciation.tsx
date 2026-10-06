@@ -47,6 +47,9 @@ function ClipControls({ clips }: { clips: readonly PronunciationClipInput[] }) {
       <span className="clip-icon clip-icon-retry" aria-hidden="true">
         <RefreshCw size={18} />
       </span>
+      <span className="clip-retry-label" aria-hidden="true">
+        Retry
+      </span>
       <span className="clip-status sr-only">Play</span>
     </>
   );
@@ -68,26 +71,30 @@ function ClipControls({ clips }: { clips: readonly PronunciationClipInput[] }) {
       {clips.map((clip, i) => {
         const url = safeMediaUrl(clip.url);
         return (
-          <button
-            key={i}
-            type="button"
-            className="clip-button"
-            disabled={!url}
-            data-pronunciation-clip={clip.id}
-            data-audio-url={url ?? undefined}
-            data-clip-text={assignmentPlainText(clip.text)}
-            data-playback-state="play"
-            aria-label={`Play pronunciation for ${assignmentPlainText(clip.text)}`}
-            aria-live="polite"
-            aria-atomic="true"
-            title={
-              url
-                ? `Play pronunciation for ${assignmentPlainText(clip.text)}`
-                : 'Audio clip not generated yet'
-            }
-          >
-            {icons}
-          </button>
+          <span className="clip-control" key={i}>
+            <button
+              type="button"
+              className="clip-button"
+              disabled={!url}
+              data-pronunciation-clip={clip.id}
+              data-audio-url={url ?? undefined}
+              data-clip-text={assignmentPlainText(clip.text)}
+              data-playback-state="play"
+              aria-label={`Play pronunciation for ${assignmentPlainText(clip.text)}`}
+              aria-live="polite"
+              aria-atomic="true"
+              title={
+                url
+                  ? `Play pronunciation for ${assignmentPlainText(clip.text)}`
+                  : 'Audio clip not generated yet'
+              }
+            >
+              {icons}
+            </button>
+            <span className="clip-error" hidden lang="en">
+              Couldn't play audio.
+            </span>
+          </span>
         );
       })}
     </span>

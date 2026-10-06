@@ -20,6 +20,13 @@ import { renderLearnerHandoutDocument } from '../src/server.js';
 const documentFor = (props = createFixture()) =>
   new JSDOM(renderLearnerHandoutDocument(props)).window.document;
 
+// Control labels are not authored lesson text.
+const fieldText = (element: Element) => {
+  const copy = element.cloneNode(true) as Element;
+  for (const button of copy.querySelectorAll('button')) button.remove();
+  return copy.textContent;
+};
+
 describe('React learner handout static foundation', () => {
   it('uses authored support language in static and React roots while keeping target English explicit', () => {
     const assignment = validateAssignmentV1({
@@ -79,7 +86,7 @@ describe('React learner handout static foundation', () => {
         explanation: alternative.querySelector('p:last-child')?.textContent,
       })),
     ).toEqual(grammar.comparisons[0]!.alternatives);
-    expect([...topic.querySelectorAll('.grammar-trap p')].map((p) => p.textContent)).toEqual([
+    expect([...topic.querySelectorAll('.grammar-trap p')].map(fieldText)).toEqual([
       `Wrong: ${grammar.traps[0]!.original}`,
       `Corrected: ${grammar.traps[0]!.improved}`,
       `Explanation: ${grammar.traps[0]!.explanation}`,
@@ -324,7 +331,7 @@ describe('React learner handout static foundation', () => {
     const doc = documentFor(props);
     expect(
       [...doc.querySelectorAll('.grammar-trap')].map((t) =>
-        [...t.querySelectorAll('p')].map((p) => p.textContent),
+        [...t.querySelectorAll('p')].map(fieldText),
       ),
     ).toEqual(
       props.assignment.toolkit.grammar[0]!.traps.map((t) => [
@@ -509,8 +516,8 @@ describe('React learner handout static foundation', () => {
     buttons[0]!.click();
     await Promise.resolve();
     expect(pause).toHaveBeenCalledTimes(1);
-    expect(buttons[0]!.textContent).toBe('Retry');
-    expect(buttons[2]!.textContent).toBe('Play');
+    expect(buttons[0]!.querySelector('.clip-status')?.textContent).toBe('Retry');
+    expect(buttons[2]!.querySelector('.clip-status')?.textContent).toBe('Play');
     expect(dom.window.document.querySelector('.playback-status')).toBeNull();
     dom.window.close();
   });

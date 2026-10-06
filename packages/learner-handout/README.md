@@ -133,9 +133,16 @@ production role. `/` opens `shadow_sentence-mixed.html`. Names are `<mode>-<audi
 `none-available.html` and `shadow_sentence-unavailable.html`. `grammar.html` uses the separate compact
 structured grammar fixture: present simple vs continuous, two form blocks, one paired routine vs
 temporary contrast, distinct time-frame guidance and a missing-be trap.
-`polish.html` is the synthetic ESL-33 fixture for unmarked/authored formula chunks, alternative
-rows, bracketed practice hints, suffix wrapping and longer vocabulary expressions. Vite exposes
-the same content through its ESL-33 polish fixture checkbox. All audio remains the local test tone.
+`polish.html` uses the full ESL-33 lesson in `preview/full-lesson.json`. Vite exposes the same
+content through its ESL-33 polish fixture checkbox. All audio remains the local test tone.
+The fixture was reconstructed from the retained published HTML artifact
+`0516b4c0e63934fcf0f5849ddbe0b08634913ebf935011fa4e2960187cbcf5bb`: all learner-visible strings,
+authored cues, six dialogue turns, three form groups, both comparisons, five vocabulary entries,
+eleven practice items and their answers, and the full mission/sample are preserved. Speaker IDs,
+roles and other hidden speaker metadata are local placeholders; teacher follow-up is a placeholder
+and teacher rationale is null. This is a presentation fixture, not recovered canonical source or
+generation-policy evidence. Original unmarked bracket hints stay unmarked; separate authored-cue
+tests exercise punctuation without backfilling this lesson.
 
 ## Focused evidence
 
@@ -197,10 +204,10 @@ or a display-only 🎧 fallback; no input is rewritten. Source presentation is L
 audio then freely available transcript, with attribution/links and quieter generation provenance.
 Pronunciation mode is internal. Its existing natural/shadow sentence and audio sit in a callout.
 
-Each grammar correction/explanation has a visible bold label and independently blurred content
+Each grammar correction/explanation has a visible semibold label and independently hidden content
 with `aria-hidden` until its native reveal button is activated. Activation reveals once, removes
 that button from tab order and preserves keyboard focus on the now-readable line. It never exposes
-another line. A simple print rule removes blur. No reveal state survives reload.
+another line. A simple print rule exposes the content. No reveal state survives reload.
 
 The packaged interaction script also animates shared native details in both directions using Web
 Animations, cancels interrupted animations from the current height, clears clipping on completion,
@@ -220,9 +227,16 @@ rows. Explicitly marked fragments retain their authored boundaries, including in
 This transformation is confined to formula presentation and never rewrites canonical strings.
 Ordinary inline content still requires explicit backticks; parentheses alone do not imply a cue.
 Blue bordered cues are atomic inline boxes: short endings stay together while long formulas wrap.
+Directly adjacent parentheses around an explicitly authored cue share its inline group but retain
+ordinary text styling. Long grouped cues still wrap; plain parenthetical prose is untouched.
 
-The shared palette uses blue surfaces, quieter heading accents, an open grammar toolkit, a grouped
-listening panel, emphasized transcript speakers, and distinct mission/answer/sample typography.
+The shared palette reserves prominent surfaces for major sections and mission frames. Listening,
+comparisons and the sample use simpler open layouts. Grammar topics have stronger headings;
+form groups use quiet side rules instead of repeated full-width separators. Practice and answers
+use 400-weight body prose, 600-weight field labels/subheadings, and 700-weight main headings.
+Part numbers and titles share size/weight; explanation prose keeps the body size. Authored emphasis
+in vocabulary, examples and transcript speakers remains distinct. Each reveal has one labeled
+native button, with no nested chip or blurred overlay.
 Vocabulary uses balanced desktop columns and stacked narrow-screen rows. Explicit table roles,
 column-header associations and English target annotations remain; mobile field labels are visual
 duplicates excluded from assistive text. Teacher-only content remains absent from the whole document.
@@ -230,9 +244,15 @@ duplicates excluded from assistive text. Teacher-only content remains absent fro
 Clip buttons show Lucide play/speaker/replay/retry icons. Accessible names, tooltips and a visually
 hidden live status describe each action/state. Switching resets the previous icon and late events
 cannot overwrite current state. Native full-track players and preload semantics remain unchanged.
+Failure also shows "Couldn't play audio." and a visible Retry label on the triggering button;
+retry/switch clears that feedback through the existing guarded state transition.
 
-Local inspection on 7 October 2026 covered emitted `polish.html` at an observed 1067px desktop and
-355px narrow viewport: formula alternatives, cue wrapping, the complete stacked vocabulary,
-expanded transcript/answer key, sample mission, and local-tone play/playing/replay. The vocabulary
-region's scroll width equaled its visible width; `-ing` occupied one intact inline box. This is
-local presentation/control evidence, not provider speech quality, hosted CI or production activation.
+The 7 October 2026 follow-up compared the same full reconstructed lesson before/after at 1280px
+desktop and 390px phone widths, with transcript and answers expanded. All 144 inline fields and
+three patterns matched the retained original text. Computed styles confirmed body/label weights,
+matching part numbers/titles and 16px explanations; page scroll width matched each viewport.
+A separate 355px authored-cue probe confirmed attached uncolored parentheses, intact `-ing` and
+wrapping long cues. Keyboard reveals and local missing-clip failure followed by tone recovery
+were inspected. Screenshots and computed-style results are retained in `D:/tmp/esl-33-follow-up/`.
+This is local presentation/control evidence, not speech quality, screen-reader or print auditing,
+hosted CI or production activation.

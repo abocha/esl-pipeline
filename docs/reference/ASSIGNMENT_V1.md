@@ -79,21 +79,23 @@ the derived text without mutating stored strings.
 ESL-33 makes grammar `pattern`/legacy `form` presentation consistently cue-styled, with fallback
 chunks for unmarked formulas and separate rows for unmarked semicolon/newline alternatives.
 Explicit cue boundaries are preserved. The general inline convention does not infer cues from
-parentheses: fresh instructions require backticks around supplied bracketed lexical hints without
+parentheses. Directly adjacent parentheses around an authored cue stay attached without sharing
+its fill; long cues can still wrap. Fresh instructions require backticks around supplied bracketed lexical hints without
 introducing the tested grammatical choice. Content fields, generation schema v8, stored prompt pins
 and serialization identity remain unchanged. The shipped instruction refinement takes effect only
 through normal explicit template activation; no active revision or frozen package is repinned.
 
 The source starts with Listen first and a bounded instruction; freely available transcript support
 follows audio. Attribution and links remain. Natural sentence practice groups the existing sentence
-and audio in a callout, with no new pedagogy. Internal pronunciation mode stays out of learner text.
+and audio in a quiet group, with no new pedagogy. Internal pronunciation mode stays out of learner text.
 Item buttons report Play / Playing… / Replay / Retry, reset on clip switching and ignore stale events.
+Playback failure also shows a concise visible message and a labeled Retry action.
 Native full-track controls retain their existing preload behavior.
 
-Wrong grammar remains visible. Bold Corrected: and Explanation: labels are always visible; each
-following content line is independently blurred and excluded from screen-reader output until its
+Wrong grammar remains visible. Semibold Corrected: and Explanation: labels are always visible; each
+following content line is independently hidden and excluded from screen-reader output until its
 native button is activated by pointer or keyboard. Reveal is permanent for the page session. Cheap
-print CSS removes blur. Native disclosures retain the consolidated Answer Key & Sample Mission,
+print CSS exposes the content. Native disclosures retain the consolidated Answer Key & Sample Mission,
 with packaged opening/closing animation, rapid-toggle cancellation and reduced-motion fallback.
 Both `teacherFollowUp` and `teacherRationale` stay in typed teacher data and are absent from complete
 learner HTML bytes, including hidden/serialized output. Ambiguous legacy rationale stays excluded.

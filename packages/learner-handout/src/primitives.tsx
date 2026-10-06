@@ -5,15 +5,28 @@ import { assignmentInlineParts } from '@esl-pipeline/contracts';
 import { safeLinkUrl, safeMediaUrl, videoEmbedUrl } from './urls.js';
 
 export function Inline({ children }: { children: string }) {
+  const parts = assignmentInlineParts(children);
+  const bracketed = (i: number) =>
+    parts[i]?.highlighted &&
+    !parts[i - 1]?.highlighted &&
+    !parts[i + 1]?.highlighted &&
+    parts[i - 1]?.text.endsWith('(') &&
+    parts[i + 1]?.text.startsWith(')');
   return (
     <span className="inline-text">
-      {assignmentInlineParts(children).map((part, i) =>
+      {parts.map((part, i) =>
         part.highlighted ? (
-          <code className="linguistic-highlight" key={i}>
-            {part.text}
-          </code>
+          bracketed(i) ? (
+            <span className="bracketed-cue" key={i}>
+              (<code className="linguistic-highlight">{part.text}</code>)
+            </span>
+          ) : (
+            <code className="linguistic-highlight" key={i}>
+              {part.text}
+            </code>
+          )
         ) : (
-          part.text
+          part.text.slice(bracketed(i - 1) ? 1 : 0, bracketed(i + 1) ? -1 : undefined)
         ),
       )}
     </span>
@@ -54,7 +67,9 @@ export function GrammarPattern({ label, children }: { label: string; children: s
   }
   return (
     <p className="plain-text grammar-pattern">
-      <strong lang="en">{label}:</strong>{' '}
+      <strong className="field-label" lang="en">
+        {label}:
+      </strong>{' '}
       <span lang="en" className="pattern-lines">
         {lines.map((row, i) => (
           <span className="pattern-line" key={i}>
@@ -87,12 +102,16 @@ export function RevealField({
 }) {
   return (
     <p className="plain-text grammar-reveal">
-      <strong lang="en">{label}:</strong>{' '}
+      <strong className="field-label" lang="en">
+        {label}:
+      </strong>{' '}
       <span className="reveal-target">
         <span className="reveal-content" lang={lang} aria-hidden="true">
           <Inline>{children}</Inline>
         </span>
-        <button type="button" data-grammar-reveal aria-label={name} />
+        <button type="button" data-grammar-reveal aria-label={name} lang="en">
+          Reveal
+        </button>
       </span>
     </p>
   );
@@ -127,7 +146,9 @@ export function Field({
 }) {
   return (
     <p className={`plain-text${className ? ` ${className}` : ''}`}>
-      <strong lang="en">{label}:</strong>{' '}
+      <strong className="field-label" lang="en">
+        {label}:
+      </strong>{' '}
       <span lang={lang}>
         <Inline>{children}</Inline>
       </span>
