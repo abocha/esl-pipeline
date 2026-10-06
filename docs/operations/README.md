@@ -19,6 +19,10 @@ backup/restore, health, Telegram, prompt-gallery, or replay runbook named there.
 For a fresh supported Ubuntu host, start with
 [production host bootstrap](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap).
 
+AssignmentV1 campaign activation uses
+[ESL-29 preparation and rollout ordering](assignment-v1-activation.md), including renderer-3 admission,
+the exact shipped v7 template, default selection and paired rollback.
+
 For on-host container, filesystem, CPU/memory-pressure, and public-route checks, see
 [`host-runtime-health.md`](host-runtime-health.md). It is separate from PostgreSQL backup health
 and does not establish off-host availability or worker job progress.
