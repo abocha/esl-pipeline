@@ -8,12 +8,18 @@ import type { LearnerHandoutProps } from './types.js';
 
 type Question = AssignmentV1['input']['comprehension'][number];
 
-function Answers({ questions }: { questions: Question[] }) {
+function Answers({
+  questions,
+  promptLanguage = 'en',
+}: {
+  questions: Question[];
+  promptLanguage?: string;
+}) {
   return (
     <ol>
       {questions.map((q, i) => (
         <li className="answer-key-item" key={i}>
-          <Text lang="en">{q.prompt}</Text>
+          <Text lang={promptLanguage}>{q.prompt}</Text>
           <Field label="Answer" lang="en">
             {q.answer}
           </Field>
@@ -103,7 +109,7 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
         ))}
       </Disclosure>
       <h3 lang="en">🤔 Comprehension Check</h3>
-      <ol lang="en">
+      <ol lang={a.metadata.instructionLanguage ?? 'en'}>
         {a.input.comprehension.map((q, i) => (
           <li className="plain-text" key={i}>
             {q.prompt}
@@ -337,7 +343,10 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         </h2>
         <Disclosure label="Answer Key">
           <h3 lang="en">Comprehension Check Answers</h3>
-          <Answers questions={a.input.comprehension} />
+          <Answers
+            questions={a.input.comprehension}
+            promptLanguage={a.metadata.instructionLanguage ?? 'en'}
+          />
           <h3 lang="en">A. Controlled Practice Answers</h3>
           <PracticeParts assignment={a} answers />
           <h3 lang="en">Sample Mission</h3>

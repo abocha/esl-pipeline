@@ -22,7 +22,9 @@ The other section IDs and labels remain stable.
 
 Authored `metadata.instructionLanguage` sets the language of the static HTML document and shared
 React article. English target text and fixed English presentation labels are marked separately;
-authored explanations and vocabulary meanings inherit the support language. This does not translate
+comprehension questions (including answer-key copies), authored explanations and vocabulary meanings
+use the support language. Comprehension answers and controlled-practice prompts/answers remain
+explicitly English. This does not translate
 the fixed UI labels. Missing metadata falls back to English in static presentation without inserting
 fields into older assignments or changing canonical data.
 

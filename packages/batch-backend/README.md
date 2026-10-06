@@ -494,7 +494,7 @@ pnpm docs:check
 ## Structured assignment generation
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
-`assignment_v1_generation_v5` response schema and matching first-line template marker in the existing
+`assignment_v1_generation_v6` response schema and matching first-line template marker in the existing
 prompt-package envelope. Runtime reads accept legacy root rationale without normalization or the
 new learner/teacher shape; post-provider fresh admission requires `learnerRationale` and required
 nullable `teacherRationale`, with no root `rationale`, plus a structured outputTask with task text,
@@ -521,8 +521,10 @@ support instructions, explanations and glosses; English targets, practice, answe
 English. Existing confirmed notes/profile provenance, transcript and memory blocks supply the
 evidence; unavailable sources stay unavailable. Economy is the smallest complete teaching sequence,
 with useful vocabulary/chunks, progressive practice, distinct structured grammar roles, conditional
-pronunciation, concrete mission self-checks and separate rationale audiences. The v5 identity pins
-this material policy change; old v4 packages/templates also fail without rewriting their pins.
+pronunciation, concrete mission self-checks and separate rationale audiences. ESL-30's v6 identity
+pins the tightened cue-leakage policy, construction-scoped grammar self-checks and short form-block
+labels. Comprehension questions/explanations use the selected support language while answers stay
+English. Old v5 (and earlier) packages/templates fail without rewriting their pins.
 Optional authored icons are deferred. The bounded
 [ESL-28 learner-quality evaluation](../../docs/operations/assignment-quality-evaluation.md) is prepared
 and completed against the shipped v5 template after explicit paid-call authorization. Its three real
