@@ -62,6 +62,7 @@ export function freshAssignmentFixture(): FreshAssignmentV1 {
     ),
   ) as FreshAssignmentV1;
   assignment.metadata.instructionLanguage = 'en';
+  assignment.metadata.icon = '🧭';
   return assignment;
 }
 

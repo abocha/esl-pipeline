@@ -7,6 +7,7 @@ import type { LearnerHandoutProps } from './types.js';
 // Package-owned immutable assets, copied once by the package build. No Vite asset loaders.
 const css = readFileSync(new URL('./handout.css', import.meta.url), 'utf8');
 const playback = readFileSync(new URL('./pronunciation-playback.js', import.meta.url), 'utf8');
+const interactions = readFileSync(new URL('./handout-interactions.js', import.meta.url), 'utf8');
 
 /** Complete unhydrated document. No publication identity/version or upload responsibilities. */
 export function renderLearnerHandoutDocument(props: LearnerHandoutProps): string {
@@ -24,7 +25,7 @@ export function renderLearnerHandoutDocument(props: LearnerHandoutProps): string
         <body>
           <LearnerHandout {...props} />
           {/* biome-ignore lint/security/noDangerouslySetInnerHtml: Trusted package behavior, never render input. */}
-          <script dangerouslySetInnerHTML={{ __html: playback }} />
+          <script dangerouslySetInnerHTML={{ __html: `${playback}\n${interactions}` }} />
         </body>
       </html>,
     )

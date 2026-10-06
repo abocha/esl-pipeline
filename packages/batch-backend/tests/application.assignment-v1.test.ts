@@ -73,7 +73,7 @@ describe('AssignmentV1 domain and native projection', () => {
       { assignment: validateAssignmentV1(a) },
       { ttsProvider: 'elevenlabs', ttsModel: 'eleven_v3', voiceMapPath: '', outPath: '' },
     );
-    expect(speech.segments[0]?.text).toBe(hostile);
+    expect(speech.segments[0]?.text).toBe(hostile.replace('`tick`', 'tick'));
     const html = await renderAssignmentToHtml(a);
     expect(html).not.toContain('<img src=x');
     expect(html).not.toContain('href="javascript:');

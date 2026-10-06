@@ -927,7 +927,7 @@ export async function newAssignment(
         schemaVersion: 1 as const,
         rendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
         title: assignment.metadata.title,
-        icon: '🎧',
+        icon: assignment.metadata.icon ?? '🎧',
         studyTextAudioUrl: audioArtifacts.studyText?.url ?? null,
         pronunciationAudioUrl: assignment.pronunciation
           ? (audioArtifacts.pronunciation?.primaryClip?.url ?? null)
@@ -1733,7 +1733,7 @@ export async function rerunAssignment(
         schemaVersion: 1 as const,
         rendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
         title: assignment.metadata.title,
-        icon: '🎧',
+        icon: assignment.metadata.icon ?? '🎧',
         studyTextAudioUrl: audioArtifacts.studyText?.url ?? null,
         pronunciationAudioUrl: assignment.pronunciation
           ? (audioArtifacts.pronunciation?.primaryClip?.url ?? null)

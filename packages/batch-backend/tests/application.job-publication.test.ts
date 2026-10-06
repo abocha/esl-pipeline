@@ -44,11 +44,16 @@ describe('typed publication metadata', () => {
   );
 
   it('reads explicit v3 publication metadata', async () => {
-    vi.mocked(readAssignmentArtifact).mockResolvedValue(assignmentFixture());
+    const assignment = assignmentFixture();
+    assignment.metadata.icon = '🌦️';
+    vi.mocked(readAssignmentArtifact).mockResolvedValue(assignment);
     vi.mocked(createTranscriptionStorageForUri).mockReturnValue({
       getText: vi.fn().mockResolvedValue(JSON.stringify({ publication: { rendererVersion: 3 } })),
     } as never);
-    expect((await getTypedJobPublication(job))?.publication.rendererVersion).toBe(3);
+    expect((await getTypedJobPublication(job))?.publication).toMatchObject({
+      rendererVersion: 3,
+      icon: '🌦️',
+    });
   });
   it.each([
     {

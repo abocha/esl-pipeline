@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
-export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_generation_v7';
+import { assignmentPlainText } from './assignment-inline.js';
+
+export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_generation_v8';
 export const ASSIGNMENT_TEMPLATE_ID = 'hw_prompt_assignment_v1.md';
 export const ASSIGNMENT_TEMPLATE_CONTRACT =
-  'Assignment output contract: assignment_v1_generation_v7';
+  'Assignment output contract: assignment_v1_generation_v8';
 
 const text = z.string();
 const optionalText = text.nullable();
@@ -88,6 +90,7 @@ const structuredGrammar = z.strictObject({
 const instructionLanguage = z.string().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/);
 const metadata = z.strictObject({
   title: text,
+  icon: text.optional(),
   student: text,
   level: text,
   topic: text,
@@ -146,7 +149,7 @@ const learnerRationaleAssignment = z.strictObject({
   teacherRationale: optionalText,
 });
 export const FreshAssignmentV1Schema = learnerRationaleAssignment.extend({
-  metadata: metadata.extend({ instructionLanguage }),
+  metadata: metadata.extend({ instructionLanguage, icon: text.min(1) }),
   outputTask: structuredOutputTask,
   toolkit: assignmentFields.toolkit.extend({ grammar: z.array(structuredGrammar) }),
 });
@@ -164,7 +167,8 @@ export type AssignmentPronunciation = NonNullable<AssignmentV1['pronunciation']>
 const { $schema: _dialect, ...providerSchema } = z.toJSONSchema(FreshAssignmentV1Schema);
 export const ASSIGNMENT_RESPONSE_SCHEMA = {
   name: ASSIGNMENT_RESPONSE_SCHEMA_NAME,
-  description: 'One complete ESL homework assignment with plain text domain fields.',
+  description:
+    'One complete ESL homework assignment with authored emoji and string content using selective paired-backtick linguistic highlights.',
   schema: providerSchema as Record<string, unknown>,
   strict: true,
 } as const;
@@ -180,7 +184,7 @@ const LEXICAL_WORD_PATTERN = /[\p{L}\p{M}\p{N}]+(?:['’‐‑-][\p{L}\p{M}\p{N}
 
 function lexicalWords(value: string): string[] {
   return (
-    value
+    assignmentPlainText(value)
       .normalize('NFKC')
       .match(LEXICAL_WORD_PATTERN)
       ?.map((word) => word.toLowerCase()) ?? []
@@ -238,6 +242,16 @@ function validateAssignmentDomain<T extends AssignmentV1>(
       });
   }
   meaningful(assignment, 'assignment');
+  // Bounded emoji admission, including ZWJ families, flags, modifiers and keycaps.
+  // This is post-provider validation: no unsupported JSON Schema emoji pattern.
+  if (
+    assignment.metadata.icon !== undefined &&
+    ([...assignment.metadata.icon].length > 32 ||
+      !/^(?:\p{Extended_Pictographic}[\uFE0F\p{Emoji_Modifier}]*(?:\u200D\p{Extended_Pictographic}[\uFE0F\p{Emoji_Modifier}]*)*|\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3)$/u.test(
+        assignment.metadata.icon,
+      ))
+  )
+    errors.push('metadata.icon must be one nonempty emoji');
   if (context.studentName && assignment.metadata.student !== context.studentName)
     errors.push('metadata.student must match the canonical student display name');
   if (context.inputKind && assignment.input.kind !== context.inputKind)
@@ -298,8 +312,8 @@ function validateAssignmentDomain<T extends AssignmentV1>(
       for (const item of p.drills) {
         if (
           item.chunks.length &&
-          item.chunks.join(' ').replace(/\s+/g, ' ').trim() !==
-            item.text.replace(/\s+/g, ' ').trim()
+          item.chunks.map(assignmentPlainText).join(' ').replace(/\s+/g, ' ').trim() !==
+            assignmentPlainText(item.text).replace(/\s+/g, ' ').trim()
         )
           errors.push('pronunciation chunks must reconstruct drill text');
         const drillWords = new Set(lexicalWords(item.text));

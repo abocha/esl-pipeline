@@ -266,7 +266,7 @@ Student: voice_student_female
       expect(convertMock).toHaveBeenCalledTimes(5); // 5 dialogue lines
     });
 
-    it('preserves plain typed dialogue inputs before synthesis', async () => {
+    it('strips paired highlight markers and preserves other literal dialogue text before synthesis', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const assignmentPath = join(dir, 'dialogue-sanitize.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
@@ -346,7 +346,7 @@ Student: voice_student_female
         throw new Error('Expected two dialogue inputs.');
       }
       expect(first.text).toBe('**Hello** *there*.');
-      expect(second.text).toBe('This is `code` and ~~strikethrough~~.');
+      expect(second.text).toBe('This is code and ~~strikethrough~~.');
     });
 
     it('should handle fixtures with speaker profiles in frontmatter', async () => {
