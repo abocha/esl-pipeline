@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_mission_v3';
+export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_grammar_v4';
 export const ASSIGNMENT_TEMPLATE_ID = 'hw_prompt_assignment_v1.md';
-export const ASSIGNMENT_TEMPLATE_CONTRACT = 'Assignment output contract: assignment_v1_mission_v3';
+export const ASSIGNMENT_TEMPLATE_CONTRACT = 'Assignment output contract: assignment_v1_grammar_v4';
 
 const text = z.string();
 const optionalText = text.nullable();
@@ -60,6 +60,29 @@ const structuredOutputTask = z.strictObject({
   sampleResponse: text,
 });
 
+const grammarFields = {
+  name: text,
+  explanation: text,
+  examples: texts,
+  uses: z.array(z.strictObject({ label: text, example: text })),
+  traps: z.array(z.strictObject({ original: text, improved: text, explanation: text })),
+};
+const legacyGrammar = z.strictObject({ ...grammarFields, form: optionalText });
+const structuredGrammar = z.strictObject({
+  ...grammarFields,
+  formBlocks: z
+    .array(z.strictObject({ label: text, pattern: text, examples: texts.min(1) }))
+    .min(1),
+  comparisons: z.array(
+    z.strictObject({
+      label: text,
+      alternatives: z
+        .array(z.strictObject({ label: text, example: text, explanation: text }))
+        .length(2),
+    }),
+  ),
+});
+
 // Rationale and mission read forms evolve independently, without rewriting older objects.
 const assignmentFields = {
   schemaVersion: z.literal(1),
@@ -90,16 +113,7 @@ const assignmentFields = {
     comprehension: z.array(questionAnswer),
   }),
   toolkit: z.strictObject({
-    grammar: z.array(
-      z.strictObject({
-        name: text,
-        form: optionalText,
-        explanation: text,
-        examples: texts,
-        uses: z.array(z.strictObject({ label: text, example: text })),
-        traps: z.array(z.strictObject({ original: text, improved: text, explanation: text })),
-      }),
-    ),
+    grammar: z.array(z.union([legacyGrammar, structuredGrammar])),
     vocabulary: z.array(z.strictObject({ expression: text, meaning: text, example: text })),
   }),
   practice: z.array(
@@ -122,12 +136,15 @@ const learnerRationaleAssignment = z.strictObject({
 });
 export const FreshAssignmentV1Schema = learnerRationaleAssignment.extend({
   outputTask: structuredOutputTask,
+  toolkit: assignmentFields.toolkit.extend({ grammar: z.array(structuredGrammar) }),
 });
 /** Durable runtime/read admission, without normalization or inserted defaults. */
 export const AssignmentV1Schema = z.union([LegacyAssignmentV1Schema, learnerRationaleAssignment]);
 
 export type AssignmentV1 = z.infer<typeof AssignmentV1Schema>;
 export type FreshAssignmentV1 = z.infer<typeof FreshAssignmentV1Schema>;
+export type AssignmentGrammar = AssignmentV1['toolkit']['grammar'][number];
+export type StructuredAssignmentGrammar = z.infer<typeof structuredGrammar>;
 export type AssignmentSpeaker = AssignmentV1['input']['studyText']['speakers'][number];
 export type AssignmentPronunciation = NonNullable<AssignmentV1['pronunciation']>;
 

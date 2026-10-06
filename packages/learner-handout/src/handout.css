@@ -97,6 +97,38 @@ li {
   border-radius: 8px;
   margin-bottom: 16px;
 }
+.grammar-topic {
+  font-size: 1.1rem;
+  margin: 4px 0 12px;
+}
+.grammar-form {
+  padding: 4px 0 4px 16px;
+  border-left: 3px solid #9fb6cd;
+  margin: 20px 0;
+}
+.grammar-card h5,
+.grammar-card h6 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+.grammar-form ul {
+  margin-bottom: 0;
+}
+.grammar-comparison {
+  margin: 24px 0;
+  padding: 16px;
+  background: #f0f3f6;
+  border-radius: 8px;
+}
+.grammar-alternatives {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+.grammar-alternative + .grammar-alternative {
+  border-left: 1px solid #9fb6cd;
+  padding-left: 20px;
+}
 .grammar-traps {
   padding-top: 8px;
   border-top: 1px solid #d6dde4;
@@ -223,6 +255,15 @@ button:disabled {
   h2 {
     font-size: 1.15rem;
     padding: 10px 12px;
+  }
+  .grammar-alternatives {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .grammar-alternative + .grammar-alternative {
+    border-left: 0;
+    border-top: 1px solid #9fb6cd;
+    padding: 12px 0 0;
   }
   .grammar-card,
   .callout,

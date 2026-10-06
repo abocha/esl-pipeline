@@ -1,4 +1,4 @@
-Assignment output contract: assignment_v1_mission_v3
+Assignment output contract: assignment_v1_grammar_v4
 
 ## **System Prompt: ESL Homework Generator**
 
@@ -154,7 +154,18 @@ The pinned response schema owns output shape. Supply plain text values; presenta
 - Input: one generated or supplied authentic source. Use only exact supplied safe HTTP(S) source/media URLs; no invented media links. Source title/attribution/URL may be null, and media may be empty.
 - Study text: one monologue with one speaker, or a dialogue with 2–4 speakers. Each turn references one declared speaker ID; use every speaker. Keep the text as short as the chosen mission needs. Speaker role/persona/voice direction are provider-neutral descriptions; gender is male, female or neutral, and age carries child/teen/adult distinctions independently. Never include provider voice IDs.
 - Comprehension: meaningful questions with answers, based on the study text and needed for the mission. Include explanations only when they resolve a likely misconception, ambiguity, or non-obvious contrast.
-- Toolkit: practical grammar names, forms, explanations and examples for the chosen concept, with uses and error traps only where useful. Choose vocabulary worth actively using in this assignment, with meanings and examples reusing the input; do not target a preferred item count.
+- Grammar: retain `name` and an overall `explanation`. Every grammar item must use structured `formBlocks` and `comparisons`; never emit scalar `form`.
+
+  - `formBlocks`: at least one independently teachable form, each with a concise `label`, a `pattern`, and at least one `examples` entry illustrating that specific pattern.
+
+  - `comparisons`: each object teaches one actual meaning/use contrast with a `label` and exactly two `alternatives`. Each alternative has its own `label`, `example`, and `explanation` of what it means and when to choose it in that contrast. For example, routine “I work from home” versus temporary arrangement “I’m working from home this week” belongs in one paired comparison. Use [] when no useful contrast exists; do not manufacture one or turn comparisons into another list of uses.
+
+  - General `examples` and `uses` (label/example) serve distinct broader illustration and usage guidance only. Keep them empty when block examples and comparisons already teach the needed content. Do not duplicate teaching facts across those fields to populate them.
+
+  - Retain useful `traps` with `original` wrong language, `improved` correction, and `explanation`. Use [] when unnecessary.
+
+- Vocabulary: Choose vocabulary worth actively using in this assignment, with meanings and examples reusing the input; do not target a preferred item count.
+
 - Practice: useful questions with corresponding answers; each item adds a different decision, context, or transfer demand. Include explanations only when they resolve a likely misconception, ambiguity, or non-obvious contrast. Named parts and instructions are optional. Do not pad item counts.
 - Pronunciation: null when no useful intervention is supported. Otherwise choose shadow_sentence, minimal_pair, connected_speech, intonation, rhythm_chunking or sentence_stress. Supply its specific payload, target, focus, action and deliverable. Transcription is optional; chunks reconstruct their drill text, and stressed words occur in it. Prefer a small, coherent set of drills and natural sentence practice.
 - Output task: compose a structured mission rather than one procedural paragraph. `task` is the concise core learner task: what the listener or reader should understand or accomplish. Keep preparation, response requirements, delivery and self-check instructions out of `task` and in their own roles.

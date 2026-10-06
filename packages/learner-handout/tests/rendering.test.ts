@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { type FreshAssignmentV1, validateAssignmentV1 } from '@esl-pipeline/contracts';
 
 import legacyFixture from '../../contracts/tests/assignment-fixture.json';
+import grammarFixture from '../../contracts/tests/assignment-grammar-fixture.json';
 import missionFixture from '../../contracts/tests/assignment-mission-fixture.json';
 import rationaleFixture from '../../contracts/tests/assignment-rationale-fixture.json';
 import { createFixture, pronunciationModes } from '../preview/fixtures.js';
@@ -15,6 +16,80 @@ const documentFor = (props = createFixture()) =>
   new JSDOM(renderLearnerHandoutDocument(props)).window.document;
 
 describe('React learner handout static foundation', () => {
+  it('renders forms, paired meaning contrasts and distinct trap roles without changing data', () => {
+    const assignment = validateAssignmentV1(grammarFixture);
+    const before = JSON.stringify(assignment);
+    const doc = documentFor({ assignment });
+    const topic = doc.querySelector('.grammar-card')!;
+    const grammar = grammarFixture.toolkit.grammar[0]!;
+    expect(topic.querySelector('h4')?.textContent).toBe(grammar.name);
+    expect(
+      [...topic.querySelectorAll('.grammar-form')].map((form) => ({
+        label: form.querySelector('h5')?.textContent,
+        pattern: form.querySelector('p')?.textContent,
+        examples: [...form.querySelectorAll('li')].map((li) => li.textContent),
+      })),
+    ).toEqual(
+      grammar.formBlocks.map((block) => ({
+        label: block.label,
+        pattern: `Pattern: ${block.pattern}`,
+        examples: block.examples,
+      })),
+    );
+    const comparison = topic.querySelector('.grammar-comparison')!;
+    expect(topic.querySelectorAll('.grammar-comparison')).toHaveLength(1);
+    expect(comparison.querySelector('h5')?.textContent).toBe(grammar.comparisons[0]!.label);
+    expect(
+      [...comparison.querySelectorAll('.grammar-alternative')].map((alternative) => ({
+        label: alternative.querySelector('h6')?.textContent,
+        example: alternative.querySelector('em')?.textContent,
+        explanation: alternative.querySelector('p:last-child')?.textContent,
+      })),
+    ).toEqual(grammar.comparisons[0]!.alternatives);
+    expect([...topic.querySelectorAll('.grammar-trap p')].map((p) => p.textContent)).toEqual([
+      `Wrong: ${grammar.traps[0]!.original}`,
+      `Corrected: ${grammar.traps[0]!.improved}`,
+      `Explanation: ${grammar.traps[0]!.explanation}`,
+    ]);
+    expect(topic.querySelector('.grammar-guidance')?.textContent).toContain(
+      grammar.uses[0]!.example,
+    );
+    expect(JSON.stringify(assignment)).toBe(before);
+  });
+
+  it('omits absent grammar contrasts and guidance while escaping structured grammar text', () => {
+    const input = structuredClone(grammarFixture);
+    const grammar = input.toolkit.grammar[0]!;
+    const hostile = '<img src=x onerror=evil()> **plain**';
+    grammar.formBlocks = [{ label: hostile, pattern: hostile, examples: [hostile] }];
+    grammar.comparisons = [];
+    grammar.examples = [];
+    grammar.uses = [];
+    grammar.traps = [];
+    const doc = documentFor({ assignment: validateAssignmentV1(input) });
+    expect(
+      doc.querySelectorAll('img, .grammar-comparison, .grammar-guidance, .grammar-traps'),
+    ).toHaveLength(0);
+    expect(doc.querySelector('.grammar-form h5')?.textContent).toBe(hostile);
+    expect(doc.querySelector('.grammar-form p')?.textContent).toBe(`Pattern: ${hostile}`);
+    expect(doc.querySelector('.grammar-form li')?.textContent).toBe(hostile);
+  });
+
+  it.each([legacyFixture, missionFixture])(
+    'renders legacy grammar directly with sensible form and traps',
+    (input) => {
+      const assignment = validateAssignmentV1(input);
+      const before = JSON.stringify(assignment);
+      const doc = documentFor({ assignment });
+      const topic = doc.querySelector('.grammar-card')!;
+      expect(topic.textContent).toContain(`Form: ${input.toolkit.grammar[0]!.form}`);
+      expect(topic.textContent).toContain(input.toolkit.grammar[0]!.explanation);
+      expect(topic.querySelectorAll('.grammar-form, .grammar-comparison')).toHaveLength(0);
+      expect(topic.querySelector('.grammar-trap')?.textContent).toContain('Corrected:');
+      expect(JSON.stringify(assignment)).toBe(before);
+    },
+  );
+
   it('renders the structured mission in teaching order with one prominent task and separate sample', () => {
     const props = createFixture();
     const before = JSON.stringify(props);

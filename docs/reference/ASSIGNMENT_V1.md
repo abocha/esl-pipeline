@@ -14,7 +14,7 @@
 [ESL-4](https://linear.app/abocha/issue/ESL-4) /
 [GitHub #308](https://github.com/abocha/esl-pipeline/issues/308) implements Slice 1.
 `packages/contracts/src/assignment-v1.ts` owns the Zod schema, inferred TypeScript domain and
-provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_mission_v3`, and the
+provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_grammar_v4`, and the
 repository prompt compatibility version is `3.0.0` because old generation packages must be recreated.
 
 The object contains metadata, mission, one input source, declared speakers and turns,
@@ -25,7 +25,7 @@ six existing modes. Gender is male/female/neutral; child is represented by age, 
 
 The backend preserves source ownership checks before generation. Fresh packages must select the
 active `hw_prompt_assignment_v1.md` revision with the exact first-line declaration
-`Assignment output contract: assignment_v1_mission_v3`. The envelope retains the read-format
+`Assignment output contract: assignment_v1_grammar_v4`. The envelope retains the read-format
 discriminator `promptVersion: assignment_v1` and pins
 the full strict schema and trusted validation context (canonical student display text, known input
 kind and exact URLs supplied in notes/transcript). Revision ID/hash and existing profile, memory,
@@ -37,14 +37,15 @@ ESL-24 uses two explicit closed rationale read shapes: legacy requires
 root `rationale` and forbids both new fields; new requires `learnerRationale` and nullable
 `teacherRationale`, forbidding root `rationale`. Mixed, absent and partial forms are rejected.
 `validateAssignmentV1` accepts either complete shape without defaults or normalization.
-`validateFreshAssignmentV1` admits only the new rationale and structured mission shape after
+`validateFreshAssignmentV1` admits only the new rationale, structured mission and structured grammar shape after
 provider receipt (also in generation evaluation); requesting a strict provider schema alone is
 insufficient. Learner rationale speaks
 directly to the learner about practical benefit; lesson evidence, diagnosis and teacher selection
 reasoning belong in teacher rationale. Teacher rationale remains typed data only.
 
 The ESL-24 rationale generation identity was `assignment_v1_rationale_v2`; ESL-25 advances the
-response schema name and template marker to `assignment_v1_mission_v3`. Neither changes AssignmentV1
+response schema name and template marker to `assignment_v1_mission_v3`; ESL-26 advances them to
+`assignment_v1_grammar_v4`. These changes preserve AssignmentV1
 schema/serialization versions or the envelope's read-format discriminator. Generation checks both pinned schema equality and the
 instruction marker. Old stored packages, including mismatched schema/instructions, fail before
 provider dispatch; fresh package creation against an old active template fails before package
@@ -84,6 +85,52 @@ delivery and self-check in that order using headings, paragraphs and lists. Empt
 heading. Extension remains lightweight; the sample stays in section 7. Legacy tasks render directly
 without inferring roles. The single-column composition uses the existing desktop/mobile shell.
 The shipped template source changes only mission instructions; no revision is activated.
+
+### Structured grammar composition (ESL-26)
+
+Grammar compatibility belongs to each item, independently of rationale and mission read forms.
+The closed legacy item retains `name`, nullable scalar `form`, `explanation`, `examples`, `uses`
+and `traps`. The closed structured item retains those roles except `form`, replacing it with:
+
+| Field                                         | Type and cardinality                                   | Teaching role                                                     |
+| --------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------- |
+| `formBlocks`                                  | Required array, at least one block                     | Independently teachable forms                                     |
+| Block `label`, `pattern`                      | Required meaningful strings                            | Name the form and show its construction                           |
+| Block `examples`                              | Required string array, at least one meaningful example | Illustrate that block's pattern                                   |
+| `comparisons`                                 | Required array, may be empty                           | Actual meaning/use contrasts only                                 |
+| Comparison `label`                            | Required meaningful string                             | Name one contrast                                                 |
+| Comparison `alternatives`                     | Exactly two closed objects                             | Keep both sides of the relationship together                      |
+| Alternative `label`, `example`, `explanation` | Required meaningful strings                            | Name the choice, illustrate it, and explain when/why to choose it |
+
+General `examples` and `uses` (label/example) remain required arrays but can be empty when they add
+no distinct broader teaching value. `traps` retains original/improved/explanation and can be empty.
+The template forbids duplicating teaching facts across block examples, general examples, uses and
+comparison alternatives, and forbids manufacturing comparisons to fill a quota. No IDs, references,
+layout nodes or graphs are introduced.
+
+Runtime admission rejects an item mixing `form` (including null) with either structured field,
+missing either structured field, empty form blocks/examples, or comparisons with other than two
+complete alternatives. Reads do not transform items or insert fields. One assignment can contain
+both legacy and structured items. Fresh provider projection and post-provider admission require
+every grammar item to be structured. The existing pinned schema equality and first-line marker
+checks reject stale ESL-25 packages and mismatched schema/template contracts before provider dispatch,
+without repinning packages. Legacy grammar in fresh output fails after receipt.
+
+The separate `assignment-grammar-fixture.json` demonstrates two affirmative forms, one routine vs
+temporary arrangement contrast, one distinct time-frame use, no general-example padding and one
+missing-be trap. The ESL-20 fixture/snapshot/hash and ESL-25 mission fixture remain untouched.
+Focused tests preserve the ESL-20 hash
+`c133b81eee1415b9dc874670279acf9cb89a52a72a45894a524936da9af7b9db` and pin the post-ESL-25
+legacy-grammar canonical hash `35cefa61cd8a753041cd12cdbcb28b680f9f4fde554a9ba4ad9e8efbbaac9f02`.
+Schema and canonical serialization versions remain 1.
+
+React grammar composition uses a topic heading, lightweight labeled form sections with patterns
+and examples, a single labeled comparison group with two alternatives, and separate Wrong,
+Corrected and Explanation trap lines. Alternatives sit side by side on desktop and stack within
+the same group on mobile. Legacy items render directly without inferred blocks. On 6 October 2026,
+the emitted `out/learner-handout/grammar.html` was inspected at 1280 and 390 CSS pixels: hierarchy,
+wrapping, spacing and label/example/explanation scanability passed, with no horizontal overflow.
+No unrelated media matrix, live generation or template activation was performed.
 
 Assignment generation admits only the existing OpenAI `gpt-6.1-sol` target in this slice. Other
 assignment overrides fail before budget reservation or dispatch; their other workloads remain

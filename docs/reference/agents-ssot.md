@@ -289,7 +289,7 @@ Docs-heavy changes also require:
 AssignmentV1 runtime/read admission accepts exactly the closed legacy root `rationale` shape or
 the new required `learnerRationale` plus required nullable `teacherRationale` shape. Mixed, missing
 and partial shapes fail. Fresh generation admits only the new shape after provider receipt; the
-provider schema and template marker identify `assignment_v1_mission_v3`. Stored prompt pins and
+provider schema and template marker identify `assignment_v1_grammar_v4`. Stored prompt pins and
 old active template markers fail the existing unsupported-contract path before dispatch. Reads
 never normalize old assignments or add fields; canonical serialization 1 and frozen hashes remain
 unchanged. Native learner HTML renders only learner rationale; ambiguous legacy rationale omits
@@ -301,6 +301,14 @@ nullable delivery text and unchanged extension/sampleResponse fields. Partial mi
 Fresh generation requires all structured role fields, permitting empty lists and null delivery
 when unnecessary. Reads insert no defaults. Learner HTML emphasizes the task first, then displays
 only populated supporting roles; the sample remains in the answer key.
+
+Grammar read admission independently accepts each closed legacy scalar-form item or complete
+structured item with required nonempty formBlocks (label/pattern/nonempty examples) and required
+comparisons (possibly empty). Each comparison contains a label and exactly two labeled alternatives,
+each with example/explanation. Mixed or partial item shapes fail. Fresh generation requires every
+grammar item to be structured; reads never convert legacy grammar or insert fields. General examples,
+uses and original/improved/explanation traps retain their distinct roles without array padding.
+Schema/serialization version 1 and frozen legacy identities remain unchanged.
 
 Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
 HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
