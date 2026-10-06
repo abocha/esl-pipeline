@@ -25,13 +25,29 @@ const primary = (url?: string) => ({
 });
 
 describe('native React publication adapter', () => {
-  it.each(['ru', 'pt-BR', 'en', undefined])(
-    'annotates comprehension support text with %s in preview and publication while preserving target English',
-    async (instructionLanguage) => {
+  it.each([
+    { instructionLanguage: 'ru', prompt: 'Что она делает на этой неделе?', expectedLanguage: 'ru' },
+    {
+      instructionLanguage: 'ru',
+      prompt: "What is different about Nina's work this week?",
+      expectedLanguage: 'en',
+    },
+    {
+      instructionLanguage: 'pt-BR',
+      prompt: 'O que ela faz esta semana?',
+      expectedLanguage: 'pt-BR',
+    },
+    { instructionLanguage: 'en', prompt: 'What is she doing this week?', expectedLanguage: 'en' },
+    {
+      instructionLanguage: undefined,
+      prompt: 'What is she doing this week?',
+      expectedLanguage: 'en',
+    },
+  ])(
+    'annotates comprehension question "$prompt" with $expectedLanguage under $instructionLanguage support in preview and publication',
+    async ({ instructionLanguage, prompt, expectedLanguage }) => {
       const assignment = fixture();
       if (instructionLanguage) assignment.metadata.instructionLanguage = instructionLanguage;
-      const prompt =
-        instructionLanguage === 'ru' ? 'Что она делает на этой неделе?' : 'Support question';
       const explanation =
         instructionLanguage === 'ru' ? 'Это временное занятие.' : 'Support explanation';
       assignment.input.comprehension = [
@@ -45,10 +61,10 @@ describe('native React publication adapter', () => {
         const question = [...doc.querySelectorAll('li.plain-text')].find(
           (li) => li.textContent === prompt,
         )!;
-        expect(languageOf(question)).toBe(instructionLanguage ?? 'en');
+        expect(languageOf(question)).toBe(expectedLanguage);
         const key = doc.querySelector('.answer-key-item')!;
         expect(key.querySelector('p')?.textContent).toBe(prompt);
-        expect(languageOf(key.querySelector('p')!)).toBe(instructionLanguage ?? 'en');
+        expect(languageOf(key.querySelector('p')!)).toBe(expectedLanguage);
         expect(key.querySelector('p:nth-child(3)')?.textContent).toContain(explanation);
         expect(languageOf(key.querySelector('p:nth-child(3)')!)).toBe(instructionLanguage ?? 'en');
         expect(languageOf(key.querySelector('p:nth-child(2) span')!)).toBe('en');

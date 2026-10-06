@@ -97,6 +97,11 @@ Form-block labels are short identifying names; formulas belong in `pattern`, sen
 Comprehension questions and explanations use the authored instruction/support language, including
 their answer-key copies; target-English answers retain English annotations. Learner-handout owns
 these annotations in both preview and publication, with English fallback for missing old metadata.
+For existing Russian-support assignments whose questions are English, a bounded rendering heuristic
+tags question text English when it contains no Cyrillic character, consistently in the exercise and
+answer-key copy. Questions containing Cyrillic retain the authored Russian tag; explanations remain
+independently in the support language and answers English. Other support languages keep the existing
+metadata-based annotation. No assignment data is rewritten or multilingual model introduced.
 Renderer publication identity remains 3. ESL-28's fixed v5 CHANGE evidence remains sufficient;
 ESL-30 uses local synthetic checks only and does not activate a revision or rerun that evaluation.
 
