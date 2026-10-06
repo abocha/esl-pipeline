@@ -113,23 +113,59 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
       <h3>A. 👀 Notice the Grammar</h3>
       {a.toolkit.grammar.map((g, i) => (
         <div className="grammar-card" key={i}>
-          <p>
-            <strong>{g.name}</strong>
-          </p>
-          {g.form && <Field label="Form">{g.form}</Field>}
+          <h4 className="grammar-topic">{g.name}</h4>
           <Text>{g.explanation}</Text>
-          <ul>
-            {g.examples.map((ex, j) => (
-              <li key={j}>
-                <em>{ex}</em>
-              </li>
-            ))}
-            {g.uses.map((u, j) => (
-              <li key={`use-${j}`}>
-                <strong>{u.label}:</strong> {u.example}
-              </li>
-            ))}
-          </ul>
+          {'form' in g ? (
+            g.form && <Field label="Form">{g.form}</Field>
+          ) : (
+            <>
+              <div className="grammar-forms">
+                {g.formBlocks.map((block, j) => (
+                  <section className="grammar-form" key={j}>
+                    <h5>{block.label}</h5>
+                    <Field label="Pattern">{block.pattern}</Field>
+                    <ul>
+                      {block.examples.map((example, k) => (
+                        <li className="plain-text" key={k}>
+                          <em>{example}</em>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+              {g.comparisons.map((comparison, j) => (
+                <section className="grammar-comparison" key={j}>
+                  <h5>{comparison.label}</h5>
+                  <div className="grammar-alternatives">
+                    {comparison.alternatives.map((alternative, k) => (
+                      <div className="grammar-alternative" key={k}>
+                        <h6>{alternative.label}</h6>
+                        <p className="plain-text">
+                          <em>{alternative.example}</em>
+                        </p>
+                        <Text>{alternative.explanation}</Text>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </>
+          )}
+          {(g.examples.length > 0 || g.uses.length > 0) && (
+            <ul className="grammar-guidance">
+              {g.examples.map((ex, j) => (
+                <li key={j}>
+                  <em>{ex}</em>
+                </li>
+              ))}
+              {g.uses.map((u, j) => (
+                <li key={`use-${j}`}>
+                  <strong>{u.label}:</strong> {u.example}
+                </li>
+              ))}
+            </ul>
+          )}
           {g.traps.length > 0 && (
             <ul className="grammar-traps">
               {g.traps.map((t, j) => (

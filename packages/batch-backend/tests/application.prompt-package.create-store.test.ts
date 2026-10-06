@@ -118,7 +118,7 @@ describe('application/prompt-package', () => {
 
     await fs.writeFile(
       templatePath,
-      'Assignment output contract: assignment_v1_mission_v3\nHello\nFooter\n',
+      'Assignment output contract: assignment_v1_grammar_v4\nHello\nFooter\n',
       'utf8',
     );
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');

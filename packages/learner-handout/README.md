@@ -26,6 +26,13 @@ Empty lists and null delivery omit their headings. Optional extension stays inli
 stays in section 7's answer key. Legacy task/extension/sampleResponse objects render directly with
 no inferred roles or data mutation. The single-column layout uses the existing responsive shell.
 
+Grammar topics use headings and overall explanations, followed by lightweight form sections with
+labels, patterns and examples. Each comparison is one labeled group containing exactly two
+alternatives with their own label/example/meaning explanation. They sit side by side on desktop
+and stack within the same group on mobile. General examples and uses appear only when populated;
+Wrong, Corrected and Explanation trap lines remain distinct. Legacy scalar forms render directly
+without inferred blocks or data mutation.
+
 ## Public seam
 
 ```tsx
@@ -100,11 +107,13 @@ pnpm --filter @esl-pipeline/learner-handout fixture:static
 pnpm --filter @esl-pipeline/learner-handout fixture:serve
 ```
 
-The first command emits 21 complete documents and the local tone into `out/learner-handout`, through
+The first command emits 22 complete documents and the local tone into `out/learner-handout`, through
 the compiled Node renderer. Each HTML can be opened directly with its sibling tone file. The optional
 second command serves only those fixture files on `http://127.0.0.1:5175`; it uses no Vite and has no
 production role. `/` opens `shadow_sentence-mixed.html`. Names are `<mode>-<audio>.html`, including
-`none-available.html` and `shadow_sentence-unavailable.html`.
+`none-available.html` and `shadow_sentence-unavailable.html`. `grammar.html` uses the separate compact
+structured grammar fixture: present simple vs continuous, two form blocks, one paired routine vs
+temporary contrast, distinct time-frame guidance and a missing-be trap.
 
 ## Focused evidence
 
@@ -144,6 +153,13 @@ compiled standalone renderer at 1280 px desktop and 390 px mobile. The task rema
 supporting roles wrap in a single column, and neither viewport has page-level horizontal overflow.
 Focused DOM tests cover all roles, independently absent roles, a minimal mission, both legacy read
 forms, escaped role text and unchanged inputs. No provider call or template activation was used.
+
+ESL-26 local inspection on 6 October 2026 covered the emitted `grammar.html` at 1280 px desktop and
+390 px mobile (CSS pixels). Form labels, patterns and examples remained scannable; comparison
+alternatives stayed paired side by side or stacked within one group. Explanations and trap lines
+wrapped with no horizontal overflow. Screenshots are retained locally in ignored
+`tmp/esl26/grammar-desktop.jpg` and `grammar-mobile.jpg`. Only the changed grammar surface was
+inspected; no pronunciation/media matrix, provider call or template activation was repeated.
 
 The package ships only `dist`, including CSS and playback JavaScript. React/React DOM are runtime
 dependencies. Production builds traverse the workspace graph; orchestrator keeps publication

@@ -57,7 +57,7 @@ export function assignmentFixture(): FixtureAssignmentV1 {
 export function freshAssignmentFixture(): FreshAssignmentV1 {
   return JSON.parse(
     readAssignmentFixture(
-      new URL('../../contracts/tests/assignment-mission-fixture.json', import.meta.url),
+      new URL('../../contracts/tests/assignment-grammar-fixture.json', import.meta.url),
       'utf8',
     ),
   ) as FreshAssignmentV1;

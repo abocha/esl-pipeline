@@ -443,7 +443,7 @@ describe('application/prompt-package', () => {
     const profilePath = path.join(allowedDir, 'profile.md');
     await fs.writeFile(
       templatePath,
-      'Assignment output contract: assignment_v1_mission_v3\nDB TEMPLATE\nEND\n',
+      'Assignment output contract: assignment_v1_grammar_v4\nDB TEMPLATE\nEND\n',
       'utf8',
     );
     await fs.writeFile(profilePath, 'LEGACY PROFILE\n', 'utf8');
@@ -527,7 +527,7 @@ describe('application/prompt-package', () => {
 
     const transcript = createTranscriptRecord();
     const activeTemplateContent =
-      'Assignment output contract: assignment_v1_mission_v3\nDB TEMPLATE\nEND\n';
+      'Assignment output contract: assignment_v1_grammar_v4\nDB TEMPLATE\nEND\n';
     const activeProfileContent = 'DB PROFILE\n';
     const activeTemplateHash = createHash('sha256')
       .update(activeTemplateContent, 'utf8')
@@ -653,9 +653,9 @@ describe('application/prompt-package', () => {
     const templateV1 = {
       id: 'template-revision-v1',
       templateId: 'hw_prompt_assignment_v1.md',
-      content: 'Assignment output contract: assignment_v1_mission_v3\nTEMPLATE V1\nEND\n',
+      content: 'Assignment output contract: assignment_v1_grammar_v4\nTEMPLATE V1\nEND\n',
       contentHash: createHash('sha256')
-        .update('Assignment output contract: assignment_v1_mission_v3\nTEMPLATE V1\nEND\n', 'utf8')
+        .update('Assignment output contract: assignment_v1_grammar_v4\nTEMPLATE V1\nEND\n', 'utf8')
         .digest('hex'),
       source: 'update' as const,
       status: 'active' as const,
@@ -892,7 +892,7 @@ describe('application/prompt-package', () => {
 
     await fs.writeFile(
       templatePath,
-      'Assignment output contract: assignment_v1_mission_v3\nHello\nFooter\n',
+      'Assignment output contract: assignment_v1_grammar_v4\nHello\nFooter\n',
       'utf8',
     );
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
@@ -965,7 +965,7 @@ describe('application/prompt-package', () => {
     const boundStudentId = 'student-1';
     await fs.writeFile(
       templatePath,
-      'Assignment output contract: assignment_v1_mission_v3\nHello\nFooter\n',
+      'Assignment output contract: assignment_v1_grammar_v4\nHello\nFooter\n',
       'utf8',
     );
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');

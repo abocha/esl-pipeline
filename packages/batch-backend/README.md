@@ -494,13 +494,17 @@ pnpm docs:check
 ## Structured assignment generation
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
-`assignment_v1_mission_v3` response schema and matching first-line template marker in the existing
+`assignment_v1_grammar_v4` response schema and matching first-line template marker in the existing
 prompt-package envelope. Runtime reads accept legacy root rationale without normalization or the
 new learner/teacher shape; post-provider fresh admission requires `learnerRationale` and required
 nullable `teacherRationale`, with no root `rationale`, plus a structured outputTask with task text,
 preparation/requirements/selfCheck text lists and nullable delivery. Empty lists and null delivery
 avoid filler. Runtime reads independently retain the old task/extension/sampleResponse shape without
-inserting fields. Old pinned schemas and old active template
+inserting fields. Each grammar item independently admits either closed legacy scalar `form` or
+structured `formBlocks` and `comparisons`. Fresh generation requires structured grammar everywhere:
+at least one labeled pattern with nonempty examples, and a possibly empty list of contrasts, each
+with exactly two labeled example/explanation alternatives. General examples, uses and traps retain
+their distinct roles; reads never convert legacy grammar. Old pinned schemas and old active template
 markers fail before generation/package creation and require recreation after an explicit template
 activation. This slice changes the repository template source only; it does not activate a revision.
 Only OpenAI GPT-6.1 Sol
