@@ -95,7 +95,7 @@ describe('AssignmentV1 mission composition', () => {
   it('projects only the closed structured mission with required fields and meaningful absence', () => {
     const schema = ASSIGNMENT_RESPONSE_SCHEMA.schema as any;
     const output = schema.properties.outputTask;
-    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v7');
+    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v8');
     expect(output.additionalProperties).toBe(false);
     expect(output).not.toHaveProperty('anyOf');
     expect(output.required).toEqual([

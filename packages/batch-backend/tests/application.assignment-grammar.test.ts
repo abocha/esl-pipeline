@@ -147,7 +147,7 @@ describe('AssignmentV1 grammar composition', () => {
   it('projects only closed structured grammar with enforced form examples and paired alternatives', () => {
     const grammar = (ASSIGNMENT_RESPONSE_SCHEMA.schema as any).properties.toolkit.properties.grammar
       .items;
-    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v7');
+    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v8');
     expect(grammar.anyOf).toBeUndefined();
     expect(grammar.additionalProperties).toBe(false);
     expect(grammar.properties.form).toBeUndefined();

@@ -62,6 +62,7 @@ describe('native React publication adapter', () => {
         ],
       },
     ];
+    input.metadata.icon = '🧭';
     const assignment = validateFreshAssignmentV1(input);
     const before = JSON.stringify(assignment);
     expect(ASSIGNMENT_HTML_RENDERER_VERSION).toBe(3);
@@ -173,11 +174,17 @@ describe('native React publication adapter', () => {
           ? { ...fixture(), rationale: 'ESL24_AMBIGUOUS_LEGACY_ONLY' }
           : { ...fresh, teacherRationale: shape === 'null' ? null : fresh.teacherRationale },
       );
+      assignment.teacherFollowUp = {
+        warmUp: 'ESL32_WARMUP_PRIVATE',
+        correctionFocus: 'ESL32_CORRECTION_PRIVATE',
+      };
       const before = JSON.stringify(assignment);
       for (const preview of [false, true]) {
         const html = await renderAssignmentToHtml(assignment, { preview });
         expect(html).not.toContain('ESL24_TEACHER_ONLY');
         expect(html).not.toContain('ESL24_AMBIGUOUS_LEGACY_ONLY');
+        expect(html).not.toContain('ESL32_WARMUP_PRIVATE');
+        expect(html).not.toContain('ESL32_CORRECTION_PRIVATE');
         const doc = new JSDOM(html).window.document;
         expect(doc.querySelector('#assignment-section-6') !== null).toBe(shape !== 'legacy');
         expect(html.includes('Why This Mission Helps You')).toBe(shape !== 'legacy');
@@ -186,7 +193,7 @@ describe('native React publication adapter', () => {
           doc.querySelector('#assignment-section-6')?.nextElementSibling?.textContent ?? null,
         ).toBe(shape === 'legacy' ? null : fresh.learnerRationale);
         expect(doc.querySelector('#assignment-section-7')?.textContent).toContain('7.');
-        expect(doc.querySelector('#assignment-section-8')?.textContent).toContain('8.');
+        expect(doc.querySelector('#assignment-section-8')).toBeNull();
       }
       expect(JSON.stringify(assignment)).toBe(before);
     },

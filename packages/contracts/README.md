@@ -15,7 +15,9 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
 - `AssignmentV1` runtime/read union (legacy root rationale or explicit learner/teacher rationale,
   independently accepting legacy output tasks or structured mission roles, and each grammar item
   as closed legacy scalar form or structured form blocks with paired contrasts),
-  new-shape-only fresh-generation admission and strict provider projection; see
+  new-shape-only fresh-generation admission and strict v8 provider projection (required authored
+  `metadata.icon` emoji, optional only on reads), plus bounded paired-backtick content parts and
+  derived plain speech projections; see
   [the assignment contract](../../docs/reference/ASSIGNMENT_V1.md).
 - Shared errors (`PipelineError`, `ConfigurationError`, etc.)
 - Shared observability shapes (`PipelineLogEvent`, `PipelineLogger`, `noopLogger`)

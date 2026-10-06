@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react';
 
-import type { AssignmentPronunciation } from '@esl-pipeline/contracts';
+import {
+  type AssignmentPronunciation,
+  assignmentInlineParts,
+  assignmentPlainText,
+} from '@esl-pipeline/contracts';
 
-import { AudioPlayer, Field } from './primitives.js';
+import { AudioPlayer, Field, Inline } from './primitives.js';
 import type { HandoutMediaInputs, PronunciationClipInput } from './types.js';
 import { safeMediaUrl } from './urls.js';
 
@@ -10,18 +14,20 @@ const lexical = /([\p{L}\p{M}\p{N}]+(?:['’‐‑-][\p{L}\p{M}\p{N}]+)*)/gu;
 
 function StressedText({ text, words }: { text: string; words: string[] }) {
   const stressed = new Set(words.map((w) => w.normalize('NFKC').toLowerCase().match(lexical)?.[0]));
-  return (
-    <>
-      {text
-        .split(lexical)
-        .map((word, i) =>
-          stressed.has(word.normalize('NFKC').toLowerCase()) ? (
-            <strong key={i}>{word}</strong>
-          ) : (
-            word
-          ),
-        )}
-    </>
+  const render = (value: string) =>
+    value
+      .split(lexical)
+      .map((word, i) =>
+        stressed.has(word.normalize('NFKC').toLowerCase()) ? <strong key={i}>{word}</strong> : word,
+      );
+  return assignmentInlineParts(text).map((part, i) =>
+    part.highlighted ? (
+      <code className="linguistic-highlight" key={i}>
+        {render(part.text)}
+      </code>
+    ) : (
+      <span key={i}>{render(part.text)}</span>
+    ),
   );
 }
 
@@ -43,7 +49,11 @@ function ClipControls({ clips }: { clips: readonly PronunciationClipInput[] }) {
             disabled={!url}
             data-pronunciation-clip={clip.id}
             data-audio-url={url ?? undefined}
-            aria-label={`Play pronunciation for ${clip.text}`}
+            data-clip-text={assignmentPlainText(clip.text)}
+            data-play-label={clip.label ?? 'Play'}
+            aria-label={`Play pronunciation for ${assignmentPlainText(clip.text)}`}
+            aria-live="polite"
+            aria-atomic="true"
             title={url ? undefined : 'Audio clip not generated yet'}
           >
             {clip.label ?? 'Play'}
@@ -75,9 +85,15 @@ export function Pronunciation({
     kind?: PronunciationClipInput['kind'],
   ) => (
     <span className="pronunciation-word-main">
-      <span>{w.text}</span>
+      <span>
+        <Inline>{w.text}</Inline>
+      </span>
       {controls(i, kind)}
-      {w.transcription && <span className="transcription">{w.transcription}</span>}
+      {w.transcription && (
+        <span className="transcription">
+          <Inline>{w.transcription}</Inline>
+        </span>
+      )}
     </span>
   );
   let items: ReactNode[];
@@ -94,7 +110,7 @@ export function Pronunciation({
     items = p.lines.map((line, i) => (
       <span key={i} className="pronunciation-line-main">
         <span>
-          {line.careful} → {line.spoken}
+          <Inline>{line.careful}</Inline> → <Inline>{line.spoken}</Inline>
         </span>
         {controls(i)}
       </span>
@@ -104,22 +120,30 @@ export function Pronunciation({
       <span key={i} className="pronunciation-line-main">
         <span className="pronunciation-line-text">
           {p.mode === 'rhythm_chunking' ? (
-            d.chunks.join(' | ')
+            d.chunks.map((chunk, j) => (
+              <span key={j}>
+                {j > 0 && ' | '}
+                <Inline>{chunk}</Inline>
+              </span>
+            ))
           ) : p.mode === 'sentence_stress' ? (
             <StressedText text={d.text} words={d.stressedWords} />
           ) : (
-            d.text
+            <Inline>{d.text}</Inline>
           )}
         </span>
         {controls(i)}
-        {d.transcription && <span className="transcription">{d.transcription}</span>}
+        {d.transcription && (
+          <span className="transcription">
+            <Inline>{d.transcription}</Inline>
+          </span>
+        )}
       </span>
     ));
   const sentence =
     'shadowSentence' in p ? p.shadowSentence : 'naturalSentence' in p ? p.naturalSentence : null;
   return (
     <section data-assignment-pronunciation={p.mode}>
-      <Field label="Mode">{p.mode}</Field>
       <Field label="Target">{p.target}</Field>
       <Field label="Focus">{p.focus}</Field>
       <Field label="Action">{p.action}</Field>
@@ -132,7 +156,7 @@ export function Pronunciation({
         ))}
       </ol>
       {sentence && (
-        <>
+        <div className="callout pronunciation-sentence">
           <Field
             lang="en"
             label={p.mode === 'shadow_sentence' ? 'Shadow sentence' : 'Natural sentence practice'}
@@ -144,10 +168,9 @@ export function Pronunciation({
             label="Pronunciation sentence audio"
             preview={preview}
           />
-        </>
+        </div>
       )}
       {'contourCue' in p && p.contourCue && <Field label="Contour cue">{p.contourCue}</Field>}
-      <p className="playback-status" role="status" aria-live="polite" />
     </section>
   );
 }

@@ -71,6 +71,13 @@ export function createFixture(
   audio: FixtureAudio = 'mixed',
 ): LearnerHandoutProps {
   const assignment = structuredClone(base) as AssignmentV1;
+  assignment.metadata.icon = '🧭';
+  assignment.toolkit.grammar[0]!.explanation +=
+    ' После `will` нет окончания `-s` или `-ed`. Формула: `subject + will + base verb + a longer phrase that wraps comfortably on mobile`.';
+  assignment.toolkit.vocabulary[0]!.expression = '`First`';
+  assignment.toolkit.vocabulary[0]!.example = 'We `get back` soon.';
+  assignment.practice[0]!.title = '1. Complete the `sentence`';
+  assignment.practice[0]!.items[0]!.prompt += ' (`windy`)';
   assignment.input.source = {
     title: 'A useful demo',
     attribution: 'Local demonstration fixture',

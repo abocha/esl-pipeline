@@ -6,19 +6,20 @@ for renderer identity, HTML artifact hashing, object keys and S3 uploads. Vite i
 
 ## Ownership and component organization
 
-The only runtime dependencies are React and React DOM; AssignmentV1 is imported as a type from
-`contracts`. The package has no operator frontend, authentication, backend, orchestrator, storage,
+Runtime dependencies are React, React DOM and `contracts`, which owns the bounded inline-text
+convention as well as AssignmentV1 types. The package has no operator frontend, authentication, backend, orchestrator, storage,
 upload, provider or TTS dependency. Keeping it separate from `batch-frontend` avoids tutor application
 providers/routing. Keeping it separate from `html-publisher` allows presentation to evolve without
 inheriting upload or publication-version responsibilities.
 
-`LearnerHandout.tsx` composes the full eight-section surface, with local input/toolkit/practice/answer
+`LearnerHandout.tsx` composes the full seven-section surface, with local input/toolkit/practice/answer
 components. `Pronunciation.tsx` handles the six existing modes. `primitives.tsx` owns escaped plain
-text, fields, native disclosures, audio and safe source links/video. Domain text is never interpreted
-as HTML or Markdown. Section 6 renders only new-shape `learnerRationale`. Legacy root `rationale`
+text, fields, native disclosures, audio and safe source links/video. Domain text is escaped; only paired-backtick linguistic fragments are highlighted, with no HTML
+or general Markdown interpretation. Section 6 renders only new-shape `learnerRationale`. Legacy root `rationale`
 is audience-ambiguous, so section 6 is omitted entirely. `teacherRationale` is retained in typed data
 and never emitted into learner HTML, including attributes, scripts, comments or serialized data.
-The other section IDs and labels remain stable.
+Section 7 remains stable; section 8 is removed. `teacherFollowUp` stays typed teacher-only data
+and is never emitted, even hidden or serialized.
 
 Authored `metadata.instructionLanguage` sets the language of the static HTML document and shared
 React article. English target text and fixed English presentation labels are marked separately;
@@ -95,12 +96,13 @@ request, random ID or input mutation is involved. A date is omitted unless expli
 ## Styles and static behavior
 
 `src/handout.css` is imported by Vite and copied alongside compiled Node JS during the package build.
-The server inlines that CSS and `src/pronunciation-playback.js`, producing a standalone document with
+The server inlines that CSS and `src/pronunciation-playback.js` and `src/handout-interactions.js`, producing a standalone document with
 no external style/script dependencies. Only trusted package assets use raw HTML insertion; all render
 inputs pass through React escaping and URL admission.
 
 `<details>` and audio controls remain native. The small vanilla script handles delegated item-clip
-playback, pauses a previous item clip, and reports playback failure/retry status. Vite imports the
+playback, pauses a previous item clip, and reports Play / Playing… / Replay / Retry in the triggering button.
+Switching resets the prior control; stale events cannot overwrite current playback state. Vite imports the
 same script. Static output has no React bundle, event handlers, hydration or client application.
 This establishes current playback only; it does not decide a general client-runtime architecture.
 
@@ -158,8 +160,8 @@ The html-publisher adapter passes study audio, pronunciation primary/item clips 
 explicitly. Structured primary URLs take precedence over the separate URL fallback. h2/h3 preset
 colors are explicit hex presentation inputs, applied as heading accents; broader legacy theme and
 feature options are retired. Preview missing-audio placeholders say "Audio track generating...";
-publication unavailable states and disabled item controls remain explicit. Teacher’s Follow-up Plan
-remains unchanged; teacher rationale is never copied into it. Static/Vite fixtures use the separate
+publication unavailable states and disabled item controls remain explicit. Teacher’s Follow-up Plan is removed from learner output; both teacher follow-up and rationale stay
+in typed teacher data. Static/Vite fixtures use the separate
 structured mission fixture (including learner/teacher rationale); the ESL-20 legacy fixture,
 ESL-24 rationale fixture and identity baseline remain untouched.
 
@@ -179,3 +181,28 @@ inspected; no pronunciation/media matrix, provider call or template activation w
 The package ships only `dist`, including CSS and playback JavaScript. React/React DOM are runtime
 dependencies. Production builds traverse the workspace graph; orchestrator keeps publication
 external to its bundle to preserve package-relative asset lookup.
+
+## First-real-handout polish (ESL-32)
+
+Vocabulary expressions always render bold and examples italic, including highlighted fragments.
+`Inline`, `Text` and `Field` share contracts' paired single-backtick convention; direct learner
+strings and answer copies use it too. Unmatched delimiters stay literal, hostile text is escaped,
+and long fragments wrap. Part titles have one renderer-owned number. The hero uses `metadata.icon`
+or a display-only 🎧 fallback; no input is rewritten. Source presentation is Listen first, existing
+audio then freely available transcript, with attribution/links and quieter generation provenance.
+Pronunciation mode is internal. Its existing natural/shadow sentence and audio sit in a callout.
+
+Each grammar correction/explanation has a visible bold label and independently blurred content
+with `aria-hidden` until its native reveal button is activated. Activation reveals once, removes
+that button from tab order and preserves keyboard focus on the now-readable line. It never exposes
+another line. A simple print rule removes blur. No reveal state survives reload.
+
+The packaged interaction script also animates shared native details in both directions using Web
+Animations, cancels interrupted animations from the current height, clears clipping on completion,
+and uses native behavior under reduced motion or without animation support. Native summary clicks
+include Enter/Space keyboard activation. There is no hydration or general interaction framework.
+
+Fresh schema/template identity is v8; see [the canonical contract](../../docs/reference/ASSIGNMENT_V1.md#learner-handout-convention-and-authored-emoji-esl-32).
+Renderer 3 remains the native architecture identity; changed HTML gets a new exact-byte publisher
+hash. Frozen fixtures/snapshots are unchanged. The local fixture deliberately demonstrates selective
+highlights, wrapping formulas, numbered authored titles and an emoji using only local audio.

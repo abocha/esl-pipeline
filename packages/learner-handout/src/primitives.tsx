@@ -1,11 +1,53 @@
 import type { ReactNode } from 'react';
 
+import { assignmentInlineParts } from '@esl-pipeline/contracts';
+
 import { safeLinkUrl, safeMediaUrl, videoEmbedUrl } from './urls.js';
+
+export function Inline({ children }: { children: string }) {
+  return (
+    <span className="inline-text">
+      {assignmentInlineParts(children).map((part, i) =>
+        part.highlighted ? (
+          <code className="linguistic-highlight" key={i}>
+            {part.text}
+          </code>
+        ) : (
+          part.text
+        ),
+      )}
+    </span>
+  );
+}
+
+export function RevealField({
+  label,
+  children,
+  lang,
+  name,
+}: {
+  label: string;
+  children: string;
+  lang?: string;
+  name: string;
+}) {
+  return (
+    <p className="plain-text grammar-reveal">
+      <strong lang="en">{label}:</strong>{' '}
+      <span className="reveal-target">
+        <span className="reveal-content" lang={lang} aria-hidden="true">
+          <Inline>{children}</Inline>
+        </span>
+        <button type="button" data-grammar-reveal aria-label={name} />
+      </span>
+    </p>
+  );
+}
 
 export function Text({ children, lang }: { children: string; lang?: string }) {
   return (
     <p className="plain-text" lang={lang}>
-      {children}
+      <Inline>{children}</Inline>
     </p>
   );
 }
@@ -21,7 +63,10 @@ export function Field({
 }) {
   return (
     <p className="plain-text">
-      <strong lang="en">{label}:</strong> {lang ? <span lang={lang}>{children}</span> : children}
+      <strong lang="en">{label}:</strong>{' '}
+      <span lang={lang}>
+        <Inline>{children}</Inline>
+      </span>
     </p>
   );
 }
@@ -36,9 +81,11 @@ export function Disclosure({
   children: ReactNode;
 }) {
   return (
-    <details className={className}>
+    <details className={className} data-handout-disclosure>
       <summary lang="en">{label}</summary>
-      <div className="disclosure-content">{children}</div>
+      <div className="disclosure-content">
+        <div className="disclosure-inner">{children}</div>
+      </div>
     </details>
   );
 }

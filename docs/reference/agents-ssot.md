@@ -289,7 +289,7 @@ Docs-heavy changes also require:
 AssignmentV1 runtime/read admission accepts exactly the closed legacy root `rationale` shape or
 the new required `learnerRationale` plus required nullable `teacherRationale` shape. Mixed, missing
 and partial shapes fail. Fresh generation admits only the new shape after provider receipt; the
-provider schema and template marker identify `assignment_v1_generation_v7`. Stored prompt pins and
+provider schema and template marker identify `assignment_v1_generation_v8`. Stored prompt pins and
 old active template markers fail the existing unsupported-contract path before dispatch. Reads
 never normalize old assignments or add fields; canonical serialization 1 and frozen hashes remain
 unchanged. Native learner HTML renders only learner rationale; ambiguous legacy rationale omits
@@ -329,3 +329,10 @@ lineage, cast/speech provenance and selected audio-family reuse remain unchanged
 Migration 0065 admits renderer-3 job writes with existing artifact checks and the frozen-identity
 trigger unchanged. It must precede new native execution writes and blocks previous-image recovery
 that cannot truthfully execute renderer 3. No v1/v2 executable renderer is retained.
+
+ESL-32 fresh metadata requires one authored `icon` emoji; missing-icon reads have only a display
+fallback. Paired-backtick linguistic highlighting stays an escaped string convention and is stripped
+only in derived speech/drill projections. Teacher follow-up, teacher rationale and ambiguous legacy
+rationale are absent from whole learner HTML. Independent grammar reveals are one-way per page;
+source/transcript and consolidated answer-key organization remain shared in Preview/publication.
+See [the handout contract](ASSIGNMENT_V1.md#learner-handout-convention-and-authored-emoji-esl-32).

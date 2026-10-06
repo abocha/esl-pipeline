@@ -32,7 +32,7 @@ export async function getTypedJobPublication(job: JobRecord) {
       manifest?.publication?.rendererVersion ??
       (job.assignmentRendererVersion === 3 ? 3 : job.assignmentRendererVersion === 2 ? 2 : 1),
     title: assignment.metadata.title,
-    icon: '🎧',
+    icon: assignment.metadata.icon ?? '🎧',
     studyTextAudioUrl: manifest?.audioArtifacts?.studyText?.url ?? legacy?.audio?.url ?? null,
     pronunciationAudioUrl: assignment.pronunciation
       ? (manifest?.audioArtifacts?.pronunciation?.primaryClip?.url ??
