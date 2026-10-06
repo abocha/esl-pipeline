@@ -26,6 +26,10 @@ Explicit human authorization must precede live execution. CLI flags record that 
 not themselves constitute human authorization. The fixed allocation was three generation requests,
 one per case, with no automatic retry or paid evaluator.
 
+The separately frozen [ESL-31 changed-policy reevaluation](assignment-quality-reevaluation.md)
+prepares two of these real contexts under v6 after ESL-30. It has a separate root and authorization;
+this completed v5 experiment and its attempt records remain unchanged.
+
 ## Fixed real cases
 
 The complete preserved source-data inputs already available locally cover these distinct decisions:
