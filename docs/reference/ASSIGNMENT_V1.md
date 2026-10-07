@@ -62,8 +62,10 @@ fixture, snapshot and pinned canonical hash remain the unchanged compatibility g
 Fresh v8 generation requires `metadata.icon`: one suitable LLM-authored emoji. The strict provider
 schema requires the nonempty string; post-provider admission checks a bounded emoji sequence,
 including ZWJ families, modifiers, flags and keycaps. Runtime reads permit absence without adding
-fields. The hero and initial/resumed publication/share metadata use the authored icon, with 🎧 only
-as a display fallback. There is no backfill, historical upgrade, rewrite or republication.
+fields. Initial/resumed publication and share metadata retain the authored icon and their display
+fallback. The learner handout uses a fixed Lucide book icon for its hero and colored Lucide icons
+for static headings and semantic roles. Rendering does not change authored metadata or lesson text.
+There is no backfill, historical upgrade, rewrite or republication.
 
 Content fields remain strings. Paired single backticks mark nonempty, single-line linguistic
 fragments: `will`, `-s`, or `subject + will + base verb`. The renderer escapes both ordinary and
@@ -87,16 +89,19 @@ through normal explicit template activation; no active revision or frozen packag
 
 The source starts with Listen first and a bounded instruction; freely available transcript support
 follows audio. Attribution and links remain. Natural sentence practice groups the existing sentence
-and audio in a quiet group, with no new pedagogy. Internal pronunciation mode stays out of learner text.
+and audio in an emphasized callout, with no new pedagogy. Internal pronunciation mode stays out of learner text.
 Item buttons report Play / Playing… / Replay / Retry, reset on clip switching and ignore stale events.
 Playback failure also shows a concise visible message and a labeled Retry action.
 Native full-track controls retain their existing preload behavior.
 
-Wrong grammar remains visible. Semibold Corrected: and Explanation: labels are always visible; each
-following content line is independently hidden and excluded from screen-reader output until its
-native button is activated by pointer or keyboard. Reveal is permanent for the page session. Cheap
-print CSS exposes the content. Native disclosures retain the consolidated Answer Key & Sample Mission,
-with packaged opening/closing animation, rapid-toggle cancellation and reduced-motion fallback.
+Wrong grammar remains visible. Decorative Lucide cross, green check and question icons identify
+wrong, corrected/answer and explanation rows, with accessible role labels. Correction and explanation
+text occupies its final layout while blurred and excluded from screen-reader output; an empty native
+button overlays each target until activated by pointer or keyboard. Reveal is independent and permanent
+for the page session, and focus transfers to readable content. Print CSS exposes the content. Transcript
+and Answer Key disclosures share a connected bordered frame, with packaged opening/closing animation,
+rapid-toggle cancellation and reduced-motion fallback. The final section is Answers and Example;
+the Answer Key disclosure name is retained.
 Both `teacherFollowUp` and `teacherRationale` stay in typed teacher data and are absent from complete
 learner HTML bytes, including hidden/serialized output. Ambiguous legacy rationale stays excluded.
 

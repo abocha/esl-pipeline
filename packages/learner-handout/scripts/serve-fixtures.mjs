@@ -6,7 +6,7 @@ createServer(async (request, response) => {
   const filename = request.url === '/' ? 'shadow_sentence-mixed.html' : request.url?.slice(1);
   if (
     !filename ||
-    !/^(?:[a-z_]+-(?:available|mixed|unavailable)\.html|fixture-tone\.wav|grammar\.html|polish(?:-(?:emoji|icons))?\.html)$/.test(
+    !/^(?:[a-z_]+-(?:available|mixed|unavailable)\.html|fixture-tone\.wav|grammar\.html|polish\.html)$/.test(
       filename,
     )
   ) {
