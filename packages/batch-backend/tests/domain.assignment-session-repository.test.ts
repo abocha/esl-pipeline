@@ -158,13 +158,14 @@ async function confirmMixedSource(
     'confirmAssignmentSessionStepPersistence'
   >,
   fixture: Awaited<ReturnType<typeof createMixedSourceConfirmationFixture>>,
+  expectedRevision = 2,
 ) {
   return repository.confirmAssignmentSessionStepPersistence({
     id: fixture.sessionId,
     userId: fixture.userId,
     request: {
       step: 'source',
-      expectedRevision: 2,
+      expectedRevision,
       lessonId: null,
       recordingId: fixture.recordingId,
       transcriptId: fixture.transcriptId,
@@ -728,7 +729,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
     const repository = await import('../src/domain/assignment-session-repository.js');
     const first = await confirmMixedSource(repository, fixture);
-    await confirmMixedSource(repository, fixture);
+    await confirmMixedSource(repository, fixture, first.session.revision);
     const before = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       const operations = await client.query<{ id: string; student_id: string; state: string }>(
         `SELECT id, student_id, state FROM profile_initial_enrichment_operations
@@ -1920,7 +1921,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       mappingContentHash: 'a'.repeat(64),
     });
     const repository = await import('../src/domain/assignment-session-repository.js');
-    await confirmMixedSource(repository, fixture);
+    const first = await confirmMixedSource(repository, fixture);
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `UPDATE profile_initial_enrichment_operations SET state = 'failed',
@@ -1928,7 +1929,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
         [fixture.sessionId],
       );
     });
-    await confirmMixedSource(repository, fixture);
+    await confirmMixedSource(repository, fixture, first.session.revision);
     const rows = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
       client.query<{ state: string }>(
         'SELECT state FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
@@ -3596,7 +3597,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       mappingContentHash: 'd'.repeat(64),
     });
     const repository = await import('../src/domain/assignment-session-repository.js');
-    await confirmMixedSource(repository, fixture);
+    const first = await confirmMixedSource(repository, fixture);
     const nextAttemptAt = new Date('2026-09-07T02:02:03.000Z');
     await withPgClientSessionContext({ rlsBypass: true }, (client) =>
       client.query(
@@ -3611,7 +3612,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
       ),
     );
 
-    await expect(confirmMixedSource(repository, fixture)).resolves.toMatchObject({
+    await expect(
+      confirmMixedSource(repository, fixture, first.session.revision),
+    ).resolves.toMatchObject({
       session: { confirmedStep: 'source' },
     });
     const replayed = await withPgClientSessionContext({ rlsBypass: true }, (client) =>

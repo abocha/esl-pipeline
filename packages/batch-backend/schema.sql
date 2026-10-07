@@ -50,6 +50,37 @@ BEGIN
   RETURN NEW;
 END $$;
 
+CREATE FUNCTION public.guard_completed_transcript_source() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE source_recording uuid; owner_record record;
+BEGIN
+  IF TG_TABLE_NAME = 'transcripts' THEN source_recording := NEW.recording_id;
+  ELSE source_recording := NEW.id; END IF;
+  FOR owner_record IN SELECT s.transcript_completed_at FROM assignment_sessions s
+    JOIN assignment_source_bindings b ON b.assignment_session_id = s.id
+    WHERE b.recording_id = source_recording ORDER BY s.id FOR UPDATE OF s NOWAIT
+  LOOP
+    IF owner_record.transcript_completed_at IS NOT NULL THEN RAISE EXCEPTION 'assignment_session_completed'; END IF;
+  END LOOP;
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.guard_session_homework_artifact() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE session_intent text;
+BEGIN
+  IF NEW.assignment_session_id IS NOT NULL THEN
+    SELECT homework_intent INTO session_intent FROM assignment_sessions
+      WHERE id = NEW.assignment_session_id FOR UPDATE;
+    IF session_intent IS DISTINCT FROM 'create' THEN RAISE EXCEPTION 'assignment_homework_intent_conflict'; END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
 CREATE TABLE public.assignment_sessions (
     id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -77,14 +108,22 @@ CREATE TABLE public.assignment_sessions (
     selected_profile_revision_id uuid,
     selected_profile_revision_hash text,
     share_job_id uuid,
+    homework_intent text DEFAULT 'create'::text NOT NULL,
+    transcript_completed_at timestamp with time zone,
+    transcript_completion_history jsonb DEFAULT '[]'::jsonb NOT NULL,
+    homework_started_from_revision integer,
     CONSTRAINT assignment_sessions_completed_share_job_check CHECK (((confirmed_step <> 'share'::text) OR (share_job_id IS NOT NULL))),
     CONSTRAINT assignment_sessions_confirmed_snapshot_check CHECK (((jsonb_typeof(confirmed_snapshot) = 'object'::text) AND (confirmed_snapshot ?& ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text]) AND (jsonb_typeof((confirmed_snapshot -> 'student'::text)) = 'object'::text) AND (NULLIF((confirmed_snapshot #>> '{student,studentId}'::text[]), ''::text) IS NOT NULL) AND (((confirmed_snapshot #>> '{student,studentId}'::text[]))::uuid = student_id) AND (((confirmed_snapshot -> 'source'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'source'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'context'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'create'::text)) = 'object'::text)))),
     CONSTRAINT assignment_sessions_confirmed_step_check CHECK ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text, 'share'::text]))),
     CONSTRAINT assignment_sessions_creation_request_id_check CHECK (((creation_request_id IS NULL) OR (btrim(creation_request_id) <> ''::text))),
     CONSTRAINT assignment_sessions_generation_provider_check CHECK (((selected_generation_provider IS NULL) OR (selected_generation_provider = ANY (ARRAY['openai'::text, 'google_ai_studio'::text, 'openrouter'::text])))),
+    CONSTRAINT assignment_sessions_homework_intent CHECK ((homework_intent = ANY (ARRAY['create'::text, 'none'::text]))),
+    CONSTRAINT assignment_sessions_no_homework_downstream CHECK (((homework_intent <> 'none'::text) OR ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text])) AND ((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) AND ((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) AND (prompt_package_id IS NULL) AND (draft_id IS NULL) AND (share_job_id IS NULL)))),
     CONSTRAINT assignment_sessions_publish_target_check CHECK (((publish_target IS NULL) OR (publish_target = 'html'::text))),
     CONSTRAINT assignment_sessions_revision_check CHECK ((revision > 0)),
     CONSTRAINT assignment_sessions_selected_profile_revision_hash_check CHECK (((selected_profile_revision_hash IS NULL) OR (selected_profile_revision_hash ~ '^[0-9a-f]{64}$'::text))),
+    CONSTRAINT assignment_sessions_transcript_completion CHECK (((transcript_completed_at IS NULL) OR COALESCE(((homework_intent = 'none'::text) AND (confirmed_step = 'source'::text) AND ((confirmed_snapshot -> 'source'::text) <> 'null'::jsonb) AND (jsonb_array_length(transcript_completion_history) > 0) AND (((transcript_completion_history -> '-1'::integer) -> 'source'::text) = (confirmed_snapshot -> 'source'::text)) AND ((((transcript_completion_history -> '-1'::integer) ->> 'resultingRevision'::text))::integer = revision) AND ((((transcript_completion_history -> '-1'::integer) ->> 'completedAt'::text))::timestamp with time zone = transcript_completed_at) AND (((transcript_completion_history -> '-1'::integer) ->> 'studentId'::text) = (student_id)::text) AND (COALESCE(to_jsonb(lesson_id), 'null'::jsonb) = (confirmed_snapshot #> '{source,lessonId}'::text[])) AND ((recording_id)::text = (confirmed_snapshot #>> '{source,recordingId}'::text[])) AND ((transcript_id)::text = (confirmed_snapshot #>> '{source,transcriptId}'::text[]))), false))),
+    CONSTRAINT assignment_sessions_transcript_history_array CHECK ((jsonb_typeof(transcript_completion_history) = 'array'::text)),
     CONSTRAINT assignment_sessions_tts_provider_check CHECK (((selected_tts_provider IS NULL) OR (selected_tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text])))),
     CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
 );
@@ -160,6 +199,34 @@ CREATE FUNCTION public.preserve_assignment_draft_format() RETURNS trigger
 BEGIN
   IF NEW.format IS DISTINCT FROM OLD.format THEN
     RAISE EXCEPTION 'Assignment draft authority format cannot be changed';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.preserve_transcript_completion_history() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.homework_intent = 'none' AND EXISTS (SELECT 1 FROM prompt_packages WHERE assignment_session_id = NEW.id) THEN
+    RAISE EXCEPTION 'assignment_homework_intent_conflict';
+  END IF;
+  IF jsonb_array_length(NEW.transcript_completion_history) < jsonb_array_length(OLD.transcript_completion_history)
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements(OLD.transcript_completion_history) WITH ORDINALITY e(value, n)
+      WHERE NEW.transcript_completion_history->(e.n::integer - 1) IS DISTINCT FROM e.value) THEN
+    RAISE EXCEPTION 'transcript_completion_history_immutable';
+  END IF;
+  IF NEW.transcript_completion_history IS DISTINCT FROM OLD.transcript_completion_history AND
+    (jsonb_array_length(NEW.transcript_completion_history) <> jsonb_array_length(OLD.transcript_completion_history) + 1
+      OR OLD.transcript_completed_at IS NOT NULL OR NEW.transcript_completed_at IS NULL) THEN
+    RAISE EXCEPTION 'transcript_completion_history_invalid_append';
+  END IF;
+  IF OLD.transcript_completed_at IS NOT NULL AND
+    NOT (NEW.homework_intent = 'create' AND NEW.transcript_completed_at IS NULL
+      AND NEW.homework_started_from_revision = OLD.revision AND NEW.revision = OLD.revision + 1
+      AND NEW.confirmed_snapshot = OLD.confirmed_snapshot AND NEW.lesson_id IS NOT DISTINCT FROM OLD.lesson_id
+      AND NEW.recording_id = OLD.recording_id AND NEW.transcript_id = OLD.transcript_id) THEN
+    RAISE EXCEPTION 'assignment_session_completed';
   END IF;
   RETURN NEW;
 END;
@@ -1638,9 +1705,9 @@ CREATE UNIQUE INDEX idx_alpha_invites_pending_email_normalized ON public.alpha_i
 
 CREATE INDEX idx_alpha_invites_status_expires_at ON public.alpha_invites USING btree (status, expires_at);
 
-CREATE INDEX idx_assignment_sessions_lesson_updated ON public.assignment_sessions USING btree (lesson_id, updated_at DESC, id DESC) WHERE ((confirmed_step <> 'share'::text) AND (lesson_id IS NOT NULL));
+CREATE INDEX idx_assignment_sessions_lesson_updated ON public.assignment_sessions USING btree (lesson_id, updated_at DESC, id DESC) WHERE ((confirmed_step <> 'share'::text) AND (transcript_completed_at IS NULL) AND (lesson_id IS NOT NULL));
 
-CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC) WHERE (confirmed_step <> 'share'::text);
+CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC) WHERE ((confirmed_step <> 'share'::text) AND (transcript_completed_at IS NULL));
 
 CREATE UNIQUE INDEX idx_assignment_sessions_user_creation_request ON public.assignment_sessions USING btree (user_id, creation_request_id) WHERE (creation_request_id IS NOT NULL);
 
@@ -1928,6 +1995,14 @@ CREATE TRIGGER freeze_legacy_profile_revisions BEFORE INSERT OR DELETE OR UPDATE
 
 CREATE TRIGGER freeze_legacy_profiles BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_profiles FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
 
+CREATE TRIGGER guard_completed_recording_source BEFORE UPDATE OF student_id, audio_topology, source_identity_kind, source_fingerprint_scheme, source_fingerprint ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.guard_completed_transcript_source();
+
+CREATE TRIGGER guard_completed_transcript_insert BEFORE INSERT ON public.transcripts FOR EACH ROW EXECUTE FUNCTION public.guard_completed_transcript_source();
+
+CREATE TRIGGER guard_completed_transcript_update BEFORE UPDATE OF storage_uri, content_hash, working_version, summary_json, recording_id ON public.transcripts FOR EACH ROW EXECUTE FUNCTION public.guard_completed_transcript_source();
+
+CREATE TRIGGER guard_session_homework_prompt BEFORE INSERT OR UPDATE ON public.prompt_packages FOR EACH ROW EXECUTE FUNCTION public.guard_session_homework_artifact();
+
 CREATE TRIGGER historical_drafts_read_only BEFORE INSERT OR UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
 
 CREATE TRIGGER historical_homework_batch_read_only BEFORE INSERT OR UPDATE ON public.student_memory_openai_batch_items FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
@@ -1955,6 +2030,8 @@ CREATE TRIGGER memory_confirmed_source_update_lock BEFORE UPDATE ON public.assig
 CREATE TRIGGER preserve_assignment_artifact_identity BEFORE UPDATE ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.preserve_assignment_artifact_identity();
 
 CREATE TRIGGER preserve_assignment_draft_format BEFORE UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.preserve_assignment_draft_format();
+
+CREATE TRIGGER preserve_transcript_completion_history BEFORE UPDATE ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.preserve_transcript_completion_history();
 
 CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
 
@@ -2525,5 +2602,6 @@ VALUES
   ('0062_assignment_v1_authority', 'df1b835d96032ecf9afb0d3fe034ee3cfe605dfecdb1dc578d7fb2f2f20c5b4d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0063_assignment_native_renderer', 'e58336ba97dc05926e652b786b370743061f8e4702029bb79fd84ffa7bb88492', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0064_historical_markdown_read_only', '9a74cf33697ccc187b1674e03d06a1f5b41b79a555e19918d9465fc5f00dd292', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0065_assignment_react_renderer', '2e37a9fd1fb5f1c3efa8807e985eb254c63bc4b972de2d544e9b8372233c40dc', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0065_assignment_react_renderer', '2e37a9fd1fb5f1c3efa8807e985eb254c63bc4b972de2d544e9b8372233c40dc', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0066_no_homework_lesson', '47c8dc8f633f5d2ff07282d3ff393886245c477dd3854204c5970147bdfe2104', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

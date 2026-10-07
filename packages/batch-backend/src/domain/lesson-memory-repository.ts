@@ -104,6 +104,7 @@ export function buildCanonicalLessonMemoryAuthoritySqlPredicate(entryAlias: stri
       ON source_session.id = source_binding.assignment_session_id
     JOIN recordings AS source_recording ON source_recording.id = ${entryAlias}.recording_id
     WHERE source_binding.assignment_session_id = ${entryAlias}.assignment_session_id
+      AND NOT historical_assignment_session(source_session)
       AND source_binding.binding_role = 'confirmed'
       AND source_binding.recording_id = ${entryAlias}.recording_id
       AND source_binding.transcript_id = ${entryAlias}.transcript_id
@@ -130,10 +131,11 @@ export type InsertCanonicalReadyLessonMemoryParams = Omit<InsertLessonMemoryPara
 export type EnsurePendingLessonMemoryEntryParams = Omit<InsertLessonMemoryParams, 'status'> & {
   sourceStorageUri: string;
   sourceContentHash: string;
+  retryTerminal?: boolean;
 };
 
 export interface EnsurePendingLessonMemoryEntryResult {
-  outcome: 'created' | 'pending_exists' | 'ready_exists';
+  outcome: 'created' | 'pending_exists' | 'ready_exists' | 'terminal_exists';
   entry: LessonMemoryRecord;
 }
 
@@ -519,6 +521,10 @@ export async function ensurePendingLessonMemoryEntry(
       }
 
       if (existing?.status === 'failed' || existing?.status === 'superseded') {
+        if (params.retryTerminal === false) {
+          await client.query('COMMIT');
+          return { outcome: 'terminal_exists', entry: mapRowToLessonMemory(existing) };
+        }
         const reset = await client.query<LessonMemoryRow>(
           `UPDATE lesson_memory_entries
            SET status = 'pending', generation_notes = $2::jsonb, generated_at = $3,

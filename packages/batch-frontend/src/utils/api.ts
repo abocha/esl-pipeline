@@ -43,6 +43,7 @@ import type {
   ConfirmAssignmentSessionStepResponse as ContractConfirmAssignmentSessionStepResponse,
   ConfirmStudentAssignmentSessionRequest as ContractConfirmStudentAssignmentSessionRequest,
   ElevenLabsTtsModelId as ContractElevenLabsTtsModelId,
+  FinishTranscriptAssignmentSessionRequest as ContractFinishTranscriptAssignmentSessionRequest,
   GenerateDraftRequest as ContractGenerateDraftRequest,
   GenerateDraftResponse as ContractGenerateDraftResponse,
   GenerationProvider as ContractGenerationProvider,
@@ -61,6 +62,7 @@ import type {
   RecordingDto as ContractRecordingDto,
   RecordingStatus as ContractRecordingStatus,
   RerunJobPayload as ContractRerunJobPayload,
+  StartHomeworkAssignmentSessionRequest as ContractStartHomeworkAssignmentSessionRequest,
   SttProviderId as ContractSttProviderId,
   StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
@@ -113,6 +115,9 @@ export type JobSummaryResponse = ContractJobSummaryResponse;
 export type StudentSummaryResponse = ContractStudentSummaryResponse;
 export type JobConfigOverrides = ContractJobConfigOverrides;
 export type AssignmentSession = ContractAssignmentSessionDto;
+export type FinishTranscriptAssignmentSessionRequest =
+  ContractFinishTranscriptAssignmentSessionRequest;
+export type StartHomeworkAssignmentSessionRequest = ContractStartHomeworkAssignmentSessionRequest;
 export type AssignmentSessionListResponse = ContractAssignmentSessionListResponse;
 export type AttachAssignmentSourceRequest = ContractAttachAssignmentSourceRequest;
 export type AttachAssignmentSourceResponse = ContractAttachAssignmentSourceResponse;
@@ -3292,10 +3297,14 @@ export async function fetchJobProvenance(jobId: string): Promise<JobProvenanceRe
   }
 }
 
-export async function listAssignmentSessions(limit = 20): Promise<AssignmentSessionListResponse> {
+export async function listAssignmentSessions(
+  limit = 20,
+  scope?: 'history',
+  offset?: number,
+): Promise<AssignmentSessionListResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/user/assignment-sessions'), {
-      params: { limit },
+      params: { limit, ...(scope ? { scope } : {}), ...(offset !== undefined ? { offset } : {}) },
     });
     return response.data;
   } catch (error: unknown) {
@@ -3437,6 +3446,46 @@ export async function confirmAssignmentSessionStep(
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
+}
+
+async function mutateTranscriptWorkflow(
+  sessionId: string,
+  command: 'finish-transcript' | 'start-homework',
+  request: FinishTranscriptAssignmentSessionRequest | StartHomeworkAssignmentSessionRequest,
+): Promise<{ session: AssignmentSession }> {
+  try {
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(
+        buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/${command}`),
+        request,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    const conflict = getAssignmentSessionConflict(axiosError);
+    if (conflict) throw new AssignmentSessionConflictApiError(conflict);
+    const artifactConflict = getArtifactWorkingConflict(axiosError);
+    if (artifactConflict) throw new ArtifactWorkingConflictApiError(artifactConflict);
+    if (isAssignmentSpeakerRoleMappingRequired(axiosError)) {
+      throw new AssignmentSpeakerRoleMappingRequiredApiError();
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export function finishTranscriptAssignmentSession(
+  sessionId: string,
+  request: FinishTranscriptAssignmentSessionRequest,
+) {
+  return mutateTranscriptWorkflow(sessionId, 'finish-transcript', request);
+}
+
+export function startHomeworkAssignmentSession(
+  sessionId: string,
+  request: StartHomeworkAssignmentSessionRequest,
+) {
+  return mutateTranscriptWorkflow(sessionId, 'start-homework', request);
 }
 
 export async function shareAssignmentSession(

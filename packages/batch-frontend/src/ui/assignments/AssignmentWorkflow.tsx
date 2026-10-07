@@ -12,6 +12,7 @@ export interface AssignmentWorkflowProps {
   highestAvailableStep: AssignmentStepId;
   saveState: 'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'ambiguous';
   studentName?: string | null;
+  lessonOnly?: boolean;
   guidance?: React.ReactNode;
   postFooter?: React.ReactNode;
   support?: React.ReactNode;
@@ -48,6 +49,7 @@ export function AssignmentWorkflow({
   activeStep,
   saveState,
   studentName,
+  lessonOnly = false,
   guidance,
   postFooter,
   support,
@@ -65,7 +67,9 @@ export function AssignmentWorkflow({
     <section className="assignment-workflow" aria-label="Assignment builder">
       <div className="assignment-workflow__status">
         {studentName?.trim() ? (
-          <span className="assignment-workflow__identity">Assignment for {studentName.trim()}</span>
+          <span className="assignment-workflow__identity">
+            {lessonOnly ? 'Lesson' : 'Assignment'} for {studentName.trim()}
+          </span>
         ) : null}
         <span
           className={`assignment-workflow__save assignment-workflow__save--${saveState}`}
@@ -82,7 +86,7 @@ export function AssignmentWorkflow({
           {steps.map((step, index) => {
             const Icon = stepIcons[step.id];
             const visualStatus = step.id === activeStep ? 'current' : step.status;
-            const disabled = visualStatus === 'locked';
+            const disabled = visualStatus === 'locked' || visualStatus === 'skipped';
             return (
               <li key={step.id} data-status={visualStatus}>
                 <button
@@ -99,7 +103,7 @@ export function AssignmentWorkflow({
                     )}
                   </span>
                   <span className="assignment-workflow__step-copy">
-                    <small>Step {index + 1}</small>
+                    <small>{visualStatus === 'skipped' ? 'Skipped' : `Step ${index + 1}`}</small>
                     <strong>{step.label}</strong>
                   </span>
                 </button>

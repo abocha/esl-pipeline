@@ -428,7 +428,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
     const replay = await confirmAssignmentSessionStepPersistence({
       id: student.id,
       userId,
-      request: sourceRequest,
+      request: { ...sourceRequest, expectedRevision: confirmedA.session.revision },
       lessonMemory: memory,
     });
     expect(replay.session.revision).toBe(3);
@@ -458,7 +458,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
       confirmAssignmentSessionStepPersistence({
         id: student.id,
         userId,
-        request: sourceRequest,
+        request: { ...sourceRequest, expectedRevision: confirmedA.session.revision },
         lessonMemory: memory,
       }),
     ).rejects.toMatchObject({ code: 'ARTIFACT_WORKING_CONFLICT' });

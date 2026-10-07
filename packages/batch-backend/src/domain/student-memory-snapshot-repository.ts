@@ -128,6 +128,7 @@ export interface EnsurePendingStudentMemorySnapshotParams {
   generationNotes?: StudentMemorySnapshotGenerationNotes | null;
   sourceEntryId?: string | null;
   reuseReadyHomeworkSource?: boolean;
+  reuseReadyLessonSource?: boolean;
   replayKey?: string;
 }
 
@@ -216,7 +217,20 @@ export async function ensurePendingStudentMemorySnapshot(
         };
       }
 
-      if (params.reuseReadyHomeworkSource && params.sourceEntryId) {
+      if (params.reuseReadyLessonSource && params.sourceEntryId) {
+        const source = await client.query(
+          `SELECT id FROM lesson_memory_entries AS lesson
+           WHERE lesson.id = $1 AND lesson.student_id = $2 AND lesson.status = 'ready'
+             AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson')}`,
+          [params.sourceEntryId, params.studentId],
+        );
+        if (!source.rows[0]) throw new StudentMemorySnapshotIntentObsoleteError();
+      }
+
+      if (
+        (params.reuseReadyHomeworkSource || params.reuseReadyLessonSource) &&
+        params.sourceEntryId
+      ) {
         const eligibleLineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot');
         const readyResult = await client.query<StudentMemorySnapshotRow>(
           `
@@ -248,7 +262,8 @@ export async function ensurePendingStudentMemorySnapshot(
           FROM student_memory_snapshots AS snapshot
           WHERE snapshot.student_id = $1
             AND snapshot.status = 'ready'
-            AND $2::uuid = ANY(snapshot.homework_memory_entry_ids)
+            AND ($2::uuid = ANY(snapshot.${params.reuseReadyLessonSource ? 'lesson' : 'homework'}_memory_entry_ids)
+              OR snapshot.generation_notes ->> 'sourceEntryId' = $2::text)
             AND ${eligibleLineage}
           ORDER BY snapshot.generated_at DESC, snapshot.created_at DESC, snapshot.id DESC
           LIMIT 1
@@ -282,11 +297,15 @@ export async function ensurePendingStudentMemorySnapshot(
       if (params.sourceEntryId) {
         const terminal = await client.query<StudentMemorySnapshotRow>(
           `SELECT * FROM student_memory_snapshots WHERE student_id = $1
-           AND generation_notes ->> 'sourceEntryId' = $2 AND status = 'superseded'
-           AND (generation_notes ? 'cancelledAt' OR generation_notes ? 'obsoleteReason')
+           AND generation_notes ->> 'sourceEntryId' = $2
+           AND (status = 'superseded' OR ($3 AND status IN ('failed', 'ready')))
            AND generation_notes ->> 'pendingEntryId' IS NULL
            ORDER BY created_at DESC, id DESC LIMIT 1`,
-          [params.studentId, params.sourceEntryId],
+          [
+            params.studentId,
+            params.sourceEntryId,
+            params.reuseReadyLessonSource === true || params.reuseReadyHomeworkSource === true,
+          ],
         );
         if (terminal.rows[0]) {
           await client.query('COMMIT');

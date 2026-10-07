@@ -216,7 +216,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
   });
 
   it('reuses the existing pending snapshot row when the same source entry is requested again', async () => {
-    ensurePendingMock.mockResolvedValueOnce({
+    ensurePendingMock.mockResolvedValue({
       outcome: 'pending_exists',
       entry: {
         id: 'snapshot-pending-existing',
@@ -385,7 +385,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
   });
 
   it('creates a new queue job when the same source entry is retriggered after a new pending row is created', async () => {
-    ensurePendingMock.mockResolvedValueOnce({
+    ensurePendingMock.mockResolvedValue({
       outcome: 'created',
       entry: {
         id: 'snapshot-pending-2',

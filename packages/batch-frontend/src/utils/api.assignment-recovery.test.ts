@@ -7,8 +7,11 @@ import {
   attachAssignmentSource,
   confirmAssignmentSessionStep,
   confirmStudentAssignmentSession,
+  finishTranscriptAssignmentSession,
+  listAssignmentSessions,
   publishAssignmentCorrection,
   shareAssignmentSession,
+  startHomeworkAssignmentSession,
   updateAssignmentSessionRecovery,
   updateDraft,
   updateRecordingTranscript,
@@ -53,6 +56,51 @@ describe('assignment recovery API', () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     vi.mocked(apiClient.post).mockReset();
+  });
+
+  it('keeps exact finish identity stable across transient retry and sends explicit promotion', async () => {
+    vi.useFakeTimers();
+    const request = {
+      expectedRevision: 5,
+      lessonId: null,
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      transcriptWorkingVersion: 3,
+      transcriptHash: 'a'.repeat(64),
+    };
+    vi.mocked(apiClient.post)
+      .mockRejectedValueOnce(makeAxiosError(503))
+      .mockResolvedValueOnce({ data: { session: { id: 'session-1' } } } as never);
+    const finish = finishTranscriptAssignmentSession('session-1', request);
+    await vi.runAllTimersAsync();
+    await finish;
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/assignment-sessions/session-1/finish-transcript',
+      request,
+    );
+    expect(vi.mocked(apiClient.post).mock.calls[1]).toEqual(
+      vi.mocked(apiClient.post).mock.calls[0],
+    );
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: { session: { id: 'session-1' } },
+    } as never);
+    await startHomeworkAssignmentSession('session-1', { expectedRevision: 6 });
+    expect(apiClient.post).toHaveBeenLastCalledWith(
+      '/api/assignment-sessions/session-1/start-homework',
+      { expectedRevision: 6 },
+    );
+  });
+
+  it('requests explicit result history without changing the default unfinished list', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { sessions: [], total: 0, limit: 20 } });
+    await listAssignmentSessions();
+    expect(apiClient.get).toHaveBeenLastCalledWith('/api/user/assignment-sessions', {
+      params: { limit: 20 },
+    });
+    await listAssignmentSessions(20, 'history', 60);
+    expect(apiClient.get).toHaveBeenLastCalledWith('/api/user/assignment-sessions', {
+      params: { limit: 20, scope: 'history', offset: 60 },
+    });
   });
 
   it('preserves the typed transcript working conflict', async () => {

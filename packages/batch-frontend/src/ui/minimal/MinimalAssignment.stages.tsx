@@ -139,6 +139,7 @@ interface SourceStageSectionProps {
   mixedSpeakerRoles: { speaker: number; role: 'teacher' | 'student' | '' }[];
   onMixedSpeakerRoleChange: (speaker: number, role: 'teacher' | 'student' | '') => void;
   hideStudentSelection?: boolean;
+  homeworkChoice?: React.ReactNode;
   readOnly?: boolean;
 }
 
@@ -773,6 +774,7 @@ export function SourceStageSection({
   mixedSpeakerRoles,
   onMixedSpeakerRoleChange,
   hideStudentSelection = false,
+  homeworkChoice,
   readOnly = false,
 }: SourceStageSectionProps) {
   const recordingProductLabel = getRecordingProductLabel(recording, uploading, uploadProgress);
@@ -1085,6 +1087,7 @@ export function SourceStageSection({
                 </span>
               </div>
               {transcriptError ? <p className="minimal-error">{transcriptError}</p> : null}
+              {homeworkChoice}
             </div>
           ) : null}
         </div>

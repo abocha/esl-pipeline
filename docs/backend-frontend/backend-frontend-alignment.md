@@ -121,6 +121,22 @@ revision content/history are preserved.
 - Confirmed Source also makes retained recording audio unavailable in the same transaction and queues
   recording-owned deletion; historical confirmed rows are backfilled to that lifecycle without
   changing transcript, Source snapshot, or downstream text lineage.
+- Saved no-homework intent routes Lesson source to Review & finish. Only explicit exact-source
+  finish confirms Source and records current transcript completion plus immutable source-bound
+  history; ordinary confirmation and session-bound downstream work reject none intent under locks.
+  Current completion excludes active lists and missing-homework follow-ups, while history alone
+  does not. Completed results expose separate extraction/refresh/enrichment progress without a
+  Share job. Explicit Create homework keeps the source owner, clears current completion and enters
+  Context; reselecting none before downstream work requires a new reviewed finish. Existing homework
+  progress takes precedence over `not_planned`; Schedule/business View transcript uses its typed
+  result-session reference. Lesson linking retains the existing elapsed-scheduled-lesson credit
+  boundary; finish/promotion have no billing effect. Pending extraction and missing ready-source
+  snapshot handoffs recover through the existing worker with canonical and terminal-state checks.
+- API 10 / DB 4 expose intent/current completion separately from exact-source history and mark
+  migration 0066's incompatible writer boundary. Ordinary public Source replay requires current
+  revision before effects. Default session lists are active; `scope=history` exposes transcript
+  results without requiring a Share job. Manifest/prompt/validator and frozen AssignmentV1 bytes
+  remain unchanged. Earlier API/DB version references above describe historical cutovers.
 - The frontend owns automatic debounce/retry/refresh mechanics and preserves local buffers on
   conflict. The frontend enables Share only when confirmed recovery and current artifacts are clean;
   before reservation it drains pending recovery and returns a dirty session to its earliest

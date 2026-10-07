@@ -240,6 +240,153 @@ describe('integration/migrations', () => {
   });
 
   it(
+    '0066 defaults existing Source-only and historical Share rows without inferring no-homework completion',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0065_assignment_react_renderer');
+        const userId = randomUUID();
+        const studentId = randomUUID();
+        const workspaceId = randomUUID();
+        const sourceId = randomUUID();
+        const historicalId = randomUUID();
+        const jobId = randomUUID();
+        const recordingId = randomUUID();
+        const transcriptId = randomUUID();
+        await pool.query(
+          `INSERT INTO users(id,email,password_hash,role) VALUES($1,$2,'hash','user')`,
+          [userId, `${userId}@migration.test`],
+        );
+        await pool.query(`INSERT INTO workspaces(id,name) VALUES($1,'Migration test')`, [
+          workspaceId,
+        ]);
+        await pool.query(`INSERT INTO students(id,student,workspace_id) VALUES($1,'Test',$2)`, [
+          studentId,
+          workspaceId,
+        ]);
+        await pool.query(
+          `INSERT INTO recordings(id,workspace_id,source,student_id,storage_uri,bytes,status) VALUES($1,$2,'upload',$3,'local://audio',12,'transcribed')`,
+          [recordingId, workspaceId, studentId],
+        );
+        await pool.query(
+          `INSERT INTO transcripts(id,recording_id,storage_uri,working_version,content_hash,stt_provider,mode,model,language,fallback_used) VALUES($1,$2,'local://transcript',1,$3,'manual','timeline','manual','auto',false)`,
+          [transcriptId, recordingId, 'a'.repeat(64)],
+        );
+        const source = {
+          lessonId: null,
+          recordingId,
+          transcriptId,
+          transcriptWorkingVersion: 1,
+          transcriptStorageUri: 'local://transcript',
+          transcriptHash: 'a'.repeat(64),
+        };
+        const snapshot = { student: { studentId }, source, context: null, create: null };
+        await pool.query(
+          `INSERT INTO assignment_sessions(id,user_id,student_id,recording_id,transcript_id,confirmed_step,confirmed_snapshot) VALUES($1,$2,$3,$4,$5,'source',$6)`,
+          [sourceId, userId, studentId, recordingId, transcriptId, snapshot],
+        );
+        // Model rows retained by the prior historical cutover, then restore its write guard.
+        await pool.query('ALTER TABLE jobs DISABLE TRIGGER historical_jobs_read_only');
+        await pool.query(
+          'ALTER TABLE assignment_sessions DISABLE TRIGGER historical_sessions_read_only',
+        );
+        try {
+          await pool.query(
+            `INSERT INTO jobs(id,state,student_id,md_storage_uri) VALUES($1,'succeeded',$2,'local://frozen-history.md')`,
+            [jobId, studentId],
+          );
+          await pool.query(
+            `INSERT INTO assignment_sessions(id,user_id,student_id,confirmed_step,confirmed_snapshot,share_job_id) VALUES($1,$2,$3,'share',$4,$5)`,
+            [
+              historicalId,
+              userId,
+              studentId,
+              {
+                ...snapshot,
+                context: { teacherNotes: null },
+                create: { draftStorageUri: 'local://frozen-history.md', draftHash: 'b'.repeat(64) },
+              },
+              jobId,
+            ],
+          );
+        } finally {
+          await pool.query('ALTER TABLE jobs ENABLE TRIGGER historical_jobs_read_only');
+          await pool.query(
+            'ALTER TABLE assignment_sessions ENABLE TRIGGER historical_sessions_read_only',
+          );
+        }
+        const original = (
+          await pool.query(
+            'SELECT id,confirmed_snapshot,confirmed_step,revision FROM assignment_sessions ORDER BY id',
+          )
+        ).rows;
+        await runMigrations();
+        expect(
+          (
+            await pool.query(
+              'SELECT id,confirmed_snapshot,confirmed_step,revision FROM assignment_sessions ORDER BY id',
+            )
+          ).rows,
+        ).toEqual(original);
+        expect(
+          (
+            await pool.query(
+              'SELECT homework_intent,transcript_completed_at,transcript_completion_history FROM assignment_sessions',
+            )
+          ).rows,
+        ).toEqual([
+          {
+            homework_intent: 'create',
+            transcript_completed_at: null,
+            transcript_completion_history: [],
+          },
+          {
+            homework_intent: 'create',
+            transcript_completed_at: null,
+            transcript_completion_history: [],
+          },
+        ]);
+        expect(
+          (
+            await pool.query(
+              'SELECT historical_assignment_session(s) AS historical FROM assignment_sessions s WHERE id=$1',
+              [historicalId],
+            )
+          ).rows[0].historical,
+        ).toBe(true);
+        await expect(
+          pool.query('UPDATE assignment_sessions SET revision=revision+1 WHERE id=$1', [
+            historicalId,
+          ]),
+        ).rejects.toThrow('legacy_assignment_read_only');
+        expect(
+          (
+            await pool.query('SELECT md_storage_uri,assignment_artifact FROM jobs WHERE id=$1', [
+              jobId,
+            ])
+          ).rows[0],
+        ).toEqual({ md_storage_uri: 'local://frozen-history.md', assignment_artifact: null });
+        const indexes = (
+          await pool.query(
+            `SELECT indexname,indexdef FROM pg_indexes WHERE tablename='assignment_sessions'`,
+          )
+        ).rows;
+        expect(
+          indexes.find((row) => row.indexname === 'idx_assignment_sessions_user_active_updated')
+            .indexdef,
+        ).toContain('transcript_completed_at IS NULL');
+        expect(
+          indexes.find((row) => row.indexname === 'idx_assignment_sessions_lesson_updated')
+            .indexdef,
+        ).toContain('transcript_completed_at IS NULL');
+        expect(
+          indexes.find((row) => row.indexname === 'idx_assignment_sessions_user_active_recording'),
+        ).toBeUndefined();
+      });
+    },
+    testTimeout,
+  );
+
+  it(
     '0065 admits React renderer 3 without changing frozen artifact identity',
     async () => {
       await withAdminClient(async (pool) => {

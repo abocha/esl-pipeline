@@ -133,13 +133,21 @@ separately gated pending the later ABO-26 retirement slice.
   pending/failed row (`superseded`, `cancelledAt`, `cancellationReason`). It cannot undo an already
   committed result. Redis removal alone does not cancel work. Checks before dispatch and canonical
   commit fence an in-flight late response; provider execution or billing is not exactly once.
-- The worker's existing five-second reconciliation tick checks at most 50 homework/snapshot
+- The worker's existing five-second reconciliation tick checks at most 50 lesson/homework/snapshot
   deliveries, rotating by `deliveryCheckedAt`. It repairs committed intent without a queue job,
   including retained failed/completed BullMQ delivery, using the persisted provider/model. Linked
   canonical homework without downstream snapshot intent and explicitly requested snapshot
   candidate delivery in `pending`/`failed` state are recovered without regenerating canonical
   memory. Existing failed/cancelled downstream intent is not replaced automatically. Provider
   failures still use existing pacing/retries and terminal failure policy.
+- Ready canonical lesson extraction with a missing `sourceEntryId` snapshot obligation is also
+  discovered in bounded batches for saved no-homework sources and promoted finish evidence that
+  still matches current authority. The shared student-locked ensure path converges scanner and
+  direct-worker requests, reuses pending/fulfilled lineage, and respects failed/cancelled/obsolete/
+  superseded obligations. A ready lesson retry repairs only this handoff; it never invokes the
+  extraction provider again or changes ready extraction to failed. Completion of the tutor's
+  transcript-only workflow preserves memory and eligible initial-enrichment admission. This repair
+  does not authorize replay of unrelated historical ready sources or terminal extraction failures.
 - Before recovered pending snapshot generation can enter BullMQ, reconciliation repairs the existing active
   Batch claim supersession prerequisite. A failed fence leaves delivery retryable and unqueued;
   a later Batch import cannot overwrite recovered ordinary output through an old active claim.

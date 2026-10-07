@@ -173,6 +173,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   loadTranscript: () => Promise<void>;
   refreshTranscriptPreservingLocal: () => Promise<void>;
   reconcileRecordingAndTranscript: () => Promise<void>;
+  isCurrentTranscriptSaved: (saved: RecordingTranscriptResponse) => boolean;
   handleSaveTranscript: (speakerRoleMapping?: {
     roles: { speaker: number; role: 'teacher' | 'student' }[];
   }) => Promise<RecordingTranscriptResponse | null>;
@@ -910,7 +911,7 @@ export function useMinimalAssignmentSourceController({
     }): Promise<RecordingTranscriptResponse | null> => {
       if (!recording?.recordingId) return null;
       const normalizedText = transcriptText.trim();
-      if (pendingTranscriptTextRef.current === normalizedText) {
+      if (pendingTranscriptTextRef.current === normalizedText && !speakerRoleMapping) {
         return transcriptSaveQueueRef.current;
       }
       if (!latestTranscriptRef.current?.workingVersion) {
@@ -1110,6 +1111,10 @@ export function useMinimalAssignmentSourceController({
     loadTranscript,
     refreshTranscriptPreservingLocal,
     reconcileRecordingAndTranscript,
+    isCurrentTranscriptSaved: (saved) =>
+      transcriptTextRef.current.trim() === (saved.text ?? '').trim() &&
+      latestTranscriptRef.current?.workingVersion === saved.workingVersion &&
+      latestTranscriptRef.current?.contentHash === saved.contentHash,
     handleSaveTranscript,
     createManualTranscript,
     resetSourceFlow,

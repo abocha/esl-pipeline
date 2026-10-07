@@ -5,6 +5,7 @@ import type {
   AssignmentConfirmedStep,
   GenerationProvider,
   PublishTarget,
+  TranscriptCompletionEvent,
   TtsProviderId,
   TtsStrategy,
 } from '@esl-pipeline/contracts';
@@ -62,6 +63,10 @@ export const AssignmentConfirmedSnapshotSchema = z
   .strict();
 
 export interface AssignmentSessionRecord {
+  homeworkIntent: 'create' | 'none';
+  transcriptCompletedAt: Date | null;
+  transcriptCompletionHistory: TranscriptCompletionEvent[];
+  homeworkStartedFromRevision: number | null;
   id: string;
   userId: string;
   studentId: string;

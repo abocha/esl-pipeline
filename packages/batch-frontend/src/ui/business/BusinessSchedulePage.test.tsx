@@ -30,6 +30,7 @@ function makeHomework(overrides: Record<string, unknown> = {}) {
     draftId: null,
     jobId: null,
     homeworkMemoryEntryId: null,
+    transcriptResultSessionId: null,
     htmlUrl: null,
     updatedAt: null,
     ...overrides,
@@ -127,6 +128,35 @@ describe('BusinessSchedulePage', () => {
     vi.resetAllMocks();
     apiMocks.getBusinessScheduleSurface.mockResolvedValue(makeSurface());
     apiMocks.updateStudentLesson.mockResolvedValue({});
+  });
+
+  it('opens completed transcript-only lessons without a homework or billing mutation', async () => {
+    const original = makeSurface();
+    apiMocks.getBusinessScheduleSurface.mockResolvedValue(
+      makeSurface({
+        lessons: [
+          {
+            ...original.lessons[0],
+            status: 'completed',
+            homework: makeHomework({
+              status: 'not_planned',
+              transcriptResultSessionId: 'transcript-result',
+            }),
+          },
+        ],
+        reminders: [],
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+    const result = await screen.findByRole('link', { name: 'View transcript' });
+    expect(result.getAttribute('href')).toBe('/?sessionId=transcript-result');
+    expect(screen.getByText(/No homework planned/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add homework' })).toBeNull();
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 
   it('renders aggregate agenda, reminders, alerts, and recent payments', async () => {

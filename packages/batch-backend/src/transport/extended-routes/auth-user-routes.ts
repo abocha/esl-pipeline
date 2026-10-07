@@ -14,6 +14,10 @@ import {
   updateAssignmentSessionRecoveryForUser,
 } from '../../application/assignment-sessions.js';
 import { confirmAssignmentSessionStep } from '../../application/confirm-assignment-session-step.js';
+import {
+  finishTranscriptAssignmentSession,
+  startHomeworkAssignmentSession,
+} from '../../application/finish-transcript-assignment-session.js';
 import { HistoricalAssignmentReadOnlyError } from '../../application/historical-assignment.js';
 import { getJobSummaryWithDefaults } from '../../application/job-summary.js';
 import { listJobsWithDefaults } from '../../application/list-jobs.js';
@@ -843,6 +847,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
   const assignmentRecoveryPatchSchema = z
     .object({
+      homeworkIntent: z.enum(['create', 'none']).optional(),
       lessonId: z.string().uuid().nullable().optional(),
       recordingId: z.string().uuid().nullable().optional(),
       transcriptId: z.string().uuid().nullable().optional(),
@@ -950,15 +955,24 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     }
 
     const routePath = resolveRoutePath(request, 'GET /user/assignment-sessions');
-    const querySchema = z.object({
-      limit: z.coerce.number().int().min(1).max(50).optional(),
-    });
+    const querySchema = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(50).optional(),
+        scope: z.enum(['active', 'history']).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+      })
+      .refine((query) => !query.offset || query.scope === 'history', {
+        path: ['offset'],
+        message: 'Offset pagination is available for history only',
+      });
 
     try {
       const query = querySchema.parse(request.query ?? {});
       const sessions = await listAssignmentSessionsForUserDto(
         authenticatedUser.id,
         query.limit ?? 20,
+        query.scope ?? 'active',
+        query.offset ?? 0,
       );
 
       logger.info('HTTP request handled', {
@@ -1133,6 +1147,84 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     }
   });
 
+  for (const command of ['finish-transcript', 'start-homework'] as const) {
+    app.post(
+      `/assignment-sessions/:id/${command}`,
+      { preHandler: authenticate },
+      async (request, reply) => {
+        const user = getAuthenticatedUser(request);
+        if (!user) return reply.code(401).send({ error: 'unauthorized' });
+        try {
+          const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+          const revisionSchema = z
+            .object({ expectedRevision: z.number().int().positive() })
+            .strict();
+          if (command === 'start-homework') {
+            const body = revisionSchema.parse(request.body);
+            return reply.send(
+              await startHomeworkAssignmentSession({
+                userId: user.id,
+                sessionId: id,
+                request: body,
+              }),
+            );
+          }
+          const body = revisionSchema
+            .extend({
+              lessonId: z.string().uuid().nullable(),
+              recordingId: z.string().uuid(),
+              transcriptId: z.string().uuid(),
+              transcriptWorkingVersion: z.number().int().positive(),
+              transcriptHash: z.string().regex(/^[0-9a-f]{64}$/),
+            })
+            .parse(request.body);
+          return reply.send(
+            await finishTranscriptAssignmentSession({
+              config,
+              userId: user.id,
+              sessionId: id,
+              request: body,
+            }),
+          );
+        } catch (error) {
+          if (error instanceof HistoricalAssignmentReadOnlyError)
+            return reply.code(410).send({ code: error.code });
+          if (error instanceof z.ZodError)
+            return reply.code(400).send({ error: 'validation_failed', details: error.issues });
+          const code = getErrorCode(error);
+          if (code === 'ASSIGNMENT_SESSION_NOT_FOUND')
+            return reply.code(404).send({ error: 'not_found' });
+          if (code === 'ASSIGNMENT_SESSION_REVISION_CONFLICT')
+            return reply.code(409).send({
+              code: 'assignment_session_revision_conflict',
+              session: getConflictSession(error),
+            });
+          if (code === 'ASSIGNMENT_SOURCE_ALREADY_OWNED')
+            return reply.code(409).send({
+              code: 'assignment_source_already_owned',
+              session: getConflictSession(error),
+            });
+          if (isArtifactWorkingConflict(error))
+            return reply.code(409).send({
+              code: 'artifact_working_conflict',
+              artifact: {
+                workingVersion: error.latest.workingVersion,
+                contentHash: error.latest.contentHash,
+              },
+            });
+          if (code?.startsWith('ASSIGNMENT_') || code === 'SOURCE_IDENTITY_REQUIRED')
+            return reply.code(409).send({ code: code.toLowerCase() });
+          logger.error(error instanceof Error ? error : String(error), {
+            event: 'transcript_session_command_failed',
+            command,
+            userId: user.id,
+          });
+          return reply.code(500).send({ error: 'internal_error' });
+        }
+      },
+    );
+  }
+
   app.post(
     '/assignment-sessions/:id/confirm',
     { preHandler: authenticate },
@@ -1191,7 +1283,8 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           return reply.code(404).send({ error: 'not_found' });
         if (
           code === 'ASSIGNMENT_SESSION_COMPLETED' ||
-          code === 'ASSIGNMENT_SESSION_SHARE_IN_PROGRESS'
+          code === 'ASSIGNMENT_SESSION_SHARE_IN_PROGRESS' ||
+          code === 'ASSIGNMENT_HOMEWORK_INTENT_CONFLICT'
         ) {
           return reply.code(409).send({ code: code.toLowerCase() });
         }

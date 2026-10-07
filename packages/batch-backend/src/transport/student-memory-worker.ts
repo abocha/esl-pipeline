@@ -81,7 +81,7 @@ export async function startStudentMemoryWorker(): Promise<void> {
     if (reconciling) return;
     reconciling = true;
     try {
-      await reconcileMemoryDelivery();
+      await reconcileMemoryDelivery({ config });
       await enqueuePendingProfileInitialEnrichments();
       await reconcileDeferredInitialEnrichmentIntents();
     } finally {

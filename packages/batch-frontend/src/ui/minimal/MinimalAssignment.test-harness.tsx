@@ -60,6 +60,8 @@ vi.mock('../../utils/api', () => ({
   approveJob: vi.fn(),
   cancelJob: vi.fn(),
   confirmAssignmentSessionStep: vi.fn(),
+  finishTranscriptAssignmentSession: vi.fn(),
+  startHomeworkAssignmentSession: vi.fn(),
   confirmStudentAssignmentSession: vi.fn(),
   createDraft: vi.fn(),
   createManualTranscriptSource: vi.fn(),
@@ -221,6 +223,10 @@ export function makeAssignmentSession(
   const promptPackageId = sessionOverrides.promptPackageId ?? null;
   const draftId = sessionOverrides.draftId ?? null;
   return {
+    homeworkIntent: 'create',
+    transcriptCompletedAt: null,
+    completionKind: null,
+    transcriptCompletionHistory: [],
     id: 'session-1',
     userId: 'user-1',
     studentId,
@@ -430,6 +436,7 @@ export function makeStudentLesson(
       draftId: null,
       jobId: null,
       homeworkMemoryEntryId: null,
+      transcriptResultSessionId: null,
       htmlUrl: null,
       updatedAt: null,
     },
@@ -1058,6 +1065,56 @@ export function setupMinimalAssignmentTest() {
       revision: request.expectedRevision + 1,
     });
     return { outcome: 'source_attached', session: currentSession };
+  });
+  vi.mocked(api.finishTranscriptAssignmentSession).mockImplementation(async (id, request) => {
+    await synchronizeCurrentSession(id);
+    const completedAt = '2026-10-07T00:00:00.000Z';
+    const source = {
+      lessonId: request.lessonId,
+      recordingId: request.recordingId,
+      transcriptId: request.transcriptId,
+      transcriptWorkingVersion: request.transcriptWorkingVersion,
+      transcriptStorageUri: 'memory://transcripts/confirmed',
+      transcriptHash: request.transcriptHash,
+    };
+    currentSession = makeAssignmentSession({
+      ...currentSession,
+      id,
+      confirmedStep: 'source',
+      revision: request.expectedRevision + 1,
+      homeworkIntent: 'none',
+      transcriptCompletedAt: completedAt,
+      completionKind: 'transcript_only',
+      confirmed: { ...currentSession.confirmed, source },
+      transcriptCompletionHistory: [
+        ...currentSession.transcriptCompletionHistory,
+        {
+          completedAt,
+          expectedRevision: request.expectedRevision,
+          resultingRevision: request.expectedRevision + 1,
+          studentId: currentSession.studentId,
+          source,
+        },
+      ],
+      transcriptProcessing: {
+        lessonMemory: 'pending',
+        snapshot: 'pending',
+        enrichment: 'not_eligible',
+      },
+    });
+    return { session: currentSession };
+  });
+  vi.mocked(api.startHomeworkAssignmentSession).mockImplementation(async (id, request) => {
+    await synchronizeCurrentSession(id);
+    currentSession = makeAssignmentSession({
+      ...currentSession,
+      id,
+      homeworkIntent: 'create',
+      transcriptCompletedAt: null,
+      completionKind: null,
+      revision: request.expectedRevision + 1,
+    });
+    return { session: currentSession };
   });
   vi.mocked(api.confirmAssignmentSessionStep).mockImplementation(async (id, request) => {
     await synchronizeCurrentSession(id);

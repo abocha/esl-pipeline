@@ -22,6 +22,11 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
 - Shared errors (`PipelineError`, `ConfigurationError`, etc.)
 - Shared observability shapes (`PipelineLogEvent`, `PipelineLogger`, `noopLogger`)
 - Semantic contract version registry (`CONTRACT_VERSIONS`)
+- Session homework intent, current completion kind/timestamp, immutable exact-source finish
+  events, finish/promotion commands and separate transcript-processing status. Lesson homework
+  projections include `not_planned` and a nullable transcript-result session reference. API 10 / DB 4
+  mark the completion/admission and incompatible-writer boundary; frozen AssignmentV1, manifest,
+  prompt and validator contracts remain unchanged.
 
 ## Notes
 

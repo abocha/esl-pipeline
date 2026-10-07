@@ -8,6 +8,7 @@ import {
   markLessonMemoryEntryFailed,
   supersedePendingLessonMemoryEntriesForTranscript,
 } from '../domain/lesson-memory-repository.js';
+import { deliverCanonicalPendingLessonMemory } from '../domain/memory-replay-delivery.js';
 import { logger } from '../infrastructure/logger.js';
 import {
   createTranscriptionStorageForUri,
@@ -48,6 +49,7 @@ export interface ProcessLessonMemoryJobDependencies {
     getById: typeof getLessonMemoryEntryById;
     markFailed: typeof markLessonMemoryEntryFailed;
     supersedePendingForTranscript: typeof supersedePendingLessonMemoryEntriesForTranscript;
+    admitPending?: (payload: ProcessLessonMemoryJobPayload) => Promise<boolean>;
   };
   snapshots: {
     requestRefresh: typeof requestStudentMemorySnapshotRefresh;
@@ -71,6 +73,8 @@ export async function processLessonMemoryJob(args: {
     getById: getLessonMemoryEntryById,
     markFailed: markLessonMemoryEntryFailed,
     supersedePendingForTranscript: supersedePendingLessonMemoryEntriesForTranscript,
+    admitPending: (payload: ProcessLessonMemoryJobPayload) =>
+      deliverCanonicalPendingLessonMemory(payload, async () => {}),
   };
   const snapshots = args.overrides?.snapshots ?? {
     requestRefresh: requestStudentMemorySnapshotRefresh,
@@ -81,7 +85,7 @@ export async function processLessonMemoryJob(args: {
   const pacer = args.overrides?.pacer ?? createStudentMemoryGenerationPacer(args.config);
 
   const pendingEntry = await lessonMemory.getById(args.payload.pendingEntryId);
-  if (!pendingEntry || pendingEntry.status !== 'pending') {
+  if (!pendingEntry || !['pending', 'ready'].includes(pendingEntry.status)) {
     return;
   }
 
@@ -99,6 +103,22 @@ export async function processLessonMemoryJob(args: {
   )
     return;
 
+  // Canonical publication and snapshot intent are separate durable commits.
+  // A ready delivery resumes only that handoff, never extraction or its budget.
+  if (pendingEntry.status === 'ready') {
+    await snapshots.requestRefresh({
+      config: args.config,
+      params: {
+        studentId: pendingEntry.studentId,
+        trigger: 'lesson-memory-ready',
+        sourceEntryId: pendingEntry.id,
+      },
+    });
+    return;
+  }
+
+  let published = false;
+  if (lessonMemory.admitPending && !(await lessonMemory.admitPending(args.payload))) return;
   try {
     const storage = storageFactory(args.payload.sourceStorageUri);
     const transcriptText = await storage.getText(args.payload.sourceStorageUri);
@@ -140,6 +160,7 @@ export async function processLessonMemoryJob(args: {
         }),
     });
 
+    published = true;
     if (args.payload.lessonId && result.entry.lessonTitle) {
       try {
         await lessons.applyGeneratedTitleIfPlaceholder({
@@ -168,13 +189,14 @@ export async function processLessonMemoryJob(args: {
     if (isStudentMemoryPacingDeferredError(error)) {
       throw error;
     }
-    await markFailureIfFinalAttempt({
-      payload: args.payload,
-      attemptsMade: args.attemptsMade,
-      maxAttempts: args.maxAttempts,
-      lessonMemory,
-      error,
-    });
+    if (!published)
+      await markFailureIfFinalAttempt({
+        payload: args.payload,
+        attemptsMade: args.attemptsMade,
+        maxAttempts: args.maxAttempts,
+        lessonMemory,
+        error,
+      });
     throw error;
   }
 }
