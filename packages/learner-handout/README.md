@@ -48,7 +48,9 @@ Grammar topics use headings and overall explanations, followed by lightweight fo
 labels, patterns and examples. Each comparison is one labeled group containing exactly two
 alternatives with their own label/example/meaning explanation. They sit side by side on desktop
 and stack within the same group on mobile. General examples and uses appear only when populated;
-Wrong, Corrected and Explanation trap lines remain distinct. Legacy scalar forms render directly
+Wrong, Corrected and Explanation trap roles remain distinct. Structured formulas omit the redundant
+visible Pattern label; their cues/alternative rows align with headings and examples. Legacy scalar
+forms retain their Form label and render directly
 without inferred blocks or data mutation.
 
 ## Public seam
@@ -248,8 +250,11 @@ use 400-weight body prose, 600-weight field labels/subheadings, and 700-weight m
 Part numbers and titles share size/weight; explanation prose keeps the body size. Authored emphasis
 in vocabulary, examples and transcript speakers remains distinct. Each reveal has one labeled
 native button covering the actual blurred answer text, with a single light border and no visible
-label/icon or nested control. Corrected and Explanation labels always sit on their own line,
-with an identical 6px gap above the full-width answer area and the same 8px/12px text inset.
+label/icon or nested control. Grammar roles use decorative Lucide cross/check/question markers in
+a 28px gutter with a 12px gap to the full-width answer area. Their English text labels remain
+visually hidden for assistive technology. The actual blurred/revealed text retains an 8px/12px inset;
+Wrong prose has the same 12px horizontal inset so all three text roles align and wrap to the same
+measure. Redundant grammar bullets are removed while explicit list semantics remain.
 Hover/focus strengthen the border without removing blur; activation
 reveals once and hides the control. Answer text retains its reserved space/inset to avoid a reveal
 layout jump, and print shows ordinary unblurred text. Descriptive accessible names, independent
@@ -261,6 +266,11 @@ icon rather than collide with it. Section 6 uses ordinary h2/body styling, retai
 conditional-rendering contract. Transcript and Answer Key disclosures share one connected light
 border: summary is the header and expanded content sits inside with a quiet separator and 16px
 side inset. Answer groups and the sample remain within the same frame, without nested borders.
+Answer and Explanation rows use the same decorative check/question markers and accessible labels.
+All native audio players fill their actual containing width. A shadow/natural sentence and its
+primary audio share the selective pale-blue callout and blue left rule, with 16px padding; sentence
+prose remains normal body text. The existing sentence conditions stay intact: minimal-pair and null
+pronunciation do not acquire an invented sentence or callout, and unavailable audio stays explicit.
 Vocabulary uses balanced desktop columns and stacked narrow-screen rows. Explicit table roles,
 column-header associations and English target annotations remain; mobile field labels are visual
 duplicates excluded from assistive text. Teacher-only content remains absent from the whole document.
@@ -312,3 +322,13 @@ wrapping, including a separate long-answer probe. Transcript and Answer Key clos
 nested answer groups and the sample were inspected. The complete article text matches the retained
 305cf3b9 document. Evidence is in `D:/tmp/esl-33-stacked-fields/`; `design-qa.md` records the scoped
 passing comparison. The existing 40-test interaction suite passes without new state/handler changes.
+
+The next approved annotations on 7 October 2026 remove structured Pattern labels, remove the native
+player width cap and emphasize the pronunciation sentence/audio group. Emoji and Lucide marker
+experiments were generated as ignored full-lesson HTML files. The maintainer selected Lucide;
+the shared React/static renderer now uses that treatment, including the final Wrong-text alignment
+annotation. The emoji trial remains disposable only. The development fixture server accepts
+`polish-emoji.html` and `polish-icons.html` for these temporary comparisons; no assignment property,
+production flag, dependency or alternate production theme was added. The normal `polish.html` is
+the selected implementation. Evidence is in `D:/tmp/esl-33-next-annotations/`, with the scoped QA
+history in `design-qa.md`. The seven h2 wordings remain unchanged pending the maintainer's copy choice.

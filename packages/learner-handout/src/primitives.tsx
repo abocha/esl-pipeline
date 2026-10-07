@@ -1,8 +1,33 @@
+import { Check, HelpCircle, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { assignmentInlineParts } from '@esl-pipeline/contracts';
 
 import { safeLinkUrl, safeMediaUrl, videoEmbedUrl } from './urls.js';
+
+// Fixed learner field semantics; ordinary instruction fields keep their text labels.
+function markerForLabel(label: string) {
+  if (label === 'Wrong') return X;
+  if (label === 'Corrected' || label === 'Answer') return Check;
+  if (label === 'Explanation') return HelpCircle;
+  return null;
+}
+
+function FieldLabel({ label }: { label: string }) {
+  const Icon = markerForLabel(label);
+  return Icon ? (
+    <span className={`field-marker field-marker-${label.toLowerCase()}`} lang="en">
+      <span className="field-decoration" aria-hidden="true">
+        <Icon size={22} strokeWidth={2} />
+      </span>
+      <strong className="field-label sr-only">{label}:</strong>
+    </span>
+  ) : (
+    <strong className="field-label" lang="en">
+      {label}:
+    </strong>
+  );
+}
 
 export function Inline({ children }: { children: string }) {
   const parts = assignmentInlineParts(children);
@@ -34,7 +59,7 @@ export function Inline({ children }: { children: string }) {
 }
 
 /** Pattern fields are formulas even when their author omitted cue delimiters. */
-export function GrammarPattern({ label, children }: { label: string; children: string }) {
+export function GrammarPattern({ label, children }: { label?: string; children: string }) {
   const rows: { text: string; highlighted: boolean }[][] = [[]];
   for (const part of assignmentInlineParts(children)) {
     if (part.highlighted) {
@@ -67,9 +92,13 @@ export function GrammarPattern({ label, children }: { label: string; children: s
   }
   return (
     <p className="plain-text grammar-pattern">
-      <strong className="field-label" lang="en">
-        {label}:
-      </strong>{' '}
+      {label && (
+        <>
+          <strong className="field-label" lang="en">
+            {label}:
+          </strong>{' '}
+        </>
+      )}
       <span lang="en" className="pattern-lines">
         {lines.map((row, i) => (
           <span className="pattern-line" key={i}>
@@ -101,10 +130,8 @@ export function RevealField({
   name: string;
 }) {
   return (
-    <p className="plain-text grammar-reveal">
-      <strong className="field-label" lang="en">
-        {label}:
-      </strong>{' '}
+    <p className={`plain-text grammar-reveal${markerForLabel(label) ? ' semantic-field' : ''}`}>
+      <FieldLabel label={label} />{' '}
       <span className="reveal-target">
         <span className="reveal-content" lang={lang} aria-hidden="true">
           <Inline>{children}</Inline>
@@ -143,11 +170,11 @@ export function Field({
   className?: string;
 }) {
   return (
-    <p className={`plain-text${className ? ` ${className}` : ''}`}>
-      <strong className="field-label" lang="en">
-        {label}:
-      </strong>{' '}
-      <span lang={lang}>
+    <p
+      className={`plain-text${markerForLabel(label) ? ' semantic-field' : ''}${className ? ` ${className}` : ''}`}
+    >
+      <FieldLabel label={label} />{' '}
+      <span lang={lang} className={markerForLabel(label) ? 'field-value' : undefined}>
         <Inline>{children}</Inline>
       </span>
     </p>

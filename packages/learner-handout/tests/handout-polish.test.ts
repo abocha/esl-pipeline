@@ -60,7 +60,7 @@ describe('ESL-32 shared learner surface', () => {
     const before = JSON.stringify(props);
     const doc = new JSDOM(renderLearnerHandoutDocument(props)).window.document;
     const patterns = doc.querySelectorAll('.grammar-pattern');
-    expect(patterns[0]!.textContent).toBe(`Pattern: ${plain}`);
+    expect(patterns[0]!.textContent).toBe(plain);
     expect(patterns[0]!.querySelectorAll('.pattern-line')).toHaveLength(2);
     expect([...patterns[0]!.querySelectorAll('code')].map((cue) => cue.textContent)).toEqual([
       'before + subject + present simple',
@@ -178,9 +178,16 @@ describe('ESL-32 shared learner surface', () => {
       'true',
       'true',
     ]);
-    expect([...doc.querySelectorAll('.grammar-reveal > strong')].map((s) => s.textContent)).toEqual(
-      ['Corrected:', 'Explanation:', 'Corrected:', 'Explanation:'],
-    );
+    expect(
+      [...doc.querySelectorAll('.grammar-reveal .field-label')].map((s) => s.textContent),
+    ).toEqual(['Corrected:', 'Explanation:', 'Corrected:', 'Explanation:']);
+    for (const marker of doc.querySelectorAll('.field-marker')) {
+      expect(marker.querySelector('.field-label')?.classList.contains('sr-only')).toBe(true);
+      expect(marker.querySelector('.field-decoration')?.getAttribute('aria-hidden')).toBe('true');
+      expect(marker.querySelector('.field-decoration svg')).not.toBeNull();
+      expect(marker.querySelector('button')).toBeNull();
+    }
+    expect(doc.querySelector('.grammar-traps')?.getAttribute('role')).toBe('list');
     expect(contents[0]!.lang).toBe('en');
     buttons[1]!.focus();
     buttons[1]!.dispatchEvent(new dom.window.MouseEvent('mouseenter'));
