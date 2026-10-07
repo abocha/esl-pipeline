@@ -1,3 +1,4 @@
+import { BookOpen, ListChecks, type LucideIcon, Mic, PencilLine, ScanText } from 'lucide-react';
 import type { CSSProperties } from 'react';
 
 import type { AssignmentV1 } from '@esl-pipeline/contracts';
@@ -17,6 +18,30 @@ import {
 import type { LearnerHandoutProps } from './types.js';
 
 type Question = AssignmentV1['input']['comprehension'][number];
+
+function IconHeading({
+  icon: Icon,
+  prefix,
+  children,
+}: {
+  icon: LucideIcon;
+  prefix?: string;
+  children: string;
+}) {
+  return (
+    <h3 className="icon-heading" lang="en">
+      {prefix && (
+        <>
+          <span className="heading-prefix">{prefix}</span>{' '}
+        </>
+      )}
+      <span className="heading-icon" aria-hidden="true">
+        <Icon size={22} strokeWidth={2} focusable="false" />
+      </span>
+      <span className="heading-text">{children}</span>
+    </h3>
+  );
+}
 
 // Russian support metadata also occurs on older assignments with English questions.
 // This bounded script heuristic applies only to question text, never explanations or answers.
@@ -112,7 +137,7 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
         {source.attribution && <Text>{source.attribution}</Text>}
         {source.url && (
           <p>
-            <strong>Source Link:</strong> <SourceLink url={source.url} />
+            <strong>Source:</strong> <SourceLink url={source.url} />
           </p>
         )}
         {a.input.media.map((m, i) =>
@@ -129,7 +154,7 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
             preview={presentation?.preview}
           />
         )}
-        <Disclosure label="Study Text: Transcript" className="study-text connected-disclosure">
+        <Disclosure label="Transcript" className="study-text connected-disclosure">
           {a.input.studyText.turns.map((turn, i) => (
             <p key={i} lang="en" className="plain-text transcript-turn">
               <strong className="transcript-speaker">
@@ -143,7 +168,7 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
           {a.input.kind === 'authentic' ? 'Authentic material' : 'Generated material'}
         </p>
       </section>
-      <h3 lang="en">🤔 Comprehension Check</h3>
+      <IconHeading icon={ListChecks}>Check Your Understanding</IconHeading>
       <ol lang={a.metadata.instructionLanguage ?? 'en'}>
         {a.input.comprehension.map((q, i) => (
           <li
@@ -162,7 +187,9 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
 function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
   return (
     <>
-      <h3 lang="en">A. 👀 Notice the Grammar</h3>
+      <IconHeading icon={ScanText} prefix="A.">
+        How the Grammar Works
+      </IconHeading>
       {a.toolkit.grammar.map((g, i) => (
         <div className="grammar-card" key={i}>
           <h4 className="grammar-topic">
@@ -263,13 +290,15 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
           )}
         </div>
       ))}
-      <h3 lang="en">B. 🗣️ Useful Chunks & Vocabulary</h3>
+      <IconHeading icon={BookOpen} prefix="B.">
+        Vocabulary
+      </IconHeading>
       <div className="table-scroll" role="region" aria-label="Vocabulary" tabIndex={0}>
         <table className="vocabulary-table" role="table">
           <thead lang="en" role="rowgroup">
             <tr role="row">
               <th id="vocabulary-expression" scope="col" role="columnheader">
-                Expression
+                Word or Phrase
               </th>
               <th id="vocabulary-meaning" scope="col" role="columnheader">
                 Meaning
@@ -337,17 +366,17 @@ function OutputMission({ mission }: { mission: AssignmentV1['outputTask'] }) {
       {'preparation' in mission && (
         <>
           <MissionList label="Prepare" items={mission.preparation} />
-          <MissionList label="Include in your response" items={mission.requirements} />
+          <MissionList label="What to Include" items={mission.requirements} />
           {mission.delivery !== null && (
             <>
               <h3 lang="en">How to do it</h3>
               <Text>{mission.delivery}</Text>
             </>
           )}
-          <MissionList label="Before you finish" items={mission.selfCheck} />
+          <MissionList label="Check Your Work" items={mission.selfCheck} />
         </>
       )}
-      {mission.extension && <Field label="Optional extension">{mission.extension}</Field>}
+      {mission.extension && <Field label="Extra Task">{mission.extension}</Field>}
     </section>
   );
 }
@@ -383,7 +412,7 @@ export function LearnerHandout(props: LearnerHandoutProps) {
           1. 🎯 Your Goal
         </h2>
         <aside className="callout">
-          <Field label="Your Goal This Week">{a.mission.goal}</Field>
+          <Field label="Your Goal">{a.mission.goal}</Field>
           <p>
             <strong lang="en">Key Language You Will Use:</strong>
           </p>
@@ -406,11 +435,15 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         <h2 id="assignment-section-4" lang="en">
           4. ✍️ Practice
         </h2>
-        <h3 lang="en">A. 🔩 Controlled Practice</h3>
+        <IconHeading icon={PencilLine} prefix="A.">
+          Practice Exercises
+        </IconHeading>
         <PracticeParts assignment={a} />
         {a.pronunciation && (
           <>
-            <h3 lang="en">B. 🎙️ Pronunciation Micro-Focus (≈1 min)</h3>
+            <IconHeading icon={Mic} prefix="B.">
+              Say It Clearly (≈1 min)
+            </IconHeading>
             <Pronunciation
               pronunciation={a.pronunciation}
               media={media}
@@ -434,14 +467,14 @@ export function LearnerHandout(props: LearnerHandoutProps) {
           7. 🔑 Answers and Example
         </h2>
         <Disclosure label="Answer Key" className="connected-disclosure">
-          <h3 lang="en">Comprehension Check Answers</h3>
+          <h3 lang="en">Understanding Answers</h3>
           <Answers
             questions={a.input.comprehension}
             promptLanguage={a.metadata.instructionLanguage ?? 'en'}
           />
-          <h3 lang="en">A. Controlled Practice Answers</h3>
+          <h3 lang="en">A. Exercise Answers</h3>
           <PracticeParts assignment={a} answers />
-          <h3 lang="en">Sample Mission</h3>
+          <h3 lang="en">Example Response</h3>
           <Text lang="en" className="sample-mission">
             {a.outputTask.sampleResponse}
           </Text>
