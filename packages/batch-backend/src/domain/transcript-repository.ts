@@ -6,6 +6,7 @@ import type { TranscriptProviderId } from '@esl-pipeline/contracts';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { ArtifactWorkingConflictError } from './artifact-working-conflict.js';
+import { lockMutableTranscriptSource } from './completed-transcript-source-guard.js';
 import {
   type TranscriptMode,
   TranscriptModeSchema,
@@ -180,6 +181,7 @@ export async function insertTranscript(
   const now = new Date();
 
   const write = async (client: PoolClient) => {
+    await lockMutableTranscriptSource(client, params.recordingId);
     const result = await client.query(
       `
       INSERT INTO transcripts (
@@ -234,7 +236,19 @@ export async function insertTranscript(
     );
     return result.rows[0];
   };
-  const row = options?.client ? await write(options.client) : await withPgClient(write);
+  const row = options?.client
+    ? await write(options.client)
+    : await withPgClient(async (client) => {
+        await client.query('BEGIN');
+        try {
+          const result = await write(client);
+          await client.query('COMMIT');
+          return result;
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        }
+      });
 
   logger.info('Transcript inserted', { transcriptId: id, recordingId: params.recordingId });
 
@@ -249,8 +263,17 @@ export async function updateTranscriptWorkingContent(params: {
   summaryJson?: Record<string, unknown> | null;
 }): Promise<TranscriptRecord> {
   const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+    await client.query('BEGIN');
+    try {
+      const identity = await client.query<{ recording_id: string }>(
+        'SELECT recording_id FROM transcripts WHERE id = $1',
+        [params.id],
+      );
+      if (identity.rows[0])
+        await lockMutableTranscriptSource(client, identity.rows[0].recording_id);
+
+      const result = await client.query(
+        `
       UPDATE transcripts
       SET
         storage_uri = $3,
@@ -275,15 +298,20 @@ export async function updateTranscriptWorkingContent(params: {
         created_at,
         updated_at
       `,
-      [
-        params.id,
-        params.expectedWorkingVersion,
-        params.storageUri,
-        params.contentHash,
-        params.summaryJson ?? null,
-      ],
-    );
-    return result.rows[0];
+        [
+          params.id,
+          params.expectedWorkingVersion,
+          params.storageUri,
+          params.contentHash,
+          params.summaryJson ?? null,
+        ],
+      );
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
 
   if (!row) {

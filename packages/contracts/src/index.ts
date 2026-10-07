@@ -271,6 +271,22 @@ export interface AssignmentConfirmedSnapshot {
 }
 
 export interface AssignmentSessionDto {
+  transcriptProcessing?: {
+    lessonMemory: 'not_requested' | 'pending' | 'ready' | 'failed' | 'superseded';
+    snapshot: 'not_requested' | 'pending' | 'ready' | 'failed' | 'superseded';
+    enrichment:
+      | 'not_requested'
+      | 'pending'
+      | 'ready'
+      | 'failed'
+      | 'superseded'
+      | 'not_eligible'
+      | 'uncertain';
+  };
+  homeworkIntent: 'create' | 'none';
+  transcriptCompletedAt: string | null;
+  completionKind: 'homework' | 'transcript_only' | null;
+  transcriptCompletionHistory: TranscriptCompletionEvent[];
   /** Backend-authoritative history classification; inspection must not trigger processing. */
   historicalReadOnly?: boolean;
   id: string;
@@ -349,6 +365,7 @@ export interface ConfirmStudentAssignmentSessionRequest {
 export interface UpdateAssignmentSessionRecoveryRequest {
   expectedRevision: number;
   patch: Partial<{
+    homeworkIntent: 'create' | 'none';
     lessonId: string | null;
     recordingId: string | null;
     transcriptId: string | null;
@@ -404,6 +421,32 @@ export type ConfirmAssignmentSessionStepRequest =
 export interface ConfirmAssignmentSessionStepResponse {
   session: AssignmentSessionDto;
   invalidated: AssignmentInvalidatedArtifact[];
+}
+
+/** Immutable evidence of one exact-source finish operation, separate from current completion. */
+export interface TranscriptCompletionEvent {
+  completedAt: string;
+  expectedRevision: number;
+  resultingRevision: number;
+  studentId: string;
+  source: NonNullable<AssignmentConfirmedSnapshot['source']>;
+}
+
+export interface FinishTranscriptAssignmentSessionRequest {
+  expectedRevision: number;
+  lessonId: string | null;
+  recordingId: string;
+  transcriptId: string;
+  transcriptWorkingVersion: number;
+  transcriptHash: string;
+}
+
+export interface StartHomeworkAssignmentSessionRequest {
+  expectedRevision: number;
+}
+
+export interface TranscriptAssignmentSessionResponse {
+  session: AssignmentSessionDto;
 }
 
 export interface ConfirmAssignmentSessionShareRequest {
@@ -662,6 +705,7 @@ export type StudentReminderChannel = 'manual' | 'telegram' | 'email';
 export type StudentReminderActionIntent = 'copy_text' | 'complete_lesson_and_start_assignment';
 export type StudentLessonHomeworkStatus =
   | 'not_started'
+  | 'not_planned'
   | 'session_in_progress'
   | 'draft_in_progress'
   | 'publishing'
@@ -670,6 +714,7 @@ export type StudentLessonHomeworkStatus =
 
 export interface StudentLessonHomeworkDto {
   status: StudentLessonHomeworkStatus;
+  transcriptResultSessionId: string | null;
   assignmentSessionId: string | null;
   promptPackageId: string | null;
   draftId: string | null;

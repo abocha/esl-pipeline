@@ -41,6 +41,7 @@ function makeHomework(overrides: Record<string, unknown> = {}) {
     draftId: null,
     jobId: null,
     homeworkMemoryEntryId: null,
+    transcriptResultSessionId: null,
     htmlUrl: null,
     updatedAt: null,
     ...overrides,
@@ -374,6 +375,31 @@ describe('StudentScheduleBillingPage', () => {
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
     });
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
+  });
+
+  it('shows a completed transcript result instead of a missing-homework action', async () => {
+    const original = makeSurface();
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        lessons: [
+          {
+            ...original.lessons[0],
+            status: 'completed',
+            homework: makeHomework({
+              status: 'not_planned',
+              transcriptResultSessionId: 'transcript-result',
+            }),
+          },
+        ],
+        reminders: [],
+      }),
+    );
+    renderPage();
+    const result = await screen.findByRole('link', { name: 'View transcript' });
+    expect(result.getAttribute('href')).toBe('/?sessionId=transcript-result');
+    expect(screen.getByText('No homework planned')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add homework' })).toBeNull();
     expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 

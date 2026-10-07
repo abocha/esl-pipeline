@@ -5,6 +5,7 @@ import {
   type EnsurePendingLessonMemoryEntryResult,
   ensurePendingLessonMemoryEntry,
 } from '../domain/lesson-memory-repository.js';
+import { deliverCanonicalPendingLessonMemory } from '../domain/memory-replay-delivery.js';
 import { supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork } from '../domain/student-memory-openai-batch-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
@@ -21,6 +22,7 @@ export interface RequestLessonMemoryGenerationParams {
   sourceContentHash: string;
   lessonId?: string | null;
   trigger: 'teacher-confirmed-transcript' | 'replay';
+  retryTerminal?: boolean;
   providerOverride?: GenerationProvider | null;
   modelOverride?: string | null;
 }
@@ -49,12 +51,17 @@ export async function enqueueConfirmedLessonMemoryIntent(
     supersedeForOnlineWork: supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork,
   };
   const queue = overrides?.queue ?? createStudentMemoryQueue();
-  await batchClaims.supersedeForOnlineWork({
-    workload: 'lesson_memory',
-    canonicalScopeKey: payload.transcriptId,
-  });
-  await queue.reconcile(payload, {
-    jobId: `lesson-memory:${payload.transcriptId}:${payload.sourceContentHash}`,
+  await deliverCanonicalPendingLessonMemory(payload, async (client) => {
+    await batchClaims.supersedeForOnlineWork(
+      {
+        workload: 'lesson_memory',
+        canonicalScopeKey: payload.transcriptId,
+      },
+      { client },
+    );
+    await queue.reconcile(payload, {
+      jobId: `lesson-memory:${payload.transcriptId}:${payload.sourceContentHash}`,
+    });
   });
 }
 
@@ -100,9 +107,10 @@ export async function requestLessonMemoryGeneration(args: {
     },
     sourceStorageUri: args.params.sourceStorageUri,
     sourceContentHash: args.params.sourceContentHash,
+    retryTerminal: args.params.retryTerminal,
   });
 
-  if (pending.outcome === 'ready_exists') {
+  if (pending.outcome === 'ready_exists' || pending.outcome === 'terminal_exists') {
     return pending;
   }
 

@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { reconcileMock, ensurePendingMock, supersedeClaimsMock } = vi.hoisted(() => ({
-  reconcileMock: vi.fn(),
-  ensurePendingMock: vi.fn(),
-  supersedeClaimsMock: vi.fn(),
-}));
+const { reconcileMock, ensurePendingMock, supersedeClaimsMock, transactionClient } = vi.hoisted(
+  () => ({
+    reconcileMock: vi.fn(),
+    ensurePendingMock: vi.fn(),
+    supersedeClaimsMock: vi.fn(),
+    transactionClient: {},
+  }),
+);
 
 vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
   createStudentMemoryQueue: vi.fn(() => ({ reconcile: reconcileMock })),
@@ -12,6 +15,13 @@ vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
 
 vi.mock('../src/domain/lesson-memory-repository.js', () => ({
   ensurePendingLessonMemoryEntry: ensurePendingMock,
+}));
+
+vi.mock('../src/domain/memory-replay-delivery.js', () => ({
+  deliverCanonicalPendingLessonMemory: async (
+    _payload: unknown,
+    deliver: (client: unknown) => Promise<void>,
+  ) => deliver(transactionClient as never),
 }));
 
 vi.mock('../src/domain/student-memory-openai-batch-repository.js', () => ({
@@ -49,10 +59,13 @@ describe('application/request-lesson-memory-generation', () => {
       },
     });
 
-    expect(supersedeClaimsMock).toHaveBeenCalledWith({
-      workload: 'lesson_memory',
-      canonicalScopeKey: 'transcript-1',
-    });
+    expect(supersedeClaimsMock).toHaveBeenCalledWith(
+      {
+        workload: 'lesson_memory',
+        canonicalScopeKey: 'transcript-1',
+      },
+      { client: transactionClient },
+    );
     expect(ensurePendingMock).toHaveBeenCalled();
     expect(reconcileMock).toHaveBeenCalled();
   });

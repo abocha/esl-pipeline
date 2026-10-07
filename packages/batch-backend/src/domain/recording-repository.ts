@@ -5,6 +5,7 @@ import type { AudioInputTopology } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { lockMutableTranscriptSource } from './completed-transcript-source-guard.js';
 import {
   AudioInputTopologySchema,
   type AudioLifecycle,
@@ -393,12 +394,20 @@ export async function updateRecordingAudioTopology(params: {
   audioTopology: AudioInputTopology;
 }): Promise<RecordingRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `UPDATE recordings SET audio_topology = $2, updated_at = now() WHERE id = $1
+    await client.query('BEGIN');
+    try {
+      await lockMutableTranscriptSource(client, params.id);
+      const result = await client.query(
+        `UPDATE recordings SET audio_topology = $2, updated_at = now() WHERE id = $1
        RETURNING *`,
-      [params.id, params.audioTopology],
-    );
-    return result.rows[0];
+        [params.id, params.audioTopology],
+      );
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
   return row ? mapRowToRecording(row) : null;
 }
@@ -408,8 +417,11 @@ export async function updateRecordingStudentId(params: {
   studentId: string | null;
 }): Promise<RecordingRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+    await client.query('BEGIN');
+    try {
+      await lockMutableTranscriptSource(client, params.id);
+      const result = await client.query(
+        `
       UPDATE recordings
       SET
         student_id = $2,
@@ -417,9 +429,14 @@ export async function updateRecordingStudentId(params: {
       WHERE id = $1
       RETURNING *
       `,
-      [params.id, params.studentId],
-    );
-    return result.rows[0];
+        [params.id, params.studentId],
+      );
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
 
   if (!row) {

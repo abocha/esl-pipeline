@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import {
   addStudentPackage,
@@ -749,14 +749,24 @@ export const StudentScheduleBillingPage: React.FC = () => {
                     lesson.homework.status === 'published' ||
                     lesson.homework.status === 'memory_ready'
                       ? 'success'
-                      : lesson.homework.status === 'not_started'
+                      : lesson.homework.status === 'not_started' ||
+                          lesson.homework.status === 'not_planned'
                         ? 'quiet'
                         : 'attention'
                   }
                 >
-                  homework {lesson.homework.status.replaceAll('_', ' ')}
+                  {lesson.homework.status === 'not_planned'
+                    ? 'No homework planned'
+                    : `homework ${lesson.homework.status.replaceAll('_', ' ')}`}
                 </StudentAreaStatusPill>
                 <div className="student-schedule-billing-actions">
+                  {lesson.homework.transcriptResultSessionId ? (
+                    <Link
+                      to={`/?sessionId=${encodeURIComponent(lesson.homework.transcriptResultSessionId)}`}
+                    >
+                      View transcript
+                    </Link>
+                  ) : null}
                   {lesson.homework.htmlUrl ? (
                     <a href={lesson.homework.htmlUrl} target="_blank" rel="noreferrer">
                       Open homework

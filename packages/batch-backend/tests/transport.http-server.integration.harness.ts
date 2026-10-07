@@ -10,6 +10,7 @@ import * as assignmentSessionsModule from '../src/application/assignment-session
 import * as confirmAssignmentSessionStepModule from '../src/application/confirm-assignment-session-step.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
+import * as finishTranscriptAssignmentSessionModule from '../src/application/finish-transcript-assignment-session.js';
 import * as generateDraftModule from '../src/application/generate-draft.js';
 import { getJobOptions } from '../src/application/get-job-options.js';
 import * as getJobProvenanceModule from '../src/application/get-job-provenance.js';
@@ -1283,6 +1284,7 @@ export function describeHttpServerIntegrationSuite(
       assignmentLearnerContextModule,
       assignmentSessionRepositoryModule,
       confirmAssignmentSessionStepModule,
+      finishTranscriptAssignmentSessionModule,
       shareAssignmentSessionModule,
       publishAssignmentCorrectionModule,
       authMiddlewareModule,

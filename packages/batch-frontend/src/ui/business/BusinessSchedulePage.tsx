@@ -203,10 +203,18 @@ export const BusinessSchedulePage: React.FC = () => {
                     <span>
                       {formatDateTime(lesson.startsAt)} · {lesson.durationMinutes} min ·{' '}
                       {lesson.status}
+                      {lesson.homework.status === 'not_planned' ? ' · No homework planned' : ''}
                     </span>
                   </div>
                   <div className="business-actions">
                     <Link to={lesson.studentScheduleBillingPath}>Open</Link>
+                    {lesson.homework.transcriptResultSessionId ? (
+                      <Link
+                        to={`/?sessionId=${encodeURIComponent(lesson.homework.transcriptResultSessionId)}`}
+                      >
+                        View transcript
+                      </Link>
+                    ) : null}
                     {lesson.homework.htmlUrl ? (
                       <a href={lesson.homework.htmlUrl} target="_blank" rel="noreferrer">
                         Open homework
