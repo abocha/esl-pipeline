@@ -156,6 +156,14 @@ describe('recording tenant authority', () => {
       studentId: tenantA.studentId,
       lessonId: null,
     });
+    // Simulate persisted foreign pointers so the test reaches workspace authorization
+    // beyond the source-attachment prerequisite, without using an authorized attach.
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        'UPDATE assignment_sessions SET recording_id = $2, transcript_id = $3 WHERE id = $1',
+        [session.id, recordingB.id, transcriptB.id],
+      ),
+    );
     await expect(
       confirmAssignmentSessionStepPersistence({
         id: session.id,

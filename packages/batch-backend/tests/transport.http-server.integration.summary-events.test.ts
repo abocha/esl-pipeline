@@ -79,7 +79,7 @@ describeHttpServerIntegrationSuite(
         url: '/user/assignment-sessions?limit=20',
       });
       expect(listed.statusCode).toBe(200);
-      expect(listSessions).toHaveBeenCalledWith('test-user-id', 20);
+      expect(listSessions).toHaveBeenCalledWith('test-user-id', 20, 'active', 0);
       expect(listed.json()).toEqual({ sessions: [session], total: 1, limit: 20 });
 
       const loaded = await app.inject({
