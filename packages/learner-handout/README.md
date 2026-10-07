@@ -331,4 +331,10 @@ annotation. The emoji trial remains disposable only. The development fixture ser
 `polish-emoji.html` and `polish-icons.html` for these temporary comparisons; no assignment property,
 production flag, dependency or alternate production theme was added. The normal `polish.html` is
 the selected implementation. Evidence is in `D:/tmp/esl-33-next-annotations/`, with the scoped QA
-history in `design-qa.md`. The seven h2 wordings remain unchanged pending the maintainer's copy choice.
+history in `design-qa.md`.
+
+The maintainer subsequently approved the seven fixed headings: Your Goal; Listen and Read; Grammar
+and Vocabulary; Practice; Your Turn; Why This Helps; Answers and Example. Existing numbers/emojis
+and section IDs remain. Practice uses the same heading with or without pronunciation; its subsection
+label stays intact. Section 6 still follows the learner-rationale visibility contract and section 7
+always retains number 7. Authored content and subsection/disclosure labels remain unchanged.

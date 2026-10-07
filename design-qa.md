@@ -422,3 +422,31 @@ hero/section typography, grammar rules/comparisons and full lesson remain the ta
 - [x] Matching viewport/state comparisons and focused checks pass; h2 copy remains pending.
 
 No P3 polish is required for the approved scope. Pending heading copy is a maintainer decision.
+
+## Approved heading copy after 61e86c81
+
+final result: passed
+
+The maintainer approved all seven headings: Your Goal; Listen and Read; Grammar and Vocabulary;
+Practice; Your Turn; Why This Helps; Answers and Example. This resolves the pending copy decision
+above. Numbers, emojis and section IDs remain stable. Practice is fixed with or without pronunciation;
+its pronunciation subsection remains unchanged. Section 6 retains its existing legacy/new-shape
+visibility contract, and section 7 retains number 7. Authored content and subsection/disclosure labels
+are unchanged. No actionable P0/P1/P2 or P3 finding remains in this approved delta.
+
+Evidence is in `D:/tmp/esl-33-next-annotations/headings/`: `before.html` preserves the prior selected
+implementation; `after.html` is the rebuilt shared static output. `desktop-opening.png`,
+`phone-opening.png` and `phone-grammar-heading.png` were visually inspected at CSS viewports
+1280 × 1000 and 320 × 900. `checks.json` records exact heading text/IDs, dimensions, unchanged
+subsection/disclosure labels and no horizontal overflow. All desktop headings remain one line;
+Grammar and Vocabulary wraps cleanly to two lines at 320px, with the other phone headings one line.
+Existing typography, colors, spacing, assets and interaction QA from the selected implementation
+above remains applicable. This is the requested heading wrapping/numbering spot check, not a new
+full-page screenshot matrix or expanded QA pass.
+
+Focused evidence: 40 unit tests passed across two files, including exact approved headings with and
+without pronunciation, legacy/new rationale visibility and stable section 7 numbering. Static build
+and fixture re-emission passed. Focused Biome passed after formatting the updated expectation.
+README and this QA history reflect the resolved decision. The normal local preview remains
+`http://127.0.0.1:5175/polish.html`. No input fixture, public assignment contract or authored lesson
+content changed. No broad gate, hosted-CI claim, provider call, push, PR, merge or production mutation.
