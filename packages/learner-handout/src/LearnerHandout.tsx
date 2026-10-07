@@ -179,7 +179,7 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
                     <h5>
                       <Inline>{block.label}</Inline>
                     </h5>
-                    <GrammarPattern label="Pattern">{block.pattern}</GrammarPattern>
+                    <GrammarPattern>{block.pattern}</GrammarPattern>
                     <ul lang="en">
                       {block.examples.map((example, k) => (
                         <li className="plain-text" key={k}>
@@ -238,7 +238,7 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
             </ul>
           )}
           {g.traps.length > 0 && (
-            <ul className="grammar-traps">
+            <ul className="grammar-traps" role="list">
               {g.traps.map((t, j) => (
                 <li className="grammar-trap" key={j}>
                   <Field label="Wrong" lang="en">

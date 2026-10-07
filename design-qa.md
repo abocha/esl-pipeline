@@ -324,3 +324,101 @@ hosted/production limits still apply. No broad gate, paid-provider call, push, P
 - [x] Matching-state source/implementation comparisons passed; complete copy and selected design retained.
 
 No P3 follow-up is required for this approved delta.
+
+## Approved next annotations and selected Lucide markers after cc241d22
+
+final result: passed
+
+**Findings, selection and scope**
+
+No actionable P0/P1/P2 difference remains. Three confirmed edits remove structured Pattern labels,
+fill the native players' containing widths and emphasize the pronunciation sentence/audio group.
+Two real full-lesson icon experiments were created. The maintainer then selected Lucide, authorizing
+its adoption in the shared source, and subsequently requested a 12px Wrong-text inset to align with
+revealed text. Both annotations are implemented. Emoji remains an unselected disposable experiment.
+The seven h2 wordings are unchanged; the proposed shorter copy is pending selection.
+
+Source visual truth: `D:/tmp/esl-33-next-annotations/before.html` retains cc241d22. The selected icon
+target is `polish-icons.html` in that directory, with the later Wrong-inset annotation superseding
+its text edge. `confirmed-only.html` retains the three-change stage before icon adoption.
+Implementation: `http://127.0.0.1:5175/polish.html`, saved as `after.html`. Existing option-3 layout,
+hero/section typography, grammar rules/comparisons and full lesson remain the target outside this delta.
+
+**Capture and comparison history**
+
+- Evidence root: `D:/tmp/esl-33-next-annotations/`. CSS viewports are 1280 × 1000 desktop and
+  390 × 900 phone. Baseline/selected native PNGs are 1280 × 1000 / 390 × 900 at DPR 1; icon trials
+  are 1408 × 1100 / 429 × 990 at DPR 1.1. Trial images are downsampled to CSS dimensions before
+  comparison. `capture-dimensions.json` records raw/full dimensions and density for every stage.
+- Full baseline: `desktop-before-full.png` (1280 × 10361), `phone-before-full.png` (390 × 14692).
+  Full selected implementation: `desktop-selected-full.png` (1280 × 10154),
+  `phone-selected-full.png` (390 × 14540). Both disclosures are open and grammar answers closed.
+  Full composition pairs retain continuous-document evidence; readable focused pairs inspect the delta.
+- Source and implementation were inspected together in desktop/phone forms, native study-audio,
+  pronunciation and grammar pairs. `*-grammar-emoji-icons.png` shows the two experiments together;
+  `*-grammar-target-selected.png` and `*-key-target-selected.png` compare the selected trial against
+  the shared implementation. Closed/revealed pairs cover both trials and selected source at both widths.
+- A forced-DPR capture produced clipped/duplicated stitched regions and was discarded. Selected
+  screenshots were recaptured at native viewport sizing; final pairs show complete regions. Density
+  normalization and small device rounding differences are documented rather than treated as design drift.
+  No substantive design fix was required after the final matching-state comparison. The user-requested
+  Wrong inset is a new approved annotation, not an unsolicited redesign.
+
+**Required fidelity surfaces**
+
+- Fonts/typography: existing family, 400/600/700 hierarchy, hero size, fixed h2 copy and authored
+  emphasis remain. Only structured Pattern UI text is omitted; legacy Form still renders. Formula
+  cues, comma/semicolon boundaries and rows remain exact. Sentence prose is ordinary body text,
+  with only its field label emphasized; the rest of pronunciation instructions stay unchanged.
+- Spacing/layout: formulas align with their form headings/examples. Native players fill their
+  figure widths (desktop Study 621px, sentence 586px; phone Study 343px, sentence 308px in the
+  measured scrollbar-containing viewport). The sentence and primary audio form one 16px-padded
+  callout. Lucide markers use a 28px gutter/12px gap; reveal text retains 8px/12px padding.
+  Wrong, Corrected and Explanation actual text edges all measure x=374 with a 557px text measure
+  on desktop, x=68 with a 279px measure on phone. Wrong-only horizontal padding matches wrapping;
+  answer-key prose is not padded globally. Closed/revealed boxes retain identical position, width,
+  height and padding; no horizontal overflow. Item separation and explicit list semantics remain.
+- Colors/tokens: existing pale-blue mission language and blue rule are reused for sentence focus.
+  Cross/check/question markers retain the selected muted red/accent-blue/muted-slate colors.
+  Actual blurred targets keep a single light border and existing hover/focus feedback; revealing
+  removes blur/control while keyboard focus retains its outline. Connected disclosure frames remain.
+- Image/assets: existing `lucide-react` X/Check/HelpCircle SVGs are used, 22px with stroke width 2,
+  inside aria-hidden decoration. No generated mock, custom SVG drawing, new icon dependency or
+  replacement hero asset. Requested emoji was used only in the disposable unselected trial.
+- Copy/content: authored article text matches baseline and both variants after excluding the three
+  approved Pattern UI labels, marker labels and their UI-only separator whitespace. Fixed headings
+  also match exactly (`copy-checks.json`). All 29 field roles retain English accessible labels;
+  reveal buttons retain descriptive names, with no visible instructional text or icon inside them.
+
+**Focused evidence and limitations**
+
+- Final marker source passed 40 tests across two files, including updated semantic marker assertions,
+  independent one-way/focus/aria-hidden reveals, long hostile cue input, canonical input preservation,
+  legacy Form, native disclosures/reduced motion and existing audio lifecycle regressions.
+  The last Wrong-only CSS inset reused that passing behavior evidence; final build/fixtures, browser
+  alignment and focused Biome were rerun for its actual risk, without an unrelated suite rerun.
+- Static build/fixtures passed. Both native players fit their actual containers. All six modes and
+  null pronunciation were inspected on phone; five sentence-bearing modes receive the same grouping,
+  minimal-pair/null retain no sentence, and unavailable primary audio retains its placeholder.
+  Legacy Form was also inspected on phone. No canonical fixture or renderer identity changed.
+- Trial and source native Enter/Space reveals passed at both widths. Source dimensions remain invariant;
+  actual text edges/wrap widths match after Wrong inset. React/Vite shows the same 29 decorative
+  markers/accessible labels, independent reveal/focus and no overflow. Browser error logs were empty.
+- Print style checks show ordinary unblurred answers, hidden buttons and zero answer/marker top inset.
+  This is not a complete print or screen-reader audit. Local tone remains control evidence, not speech
+  quality. No broad gate, hosted-CI claim, paid-provider call, push, PR, merge or production mutation.
+- Only the development server allowlist gained the two exact temporary trial filenames. Trial markup,
+  CSS and generation helper remain ignored local evidence/output; the selected semantic marker seam
+  is private to renderer primitives, with no persistent assignment option or public configuration.
+
+**Implementation checklist**
+
+- [x] Structured formulas omit Pattern; legacy Form and canonical strings/rows remain.
+- [x] Native study/sentence players fill containers and fit phone widths.
+- [x] Existing sentence-bearing modes share a readable sentence/audio callout; absent/null stays absent.
+- [x] Two interactive full-lesson trials captured; selected Lucide adopted in React/static source.
+- [x] Accessible labels, decorative markers, list semantics and independent stable reveals preserved.
+- [x] Wrong text aligns with revealed text; only its grammar-trap value receives the added inset.
+- [x] Matching viewport/state comparisons and focused checks pass; h2 copy remains pending.
+
+No P3 polish is required for the approved scope. Pending heading copy is a maintainer decision.

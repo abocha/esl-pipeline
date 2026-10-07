@@ -72,7 +72,7 @@ describe('React learner handout static foundation', () => {
     ).toEqual(
       grammar.formBlocks.map((block) => ({
         label: block.label,
-        pattern: `Pattern: ${block.pattern}`,
+        pattern: block.pattern,
         examples: block.examples,
       })),
     );
@@ -111,7 +111,7 @@ describe('React learner handout static foundation', () => {
       doc.querySelectorAll('img, .grammar-comparison, .grammar-guidance, .grammar-traps'),
     ).toHaveLength(0);
     expect(doc.querySelector('.grammar-form h5')?.textContent).toBe(hostile);
-    expect(doc.querySelector('.grammar-form p')?.textContent).toBe(`Pattern: ${hostile}`);
+    expect(doc.querySelector('.grammar-form p')?.textContent).toBe(hostile);
     expect(doc.querySelector('.grammar-form li')?.textContent).toBe(hostile);
   });
 

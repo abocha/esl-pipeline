@@ -272,6 +272,8 @@ li::marker {
 }
 .grammar-traps {
   margin-top: 16px;
+  list-style-type: none;
+  padding-left: 0;
 }
 .grammar-trap {
   margin: 20px 0;
@@ -361,7 +363,6 @@ figcaption {
 }
 audio {
   width: 100%;
-  max-width: 560px;
   display: block;
 }
 .audio-placeholder {
@@ -535,10 +536,60 @@ button:disabled {
 }
 .pronunciation-sentence {
   margin: 24px 0;
+  padding: 16px;
+  border-left: 3px solid var(--handout-rule);
+  background: var(--handout-surface);
+}
+.pronunciation-sentence > p {
+  margin: 0;
+}
+.pronunciation-sentence .audio-figure {
+  margin: 20px 0 0;
 }
 .grammar-reveal {
   display: grid;
   gap: 6px;
+}
+.semantic-field {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 0;
+  align-items: start;
+}
+.field-marker {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 26.4px;
+}
+.field-decoration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.field-decoration svg {
+  display: block;
+}
+.field-value {
+  display: block;
+  min-width: 0;
+}
+.grammar-reveal .field-marker {
+  padding-top: 8px;
+}
+.field-marker-wrong {
+  color: #a44343;
+}
+.grammar-trap .field-marker-wrong + .field-value {
+  padding-inline: 12px;
+}
+.field-marker-corrected,
+.field-marker-answer {
+  color: var(--handout-accent);
+}
+.field-marker-explanation {
+  color: var(--handout-muted);
 }
 .reveal-target {
   position: relative;
@@ -664,5 +715,8 @@ button:disabled {
   }
   .reveal-content {
     padding: 0;
+  }
+  .grammar-reveal .field-marker {
+    padding-top: 0;
   }
 }
