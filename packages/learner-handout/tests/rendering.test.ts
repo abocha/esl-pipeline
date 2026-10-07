@@ -20,6 +20,13 @@ import { renderLearnerHandoutDocument } from '../src/server.js';
 const documentFor = (props = createFixture()) =>
   new JSDOM(renderLearnerHandoutDocument(props)).window.document;
 
+// Control labels are not authored lesson text.
+const fieldText = (element: Element) => {
+  const copy = element.cloneNode(true) as Element;
+  for (const button of copy.querySelectorAll('button')) button.remove();
+  return copy.textContent;
+};
+
 describe('React learner handout static foundation', () => {
   it('uses authored support language in static and React roots while keeping target English explicit', () => {
     const assignment = validateAssignmentV1({
@@ -39,7 +46,7 @@ describe('React learner handout static foundation', () => {
     const cells = doc.querySelectorAll('tbody tr:first-child td');
     expect(cells[0]?.getAttribute('lang')).toBe('en');
     expect(cells[1]?.getAttribute('lang')).toBeNull();
-    expect(cells[1]?.textContent).toBe('сначала');
+    expect(cells[1]?.querySelector('.vocabulary-value')?.textContent).toBe('сначала');
     expect(cells[2]?.getAttribute('lang')).toBe('en');
     expect(doc.querySelector('#assignment-section-1')?.getAttribute('lang')).toBe('en');
     expect(doc.body.textContent).toContain('Это поможет вам объяснять свои планы.');
@@ -65,7 +72,7 @@ describe('React learner handout static foundation', () => {
     ).toEqual(
       grammar.formBlocks.map((block) => ({
         label: block.label,
-        pattern: `Pattern: ${block.pattern}`,
+        pattern: block.pattern,
         examples: block.examples,
       })),
     );
@@ -79,7 +86,7 @@ describe('React learner handout static foundation', () => {
         explanation: alternative.querySelector('p:last-child')?.textContent,
       })),
     ).toEqual(grammar.comparisons[0]!.alternatives);
-    expect([...topic.querySelectorAll('.grammar-trap p')].map((p) => p.textContent)).toEqual([
+    expect([...topic.querySelectorAll('.grammar-trap p')].map(fieldText)).toEqual([
       `Wrong: ${grammar.traps[0]!.original}`,
       `Corrected: ${grammar.traps[0]!.improved}`,
       `Explanation: ${grammar.traps[0]!.explanation}`,
@@ -104,7 +111,7 @@ describe('React learner handout static foundation', () => {
       doc.querySelectorAll('img, .grammar-comparison, .grammar-guidance, .grammar-traps'),
     ).toHaveLength(0);
     expect(doc.querySelector('.grammar-form h5')?.textContent).toBe(hostile);
-    expect(doc.querySelector('.grammar-form p')?.textContent).toBe(`Pattern: ${hostile}`);
+    expect(doc.querySelector('.grammar-form p')?.textContent).toBe(hostile);
     expect(doc.querySelector('.grammar-form li')?.textContent).toBe(hostile);
   });
 
@@ -135,9 +142,9 @@ describe('React learner handout static foundation', () => {
     );
     expect([...mission.querySelectorAll('h3')].map((h) => h.textContent)).toEqual([
       'Prepare',
-      'Include in your response',
+      'What to Include',
       'How to do it',
-      'Before you finish',
+      'Check Your Work',
     ]);
     expect(
       [...mission.querySelectorAll('ul')].map((list) =>
@@ -149,9 +156,7 @@ describe('React learner handout static foundation', () => {
       missionFixture.outputTask.selfCheck,
     ]);
     expect(mission.textContent).toContain(missionFixture.outputTask.delivery);
-    expect(mission.textContent).toContain(
-      `Optional extension: ${missionFixture.outputTask.extension}`,
-    );
+    expect(mission.textContent).toContain(`Extra Task: ${missionFixture.outputTask.extension}`);
     expect(mission.textContent).not.toContain(missionFixture.outputTask.sampleResponse);
     expect(doc.querySelector('#assignment-section-7 + details')?.textContent).toContain(
       missionFixture.outputTask.sampleResponse,
@@ -175,15 +180,15 @@ describe('React learner handout static foundation', () => {
       const mission = documentFor(props).querySelector('.output-mission')!;
       const roles = [
         ['preparation', 'Prepare'],
-        ['requirements', 'Include in your response'],
+        ['requirements', 'What to Include'],
         ['delivery', 'How to do it'],
-        ['selfCheck', 'Before you finish'],
+        ['selfCheck', 'Check Your Work'],
       ];
       expect([...mission.querySelectorAll('h3')].map((h) => h.textContent)).toEqual(
         roles.filter(([field]) => absent !== field && absent !== 'all').map(([, label]) => label),
       );
       expect(mission.textContent).toContain(outputTask.task);
-      expect(mission.textContent).not.toContain('Optional extension');
+      expect(mission.textContent).not.toContain('Extra Task');
     },
   );
 
@@ -219,7 +224,7 @@ describe('React learner handout static foundation', () => {
     expect(doc.querySelectorAll('img')).toHaveLength(0);
     expect(
       [...doc.querySelectorAll('.output-mission .plain-text')].map((p) => p.textContent),
-    ).toEqual([hostile, hostile, hostile, hostile, hostile, `Optional extension: ${hostile}`]);
+    ).toEqual([hostile, hostile, hostile, hostile, hostile, `Extra Task: ${hostile}`]);
   });
 
   it.each(['teacher', 'null', 'legacy'] as const)(
@@ -242,12 +247,14 @@ describe('React learner handout static foundation', () => {
       expect(html).not.toContain('ESL24_TEACHER_ONLY');
       expect(html).not.toContain(legacySentinel);
       expect(doc.querySelector('#assignment-section-6') !== null).toBe(shape !== 'legacy');
-      expect(html.includes('Why This Mission Helps You')).toBe(shape !== 'legacy');
+      expect(html.includes('Why This Helps You')).toBe(shape !== 'legacy');
       expect(html.includes(rationaleFixture.learnerRationale)).toBe(shape !== 'legacy');
       expect(
         doc.querySelector('#assignment-section-6')?.nextElementSibling?.textContent ?? null,
       ).toBe(shape === 'legacy' ? null : rationaleFixture.learnerRationale);
-      expect(doc.querySelector('#assignment-section-7')?.textContent).toContain('7.');
+      expect(doc.querySelector('#assignment-section-7')?.textContent).toBe(
+        '7. Answers and Example',
+      );
       expect(doc.querySelector('#assignment-section-8')).toBeNull();
       expect(JSON.stringify(props.assignment)).toBe(before);
     },
@@ -260,16 +267,38 @@ describe('React learner handout static foundation', () => {
       const before = JSON.stringify(props);
       const doc = documentFor(props);
       const a = props.assignment;
-      expect(doc.querySelectorAll('main > h2')).toHaveLength(7);
+      expect([...doc.querySelectorAll('main > h2')].map((heading) => heading.textContent)).toEqual([
+        '1. Your Goal',
+        '2. Listen and Read',
+        '3. Grammar and Vocabulary',
+        '4. Practice',
+        '5. Your Turn',
+        '6. Why This Helps You',
+        '7. Answers and Example',
+      ]);
       expect(doc.querySelectorAll('nav, .toc-shell, .table-of-contents')).toHaveLength(0);
       expect(
         [...doc.querySelectorAll('.mission-key-language li')].map((li) => li.textContent),
       ).toEqual(a.mission.keyLanguage);
-      expect(doc.querySelector('#assignment-section-4')?.textContent).toBe(
-        mode === 'none' ? '4. ✍️ Practice' : '4. ✍️ Practice & Pronunciation',
-      );
       expect(doc.querySelector('[data-assignment-pronunciation]') !== null).toBe(mode !== 'none');
+      expect([...doc.querySelectorAll('h3.icon-heading')].map((h) => h.textContent)).toEqual([
+        'Check Your Understanding',
+        'A. How the Grammar Works',
+        'B. Vocabulary',
+        'A. Exercises',
+        ...(mode === 'none' ? [] : ['B. Say It Clearly (≈1 min)']),
+      ]);
+      for (const icon of doc.querySelectorAll('.heading-icon')) {
+        expect(icon.getAttribute('aria-hidden')).toBe('true');
+        expect(icon.querySelector('svg')?.getAttribute('focusable')).toBe('false');
+      }
+      expect(doc.querySelector('main > aside .field-label')?.textContent).toBe('Your Goal:');
+      expect(doc.querySelector('main > aside > p > strong:not(.field-label)')?.textContent).toBe(
+        'Key Language You Will Use:',
+      );
+      expect(doc.querySelector('#vocabulary-expression')?.textContent).toBe('Word or Phrase');
       const transcript = doc.querySelector<HTMLDetailsElement>('details.study-text')!;
+      expect(transcript.querySelector('summary')?.textContent).toBe('Transcript');
       expect(transcript.open).toBe(false);
       expect(transcript.previousElementSibling?.matches('.audio-figure')).toBe(true);
       expect(transcript.textContent).toContain(a.input.studyText.turns[0]!.text);
@@ -286,9 +315,9 @@ describe('React learner handout static foundation', () => {
       )!;
       expect(key.open).toBe(false);
       expect([...key.querySelectorAll('h3')].map((h) => h.textContent)).toEqual([
-        'Comprehension Check Answers',
-        'A. Controlled Practice Answers',
-        'Sample Mission',
+        'Understanding Answers',
+        'A. Exercise Answers',
+        'Example Response',
       ]);
       expect(
         [...key.querySelectorAll('.answer-key-item')].map((item) =>
@@ -324,7 +353,7 @@ describe('React learner handout static foundation', () => {
     const doc = documentFor(props);
     expect(
       [...doc.querySelectorAll('.grammar-trap')].map((t) =>
-        [...t.querySelectorAll('p')].map((p) => p.textContent),
+        [...t.querySelectorAll('p')].map(fieldText),
       ),
     ).toEqual(
       props.assignment.toolkit.grammar[0]!.traps.map((t) => [
@@ -348,6 +377,7 @@ describe('React learner handout static foundation', () => {
       'https://example.com/source?a=1&b=2',
     );
     expect(authentic.querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(authentic.querySelector('a')?.previousElementSibling?.textContent).toBe('Source:');
   });
 
   it.each(pronunciationModes)(
@@ -359,6 +389,20 @@ describe('React learner handout static foundation', () => {
           .querySelector('[data-assignment-pronunciation]')
           ?.getAttribute('data-assignment-pronunciation'),
       ).toBe(mode);
+      expect(
+        [...available.querySelectorAll('[data-assignment-pronunciation] > p > .field-label')].map(
+          (label) => label.textContent,
+        ),
+      ).toEqual([
+        'Target:',
+        'Focus:',
+        'What to Do:',
+        'Goal:',
+        ...(['intonation', 'sentence_stress'].includes(mode) ? ['Contour cue:'] : []),
+      ]);
+      expect(available.querySelector('.pronunciation-sentence .field-label')?.textContent).toBe(
+        mode === 'minimal_pair' ? undefined : 'Practise This Sentence:',
+      );
       expect(
         available.querySelectorAll('[data-pronunciation-clip]:not(:disabled)').length,
       ).toBeGreaterThan(0);
@@ -424,7 +468,7 @@ describe('React learner handout static foundation', () => {
       ];
       const html = renderLearnerHandoutDocument(props);
       const doc = new JSDOM(html).window.document;
-      expect(doc.querySelector('h1')?.textContent).toBe('🧭 ' + hostile);
+      expect(doc.querySelector('h1 > .inline-text')?.textContent).toBe(hostile);
       expect(doc.querySelectorAll('img, object, embed')).toHaveLength(0);
       expect(doc.querySelectorAll('iframe')).toHaveLength(0);
       expect(doc.querySelectorAll('script')).toHaveLength(1);
@@ -509,8 +553,8 @@ describe('React learner handout static foundation', () => {
     buttons[0]!.click();
     await Promise.resolve();
     expect(pause).toHaveBeenCalledTimes(1);
-    expect(buttons[0]!.textContent).toBe('Retry');
-    expect(buttons[2]!.textContent).toBe('Play');
+    expect(buttons[0]!.querySelector('.clip-status')?.textContent).toBe('Retry');
+    expect(buttons[2]!.querySelector('.clip-status')?.textContent).toBe('Play');
     expect(dom.window.document.querySelector('.playback-status')).toBeNull();
     dom.window.close();
   });

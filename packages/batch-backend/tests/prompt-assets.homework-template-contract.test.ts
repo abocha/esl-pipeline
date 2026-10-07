@@ -178,6 +178,10 @@ describe('structured homework bootstrap template', () => {
       'Let the learner choose how to express those meanings',
       'Use meaning-based requirements when necessary to ensure important target language is elicited',
       'without naming or supplying the grammatical form they need to choose',
+      'Consistently mark supplied lexical hints in practice prompts with paired backticks',
+      'The backticks surround only the supplied words, not the parentheses or the sentence',
+      'Highlighting must not introduce an inflected answer, auxiliary, or grammatical choice',
+      'each cue individually closed before a newline',
     ])
       expect(template).toContain(rule);
   });

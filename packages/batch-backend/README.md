@@ -534,6 +534,10 @@ ESL-32 advances generation to v8 and requires an authored `metadata.icon` emoji.
 and active markers fail without repinning. Read fallback is display-only; no history is rewritten.
 Paired backticks highlight linguistic fragments in learner content; derived speech strips only that
 syntax. Teacher follow-up remains typed teacher-only data and is omitted from whole learner HTML.
+ESL-33 tightens the shipped v8 instructions to mark supplied bracketed lexical hints explicitly,
+author useful formula chunks, and keep each cue closed before a newline between alternatives.
+The hint must not supply an inflected answer or decisive grammatical choice. No schema/marker
+change, active revision replacement or prompt-package repinning is performed by this refinement.
 The bounded
 [ESL-28 learner-quality evaluation](../../docs/operations/assignment-quality-evaluation.md) is prepared
 and completed against the shipped v5 template after explicit paid-call authorization. Its three real

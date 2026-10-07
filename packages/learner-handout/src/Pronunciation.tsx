@@ -1,3 +1,4 @@
+import { Play, RefreshCw, RotateCcw, Volume2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import {
@@ -32,10 +33,37 @@ function StressedText({ text, words }: { text: string; words: string[] }) {
 }
 
 function ClipControls({ clips }: { clips: readonly PronunciationClipInput[] }) {
+  const icons = (
+    <>
+      <span className="clip-icon clip-icon-play" aria-hidden="true">
+        <Play size={18} />
+      </span>
+      <span className="clip-icon clip-icon-playing" aria-hidden="true">
+        <Volume2 size={18} />
+      </span>
+      <span className="clip-icon clip-icon-replay" aria-hidden="true">
+        <RotateCcw size={18} />
+      </span>
+      <span className="clip-icon clip-icon-retry" aria-hidden="true">
+        <RefreshCw size={18} />
+      </span>
+      <span className="clip-retry-label" aria-hidden="true">
+        Retry
+      </span>
+      <span className="clip-status sr-only">Play</span>
+    </>
+  );
   if (!clips.length)
     return (
-      <button type="button" disabled title="Audio clip not generated yet">
-        Play
+      <button
+        className="clip-button"
+        type="button"
+        disabled
+        data-playback-state="play"
+        aria-label="Pronunciation audio unavailable"
+        title="Audio clip not generated yet"
+      >
+        {icons}
       </button>
     );
   return (
@@ -43,21 +71,30 @@ function ClipControls({ clips }: { clips: readonly PronunciationClipInput[] }) {
       {clips.map((clip, i) => {
         const url = safeMediaUrl(clip.url);
         return (
-          <button
-            key={i}
-            type="button"
-            disabled={!url}
-            data-pronunciation-clip={clip.id}
-            data-audio-url={url ?? undefined}
-            data-clip-text={assignmentPlainText(clip.text)}
-            data-play-label={clip.label ?? 'Play'}
-            aria-label={`Play pronunciation for ${assignmentPlainText(clip.text)}`}
-            aria-live="polite"
-            aria-atomic="true"
-            title={url ? undefined : 'Audio clip not generated yet'}
-          >
-            {clip.label ?? 'Play'}
-          </button>
+          <span className="clip-control" key={i}>
+            <button
+              type="button"
+              className="clip-button"
+              disabled={!url}
+              data-pronunciation-clip={clip.id}
+              data-audio-url={url ?? undefined}
+              data-clip-text={assignmentPlainText(clip.text)}
+              data-playback-state="play"
+              aria-label={`Play pronunciation for ${assignmentPlainText(clip.text)}`}
+              aria-live="polite"
+              aria-atomic="true"
+              title={
+                url
+                  ? `Play pronunciation for ${assignmentPlainText(clip.text)}`
+                  : 'Audio clip not generated yet'
+              }
+            >
+              {icons}
+            </button>
+            <span className="clip-error" hidden lang="en">
+              Couldn't play audio.
+            </span>
+          </span>
         );
       })}
     </span>
@@ -144,10 +181,12 @@ export function Pronunciation({
     'shadowSentence' in p ? p.shadowSentence : 'naturalSentence' in p ? p.naturalSentence : null;
   return (
     <section data-assignment-pronunciation={p.mode}>
-      <Field label="Target">{p.target}</Field>
+      <Field label="Target" className="pronunciation-target">
+        {p.target}
+      </Field>
       <Field label="Focus">{p.focus}</Field>
-      <Field label="Action">{p.action}</Field>
-      <Field label="Deliverable">{p.deliverable}</Field>
+      <Field label="What to Do">{p.action}</Field>
+      <Field label="Goal">{p.deliverable}</Field>
       <ol lang="en">
         {items.map((item, i) => (
           <li className="pronunciation-item" data-pronunciation-item={i} key={i}>
@@ -157,10 +196,7 @@ export function Pronunciation({
       </ol>
       {sentence && (
         <div className="callout pronunciation-sentence">
-          <Field
-            lang="en"
-            label={p.mode === 'shadow_sentence' ? 'Shadow sentence' : 'Natural sentence practice'}
-          >
+          <Field lang="en" label="Practise This Sentence">
             {sentence}
           </Field>
           <AudioPlayer

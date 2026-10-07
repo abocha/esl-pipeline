@@ -2,6 +2,7 @@ import type { AssignmentPronunciation, AssignmentV1 } from '@esl-pipeline/contra
 
 import base from '../../contracts/tests/assignment-mission-fixture.json';
 import type { LearnerHandoutProps, PronunciationClipInput } from '../src/types.js';
+import fullLesson from './full-lesson.json';
 
 export const pronunciationModes = [
   'shadow_sentence',
@@ -130,4 +131,20 @@ export function createFixture(
       },
     },
   };
+}
+
+/** Full learner-visible lesson reconstructed from retained ESL-33 HTML; see README for limits. */
+export function createPolishFixture(): LearnerHandoutProps {
+  const props = createFixture('shadow_sentence', 'available');
+  props.assignment = structuredClone(fullLesson) as AssignmentV1;
+  props.media!.pronunciationAudio!.itemClips = [
+    {
+      id: 'full-museum',
+      itemIndex: 0,
+      kind: 'word_item',
+      text: 'museum',
+      url: './fixture-tone.wav',
+    },
+  ];
+  return props;
 }

@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "title": "Explain an Island Quest",
+    "student": "Veronika",
+    "level": "A2+",
+    "topic": "Future Conditions and Time Clauses",
+    "icon": "🏝️",
+    "instructionLanguage": "en"
+  },
+  "mission": {
+    "goal": "Veronika, explain a player's next steps in an island-building game, including what depends on a condition and what happens at a particular time. Use the supplied story; you do not need to invent anything.",
+    "keyLanguage": [
+      "If I find enough metal, I'll give Ava the materials.",
+      "Before you leave, check your tools.",
+      "When you return, give Ava the materials.",
+      "You can't buy tools until the workshop opens."
+    ]
+  },
+  "input": {
+    "kind": "generate",
+    "source": {
+      "title": "The Workshop Quest",
+      "attribution": "Original dialogue set in an imaginary island-building game.",
+      "url": null
+    },
+    "media": [],
+    "studyText": {
+      "type": "dialogue",
+      "speakers": [
+        {
+          "id": "leo",
+          "displayName": "Leo",
+          "role": "Local fixture speaker",
+          "persona": null,
+          "voiceDirection": null,
+          "gender": "neutral",
+          "age": null,
+          "accent": null
+        },
+        {
+          "id": "maya",
+          "displayName": "Maya",
+          "role": "Local fixture speaker",
+          "persona": null,
+          "voiceDirection": null,
+          "gender": "neutral",
+          "age": null,
+          "accent": null
+        }
+      ],
+      "turns": [
+        {
+          "speakerId": "leo",
+          "text": "I'm playing Harbour Island. Ava needs twenty pieces of metal to build a workshop. I have fourteen, so I'm going to explore the northern island today. If I find six more pieces, I'll give her all the materials."
+        },
+        {
+          "speakerId": "maya",
+          "text": "Before you leave, check your tools and make some space in your bag. Take a shovel and a ladder with you. If you find metal on a hill, you can use the ladder to reach it."
+        },
+        {
+          "speakerId": "leo",
+          "text": "Is it worth taking the ladder? It uses space in my bag."
+        },
+        {
+          "speakerId": "maya",
+          "text": "Yes, it's worth taking it. Some useful places are high up. When you return, give Ava the materials. After she receives everything, she'll start building. The workshop will open the next day. You can't buy tools there until it opens."
+        },
+        {
+          "speakerId": "leo",
+          "text": "Okay. As soon as the workshop opens, I'll buy a better shovel. What about any extra metal?"
+        },
+        {
+          "speakerId": "maya",
+          "text": "Keep it in storage. You'll need it for other projects. And if you find a fossil during your trip, take it to the museum."
+        }
+      ]
+    },
+    "comprehension": [
+      {
+        "prompt": "What is Leo's problem, and how does he plan to solve it?",
+        "answer": "He needs six more pieces of metal. He plans to explore the northern island to find them.",
+        "explanation": null
+      },
+      {
+        "prompt": "What should Leo do before leaving, and what is the ladder useful for?",
+        "answer": "He should check his tools and make space in his bag. The ladder helps him reach metal on a hill.",
+        "explanation": null
+      },
+      {
+        "prompt": "Explain the order: giving Ava the materials, building the workshop, and buying a better shovel.",
+        "answer": "First, Leo gives Ava all the materials. Then she starts building. The workshop opens the next day, and Leo buys a better shovel after it opens.",
+        "explanation": "Finding enough metal is a condition. The later steps describe the order of events once that condition is met."
+      }
+    ]
+  },
+  "toolkit": {
+    "grammar": [
+      {
+        "name": "Future conditions and time clauses",
+        "explanation": "A sentence can have two parts: a condition or time clause, and a main clause. For the future situations in this assignment, use present simple in the clause beginning with `if`, `when`, `before`, `after`, `until`, or `as soon as`. Use `will + base verb` in the main clause for an expected future result, or `can + base verb` for an available option. For example: `If I find enough metal, I'll give Ava the materials.` The condition is future, but `find` is present simple. Advice can also use an imperative: `Before you leave, check your tools.`",
+        "formBlocks": [
+          {
+            "label": "Condition and result",
+            "pattern": "if + subject + present simple, subject + will / can + base verb",
+            "examples": [
+              "If I find six more pieces, I'll give her all the materials.",
+              "If you find metal on a hill, you can use the ladder to reach it."
+            ]
+          },
+          {
+            "label": "Time and next action",
+            "pattern": "when / after / as soon as + subject + present simple, subject + will + base verb",
+            "examples": [
+              "After she receives everything, she'll start building.",
+              "As soon as the workshop opens, I'll buy a better shovel."
+            ]
+          },
+          {
+            "label": "Preparation and waiting",
+            "pattern": "before + subject + present simple, imperative; subject + can't + base verb + until + subject + present simple",
+            "examples": [
+              "Before you leave, check your tools.",
+              "You can't buy tools there until it opens."
+            ]
+          }
+        ],
+        "comparisons": [
+          {
+            "label": "An uncertain condition or an expected event?",
+            "alternatives": [
+              {
+                "label": "If",
+                "example": "If Leo finds enough metal, he'll give Ava the materials.",
+                "explanation": "Choose `if` because finding enough metal is not certain."
+              },
+              {
+                "label": "When",
+                "example": "When Leo returns, he'll give Ava the materials.",
+                "explanation": "Choose `when` when the return is expected and you are explaining what happens at that time."
+              }
+            ]
+          },
+          {
+            "label": "Expected result or available option?",
+            "alternatives": [
+              {
+                "label": "Will",
+                "example": "If Leo finds a fossil, he'll take it to the museum.",
+                "explanation": "This says what Leo is expected to do."
+              },
+              {
+                "label": "Can",
+                "example": "If Leo finds a fossil, he can take it to the museum.",
+                "explanation": "This presents an option; it does not say that Leo definitely chooses it."
+              }
+            ]
+          }
+        ],
+        "examples": [],
+        "uses": [],
+        "traps": [
+          {
+            "original": "If he will find enough metal, he will gives Ava the materials.",
+            "improved": "If he finds enough metal, he will give Ava the materials.",
+            "explanation": "In this future condition, use present simple after `if`: `he finds`. After `will`, use the base verb: `give`."
+          },
+          {
+            "original": "You can't buy tools until the workshop will open.",
+            "improved": "You can't buy tools until the workshop opens.",
+            "explanation": "Here, `until` introduces the future time limit. Use present simple in that clause, including `-s` with `the workshop`."
+          }
+        ]
+      }
+    ],
+    "vocabulary": [
+      {
+        "expression": "tools",
+        "meaning": "Equipment used for practical jobs, such as a shovel or a ladder. Use `tools`, rather than `instruments`, for this game equipment.",
+        "example": "Before you leave, check your tools."
+      },
+      {
+        "expression": "take something with you",
+        "meaning": "Carry something to the place you are going.",
+        "example": "Take a shovel and a ladder with you."
+      },
+      {
+        "expression": "make space in your bag",
+        "meaning": "Remove or move items so that your bag has room for more.",
+        "example": "Make some space in your bag before the trip."
+      },
+      {
+        "expression": "be worth doing",
+        "meaning": "Be useful enough to justify the time, effort, or inconvenience. Use an `-ing` form after `worth`.",
+        "example": "It's worth taking the ladder."
+      },
+      {
+        "expression": "keep something in storage",
+        "meaning": "Save something in a place where you can use it later.",
+        "example": "Keep extra metal in storage."
+      }
+    ]
+  },
+  "practice": [
+    {
+      "title": "Complete the quest rules",
+      "instructions": "Complete each gap with the correct form of the verb in brackets. Decide which clause gives a condition or time, and which gives a future result. These are new situations in the same imaginary game.",
+      "items": [
+        {
+          "prompt": "The gate might be locked tomorrow. If the gate ___ (be) locked, Leo ___ (not enter) the cave.",
+          "answer": "If the gate is locked, Leo won't enter the cave.",
+          "explanation": "Use `is` in the condition and `won't enter` for the negative future result."
+        },
+        {
+          "prompt": "Maya expects Leo's boat to arrive tomorrow. When his boat ___ (arrive), she ___ (meet) him at the beach.",
+          "answer": "When his boat arrives, she will meet him at the beach.",
+          "explanation": null
+        },
+        {
+          "prompt": "Leo wants to check the map before tomorrow's trip. Before he ___ (leave), he ___ (check) the map.",
+          "answer": "Before he leaves, he will check the map.",
+          "explanation": null
+        },
+        {
+          "prompt": "Ava needs to finish the roof tomorrow before she paints the walls. After she ___ (finish) the roof, she ___ (paint) the walls.",
+          "answer": "After she finishes the roof, she will paint the walls.",
+          "explanation": null
+        },
+        {
+          "prompt": "Tomorrow, Leo plans to leave immediately when the storm ends. As soon as the storm ___ (end), he ___ (sail) home.",
+          "answer": "As soon as the storm ends, he will sail home.",
+          "explanation": "`As soon as` emphasizes that the next action happens immediately."
+        }
+      ]
+    },
+    {
+      "title": "Repair and explain",
+      "instructions": "Find the incorrect words before rewriting each sentence. Give a short explanation of the problem before checking the answer.",
+      "items": [
+        {
+          "prompt": "Correct the sentence: If Leo will need more wood tomorrow, he will collects it near the beach.",
+          "answer": "If Leo needs more wood tomorrow, he will collect it near the beach.",
+          "explanation": "Use present simple in this future condition, and the base verb after `will`."
+        },
+        {
+          "prompt": "Correct the sentence: Maya can't cross the river until the bridge will be ready.",
+          "answer": "Maya can't cross the river until the bridge is ready.",
+          "explanation": "The `until` clause uses present simple. With the adjective `ready`, the verb is `is`."
+        },
+        {
+          "prompt": "Correct the sentence: If Maya finds a rare flower, she can to plant it near her house.",
+          "answer": "If Maya finds a rare flower, she can plant it near her house.",
+          "explanation": "`Can` is followed by a base verb without `to`."
+        }
+      ]
+    },
+    {
+      "title": "Build the connection",
+      "instructions": "Combine each pair of facts into one sentence. Choose the connector yourself. More than one natural answer may be possible.",
+      "items": [
+        {
+          "prompt": "Leo might discover a hidden beach tomorrow. His plan is to take a photo there, but only in that situation.",
+          "answer": "If Leo discovers a hidden beach tomorrow, he'll take a photo there.",
+          "explanation": "`If` keeps the discovery uncertain."
+        },
+        {
+          "prompt": "Ava expects the delivery tomorrow. She plans to start work immediately after it arrives.",
+          "answer": "As soon as the delivery arrives tomorrow, Ava will start work.",
+          "explanation": "`As soon as` expresses the immediate next step. `When` is also possible, but does not emphasize immediacy."
+        },
+        {
+          "prompt": "The river is dangerous during the storm. Crossing becomes possible only after the storm stops. Explain the restriction.",
+          "answer": "You can't cross the river until the storm stops.",
+          "explanation": "`Can't ... until` explains that an action is not possible before a particular event."
+        }
+      ]
+    }
+  ],
+  "pronunciation": {
+    "mode": "shadow_sentence",
+    "target": "museum",
+    "focus": "Stress the second syllable: mu-SE-um. Keep the final syllable light.",
+    "action": "Say the word slowly three times, then say the complete sentence twice. Keep the same word stress inside the sentence.",
+    "deliverable": "One clear spoken sentence. Recording is optional.",
+    "words": [
+      {
+        "text": "museum",
+        "transcription": "/mjuˈziːəm/"
+      }
+    ],
+    "shadowSentence": "If you find a fossil during your trip, take it to the museum."
+  },
+  "outputTask": {
+    "task": "Explain Leo's workshop quest to someone who has not read the dialogue, so they understand his problem, the preparation, and the order of the next steps.",
+    "preparation": [
+      "Read the dialogue again. All the facts you need are there.",
+      "Write up to six keywords, not complete sentences: metal, bag, ladder, Ava, workshop, storage.",
+      "Look at your keywords for 20 seconds. Then hide the dialogue and try your explanation."
+    ],
+    "requirements": [
+      "Explain how much metal Leo has and how much more he needs.",
+      "Describe what he should do before leaving and how the ladder could help.",
+      "Explain what depends on finding enough metal.",
+      "Describe what happens after Ava gets the materials and when Leo can buy a better shovel.",
+      "Explain what to do with extra metal or a fossil."
+    ],
+    "delivery": "Speak for about 45–75 seconds. You may keep the six keywords visible on your first attempt, then try once without them. Recording or sharing it with your teacher is optional; two attempts are enough.",
+    "selfCheck": [
+      "Can a listener follow the steps without seeing the dialogue?",
+      "In the future condition and time clauses you used in this explanation, check for present simple after if, when, before, after, until, or as soon as.",
+      "In your result clauses, check that will and can are followed by a base verb.",
+      "Choose one sentence you were unsure about. Identify the problem and try a correction before checking the toolkit."
+    ],
+    "extension": null,
+    "sampleResponse": "Leo wants to build a workshop. He has fourteen pieces of metal, but he needs twenty, so he's going to explore the northern island. Before he leaves, he'll check his tools and make space in his bag. He should take a shovel and a ladder with him. If he finds metal on a hill, he can reach it with the ladder. If he collects six more pieces, he'll give Ava all the materials. After she receives everything, she'll start building. Leo can't buy tools there until the workshop opens the next day. As soon as it opens, he'll buy a better shovel. He should keep extra metal in storage and take any fossils to the museum."
+  },
+  "teacherFollowUp": {
+    "warmUp": "Not reconstructed from learner HTML.",
+    "correctionFocus": "Not reconstructed from learner HTML."
+  },
+  "learnerRationale": "You get more grammar decisions to solve, followed by a short explanation based entirely on a story. This helps you turn rules you understand into useful game advice without inventing a story or discussing personal facts.",
+  "teacherRationale": null
+}
