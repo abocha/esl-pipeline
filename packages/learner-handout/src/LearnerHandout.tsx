@@ -1,4 +1,17 @@
-import { BookOpen, ListChecks, type LucideIcon, Mic, PencilLine, ScanText } from 'lucide-react';
+import {
+  BookOpen,
+  Brain,
+  CircleCheck,
+  Headphones,
+  KeyRound,
+  ListChecks,
+  type LucideIcon,
+  Mic,
+  PencilLine,
+  ScanText,
+  Target,
+  Wrench,
+} from 'lucide-react';
 import type { CSSProperties } from 'react';
 
 import type { AssignmentV1 } from '@esl-pipeline/contracts';
@@ -22,24 +35,32 @@ type Question = AssignmentV1['input']['comprehension'][number];
 function IconHeading({
   icon: Icon,
   prefix,
+  level: Heading = 'h3',
+  id,
+  tone,
+  className,
   children,
 }: {
   icon: LucideIcon;
   prefix?: string;
+  level?: 'h2' | 'h3';
+  id?: string;
+  tone: 'goal' | 'listen' | 'grammar' | 'exercises' | 'complete' | 'rationale' | 'answers';
+  className?: string;
   children: string;
 }) {
   return (
-    <h3 className="icon-heading" lang="en">
+    <Heading className={`icon-heading${className ? ` ${className}` : ''}`} id={id} lang="en">
       {prefix && (
         <>
           <span className="heading-prefix">{prefix}</span>{' '}
         </>
       )}
-      <span className="heading-icon" aria-hidden="true">
+      <span className={`heading-icon icon-${tone}`} aria-hidden="true">
         <Icon size={22} strokeWidth={2} focusable="false" />
       </span>
       <span className="heading-text">{children}</span>
-    </h3>
+    </Heading>
   );
 }
 
@@ -168,7 +189,9 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
           {a.input.kind === 'authentic' ? 'Authentic material' : 'Generated material'}
         </p>
       </section>
-      <IconHeading icon={ListChecks}>Check Your Understanding</IconHeading>
+      <IconHeading icon={ListChecks} tone="complete">
+        Check Your Understanding
+      </IconHeading>
       <ol lang={a.metadata.instructionLanguage ?? 'en'}>
         {a.input.comprehension.map((q, i) => (
           <li
@@ -187,7 +210,7 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
 function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
   return (
     <>
-      <IconHeading icon={ScanText} prefix="A.">
+      <IconHeading icon={ScanText} prefix="A." tone="grammar">
         How the Grammar Works
       </IconHeading>
       {a.toolkit.grammar.map((g, i) => (
@@ -290,7 +313,7 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
           )}
         </div>
       ))}
-      <IconHeading icon={BookOpen} prefix="B.">
+      <IconHeading icon={BookOpen} prefix="B." tone="listen">
         Vocabulary
       </IconHeading>
       <div className="table-scroll" role="region" aria-label="Vocabulary" tabIndex={0}>
@@ -398,7 +421,7 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         </p>
         <h1>
           <span className="hero-icon" aria-hidden="true">
-            {a.metadata.icon ?? '🎧'}
+            <BookOpen size="1em" strokeWidth={2} focusable="false" />
           </span>{' '}
           <Inline>{a.metadata.title}</Inline>
         </h1>
@@ -408,9 +431,9 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         {publication?.displayDate && <p>{publication.displayDate}</p>}
       </header>
       <main>
-        <h2 id="assignment-section-1" lang="en">
-          1. 🎯 Your Goal
-        </h2>
+        <IconHeading level="h2" id="assignment-section-1" icon={Target} prefix="1." tone="goal">
+          Your Goal
+        </IconHeading>
         <aside className="callout">
           <Field label="Your Goal">{a.mission.goal}</Field>
           <p>
@@ -424,24 +447,36 @@ export function LearnerHandout(props: LearnerHandoutProps) {
             ))}
           </ul>
         </aside>
-        <h2 id="assignment-section-2" lang="en">
-          2. 🎧 Listen and Read
-        </h2>
+        <IconHeading
+          level="h2"
+          id="assignment-section-2"
+          icon={Headphones}
+          prefix="2."
+          tone="listen"
+        >
+          Listen and Read
+        </IconHeading>
         <InputMaterial {...props} />
-        <h2 id="assignment-section-3" lang="en">
-          3. 🛠️ Grammar and Vocabulary
-        </h2>
+        <IconHeading level="h2" id="assignment-section-3" icon={Wrench} prefix="3." tone="grammar">
+          Grammar and Vocabulary
+        </IconHeading>
         <LanguageToolkit assignment={a} />
-        <h2 id="assignment-section-4" lang="en">
-          4. ✍️ Practice
-        </h2>
-        <IconHeading icon={PencilLine} prefix="A.">
-          Practice Exercises
+        <IconHeading
+          level="h2"
+          id="assignment-section-4"
+          icon={PencilLine}
+          prefix="4."
+          tone="exercises"
+        >
+          Practice
+        </IconHeading>
+        <IconHeading icon={PencilLine} prefix="A." tone="exercises">
+          Exercises
         </IconHeading>
         <PracticeParts assignment={a} />
         {a.pronunciation && (
           <>
-            <IconHeading icon={Mic} prefix="B.">
+            <IconHeading icon={Mic} prefix="B." tone="listen">
               Say It Clearly (≈1 min)
             </IconHeading>
             <Pronunciation
@@ -451,21 +486,40 @@ export function LearnerHandout(props: LearnerHandoutProps) {
             />
           </>
         )}
-        <h2 id="assignment-section-5" lang="en">
-          5. ✅ Your Turn
-        </h2>
+        <IconHeading
+          level="h2"
+          id="assignment-section-5"
+          icon={CircleCheck}
+          prefix="5."
+          tone="complete"
+        >
+          Your Turn
+        </IconHeading>
         <OutputMission mission={a.outputTask} />
         {'learnerRationale' in a && (
           <>
-            <h2 id="assignment-section-6" className="rationale-heading" lang="en">
-              6. 🧠 Why This Helps
-            </h2>
+            <IconHeading
+              level="h2"
+              id="assignment-section-6"
+              icon={Brain}
+              prefix="6."
+              tone="rationale"
+              className="rationale-heading"
+            >
+              Why This Helps You
+            </IconHeading>
             <Text className="learner-rationale">{a.learnerRationale}</Text>
           </>
         )}
-        <h2 id="assignment-section-7" lang="en">
-          7. 🔑 Answers and Example
-        </h2>
+        <IconHeading
+          level="h2"
+          id="assignment-section-7"
+          icon={KeyRound}
+          prefix="7."
+          tone="answers"
+        >
+          Answers and Example
+        </IconHeading>
         <Disclosure label="Answer Key" className="connected-disclosure">
           <h3 lang="en">Understanding Answers</h3>
           <Answers

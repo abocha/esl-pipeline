@@ -247,13 +247,13 @@ describe('React learner handout static foundation', () => {
       expect(html).not.toContain('ESL24_TEACHER_ONLY');
       expect(html).not.toContain(legacySentinel);
       expect(doc.querySelector('#assignment-section-6') !== null).toBe(shape !== 'legacy');
-      expect(html.includes('Why This Helps')).toBe(shape !== 'legacy');
+      expect(html.includes('Why This Helps You')).toBe(shape !== 'legacy');
       expect(html.includes(rationaleFixture.learnerRationale)).toBe(shape !== 'legacy');
       expect(
         doc.querySelector('#assignment-section-6')?.nextElementSibling?.textContent ?? null,
       ).toBe(shape === 'legacy' ? null : rationaleFixture.learnerRationale);
       expect(doc.querySelector('#assignment-section-7')?.textContent).toBe(
-        '7. 🔑 Answers and Example',
+        '7. Answers and Example',
       );
       expect(doc.querySelector('#assignment-section-8')).toBeNull();
       expect(JSON.stringify(props.assignment)).toBe(before);
@@ -268,13 +268,13 @@ describe('React learner handout static foundation', () => {
       const doc = documentFor(props);
       const a = props.assignment;
       expect([...doc.querySelectorAll('main > h2')].map((heading) => heading.textContent)).toEqual([
-        '1. 🎯 Your Goal',
-        '2. 🎧 Listen and Read',
-        '3. 🛠️ Grammar and Vocabulary',
-        '4. ✍️ Practice',
-        '5. ✅ Your Turn',
-        '6. 🧠 Why This Helps',
-        '7. 🔑 Answers and Example',
+        '1. Your Goal',
+        '2. Listen and Read',
+        '3. Grammar and Vocabulary',
+        '4. Practice',
+        '5. Your Turn',
+        '6. Why This Helps You',
+        '7. Answers and Example',
       ]);
       expect(doc.querySelectorAll('nav, .toc-shell, .table-of-contents')).toHaveLength(0);
       expect(
@@ -285,7 +285,7 @@ describe('React learner handout static foundation', () => {
         'Check Your Understanding',
         'A. How the Grammar Works',
         'B. Vocabulary',
-        'A. Practice Exercises',
+        'A. Exercises',
         ...(mode === 'none' ? [] : ['B. Say It Clearly (≈1 min)']),
       ]);
       for (const icon of doc.querySelectorAll('.heading-icon')) {
@@ -468,7 +468,7 @@ describe('React learner handout static foundation', () => {
       ];
       const html = renderLearnerHandoutDocument(props);
       const doc = new JSDOM(html).window.document;
-      expect(doc.querySelector('h1')?.textContent).toBe('🧭 ' + hostile);
+      expect(doc.querySelector('h1 > .inline-text')?.textContent).toBe(hostile);
       expect(doc.querySelectorAll('img, object, embed')).toHaveLength(0);
       expect(doc.querySelectorAll('iframe')).toHaveLength(0);
       expect(doc.querySelectorAll('script')).toHaveLength(1);

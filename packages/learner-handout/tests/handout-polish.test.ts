@@ -105,7 +105,7 @@ describe('ESL-32 shared learner surface', () => {
     props.assignment = validateAssignmentV1(grammar);
     props.assignment.metadata.icon = '🌦️';
     props.assignment.practice[0]!.title = '1. Исправь `форму`';
-    const cue = 'После `will` нет `-s`. (`windy`) `<img src=x onerror=evil()>` `open';
+    const cue = 'После `will` нет `-s`. (`windy`) `<img src=x onerror=evil()>` `open 🌦️';
     props.assignment.practice[0]!.items[0]!.prompt = cue;
     props.assignment.toolkit.grammar[0]!.explanation = cue;
     props.assignment.toolkit.vocabulary[0] = {
@@ -120,7 +120,10 @@ describe('ESL-32 shared learner surface', () => {
     const before = JSON.stringify(props);
     const html = renderLearnerHandoutDocument(props);
     const doc = new JSDOM(html).window.document;
-    expect(doc.querySelector('.hero-icon')?.textContent).toBe('🌦️');
+    const hero = doc.querySelector('.hero-icon')!;
+    expect(hero.textContent).toBe('');
+    expect(hero.getAttribute('aria-hidden')).toBe('true');
+    expect(hero.querySelector('svg.lucide-book-open')?.getAttribute('focusable')).toBe('false');
     expect([...doc.querySelectorAll('.practice-part h4')].map((h) => h.textContent)).toEqual([
       'Part 1: Исправь форму',
       'Part 2',
@@ -128,7 +131,9 @@ describe('ESL-32 shared learner surface', () => {
       'Part 2',
     ]);
     const prompt = doc.querySelector('.practice-part li')!;
-    expect(prompt.textContent).toBe('После will нет -s. (windy) <img src=x onerror=evil()> `open');
+    expect(prompt.textContent).toBe(
+      'После will нет -s. (windy) <img src=x onerror=evil()> `open 🌦️',
+    );
     expect([...prompt.querySelectorAll('code')].map((c) => c.textContent)).toEqual([
       'will',
       '-s',
@@ -148,9 +153,9 @@ describe('ESL-32 shared learner surface', () => {
     expect(JSON.stringify(props)).toBe(before);
     delete props.assignment.metadata.icon;
     expect(
-      new JSDOM(renderLearnerHandoutDocument(props)).window.document.querySelector('.hero-icon')
-        ?.textContent,
-    ).toBe('🎧');
+      new JSDOM(renderLearnerHandoutDocument(props)).window.document.querySelector('.hero-icon svg')
+        ?.outerHTML,
+    ).toBe(hero.querySelector('svg')?.outerHTML);
     expect(props.assignment.metadata).not.toHaveProperty('icon');
   });
 

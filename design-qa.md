@@ -495,3 +495,40 @@ dependency, assignment shape or renderer/publication identity changed. Scripts a
 server are untouched. The coordinating task restarted the main preview server; this task re-emitted
 its files without operating that server. README reflects the final selection. No provider call,
 production/data mutation, push, PR, merge, deployment or hosted-CI claim.
+
+## Final approved UI icons, color and copy after 32a00834
+
+final result: passed
+
+All renderer-owned emoji are replaced with existing Lucide icons. The hero is a neutral BookOpen;
+stored metadata.icon and literal emoji in authored lesson strings remain unchanged. Seven h2 icons
+are Target, Headphones, Wrench, PencilLine, CircleCheck, Brain and KeyRound. Fixed copy is now
+A. Exercises and 6. Why This Helps You. Numbers/IDs, A/B markers, section visibility and typography,
+blue rules/underlines, native controls and callout/cue surfaces remain. Decorative SVGs are hidden
+from accessible names and nonfocusable. A bounded private heading adaptation shares the current
+layout; there is no emoji parser, icon inference, new contract/configuration or dependency.
+
+The small semantic palette colors icons only: orange goal, teal listening/vocabulary/pronunciation
+and hero, violet grammar/rationale, amber exercises and ochre answer key. Checks use green #2f6d46;
+Wrong stays red and explanation slate. README now describes the current renderer and condenses
+historical iterations to evidence pointers; abandoned experiments are not advertised as production
+variants. Renderer 3 and fresh-generation identity remain unchanged.
+
+Evidence: `D:/tmp/esl-33-final-icons/after.html`, six representative opening/grammar/check PNGs and
+`browser-checks.json`. One desktop/phone sanity pass used 1280 × 1000 and 320 × 900 CSS viewports,
+DPR 1. Retained selected baseline was compared with the final desktop opening and phone grammar
+in `*-pair.png`. The final check-marker view was also inspected. No P0/P1/P2 or P3 issue remains in
+this delta. Hero metrics remain 45px title/57px icon desktop and 32px title/40.5px icon phone;
+heading typography and underlines remain, wrapped text aligns with its heading words, and no
+horizontal overflow occurs. Computed colors confirm green checks and the varied palette across
+all headings. Disclosures remained closed, browser error logs were empty and the preview was
+returned to the normal viewport. Prior passing interaction evidence is reused; no new full-page,
+mode, hover or print matrix was run.
+
+Focused build and static fixture re-emission passed. The 9 polish tests passed in the initial run,
+including preserved authored emoji, neutral hero with/without metadata.icon, exact unchanged input
+and interaction regressions. One old title-prefix expectation in the rendering file was updated;
+its focused rerun passed all 31 tests on the same built source. Focused Biome and whitespace checks
+passed. No canonical input fixture changed. Root-owned contract docs/dev-route cleanup were preserved
+and left for the coordinating task's shipping commit. This local handoff makes no hosted-CI,
+release, merge, provider or production/deployment claim.

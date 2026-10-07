@@ -39,8 +39,8 @@ This is script-based presentation guidance, not general language detection; mixe
 support languages are not classified by this rule.
 
 Section 5 renders the structured mission as one emphasized task callout, followed by lightweight
-Prepare, Include in your response, How to do it and Before you finish headings with lists or text.
-Empty lists and null delivery omit their headings. Optional extension stays inline; sampleResponse
+Prepare, What to Include, How to do it and Check Your Work headings with lists or text.
+Empty lists and null delivery omit their headings. Extra Task stays inline; sampleResponse
 stays in section 7's answer key. Legacy task/extension/sampleResponse objects render directly with
 no inferred roles or data mutation. The single-column layout uses the existing responsive shell.
 
@@ -201,12 +201,14 @@ external to its bundle to preserve package-relative asset lookup.
 Vocabulary expressions always render bold and examples italic, including highlighted fragments.
 `Inline`, `Text` and `Field` share contracts' paired single-backtick convention; direct learner
 strings and answer copies use it too. Unmatched delimiters stay literal, hostile text is escaped,
-and long fragments wrap. Part titles have one renderer-owned number. The hero uses `metadata.icon`
-or a display-only 🎧 fallback; no input is rewritten. Source presentation is Listen first, existing
+and long fragments wrap. Part titles have one renderer-owned number. The hero uses a neutral
+decorative Lucide BookOpen; authored `metadata.icon` is preserved in data but is not rendered or
+interpreted to select a UI icon. Source presentation is Listen first, existing
 audio then freely available transcript, with attribution/links and quieter generation provenance.
 Pronunciation mode is internal. Its existing natural/shadow sentence and audio sit in a callout.
 
-Each grammar correction/explanation has a visible semibold label and independently hidden content
+Each grammar correction/explanation has a decorative semantic marker, an accessible English label
+and independently hidden content
 with `aria-hidden` until its native reveal button is activated. Activation reveals once, removes
 that button from tab order and preserves keyboard focus on the now-readable line. It never exposes
 another line. A simple print rule exposes the content. No reveal state survives reload.
@@ -219,7 +221,9 @@ include Enter/Space keyboard activation. There is no hydration or general intera
 Fresh schema/template identity is v8; see [the canonical contract](../../docs/reference/ASSIGNMENT_V1.md#learner-handout-convention-and-authored-emoji-esl-32).
 Renderer 3 remains the native architecture identity; changed HTML gets a new exact-byte publisher
 hash. Frozen fixtures/snapshots are unchanged. The local fixture deliberately demonstrates selective
-highlights, wrapping formulas, numbered authored titles and an emoji using only local audio.
+highlights, wrapping formulas, numbered authored titles and preserved authored icon metadata using
+only local audio. Renderer-owned icons are Lucide; literal emojis inside authored lesson strings
+remain ordinary authored content.
 
 ## Visual and cue follow-up (ESL-33)
 
@@ -260,7 +264,7 @@ reveals once and hides the control. Answer text retains its reserved space/inset
 layout jump, and print shows ordinary unblurred text. Descriptive accessible names, independent
 aria-hidden answers and keyboard focus transfer remain.
 
-The hero title scales to 45px with its existing emoji at approximately 57px; phones use 32px text
+The hero title scales to 45px with its neutral BookOpen at approximately 57px; phones use 32px text
 and a proportional 40.5px icon. A flexible first-line alignment lets long titles wrap beside the
 icon rather than collide with it. Section 6 uses ordinary h2/body styling, retaining its existing
 conditional-rendering contract. Transcript and Answer Key disclosures share one connected light
@@ -281,72 +285,31 @@ cannot overwrite current state. Native full-track players and preload semantics 
 Failure also shows "Couldn't play audio." and a visible Retry label on the triggering button;
 retry/switch clears that feedback through the existing guarded state transition.
 
-The 7 October 2026 follow-up compared the same full reconstructed lesson before/after at 1280px
-desktop and 390px phone widths, with transcript and answers expanded. All 144 inline fields and
-three patterns matched the retained original text. Computed styles confirmed body/label weights,
-matching part numbers/titles and 16px explanations; page scroll width matched each viewport.
-A separate 355px authored-cue probe confirmed attached uncolored parentheses, intact `-ing` and
-wrapping long cues. Keyboard reveals and local missing-clip failure followed by tone recovery
-were inspected. Screenshots and computed-style results are retained in `D:/tmp/esl-33-follow-up/`.
-This is local presentation/control evidence, not speech quality, screen-reader or print auditing,
-hosted CI or production activation.
+The fixed main headings are Your Goal; Listen and Read; Grammar and Vocabulary; Practice; Your Turn;
+Why This Helps You; Answers and Example. Numbers and section IDs remain stable; section 6 retains
+its legacy/new-shape visibility contract and section 7 keeps number 7. Fixed subheadings include
+Check Your Understanding; A. How the Grammar Works; B. Vocabulary; A. Exercises; and
+B. Say It Clearly (≈1 min). These use decorative, nonfocusable Lucide icons with accessible text
+names, stable A/B prefixes, 22px size and stroke 2. The hero is a neutral BookOpen; no UI icon is
+inferred from authored metadata. Authored titles, grammar/form/comparison labels, practice-part
+names, cues, literal emoji content and assignment values remain unchanged.
 
-The approved continuous-document refinement on 7 October 2026 reused that same full lesson.
-Before/after screenshots at 1280px and 390px cover every section with transcript/answers expanded.
-Desktop reading blocks measured 621px and wider blocks 976px, all centered at x=640; phone blocks
-measured 358px with 16px gutters, centered at x=195. Complete article text matched before/after.
-The 400/600/700 hierarchy, pale-blue bordered cues, native disclosure/reveal controls, visible focus,
-and audio error/Retry feedback remain. Focused local evidence and screenshot comparison slices
-are retained in `D:/tmp/esl-33-reading-document/`. This delta changed only CSS and owning docs;
-the earlier fixture-source and validation limitations still apply.
+A small private semantic palette colors the icons: goal orange, listening/vocabulary/pronunciation
+and hero teal, grammar/rationale violet, exercises amber and the answer key ochre. Your Turn,
+understanding, Corrected and Answer checks use green (#2f6d46); Wrong stays red and explanation
+stays slate. Heading prose, links, control text, blue rules/underlines and callout/cue surfaces retain
+their existing styling.
 
-The maintainer-selected Product Design revision on 7 October 2026 supersedes the stripped
-presentation above with restrained section markers, grammar left rules, shared comparison surfaces
-and vocabulary separators. The full lesson remains unchanged. In-app browser captures at 1280px
-and 390px were compared together with the selected reference after density/body-scale normalization;
-the generated excerpt's shorter copy and larger type were explicitly accounted for. One excessive
-section/subheading gap was fixed and recaptured. The project-root `design-qa.md` records the passing
-visual gate, focused checks and limitations; screenshots and comparison images are retained in
-`D:/tmp/esl-33-selected-design/`.
+Other fixed labels are Your Goal, Transcript, Word or Phrase, What to Do, Goal, Practise This Sentence,
+What to Include, Check Your Work, Understanding Answers, A. Exercise Answers, Example Response,
+Extra Task and Source. Key Language You Will Use and the Answer Key disclosure keep their exact
+labels. Listen first, Prepare, How to do it, Meaning/Example, Target/Focus, audio captions, Contour cue,
+source provenance and Part prefixes remain. Historical icon/copy experiments are local evidence,
+not supported production variants or public presentation options.
 
-The four approved annotation refinements on 7 October 2026 retain that selected design while
-replacing the visible Reveal text with the blurred-answer control, standardizing section 6,
-enlarging the responsive hero and connecting the transcript spoiler frame. Full desktop/phone
-captures and closed/hover/focus/revealed, long-answer, print-style and native transcript checks are
-retained in `D:/tmp/esl-33-annotations/`. The existing `design-qa.md` preserves the earlier history
-and records this bounded delta's passing comparison and 40-test evidence.
-
-The approved stacked-field/shared-disclosure follow-up on 7 October 2026 retains the same content
-and design. Desktop/phone closed and fully revealed fields have matching dimensions, padding and
-wrapping, including a separate long-answer probe. Transcript and Answer Key closed/open states,
-nested answer groups and the sample were inspected. The complete article text matches the retained
-305cf3b9 document. Evidence is in `D:/tmp/esl-33-stacked-fields/`; `design-qa.md` records the scoped
-passing comparison. The existing 40-test interaction suite passes without new state/handler changes.
-
-The next approved annotations on 7 October 2026 remove structured Pattern labels, remove the native
-player width cap and emphasize the pronunciation sentence/audio group. Emoji and Lucide marker
-experiments were generated as ignored full-lesson HTML files. The maintainer selected Lucide;
-the shared React/static renderer now uses that treatment, including the final Wrong-text alignment
-annotation. The emoji trial remains disposable only. The development fixture server accepts
-`polish-emoji.html` and `polish-icons.html` for these temporary comparisons; no assignment property,
-production flag, dependency or alternate production theme was added. The normal `polish.html` is
-the selected implementation. Evidence is in `D:/tmp/esl-33-next-annotations/`, with the scoped QA
-history in `design-qa.md`.
-
-The maintainer subsequently approved the seven fixed headings: Your Goal; Listen and Read; Grammar
-and Vocabulary; Practice; Your Turn; Why This Helps; Answers and Example. Existing numbers/emojis
-and section IDs remain. Practice uses the same heading with or without pronunciation; its subsection
-label stays intact. Section 6 still follows the learner-rationale visibility contract and section 7
-always retains number 7. Authored content and subsection/disclosure labels remain unchanged.
-
-The subsequent subheading trial was selected with the maintainer's final copy overrides. Five fixed
-h3 headings now use decorative, nonfocusable Lucide icons: Check Your Understanding (ListChecks),
-A. How the Grammar Works (ScanText), B. Vocabulary (BookOpen), A. Practice Exercises (PencilLine),
-and B. Say It Clearly (≈1 min) (Mic). Their private layout uses the existing blue accent, 22px icons,
-stroke 2 and 8px gaps; accessible heading names retain the words and A/B prefixes. H2 emojis and the
-authored hero remain. Other selected fixed labels include Your Goal, Transcript, Word or Phrase,
-What to Do, Goal, Practise This Sentence, What to Include, Check Your Work, Understanding Answers,
-A. Exercise Answers, Example Response, Extra Task and Source. Key Language You Will Use and the
-Answer Key disclosure retain their exact labels. Authored titles, grammar/form/comparison labels,
-practice-part names, cues and assignment values are unchanged. Evidence and selected-trial comparisons
-are in `D:/tmp/esl-33-subheading-selected/`; `design-qa.md` records the focused passing delta.
+The full-lesson fixture remains the retained ESL-33 teaching input with local tone audio. Earlier
+visual iterations and acceptance evidence are recorded in the project-root design-qa.md and retained
+D:/tmp/esl-33-* evidence directories. Final focused source/build/test and desktop/phone sanity evidence
+is in D:/tmp/esl-33-final-icons/. These are local presentation/control checks, not hosted CI,
+provider speech-quality evidence or production activation. The validation commands and compatibility
+limits above remain the current package workflow.

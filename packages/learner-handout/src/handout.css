@@ -19,6 +19,12 @@ body {
   --handout-rule: #75a9d5;
   --handout-soft-rule: #a3c5e4;
   --handout-surface: #edf5fc;
+  --handout-icon-goal: #99501a;
+  --handout-icon-teal: #246b70;
+  --handout-icon-violet: #62579a;
+  --handout-icon-amber: #926017;
+  --handout-icon-green: #2f6d46;
+  --handout-icon-ochre: #80621c;
   max-width: 1040px;
   margin: 0 auto;
   padding: 56px 32px 80px;
@@ -62,10 +68,15 @@ h1 {
   margin: 12px 0;
 }
 .hero-icon {
+  display: inline-flex;
   flex: 0 0 auto;
   font-size: 1.2667em;
   line-height: 1;
   letter-spacing: 0;
+  color: var(--handout-icon-teal);
+}
+.hero-icon svg {
+  display: block;
 }
 :where(h1) > .inline-text {
   min-width: 0;
@@ -119,6 +130,25 @@ h3 {
 }
 .heading-text {
   min-width: 0;
+}
+.icon-goal {
+  color: var(--handout-icon-goal);
+}
+.icon-listen {
+  color: var(--handout-icon-teal);
+}
+.icon-grammar,
+.icon-rationale {
+  color: var(--handout-icon-violet);
+}
+.icon-exercises {
+  color: var(--handout-icon-amber);
+}
+.icon-complete {
+  color: var(--handout-icon-green);
+}
+.icon-answers {
+  color: var(--handout-icon-ochre);
 }
 :where(.learner-handout main) > h2 + h3 {
   margin-top: 0;
@@ -610,7 +640,7 @@ button:disabled {
 }
 .field-marker-corrected,
 .field-marker-answer {
-  color: var(--handout-accent);
+  color: var(--handout-icon-green);
 }
 .field-marker-explanation {
   color: var(--handout-muted);
