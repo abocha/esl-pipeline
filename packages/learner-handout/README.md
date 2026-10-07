@@ -201,9 +201,9 @@ external to its bundle to preserve package-relative asset lookup.
 Vocabulary expressions always render bold and examples italic, including highlighted fragments.
 `Inline`, `Text` and `Field` share contracts' paired single-backtick convention; direct learner
 strings and answer copies use it too. Unmatched delimiters stay literal, hostile text is escaped,
-and long fragments wrap. Part titles have one renderer-owned number. The hero uses a neutral
-decorative Lucide BookOpen; authored `metadata.icon` is preserved in data but is not rendered or
-interpreted to select a UI icon. Source presentation is Listen first, existing
+and long fragments wrap. Part titles have one renderer-owned number. The hero retains authored
+`metadata.icon` as decorative Unicode text, with a headphones emoji fallback when absent. It is
+the exception to the static UI's Lucide icons. Source presentation is Listen first, existing
 audio then freely available transcript, with attribution/links and quieter generation provenance.
 Pronunciation mode is internal. Its existing natural/shadow sentence and audio sit in a callout.
 
@@ -264,7 +264,7 @@ reveals once and hides the control. Answer text retains its reserved space/inset
 layout jump, and print shows ordinary unblurred text. Descriptive accessible names, independent
 aria-hidden answers and keyboard focus transfer remain.
 
-The hero title scales to 45px with its neutral BookOpen at approximately 57px; phones use 32px text
+The hero title scales to 45px with its authored emoji at approximately 57px; phones use 32px text
 and a proportional 40.5px icon. A flexible first-line alignment lets long titles wrap beside the
 icon rather than collide with it. Section 6 uses ordinary h2/body styling, retaining its existing
 conditional-rendering contract. Transcript and Answer Key disclosures share one connected light
@@ -290,12 +290,12 @@ Why This Helps You; Answers and Example. Numbers and section IDs remain stable; 
 its legacy/new-shape visibility contract and section 7 keeps number 7. Fixed subheadings include
 Check Your Understanding; A. How the Grammar Works; B. Vocabulary; A. Exercises; and
 B. Say It Clearly (≈1 min). These use decorative, nonfocusable Lucide icons with accessible text
-names, stable A/B prefixes, 22px size and stroke 2. The hero is a neutral BookOpen; no UI icon is
+names, stable A/B prefixes, 22px size and stroke 2. The hero retains its authored emoji; no Lucide icon is
 inferred from authored metadata. Authored titles, grammar/form/comparison labels, practice-part
 names, cues, literal emoji content and assignment values remain unchanged.
 
 A small private semantic palette colors the icons: goal orange, listening/vocabulary/pronunciation
-and hero teal, grammar/rationale violet, exercises amber and the answer key ochre. Your Turn,
+teal, grammar/rationale violet, exercises amber and the answer key ochre. Your Turn,
 understanding, Corrected and Answer checks use green (#2f6d46); Wrong stays red and explanation
 stays slate. Heading prose, links, control text, blue rules/underlines and callout/cue surfaces retain
 their existing styling.

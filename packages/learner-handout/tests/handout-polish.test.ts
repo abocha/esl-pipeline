@@ -121,9 +121,9 @@ describe('ESL-32 shared learner surface', () => {
     const html = renderLearnerHandoutDocument(props);
     const doc = new JSDOM(html).window.document;
     const hero = doc.querySelector('.hero-icon')!;
-    expect(hero.textContent).toBe('');
+    expect(hero.textContent).toBe('🌦️');
     expect(hero.getAttribute('aria-hidden')).toBe('true');
-    expect(hero.querySelector('svg.lucide-book-open')?.getAttribute('focusable')).toBe('false');
+    expect(hero.querySelector('svg')).toBeNull();
     expect([...doc.querySelectorAll('.practice-part h4')].map((h) => h.textContent)).toEqual([
       'Part 1: Исправь форму',
       'Part 2',
@@ -153,9 +153,9 @@ describe('ESL-32 shared learner surface', () => {
     expect(JSON.stringify(props)).toBe(before);
     delete props.assignment.metadata.icon;
     expect(
-      new JSDOM(renderLearnerHandoutDocument(props)).window.document.querySelector('.hero-icon svg')
-        ?.outerHTML,
-    ).toBe(hero.querySelector('svg')?.outerHTML);
+      new JSDOM(renderLearnerHandoutDocument(props)).window.document.querySelector('.hero-icon')
+        ?.textContent,
+    ).toBe('🎧');
     expect(props.assignment.metadata).not.toHaveProperty('icon');
   });
 

@@ -421,7 +421,7 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         </p>
         <h1>
           <span className="hero-icon" aria-hidden="true">
-            <BookOpen size="1em" strokeWidth={2} focusable="false" />
+            {a.metadata.icon ?? '🎧'}
           </span>{' '}
           <Inline>{a.metadata.title}</Inline>
         </h1>
