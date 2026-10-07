@@ -333,21 +333,21 @@ summary:hover {
 .disclosure-inner {
   padding: 16px 0 0;
 }
-.study-text {
+.connected-disclosure {
   border: 1px solid #aec6df;
   border-radius: 8px;
 }
-.study-text > summary {
+.connected-disclosure > summary {
   width: auto;
   padding: 12px 16px;
   border: 0;
   border-radius: 7px;
 }
-.study-text[open] > summary {
+.connected-disclosure[open] > summary {
   border-bottom: 1px solid #dbe7f2;
   border-radius: 7px 7px 0 0;
 }
-.study-text .disclosure-inner {
+.connected-disclosure > .disclosure-content > .disclosure-inner {
   padding: 0 16px 8px;
 }
 .audio-figure {
@@ -536,11 +536,16 @@ button:disabled {
 .pronunciation-sentence {
   margin: 24px 0;
 }
+.grammar-reveal {
+  display: grid;
+  gap: 6px;
+}
 .reveal-target {
   position: relative;
-  display: inline-block;
+  display: block;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
-  vertical-align: top;
   min-height: 44px;
 }
 .reveal-content {

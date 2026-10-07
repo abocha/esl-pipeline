@@ -129,7 +129,7 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
             preview={presentation?.preview}
           />
         )}
-        <Disclosure label="Study Text: Transcript" className="study-text">
+        <Disclosure label="Study Text: Transcript" className="study-text connected-disclosure">
           {a.input.studyText.turns.map((turn, i) => (
             <p key={i} lang="en" className="plain-text transcript-turn">
               <strong className="transcript-speaker">
@@ -433,7 +433,7 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         <h2 id="assignment-section-7" lang="en">
           7. 🔑 Answer Key & Sample Mission
         </h2>
-        <Disclosure label="Answer Key">
+        <Disclosure label="Answer Key" className="connected-disclosure">
           <h3 lang="en">Comprehension Check Answers</h3>
           <Answers
             questions={a.input.comprehension}
