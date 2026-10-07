@@ -2,7 +2,7 @@
   color-scheme: light;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #1d2935;
-  background: #fafbfc;
+  background: #fff;
   line-height: 1.65;
   font-size: 16px;
 }
@@ -16,6 +16,9 @@ body {
   font-weight: 400;
   --handout-accent: #315f85;
   --handout-muted: #526477;
+  --handout-rule: #75a9d5;
+  --handout-soft-rule: #a3c5e4;
+  --handout-surface: #edf5fc;
   max-width: 1040px;
   margin: 0 auto;
   padding: 56px 32px 80px;
@@ -37,17 +40,15 @@ body {
 :where(.learner-handout main) > .table-scroll {
   grid-column: 1 / -1;
 }
-.grammar-card,
-.grammar-comparison {
+.grammar-card {
   display: grid;
   grid-template-columns: subgrid;
 }
-:where(.grammar-card, .grammar-comparison) > * {
+:where(.grammar-card) > * {
   grid-column: 2;
   min-width: 0;
 }
-:where(.grammar-card) > .grammar-comparison,
-:where(.grammar-comparison) > .grammar-alternatives {
+:where(.grammar-card) > .grammar-comparison {
   grid-column: 1 / -1;
 }
 h1 {
@@ -61,18 +62,33 @@ h1 {
   margin-right: 0.15em;
 }
 h2 {
-  font-size: 1.35rem;
+  position: relative;
+  font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.45;
-  margin: 64px 0 20px;
+  margin: 40px 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--handout-rule);
+}
+h2::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -20px;
+  width: 4px;
+  height: 1.45em;
+  background: var(--handout-rule);
 }
 .learner-handout main > h2:first-child {
-  margin-top: 48px;
+  margin-top: 36px;
 }
 h3 {
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  margin: 28px 0 14px;
+  margin: 20px 0 8px;
+}
+:where(.learner-handout main) > h2 + h3 {
+  margin-top: 0;
 }
 h4 {
   font-size: 1.05rem;
@@ -115,6 +131,10 @@ p {
 }
 aside.callout > p:first-child {
   font-size: 1.05rem;
+  border-left: 3px solid var(--handout-soft-rule);
+  background: var(--handout-surface);
+  padding: 12px 16px;
+  margin-top: 0;
 }
 .mission-key-language {
   margin: 12px 0 0;
@@ -122,6 +142,9 @@ aside.callout > p:first-child {
 .mission-task {
   font-size: 1.1rem;
   font-weight: 600;
+  border-left: 3px solid var(--handout-rule);
+  background: var(--handout-surface);
+  padding: 16px;
 }
 .mission-task p {
   margin: 0;
@@ -129,14 +152,14 @@ aside.callout > p:first-child {
 .output-mission h3 {
   border: 0;
   padding: 0;
-  margin-top: 28px;
+  margin-top: 24px;
 }
 .practice-part-number {
   font-size: inherit;
   font-weight: inherit;
 }
 .practice-part + .practice-part {
-  margin-top: 32px;
+  margin-top: 24px;
 }
 ul,
 ol {
@@ -144,7 +167,7 @@ ol {
 }
 li {
   padding-left: 0;
-  margin: 10px 0;
+  margin: 8px 0;
 }
 li::marker {
   color: var(--handout-muted);
@@ -169,25 +192,26 @@ li::marker {
   font-weight: 600;
 }
 .grammar-card {
-  margin: 8px 0 24px;
+  margin: 4px 0 16px;
 }
 .grammar-card + .grammar-card {
-  margin-top: 40px;
+  margin-top: 28px;
 }
 .grammar-topic {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 700;
-  color: var(--handout-accent);
-  margin: 4px 0 12px;
+  margin: 4px 0 8px;
 }
 .grammar-form {
-  margin: 24px 0;
+  border-left: 3px solid var(--handout-soft-rule);
+  padding-left: 16px;
+  margin: 20px 0 20px 12px;
 }
 .grammar-card h5,
 .grammar-card h6 {
   font-size: 1rem;
   font-weight: 600;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 .grammar-form ul {
   margin-top: 8px;
@@ -209,19 +233,33 @@ li::marker {
   white-space: normal;
 }
 .grammar-comparison {
-  margin: 32px 0;
-  padding: 0;
+  margin: 16px 0;
+  padding: 20px;
+  border-radius: 5px;
+  background: var(--handout-surface);
 }
 .grammar-comparison > h5 {
+  font-size: 1.1rem;
+  color: #173e63;
   margin-bottom: 16px;
 }
 .grammar-alternatives {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 40px;
+  gap: 20px;
+}
+.grammar-alternative + .grammar-alternative {
+  border-left: 1px solid var(--handout-soft-rule);
+  padding-left: 20px;
 }
 .grammar-alternative h6 {
-  color: var(--handout-accent);
+  color: #173e63;
+  background: #d9e9f8;
+  padding: 6px 12px;
+  border-radius: 5px;
+}
+.grammar-alternative > p:last-child {
+  margin-bottom: 0;
 }
 .grammar-traps {
   margin-top: 16px;
@@ -245,6 +283,7 @@ li::marker {
   padding: 16px 20px 16px 0;
   text-align: left;
   vertical-align: top;
+  border-bottom: 1px solid #dbe7f2;
 }
 .vocabulary-table th {
   font-size: 0.9rem;
@@ -426,7 +465,7 @@ button:disabled {
 }
 .answer-key-item {
   padding: 0;
-  margin: 28px 0;
+  margin: 24px 0;
 }
 .answer-key-item p {
   margin: 8px 0;
@@ -494,12 +533,32 @@ button:disabled {
     padding: 24px 16px 32px;
   }
   h2 {
-    font-size: 1.15rem;
-    margin-top: 48px;
+    font-size: 1.25rem;
+    margin-top: 32px;
+  }
+  h2::before {
+    left: -12px;
+    width: 3px;
+  }
+  h3 {
+    font-size: 1.1rem;
+  }
+  .grammar-form {
+    margin-left: 4px;
+    padding-left: 12px;
+  }
+  .grammar-comparison {
+    padding: 16px;
   }
   .grammar-alternatives {
     grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
+    gap: 16px;
+  }
+  .grammar-alternative + .grammar-alternative {
+    border-left: 0;
+    border-top: 1px solid var(--handout-soft-rule);
+    padding-left: 0;
+    padding-top: 16px;
   }
   .vocabulary-table,
   .vocabulary-table tbody {
@@ -517,6 +576,7 @@ button:disabled {
     display: grid;
     gap: 12px;
     padding: 20px 0;
+    border-bottom: 1px solid #dbe7f2;
   }
   .vocabulary-table td {
     display: block;
