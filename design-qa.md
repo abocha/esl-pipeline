@@ -135,3 +135,110 @@ production/data mutation is authorized or performed.
 
 No P3 item is required for this approved delta. Platform font/emoji differences and the generated
 excerpt's density are documented adaptations.
+
+## Approved annotation delta after f1f81f2d
+
+final result: passed
+
+**Findings and approved target**
+
+No actionable P0/P1/P2 mismatch remains in this bounded delta. The earlier selected reference and
+comparison history above remain intact. The maintainer approved four specific changes to that
+design: actual blurred text inside one clickable border with no visible Reveal label; standard
+section 6 typography; a roughly 45px/57px desktop hero; and one connected transcript disclosure.
+These annotations supersede the corresponding f1f81f2d presentation, not the selected layout as a
+whole. Baseline visual truth is its saved complete document, `D:/tmp/esl-33-annotations/before.html`.
+The selected option-3 reference remains the source for the unchanged rules/comparison surfaces.
+
+**Capture and comparison evidence**
+
+- In-app browser implementation: `http://127.0.0.1:5175/polish.html`; full existing lesson.
+- Evidence directory: `D:/tmp/esl-33-annotations/`. Full baseline: `desktop-before-full.png`
+  (1280 × 10063), `phone-before-full.png` (390 × 13999). Full implementation:
+  `desktop-after-full.png` (1280 × 10208), `phone-after-full.png` (390 × 14383).
+- Measured CSS viewports: 1280 × 1000 and 390 × 900, devicePixelRatio 1.100000023841858.
+  Native viewport PNGs (1408 × 1100 / 429 × 990) were downsampled to CSS size and stitched by
+  measured scroll offsets. Raw PNGs and scroll/region metadata are retained. Full-page states:
+  transcript/answer key open, independent grammar answers closed.
+- Source and implementation were inspected together in `desktop-hero-pair.png`,
+  `phone-hero-pair.png`, `desktop-rationale-pair.png`, `phone-rationale-pair.png`,
+  `desktop-transcript-pair.png`, `phone-grammar-pair.png`, and unchanged comparison/vocabulary/sample
+  pairs. Same semantic crops and CSS scale avoid false drift from absolute scroll position.
+  The full pages verify composition/density; focused pairs make the changes readable.
+- State comparisons: `grammar-closed-hover-pair.png`, `grammar-closed-focus-pair.png`,
+  `grammar-closed-revealed-pair.png`, `transcript-closed-open-pair.png`, and
+  `long-closed-revealed-pair.png`. Closed/hover/focus screenshots were visually inspected: the
+  soft blur conveys text shape but the answers remain unreadable. There is one crisp area per
+  field, no visible instruction, Reveal label, icon or nested control.
+- The long-answer probe uses a separate local clone with about 740 characters and authored cues;
+  it does not replace or edit the full lesson. Both closed and revealed states wrap inside the
+  phone reading area. The temporary probe is only supplementary layout evidence.
+
+**Iteration history and fidelity surfaces**
+
+The first annotation implementation passed the combined visual comparison. No substantive visual
+fix was required after that comparison; formatting and selector-specificity cleanup preserved its
+appearance. This is an additional passing iteration, not a repeat of whole-design ideation.
+
+- Typography: unchanged 400 body / 600 labels-subheads / 700 main headings and authored emphasis.
+  Desktop hero text measures 45px; icon font measures 57px. Mobile text is 32px and icon 40.5px.
+  The emoji is sized relative to h1 (1.2667em), with flex-start alignment to the first title line.
+  At 390px and 320px the complete title wraps without collision/overflow; section icons remain
+  unchanged. Section 6 now computes exactly like the standard h2 at each width, including color,
+  weight, line height, margins and underline; rationale computes to ordinary 16px/400 body color.
+- Spacing/layout: each answer uses its actual text to reserve the eventual dimensions before
+  activation. A small 8px/12px inset stays after activation, avoiding reflow while the border/wash
+  disappears. All four full-lesson boxes retained identical dimensions after Enter/Space reveal.
+  The long explanation retained 320.38px × 553.89px in both states with no page overflow. Initial
+  document height increases because real answers now occupy space instead of short Reveal labels;
+  this is an approved text-shape adaptation, not a new panel stack. Transcript content has a scoped
+  16px inset inside its one frame; answer-key disclosure remains unchanged.
+- Colors/tokens: existing blue palette/cue styling preserved. Closed answer text uses a static
+  4px blur. One light control border strengthens blue on hover/focus with a faint wash; neither
+  state changes blur or aria-hidden. Revealed fields have no control border/fill; keyboard focus
+  retains the existing clear outline. Transcript has one light outer border, a borderless summary
+  header and one quiet open-state separator; no nested frame. Section 6 no longer uses muted prose.
+- Image/assets: existing hero emoji and playback library icons preserved; only the hero is scaled.
+  No new imagery, assets, icons, animation effects or app infrastructure was introduced.
+- Copy/content: same full lesson and conditional section-6 contract retained. Visible Reveal text
+  is intentionally removed from the native buttons; descriptive accessible names remain. Actual
+  answer text occurs once, with unchanged Inline escaping/cue rendering, and stays aria-hidden
+  before activation. The long/hostile-input regression test verifies exact content and no mutation.
+
+**Interactions and focused evidence**
+
+- Hover and keyboard focus keep filter `blur(4px)` and `aria-hidden=true`. Actual screenshots
+  confirm unreadability; measurements alone were not treated as visual proof.
+- Enter reveals only the first correction; Space independently reveals its explanation. Each
+  removes aria-hidden/blur, hides the sole native button and transfers focus to ordinary answer
+  text. Other fields remain hidden/blurred. Dimensions are unchanged. A second activation cannot
+  hide a previously revealed field. Existing delegation was reused without state/hydration changes.
+- React/Vite full-lesson preview also verifies empty accessible controls, independent reveal,
+  focus transfer, expected filters and no overflow. No JavaScript console errors were observed.
+- Native transcript Enter/open/close states were checked. Existing interrupted-animation and
+  reduced-motion tests still pass; those handlers were not edited. Answer-key styling is untouched.
+- Browser print-media styles show unblurred answers, hidden reveal buttons and zero answer inset,
+  preserving the existing print fallback. This is a print-style check, not a complete print audit.
+- `pnpm --filter @esl-pipeline/learner-handout test:unit`: 40 tests passed across two files, including
+  updated single-control/hidden-content assertions and a new long escaped/cue-content regression.
+  Existing independent one-way/focus, native disclosure, audio binding/retry/stale-event and input
+  preservation coverage passed. Static build/fixture emission passed.
+- Focused Biome/Markdown formatting, diff checks and PR docs freshness results are recorded in
+  the final ESL-33 evidence update. No broad gate or provider call was performed.
+
+**Remaining limitations and checklist**
+
+The earlier fixture-source, local-tone, screen-reader/other-engine, hosted-CI and production limits
+still apply. CSS blur is a visual study affordance, not secret storage: the answer intentionally
+exists in the document. Only the named learner controls and typography were changed; no public
+data/generation/renderer-identity contract changed. No push, PR, merge or deployment performed.
+
+- [x] One actual blurred answer and one empty, descriptively named native control per field.
+- [x] Hover/focus stay unreadable; independent one-way Enter/Space and focus transfer pass.
+- [x] Long answers wrap and reveal without size change; escaping/cues/print preserved.
+- [x] Section 6 matches ordinary heading/body styles; conditional content untouched.
+- [x] Responsive 45px/57px hero scales down and aligns with the first wrapped title line.
+- [x] Transcript is one connected spoiler frame; native behavior and answer key preserved.
+- [x] Full-copy/paired/state evidence inspected and focused checks passed.
+
+No P3 follow-up is needed for these approved annotations.

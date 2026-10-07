@@ -247,7 +247,18 @@ Practice and answers
 use 400-weight body prose, 600-weight field labels/subheadings, and 700-weight main headings.
 Part numbers and titles share size/weight; explanation prose keeps the body size. Authored emphasis
 in vocabulary, examples and transcript speakers remains distinct. Each reveal has one labeled
-native button, with no nested chip or blurred overlay.
+native button covering the actual blurred answer text, with a single light border and no visible
+label/icon or nested control. Hover/focus strengthen the border without removing blur; activation
+reveals once and hides the control. Answer text retains its reserved space/inset to avoid a reveal
+layout jump, and print shows ordinary unblurred text. Descriptive accessible names, independent
+aria-hidden answers and keyboard focus transfer remain.
+
+The hero title scales to 45px with its existing emoji at approximately 57px; phones use 32px text
+and a proportional 40.5px icon. A flexible first-line alignment lets long titles wrap beside the
+icon rather than collide with it. Section 6 uses ordinary h2/body styling, retaining its existing
+conditional-rendering contract. Only the transcript disclosure has a connected light border:
+summary is its header and the expanded transcript sits inside with a quiet separator. The answer
+key keeps its own existing disclosure styling.
 Vocabulary uses balanced desktop columns and stacked narrow-screen rows. Explicit table roles,
 column-header associations and English target annotations remain; mobile field labels are visual
 duplicates excluded from assistive text. Teacher-only content remains absent from the whole document.
@@ -285,3 +296,10 @@ the generated excerpt's shorter copy and larger type were explicitly accounted f
 section/subheading gap was fixed and recaptured. The project-root `design-qa.md` records the passing
 visual gate, focused checks and limitations; screenshots and comparison images are retained in
 `D:/tmp/esl-33-selected-design/`.
+
+The four approved annotation refinements on 7 October 2026 retain that selected design while
+replacing the visible Reveal text with the blurred-answer control, standardizing section 6,
+enlarging the responsive hero and connecting the transcript spoiler frame. Full desktop/phone
+captures and closed/hover/focus/revealed, long-answer, print-style and native transcript checks are
+retained in `D:/tmp/esl-33-annotations/`. The existing `design-qa.md` preserves the earlier history
+and records this bounded delta's passing comparison and 40-test evidence.
