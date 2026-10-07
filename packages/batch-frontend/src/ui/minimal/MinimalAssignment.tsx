@@ -112,7 +112,6 @@ import {
   type WorkflowStage,
   type WorkflowStageStatus,
 } from './MinimalAssignment.stages';
-import { TranscriptHistory } from './MinimalAssignment.transcript-history';
 import { TranscriptReviewResult } from './MinimalAssignment.transcript-result';
 import './MinimalAssignment.css';
 
@@ -3131,17 +3130,6 @@ export const MinimalAssignment: React.FC = () => {
             onRetryLearners={() => void loadStudentOptions()}
             onStartNew={() => void commitNewAssignment(source.selectedStudentId)}
             onChangeAssignment={handleStartNewAssignmentWithSessionReset}
-          />
-          <TranscriptHistory
-            studentNames={source.studentOptions}
-            onOpen={(id) => {
-              void openAssignmentSession(id).then((opened) => {
-                if (opened.ok) {
-                  setEntryView('summary');
-                  setActiveStep(opened.destination);
-                }
-              });
-            }}
           />
         </div>
 

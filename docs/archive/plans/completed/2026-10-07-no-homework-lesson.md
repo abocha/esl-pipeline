@@ -5,10 +5,10 @@
 - Audience: implementation agents and maintainer.
 - Authority Level: approved plan-backed execution contract.
 - Owner: founder-maintainer + implementation agents.
-- Status: `active`.
-- Last Verified Against: 2026-10-08 local implementation and focused validation from c3b33af166796a683176208d00ac5bb1528d3289.
-- Exit Trigger: archive after the authorized implementation PR merges.
-- Current Focus: local implementation and review complete; commit/push/PR handoff authorized 2026-10-08, then stop without CI monitoring.
+- Status: `completed`.
+- Last Verified Against: 2026-10-07 merged PR #357 at main fa3673dcb5b1d83cf07354fcc6755614d9eb8c9d (v20.0.0).
+- Exit Trigger: satisfied; implementation PR #357 merged.
+- Current Focus: historical implementation evidence; UI polish continues separately in ESL-35.
 - Execution: [ESL-34](https://linear.app/abocha/issue/ESL-34/implement-saved-no-homework-lesson-completion-and-same-source-homework), synchronized to GitHub #356.
 
 Implement the approved corrected design from [ABO-34](https://linear.app/abocha/issue/ABO-34/design-transcript-only-lesson-completion-without-homework) and [full handoff](https://linear.app/abocha/document/no-homework-for-this-lesson-design-and-implementation-handoff-351d44f3c85c).
