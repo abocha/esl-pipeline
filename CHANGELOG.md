@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [19.1.0] - 2026-10-07
+
+### Changed
+
+- Automated release from PR #355: feat(handout): polish learner layout, cues and Lucide controls (https://github.com/abocha/esl-pipeline/pull/355)
+
 ## [19.0.0] - 2026-10-06
 
 ### Changed
