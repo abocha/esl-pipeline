@@ -242,3 +242,85 @@ data/generation/renderer-identity contract changed. No push, PR, merge or deploy
 - [x] Full-copy/paired/state evidence inspected and focused checks passed.
 
 No P3 follow-up is needed for these approved annotations.
+
+## Approved stacked-field and shared-disclosure delta after 305cf3b9
+
+final result: passed
+
+**Findings and target**
+
+No actionable P0/P1/P2 mismatch remains. The maintainer approved consistently stacked Corrected
+and Explanation labels at every width, plus the transcript's connected frame on the Answer Key.
+The selected option-3 design and all other annotations remain the visual authority. This is a
+bounded implementation delta, with no new ideation, imagery or product infrastructure.
+
+Source visual truth: `D:/tmp/esl-33-stacked-fields/before.html`, the retained 305cf3b9 complete
+document. Implementation: `http://127.0.0.1:5175/polish.html`, also saved as `after.html` in the same
+evidence directory. The full lesson, theme and interaction states match for the final comparisons.
+
+**Captures and comparison history**
+
+- CSS viewports: desktop 1280 × 1000 and phone 390 × 900, DPR 1.100000023841858. Raw viewport
+  screenshots are 1408 × 1100 and 429 × 990. They were normalized to CSS size and stitched using
+  measured scroll offsets; raw parts and region metadata remain in the evidence directory.
+- Full baseline: `desktop-before-full.png` (1280 × 10208), `phone-before-full.png` (390 × 14383).
+  Full implementation: `desktop-after-full.png` (1280 × 10365), `phone-after-full.png`
+  (390 × 14670). Both disclosures are open and all grammar fields closed. The full composition
+  pairs show the continuous document and the approved additional field/frame space.
+- A first baseline capture had mismatched visible answer states. It was rejected, recaptured in
+  explicit screen media with verified closed answers, and the comparison pairs regenerated.
+  `baseline-state.json` records blur/aria-hidden and disclosure states. This was evidence repair,
+  not a product design fix; no substantive fix was needed after the matching-state comparison.
+- Source and implementation were inspected together in desktop/phone grammar pairs, transcript
+  pairs, Answer Key head/middle/closed pairs and sample pairs. Full composition supports hierarchy;
+  focused regions show label placement, text wrapping and the connected frame at readable scale.
+- `desktop-grammar-state-pair.png`, `phone-grammar-state-pair.png`, `desktop-long-state-pair.png`
+  and `phone-long-state-pair.png` compare actual closed and revealed states. Closed answers remain
+  unreadable; revealed answers keep the same inset and line wrapping. The last keyboard-revealed
+  answer retains the existing focus outline, not a permanent control border.
+
+**Required fidelity surfaces**
+
+- Fonts/typography: existing family, 400/600/700 weights, body size, cues, hero sizes, section
+  markers and supporting headings remain. Corrected and Explanation consistently occupy a full
+  label row above their value; Wrong remains the introductory sentence. No clipping/truncation.
+- Spacing/layout: one grid rule gives both fields the same 6px gap. Their targets use the full
+  available list width (597px desktop, 320.38px phone). The 8px/12px text inset remains unchanged
+  before/after activation. Four normal fields retain identical widths/heights; the long probe
+  retains 597px × 290.11px desktop and 320.38px × 553.89px phone. Page positions differ by less
+  than 0.001px in readouts after focus scrolling; no layout shift or horizontal overflow occurs.
+  Shared disclosure content uses the existing 16px side inset. Narrower answer prose is an approved
+  frame adaptation; nested answer groups and the complete sample stay readable inside it.
+- Colors/tokens: the existing light border, quiet open separator, hover wash and blue focus styling
+  are reused. Both disclosures have one outer border, a borderless closed summary, a bottom-only
+  open summary separator and borderless content. No double frame or new surface palette.
+- Image/assets: existing emoji/library icons and their scale remain; no assets were added or replaced.
+- Copy/content: complete article text matches exactly (including hidden answers and expanded
+  disclosure content): 12,752 characters, recorded in `copy-checks.json`. Distinct transcript and
+  Answer Key labels, all cue markup/escaping and original assignment input remain intact.
+
+**Focused evidence and limits**
+
+Native Enter/Space revealed all four fields independently at both widths, with aria-hidden removal,
+focus transfer and hidden controls. Click revealed the long explanation while other fields stayed
+blurred. Both disclosures were opened/closed with native Enter. `geometry-checks.json` and
+`long-checks.json` preserve measurements and states. Print media shows no blur, hidden controls and
+zero text inset; this is a style check, not a full print audit. Browser error log was empty.
+
+`pnpm --filter @esl-pipeline/learner-handout test:unit` passed 40 tests across two files; static
+build/fixture emission passed. Existing accessibility, independent one-way reveal, cue escaping,
+input preservation, interrupted/reduced-motion disclosure and audio lifecycle tests were reused.
+No component state or handler changed. Focused lint/format/diff and docs freshness checks are
+recorded in the final ESL-33 evidence. Earlier fixture-source/other-engine/screen-reader/audio and
+hosted/production limits still apply. No broad gate, paid-provider call, push, PR, merge or deploy.
+
+**Implementation checklist**
+
+- [x] Both label rows and full-width targets use identical deliberate gap/inset rules.
+- [x] Closed/revealed short and long geometry/wrapping are invariant at desktop and phone widths.
+- [x] Single blurred targets and existing interaction/accessibility/print behavior remain.
+- [x] Transcript and Answer Key share one presentation class with no duplicated styling.
+- [x] Native closed/open frames, nested answers and sample are readable without double borders.
+- [x] Matching-state source/implementation comparisons passed; complete copy and selected design retained.
+
+No P3 follow-up is required for this approved delta.

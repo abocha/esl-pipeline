@@ -239,7 +239,7 @@ comparison titles sit inside the shared pale-blue surface and align with its con
 has a darker pale-blue heading strip, with one quiet divider between columns. Grammar forms use
 a blue left rule spanning heading, formula and examples on white, with a consistent inset.
 Vocabulary has light row separators without cell grids/fills. Text remains left-aligned, with one
-consistent list indent and no extra disclosure/sample inset. Phones use 16px side gutters and
+consistent list indent. Phones use 16px side gutters and
 stack comparisons/vocabulary, changing the comparison divider to a horizontal rule. Compact
 section/subsection spacing and stronger topic headings carry the hierarchy; selective goal/final-task
 surfaces retain mission emphasis. Listening, transcript, practice, answers and sample remain quiet.
@@ -248,7 +248,9 @@ use 400-weight body prose, 600-weight field labels/subheadings, and 700-weight m
 Part numbers and titles share size/weight; explanation prose keeps the body size. Authored emphasis
 in vocabulary, examples and transcript speakers remains distinct. Each reveal has one labeled
 native button covering the actual blurred answer text, with a single light border and no visible
-label/icon or nested control. Hover/focus strengthen the border without removing blur; activation
+label/icon or nested control. Corrected and Explanation labels always sit on their own line,
+with an identical 6px gap above the full-width answer area and the same 8px/12px text inset.
+Hover/focus strengthen the border without removing blur; activation
 reveals once and hides the control. Answer text retains its reserved space/inset to avoid a reveal
 layout jump, and print shows ordinary unblurred text. Descriptive accessible names, independent
 aria-hidden answers and keyboard focus transfer remain.
@@ -256,9 +258,9 @@ aria-hidden answers and keyboard focus transfer remain.
 The hero title scales to 45px with its existing emoji at approximately 57px; phones use 32px text
 and a proportional 40.5px icon. A flexible first-line alignment lets long titles wrap beside the
 icon rather than collide with it. Section 6 uses ordinary h2/body styling, retaining its existing
-conditional-rendering contract. Only the transcript disclosure has a connected light border:
-summary is its header and the expanded transcript sits inside with a quiet separator. The answer
-key keeps its own existing disclosure styling.
+conditional-rendering contract. Transcript and Answer Key disclosures share one connected light
+border: summary is the header and expanded content sits inside with a quiet separator and 16px
+side inset. Answer groups and the sample remain within the same frame, without nested borders.
 Vocabulary uses balanced desktop columns and stacked narrow-screen rows. Explicit table roles,
 column-header associations and English target annotations remain; mobile field labels are visual
 duplicates excluded from assistive text. Teacher-only content remains absent from the whole document.
@@ -303,3 +305,10 @@ enlarging the responsive hero and connecting the transcript spoiler frame. Full 
 captures and closed/hover/focus/revealed, long-answer, print-style and native transcript checks are
 retained in `D:/tmp/esl-33-annotations/`. The existing `design-qa.md` preserves the earlier history
 and records this bounded delta's passing comparison and 40-test evidence.
+
+The approved stacked-field/shared-disclosure follow-up on 7 October 2026 retains the same content
+and design. Desktop/phone closed and fully revealed fields have matching dimensions, padding and
+wrapping, including a separate long-answer probe. Transcript and Answer Key closed/open states,
+nested answer groups and the sample were inspected. The complete article text matches the retained
+305cf3b9 document. Evidence is in `D:/tmp/esl-33-stacked-fields/`; `design-qa.md` records the scoped
+passing comparison. The existing 40-test interaction suite passes without new state/handler changes.
