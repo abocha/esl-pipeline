@@ -170,8 +170,8 @@ ESL-21 string-renderer suite also passed without changing the snapshot, pinned h
 
 The html-publisher adapter passes study audio, pronunciation primary/item clips and preview state
 explicitly. Structured primary URLs take precedence over the separate URL fallback. h2/h3 preset
-colors remain accepted hex presentation inputs; the neutral document layout no longer applies
-decorative heading accents. Broader legacy theme and feature options are retired. Preview missing-audio placeholders say "Audio track generating...";
+colors remain accepted hex presentation inputs; heading markers use the shared blue palette rather
+than those theme colors. Broader legacy theme and feature options are retired. Preview missing-audio placeholders say "Audio track generating...";
 publication unavailable states and disabled item controls remain explicit. Teacher’s Follow-up Plan is removed from learner output; both teacher follow-up and rationale stay
 in typed teacher data. Static/Vite fixtures use the separate
 structured mission fixture (including learner/teacher rationale); the ESL-20 legacy fixture,
@@ -230,14 +230,20 @@ Blue bordered cues are atomic inline boxes: short endings stay together while lo
 Directly adjacent parentheses around an explicitly authored cue share its inline group but retain
 ordinary text styling. Long grouped cues still wrap; plain parenthetical prose is untouched.
 
-The shared layout uses one continuous neutral canvas without an outer frame, section bands,
-mission panels, teaching-group rules or vocabulary grids/fills. Header, section/subsection headings,
+The shared layout uses one continuous white canvas without an outer frame or filled section bands.
+Main sections have a blue vertical accent beside the heading and a thin blue underline across its
+full content width. Header, section/subsection headings,
 prose, transcript, practice, mission and answers share a centered 72ch reading column within a
 1040px outer maximum. Comparisons and vocabulary expand symmetrically around the same axis;
-comparison-group headings align with the reading column. Text remains left-aligned, with one
+comparison titles sit inside the shared pale-blue surface and align with its contents. Each column
+has a darker pale-blue heading strip, with one quiet divider between columns. Grammar forms use
+a blue left rule spanning heading, formula and examples on white, with a consistent inset.
+Vocabulary has light row separators without cell grids/fills. Text remains left-aligned, with one
 consistent list indent and no extra disclosure/sample inset. Phones use 16px side gutters and
-stack comparisons/vocabulary. Section spacing, stronger topic headings and close pattern/example
-groups carry the hierarchy; goal/task typography retains mission emphasis. Practice and answers
+stack comparisons/vocabulary, changing the comparison divider to a horizontal rule. Compact
+section/subsection spacing and stronger topic headings carry the hierarchy; selective goal/final-task
+surfaces retain mission emphasis. Listening, transcript, practice, answers and sample remain quiet.
+Practice and answers
 use 400-weight body prose, 600-weight field labels/subheadings, and 700-weight main headings.
 Part numbers and titles share size/weight; explanation prose keeps the body size. Authored emphasis
 in vocabulary, examples and transcript speakers remains distinct. Each reveal has one labeled
@@ -270,3 +276,12 @@ The 400/600/700 hierarchy, pale-blue bordered cues, native disclosure/reveal con
 and audio error/Retry feedback remain. Focused local evidence and screenshot comparison slices
 are retained in `D:/tmp/esl-33-reading-document/`. This delta changed only CSS and owning docs;
 the earlier fixture-source and validation limitations still apply.
+
+The maintainer-selected Product Design revision on 7 October 2026 supersedes the stripped
+presentation above with restrained section markers, grammar left rules, shared comparison surfaces
+and vocabulary separators. The full lesson remains unchanged. In-app browser captures at 1280px
+and 390px were compared together with the selected reference after density/body-scale normalization;
+the generated excerpt's shorter copy and larger type were explicitly accounted for. One excessive
+section/subheading gap was fixed and recaptured. The project-root `design-qa.md` records the passing
+visual gate, focused checks and limitations; screenshots and comparison images are retained in
+`D:/tmp/esl-33-selected-design/`.
