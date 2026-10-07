@@ -6,7 +6,7 @@ import grammarFixture from '../../contracts/tests/assignment-grammar-fixture.jso
 };
 // Intentionally import compiled JavaScript: this path has no Vite involvement.
 import { renderLearnerHandoutDocument } from '../dist/server.js';
-import { createFixture, pronunciationModes } from '../preview/fixtures.js';
+import { createFixture, createPolishFixture, pronunciationModes } from '../preview/fixtures.js';
 
 const output = new URL('../../../out/learner-handout/', import.meta.url);
 mkdirSync(output, { recursive: true });
@@ -30,5 +30,10 @@ writeFileSync(
 copyFileSync(
   new URL('../public/fixture-tone.wav', import.meta.url),
   new URL('fixture-tone.wav', output),
+);
+writeFileSync(
+  new URL('polish.html', output),
+  renderLearnerHandoutDocument(createPolishFixture()),
+  'utf8',
 );
 console.log(`Standalone documents: ${fileURLToPath(output)}`);

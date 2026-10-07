@@ -62,8 +62,10 @@ fixture, snapshot and pinned canonical hash remain the unchanged compatibility g
 Fresh v8 generation requires `metadata.icon`: one suitable LLM-authored emoji. The strict provider
 schema requires the nonempty string; post-provider admission checks a bounded emoji sequence,
 including ZWJ families, modifiers, flags and keycaps. Runtime reads permit absence without adding
-fields. The hero and initial/resumed publication/share metadata use the authored icon, with 🎧 only
-as a display fallback. There is no backfill, historical upgrade, rewrite or republication.
+fields. The hero and initial/resumed publication/share metadata retain the authored icon, with 🎧
+as the display fallback. The hero is the exception to colored Lucide icons for static handout headings
+and semantic roles. Rendering does not change authored metadata or lesson text.
+There is no backfill, historical upgrade, rewrite or republication.
 
 Content fields remain strings. Paired single backticks mark nonempty, single-line linguistic
 fragments: `will`, `-s`, or `subject + will + base verb`. The renderer escapes both ordinary and
@@ -76,17 +78,30 @@ numeric prefix and supplies one part number. Canonical values stay exact. Derive
 pronunciation projections remove paired delimiters; chunk reconstruction and lexical checks compare
 the derived text without mutating stored strings.
 
+ESL-33 makes grammar `pattern`/legacy `form` presentation consistently cue-styled, with fallback
+chunks for unmarked formulas and separate rows for unmarked semicolon/newline alternatives.
+Explicit cue boundaries are preserved. The general inline convention does not infer cues from
+parentheses. Directly adjacent parentheses around an authored cue stay attached without sharing
+its fill; long cues can still wrap. Fresh instructions require backticks around supplied bracketed lexical hints without
+introducing the tested grammatical choice. Content fields, generation schema v8, stored prompt pins
+and serialization identity remain unchanged. The shipped instruction refinement takes effect only
+through normal explicit template activation; no active revision or frozen package is repinned.
+
 The source starts with Listen first and a bounded instruction; freely available transcript support
 follows audio. Attribution and links remain. Natural sentence practice groups the existing sentence
-and audio in a callout, with no new pedagogy. Internal pronunciation mode stays out of learner text.
+and audio in an emphasized callout, with no new pedagogy. Internal pronunciation mode stays out of learner text.
 Item buttons report Play / Playing… / Replay / Retry, reset on clip switching and ignore stale events.
+Playback failure also shows a concise visible message and a labeled Retry action.
 Native full-track controls retain their existing preload behavior.
 
-Wrong grammar remains visible. Bold Corrected: and Explanation: labels are always visible; each
-following content line is independently blurred and excluded from screen-reader output until its
-native button is activated by pointer or keyboard. Reveal is permanent for the page session. Cheap
-print CSS removes blur. Native disclosures retain the consolidated Answer Key & Sample Mission,
-with packaged opening/closing animation, rapid-toggle cancellation and reduced-motion fallback.
+Wrong grammar remains visible. Decorative Lucide cross, green check and question icons identify
+wrong, corrected/answer and explanation rows, with accessible role labels. Correction and explanation
+text occupies its final layout while blurred and excluded from screen-reader output; an empty native
+button overlays each target until activated by pointer or keyboard. Reveal is independent and permanent
+for the page session, and focus transfers to readable content. Print CSS exposes the content. Transcript
+and Answer Key disclosures share a connected bordered frame, with packaged opening/closing animation,
+rapid-toggle cancellation and reduced-motion fallback. The final section is Answers and Example;
+the Answer Key disclosure name is retained.
 Both `teacherFollowUp` and `teacherRationale` stay in typed teacher data and are absent from complete
 learner HTML bytes, including hidden/serialized output. Ambiguous legacy rationale stays excluded.
 
