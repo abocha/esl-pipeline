@@ -62,9 +62,9 @@ fixture, snapshot and pinned canonical hash remain the unchanged compatibility g
 Fresh v8 generation requires `metadata.icon`: one suitable LLM-authored emoji. The strict provider
 schema requires the nonempty string; post-provider admission checks a bounded emoji sequence,
 including ZWJ families, modifiers, flags and keycaps. Runtime reads permit absence without adding
-fields. Initial/resumed publication and share metadata retain the authored icon and their display
-fallback. The learner handout uses a fixed Lucide book icon for its hero and colored Lucide icons
-for static headings and semantic roles. Rendering does not change authored metadata or lesson text.
+fields. The hero and initial/resumed publication/share metadata retain the authored icon, with 🎧
+as the display fallback. The hero is the exception to colored Lucide icons for static handout headings
+and semantic roles. Rendering does not change authored metadata or lesson text.
 There is no backfill, historical upgrade, rewrite or republication.
 
 Content fields remain strings. Paired single backticks mark nonempty, single-line linguistic

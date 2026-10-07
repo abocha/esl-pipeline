@@ -532,3 +532,20 @@ its focused rerun passed all 31 tests on the same built source. Focused Biome an
 passed. No canonical input fixture changed. Root-owned contract docs/dev-route cleanup were preserved
 and left for the coordinating task's shipping commit. This local handoff makes no hosted-CI,
 release, merge, provider or production/deployment claim.
+
+## Final hero exception and shipping cleanup
+
+The maintainer's final correction retains the LLM-authored Unicode hero emoji, with the existing
+headphones fallback when metadata.icon is absent. All static heading and control icons remain Lucide
+with the selected semantic colors and green checks. Hero sizing and alignment reuse the previously
+selected emoji layout; no new screenshot matrix was needed. Owning docs and the existing hero/input
+preservation regression now record this exception. Static fixture build/re-emission and all 9 focused
+polish tests passed after the restoration. The preceding 31 rendering-test results remain applicable
+to the unchanged headings, controls and rendering contracts.
+
+Shipping cleanup removes retired emoji/icon comparison routes from the tracked fixture server and
+synchronizes the canonical presentation reference. Untracked/ignored temporary files and evidence
+are preserved. The final prompt-template contract check passed all 7 tests. Deployment requires
+explicit canonical homework-template activation after the standard image deployment; the PR records
+the shipped hash, existing-package boundary and paired rollback. Hosted CI and production are not
+local completion evidence.

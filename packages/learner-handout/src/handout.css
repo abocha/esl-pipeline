@@ -73,10 +73,6 @@ h1 {
   font-size: 1.2667em;
   line-height: 1;
   letter-spacing: 0;
-  color: var(--handout-icon-teal);
-}
-.hero-icon svg {
-  display: block;
 }
 :where(h1) > .inline-text {
   min-width: 0;
