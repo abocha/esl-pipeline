@@ -16,26 +16,29 @@ describe('domain/transcript-repository', () => {
 
   it('uses a supplied PostgreSQL client for an insert', async () => {
     const now = new Date('2026-07-10T00:00:00.000Z');
-    const query = vi.fn().mockResolvedValue({
-      rows: [
-        {
-          id: '33333333-3333-4333-8333-333333333333',
-          recording_id: '11111111-1111-4111-8111-111111111111',
-          storage_uri: 'local://transcripts/transcript.txt',
-          working_version: 1,
-          content_hash: 'a'.repeat(64),
-          raw_response_uri: null,
-          mode: 'timeline',
-          model: 'manual-entry',
-          language: 'und',
-          stt_provider: 'manual',
-          fallback_used: false,
-          summary_json: { provider: 'manual', origin: 'tutor_paste' },
-          created_at: now,
-          updated_at: now,
-        },
-      ],
-    });
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            recording_id: '11111111-1111-4111-8111-111111111111',
+            storage_uri: 'local://transcripts/transcript.txt',
+            working_version: 1,
+            content_hash: 'a'.repeat(64),
+            raw_response_uri: null,
+            mode: 'timeline',
+            model: 'manual-entry',
+            language: 'und',
+            stt_provider: 'manual',
+            fallback_used: false,
+            summary_json: { provider: 'manual', origin: 'tutor_paste' },
+            created_at: now,
+            updated_at: now,
+          },
+        ],
+      });
     const client = { query } as unknown as PoolClient;
     const { insertTranscript } = await import('../src/domain/transcript-repository.js');
 
@@ -59,7 +62,8 @@ describe('domain/transcript-repository', () => {
     expect(result.sttProvider).toBe('manual');
     expect(result.workingVersion).toBe(1);
     expect(result.contentHash).toBe('a'.repeat(64));
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[0]?.[0]).toContain('FOR UPDATE OF s');
     expect(mockWithPgClient).not.toHaveBeenCalled();
   });
 
@@ -81,11 +85,17 @@ describe('domain/transcript-repository', () => {
       created_at: now,
       updated_at: now,
     };
-    const query = vi
-      .fn()
-      .mockResolvedValueOnce({ rows: [latestRow] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [latestRow] });
+    let updates = 0;
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.startsWith('SELECT recording_id')) {
+        return { rows: [{ recording_id: latestRow.recording_id }] };
+      }
+      if (sql.includes('UPDATE transcripts')) {
+        return { rows: updates++ === 0 ? [latestRow] : [] };
+      }
+      if (sql.includes('FROM transcripts')) return { rows: [latestRow] };
+      return { rows: [] };
+    });
     mockWithPgClient.mockImplementation(async (callback) =>
       callback({ query } as unknown as PoolClient),
     );
