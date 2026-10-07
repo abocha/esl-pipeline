@@ -17,6 +17,7 @@
 | GET | `/admin/stats` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/admin/users` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/assignment-sessions/:id` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
+| POST | `/assignment-sessions/:id/${command}` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/assignment-sessions/:id/confirm` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/assignment-sessions/:id/learner-context` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | PATCH | `/assignment-sessions/:id/recovery` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |

@@ -41,6 +41,10 @@ function createJob(overrides: Partial<JobStatus> = {}): JobStatus {
 
 function createSession(overrides: Partial<AssignmentSession> = {}): AssignmentSession {
   return {
+    homeworkIntent: 'create',
+    transcriptCompletedAt: null,
+    completionKind: null,
+    transcriptCompletionHistory: [],
     id: 'session-raw-identifier',
     userId: 'user-1',
     studentId: 'student-cora',

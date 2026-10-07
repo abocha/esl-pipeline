@@ -13,6 +13,7 @@ import {
   addStudentPackage,
   adjustStudentCredits,
   applyGeneratedLessonTitleIfPlaceholder,
+  completeElapsedScheduledLessonForHomework,
   createStudentLesson,
   getStudentScheduleBillingSurface,
   hideStudentLessonFollowupReminder,
@@ -29,6 +30,10 @@ import {
   updateBusinessSettings,
 } from '../src/application/teacher-business-dashboard.js';
 import { resolvePrimaryWorkspaceIdForUser } from '../src/application/workspace-context.js';
+import {
+  finishTranscriptAssignmentSessionPersistence,
+  startHomeworkAssignmentSessionPersistence,
+} from '../src/domain/assignment-session-repository.js';
 import { closePgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
@@ -447,6 +452,81 @@ async function countObsoleteGeneratedLessons(ruleId: string): Promise<number> {
 function addDays(days: number): string {
   const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   return date.toISOString();
+}
+
+async function prepareTranscriptOnlyLesson(
+  userId: string,
+  studentId: string,
+  lessonId: string | null,
+) {
+  const recordingId = randomUUID();
+  const transcriptId = randomUUID();
+  const hash = 'a'.repeat(64);
+  const session = await confirmStudentAssignmentSessionForUser(userId, {
+    requestId: randomUUID(),
+    studentId,
+    lessonId,
+  });
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status, audio_topology,
+        source_identity_kind, source_fingerprint_scheme, source_fingerprint)
+       VALUES ($1, 'upload', $2, $3, 12, 'transcribed', 'mixed_recording', 'audio',
+        'prepared-media-sha256-v1', $4)`,
+      [
+        recordingId,
+        studentId,
+        `local://recordings/${recordingId}.mp3`,
+        recordingId.replaceAll('-', '').repeat(2),
+      ],
+    );
+    await client.query(
+      `INSERT INTO transcripts (id, recording_id, storage_uri, working_version, content_hash, stt_provider,
+        mode, model, language, fallback_used, summary_json)
+       VALUES ($1, $2, $3, 1, $4, 'elevenlabs', 'timeline', 'scribe_v2', 'auto', false, $5::jsonb)`,
+      [
+        transcriptId,
+        recordingId,
+        `local://transcripts/${transcriptId}.txt`,
+        hash,
+        JSON.stringify({
+          audioTopology: 'mixed_recording',
+          speakerTracks: { speakers: [{ speaker: 0 }, { speaker: 1 }] },
+          speakerRoleMapping: {
+            version: 'speaker-role-mapping-v1',
+            provenance: 'tutor_confirmed',
+            confidence: null,
+            roles: [
+              { speaker: 0, role: 'teacher' },
+              { speaker: 1, role: 'student' },
+            ],
+            confirmedWorkingVersion: 1,
+            confirmedContentHash: hash,
+          },
+        }),
+      ],
+    );
+  });
+  const attached = await attachAssignmentSourceForUser(userId, session.id, {
+    expectedRevision: session.revision,
+    recordingId,
+    transcriptId,
+  });
+  const saved = await updateAssignmentSessionRecoveryForUser(userId, session.id, {
+    expectedRevision: attached.session.revision,
+    patch: { homeworkIntent: 'none' },
+  });
+  return {
+    session: saved,
+    request: {
+      expectedRevision: saved.revision,
+      lessonId,
+      recordingId,
+      transcriptId,
+      transcriptWorkingVersion: 1,
+      transcriptHash: hash,
+    },
+  };
 }
 
 describeIfPg('application/student-schedule-billing', () => {
@@ -1481,6 +1561,186 @@ describeIfPg('application/student-schedule-billing', () => {
       expect(result.rows[0]?.completed_by).toBe(userId);
     });
   });
+
+  it('serializes concurrent session linking and lesson completion to one active debit', async () => {
+    const { studentId, userId } = await seedStudent();
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+    });
+    const sessions = await Promise.all([
+      confirmStudentAssignmentSessionForUser(userId, {
+        requestId: randomUUID(),
+        studentId,
+        lessonId,
+      }),
+      confirmStudentAssignmentSessionForUser(userId, {
+        requestId: randomUUID(),
+        studentId,
+        lessonId,
+      }),
+      completeElapsedScheduledLessonForHomework(DEFAULT_WORKSPACE_ID, studentId, lessonId, userId),
+      completeElapsedScheduledLessonForHomework(DEFAULT_WORKSPACE_ID, studentId, lessonId, userId),
+    ]);
+    const session = sessions[0];
+    // The opt-out saves after the same billing boundary as ordinary homework.
+    await updateAssignmentSessionRecoveryForUser(userId, session.id, {
+      expectedRevision: session.revision,
+      patch: { homeworkIntent: 'none' },
+    });
+    await completeElapsedScheduledLessonForHomework(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      lessonId,
+      userId,
+    );
+    const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+    expect(surface?.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
+      status: 'completed',
+      consumesCredit: true,
+    });
+    expect(
+      surface?.creditEvents.filter((event) => event.eventType === 'credit_consumed'),
+    ).toHaveLength(1);
+    expect(surface?.creditSummary.consumed).toBe(1);
+  });
+
+  it('suppresses only current finished no-homework follow-ups on both surfaces and keeps real homework precedence', async () => {
+    const { studentId, userId } = await seedStudent();
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+    });
+    const prepared = await prepareTranscriptOnlyLesson(userId, studentId, lessonId);
+    const surfaces = async () => ({
+      student: await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId),
+      business: await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
+        from: '2000-01-01',
+        to: '2000-01-01',
+      }),
+    });
+    const assertFollowup = (surface: Awaited<ReturnType<typeof surfaces>>, present: boolean) => {
+      for (const value of [surface.student, surface.business]) {
+        expect(
+          value?.reminders.some(
+            (item) => item.type === 'lesson_followup' && item.lessonId === lessonId,
+          ),
+        ).toBe(present);
+      }
+    };
+    assertFollowup(await surfaces(), true);
+    const finished = await finishTranscriptAssignmentSessionPersistence({
+      id: prepared.session.id,
+      userId,
+      request: prepared.request,
+      lessonMemory: {
+        schemaVersion: 'lesson-memory-v1',
+        provider: 'openai',
+        model: 'deterministic-fixture',
+        requestedAt: new Date(),
+      },
+    });
+    const completed = await surfaces();
+    assertFollowup(completed, false);
+    for (const surface of [completed.student, completed.business]) {
+      expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework).toMatchObject({
+        status: 'not_planned',
+        transcriptResultSessionId: prepared.session.id,
+        assignmentSessionId: null,
+        promptPackageId: null,
+        draftId: null,
+        jobId: null,
+        homeworkMemoryEntryId: null,
+        htmlUrl: null,
+      });
+      expect(surface?.reminders.some((item) => item.type === 'no_next_lesson')).toBe(true);
+    }
+    expect(
+      completed.student?.creditEvents.filter((event) => event.eventType === 'credit_consumed'),
+    ).toHaveLength(1);
+    const promoted = await startHomeworkAssignmentSessionPersistence({
+      id: prepared.session.id,
+      userId,
+      expectedRevision: finished.session.revision,
+    });
+    assertFollowup(await surfaces(), true);
+    const reselected = await updateAssignmentSessionRecoveryForUser(userId, promoted.id, {
+      expectedRevision: promoted.revision,
+      patch: { homeworkIntent: 'none' },
+    });
+    expect(reselected.transcriptCompletedAt).toBeNull();
+    expect(reselected.transcriptCompletionHistory).toEqual(
+      finished.session.transcriptCompletionHistory,
+    );
+    assertFollowup(await surfaces(), true);
+    await finishTranscriptAssignmentSessionPersistence({
+      id: reselected.id,
+      userId,
+      request: { ...prepared.request, expectedRevision: reselected.revision },
+      lessonMemory: {
+        schemaVersion: 'lesson-memory-v1',
+        provider: 'openai',
+        model: 'deterministic-fixture',
+        requestedAt: new Date(),
+      },
+    });
+    await confirmStudentAssignmentSessionForUser(userId, {
+      requestId: randomUUID(),
+      studentId,
+      lessonId,
+    });
+    const withPlanned = await surfaces();
+    assertFollowup(withPlanned, true);
+    for (const surface of [withPlanned.student, withPlanned.business]) {
+      expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework).toMatchObject({
+        status: 'session_in_progress',
+        transcriptResultSessionId: null,
+      });
+    }
+    await insertSucceededHomeworkJob({ studentId, lessonId });
+    const published = await surfaces();
+    assertFollowup(published, false);
+    for (const surface of [published.student, published.business]) {
+      expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
+        'published',
+      );
+    }
+  });
+
+  it.each([
+    { status: 'completed' as const, startsAt: '2000-01-01T10:00:00.000Z' },
+    { status: 'canceled' as const, startsAt: '2000-01-01T10:00:00.000Z' },
+    { status: 'no_show' as const, startsAt: '2000-01-01T10:00:00.000Z' },
+    { status: 'scheduled' as const, startsAt: '2099-01-01T10:00:00.000Z' },
+  ])(
+    'preserves the ledger for $status/$startsAt when linking and saving no homework',
+    async ({ status, startsAt }) => {
+      const { studentId, userId } = await seedStudent();
+      const lessonId = await insertBusinessLesson({
+        studentId,
+        startsAt,
+        status,
+        consumesCredit: false,
+      });
+      const session = await confirmStudentAssignmentSessionForUser(userId, {
+        requestId: randomUUID(),
+        studentId,
+        lessonId,
+      });
+      await updateAssignmentSessionRecoveryForUser(userId, session.id, {
+        expectedRevision: session.revision,
+        patch: { homeworkIntent: 'none' },
+      });
+      const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+      expect(surface?.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
+        status,
+        consumesCredit: false,
+      });
+      expect(
+        surface?.creditEvents.filter((event) => event.eventType === 'credit_consumed'),
+      ).toHaveLength(0);
+    },
+  );
 
   it('self-heals the default workspace for baseline-created students without workspace data', async () => {
     const { studentId, userId } = await seedStudentWithoutWorkspace();

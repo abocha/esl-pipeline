@@ -14,6 +14,10 @@ import {
 
 function session(overrides: Partial<AssignmentSession> = {}): AssignmentSession {
   return {
+    homeworkIntent: 'create',
+    transcriptCompletedAt: null,
+    completionKind: null,
+    transcriptCompletionHistory: [],
     id: 'session-1',
     userId: 'user-1',
     studentId: 'student-1',

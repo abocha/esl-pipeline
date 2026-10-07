@@ -98,6 +98,19 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Database changes belong in versioned migrations.
 - Runtime legacy schema patching is emergency-only and must not become the normal change path.
 - Durable workflow state, action history, and lineage are backend responsibilities, not frontend inventions.
+- Assignment completion has two backend-owned outcomes: confirmed Share for homework, or saved
+  `homeworkIntent = 'none'` with a current `transcriptCompletedAt` marker for transcript-only lessons.
+  Only explicit finish sets the marker after exact-source confirmation; choice saves remain
+  unfinished. Immutable source-bound finish history is separate and never confers current completion.
+  Promotion to homework clears the current marker, retains the same canonical owner and finish
+  evidence, and requires another explicit finish if no-homework is reselected before downstream work.
+  Saved none intent rejects ordinary confirmation and session-bound generation under the same locks
+  as mutation. Completed transcript sources are read-only until explicit promotion.
+- Transcript-only completion preserves canonical lesson-memory, snapshot and eligible initial
+  enrichment processing. Durable delivery reconciliation covers pending extraction and a ready
+  extraction with a missing source-linked snapshot obligation; repair reuses extraction and respects
+  terminal intent states. Lesson linking retains the existing elapsed-lesson credit boundary;
+  transcript finish and promotion have no billing effects.
 
 ### Security and config
 

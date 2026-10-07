@@ -112,6 +112,9 @@
   display: grid;
   gap: 0.1rem;
 }
+[data-status="skipped"] .assignment-workflow__step-copy {
+  color: var(--text-secondary);
+}
 .assignment-workflow__step-copy small {
   font-size: var(--cs-text-meta);
   font-weight: 600;

@@ -25,6 +25,7 @@ export interface RecentAssignmentItem {
   statusLabel: string;
   statusTone: 'success' | 'progress' | 'warning' | 'neutral';
   actionLabel:
+    | 'View transcript'
     | 'Continue assignment'
     | 'Review progress'
     | 'Review assignment'
@@ -103,6 +104,16 @@ export function getJobRecentAssignmentPresentation(
 export function getSessionRecentAssignmentPresentation(
   session: AssignmentSession,
 ): RecentAssignmentPresentation {
+  if (session.homeworkIntent === 'none' && session.transcriptCompletedAt)
+    return {
+      state: 'published',
+      activityLabel: 'Transcript confirmed',
+      outcomeLabel: 'No homework planned',
+      statusLabel: 'Finished',
+      statusTone: 'success',
+      actionLabel: 'View transcript',
+      destination: 'review',
+    };
   const destination = deriveResumeDestination(session);
   if (typeof destination !== 'string') {
     throw new Error('Completed Share sessions must be presented through their linked job');

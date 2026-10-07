@@ -8,6 +8,7 @@ describeHttpServerIntegrationSuite(
     assignmentSessionsModule,
     assignmentLearnerContextModule,
     confirmAssignmentSessionStepModule,
+    finishTranscriptAssignmentSessionModule,
     publishAssignmentCorrectionModule,
     shareAssignmentSessionModule,
     expect,
@@ -15,6 +16,10 @@ describeHttpServerIntegrationSuite(
     vi,
   }) => {
     const session = {
+      homeworkIntent: 'create' as const,
+      transcriptCompletedAt: null,
+      transcriptCompletionHistory: [],
+      completionKind: null,
       id: '11111111-1111-4111-8111-111111111111',
       userId: 'test-user-id',
       studentId: '22222222-2222-4222-8222-222222222222',
@@ -46,6 +51,159 @@ describeHttpServerIntegrationSuite(
       createdAt: '2026-07-19T00:00:00.000Z',
       updatedAt: '2026-07-19T00:00:00.000Z',
     };
+
+    it('paginates older transcript history with a fixed limit and offset while keeping active admission', async () => {
+      const older = {
+        ...session,
+        homeworkIntent: 'none' as const,
+        completionKind: 'transcript_only' as const,
+        transcriptCompletedAt: '2026-07-18T00:00:00.000Z',
+      };
+      const list = vi
+        .spyOn(assignmentSessionsModule, 'listAssignmentSessionsForUserDto')
+        .mockClear()
+        .mockResolvedValue({ sessions: [older], total: 61, limit: 20 });
+      const page = await app.inject({
+        method: 'GET',
+        url: '/user/assignment-sessions?scope=history&limit=20&offset=40',
+      });
+      expect(page.statusCode).toBe(200);
+      expect(page.json()).toMatchObject({
+        sessions: [{ id: session.id, completionKind: 'transcript_only' }],
+        total: 61,
+        limit: 20,
+      });
+      expect(list).toHaveBeenCalledWith('test-user-id', 20, 'history', 40);
+      list.mockClear();
+      for (const query of [
+        'scope=history&limit=60&offset=40',
+        'scope=history&offset=-1',
+        'scope=active&offset=20',
+        'offset=20',
+      ]) {
+        const invalid = await app.inject({
+          method: 'GET',
+          url: `/user/assignment-sessions?${query}`,
+        });
+        expect(invalid.statusCode).toBe(400);
+      }
+      expect(list).not.toHaveBeenCalled();
+      const active = await app.inject({ method: 'GET', url: '/user/assignment-sessions' });
+      expect(active.statusCode).toBe(200);
+      expect(list).toHaveBeenCalledWith('test-user-id', 20, 'active', 0);
+    });
+
+    it('transports exact reviewed finish and promotion commands, and saved intent', async () => {
+      const finish = vi
+        .spyOn(finishTranscriptAssignmentSessionModule, 'finishTranscriptAssignmentSession')
+        .mockResolvedValue({ session });
+      const start = vi
+        .spyOn(finishTranscriptAssignmentSessionModule, 'startHomeworkAssignmentSession')
+        .mockResolvedValue({ session });
+      const recovery = vi
+        .spyOn(assignmentSessionsModule, 'updateAssignmentSessionRecoveryForUser')
+        .mockResolvedValue(session);
+      const reviewed = {
+        expectedRevision: 3,
+        lessonId: null,
+        recordingId: '33333333-3333-4333-8333-333333333333',
+        transcriptId: '44444444-4444-4444-8444-444444444444',
+        transcriptWorkingVersion: 2,
+        transcriptHash: 'a'.repeat(64),
+      };
+      const result = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/finish-transcript`,
+        payload: reviewed,
+      });
+      expect(result.statusCode).toBe(200);
+      expect(finish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'test-user-id',
+          sessionId: session.id,
+          request: reviewed,
+        }),
+      );
+      const promoted = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/start-homework`,
+        payload: { expectedRevision: 5 },
+      });
+      expect(promoted.statusCode).toBe(200);
+      expect(start).toHaveBeenCalledWith({
+        userId: 'test-user-id',
+        sessionId: session.id,
+        request: { expectedRevision: 5 },
+      });
+      const saved = await app.inject({
+        method: 'PATCH',
+        url: `/assignment-sessions/${session.id}/recovery`,
+        payload: { expectedRevision: 2, patch: { homeworkIntent: 'none' } },
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(recovery).toHaveBeenCalledWith('test-user-id', session.id, {
+        expectedRevision: 2,
+        patch: { homeworkIntent: 'none' },
+      });
+    });
+
+    it('finish rejects incomplete review payload and returns current session on operation conflict', async () => {
+      const finish = vi
+        .spyOn(finishTranscriptAssignmentSessionModule, 'finishTranscriptAssignmentSession')
+        .mockClear();
+      const incomplete = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/finish-transcript`,
+        payload: { expectedRevision: 3 },
+      });
+      expect(incomplete.statusCode).toBe(400);
+      expect(finish).not.toHaveBeenCalled();
+      finish.mockRejectedValue(
+        Object.assign(new Error('stale finish'), {
+          code: 'ASSIGNMENT_SESSION_REVISION_CONFLICT',
+          session,
+        }),
+      );
+      const conflict = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/finish-transcript`,
+        payload: {
+          expectedRevision: 3,
+          lessonId: null,
+          recordingId: '33333333-3333-4333-8333-333333333333',
+          transcriptId: '44444444-4444-4444-8444-444444444444',
+          transcriptWorkingVersion: 2,
+          transcriptHash: 'a'.repeat(64),
+        },
+      });
+      expect(conflict.statusCode).toBe(409);
+      expect(conflict.json()).toMatchObject({
+        code: 'assignment_session_revision_conflict',
+        session: { id: session.id },
+      });
+    });
+
+    it('ordinary confirmation returns intent conflict before allowing callers to proceed', async () => {
+      vi.spyOn(
+        confirmAssignmentSessionStepModule,
+        'confirmAssignmentSessionStep',
+      ).mockRejectedValue(
+        Object.assign(new Error('none'), { code: 'ASSIGNMENT_HOMEWORK_INTENT_CONFLICT' }),
+      );
+      const result = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/confirm`,
+        payload: {
+          step: 'context',
+          expectedRevision: 3,
+          teacherNotes: null,
+          profileRevisionId: null,
+          profileRevisionHash: null,
+        },
+      });
+      expect(result.statusCode).toBe(409);
+      expect(result.json()).toMatchObject({ code: 'assignment_homework_intent_conflict' });
+    });
 
     it('accepts migrated profile revision IDs in context confirmation and recovery', async () => {
       const confirm = vi

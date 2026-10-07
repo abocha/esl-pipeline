@@ -876,6 +876,7 @@ function scheduleBillingSurface() {
         draftId: null,
         jobId: null,
         homeworkMemoryEntryId: null,
+        transcriptResultSessionId: null,
         htmlUrl: null,
         updatedAt: null,
       },

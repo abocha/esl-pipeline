@@ -226,7 +226,7 @@ export async function isPromptPackageSourceCanonical(id: string): Promise<boolea
            SELECT 1 FROM assignment_source_bindings b
            JOIN assignment_sessions s ON s.id = b.assignment_session_id
            WHERE b.assignment_session_id = p.assignment_session_id
-             AND b.binding_role = 'confirmed'
+             AND b.binding_role = 'confirmed' AND s.homework_intent = 'create'
              AND b.recording_id = p.recording_id
              AND b.transcript_id = p.transcript_id
              AND s.confirmed_snapshot #>> '{source,sourceIdentityKind}' = b.source_identity_kind

@@ -80,6 +80,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
 
   const requestedAt = now();
   const isAutomaticHomeworkRefresh = args.params.trigger === 'homework-memory-ready';
+  const isAutomaticRefresh = args.params.trigger !== 'manual-replay';
   const ensureParams = {
     replayKey: args.params.replayKey?.trim(),
     studentId: args.params.studentId,
@@ -89,6 +90,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     model: target.model,
     sourceEntryId,
     reuseReadyHomeworkSource: isAutomaticHomeworkRefresh,
+    reuseReadyLessonSource: args.params.trigger === 'lesson-memory-ready',
     generationNotes: {
       trigger: args.params.trigger,
       sourceEntryId,
@@ -117,7 +119,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     canonicalScopeKey: args.params.studentId,
   });
 
-  if (isAutomaticHomeworkRefresh) {
+  if (isAutomaticRefresh) {
     pending = await snapshots.ensurePending(ensureParams);
     if (pending.outcome === 'already_reconciled') {
       logger.info('Student-memory snapshot refresh requested', {

@@ -234,6 +234,12 @@ export async function createPromptPackage(
       'Assignment session was not found',
     );
   }
+  if (assignmentSession?.homeworkIntent === 'none') {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+      'No homework is planned for this lesson',
+    );
+  }
   if (assignmentSession && (await isHistoricalAssignmentSession(assignmentSession)))
     throw new HistoricalAssignmentReadOnlyError();
   if (assignmentSession && (params.notes !== undefined || params.lessonId !== undefined)) {

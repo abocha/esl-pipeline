@@ -4,6 +4,7 @@ import type { PoolClient } from 'pg';
 import type { SttProviderId } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
+import { lockMutableTranscriptSource } from './completed-transcript-source-guard.js';
 import type { RecordingStatus } from './recording-model.js';
 import { type InsertTranscriptParams, insertTranscript } from './transcript-repository.js';
 
@@ -33,6 +34,7 @@ export async function createQueuedTranscriptionRun(params: {
   client?: PoolClient;
 }): Promise<TranscriptionRun> {
   const write = async (client: PoolClient) => {
+    await lockMutableTranscriptSource(client, params.recordingId);
     // A retry of an uncertain API acknowledgement must converge on the active row.
     const existing = await client.query(
       `SELECT * FROM transcription_runs WHERE recording_id = $1
@@ -59,6 +61,7 @@ export async function createQueuedTranscriptionRun(params: {
     try {
       // Serialize an uncertain enqueue acknowledgement against the parent row;
       // the partial active-run uniqueness then remains a backstop, not the protocol.
+      await lockMutableTranscriptSource(client, params.recordingId);
       await client.query('SELECT id FROM recordings WHERE id = $1 FOR UPDATE', [
         params.recordingId,
       ]);
