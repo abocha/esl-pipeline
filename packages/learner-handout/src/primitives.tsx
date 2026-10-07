@@ -18,7 +18,7 @@ function FieldLabel({ label }: { label: string }) {
   return Icon ? (
     <span className={`field-marker field-marker-${label.toLowerCase()}`} lang="en">
       <span className="field-decoration" aria-hidden="true">
-        <Icon size={22} strokeWidth={2} />
+        <Icon size={22} strokeWidth={2} focusable="false" />
       </span>
       <strong className="field-label sr-only">{label}:</strong>
     </span>
