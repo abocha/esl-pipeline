@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [20.0.0] - 2026-10-07
+
+### Changed
+
+- Automated release from PR #357: feat!: finish lessons without homework and reopen the same source (https://github.com/abocha/esl-pipeline/pull/357)
+
 ## [19.1.0] - 2026-10-07
 
 ### Changed
