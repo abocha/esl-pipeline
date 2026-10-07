@@ -38,7 +38,9 @@ smuggled into the pedagogical learner profile.
 3. The first UI remains single-workspace behavior while the database prepares for future account and
    membership expansion.
 4. Lesson credits are counted as lesson units. Duration is stored separately as lesson metadata.
-5. A credit is consumed only when a teacher marks a lesson `completed` and chargeable.
+5. A credit is consumed when a lesson becomes `completed` and chargeable. Current session linking
+   also completes an eligible elapsed scheduled lesson at Student confirmation/recovery, before
+   transcript finish or homework publication. Abandoning review does not reverse this ledger fact.
 6. Canceled, no-show, trial, or make-up lessons use explicit lesson status plus explicit
    credit-consumption state.
 7. Credit balances may go negative. Negative balance is an urgent operational signal, not a data
@@ -65,7 +67,8 @@ smuggled into the pedagogical learner profile.
     remain factual history.
 17. Elapsed lesson reminders are teacher-confirmed actions. The system may surface a
     `lesson_followup` when a lesson's scheduled end time has passed, but it must not mark the
-    lesson completed or consume credit until the teacher chooses that action.
+    lesson completed or consume credit merely by reading the reminder. Explicit lesson completion
+    or linking that eligible elapsed scheduled lesson to a session performs the current boundary.
 18. Homework created from a schedule follow-up keeps nullable `lesson_id` lineage through
     assignment sessions, prompt packages, drafts, jobs, and homework-memory entries. Schedule
     surfaces may summarize that lineage to show whether homework is not started, in progress,
@@ -127,6 +130,14 @@ The first schedule-to-homework workflow is an in-app operator reminder:
    and `lessonId` context.
 3. The assignment flow preserves the lesson link while prompt packages, drafts, publish jobs, and
    homework-memory extraction proceed through the normal review/publish pipeline.
+4. An explicit transcript-only finish records `not_planned` with a nullable transcript-result
+   session reference and suppresses only missing-homework follow-up on student/business surfaces.
+   A saved checkbox or immutable past finish event is insufficient. Actual homework work takes
+   precedence; promotion restores ordinary progress/reminders with accounting unchanged. Finished
+   transcript-only review does not create a lesson, charge/refund credit or alter payment records.
+5. Concurrent session linking/completion serializes on the shared lesson row before reading status
+   and reconciling the debit. Completed non-credit, future, cancelled/no-show and unlinked cases
+   retain their existing respective ledger state.
 
 ## Related
 

@@ -138,6 +138,7 @@ describe('domain/recording-repository', () => {
       .fn()
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [recordingRow] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [transcriptRow] })
       .mockResolvedValueOnce({ rows: [] });
     mockWithPgClient.mockImplementation(async (fn) => fn({ query }));
@@ -181,6 +182,7 @@ describe('domain/recording-repository', () => {
     expect(query.mock.calls.map(([sql]) => String(sql).trim())).toEqual([
       'BEGIN',
       expect.stringContaining('INSERT INTO recordings'),
+      expect.stringContaining('FOR UPDATE OF s'),
       expect.stringContaining('INSERT INTO transcripts'),
       'COMMIT',
     ]);

@@ -141,6 +141,21 @@ Canonical behavior and current status live in:
 - Source Continue waits for the canonical attachment result, persists a linked lesson through
   ordinary session recovery separately, and confirms the attached recording/transcript through the
   Source confirmation endpoint. Generic recovery never reattaches source IDs.
+- Lesson source offers a saved, default-unchecked native **No homework for this lesson** checkbox.
+  Checked sessions use **Review transcript**, await source text/role/recovery saves and enter
+  **Review & finish** with Teaching context/Create skipped. Review and choice save never confirm
+  Source or claim completion. **Confirm transcript and finish** submits the exact reviewed
+  server version/hash. The result is a read-only transcript with actual lesson/credit status and
+  separate extraction, refresh and initial-enrichment status, without handout/Share controls.
+  **Create homework** explicitly promotes the same owner to Context; reselecting none before
+  downstream work remains unfinished until another finish. Context/prompt/draft/Share work disables
+  opt-out with an explanation. Refresh/resume restores saved intent and completed results. Completed results
+  are discoverable through **Confirmed transcript results** at Student and **View transcript** on
+  linked lesson rows. History uses fixed-size server-offset pages and remains separate from
+  unfinished assignments.
+  Schedule/business **View transcript** uses the nullable result-session reference; only current
+  completed no-homework suppresses its lesson follow-up. Linking an elapsed scheduled lesson can
+  already complete/charge it before transcript review; finish does not introduce a billing action.
 - Prompt and draft recovery is lineage-safe: a generated draft is created against the exact prompt
   returned by that generation operation, prompt/draft IDs recover as a compatible pair, and Create
   navigation plus draft editing stays locked while prompt or draft generation is in flight.

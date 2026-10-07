@@ -11,6 +11,10 @@ const request = {
 
 function createSession(): AssignmentSessionRecord {
   return {
+    homeworkIntent: 'create',
+    transcriptCompletedAt: null,
+    transcriptCompletionHistory: [],
+    homeworkStartedFromRevision: null,
     id: 'session-1',
     userId: 'user-1',
     studentId: 'student-1',

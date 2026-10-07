@@ -69,6 +69,7 @@ interface BusinessLessonRow {
   created_at: Date;
   updated_at: Date;
   homework_status: StudentLessonHomeworkStatus;
+  transcript_result_session_id: string | null;
   homework_assignment_session_id: string | null;
   homework_prompt_package_id: string | null;
   homework_draft_id: string | null;
@@ -132,9 +133,14 @@ const BUSINESS_LESSON_HOMEWORK_SELECT = `
     WHEN lesson_active_job.id IS NOT NULL THEN 'publishing'
     WHEN lesson_assignment_session.draft_id IS NOT NULL THEN 'draft_in_progress'
     WHEN lesson_assignment_session.id IS NOT NULL THEN 'session_in_progress'
+    WHEN lesson_transcript_result.id IS NOT NULL THEN 'not_planned'
     ELSE 'not_started'
   END AS homework_status,
   lesson_assignment_session.id AS homework_assignment_session_id,
+  CASE WHEN lesson_assignment_session.id IS NULL
+    AND lesson_published_job.id IS NULL AND lesson_active_job.id IS NULL
+    AND lesson_homework_memory.id IS NULL THEN lesson_transcript_result.id
+    ELSE NULL END AS transcript_result_session_id,
   COALESCE(
     lesson_homework_memory.prompt_package_id,
     lesson_published_job.prompt_package_id,
@@ -154,7 +160,8 @@ const BUSINESS_LESSON_HOMEWORK_SELECT = `
     lesson_homework_memory.generated_at,
     lesson_published_job.updated_at,
     lesson_active_job.updated_at,
-    lesson_assignment_session.updated_at
+    lesson_assignment_session.updated_at,
+    lesson_transcript_result.updated_at
   ) AS homework_updated_at
 `;
 
@@ -167,6 +174,14 @@ const BUSINESS_LESSON_HOMEWORK_JOINS = `
     ORDER BY updated_at DESC, id DESC
     LIMIT 1
   ) lesson_assignment_session ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT id, updated_at
+    FROM assignment_sessions
+    WHERE lesson_id = student_lessons.id
+      AND homework_intent = 'none' AND transcript_completed_at IS NOT NULL
+    ORDER BY transcript_completed_at DESC, updated_at DESC, id DESC
+    LIMIT 1
+  ) lesson_transcript_result ON TRUE
   LEFT JOIN LATERAL (
     SELECT id, prompt_package_id, draft_id, html_url,
            COALESCE(finished_at, updated_at, created_at) AS updated_at
@@ -955,6 +970,7 @@ function mapBusinessLesson(row: BusinessLessonRow): BusinessLessonDto {
 function mapBusinessLessonHomework(row: BusinessLessonRow): StudentLessonHomeworkDto {
   return {
     status: row.homework_status ?? 'not_started',
+    transcriptResultSessionId: row.transcript_result_session_id ?? null,
     assignmentSessionId: row.homework_assignment_session_id ?? null,
     promptPackageId: row.homework_prompt_package_id ?? null,
     draftId: row.homework_draft_id ?? null,
@@ -985,7 +1001,7 @@ function getBusinessLessonFollowupSuppressionKey(lesson: BusinessLessonDto): str
 
 function isBusinessLessonFollowUpDue(lesson: BusinessLessonDto): boolean {
   if (!['scheduled', 'completed'].includes(lesson.status)) return false;
-  if (lesson.homework.status === 'published' || lesson.homework.status === 'memory_ready') {
+  if (['published', 'memory_ready', 'not_planned'].includes(lesson.homework.status)) {
     return false;
   }
   const endsAt = new Date(lesson.startsAt).getTime() + lesson.durationMinutes * 60 * 1000;

@@ -297,11 +297,43 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   made runnable in PostgreSQL before its matching retained BullMQ job is reactivated in place;
   generic queue reconciliation remains strict. An intentional rerun remains a new `source_job_id`
   child.
-- `confirmedStep = 'share'` is the sole completed predicate. Completed sessions remain immutable
+- `confirmedStep = 'share'` is the homework completed predicate. Completed homework sessions remain immutable
   provenance for their historical jobs/handouts, are not resumable or in progress, and retain their
   canonical source binding. Job status DTOs expose the optional retained
   `assignmentSessionId` through rerun ancestry so post-cutover history can reopen confirmed inputs;
   pre-cutover jobs return no link. There is no assignment archival or archive-retry state.
+- Saved `homeworkIntent` defaults to `create`. The `none` branch remains unfinished until
+  `POST /assignment-sessions/:id/finish-transcript` confirms the exact reviewed version/hash and
+  atomically records Source, memory/enrichment intents, audio cleanup, a current completion marker
+  and immutable exact-source finish history. Public Source/Context/Create and session-bound
+  generation reject none intent before effects; transcript writers serialize with finish.
+  Duplicate finish accepts only the current operation's revision and exact source. Historical
+  finish events cannot complete a later review.
+- API 10 / DB 4 mark the new outcome and incompatible writer boundary. Ordinary public Source
+  confirmation now checks revision before its identical-source replay shortcut; Context/Create
+  retain their existing replay semantics. Intent, current completion/kind and exact-source finish
+  history are distinct DTO fields. `GET /user/assignment-sessions?scope=history` discovers completed
+  transcript results and retained finish history; default scope remains active workflows.
+- Completed transcript-only sessions are read-only results and leave active lists/counts. Explicit
+  `POST /assignment-sessions/:id/start-homework` promotes the same owner to Context, clears current
+  completion and retains history. It performs no reupload, reconfirmation, memory extraction or
+  billing. Reselecting none before downstream work is allowed and requires a new explicit finish.
+  Downstream Context/prompt/draft/Share work prevents opt-out; historical Markdown stays read-only.
+- Both missing pending lesson-memory delivery and ready extraction without a source-linked snapshot
+  obligation recover through the existing periodic memory dispatcher. Ready retry only delivers
+  the post-publication obligation. Student locking deduplicates scanner/direct-worker requests,
+  reuses pending/fulfilled snapshot evidence and respects failed/cancelled/obsolete/superseded
+  obligations. Result reads distinguish extraction, refresh and initial enrichment; read does not
+  retry terminal failures. None-session ready-source discovery is bounded to canonical authority,
+  including eligible pre-existing ready extraction and promoted current finish evidence.
+- Schedule and business projections expose `not_planned` and a nullable `transcriptResultSessionId`
+  only for current completed none work without actual homework progress. Saved none and historical
+  finish evidence alone do not suppress follow-up. Linking an eligible elapsed scheduled lesson
+  at Student confirmation/recovery retains existing completion and credit behavior. Finish does not
+  charge or refund; concurrent completion shares the lesson lock and retains one active debit.
+- Migration 0066 is runtime-incompatible despite additive columns: previous images cannot safely
+  read/write transcript-only sessions. Recovery after these writes requires capable readers and
+  writers, or restoring the paired pre-migration backup; no image-only downgrade is implied.
 - `POST /jobs/:publishedJobId/publish-correction` is the distinct post-Share correction command. It
   serializes on the stable request/job ID, locks and compares the authoritative mutable draft
   version/hash, and transactionally reserves one `source_job_id` child against the server-owned

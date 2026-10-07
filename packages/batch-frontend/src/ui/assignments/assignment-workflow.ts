@@ -5,7 +5,7 @@ import {
 } from '../minimal/MinimalAssignment.confirmation';
 
 export type AssignmentStepId = 'student' | 'source' | 'context' | 'assignment' | 'review';
-export type AssignmentStepStatus = 'complete' | 'current' | 'available' | 'locked';
+export type AssignmentStepStatus = 'complete' | 'current' | 'available' | 'locked' | 'skipped';
 export type AssignmentArtifact = 'transcript' | 'prompt' | 'draft' | 'preview' | 'publishedJob';
 export type AssignmentInputChange =
   | 'student'
@@ -33,6 +33,21 @@ export function deriveAssignmentWorkflow(
   artifacts: AssignmentWorkingArtifacts = {},
 ): AssignmentWorkflowStep[] {
   if (!session) return mapStatuses(0, -1);
+  if (session.homeworkIntent === 'none') {
+    const completed = Boolean(session.transcriptCompletedAt);
+    return STEP_DEFINITIONS.map((step) => ({
+      ...step,
+      label: step.id === 'review' ? 'Review & finish' : step.label,
+      status:
+        step.id === 'context' || step.id === 'assignment'
+          ? 'skipped'
+          : step.id === 'student' || completed
+            ? 'complete'
+            : step.id === 'source'
+              ? 'current'
+              : 'locked',
+    }));
+  }
   if (session.confirmedStep === 'share') return mapStatuses(-1, STEP_DEFINITIONS.length - 1);
 
   const dirtyStep = findResumeStep(session, artifacts);

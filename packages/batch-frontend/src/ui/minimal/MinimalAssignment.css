@@ -164,6 +164,28 @@
   gap: var(--space-3);
 }
 
+.minimal-homework-choice,
+.minimal-transcript-history {
+  padding: var(--space-4) 0;
+}
+
+.minimal-homework-choice label,
+.minimal-transcript-result > label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.minimal-transcript-processing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+}
+
+.minimal-transcript-processing dd {
+  margin: 0;
+}
+
 .minimal-stage-card {
   gap: var(--space-4);
 }
