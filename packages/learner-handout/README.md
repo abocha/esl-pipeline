@@ -338,3 +338,15 @@ and Vocabulary; Practice; Your Turn; Why This Helps; Answers and Example. Existi
 and section IDs remain. Practice uses the same heading with or without pronunciation; its subsection
 label stays intact. Section 6 still follows the learner-rationale visibility contract and section 7
 always retains number 7. Authored content and subsection/disclosure labels remain unchanged.
+
+The subsequent subheading trial was selected with the maintainer's final copy overrides. Five fixed
+h3 headings now use decorative, nonfocusable Lucide icons: Check Your Understanding (ListChecks),
+A. How the Grammar Works (ScanText), B. Vocabulary (BookOpen), A. Practice Exercises (PencilLine),
+and B. Say It Clearly (≈1 min) (Mic). Their private layout uses the existing blue accent, 22px icons,
+stroke 2 and 8px gaps; accessible heading names retain the words and A/B prefixes. H2 emojis and the
+authored hero remain. Other selected fixed labels include Your Goal, Transcript, Word or Phrase,
+What to Do, Goal, Practise This Sentence, What to Include, Check Your Work, Understanding Answers,
+A. Exercise Answers, Example Response, Extra Task and Source. Key Language You Will Use and the
+Answer Key disclosure retain their exact labels. Authored titles, grammar/form/comparison labels,
+practice-part names, cues and assignment values are unchanged. Evidence and selected-trial comparisons
+are in `D:/tmp/esl-33-subheading-selected/`; `design-qa.md` records the focused passing delta.

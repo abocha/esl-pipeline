@@ -450,3 +450,48 @@ and fixture re-emission passed. Focused Biome passed after formatting the update
 README and this QA history reflect the resolved decision. The normal local preview remains
 `http://127.0.0.1:5175/polish.html`. No input fixture, public assignment contract or authored lesson
 content changed. No broad gate, hosted-CI claim, provider call, push, PR, merge or production mutation.
+
+## Selected subheading copy and Lucide icons after 38da850f
+
+final result: passed
+
+The disposable full-lesson subheading experiment was selected with explicit final overrides.
+Key Language You Will Use and the Answer Key disclosure retain their exact labels. The vocabulary
+heading becomes B. Vocabulary, comprehension answers become Understanding Answers, optional extension
+becomes Extra Task and Source Link becomes Source. All other enumerated trial copy is adopted.
+Only the five existing fixed h3 emojis become decorative ListChecks/ScanText/BookOpen/PencilLine/Mic
+icons. Their words are Check Your Understanding; A. How the Grammar Works; B. Vocabulary;
+A. Practice Exercises; B. Say It Clearly (≈1 min). A/B prefixes, accessible names, h2 copy/emojis,
+authored hero and the previously selected semantic field icons remain. No actionable P0/P1/P2 or
+P3 difference remains in the approved delta.
+
+The selected visual target is `D:/tmp/esl-33-subheading-selected/selected-target.html`: the retained
+disposable trial with the four present final copy overrides applied. Shared static source is the
+normal `http://127.0.0.1:5175/polish.html`, saved as `after.html` in that evidence directory.
+Whole article text and control attributes match the selected target exactly, recorded in
+`copy-controls-checks.json`. Existing tests cover Source, Extra Task and the equivalent natural
+sentence label, which are absent from the canonical full-lesson trial. No canonical fixture was edited.
+
+Matching captures use 1280 × 1000 desktop and 320 × 900 phone CSS viewports, DPR 1. Opening,
+grammar, pronunciation/practice and open answer regions are retained as raw PNGs and eight
+`*-pair.png` comparisons. Transcript and grammar reveals are closed in the captured comparison.
+The compared regions preserve typography, colors, spacing, borders and assets outside the requested
+copy/icons. Icons are 22px/stroke 2, with 8px gaps and the existing quiet blue accent; baseline and
+wrapped text alignment match the selected trial. No horizontal overflow occurs at either width.
+The phone grammar h2 wraps to two lines and Say It Clearly fits one line. Browser checks retain
+exact heading names and aria-hidden/nonfocusable 22px icons. This is the requested representative
+comparison, not a full-page/mode/print or screen-reader audit; prior selected layout evidence remains.
+
+Focused evidence: all 40 existing tests passed across two files after updating expectations, including
+authored-content/legacy preservation, rationale visibility, stable section numbering, Source/Extra Task
+paths, all pronunciation modes and existing reveal/audio lifecycle behavior. Build and static fixture
+re-emission passed. Shared-source phone checks also passed Answer Key closing, Transcript opening,
+independent Enter/Space reveals with hidden state removed and focus retained, local pronunciation
+playing state and empty browser error logs (`interaction-checks.json`). Local tone verifies controls,
+not speech quality. The main preview was restored to its normal viewport with closed disclosures.
+
+The five-heading JSX helper is private to LearnerHandout; no public option, generic framework,
+dependency, assignment shape or renderer/publication identity changed. Scripts and the tracked fixture
+server are untouched. The coordinating task restarted the main preview server; this task re-emitted
+its files without operating that server. README reflects the final selection. No provider call,
+production/data mutation, push, PR, merge, deployment or hosted-CI claim.

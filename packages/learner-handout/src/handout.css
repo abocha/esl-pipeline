@@ -96,6 +96,30 @@ h3 {
   font-weight: 600;
   margin: 20px 0 8px;
 }
+.icon-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.heading-prefix {
+  flex: none;
+}
+.heading-icon {
+  display: inline-flex;
+  align-self: baseline;
+  position: relative;
+  top: 4px;
+  color: var(--handout-accent);
+  flex: none;
+}
+.heading-icon svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+.heading-text {
+  min-width: 0;
+}
 :where(.learner-handout main) > h2 + h3 {
   margin-top: 0;
 }
