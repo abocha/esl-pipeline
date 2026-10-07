@@ -380,7 +380,7 @@ export function LearnerHandout(props: LearnerHandoutProps) {
       </header>
       <main>
         <h2 id="assignment-section-1" lang="en">
-          1. 🎯 This Week's Mission Briefing
+          1. 🎯 Your Goal
         </h2>
         <aside className="callout">
           <Field label="Your Goal This Week">{a.mission.goal}</Field>
@@ -396,15 +396,15 @@ export function LearnerHandout(props: LearnerHandoutProps) {
           </ul>
         </aside>
         <h2 id="assignment-section-2" lang="en">
-          2. 🎧 Input Material: The Source
+          2. 🎧 Listen and Read
         </h2>
         <InputMaterial {...props} />
         <h2 id="assignment-section-3" lang="en">
-          3. 🛠️ Language Toolkit: Useful Language
+          3. 🛠️ Grammar and Vocabulary
         </h2>
         <LanguageToolkit assignment={a} />
         <h2 id="assignment-section-4" lang="en">
-          {a.pronunciation ? '4. ✍️ Practice & Pronunciation' : '4. ✍️ Practice'}
+          4. ✍️ Practice
         </h2>
         <h3 lang="en">A. 🔩 Controlled Practice</h3>
         <PracticeParts assignment={a} />
@@ -419,19 +419,19 @@ export function LearnerHandout(props: LearnerHandoutProps) {
           </>
         )}
         <h2 id="assignment-section-5" lang="en">
-          5. ✅ Your Turn: Complete the Mission!
+          5. ✅ Your Turn
         </h2>
         <OutputMission mission={a.outputTask} />
         {'learnerRationale' in a && (
           <>
             <h2 id="assignment-section-6" className="rationale-heading" lang="en">
-              6. 🧠 Why This Mission Helps You
+              6. 🧠 Why This Helps
             </h2>
             <Text className="learner-rationale">{a.learnerRationale}</Text>
           </>
         )}
         <h2 id="assignment-section-7" lang="en">
-          7. 🔑 Answer Key & Sample Mission
+          7. 🔑 Answers and Example
         </h2>
         <Disclosure label="Answer Key" className="connected-disclosure">
           <h3 lang="en">Comprehension Check Answers</h3>

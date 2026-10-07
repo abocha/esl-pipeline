@@ -249,12 +249,14 @@ describe('React learner handout static foundation', () => {
       expect(html).not.toContain('ESL24_TEACHER_ONLY');
       expect(html).not.toContain(legacySentinel);
       expect(doc.querySelector('#assignment-section-6') !== null).toBe(shape !== 'legacy');
-      expect(html.includes('Why This Mission Helps You')).toBe(shape !== 'legacy');
+      expect(html.includes('Why This Helps')).toBe(shape !== 'legacy');
       expect(html.includes(rationaleFixture.learnerRationale)).toBe(shape !== 'legacy');
       expect(
         doc.querySelector('#assignment-section-6')?.nextElementSibling?.textContent ?? null,
       ).toBe(shape === 'legacy' ? null : rationaleFixture.learnerRationale);
-      expect(doc.querySelector('#assignment-section-7')?.textContent).toContain('7.');
+      expect(doc.querySelector('#assignment-section-7')?.textContent).toBe(
+        '7. 🔑 Answers and Example',
+      );
       expect(doc.querySelector('#assignment-section-8')).toBeNull();
       expect(JSON.stringify(props.assignment)).toBe(before);
     },
@@ -267,14 +269,19 @@ describe('React learner handout static foundation', () => {
       const before = JSON.stringify(props);
       const doc = documentFor(props);
       const a = props.assignment;
-      expect(doc.querySelectorAll('main > h2')).toHaveLength(7);
+      expect([...doc.querySelectorAll('main > h2')].map((heading) => heading.textContent)).toEqual([
+        '1. 🎯 Your Goal',
+        '2. 🎧 Listen and Read',
+        '3. 🛠️ Grammar and Vocabulary',
+        '4. ✍️ Practice',
+        '5. ✅ Your Turn',
+        '6. 🧠 Why This Helps',
+        '7. 🔑 Answers and Example',
+      ]);
       expect(doc.querySelectorAll('nav, .toc-shell, .table-of-contents')).toHaveLength(0);
       expect(
         [...doc.querySelectorAll('.mission-key-language li')].map((li) => li.textContent),
       ).toEqual(a.mission.keyLanguage);
-      expect(doc.querySelector('#assignment-section-4')?.textContent).toBe(
-        mode === 'none' ? '4. ✍️ Practice' : '4. ✍️ Practice & Pronunciation',
-      );
       expect(doc.querySelector('[data-assignment-pronunciation]') !== null).toBe(mode !== 'none');
       const transcript = doc.querySelector<HTMLDetailsElement>('details.study-text')!;
       expect(transcript.open).toBe(false);
