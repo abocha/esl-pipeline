@@ -56,10 +56,11 @@ describe('AssignmentV1 domain and native projection', () => {
     expect(assignmentMetadata(a).speaker_profiles?.map((p) => p.id)).toEqual(['Alex', 'Jo']);
     expect(assignmentStudyText(a).lines[0]).toBe('Alex: First, open the app.');
     const html = await renderAssignmentToHtml(a);
-    expect(html.indexOf('Comprehension Check')).toBeLessThan(
-      html.indexOf('<h2 id="assignment-section-3"'),
+    expect(html).toContain('Check Your Understanding');
+    expect(html.indexOf('Check Your Understanding')).toBeLessThan(
+      html.indexOf('id="assignment-section-3"'),
     );
-    expect(html).toContain('Sample Mission');
+    expect(html).toContain('Example Response');
   });
 
   it('keeps hostile plain text inside data boundaries and preserves exact authored speech', async () => {
