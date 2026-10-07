@@ -52,14 +52,23 @@ body {
   grid-column: 1 / -1;
 }
 h1 {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   font-weight: 700;
-  font-size: clamp(1.6rem, 4vw, 2.25rem);
+  font-size: clamp(2rem, 4.5vw, 2.8125rem);
   line-height: 1.25;
   letter-spacing: -0.025em;
   margin: 12px 0;
 }
 .hero-icon {
-  margin-right: 0.15em;
+  flex: 0 0 auto;
+  font-size: 1.2667em;
+  line-height: 1;
+  letter-spacing: 0;
+}
+:where(h1) > .inline-text {
+  min-width: 0;
 }
 h2 {
   position: relative;
@@ -324,6 +333,23 @@ summary:hover {
 .disclosure-inner {
   padding: 16px 0 0;
 }
+.study-text {
+  border: 1px solid #aec6df;
+  border-radius: 8px;
+}
+.study-text > summary {
+  width: auto;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 7px;
+}
+.study-text[open] > summary {
+  border-bottom: 1px solid #dbe7f2;
+  border-radius: 7px 7px 0 0;
+}
+.study-text .disclosure-inner {
+  padding: 0 16px 8px;
+}
 .audio-figure {
   margin: 24px 0;
 }
@@ -481,12 +507,6 @@ button:disabled {
 .sample-mission {
   padding: 0;
 }
-.rationale-heading {
-  font-size: 1.1rem;
-}
-.learner-rationale {
-  color: var(--handout-muted);
-}
 .linguistic-highlight {
   display: inline-block;
   max-width: 100%;
@@ -521,16 +541,41 @@ button:disabled {
   display: inline-block;
   max-width: 100%;
   vertical-align: top;
+  min-height: 44px;
+}
+.reveal-content {
+  display: block;
+  padding: 8px 12px;
 }
 .reveal-content:not(.is-revealed) {
-  display: none;
+  filter: blur(4px);
+  user-select: none;
+  pointer-events: none;
 }
 [data-grammar-reveal] {
-  font-weight: 600;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+[data-grammar-reveal]:hover:not(:disabled) {
+  border-color: var(--handout-rule);
+  background: #edf5fc40;
+}
+[data-grammar-reveal]:focus-visible {
+  border-color: var(--handout-rule);
+}
+[data-grammar-reveal][hidden] {
+  display: none;
 }
 @media (max-width: 600px) {
   .learner-handout {
     padding: 24px 16px 32px;
+  }
+  h1 {
+    font-size: 2rem;
+    gap: 10px;
   }
   h2 {
     font-size: 1.25rem;
@@ -607,6 +652,12 @@ button:disabled {
     display: none;
   }
   .reveal-content:not(.is-revealed) {
-    display: inline;
+    filter: none;
+  }
+  .reveal-target {
+    min-height: 0;
+  }
+  .reveal-content {
+    padding: 0;
   }
 }

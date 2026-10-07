@@ -166,6 +166,12 @@ describe('ESL-32 shared learner surface', () => {
     const doc = dom.window.document;
     const buttons = [...doc.querySelectorAll<HTMLButtonElement>('[data-grammar-reveal]')];
     const contents = [...doc.querySelectorAll<HTMLElement>('.reveal-content')];
+    for (const button of buttons) {
+      expect(button.textContent).toBe('');
+      expect(button.getAttribute('aria-label')).toMatch(/^Reveal (corrected sentence|explanation)/);
+      expect(button.querySelector('button, code, svg')).toBeNull();
+      expect(button.parentElement!.querySelectorAll('button')).toHaveLength(1);
+    }
     expect(contents.map((c) => c.getAttribute('aria-hidden'))).toEqual([
       'true',
       'true',
@@ -177,6 +183,8 @@ describe('ESL-32 shared learner surface', () => {
     );
     expect(contents[0]!.lang).toBe('en');
     buttons[1]!.focus();
+    buttons[1]!.dispatchEvent(new dom.window.MouseEvent('mouseenter'));
+    expect(contents.every((c) => c.getAttribute('aria-hidden') === 'true')).toBe(true);
     buttons[1]!.click();
     expect(doc.activeElement).toBe(contents[1]);
     expect(contents.map((c) => c.getAttribute('aria-hidden'))).toEqual([
@@ -190,6 +198,33 @@ describe('ESL-32 shared learner surface', () => {
     expect(contents[1]!.getAttribute('aria-hidden')).toBeNull();
     buttons[2]!.click();
     expect(contents[2]!.querySelector('code')?.textContent).toBe('two');
+    dom.window.close();
+  });
+
+  it('keeps the actual long cue-formatted answer escaped and unchanged behind an empty control', () => {
+    const props = createPolishFixture();
+    const answer =
+      'Use `present simple` after the connector. <img src=x onerror=alert(1)> & keep this long explanation intact. '.repeat(
+        5,
+      );
+    props.assignment.toolkit.grammar[0]!.traps[0]!.explanation = answer;
+    const before = JSON.stringify(props);
+    const dom = new JSDOM(renderLearnerHandoutDocument(props), { runScripts: 'dangerously' });
+    const doc = dom.window.document;
+    const target = doc.querySelectorAll('.reveal-target')[1]!;
+    const content = target.querySelector<HTMLElement>('.reveal-content')!;
+    const button = target.querySelector<HTMLButtonElement>('button')!;
+    const text = content.textContent;
+    expect(text).toBe(answer.replaceAll('`', ''));
+    expect(content.querySelectorAll('code')).toHaveLength(5);
+    expect(target.querySelector('img')).toBeNull();
+    expect(button.textContent).toBe('');
+    expect(content.getAttribute('aria-hidden')).toBe('true');
+    button.click();
+    expect(content.textContent).toBe(text);
+    expect(content.getAttribute('aria-hidden')).toBeNull();
+    expect(button.hidden).toBe(true);
+    expect(JSON.stringify(props)).toBe(before);
     dom.window.close();
   });
 

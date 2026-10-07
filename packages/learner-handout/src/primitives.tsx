@@ -109,9 +109,7 @@ export function RevealField({
         <span className="reveal-content" lang={lang} aria-hidden="true">
           <Inline>{children}</Inline>
         </span>
-        <button type="button" data-grammar-reveal aria-label={name} lang="en">
-          Reveal
-        </button>
+        <button type="button" data-grammar-reveal aria-label={name} lang="en" />
       </span>
     </p>
   );
