@@ -187,7 +187,7 @@ describe('native React publication adapter', () => {
         expect(html).not.toContain('ESL32_CORRECTION_PRIVATE');
         const doc = new JSDOM(html).window.document;
         expect(doc.querySelector('#assignment-section-6') !== null).toBe(shape !== 'legacy');
-        expect(html.includes('Why This Mission Helps You')).toBe(shape !== 'legacy');
+        expect(html.includes('Why This Helps You')).toBe(shape !== 'legacy');
         expect(html.includes(fresh.learnerRationale)).toBe(shape !== 'legacy');
         expect(
           doc.querySelector('#assignment-section-6')?.nextElementSibling?.textContent ?? null,
