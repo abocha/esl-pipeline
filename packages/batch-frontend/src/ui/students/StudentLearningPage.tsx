@@ -351,9 +351,10 @@ function MemoryHealthDetails({
             <div className="student-learning-memory-support-grid">
               <section>
                 <h3>Latest Snapshot</h3>
+                <p>Availability: {health.availability?.state ?? 'not reported'}</p>
                 {snapshot ? (
                   <dl>
-                    <dt>Status</dt>
+                    <dt>Stored status</dt>
                     <dd>{snapshot.status}</dd>
                     <dt>Strategy</dt>
                     <dd>{formatHealthValue(snapshot.strategy)}</dd>
@@ -1320,6 +1321,13 @@ export const StudentLearningPage: React.FC = () => {
   }
 
   const latestSnapshot = memoryOverview?.latestReadyStudentMemorySnapshot ?? null;
+  const availability = memoryOverview?.availability ?? memoryHealth?.availability;
+  const memoryUnavailableCopy =
+    availability?.state === 'repair_required'
+      ? 'Stored memory history requires explicit repair. Recent observations do not restore established history.'
+      : availability?.state === 'repository_unavailable'
+        ? 'Memory retrieval is unavailable. Existing history is unknown.'
+        : 'No established student-memory snapshot is available yet.';
   const canActivateDraft = currentRevision?.status === 'draft';
   const unresolvedIssues = latestSnapshot?.unresolvedIssues ?? [];
   const recentLessons = memoryOverview?.recentReadyLessonMemory ?? [];
@@ -1377,13 +1385,21 @@ export const StudentLearningPage: React.FC = () => {
           />
           <LearningMetricCard
             eyebrow="Memory Snapshot"
-            value={getSnapshotLabel(latestSnapshot)}
+            value={
+              latestSnapshot
+                ? getSnapshotLabel(latestSnapshot)
+                : availability?.state === 'repair_required'
+                  ? 'Repair required'
+                  : availability?.state === 'repository_unavailable'
+                    ? 'Unavailable'
+                    : getSnapshotLabel(latestSnapshot)
+            }
             detail={
               latestSnapshot
                 ? `${formatDateTime(latestSnapshot.generatedAt)} • ${
                     unresolvedIssues.length
                   } open thread${unresolvedIssues.length === 1 ? '' : 's'}`
-                : 'Generate student memory to strengthen this teaching view.'
+                : memoryUnavailableCopy
             }
           />
           <LearningMetricCard
@@ -1577,10 +1593,13 @@ export const StudentLearningPage: React.FC = () => {
               </>
             ) : (
               <div className="student-learning-empty-block">
-                <strong>No ready student-memory snapshot is available yet.</strong>
+                <strong>{memoryUnavailableCopy}</strong>
                 <p>
-                  The profile can still be edited manually, and this area will become more useful as
-                  lesson and homework memory accumulates.
+                  {availability?.state === 'repair_required'
+                    ? 'Existing observations remain retained. A separately authorized rebuild is required before using the established summary.'
+                    : availability?.state === 'repository_unavailable'
+                      ? 'Try again when memory retrieval is restored. The profile can still be edited manually.'
+                      : 'The profile can still be edited manually, and this area will become more useful as lesson and homework memory accumulates.'}
                 </p>
               </div>
             )}

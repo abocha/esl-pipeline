@@ -1,3 +1,5 @@
+import type { StudentMemoryAvailability } from '@esl-pipeline/contracts';
+
 import type { BatchBackendConfig } from '../config/env.js';
 import type {
   HomeworkMemoryEntryStatus,
@@ -17,7 +19,7 @@ import type {
   StudentMemorySnapshotStatus,
 } from '../domain/student-memory-snapshot-model.js';
 import {
-  getLatestReadyStudentMemorySnapshotByStudentId,
+  getStudentMemorySnapshotSelection,
   listStudentMemorySnapshots,
 } from '../domain/student-memory-snapshot-repository.js';
 import type {
@@ -26,6 +28,7 @@ import type {
   StudentProfileCandidateStatus,
 } from '../domain/student-profile-candidate-model.js';
 import { listStudentProfileCandidates } from '../domain/student-profile-candidate-repository.js';
+import { loadStudentMemorySelection } from './student-memory-availability.js';
 import type { StudentProfileData } from './student-profiles-store.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
@@ -79,6 +82,7 @@ export interface StudentMemoryLatestFailedReason {
 }
 
 export interface StudentMemoryHealth {
+  availability: StudentMemoryAvailability;
   studentId: string;
   latestSnapshot: StudentMemoryLatestSnapshotHealth | null;
   memoryCounts: {
@@ -95,6 +99,7 @@ export interface StudentMemoryHealth {
 }
 
 export interface StudentMemoryOverview {
+  availability: StudentMemoryAvailability;
   studentId: string;
   latestReadyStudentMemorySnapshot: StudentMemorySnapshotRecord | null;
   recentReadyLessonMemory: LessonMemoryRecord[];
@@ -298,7 +303,7 @@ interface StudentMemoryInspectionDependencies {
     listRecentReadyByStudentId: typeof listRecentReadyHomeworkMemoryByStudentId;
   };
   snapshots: {
-    getLatestReadyByStudentId: typeof getLatestReadyStudentMemorySnapshotByStudentId;
+    getSelection: typeof getStudentMemorySnapshotSelection;
     list: typeof listStudentMemorySnapshots;
   };
   profileCandidates: {
@@ -333,7 +338,7 @@ export async function getStudentMemoryOverview(args: {
     listRecentReadyByStudentId: listRecentReadyHomeworkMemoryByStudentId,
   };
   const snapshots = args.overrides?.snapshots ?? {
-    getLatestReadyByStudentId: getLatestReadyStudentMemorySnapshotByStudentId,
+    getSelection: getStudentMemorySnapshotSelection,
     list: listStudentMemorySnapshots,
   };
 
@@ -345,23 +350,23 @@ export async function getStudentMemoryOverview(args: {
   const lessonLimit = args.lessonLimit ?? DEFAULT_OVERVIEW_LESSON_LIMIT;
   const homeworkLimit = args.homeworkLimit ?? DEFAULT_OVERVIEW_HOMEWORK_LIMIT;
 
-  const [latestReadyStudentMemorySnapshot, recentReadyLessonMemory, recentReadyHomeworkMemory] =
-    await Promise.all([
-      snapshots.getLatestReadyByStudentId(args.studentId),
-      lessonMemory.listRecentReadyByStudentId(args.studentId, {
-        limit: lessonLimit,
-      }),
-      homeworkMemory.listRecentReadyByStudentId(args.studentId, {
-        limit: homeworkLimit,
-      }),
-    ]);
+  const [selection, recentReadyLessonMemory, recentReadyHomeworkMemory] = await Promise.all([
+    loadStudentMemorySelection(args.studentId, snapshots.getSelection),
+    lessonMemory.listRecentReadyByStudentId(args.studentId, {
+      limit: lessonLimit,
+    }),
+    homeworkMemory.listRecentReadyByStudentId(args.studentId, {
+      limit: homeworkLimit,
+    }),
+  ]);
 
   return {
     studentId: args.studentId,
-    latestReadyStudentMemorySnapshot,
+    latestReadyStudentMemorySnapshot: selection.snapshot,
+    availability: selection.availability,
     recentReadyLessonMemory,
     recentReadyHomeworkMemory,
-    unresolvedIssues: latestReadyStudentMemorySnapshot?.unresolvedIssues ?? [],
+    unresolvedIssues: selection.snapshot?.unresolvedIssues ?? [],
   };
 }
 
@@ -382,7 +387,7 @@ export async function getStudentMemoryHealth(args: {
     listRecentReadyByStudentId: listRecentReadyHomeworkMemoryByStudentId,
   };
   const snapshots = args.overrides?.snapshots ?? {
-    getLatestReadyByStudentId: getLatestReadyStudentMemorySnapshotByStudentId,
+    getSelection: getStudentMemorySnapshotSelection,
     list: listStudentMemorySnapshots,
   };
   const profileCandidates = args.overrides?.profileCandidates ?? {
@@ -402,6 +407,7 @@ export async function getStudentMemoryHealth(args: {
   };
 
   const [
+    selection,
     latestSnapshots,
     readyLessonMemory,
     pendingLessonMemory,
@@ -414,12 +420,15 @@ export async function getStudentMemoryHealth(args: {
     rejectedCandidates,
     deferredCandidates,
   ] = await Promise.all([
-    snapshots.list({
-      studentId: args.studentId,
-      limit: 1,
-      offset: 0,
-      order: DEFAULT_LIST_ORDER,
-    }),
+    loadStudentMemorySelection(args.studentId, snapshots.getSelection),
+    snapshots
+      .list({
+        studentId: args.studentId,
+        limit: 1,
+        offset: 0,
+        order: DEFAULT_LIST_ORDER,
+      })
+      .catch(() => []),
     lessonMemory.list({
       ...memoryListParams,
       statuses: ['ready'],
@@ -473,6 +482,7 @@ export async function getStudentMemoryHealth(args: {
   return {
     studentId: args.studentId,
     latestSnapshot: buildLatestSnapshotHealth(latestSnapshot),
+    availability: selection.availability,
     memoryCounts: {
       lesson: {
         ready: buildMemoryStatusCount(readyLessonMemory),
@@ -644,7 +654,7 @@ export async function listStudentMemorySnapshotsForStudent(args: {
     getById: getStudentProfileById,
   };
   const snapshots = args.overrides?.snapshots ?? {
-    getLatestReadyByStudentId: getLatestReadyStudentMemorySnapshotByStudentId,
+    getSelection: getStudentMemorySnapshotSelection,
     list: listStudentMemorySnapshots,
   };
 

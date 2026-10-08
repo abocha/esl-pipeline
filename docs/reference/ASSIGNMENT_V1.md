@@ -436,7 +436,11 @@ produced media/downloads, manifests, prompt revision/package provenance, jobs/ac
 timestamps and audit/retention data remain under normal retention. SQL columns and objects are not dropped.
 
 No legacy correction, edit-and-republish, rerun, regeneration, retry, resume, recovery, TTS, HTML
-rendering, publication, model conversion or downstream memory processing is supported. APIs reject
+rendering, publication, model conversion or fresh downstream memory extraction is supported.
+ESL-38 permits read access and snapshot derivation from already-materialized, source-verified
+lesson/homework observations. Historical format alone does not invalidate that evidence; exact
+student/workspace ownership, confirmed source binding, identity/URI/hash, ready state and actual
+replacement remain required. This exception does not admit historical replay, enrichment or Batch import. APIs reject
 legacy actions explicitly with `legacy_assignment_read_only`; Markdown validation is a retired endpoint.
 AssignmentV1 is the only execution input. There is no parser fallback or invisible conversion.
 The UI opens history for inspection with processing controls unavailable. Sharing existing outputs uses

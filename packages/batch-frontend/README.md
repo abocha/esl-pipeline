@@ -1,5 +1,11 @@
 # @esl-pipeline/batch-frontend
 
+Learning and transcript-processing details consume the shared aggregate availability contract.
+Stored-ready history can require explicit repair; repository failure remains unknown rather than
+empty. Repair-required copy never suggests that recent observations restore established history.
+Optional response fields permit older API responses during coordinated rollout; repair execution
+remains operator-owned. See [the memory runbook](../../docs/operations/student-memory-replay-backfill.md#evidence-availability-and-continuity-esl-38).
+
 ## Meta
 
 - Audience: maintainers and implementing agents.

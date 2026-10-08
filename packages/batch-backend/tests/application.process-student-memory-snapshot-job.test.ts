@@ -7,7 +7,7 @@ vi.mock('../src/domain/student-memory-currentness.js', () => ({
 }));
 vi.mock('../src/domain/student-memory-snapshot-repository.js', async () => ({
   ...(await vi.importActual('../src/domain/student-memory-snapshot-repository.js')),
-  getLatestReadyStudentMemorySnapshotByStudentId: vi.fn().mockResolvedValue(null),
+  getStudentMemorySnapshotSelection: vi.fn().mockResolvedValue(memorySelection(null)),
   admitStudentMemorySnapshotIntent: vi.fn().mockResolvedValue(true),
 }));
 
@@ -172,6 +172,7 @@ function finalizationRaceOverrides(args: {
       listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
     },
     snapshots: {
+      markRepairRequired: vi.fn(),
       getById: vi.fn().mockResolvedValue({
         id: 'snapshot-pending-1',
         status: 'pending',
@@ -184,7 +185,7 @@ function finalizationRaceOverrides(args: {
           sourceEntryId: 'lesson-1',
         },
       }),
-      getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+      getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
       markFailed: args.markFailed,
       supersedePendingForStudent: args.supersedePendingForStudent ?? vi.fn(),
       updateGenerationNotes: args.updateGenerationNotes ?? vi.fn(),
@@ -196,6 +197,47 @@ function finalizationRaceOverrides(args: {
 }
 
 describe('application/process-student-memory-snapshot-job', () => {
+  it('blocks automatic repair before source reads, pacing or provider calls', async () => {
+    const markRepairRequired = vi.fn();
+    const generator = vi.fn();
+    const run = vi.fn();
+    const getById = vi.fn().mockResolvedValue({
+      id: 'repair-intent',
+      studentId: 'student-1',
+      status: 'pending',
+      provider: 'openai',
+      model: 'fixture',
+    });
+    await processStudentMemorySnapshotJob({
+      config: createTestConfig(),
+      payload: {
+        kind: 'student-memory-snapshot-refresh',
+        studentId: 'student-1',
+        pendingEntryId: 'repair-intent',
+        provider: 'openai',
+        model: 'fixture',
+        trigger: 'lesson-memory-ready',
+        sourceEntryId: 'lesson-new',
+      },
+      overrides: {
+        snapshots: {
+          getById,
+          getSelection: vi
+            .fn()
+            .mockResolvedValue({ snapshot: null, availability: { state: 'repair_required' } }),
+          markRepairRequired,
+          markFailed: vi.fn(),
+          supersedePendingForStudent: vi.fn(),
+          updateGenerationNotes: vi.fn(),
+        },
+        generator,
+        pacer: { run },
+      },
+    });
+    expect(markRepairRequired).toHaveBeenCalledWith('student-1', 'repair-intent');
+    expect(generator).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+  });
   it('no-ops a delayed queue job after its pending snapshot was superseded', async () => {
     const generator = vi.fn();
 
@@ -212,11 +254,12 @@ describe('application/process-student-memory-snapshot-job', () => {
       },
       overrides: {
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-superseded-1',
             status: 'superseded',
           }),
-          getLatestReadyByStudentId: vi.fn(),
+          getSelection: vi.fn(),
           markFailed: vi.fn(),
           supersedePendingForStudent: vi.fn(),
           updateGenerationNotes: vi.fn(),
@@ -284,6 +327,7 @@ describe('application/process-student-memory-snapshot-job', () => {
           listRecentReadyByStudentId: vi.fn().mockResolvedValue([supportingHomework]),
         },
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
@@ -296,7 +340,7 @@ describe('application/process-student-memory-snapshot-job', () => {
               sourceEntryId: 'lesson-1',
             },
           }),
-          getLatestReadyByStudentId: vi.fn().mockResolvedValue(parentSnapshot),
+          getSelection: vi.fn().mockResolvedValue(memorySelection(parentSnapshot)),
           markFailed: vi.fn(),
           supersedePendingForStudent,
           updateGenerationNotes,
@@ -396,6 +440,7 @@ describe('application/process-student-memory-snapshot-job', () => {
           listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
         },
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
@@ -405,7 +450,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: null,
           }),
-          getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+          getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
           markFailed: vi.fn(),
           supersedePendingForStudent: vi.fn().mockResolvedValue([]),
           updateGenerationNotes,
@@ -481,6 +526,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
           },
           snapshots: {
+            markRepairRequired: vi.fn(),
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
@@ -490,7 +536,7 @@ describe('application/process-student-memory-snapshot-job', () => {
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: null,
             }),
-            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
             markFailed: vi.fn(),
             supersedePendingForStudent: vi.fn().mockResolvedValue([]),
             updateGenerationNotes,
@@ -561,6 +607,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
           },
           snapshots: {
+            markRepairRequired: vi.fn(),
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
@@ -570,7 +617,7 @@ describe('application/process-student-memory-snapshot-job', () => {
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: null,
             }),
-            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
             markFailed: vi.fn(),
             supersedePendingForStudent: vi.fn().mockResolvedValue([]),
             updateGenerationNotes,
@@ -644,6 +691,7 @@ describe('application/process-student-memory-snapshot-job', () => {
           listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
         },
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
@@ -653,7 +701,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: null,
           }),
-          getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+          getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
           markFailed: vi.fn(),
           supersedePendingForStudent: vi.fn().mockResolvedValue([]),
           updateGenerationNotes,
@@ -716,6 +764,7 @@ describe('application/process-student-memory-snapshot-job', () => {
           listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
         },
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
@@ -725,7 +774,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             generatedAt: new Date('2026-03-20T01:00:00.000Z'),
             generationNotes: null,
           }),
-          getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+          getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
           markFailed: vi.fn(),
           supersedePendingForStudent: vi.fn().mockResolvedValue([]),
           updateGenerationNotes,
@@ -775,6 +824,7 @@ describe('application/process-student-memory-snapshot-job', () => {
         },
         homeworkMemory: { list: vi.fn().mockResolvedValue([]) },
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
@@ -848,6 +898,7 @@ describe('application/process-student-memory-snapshot-job', () => {
         },
         homeworkMemory: { list: vi.fn().mockResolvedValue([]) },
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
@@ -947,6 +998,7 @@ describe('application/process-student-memory-snapshot-job', () => {
           listRecentReadyByStudentId: listRecentHomeworkMemory,
         },
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
@@ -959,7 +1011,7 @@ describe('application/process-student-memory-snapshot-job', () => {
               sourceEntryId: 'homework-1',
             },
           }),
-          getLatestReadyByStudentId: vi.fn().mockResolvedValue(null),
+          getSelection: vi.fn().mockResolvedValue(memorySelection(null)),
           markFailed: vi.fn(),
           supersedePendingForStudent: vi.fn().mockResolvedValue([]),
         },
@@ -1046,6 +1098,7 @@ describe('application/process-student-memory-snapshot-job', () => {
               ]),
           },
           snapshots: {
+            markRepairRequired: vi.fn(),
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
@@ -1058,7 +1111,7 @@ describe('application/process-student-memory-snapshot-job', () => {
                 sourceEntryId: 'lesson-1',
               },
             }),
-            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
             markFailed,
             supersedePendingForStudent: vi.fn(),
           },
@@ -1142,6 +1195,7 @@ describe('application/process-student-memory-snapshot-job', () => {
           listRecentReadyByStudentId: vi.fn().mockResolvedValue([supportingHomework]),
         },
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
@@ -1154,7 +1208,7 @@ describe('application/process-student-memory-snapshot-job', () => {
               sourceEntryId: 'lesson-1',
             },
           }),
-          getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+          getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
           markFailed: vi.fn(),
           supersedePendingForStudent: vi.fn().mockResolvedValue([]),
         },
@@ -1235,6 +1289,7 @@ describe('application/process-student-memory-snapshot-job', () => {
           list: vi.fn().mockResolvedValue([]),
         },
         snapshots: {
+          markRepairRequired: vi.fn(),
           getById: vi.fn().mockResolvedValue({
             id: 'snapshot-pending-1',
             status: 'pending',
@@ -1322,6 +1377,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
           },
           snapshots: {
+            markRepairRequired: vi.fn(),
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
@@ -1334,7 +1390,7 @@ describe('application/process-student-memory-snapshot-job', () => {
                 sourceEntryId: 'lesson-1',
               },
             }),
-            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
             markFailed,
             supersedePendingForStudent,
             updateGenerationNotes,
@@ -1400,6 +1456,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
           },
           snapshots: {
+            markRepairRequired: vi.fn(),
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
@@ -1412,7 +1469,7 @@ describe('application/process-student-memory-snapshot-job', () => {
                 sourceEntryId: 'lesson-1',
               },
             }),
-            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
             markFailed,
             supersedePendingForStudent: vi.fn().mockResolvedValue([]),
             updateGenerationNotes: vi.fn(),
@@ -1571,6 +1628,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             listRecentReadyByStudentId: vi.fn(),
           },
           snapshots: {
+            markRepairRequired: vi.fn(),
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
@@ -1580,7 +1638,7 @@ describe('application/process-student-memory-snapshot-job', () => {
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: null,
             }),
-            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
             markFailed,
             supersedePendingForStudent: vi.fn(),
           },
@@ -1629,6 +1687,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             listRecentReadyByStudentId: vi.fn(),
           },
           snapshots: {
+            markRepairRequired: vi.fn(),
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
@@ -1638,7 +1697,7 @@ describe('application/process-student-memory-snapshot-job', () => {
               generatedAt: new Date('2026-03-20T01:00:00.000Z'),
               generationNotes: null,
             }),
-            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            getSelection: vi.fn().mockResolvedValue(memorySelection(readySnapshot())),
             markFailed,
             supersedePendingForStudent: vi.fn(),
           },
@@ -1697,6 +1756,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             list: vi.fn().mockResolvedValue([]),
           },
           snapshots: {
+            markRepairRequired: vi.fn(),
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
@@ -1795,6 +1855,7 @@ describe('application/process-student-memory-snapshot-job', () => {
           },
           homeworkMemory: { list: vi.fn().mockResolvedValue([]) },
           snapshots: {
+            markRepairRequired: vi.fn(),
             getById: vi.fn().mockResolvedValue({
               id: 'snapshot-pending-1',
               status: 'pending',
@@ -1827,3 +1888,15 @@ describe('application/process-student-memory-snapshot-job', () => {
     expect(markFailed).not.toHaveBeenCalled();
   });
 });
+
+function memorySelection(snapshot: unknown) {
+  return {
+    snapshot,
+    availability: {
+      state: snapshot ? 'available' : 'absent',
+      reason: snapshot ? 'verified_lineage' : 'no_established_snapshot',
+      lessonReferenceCount: 0,
+      homeworkReferenceCount: 0,
+    },
+  };
+}
