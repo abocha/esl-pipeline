@@ -2,6 +2,24 @@ import type { AssignmentSession, StudentScheduleBillingSurface } from '../../uti
 import { ProductButton } from '../system/ProductButton';
 import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
+type ProcessingStatus = NonNullable<AssignmentSession['transcriptProcessing']>[keyof NonNullable<
+  AssignmentSession['transcriptProcessing']
+>];
+
+const processingLabels: Record<ProcessingStatus, string> = {
+  not_requested: 'Not started',
+  pending: 'In progress',
+  ready: 'Ready',
+  failed: 'Failed',
+  superseded: 'Replaced by a newer source',
+  not_eligible: 'Not applicable',
+  uncertain: 'Status needs checking',
+};
+
+function processingLabel(status: ProcessingStatus | undefined): string {
+  return status ? processingLabels[status] : 'Status unavailable';
+}
+
 export function TranscriptReviewResult({
   session,
   transcriptText,
@@ -30,46 +48,44 @@ export function TranscriptReviewResult({
   onStartHomework: () => void;
 }) {
   const warnings = getTranscriptUnexpectedCharacterWarnings(transcriptText);
+  const processing = session?.transcriptProcessing;
+  const processingNeedsAttention = Object.values(processing ?? {}).some(
+    (status) => status === 'failed' || status === 'uncertain',
+  );
   return (
     <section
       className="minimal-section minimal-transcript-result"
       aria-label={completed ? 'Transcript result' : 'Review transcript'}
     >
       <h2>{completed ? 'Transcript confirmed — no homework planned' : 'Review & finish'}</h2>
-      <p>Lesson for {studentName ?? 'selected student'}</p>
-      {session?.lessonId ? (
-        <div>
-          <p>
-            {lesson?.title ?? 'Linked lesson'} ·{' '}
-            {lesson ? new Date(lesson.startsAt).toLocaleString() : session.lessonId}
-          </p>
-          {lesson ? (
-            <p>
-              Lesson status: {lesson.status.replaceAll('_', ' ')}. Credit:{' '}
-              {lesson.creditEventId
-                ? 'consumed'
-                : lesson.consumesCredit
-                  ? 'not consumed'
-                  : 'non-credit lesson'}
-              .
-            </p>
+      <div className="minimal-transcript-identity">
+        <p>Lesson for {studentName ?? 'selected student'}</p>
+        {session?.lessonId ? (
+          lesson ? (
+            <>
+              <p>
+                {lesson.title} · {new Date(lesson.startsAt).toLocaleString()}
+              </p>
+              <p className="minimal-muted">
+                {lesson.status.replaceAll('_', ' ')} ·{' '}
+                {lesson.creditEventId
+                  ? 'Credit used'
+                  : lesson.consumesCredit
+                    ? 'Credit not used'
+                    : 'Non-credit lesson'}
+              </p>
+            </>
           ) : (
-            <p role="status">
+            <p role={lessonLoadingError ? 'alert' : 'status'}>
               {lessonLoadingError
                 ? 'Lesson and credit status could not be loaded.'
-                : 'Loading lesson and credit status…'}
+                : 'Loading lesson details…'}
             </p>
-          )}
-        </div>
-      ) : (
-        <p>No scheduled lesson linked. No lesson credit is recorded by this workflow.</p>
-      )}
-      {!completed ? (
-        <p>
-          Review the saved transcript and speaker roles. Finish confirms this exact source; lesson
-          and credit status stay as shown.
-        </p>
-      ) : null}
+          )
+        ) : (
+          <p className="minimal-muted">No scheduled lesson linked</p>
+        )}
+      </div>
       <h3>Transcript</h3>
       <textarea aria-label="Reviewed transcript" value={transcriptText} readOnly rows={12} />
       {roles.length ? (
@@ -83,45 +99,35 @@ export function TranscriptReviewResult({
             ))}
           </ul>
         </div>
-      ) : (
-        <p>No speaker-role mapping is required for this source.</p>
-      )}
+      ) : null}
       {warnings.length ? (
         <p role="status">
           Transcript contains characters outside expected English/Russian text: {warnings.join(' ')}
-          . Check these spots before confirming.
+          .{!completed ? ' Check these spots before confirming.' : ''}
         </p>
       ) : null}
       {completed ? (
         <>
-          <dl className="minimal-transcript-processing">
-            <dt>Lesson memory extraction</dt>
-            <dd>
-              {session?.transcriptProcessing?.lessonMemory?.replaceAll('_', ' ') ??
-                'Status unavailable'}
-            </dd>
-            <dt>Student memory snapshot refresh</dt>
-            <dd>
-              {session?.transcriptProcessing?.snapshot?.replaceAll('_', ' ') ??
-                'Status unavailable'}
-            </dd>
-            <dt>Initial profile enrichment</dt>
-            <dd>
-              {session?.transcriptProcessing?.enrichment?.replaceAll('_', ' ') ??
-                'Status unavailable'}
-            </dd>
-          </dl>
-          <p>
-            Background processing does not change transcript confirmation or lesson credits. Profile
-            candidates remain subject to review.
-          </p>
           <ProductButton disabled={busy} onClick={onStartHomework}>
             Create homework
           </ProductButton>
+          <details className="minimal-transcript-details">
+            <summary>
+              Processing details{processingNeedsAttention ? ' · Needs attention' : ''}
+            </summary>
+            <dl className="minimal-transcript-processing">
+              <dt>Lesson notes</dt>
+              <dd>{processingLabel(processing?.lessonMemory)}</dd>
+              <dt>Student summary</dt>
+              <dd>{processingLabel(processing?.snapshot)}</dd>
+              <dt>Profile suggestions</dt>
+              <dd>{processingLabel(processing?.enrichment)}</dd>
+            </dl>
+          </details>
         </>
       ) : (
         <>
-          <label>
+          <label className="minimal-homework-choice-label">
             <input
               type="checkbox"
               checked

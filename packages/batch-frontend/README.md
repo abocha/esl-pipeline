@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-10-01 student-owned profile revisions.
+- Last Verified Against: 2026-10-07 no-homework transcript UI and student-history placement (ESL-35).
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -146,13 +146,19 @@ Canonical behavior and current status live in:
   **Review & finish** with Teaching context/Create skipped. Review and choice save never confirm
   Source or claim completion. **Confirm transcript and finish** submits the exact reviewed
   server version/hash. The result is a read-only transcript with actual lesson/credit status and
-  separate extraction, refresh and initial-enrichment status, without handout/Share controls.
+  collapsed **Processing details** for lesson notes, student summary, and profile suggestions,
+  without handout/Share controls. Pending, failed, unavailable, and inapplicable processing remain
+  distinct and never block transcript completion or **Create homework**.
   **Create homework** explicitly promotes the same owner to Context; reselecting none before
   downstream work remains unfinished until another finish. Context/prompt/draft/Share work disables
   opt-out with an explanation. Refresh/resume restores saved intent and completed results. Completed results
-  are discoverable through **Confirmed transcript results** at Student and **View transcript** on
-  linked lesson rows. History uses fixed-size server-offset pages and remains separate from
-  unfinished assignments.
+  are discoverable through **Lesson transcripts** on the student's **History** page and
+  **View transcript** on linked lesson rows. Unlinked transcripts remain accessible through History.
+  The student-scoped list filters existing tutor history pages locally and advances by server
+  result counts, including mixed homework/transcript pages. Empty partial pages offer older results;
+  student changes reset the list and ignore stale responses. Completed transcripts remain separate
+  from Step 1's unfinished/resume chooser. Server-side student filtering is deferred unless mixed
+  history volume makes browsing materially inefficient.
   Schedule/business **View transcript** uses the nullable result-session reference; only current
   completed no-homework suppresses its lesson follow-up. Linking an elapsed scheduled lesson can
   already complete/charge it before transcript review; finish does not introduce a billing action.

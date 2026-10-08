@@ -12,6 +12,7 @@ import {
   type StudentTimelineItem,
 } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
+import { StudentTranscriptHistory } from './StudentTranscriptHistory';
 import './StudentHistoryPage.css';
 
 type HistoryFilter =
@@ -731,6 +732,8 @@ export const StudentHistoryPage: React.FC = () => {
             {studentError ?? historyError}
           </p>
         ) : null}
+
+        {studentId ? <StudentTranscriptHistory key={studentId} studentId={studentId} /> : null}
 
         <div className="student-history-filters" aria-label="History filters">
           <span>Show</span>

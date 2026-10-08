@@ -388,6 +388,65 @@
   letter-spacing: 0.08em;
 }
 
+.student-transcript-history {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--history-line);
+  border-radius: 22px;
+  background: var(--history-paper-panel);
+}
+
+.student-transcript-history h2,
+.student-transcript-history p {
+  margin: 0;
+}
+
+.student-transcript-history h2 {
+  font-family: var(--student-area-serif);
+  font-size: 1.35rem;
+  font-weight: 500;
+}
+
+.student-transcript-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.student-transcript-history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--history-line);
+}
+
+.student-transcript-history li > div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.student-transcript-history span,
+.student-transcript-history p {
+  color: var(--history-muted);
+}
+
+.student-transcript-history a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--history-blue);
+  font-weight: 700;
+}
+
+.student-transcript-history button {
+  justify-self: start;
+  min-height: 44px;
+}
+
 .student-history-skeleton {
   display: block;
   position: relative;

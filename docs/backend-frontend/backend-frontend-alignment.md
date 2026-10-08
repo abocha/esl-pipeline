@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 3 minutes.
 - Authority Level: Canonical status tracker.
-- Last Verified Against: 2026-10-03 ordinary replay safety (ESL-16).
+- Last Verified Against: 2026-10-07 no-homework transcript UI and history placement (ESL-35).
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while alpha work continues.
 - Status: `active`.
@@ -125,8 +125,10 @@ revision content/history are preserved.
   finish confirms Source and records current transcript completion plus immutable source-bound
   history; ordinary confirmation and session-bound downstream work reject none intent under locks.
   Current completion excludes active lists and missing-homework follow-ups, while history alone
-  does not. Completed results expose separate extraction/refresh/enrichment progress without a
-  Share job. Explicit Create homework keeps the source owner, clears current completion and enters
+  does not. Completed results keep processing progress behind collapsed Processing details without
+  a Share job. Student History lists completed lesson transcripts, including unlinked sources,
+  using existing history pages and session-result links; Step 1 remains the unfinished-work chooser.
+  Explicit Create homework keeps the source owner, clears current completion and enters
   Context; reselecting none before downstream work requires a new reviewed finish. Existing homework
   progress takes precedence over `not_planned`; Schedule/business View transcript uses its typed
   result-session reference. Lesson linking retains the existing elapsed-scheduled-lesson credit
