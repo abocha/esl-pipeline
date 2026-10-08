@@ -444,6 +444,56 @@ artifact writes and family revocation serialize on the Pipeline grant row, so re
 cannot leave an overlapping token valid. OAuth cookies use the external `/api/oauth` path and stay
 Secure on HTTPS through the Caddy to nginx proxy chain.
 
+OAuth diagnostics use the existing Pino stdout JSON stream. At `info` level,
+`mcp_oauth_diagnostic` emits one summary per token exchange, initial authorization request,
+or provider revocation request; rejections use `warn`. `status` is the HTTP status (authorization
+errors can redirect), `oauthError` is the bounded provider error code, and `reason` adds safe
+classifications such as `refresh_replayed`, `refresh_not_found`, `client_mismatch`,
+`pkce_verification_failed`, `duplicate_grant_type`, or `consume_conflict`. Unknown exceptions
+emit `server_error` / `server_failure` without their payloads. These hooks use the supported
+[provider middleware and events](https://github.com/panva/node-oidc-provider/blob/v9.12.2/docs/events.md),
+not HTTP body interception.
+
+Provider-supported case/trailing-slash endpoint aliases receive the same diagnostics. An escaping
+provider exception also emits a bounded `mcp_oauth_provider_error` fallback; the provider's supported
+`error` listener prevents Koa's default stderr exception dump. Repeated session-cleanup failures
+preserve the captured server-failure classification and report the escaping failure's HTTP status.
+
+Each summary includes a generated `requestId`, completion `timestamp` in UTC, `durationMs`,
+`grantType`, `clientClass` (`chatgpt_web`, `codex`, `other`), and `resourceState`
+(`absent`, `expected`, `unexpected`, or `unavailable` before parsing). Client classification
+describes the requested client ID shape, not verified client identity. `grantRef`, when available,
+is a domain-separated HMAC reference using the first existing OAuth cookie key; it links token
+family events and `mcp_oauth_authorized` without logging raw grant/user/workspace IDs. Cookie-key
+rotation changes these references. No credential fingerprints or raw request/error contents are logged.
+
+`refreshConsumed`, `refreshSaved`, and `familyRevoked` report committed adapter actions in that
+request. `refreshRotated` means the provider rotated and saved the replacement; it does **not**
+prove the client received it. A rejected request can have these flags set because rotation occurs
+before some later validations. False flags mean no action observed in that request, not that a
+grant is globally valid. `refresh_not_found` cannot distinguish unknown, expired, or previously
+deleted credentials because the adapter filters expired rows and revocation deletes artifacts.
+Other unmapped rejections retain their OAuth code with a generic bounded reason. A new initial
+authorization event shows a client starting authorization; it cannot reveal the client's reason,
+prove a human clicked reconnect, or identify the same client session across unrelated grants.
+
+After an authorized deployment, inspect the existing Docker logs on the production host (adjust
+the container name for a nondefault Compose project):
+
+```bash
+docker logs --since 30m esl-pipeline-prod-batch-backend-1 2>&1 |
+  jq -Rc 'fromjson? | select(.event == "mcp_oauth_diagnostic" or .event == "mcp_oauth_authorized")'
+```
+
+For the next naturally occurring reconnect, retain the UTC window before Docker log rotation.
+Sort by `timestamp` (Pino `time` for the authorization marker), locate the first rejected token
+exchange, and inspect its `oauthError`, `reason`, grant/resource/client classifications and lifecycle
+flags. Match `grantRef` to preceding successes/revocations and `requestId` to the individual summary;
+then compare the timing of new authorization requests. This determines whether rejection preceded
+reauthorization or a client initiated it without an observed rejection. Missing references and
+client-only decisions remain unproven; do not enable request-body or provider DEBUG dumps to fill
+those gaps. Deployment and any deliberate live OAuth reproduction require separate authorization.
+
 The current [OpenAI MCP authentication guidance](https://developers.openai.com/plugins/build/auth)
 requires OAuth 2.1 authorization code with PKCE S256, protected-resource and authorization-server
 discovery, and resource-bound tokens; it prefers CIMD when supported. The
