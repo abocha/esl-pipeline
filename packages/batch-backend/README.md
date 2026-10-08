@@ -501,11 +501,22 @@ discovery, and resource-bound tokens; it prefers CIMD when supported. The
 shaped the path-aware discovery and audience handling. The endpoint uses the official TypeScript
 MCP SDK 2.1.0 with stateless request/response handling for the current 2026-07-28 protocol and
 stateless legacy initialize compatibility. It publishes `find_student` and
-`get_student_teaching_context`, each with `teaching_context.read` OAuth metadata and read-only
+`get_student_teaching_context`, plus the connection tool `get_profile`, each with
+`teaching_context.read` OAuth metadata and read-only
 annotations. Missing credentials receive a tool-level linking challenge; invalid credentials
-receive HTTP 401 with protected-resource discovery. The latter tool calls the canonical internal
+receive HTTP 401 with protected-resource discovery. The teaching-context tool calls the canonical internal
 teaching-context query and returns the independently versioned `mcp_teaching_context.v1` allowlist
 without internal provenance or personal facts. The MCP layer does not cache learner context.
+`get_profile` uses the [documented OpenAI profile schema](https://developers.openai.com/plugins/build/auth#support-multiple-accounts)
+and `openai/profile` marker. Its opaque UUID identifies the authenticated user/workspace pair;
+email and a workspace label are display metadata only. Migration `0067_mcp_profile_identities`
+backfills distinct pairs from all retained OAuth grants. Successful grant binding provisions
+missing identities atomically and idempotently; the read tool never provisions or repairs them.
+The migration is classified `incompatible` so the existing deployment procedure quiesces old
+grant writers before backfill; otherwise they could create grants without identities during rollout.
+Identities survive grant expiry/revocation and membership removal/recreation. Current active-user,
+workspace membership and credential checks still apply; missing identities fail closed. Existing
+user/workspace deletion retires the UUID, and identity updates/reassignment are rejected by SQL.
 The MCP routes accept browser `Origin` only when it exactly matches the configured
 `MCP_OAUTH_RESOURCE` origin; non-browser clients may omit it. MCP request database failures log
 only a safe event and SQLSTATE code, without exception text or stack.
