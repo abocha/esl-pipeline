@@ -528,8 +528,9 @@ user/workspace deletion retires the UUID, and identity updates/reassignment are 
 The MCP routes accept browser `Origin` only when it exactly matches the configured
 `MCP_OAUTH_RESOURCE` origin; non-browser clients may omit it. MCP request database failures log
 only a safe event and SQLSTATE code, without exception text or stack.
-`MCP_OAUTH_ENABLED` remains false by default; production activation and ChatGPT connection testing
-belong to a later slice.
+`MCP_OAUTH_ENABLED` remains false by default. Production rollout of the profile/refresh correction
+and live ChatGPT verification remain separate operator actions; follow the
+[`0067` deployment and recovery procedure](../../docs/backend-frontend/DEPLOYMENT.md#schema-compatibility-and-recovery).
 
 Student-memory operator workflows:
 

@@ -499,6 +499,7 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
       const warn = vi.spyOn(logger, 'warn');
       try {
         const issued = await issue(browser);
+        const profile = await readProfile(issued.access_token);
         const adapter = new McpOAuthAdapter('RefreshToken');
         const stored = await adapter.find(issued.refresh_token);
         expect(!!stored).toBe(true);
@@ -552,6 +553,11 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
             oauthConfig,
           )) !== null,
         ).toBe(true);
+        expect((await readProfile(response.json().access_token)).id === profile.id).toBe(true);
+        await withPgClient(async (client) => {
+          const identities = await client.query('SELECT id FROM mcp_profile_identities');
+          expect(identities.rows).toEqual([{ id: profile.id }]);
+        });
         const logs = JSON.stringify([...info.mock.calls, ...warn.mock.calls]);
         for (const secret of [
           issued.access_token,
@@ -611,6 +617,9 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     const response = await refresh(issued.refresh_token);
     expect(response.statusCode >= 400 && response.statusCode < 500).toBe(true);
     expect(response.json().access_token === undefined).toBe(true);
+    expect((await callProfile(issued.access_token)).statusCode).toBe(
+      invalidState === 'expired refresh' ? 200 : 401,
+    );
   });
 
   it('distinguishes unknown credentials from a matching legacy token rejected by session binding', async () => {
