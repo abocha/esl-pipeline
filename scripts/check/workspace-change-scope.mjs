@@ -253,6 +253,7 @@ function isCiRootToolchainPath(file) {
 function isCiDocsPath(file) {
   return (
     file === 'AGENTS.md' ||
+    file === 'README.md' ||
     file.startsWith('.codex/') ||
     file.startsWith('docs/') ||
     file.startsWith('scripts/docs/') ||
