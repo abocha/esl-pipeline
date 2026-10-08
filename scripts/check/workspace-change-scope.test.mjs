@@ -36,6 +36,16 @@ const ciScopeCases = [
     [false, false, false, false, true],
   ],
   [
+    'root README documentation only',
+    records('M', 'README.md'),
+    [false, false, false, false, true],
+  ],
+  [
+    'root README with docs',
+    [...records('M', 'README.md'), ...records('M', 'docs/QUICK_START.md')],
+    [false, false, false, false, true],
+  ],
+  [
     'Codex maintainer guidance only',
     records('M', '.codex/ORCHESTRATION.md'),
     [false, false, false, false, true],
