@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import Provider, { type Configuration, errors, interactionPolicy } from 'oidc-provider';
 
@@ -14,6 +14,11 @@ import { getUserById } from '../domain/user-repository.js';
 import type { AuthService } from '../infrastructure/auth-service.js';
 import { logger } from '../infrastructure/logger.js';
 import { McpOAuthAdapter } from '../infrastructure/mcp-oauth-adapter.js';
+import {
+  installOAuthDiagnostics,
+  oauthClientClass,
+  oauthGrantReference,
+} from '../infrastructure/mcp-oauth-diagnostics.js';
 import { authenticate, getAuthenticatedUser } from './auth-middleware.js';
 
 const GRANT_TTL_SECONDS = 14 * 24 * 60 * 60;
@@ -354,6 +359,7 @@ export function createMcpOAuthProvider(config: McpOAuthConfig, authService: Auth
       return undefined;
     },
   });
+  installOAuthDiagnostics(provider, config.resource, config.cookieKeys[0]!);
   // oidc-provider always includes its built-in `openid` claim scope in
   // discovery. This OAuth-only integration does not offer an OIDC identity
   // scope; consent accepts only the resource's read scope.
@@ -423,6 +429,7 @@ export function registerMcpOAuthRoutes(
       request.raw.url.startsWith('/oauth/grants/')
     )
       return;
+    const diagnosticStarted = performance.now();
     const authorizationUrl = new URL(request.raw.url, config.issuer);
     let authorizationPath = authorizationUrl.pathname;
     try {
@@ -439,6 +446,26 @@ export function registerMcpOAuthRoutes(
         authorizationUrl.searchParams.getAll('redirect_uri').length !== 1 ||
         !isAllowedCodexRedirect(authorizationUrl.searchParams.get('redirect_uri')))
     ) {
+      const resources = authorizationUrl.searchParams.getAll('resource');
+      logger.warn('MCP OAuth request rejected', {
+        event: 'mcp_oauth_diagnostic',
+        operation: 'authorization',
+        requestId: randomUUID(),
+        timestamp: new Date().toISOString(),
+        durationMs: Math.round(performance.now() - diagnosticStarted),
+        status: 400,
+        outcome: 'rejected',
+        clientClass: 'codex',
+        grantType: 'authorization_code',
+        oauthError: 'invalid_request',
+        reason: 'codex_redirect_rejected',
+        resourceState:
+          resources.length === 0
+            ? 'absent'
+            : resources.length === 1 && resources[0] === config.resource
+              ? 'expected'
+              : 'unexpected',
+      });
       return reply.code(400).send({ error: 'invalid_request' });
     }
     reply.hijack();
@@ -585,8 +612,8 @@ export function registerMcpOAuthRoutes(
       }
       logger.info('MCP OAuth grant authorized', {
         event: 'mcp_oauth_authorized',
-        userId: user.id,
-        workspaceId: selected.id,
+        clientClass: oauthClientClass(details.params.client_id),
+        grantRef: oauthGrantReference(grantId, config.cookieKeys[0]!),
       });
       const returnTo = await provider.interactionResult(
         request.raw,
