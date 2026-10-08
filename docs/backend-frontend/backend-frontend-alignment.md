@@ -66,9 +66,11 @@ revision content/history are preserved.
 ## Current Focus
 
 - The read-only ChatGPT MCP resource is implemented behind disabled-by-default `MCP_OAUTH_ENABLED`.
-  It exposes only learner name lookup and canonical teaching context. Production OAuth diagnostics
-  are active. The local refresh correction makes new credentials follow their explicit Pipeline
-  grant rather than the provider browser session; deployment and live verification remain pending.
+  It exposes learner name lookup, canonical teaching context, and the authenticated connection's
+  read-only profile. Production OAuth diagnostics are active. New credentials follow their explicit
+  Pipeline grant rather than the provider browser session. Migration `0067` backfills stable
+  user/workspace profile identities with old grant writers stopped; deployment and live verification
+  of these changes remain pending.
 - Use production observations and tutor reports to select work from
   [`docs/plans/2026-06-23-alpha-readiness.md`](../plans/2026-06-23-alpha-readiness.md).
 - Treat reproduced reliability or workflow failures as priority evidence.
