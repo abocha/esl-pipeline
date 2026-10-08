@@ -6,6 +6,7 @@ export type {
 
 import type { ContractVersionRegistry } from './contract-versions.js';
 
+export { type McpProfileDto, mcpProfileSchema } from './mcp-profile.js';
 export {
   type FindStudentResultDto,
   type GetStudentTeachingContextResultDto,
