@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [20.0.1] - 2026-10-08
+
+### Changed
+
+- Automated release from PR #359: fix(frontend): polish no-homework transcript flow (ESL-35) (https://github.com/abocha/esl-pipeline/pull/359)
+
 ## [20.0.0] - 2026-10-07
 
 ### Changed
