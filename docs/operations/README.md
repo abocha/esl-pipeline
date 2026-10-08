@@ -16,12 +16,17 @@ Use a current runbook for instructions. Start with the relevant entry in
 [`docs/reference/DOCS_IA_MAP.md`](../reference/DOCS_IA_MAP.md), or with the deployment,
 backup/restore, health, Telegram, prompt-gallery, or replay runbook named there.
 
+For an isolated, no-spend local assignment/UI/API rehearsal, start with
+[`local-product-smoke.md`](local-product-smoke.md); it uses a typed AssignmentV1 fixture
+and does not run the transcription worker or call paid providers by default.
+
 For a fresh supported Ubuntu host, start with
 [production host bootstrap](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap).
 
-AssignmentV1 campaign activation uses
-[ESL-29 preparation and rollout ordering](assignment-v1-activation.md), including renderer-3 admission,
-the exact shipped v7 template, default selection and paired rollback.
+For AssignmentV1 activation, consult the [ESL-29 preparation record](assignment-v1-activation.md)
+**only as dated rollout evidence**. Its frozen v7 hashes and release identities predate the current
+v8 template/schema contract. Refresh live deployment, template, schema and rollback identities
+before proposing any new activation; do not execute the historical v7 instructions unchanged.
 
 For on-host container, filesystem, CPU/memory-pressure, and public-route checks, see
 [`host-runtime-health.md`](host-runtime-health.md). It is separate from PostgreSQL backup health

@@ -91,7 +91,8 @@ placeholders. No transcription, batch publishing, Telegram, or other unrelated w
 
 ## Browser rehearsal
 
-1. Register/login locally. In **Students → Create Student**, create a synthetic learner. Expand
+1. Register/login locally. In **Students → Create Student**, create a synthetic learner named
+   **Alex** (matching the checked-in AssignmentV1 fixture's `metadata.student`). Expand
    **Starter profile** and add a level, goals, interests, and teacher notes. Check the saved active
    profile in **Learning**; manual edits require no provider.
 2. In **Assignments → Start new assignment**, choose that learner and continue.
@@ -106,9 +107,11 @@ placeholders. No transcription, batch publishing, Telegram, or other unrelated w
 6. Select **Generate assignment** (the Generate Draft action). It creates a fresh prompt package
    before generation. Default mode must stop at the provider boundary with an unavailable-provider
    result. This is a successful no-spend boundary, not successful generation.
-7. Use the product's manual draft editor with synthetic assignment Markdown to exercise save and
-   **Preview** without generation. Inspect the rendered text. Provider-backed generated output
-   requires the deliberate live path below; publishing/audio is outside this rehearsal.
+7. After the expected provider-unavailable result, use the manual **Assignment JSON** editor
+   to exercise validated draft autosave and **Preview** with the existing repository fixture below.
+   A provider failure is not a successful generation; if the current UI does not allow manually
+   creating or saving a typed draft at this boundary, record the blocker instead of claiming a
+   successful Preview. Publishing/audio is outside this rehearsal.
 
 ```text
 Teacher: What did you do last weekend?
@@ -118,17 +121,21 @@ Learner: I cooked with my sister. Next weekend I want to visit a museum.
 Teacher: Practise past simple questions and talking about future plans.
 ```
 
-If Context says **Saving needs attention / Invalid request** on a checkout preceding ESL-10,
-apply/merge the existing recovery fix in [PR #320](https://github.com/abocha/esl-pipeline/pull/320)
-before rehearsing further. ESL-11's local rehearsal uses that commit as a separate dependency.
-
-For a no-provider Preview check, copy the repository-owned valid synthetic assignment:
+For the typed-editor check, copy the **existing read-compatible AssignmentV1 JSON fixture** used
+by the frontend sandbox (not the legacy Markdown fixture, and not a fresh-generation v8 example):
 
 ```powershell
-Get-Content -Raw scripts/smoke/product-assignment.md | Set-Clipboard
+Get-Content -Raw packages/batch-frontend/src/dev/assignment-fixture.json | Set-Clipboard
 ```
 
-Paste it into Draft markdown, wait for the draft to save, continue to Review & share, then open Preview assignment. The production validator should accept the fixture without modification.
+With **Alex** as the selected learner and **Use an existing transcript** as the source path, paste
+it into **Assignment JSON**. This fixture has `metadata.student: "Alex"`, `input.kind: "generate"`
+and no external URLs; its metadata and source kind must match the session validation context.
+Wait for a valid autosave, then continue to **Review & share** and open **Preview assignment**.
+An invalid JSON buffer is browser-local and cannot be saved or previewed. The old
+`scripts/smoke/product-assignment.md` is Markdown with YAML frontmatter and must **not** be pasted
+into the new AssignmentV1 editor. This check exercises the read-compatible manual edit/Preview
+path; it does not prove that current v8 generation or a provider call succeeded.
 
 ## Deliberate real generation
 

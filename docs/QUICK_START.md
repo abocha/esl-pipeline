@@ -63,8 +63,9 @@ reproduce that job's actual command, configuration, and prerequisites. Use
 pnpm dev:batch
 ```
 
-This starts the API, batch worker, student-memory worker, and frontend on the host. For frontend-only
-iteration without a backend, use the mock-auth sandbox documented in
+This starts the **core** API, batch worker, student-memory worker, and frontend on the host;
+`dev:batch` is not the full recording/STT stack. For frontend-only iteration without a backend,
+use the mock-auth sandbox documented in
 [`packages/batch-frontend/README.md`](../packages/batch-frontend/README.md).
 
 The root command does not start the separate transcription worker. When testing OPUS transcription,

@@ -14,6 +14,11 @@ pnpm env:validate -- --profile=development
 pnpm dev:batch
 ```
 
+`dev:batch` starts API, frontend, batch worker and student-memory worker, **not** the
+transcription worker. For recording/STT tests, also run
+`pnpm --filter @esl-pipeline/batch-backend dev:transcribe-worker` in another terminal.
+For the isolated no-spend manual-transcript rehearsal, use `smoke:start` below instead.
+
 For prerequisites, local Docker behavior, environment setup, and operational commands, read
 [`docs/QUICK_START.md`](docs/QUICK_START.md) and
 [`docs/reference/env.md`](docs/reference/env.md).
