@@ -40,6 +40,15 @@ Provider/model detail stays in
 
 ### Ordinary memory replay
 
+ESL-38 shares aggregate availability across selection, health, prompt packaging, transcript progress,
+teaching context and Learning. `absent`, `available`, `repair_required` and `repository_unavailable`
+are separate from stored status and pending/failed work. Reference counts describe lineage only.
+MCP adds result-level availability without changing the closed `mcp_teaching_context.v1` content.
+Verified historical observations remain consumable; historical execution remains blocked. Established
+history cannot fall back to a recent-only bootstrap after genuine invalidation. Explicit eligible-episode
+rebuild and coordinated API/worker/frontend rollout remain separately authorized operations; see
+[the continuity runbook](../operations/student-memory-replay-backfill.md#evidence-availability-and-continuity-esl-38).
+
 Ordinary homework/snapshot replay stays operator-owned and CLI-only. Durable replay keys distinguish
 resumption from new regeneration; cancellation and changed canonical source/current snapshot state
 fence late results. Snapshot completion links one canonical result atomically, and the existing
@@ -180,6 +189,6 @@ HTML; typed preview uses the same renderer. No active PMD projection or temporar
 is created. Native React renderer 3 / manifest schema 6 carry canonical assignment and publication
 metadata; API 9 / validator 3 retire Markdown processing while manifest contract 4 keeps historical
 read semantics. Historical Markdown and renderer-1 manifests are read-only evidence under ABO-30.
-No correction, retry, rerun, resume, rendering, TTS, publication, memory processing or conversion is supported. Editable JSON authority, source authorization, CAS,
+No historical correction, retry, rerun, resume, rendering, TTS, publication, fresh memory extraction or conversion is supported. Previously materialized, verified lesson/homework observations may be read and used in student-memory snapshot derivation under the existing exact ownership, confirmed-binding, identity/URI/hash and replacement checks (ESL-38). This evidence exception never admits historical extraction, regeneration, enrichment recovery or Batch legacy import. Editable JSON authority, source authorization, CAS,
 lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
 [AssignmentV1](../reference/ASSIGNMENT_V1.md) for the canonical execution contract.

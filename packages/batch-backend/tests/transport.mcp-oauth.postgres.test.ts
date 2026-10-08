@@ -1170,6 +1170,8 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     ]);
     expect(Object.keys(tools[0]!.inputSchema.properties ?? {})).toEqual(['name']);
     expect(Object.keys(tools[1]!.inputSchema.properties ?? {})).toEqual(['studentId']);
+    expect(Object.keys(tools[1]!.outputSchema!.properties ?? {})).toEqual(['context', 'availability']);
+    expect(tools[1]!.outputSchema!.required).toEqual(['context', 'availability']);
     const profileTool = wireDiscovery.result.tools[2];
     expect(profileTool.inputSchema).toEqual({
       type: 'object',
@@ -1224,6 +1226,10 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
       arguments: { studentId: students[0]!.id },
     });
     expect(context.structuredContent).toMatchObject({
+      availability: {
+        state: 'absent', reason: 'no_established_snapshot',
+        lessonReferenceCount: 0, homeworkReferenceCount: 0,
+      },
       context: {
         contractVersion: 'mcp_teaching_context.v1',
         student: { studentId: students[0]!.id, name: 'Anna 1' },

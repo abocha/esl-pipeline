@@ -1,3 +1,5 @@
+import type { StudentMemoryAvailability } from '@esl-pipeline/contracts';
+
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import { listRecentReadyHomeworkMemoryByStudentId } from '../domain/homework-memory-repository.js';
 import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
@@ -5,13 +7,14 @@ import { listRecentReadyLessonMemoryByStudentId } from '../domain/lesson-memory-
 import type { ProfileRevisionSource } from '../domain/profile-revision-model.js';
 import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
-import { getLatestReadyStudentMemorySnapshotByStudentId } from '../domain/student-memory-snapshot-repository.js';
+import { getStudentMemorySnapshotSelection } from '../domain/student-memory-snapshot-repository.js';
 import { getStudentById } from '../domain/student-repository.js';
 import {
   deriveFoundationalProfileFromMarkdown,
   type FoundationalProfile,
   normalizeFoundationalProfile,
 } from './foundational-profile.js';
+import { loadStudentMemorySelection } from './student-memory-availability.js';
 
 export const TEACHING_CONTEXT_SCHEMA_VERSION = 'teaching_context.v1';
 
@@ -20,6 +23,7 @@ const RECENT_HOMEWORK_LIMIT = 2;
 const SECTION_ITEM_LIMIT = 5;
 
 export interface TeachingContext {
+  availability: StudentMemoryAvailability;
   schemaVersion: typeof TEACHING_CONTEXT_SCHEMA_VERSION;
   student: { id: string; name: string };
   profile: FoundationalProfile | null;
@@ -77,7 +81,7 @@ export interface TeachingContext {
 interface TeachingContextDependencies {
   getStudent: typeof getStudentById;
   getRevision: typeof getActiveProfileRevision;
-  getSnapshot: typeof getLatestReadyStudentMemorySnapshotByStudentId;
+  getSelection: typeof getStudentMemorySnapshotSelection;
   listLessons: typeof listRecentReadyLessonMemoryByStudentId;
   listHomework: typeof listRecentReadyHomeworkMemoryByStudentId;
 }
@@ -182,7 +186,7 @@ export async function getStudentTeachingContext(args: {
   const dependencies: TeachingContextDependencies = {
     getStudent: args.overrides?.getStudent ?? getStudentById,
     getRevision: args.overrides?.getRevision ?? getActiveProfileRevision,
-    getSnapshot: args.overrides?.getSnapshot ?? getLatestReadyStudentMemorySnapshotByStudentId,
+    getSelection: args.overrides?.getSelection ?? getStudentMemorySnapshotSelection,
     listLessons: args.overrides?.listLessons ?? listRecentReadyLessonMemoryByStudentId,
     listHomework: args.overrides?.listHomework ?? listRecentReadyHomeworkMemoryByStudentId,
   };
@@ -195,12 +199,13 @@ export async function getStudentTeachingContext(args: {
 
   const revision = await dependencies.getRevision(student.id);
 
-  const [snapshot, lessons, homework] = await Promise.all([
-    dependencies.getSnapshot(student.id),
+  const [selection, lessons, homework] = await Promise.all([
+    loadStudentMemorySelection(student.id, dependencies.getSelection),
     dependencies.listLessons(student.id, { limit: RECENT_LESSON_LIMIT }),
     dependencies.listHomework(student.id, { limit: RECENT_HOMEWORK_LIMIT }),
   ]);
 
+  const snapshot = selection.snapshot;
   const activeRevision = revision?.status === 'active' ? revision : null;
   const profileContent = activeRevision
     ? (activeRevision.structuredContent ??
@@ -211,6 +216,7 @@ export async function getStudentTeachingContext(args: {
 
   return {
     schemaVersion: TEACHING_CONTEXT_SCHEMA_VERSION,
+    availability: selection.availability,
     student: { id: student.id, name: student.student },
     profile: profileContent ? normalizeFoundationalProfile(profileContent) : null,
     memorySnapshot: projectSnapshot(snapshot),

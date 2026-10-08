@@ -38,6 +38,7 @@ import {
 } from '../src/domain/student-memory-openai-batch-repository.js';
 import {
   ensurePendingStudentMemorySnapshot,
+  getLatestReadyStudentMemorySnapshotByStudentId,
   getStudentMemorySnapshotById,
   insertCanonicalReadyStudentMemorySnapshot,
   markStudentMemorySnapshotFailed,
@@ -48,7 +49,10 @@ import {
   closeStudentMemoryQueue,
   createStudentMemoryQueue,
 } from '../src/infrastructure/student-memory-queue.js';
-import { insertLessonMemory } from './support/student-memory-fixture.js';
+import {
+  insertLessonMemory,
+  makeLessonMemorySourcesHistorical,
+} from './support/student-memory-fixture.js';
 import { requirePgTestEnv, requireRedisTestEnv } from './support/test-env.js';
 
 requirePgTestEnv();
@@ -192,6 +196,39 @@ async function readyHomework(source: Awaited<ReturnType<typeof seed>>) {
 }
 
 describe('ordinary replay transactions and DB → BullMQ delivery', () => {
+  it('explicitly reconstructs all eligible materialized history after invalidation, including old historical episodes, exactly once', async () => {
+    const { studentId } = await seed();
+    const ids: string[] = [];
+    for (let i = 0; i < 9; i++)
+      ids.push(await insertLessonMemory({ studentId, status: 'ready', withConfirmedSource: true }));
+    await makeLessonMemorySourcesHistorical(ids.slice(0, 8));
+    const original = await insertCanonicalReadyStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'openai',
+      model: 'fixture',
+      lessonMemoryEntryIds: ids,
+      snapshotSummary: 'Established history',
+    });
+    await withPgClient((client) =>
+      client.query("UPDATE lesson_memory_entries SET status = 'superseded' WHERE id = $1", [
+        ids[0],
+      ]),
+    );
+    const intent = await pendingSnapshot(studentId);
+    const extractor = vi.fn().mockResolvedValue({ content: snapshotContent });
+    await runSnapshot(intent, extractor);
+    await runSnapshot(intent, extractor);
+    expect(extractor).toHaveBeenCalledTimes(1);
+    const rebuilt = await getLatestReadyStudentMemorySnapshotByStudentId(studentId);
+    expect(rebuilt?.lessonMemoryEntryIds.sort()).toEqual(ids.slice(1).sort());
+    expect(rebuilt?.generationNotes).toMatchObject({
+      replayKey: intent.generationNotes?.replayKey,
+      strategy: 'manual_rebuild_v1_1',
+      operatorReason: 'Integration replay',
+    });
+    expect((await getStudentMemorySnapshotById(original.id))?.lessonMemoryEntryIds).toEqual(ids);
+  });
   it('serializes phantom canonical sources and Source-authority changes on the student lock', async () => {
     const source = await seed();
     const lessonId = await insertLessonMemory({

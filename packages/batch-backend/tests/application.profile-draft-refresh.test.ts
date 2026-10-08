@@ -133,6 +133,12 @@ describe('application/profile-draft-refresh', () => {
         },
         memory: {
           getOverview: async () => ({
+            availability: {
+              state: 'absent',
+              reason: 'no_established_snapshot',
+              lessonReferenceCount: 0,
+              homeworkReferenceCount: 0,
+            },
             studentId: 'tolik',
             latestReadyStudentMemorySnapshot: null,
             recentReadyLessonMemory: [],

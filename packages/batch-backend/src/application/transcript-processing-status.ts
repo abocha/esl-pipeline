@@ -1,9 +1,15 @@
-import { buildCanonicalLessonMemoryAuthoritySqlPredicate } from '../domain/lesson-memory-repository.js';
-import { buildEligibleStudentMemorySnapshotLineageSqlPredicate } from '../domain/student-memory-snapshot-repository.js';
+import type { StudentMemoryAvailability } from '@esl-pipeline/contracts';
+
+import { buildVerifiedLessonMemoryEvidenceSqlPredicate } from '../domain/lesson-memory-repository.js';
+import {
+  buildEligibleStudentMemorySnapshotLineageSqlPredicate,
+  readStudentMemorySnapshotSelection,
+} from '../domain/student-memory-snapshot-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 
 type MemoryStatus = 'not_requested' | 'pending' | 'ready' | 'failed' | 'superseded';
 export interface TranscriptProcessingStatus {
+  availability: StudentMemoryAvailability;
   lessonMemory: MemoryStatus;
   snapshot: MemoryStatus;
   enrichment: MemoryStatus | 'not_eligible' | 'uncertain';
@@ -21,8 +27,9 @@ export async function getTranscriptProcessingStatus(
       enrichment_state: string | null;
       enrichment_eligible: boolean;
       enrichment_uncertain: boolean;
+      student_id: string;
     }>(
-      `SELECT lesson.status AS lesson_status, snapshot.status AS snapshot_status,
+      `SELECT a.student_id, lesson.status AS lesson_status, snapshot.status AS snapshot_status,
          enrichment.state AS enrichment_state,
          (student.profile_provenance = 'tutor_only' AND lesson.id IS NOT NULL) AS enrichment_eligible,
          EXISTS (SELECT 1 FROM profile_initial_enrichment_operations op
@@ -31,7 +38,7 @@ export async function getTranscriptProcessingStatus(
        JOIN students student ON student.id = a.student_id
        LEFT JOIN LATERAL (
          SELECT l.* FROM lesson_memory_entries l WHERE l.assignment_session_id = a.id
-           AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('l')}
+           AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('l')}
          ORDER BY l.generated_at DESC, l.id DESC LIMIT 1
        ) lesson ON TRUE
        LEFT JOIN LATERAL (
@@ -71,6 +78,14 @@ export async function getTranscriptProcessingStatus(
                     ? 'pending'
                     : 'not_eligible';
     return {
+      availability: row?.student_id
+        ? (await readStudentMemorySnapshotSelection(client, row.student_id)).availability
+        : {
+            state: 'absent',
+            reason: 'no_established_snapshot',
+            lessonReferenceCount: 0,
+            homeworkReferenceCount: 0,
+          },
       lessonMemory: row?.lesson_status ?? 'not_requested',
       snapshot:
         row?.snapshot_status ?? (row?.lesson_status === 'ready' ? 'pending' : 'not_requested'),

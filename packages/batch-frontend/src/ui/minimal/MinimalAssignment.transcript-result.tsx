@@ -2,9 +2,10 @@ import type { AssignmentSession, StudentScheduleBillingSurface } from '../../uti
 import { ProductButton } from '../system/ProductButton';
 import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
-type ProcessingStatus = NonNullable<AssignmentSession['transcriptProcessing']>[keyof NonNullable<
-  AssignmentSession['transcriptProcessing']
->];
+type ProcessingStatus = NonNullable<AssignmentSession['transcriptProcessing']>[
+  | 'lessonMemory'
+  | 'snapshot'
+  | 'enrichment'];
 
 const processingLabels: Record<ProcessingStatus, string> = {
   not_requested: 'Not started',
@@ -49,9 +50,12 @@ export function TranscriptReviewResult({
 }) {
   const warnings = getTranscriptUnexpectedCharacterWarnings(transcriptText);
   const processing = session?.transcriptProcessing;
-  const processingNeedsAttention = Object.values(processing ?? {}).some(
-    (status) => status === 'failed' || status === 'uncertain',
-  );
+  const processingNeedsAttention =
+    Object.values(processing ?? {}).some(
+      (status) => status === 'failed' || status === 'uncertain',
+    ) ||
+    processing?.availability?.state === 'repair_required' ||
+    processing?.availability?.state === 'repository_unavailable';
   return (
     <section
       className="minimal-section minimal-transcript-result"
@@ -120,6 +124,20 @@ export function TranscriptReviewResult({
               <dd>{processingLabel(processing?.lessonMemory)}</dd>
               <dt>Student summary</dt>
               <dd>{processingLabel(processing?.snapshot)}</dd>
+              {processing?.availability ? (
+                <>
+                  <dt>Summary availability</dt>
+                  <dd>
+                    {processing.availability.state === 'repair_required'
+                      ? 'Established history requires explicit repair'
+                      : processing.availability.state === 'repository_unavailable'
+                        ? 'Memory retrieval unavailable'
+                        : processing.availability.state === 'available'
+                          ? 'Available'
+                          : 'No established summary yet'}
+                  </dd>
+                </>
+              ) : null}
               <dt>Profile suggestions</dt>
               <dd>{processingLabel(processing?.enrichment)}</dd>
             </dl>

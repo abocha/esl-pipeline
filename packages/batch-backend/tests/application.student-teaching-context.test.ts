@@ -40,21 +40,23 @@ function dependencies() {
       },
       content: 'Private markdown profile',
     }),
-    getSnapshot: vi.fn().mockResolvedValue({
-      id: 'snapshot-1',
-      generatedAt: date,
-      stableStrengths: [
-        { label: 'Fluency', note: 'Longer responses', privateKey: 'Unexpected snapshot key' },
-      ],
-      recurringIssues: [
-        { label: 'Articles', issueType: 'grammar', note: 'Often omitted', confidence: 'high' },
-      ],
-      activeReviewBacklog: [{ label: 'Past tense', note: 'Review next lesson' }],
-      recentProgress: [{ label: 'Vocabulary', note: 'Improved recall' }],
-      unresolvedIssues: [],
-      personalFacts: [{ fact: 'Private detail', evidence: [{ quote: 'Raw transcript' }] }],
-      provider: 'internal-provider',
-    }),
+    getSelection: vi.fn().mockResolvedValue(
+      memorySelection({
+        id: 'snapshot-1',
+        generatedAt: date,
+        stableStrengths: [
+          { label: 'Fluency', note: 'Longer responses', privateKey: 'Unexpected snapshot key' },
+        ],
+        recurringIssues: [
+          { label: 'Articles', issueType: 'grammar', note: 'Often omitted', confidence: 'high' },
+        ],
+        activeReviewBacklog: [{ label: 'Past tense', note: 'Review next lesson' }],
+        recentProgress: [{ label: 'Vocabulary', note: 'Improved recall' }],
+        unresolvedIssues: [],
+        personalFacts: [{ fact: 'Private detail', evidence: [{ quote: 'Raw transcript' }] }],
+        provider: 'internal-provider',
+      }),
+    ),
     listLessons: vi.fn().mockResolvedValue([
       {
         id: 'lesson-memory-1',
@@ -117,13 +119,33 @@ function dependencies() {
 }
 
 describe('getStudentTeachingContext', () => {
+  it('keeps bounded availability separate from the closed MCP v1 context', async () => {
+    const overrides = dependencies();
+    const availability = {
+      state: 'repair_required',
+      reason: 'established_history_ineligible',
+      lessonReferenceCount: 19,
+      homeworkReferenceCount: 3,
+    };
+    overrides.getSelection.mockResolvedValue({ snapshot: null, availability });
+    const context = await getStudentTeachingContext({ workspaceId, studentId, overrides });
+    expect(context?.availability).toEqual(availability);
+    expect(context?.memorySnapshot).toBeNull();
+    const wire = projectMcpTeachingContext(context!);
+    expect(mcpTeachingContextSchema.parse(wire)).toEqual(wire);
+    expect(wire).not.toHaveProperty('availability');
+    overrides.getSelection.mockRejectedValue(new Error('s3://private failure'));
+    const unavailable = await getStudentTeachingContext({ workspaceId, studentId, overrides });
+    expect(unavailable?.availability.state).toBe('repository_unavailable');
+    expect(JSON.stringify(unavailable?.availability)).not.toContain('private');
+  });
   it('composes a compact structured projection from authorized canonical sources', async () => {
     const overrides = dependencies();
     const context = await getStudentTeachingContext({ workspaceId, studentId, overrides });
 
     expect(overrides.getStudent).toHaveBeenCalledWith(studentId, { workspaceId });
     expect(overrides.getRevision).toHaveBeenCalledWith(studentId);
-    expect(overrides.getSnapshot).toHaveBeenCalledWith(studentId);
+    expect(overrides.getSelection).toHaveBeenCalledWith(studentId);
     expect(overrides.listLessons).toHaveBeenCalledWith(studentId, { limit: 3 });
     expect(overrides.listHomework).toHaveBeenCalledWith(studentId, { limit: 2 });
     expect(context).toMatchObject({
@@ -200,7 +222,7 @@ describe('getStudentTeachingContext', () => {
     const overrides = dependencies();
     const lesson = (await overrides.listLessons())[0];
     const homework = (await overrides.listHomework())[0];
-    const snapshot = await overrides.getSnapshot();
+    const snapshot = (await overrides.getSelection()).snapshot;
     overrides.listLessons.mockResolvedValue(
       Array.from({ length: 8 }, (_, index) => ({
         ...lesson,
@@ -223,13 +245,15 @@ describe('getStudentTeachingContext', () => {
         })),
       })),
     );
-    overrides.getSnapshot.mockResolvedValue({
-      ...snapshot,
-      stableStrengths: Array.from({ length: 9 }, (_, index) => ({
-        label: `Strength ${index}`,
-        note: 'Note',
-      })),
-    });
+    overrides.getSelection.mockResolvedValue(
+      memorySelection({
+        ...snapshot,
+        stableStrengths: Array.from({ length: 9 }, (_, index) => ({
+          label: `Strength ${index}`,
+          note: 'Note',
+        })),
+      }),
+    );
 
     const context = await getStudentTeachingContext({ workspaceId, studentId, overrides });
     expect(context?.recentLessons.map((entry) => entry.title)).toEqual([
@@ -292,12 +316,13 @@ describe('getStudentTeachingContext', () => {
       structuredContent: null,
       content: 'Legacy prose',
     });
-    overrides.getSnapshot.mockResolvedValue(null);
+    overrides.getSelection.mockResolvedValue(memorySelection(null));
     overrides.listLessons.mockResolvedValue([]);
     overrides.listHomework.mockResolvedValue([]);
 
     const context = await getStudentTeachingContext({ workspaceId, studentId, overrides });
     expect(context).toEqual({
+      availability: memorySelection(null).availability,
       schemaVersion: TEACHING_CONTEXT_SCHEMA_VERSION,
       student: { id: studentId, name: 'Maya' },
       profile: null,
@@ -324,7 +349,7 @@ describe('getStudentTeachingContext', () => {
     const overrides = dependencies();
     overrides.getRevision.mockResolvedValue(null);
     overrides.getStudent.mockResolvedValue(student());
-    overrides.getSnapshot.mockResolvedValue(null);
+    overrides.getSelection.mockResolvedValue(memorySelection(null));
     overrides.listLessons.mockResolvedValue([]);
     overrides.listHomework.mockResolvedValue([]);
 
@@ -345,7 +370,7 @@ describe('getStudentTeachingContext', () => {
       expect(overrides.getStudent).toHaveBeenCalledWith(studentId, { workspaceId });
       for (const dependency of [
         overrides.getRevision,
-        overrides.getSnapshot,
+        overrides.getSelection,
         overrides.listLessons,
         overrides.listHomework,
       ]) {
@@ -354,3 +379,15 @@ describe('getStudentTeachingContext', () => {
     },
   );
 });
+
+function memorySelection(snapshot: unknown) {
+  return {
+    snapshot,
+    availability: {
+      state: snapshot ? 'available' : 'absent',
+      reason: snapshot ? 'verified_lineage' : 'no_established_snapshot',
+      lessonReferenceCount: 0,
+      homeworkReferenceCount: 0,
+    },
+  };
+}

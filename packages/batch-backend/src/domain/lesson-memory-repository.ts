@@ -93,7 +93,8 @@ export interface ListLessonMemoryEntriesOptions {
   canonicalOnly?: boolean;
 }
 
-export function buildCanonicalLessonMemoryAuthoritySqlPredicate(entryAlias: string): string {
+/** Source proof for existing observations, independent of workflow execution permission. */
+export function buildVerifiedLessonMemoryEvidenceSqlPredicate(entryAlias: string): string {
   if (!/^[a-z_][a-z0-9_]*$/.test(entryAlias)) {
     throw new Error('Invalid lesson-memory SQL alias');
   }
@@ -103,8 +104,16 @@ export function buildCanonicalLessonMemoryAuthoritySqlPredicate(entryAlias: stri
     JOIN assignment_sessions AS source_session
       ON source_session.id = source_binding.assignment_session_id
     JOIN recordings AS source_recording ON source_recording.id = ${entryAlias}.recording_id
+    JOIN students AS source_student ON source_student.id = ${entryAlias}.student_id
+    JOIN transcripts AS source_transcript ON source_transcript.id = ${entryAlias}.transcript_id
     WHERE source_binding.assignment_session_id = ${entryAlias}.assignment_session_id
-      AND NOT historical_assignment_session(source_session)
+      AND source_binding.student_id = ${entryAlias}.student_id
+      AND source_session.student_id = ${entryAlias}.student_id
+      AND source_recording.student_id = ${entryAlias}.student_id
+      AND source_binding.user_id = source_session.user_id
+      AND source_binding.workspace_id = source_student.workspace_id
+      AND source_recording.workspace_id = source_student.workspace_id
+      AND source_transcript.recording_id = ${entryAlias}.recording_id
       AND source_binding.binding_role = 'confirmed'
       AND source_binding.recording_id = ${entryAlias}.recording_id
       AND source_binding.transcript_id = ${entryAlias}.transcript_id
@@ -119,6 +128,27 @@ export function buildCanonicalLessonMemoryAuthoritySqlPredicate(entryAlias: stri
       AND source_session.confirmed_snapshot #>> '{source,transcriptStorageUri}' = ${entryAlias}.source_storage_uri
       AND source_session.confirmed_snapshot #>> '{source,transcriptHash}' = ${entryAlias}.source_content_hash
   )`;
+}
+
+/** Admission for extraction, delivery and enrichment must keep the historical fence. */
+export function buildLessonMemoryExecutionSqlPredicate(entryAlias: string): string {
+  return `${buildVerifiedLessonMemoryEvidenceSqlPredicate(entryAlias)} AND EXISTS (
+    SELECT 1 FROM assignment_sessions execution_session
+    WHERE execution_session.id = ${entryAlias}.assignment_session_id
+      AND NOT historical_assignment_session(execution_session)
+  )`;
+}
+
+async function assertLessonMemoryWorkflowExecutable(
+  client: PoolClient,
+  sessionId: string | null | undefined,
+) {
+  if (!sessionId) return;
+  const result = await client.query(
+    'SELECT 1 FROM assignment_sessions s WHERE s.id = $1 AND historical_assignment_session(s)',
+    [sessionId],
+  );
+  if (result.rows[0]) throw new Error('Historical lesson-memory execution is read-only');
 }
 
 export interface ListRecentReadyLessonMemoryOptions {
@@ -256,6 +286,7 @@ export async function insertCanonicalReadyLessonMemoryEntry(
       await client.query('SELECT id FROM transcripts WHERE id = $1 FOR UPDATE', [
         params.transcriptId,
       ]);
+      await assertLessonMemoryWorkflowExecutable(client, params.assignmentSessionId);
 
       const insertResult = await client.query(
         `
@@ -390,6 +421,7 @@ async function assertCanonicalAssignmentMemoryAuthority(
      JOIN assignment_sessions s ON s.id = b.assignment_session_id
      JOIN recordings r ON r.id = b.recording_id
      WHERE b.assignment_session_id = $1
+       AND NOT historical_assignment_session(s)
        AND b.student_id = $2
        AND b.binding_role = 'confirmed'
        AND b.recording_id = $3
@@ -434,6 +466,7 @@ export async function ensurePendingLessonMemoryEntry(
         [params.transcriptId],
       );
       const transcript = transcriptResult.rows[0];
+      await assertLessonMemoryWorkflowExecutable(client, params.assignmentSessionId);
       if (!transcript) {
         throw new Error(`Transcript not found for lesson-memory request: ${params.transcriptId}`);
       }
@@ -477,6 +510,8 @@ export async function ensurePendingLessonMemoryEntry(
         [params.transcriptId, params.sourceContentHash],
       );
       const existing = existingResult.rows[0];
+      if (!params.assignmentSessionId)
+        await assertLessonMemoryWorkflowExecutable(client, existing?.assignment_session_id);
       if (existing && (existing.status === 'ready' || existing.status === 'pending')) {
         if (
           params.assignmentSessionId &&
@@ -753,7 +788,7 @@ export async function publishConfirmedLessonMemoryEntry(
         AND source_content_hash = $3
         AND source_storage_uri = $20
         AND status = 'pending'
-        AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
+        AND ${buildLessonMemoryExecutionSqlPredicate('lesson_memory_entries')}
       RETURNING *
       `,
         [
@@ -829,7 +864,7 @@ export async function getLatestReadyLessonMemoryByTranscriptId(
       WHERE lesson_memory_entries.transcript_id = $1
         AND lesson_memory_entries.status = 'ready'
         AND lesson_memory_entries.source_content_hash IS NOT NULL
-        AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
+        AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
       ORDER BY lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
       LIMIT 1
       `,
@@ -929,7 +964,7 @@ export async function listLessonMemoryEntries(
     }
   }
   if (canonicalOnly) {
-    clauses.push(buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries'));
+    clauses.push(buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries'));
   }
 
   values.push(limit);
@@ -1041,7 +1076,7 @@ export async function listRecentReadyLessonMemoryByStudentId(
       FROM lesson_memory_entries
       WHERE ${clauses.join(' AND ')}
         AND lesson_memory_entries.source_content_hash IS NOT NULL
-        AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
+        AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
       ORDER BY lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
       LIMIT $${limitParam}
       `,
