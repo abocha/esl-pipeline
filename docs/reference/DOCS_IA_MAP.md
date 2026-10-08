@@ -40,6 +40,7 @@ boundary.
 | Task                                                    | Read first                                          | Then read                                                   |
 | ------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- |
 | Find a current procedure or dated operations evidence   | `docs/operations/README.md`                         | the named runbook or evidence record                        |
+| Isolated no-spend UI/API assignment rehearsal           | `docs/operations/local-product-smoke.md`             | `docs/reference/ASSIGNMENT_V1.md` for typed draft contracts  |
 | Deployment or local production Compose                  | `docs/backend-frontend/DEPLOYMENT.md`               | `docs/operations/production-env-checklist.md`               |
 | Docker recovery, host paths, or pnpm hydration          | `docs/operations/docker-host-paths.md`              | `docs/operations/rollup-optional-binary-troubleshooting.md` |
 | Postgres backup or restore                              | `docs/operations/postgres-backup-restore.md`        | `docs/operations/postgres-backup-s3.md`                     |
