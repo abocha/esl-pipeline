@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [20.1.0] - 2026-10-08
+
+### Changed
+
+- Automated release from PR #367: feat(mcp): add stable profiles and fix session-bound refresh tokens (https://github.com/abocha/esl-pipeline/pull/367)
+
 ## [20.0.2] - 2026-10-08
 
 ### Changed
