@@ -9,6 +9,7 @@ import { Client as PgClient } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAuthService } from '../src/infrastructure/auth-service.js';
+import { type BoundOAuthGrant, bindOAuthGrant, getMcpProfile } from '../src/domain/mcp-oauth-grants.js';
 import { insertStudent } from '../src/domain/student-repository.js';
 import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
 import { logger } from '../src/infrastructure/logger.js';
@@ -279,6 +280,39 @@ async function refresh(refreshToken: string, options: Record<string, string> = {
   });
 }
 
+async function callProfile(token?: string, args: Record<string, unknown> = {}) {
+  return testApp.app.inject({
+    method: 'POST',
+    url: '/mcp',
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    payload: {
+      jsonrpc: '2.0',
+      id: 67,
+      method: 'tools/call',
+      params: { name: 'get_profile', arguments: args },
+    },
+  });
+}
+
+function rpcBody(response: Injection) {
+  return JSON.parse(
+    response.body.startsWith('{') ? response.body : /^data: (.+)$/m.exec(response.body)![1]!,
+  );
+}
+
+async function readProfile(token: string) {
+  const response = await callProfile(token);
+  expect(response.statusCode).toBe(200);
+  const result = rpcBody(response).result;
+  expect(result.isError).toBe(false);
+  expect(JSON.parse(result.content[0].text)).toEqual(result.structuredContent);
+  return result.structuredContent as { id: string; email?: string; nickname?: string };
+}
+
 describe('MCP OAuth foundation with PostgreSQL', () => {
   beforeAll(async () => {
     await runMigrations();
@@ -289,6 +323,171 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     await testApp?.app.close();
     await reset();
     await closePgPool();
+  });
+
+  it('keeps MCP profile identity across grants, refresh, metadata changes and membership recreation', async () => {
+    const user = await seedUser(2);
+    const issueWorkspace = async (workspaceId: string) => {
+      const { callback } = await authorize(
+        new Browser(testApp.app, user.refreshCookie),
+        workspaceId,
+      );
+      expect(callback?.statusCode).toBe(303);
+      const code = new URL(callback!.headers.location!).searchParams.get('code')!;
+      const response = await exchange(testApp.app, code);
+      expect(response.statusCode).toBe(200);
+      return response.json() as { access_token: string; refresh_token: string };
+    };
+    const first = await issueWorkspace(user.workspaceIds[0]!);
+    const profile = await readProfile(first.access_token);
+    expect(profile.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect([user.userId, ...user.workspaceIds]).not.toContain(profile.id);
+    expect(profile.nickname).toBe(`${user.userId}@example.test — Workspace 1`);
+    expect((await readProfile(first.access_token)).id).toBe(profile.id);
+    const rotated = await refresh(first.refresh_token);
+    expect(rotated.statusCode).toBe(200);
+    expect((await readProfile(rotated.json().access_token)).id).toBe(profile.id);
+    const reconnected = await issueWorkspace(user.workspaceIds[0]!);
+    expect((await readProfile(reconnected.access_token)).id).toBe(profile.id);
+    expect(
+      (await readProfile((await issueWorkspace(user.workspaceIds[1]!)).access_token)).id,
+    ).not.toBe(profile.id);
+    const other = await seedUser();
+    await withPgClient(async (db) =>
+      db.query(
+        "INSERT INTO workspace_memberships (user_id, workspace_id, role) VALUES ($1, $2, 'member')",
+        [other.userId, user.workspaceIds[0]],
+      ),
+    );
+    const { callback } = await authorize(
+      new Browser(testApp.app, other.refreshCookie),
+      user.workspaceIds[0],
+    );
+    const otherToken = (
+      await exchange(testApp.app, new URL(callback!.headers.location!).searchParams.get('code')!)
+    ).json().access_token;
+    expect((await readProfile(otherToken)).id).not.toBe(profile.id);
+
+    await withPgClient(async (db) => {
+      await db.query('UPDATE users SET email = $2 WHERE id = $1', [
+        user.userId,
+        'renamed@example.test',
+      ]);
+      await db.query('UPDATE workspaces SET name = $2 WHERE id = $1', [
+        user.workspaceIds[0],
+        'Renamed workspace',
+      ]);
+    });
+    expect(await readProfile(reconnected.access_token)).toEqual({
+      id: profile.id,
+      email: 'renamed@example.test',
+      nickname: 'renamed@example.test — Renamed workspace',
+    });
+    await withPgClient(async (db) =>
+      db.query('DELETE FROM workspace_memberships WHERE user_id = $1 AND workspace_id = $2', [
+        user.userId,
+        user.workspaceIds[0],
+      ]),
+    );
+    expect((await callProfile(reconnected.access_token)).statusCode).toBe(401);
+    expect((await refresh(rotated.json().refresh_token)).statusCode).toBe(400);
+    await withPgClient(async (db) => {
+      const stored = await db.query(
+        'SELECT id FROM mcp_profile_identities WHERE user_id = $1 AND workspace_id = $2',
+        [user.userId, user.workspaceIds[0]],
+      );
+      expect(stored.rows).toEqual([{ id: profile.id }]);
+      await db.query(
+        "INSERT INTO workspace_memberships (user_id, workspace_id, role) VALUES ($1, $2, 'owner')",
+        [user.userId, user.workspaceIds[0]],
+      );
+    });
+    const restored = await issueWorkspace(user.workspaceIds[0]!);
+    expect((await readProfile(restored.access_token)).id).toBe(profile.id);
+    await withPgClient(async (db) =>
+      db.query('UPDATE users SET is_active = FALSE WHERE id = $1', [user.userId]),
+    );
+    expect((await callProfile(restored.access_token)).statusCode).toBe(401);
+  });
+
+  it('provisions one immutable MCP identity under concurrent grant binding and rolls back on failure', async () => {
+    const user = await seedUser(2);
+    const grant = (id: string, workspaceId = user.workspaceIds[0]!): BoundOAuthGrant => ({
+      id,
+      userId: user.userId,
+      workspaceId,
+      clientId,
+      resource,
+      scope: 'teaching_context.read',
+    });
+    const grants = Array.from({ length: 8 }, () => grant(randomUUID()));
+    expect(await Promise.all(grants.map((bound) => bindOAuthGrant(bound, 3600)))).toEqual(
+      Array(8).fill(true),
+    );
+    const profiles = await Promise.all(grants.map(getMcpProfile));
+    expect(new Set(profiles.map((profile) => profile?.id)).size).toBe(1);
+    expect(profiles[0]?.id).toBeTruthy();
+    const duplicate = grant(randomUUID());
+    expect(
+      (await Promise.all(Array.from({ length: 4 }, () => bindOAuthGrant(duplicate, 3600)))).filter(
+        Boolean,
+      ),
+    ).toHaveLength(1);
+    expect((await getMcpProfile(duplicate))?.id).toBe(profiles[0]!.id);
+    const failed = grant(randomUUID(), user.workspaceIds[1]);
+    await withPgClient(async (db) => {
+      expect((await db.query('SELECT id FROM mcp_profile_identities')).rows).toEqual([
+        { id: profiles[0]!.id },
+      ]);
+      // Force a real provisioning constraint failure after the grant INSERT.
+      await db.query(
+        `ALTER TABLE mcp_profile_identities ALTER COLUMN id SET DEFAULT '${profiles[0]!.id}'::uuid`,
+      );
+    });
+    try {
+      await expect(bindOAuthGrant(failed, 3600)).rejects.toMatchObject({ code: '23505' });
+      await withPgClient(async (db) => {
+        expect(
+          (await db.query('SELECT id FROM mcp_oauth_grants WHERE id = $1', [failed.id])).rows,
+        ).toEqual([]);
+      });
+    } finally {
+      await withPgClient(async (db) =>
+        db.query(
+          'ALTER TABLE mcp_profile_identities ALTER COLUMN id SET DEFAULT gen_random_uuid()',
+        ),
+      );
+    }
+    await withPgClient(async (db) =>
+      db.query('DELETE FROM workspace_memberships WHERE user_id = $1', [user.userId]),
+    );
+    expect(await bindOAuthGrant(grant(randomUUID()), 3600)).toBe(false);
+    expect(await getMcpProfile(grants[0]!)).toBeNull();
+  });
+
+  it('fails closed for missing MCP profile identity without writing or accepting account selectors', async () => {
+    const user = await seedUser();
+    const token = (await issue(new Browser(testApp.app, user.refreshCookie))).access_token;
+    await withPgClient(async (db) => db.query('DELETE FROM mcp_profile_identities'));
+    const missing = rpcBody(await callProfile(token)).result;
+    expect(missing.isError).toBe(true);
+    expect(missing.structuredContent).toBeUndefined();
+    expect(missing.content).toEqual([{ type: 'text', text: 'Profile identity unavailable.' }]);
+    await withPgClient(async (db) =>
+      expect((await db.query('SELECT id FROM mcp_profile_identities')).rows).toEqual([]),
+    );
+    expect(rpcBody(await callProfile(token, { userId: user.userId })).result.isError).toBe(true);
+    const anonymous = rpcBody(await callProfile()).result;
+    expect(anonymous.isError).toBe(true);
+    expect(anonymous.structuredContent).toBeUndefined();
+    expect(anonymous._meta['mcp/www_authenticate'][0]).toContain(canonicalResourceMetadataUrl);
+    for (const credential of [user.restToken, 'invalid']) {
+      const denied = await callProfile(credential);
+      expect(denied.statusCode).toBe(401);
+      expect(denied.headers['www-authenticate']).toContain('scope="teaching_context.read"');
+    }
   });
 
   it('logs sanitized, correlated code/refresh outcomes, replay revocation and new authorization', async () => {
@@ -720,7 +919,7 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     ).toBeNull();
   });
 
-  it('serves two read-only tools through stateless Streamable HTTP with workspace-bound OAuth', async () => {
+  it('serves three read-only tools through stateless Streamable HTTP with workspace-bound OAuth', async () => {
     const user = await seedUser();
     const otherUser = await seedUser();
     const tokenOne = (await issue(new Browser(testApp.app, user.refreshCookie))).access_token;
@@ -765,15 +964,47 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     );
     expect(
       wireDiscovery.result.tools.map((tool: { securitySchemes: unknown }) => tool.securitySchemes),
-    ).toEqual(Array(2).fill([{ type: 'oauth2', scopes: ['teaching_context.read'] }]));
+    ).toEqual(Array(3).fill([{ type: 'oauth2', scopes: ['teaching_context.read'] }]));
     expect(rawDiscovery.body).not.toContain('Anna 1');
     const tools = (await client.listTools()).tools;
     expect(tools.map((tool) => tool.name)).toEqual([
       'find_student',
       'get_student_teaching_context',
+      'get_profile',
     ]);
     expect(Object.keys(tools[0]!.inputSchema.properties ?? {})).toEqual(['name']);
     expect(Object.keys(tools[1]!.inputSchema.properties ?? {})).toEqual(['studentId']);
+    const profileTool = wireDiscovery.result.tools[2];
+    expect(profileTool.inputSchema).toEqual({
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    });
+    expect(profileTool._meta['openai/profile']).toBe(true);
+    expect(profileTool.outputSchema).toEqual({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          minLength: 1,
+          pattern: '\\S',
+          description:
+            'Opaque profile identifier, unique within this app and unchanged across token refresh, reconnection, and display-metadata changes. Never reassigned to another profile.',
+        },
+        name: { type: 'string', description: 'Display name for the authenticated profile.' },
+        email: {
+          type: 'string',
+          description: 'Email address for display; not used as the profile identity.',
+        },
+        nickname: {
+          type: 'string',
+          description: 'A useful label that helps users distinguish connected profiles.',
+        },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    });
     for (const tool of tools) {
       expect(tool.annotations).toMatchObject({
         readOnlyHint: true,
@@ -853,7 +1084,7 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     ).toBe(true);
 
     const anonymous = await connect();
-    expect((await anonymous.listTools()).tools).toHaveLength(2);
+    expect((await anonymous.listTools()).tools).toHaveLength(3);
     const linking = await anonymous.callTool({ name: 'find_student', arguments: { name: 'Anna' } });
     expect(linking.isError).toBe(true);
     expect(linking._meta?.['mcp/www_authenticate']).toEqual([
