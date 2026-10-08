@@ -16,7 +16,6 @@ import {
   setupMinimalAssignmentTest,
   startNewAssignmentForLearner,
   testVi as vi,
-  testWaitFor as waitFor,
 } from './MinimalAssignment.test-harness';
 
 async function freshSource() {
@@ -155,8 +154,12 @@ describe('no-homework lesson workflow', () => {
     globalThis.history.replaceState(null, '', '/?sessionId=session-1');
     renderMinimalAssignment();
     await screen.findByRole('heading', { name: 'Transcript confirmed — no homework planned' });
-    expect(screen.getByText('failed')).toBeTruthy();
-    expect(screen.getByText('not eligible')).toBeTruthy();
+    const details = screen.getByText('Processing details · Needs attention').closest('details');
+    expect(details?.open).toBe(false);
+    const user = createMinimalUser();
+    await user.click(screen.getByText('Processing details · Needs attention'));
+    expect(screen.getByText('Failed')).toBeTruthy();
+    expect(screen.getByText('Not applicable')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Confirm transcript and finish' })).toBeNull();
     expect(api.getJobStatus).not.toHaveBeenCalled();
     expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
@@ -350,56 +353,15 @@ describe('no-homework lesson workflow', () => {
     },
   );
 
-  it('finds an unlinked finished result through history without adding it to unfinished sessions', async () => {
-    vi.mocked(api.listAssignmentSessions).mockImplementation(async (_limit, scope) =>
-      scope === 'history'
-        ? { sessions: [finishedSession()], total: 1, limit: _limit ?? 20 }
-        : { sessions: [], total: 0, limit: _limit ?? 20 },
-    );
+  it('opens an unlinked finished result directly without an archive in the Student step', async () => {
     vi.mocked(api.fetchAssignmentSession).mockResolvedValue(finishedSession());
-    const user = createMinimalUser();
+    globalThis.history.replaceState(null, '', '/?sessionId=session-1');
     renderMinimalAssignment();
-    await user.click(screen.getByText('Confirmed transcript results'));
-    await user.click(await screen.findByRole('button', { name: /View transcript/i }));
     await screen.findByRole('heading', { name: 'Transcript confirmed — no homework planned' });
-    expect(api.listAssignmentSessions).toHaveBeenCalledWith(20, 'history', 0);
-  });
-
-  it('pages past fifty mixed history entries using server offsets and preserves every transcript result', async () => {
-    const history = Array.from({ length: 65 }, (_, index) =>
-      index === 21 || index === 61
-        ? { ...finishedSession(), id: `result-${index}` }
-        : makeAssignmentSession({
-            id: `shared-${index}`,
-            confirmedStep: 'share',
-            shareJobId: `job-${index}`,
-          }),
-    );
-    vi.mocked(api.listAssignmentSessions).mockImplementation(
-      async (limit = 20, scope, offset = 0) =>
-        scope === 'history'
-          ? { sessions: history.slice(offset, offset + limit), total: history.length, limit }
-          : { sessions: [], total: 0, limit },
-    );
-    const user = createMinimalUser();
-    renderMinimalAssignment();
-    await user.click(screen.getByText('Confirmed transcript results'));
-    await user.click(await screen.findByRole('button', { name: 'Show older results' }));
-    await screen.findByRole('button', { name: /View transcript/ });
-    await user.click(screen.getByRole('button', { name: 'Show older results' }));
-    await user.click(await screen.findByRole('button', { name: 'Show older results' }));
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Show older results' })).toBeNull(),
-    );
-    expect(screen.getAllByRole('button', { name: /View transcript/ })).toHaveLength(2);
+    expect(screen.queryByText('Confirmed transcript results')).toBeNull();
     expect(
-      vi.mocked(api.listAssignmentSessions).mock.calls.filter((call) => call[1] === 'history'),
-    ).toEqual([
-      [20, 'history', 0],
-      [20, 'history', 20],
-      [20, 'history', 40],
-      [20, 'history', 60],
-    ]);
+      vi.mocked(api.listAssignmentSessions).mock.calls.some((call) => call[1] === 'history'),
+    ).toBe(false);
   });
 
   it('does not interpret historical matching evidence or a different expected revision as current success', () => {

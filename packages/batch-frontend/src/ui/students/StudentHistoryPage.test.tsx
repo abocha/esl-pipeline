@@ -11,6 +11,7 @@ const apiMocks = vi.hoisted(() => ({
   listStudentProfileCandidates: vi.fn(),
   listStudentHomeworkMemoryEntries: vi.fn(),
   listStudentLessonMemoryEntries: vi.fn(),
+  listAssignmentSessions: vi.fn(),
 }));
 
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
@@ -52,6 +53,7 @@ function seedHistoryContext() {
 }
 
 function seedHistoryMocks() {
+  apiMocks.listAssignmentSessions.mockResolvedValue({ sessions: [], total: 0, limit: 20 });
   apiMocks.getStudentHistorySurface.mockImplementation(async (studentId: string) => {
     const [timeline, lessonMemory, homeworkMemory] = await Promise.all([
       apiMocks.getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
