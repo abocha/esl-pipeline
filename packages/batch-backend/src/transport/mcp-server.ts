@@ -4,9 +4,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type Provider from 'oidc-provider';
 import { z } from 'zod';
 
-import type {
-  FindStudentResultDto,
-  GetStudentTeachingContextResultDto,
+import {
+  type FindStudentResultDto,
+  type GetStudentTeachingContextResultDto,
+  mcpProfileSchema,
 } from '@esl-pipeline/contracts';
 
 import { findStudent } from '../application/find-student.js';
@@ -15,7 +16,7 @@ import {
   projectMcpTeachingContext,
 } from '../application/mcp-teaching-context.js';
 import { getStudentTeachingContext } from '../application/student-teaching-context.js';
-import { type BoundOAuthGrant, MCP_READ_SCOPE } from '../domain/mcp-oauth-grants.js';
+import { type BoundOAuthGrant, getMcpProfile, MCP_READ_SCOPE } from '../domain/mcp-oauth-grants.js';
 import { withSanitizedPgLogging } from '../infrastructure/db.js';
 import {
   getProtectedResourceMetadataUrl,
@@ -39,6 +40,18 @@ const findResultSchema = z
   })
   .strict();
 const contextResultSchema = z.object({ context: mcpTeachingContextSchema }).strict();
+const profileInputSchema = z.object({}).strict();
+const profileDescription =
+  "Return the profile represented by this request's authenticated credentials. The opaque id is unique within this app and remains unchanged across token refresh, reconnection, and display-metadata changes.";
+const profileMeta = { securitySchemes: authSchemes, 'openai/profile': true } as const;
+const profileTool = {
+  title: 'Get profile',
+  description: profileDescription,
+  inputSchema: profileInputSchema,
+  outputSchema: mcpProfileSchema,
+  annotations,
+  _meta: profileMeta,
+};
 
 function challenge(config: McpOAuthConfig) {
   const metadata = getProtectedResourceMetadataUrl(config.resource);
@@ -132,6 +145,22 @@ function createServer(config: McpOAuthConfig, grant: BoundOAuthGrant | null): Mc
       }
     },
   );
+  server.registerTool('get_profile', profileTool, async () => {
+    if (!grant) return authError(config);
+    try {
+      const profile = await getMcpProfile(grant);
+      if (profile) {
+        return {
+          isError: false,
+          structuredContent: profile,
+          content: [{ type: 'text', text: JSON.stringify(profile) }],
+        };
+      }
+    } catch {
+      // Never fabricate an identity or repair persistence from a read tool.
+    }
+    return { isError: true, content: [{ type: 'text', text: 'Profile identity unavailable.' }] };
+  });
   // SDK 2.1 exposes extension metadata but does not yet accept OpenAI's
   // top-level securitySchemes field. Publish both forms for ChatGPT clients.
   const tools = [
@@ -154,6 +183,13 @@ function createServer(config: McpOAuthConfig, grant: BoundOAuthGrant | null): Mc
       annotations,
       securitySchemes: authSchemes,
       _meta: { securitySchemes: authSchemes },
+    },
+    {
+      ...profileTool,
+      name: 'get_profile',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      outputSchema: z.toJSONSchema(mcpProfileSchema),
+      securitySchemes: authSchemes,
     },
   ] as unknown as Tool[];
   server.server.setRequestHandler('tools/list', () => ({ tools }));

@@ -114,6 +114,11 @@ For deep system maps, prefer the linked docs rather than growing this file again
 
 ### Security and config
 
+- MCP connection profiles identify one authenticated user/workspace pair using an immutable random
+  UUID in `mcp_profile_identities`, independent of OAuth grants, tokens and display metadata.
+  Successful grant binding provisions the identity atomically. Membership removal must deny access
+  without deleting the identity; reconnecting after membership restoration reuses it. `get_profile`
+  only reads the validated grant's profile and fails closed when its identity is missing.
 - Never hardcode secrets.
 - Prefer canonical namespaced env vars over legacy aliases.
 - Fail-safe defaults matter more than convenience defaults for auth, quotas, and mutating operations.

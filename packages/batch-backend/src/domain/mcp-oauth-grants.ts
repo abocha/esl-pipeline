@@ -1,3 +1,5 @@
+import type { McpProfileDto } from '@esl-pipeline/contracts';
+
 import { withPgClient } from '../infrastructure/db.js';
 
 export const MCP_READ_SCOPE = 'teaching_context.read';
@@ -35,15 +37,26 @@ export async function bindOAuthGrant(
   lifetimeSeconds: number,
 ): Promise<boolean> {
   return withPgClient(async (client) => {
-    const result = await client.query(
-      `INSERT INTO mcp_oauth_grants
+    // Data-modifying CTEs share one transaction: a provisioning failure cannot
+    // leave a newly bound grant without its identity. The pair constraint
+    // serializes concurrent bindings without replacing the winning UUID.
+    const result = await client.query<{ bound: boolean }>(
+      `WITH bound_grant AS (
+       INSERT INTO mcp_oauth_grants
          (id, user_id, workspace_id, client_id, resource, scope, expires_at)
        SELECT $1, u.id, w.id, $4, $5, $6, NOW() + $7 * INTERVAL '1 second'
        FROM users u
        JOIN workspace_memberships m ON m.user_id = u.id
        JOIN workspaces w ON w.id = m.workspace_id
        WHERE u.id = $2 AND u.is_active = TRUE AND w.id = $3
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT (id) DO NOTHING
+       RETURNING user_id, workspace_id
+       ), provisioned_profile AS (
+         INSERT INTO mcp_profile_identities (user_id, workspace_id)
+         SELECT user_id, workspace_id FROM bound_grant
+         ON CONFLICT (user_id, workspace_id) DO NOTHING
+       )
+       SELECT EXISTS (SELECT 1 FROM bound_grant) AS bound`,
       [
         input.id,
         input.userId,
@@ -54,7 +67,28 @@ export async function bindOAuthGrant(
         lifetimeSeconds,
       ],
     );
-    return result.rowCount === 1;
+    return result.rows[0]?.bound === true;
+  });
+}
+
+export async function getMcpProfile(grant: BoundOAuthGrant): Promise<McpProfileDto | null> {
+  return withPgClient(async (client) => {
+    const result = await client.query<{ id: string; email: string; workspace_name: string }>(
+      `SELECT p.id, u.email, w.name AS workspace_name
+       FROM mcp_oauth_grants g
+       JOIN users u ON u.id = g.user_id AND u.is_active = TRUE
+       JOIN workspaces w ON w.id = g.workspace_id
+       JOIN workspace_memberships m ON m.user_id = u.id AND m.workspace_id = w.id
+       JOIN mcp_profile_identities p ON p.user_id = u.id AND p.workspace_id = w.id
+       WHERE g.id = $1 AND g.user_id = $2 AND g.workspace_id = $3
+         AND g.client_id = $4 AND g.resource = $5 AND g.scope = $6
+         AND g.revoked_at IS NULL AND g.expires_at > NOW()`,
+      [grant.id, grant.userId, grant.workspaceId, grant.clientId, grant.resource, grant.scope],
+    );
+    const row = result.rows[0];
+    return row
+      ? { id: row.id, email: row.email, nickname: `${row.email} — ${row.workspace_name}` }
+      : null;
   });
 }
 

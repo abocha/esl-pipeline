@@ -474,6 +474,26 @@ triggers require publication and confirmed Source transactions to acquire the st
 source/memory rows; previous images use opposing ordering and can deadlock. The same quiescence and
 schema-compatible recovery gates apply even though this migration only adds indexes and triggers.
 
+`0067_mcp_profile_identities` is incompatible with previous grant writers. It backfills one stable,
+immutable profile UUID per retained OAuth user/workspace pair, including expired/revoked grants.
+Old writers must stop before backfill so they cannot create grants without identities. Deploy the
+combined MCP profile/session-binding correction with the standard script: inspect
+`deploy-prod-images.sh <40-char-release-sha> --plan`, then, under separate deployment authorization,
+run `deploy-prod-images.sh <40-char-release-sha>`. Use the complete CI-published release bundle,
+not the PR head SHA. No new environment variables, manual identity backfill, or OAuth artifact
+rewrites are required. The script quiesces writers, verifies the pre-migration backup, applies the
+packaged migrations, recreates application services, and verifies schema/health/worker readiness.
+
+After rollout, verify `/api/meta/version` reports migration head `0067_mcp_profile_identities`
+(or the reviewed later head). Existing session-bound refresh tokens keep their stored flag and need
+reauthorization; the backfilled profile UUID remains stable for the same user/workspace pair.
+Observe a new connection's normal refresh after browser-session expiry and confirm its read-only
+`get_profile` ID is unchanged. Do not log credentials or initiate live OAuth tests without approval.
+Previous-image rollback across `0067` is blocked. Prefer a runtime supporting `0067`, which preserves
+profile identities. Restoring a verified pre-`0067` backup is a separate recovery operation: it loses
+post-backup writes and any newly provisioned profile identities; applying `0067` again generates
+new UUIDs. A backup from a deploy retry after `0067` committed cannot restore pre-`0067` compatibility.
+
 The pre-mutation output lists pending migrations, incompatible/unclassified boundaries, required
 quiescence, and previous-image rollback eligibility. To inspect it without backup, migration, or
 service mutation:

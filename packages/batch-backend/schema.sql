@@ -274,6 +274,16 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.reject_mcp_profile_identity_update() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW IS DISTINCT FROM OLD THEN
+    RAISE EXCEPTION 'MCP profile identity is immutable' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION public.request_confirmed_source_audio_deletion() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -857,6 +867,12 @@ CREATE TABLE public.mcp_oauth_grants (
     revoked_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT mcp_oauth_grants_scope_check CHECK ((scope = 'teaching_context.read'::text))
+);
+
+CREATE TABLE public.mcp_profile_identities (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    workspace_id uuid NOT NULL
 );
 
 CREATE TABLE public.ops_actions (
@@ -1564,6 +1580,12 @@ ALTER TABLE ONLY public.mcp_oauth_artifacts
 ALTER TABLE ONLY public.mcp_oauth_grants
     ADD CONSTRAINT mcp_oauth_grants_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.mcp_profile_identities
+    ADD CONSTRAINT mcp_profile_identities_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.mcp_profile_identities
+    ADD CONSTRAINT mcp_profile_identities_user_id_workspace_id_key UNIQUE (user_id, workspace_id);
+
 ALTER TABLE ONLY public.ops_actions
     ADD CONSTRAINT ops_actions_pkey PRIMARY KEY (operation_id);
 
@@ -2019,6 +2041,8 @@ CREATE TRIGGER homework_memory_canonical_student_lock BEFORE INSERT OR DELETE OR
 
 CREATE TRIGGER lesson_memory_canonical_student_lock BEFORE INSERT OR DELETE OR UPDATE ON public.lesson_memory_entries FOR EACH ROW EXECUTE FUNCTION public.lock_canonical_memory_student();
 
+CREATE TRIGGER mcp_profile_identity_immutable BEFORE UPDATE ON public.mcp_profile_identities FOR EACH ROW EXECUTE FUNCTION public.reject_mcp_profile_identity_update();
+
 CREATE TRIGGER memory_confirmed_source_delete_lock BEFORE DELETE ON public.assignment_source_bindings FOR EACH ROW WHEN ((old.binding_role = 'confirmed'::text)) EXECUTE FUNCTION public.lock_memory_source_student();
 
 CREATE TRIGGER memory_confirmed_source_insert_lock BEFORE INSERT ON public.assignment_source_bindings FOR EACH ROW WHEN ((new.binding_role = 'confirmed'::text)) EXECUTE FUNCTION public.lock_memory_source_student();
@@ -2195,6 +2219,12 @@ ALTER TABLE ONLY public.mcp_oauth_grants
 
 ALTER TABLE ONLY public.mcp_oauth_grants
     ADD CONSTRAINT mcp_oauth_grants_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.mcp_profile_identities
+    ADD CONSTRAINT mcp_profile_identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.mcp_profile_identities
+    ADD CONSTRAINT mcp_profile_identities_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
     ADD CONSTRAINT profile_initial_enrichment_op_student_id_result_revision_i_fkey FOREIGN KEY (student_id, result_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
@@ -2603,5 +2633,6 @@ VALUES
   ('0063_assignment_native_renderer', 'e58336ba97dc05926e652b786b370743061f8e4702029bb79fd84ffa7bb88492', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0064_historical_markdown_read_only', '9a74cf33697ccc187b1674e03d06a1f5b41b79a555e19918d9465fc5f00dd292', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0065_assignment_react_renderer', '2e37a9fd1fb5f1c3efa8807e985eb254c63bc4b972de2d544e9b8372233c40dc', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0066_no_homework_lesson', '47c8dc8f633f5d2ff07282d3ff393886245c477dd3854204c5970147bdfe2104', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0066_no_homework_lesson', '47c8dc8f633f5d2ff07282d3ff393886245c477dd3854204c5970147bdfe2104', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0067_mcp_profile_identities', '430f6083475887792ed256290751ac5f4bff9ecf4cc8a84bf7f1402d2ef50f22', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

@@ -240,6 +240,80 @@ describe('integration/migrations', () => {
   });
 
   it(
+    '0067 backfills distinct OAuth identities including revoked, expired and nonmember grants',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0066_no_homework_lesson');
+        const userId = randomUUID(),
+          otherUserId = randomUUID();
+        const workspaceId = randomUUID(),
+          otherWorkspaceId = randomUUID();
+        await pool.query(
+          `INSERT INTO users (id, email, password_hash) VALUES
+        ($1, 'profile-one@example.test', 'unused'), ($2, 'profile-two@example.test', 'unused')`,
+          [userId, otherUserId],
+        );
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'One'), ($2, 'Two')`, [
+          workspaceId,
+          otherWorkspaceId,
+        ]);
+        // Deliberately no memberships. Multiple grants for one pair must produce
+        // one UUID, while both dimensions distinguish independent profiles.
+        await pool.query(
+          `INSERT INTO mcp_oauth_grants
+        (id, user_id, workspace_id, client_id, resource, scope, expires_at, revoked_at) VALUES
+        ('old-one', $1, $3, 'client', 'resource', 'teaching_context.read', NOW() + INTERVAL '1 hour', NULL),
+        ('old-two', $1, $3, 'client', 'resource', 'teaching_context.read', NOW() - INTERVAL '1 hour', NOW()),
+        ('other-workspace', $1, $4, 'client', 'resource', 'teaching_context.read', NOW() - INTERVAL '1 hour', NULL),
+        ('other-user', $2, $3, 'client', 'resource', 'teaching_context.read', NOW() + INTERVAL '1 hour', NOW())`,
+          [userId, otherUserId, workspaceId, otherWorkspaceId],
+        );
+        await runMigrations();
+        const profiles = await pool.query(
+          'SELECT id, user_id, workspace_id FROM mcp_profile_identities ORDER BY id',
+        );
+        expect(profiles.rows).toHaveLength(3);
+        expect(new Set(profiles.rows.map((row) => row.id)).size).toBe(3);
+        for (const row of profiles.rows) {
+          expect(row.id).toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+          );
+          for (const column of ['id', 'user_id', 'workspace_id']) {
+            await expect(
+              pool.query(`UPDATE mcp_profile_identities SET ${column} = $1 WHERE id = $2`, [
+                randomUUID(),
+                row.id,
+              ]),
+            ).rejects.toMatchObject({ code: '23514' });
+          }
+        }
+        await expect(
+          pool.query('INSERT INTO mcp_profile_identities (user_id, workspace_id) VALUES ($1, $2)', [
+            userId,
+            workspaceId,
+          ]),
+        ).rejects.toMatchObject({ code: '23505' });
+        await expect(
+          pool.query(
+            'INSERT INTO mcp_profile_identities (id, user_id, workspace_id) VALUES ($1, $2, $3)',
+            [profiles.rows[0].id, otherUserId, otherWorkspaceId],
+          ),
+        ).rejects.toMatchObject({ code: '23505' });
+        await runMigrations();
+        expect(
+          (
+            await pool.query(
+              'SELECT id, user_id, workspace_id FROM mcp_profile_identities ORDER BY id',
+            )
+          ).rows,
+        ).toEqual(profiles.rows);
+      });
+      await assertSchemaHealthy('mcp-profile-identities');
+    },
+    testTimeout,
+  );
+
+  it(
     '0066 defaults existing Source-only and historical Share rows without inferring no-homework completion',
     async () => {
       await withAdminClient(async (pool) => {

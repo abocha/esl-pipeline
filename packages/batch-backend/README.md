@@ -439,6 +439,11 @@ automatically binds one, and requires a selection for multiple. Credential verif
 opaque access token, fixed resource and scope, current active user, current workspace membership,
 grant expiry, and revocation. REST JWTs and OAuth credentials cannot cross the two verifier paths.
 Codes live 60 seconds, access tokens 15 minutes, and grants/refresh tokens 14 days.
+New credentials follow the explicit Pipeline grant rather than the one-hour provider browser
+session: session expiry, logout, or later authorization does not revoke another active connection.
+Explicit grant/token revocation, replay detection, token/grant expiry, and current user/workspace
+authorization still apply. Previously issued session-bound credentials retain their stored binding;
+affected connections need one reauthorization after this correction is deployed.
 Consent submits the exact displayed workspace and rechecks its membership on confirmation. Provider
 artifact writes and family revocation serialize on the Pipeline grant row, so replay or revocation
 cannot leave an overlapping token valid. OAuth cookies use the external `/api/oauth` path and stay
@@ -473,6 +478,9 @@ prove the client received it. A rejected request can have these flags set becaus
 before some later validations. False flags mean no action observed in that request, not that a
 grant is globally valid. `refresh_not_found` cannot distinguish unknown, expired, or previously
 deleted credentials because the adapter filters expired rows and revocation deletes artifacts.
+It also covers provider rejection of a matching stored token's browser-session binding. The adapter
+records `grantRef` when it finds a grant-bearing row, before provider validation; a refresh failure
+with a reference can therefore mean that lookup succeeded and subsequent validation rejected it.
 Other unmapped rejections retain their OAuth code with a generic bounded reason. A new initial
 authorization event shows a client starting authorization; it cannot reveal the client's reason,
 prove a human clicked reconnect, or identify the same client session across unrelated grants.
@@ -501,16 +509,28 @@ discovery, and resource-bound tokens; it prefers CIMD when supported. The
 shaped the path-aware discovery and audience handling. The endpoint uses the official TypeScript
 MCP SDK 2.1.0 with stateless request/response handling for the current 2026-07-28 protocol and
 stateless legacy initialize compatibility. It publishes `find_student` and
-`get_student_teaching_context`, each with `teaching_context.read` OAuth metadata and read-only
+`get_student_teaching_context`, plus the connection tool `get_profile`, each with
+`teaching_context.read` OAuth metadata and read-only
 annotations. Missing credentials receive a tool-level linking challenge; invalid credentials
-receive HTTP 401 with protected-resource discovery. The latter tool calls the canonical internal
+receive HTTP 401 with protected-resource discovery. The teaching-context tool calls the canonical internal
 teaching-context query and returns the independently versioned `mcp_teaching_context.v1` allowlist
 without internal provenance or personal facts. The MCP layer does not cache learner context.
+`get_profile` uses the [documented OpenAI profile schema](https://developers.openai.com/plugins/build/auth#support-multiple-accounts)
+and `openai/profile` marker. Its opaque UUID identifies the authenticated user/workspace pair;
+email and a workspace label are display metadata only. Migration `0067_mcp_profile_identities`
+backfills distinct pairs from all retained OAuth grants. Successful grant binding provisions
+missing identities atomically and idempotently; the read tool never provisions or repairs them.
+The migration is classified `incompatible` so the existing deployment procedure quiesces old
+grant writers before backfill; otherwise they could create grants without identities during rollout.
+Identities survive grant expiry/revocation and membership removal/recreation. Current active-user,
+workspace membership and credential checks still apply; missing identities fail closed. Existing
+user/workspace deletion retires the UUID, and identity updates/reassignment are rejected by SQL.
 The MCP routes accept browser `Origin` only when it exactly matches the configured
 `MCP_OAUTH_RESOURCE` origin; non-browser clients may omit it. MCP request database failures log
 only a safe event and SQLSTATE code, without exception text or stack.
-`MCP_OAUTH_ENABLED` remains false by default; production activation and ChatGPT connection testing
-belong to a later slice.
+`MCP_OAUTH_ENABLED` remains false by default. Production rollout of the profile/refresh correction
+and live ChatGPT verification remain separate operator actions; follow the
+[`0067` deployment and recovery procedure](../../docs/backend-frontend/DEPLOYMENT.md#schema-compatibility-and-recovery).
 
 Student-memory operator workflows:
 

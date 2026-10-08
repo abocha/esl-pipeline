@@ -330,6 +330,10 @@ export function createMcpOAuthProvider(config: McpOAuthConfig, authService: Auth
     pkce: { required: () => true },
     responseTypes: ['code'],
     issueRefreshToken: (_ctx, client) => client.grantTypeAllowed('refresh_token'),
+    // Connector credentials follow the explicit Pipeline grant, not the browser's
+    // one-hour provider session. The default otherwise binds our non-OIDC scope
+    // to that session and hides matching tokens after expiry or reauthorization.
+    expiresWithSession: () => false,
     rotateRefreshToken: true,
     interactions: {
       policy,
