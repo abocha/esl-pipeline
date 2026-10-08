@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [20.0.2] - 2026-10-08
+
+### Changed
+
+- Automated release from PR #366: fix(oauth): add sanitized MCP connector diagnostics (https://github.com/abocha/esl-pipeline/pull/366)
+
 ## [20.0.1] - 2026-10-08
 
 ### Changed
