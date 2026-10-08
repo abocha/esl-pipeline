@@ -291,6 +291,256 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     await closePgPool();
   });
 
+  it('logs sanitized, correlated code/refresh outcomes, replay revocation and new authorization', async () => {
+    const user = await seedUser();
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    try {
+      const browser = new Browser(testApp.app, user.refreshCookie);
+      const { callback } = await authorize(browser);
+      const code = new URL(callback!.headers.location!).searchParams.get('code')!;
+      const issued = (await exchange(testApp.app, code)).json();
+      const rotated = await refresh(issued.refresh_token);
+      expect(rotated.statusCode).toBe(200);
+      expect((await refresh(issued.refresh_token)).statusCode).toBe(400);
+      expect((await refresh(rotated.json().refresh_token)).statusCode).toBe(400);
+      const next = await authorize(browser);
+      const nextCode = new URL(next.callback!.headers.location!).searchParams.get('code')!;
+      const wrongPkce = await exchange(testApp.app, nextCode, 'b'.repeat(43));
+      expect(wrongPkce.statusCode).toBe(400);
+      // Authorization codes are consumed before later validation; use a fresh one.
+      const third = await authorize(browser);
+      const thirdCode = new URL(third.callback!.headers.location!).searchParams.get('code')!;
+      expect((await exchange(testApp.app, thirdCode, verifier, { resource: '' })).statusCode).toBe(
+        400,
+      );
+      const fourth = await authorize(browser);
+      const fourthCode = new URL(fourth.callback!.headers.location!).searchParams.get('code')!;
+      expect(
+        (
+          await exchange(testApp.app, fourthCode, verifier, {
+            resource: 'https://sensitive.test/private',
+          })
+        ).statusCode,
+      ).toBe(400);
+
+      const fields = [...info.mock.calls, ...warn.mock.calls].map((call) => call[1]);
+      const events = fields.filter((field) => field?.event === 'mcp_oauth_diagnostic');
+      const tokens = events.filter((field) => field?.operation === 'token');
+      expect(tokens).toHaveLength(7);
+      expect(tokens).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            grantType: 'authorization_code',
+            status: 200,
+            resourceState: 'expected',
+          }),
+          expect.objectContaining({
+            grantType: 'refresh_token',
+            status: 200,
+            refreshConsumed: true,
+            refreshSaved: true,
+            refreshRotated: true,
+          }),
+          expect.objectContaining({
+            oauthError: 'invalid_grant',
+            reason: 'refresh_replayed',
+            familyRevoked: true,
+          }),
+          expect.objectContaining({ oauthError: 'invalid_grant', reason: 'refresh_not_found' }),
+          expect.objectContaining({
+            oauthError: 'invalid_grant',
+            reason: 'pkce_verification_failed',
+          }),
+          expect.objectContaining({ oauthError: 'invalid_target', resourceState: 'absent' }),
+          expect.objectContaining({ oauthError: 'invalid_target', resourceState: 'unexpected' }),
+        ]),
+      );
+      const family = tokens.find((field) => field?.refreshRotated)?.grantRef;
+      expect(family).toMatch(/^[a-f0-9]{24}$/);
+      expect(tokens.find((field) => field?.reason === 'refresh_replayed')?.grantRef).toBe(family);
+      expect(events.filter((field) => field?.operation === 'authorization')).toHaveLength(4);
+      for (const event of events) {
+        expect(event?.requestId).toMatch(/^[a-f0-9-]{36}$/);
+        expect(event?.timestamp).toMatch(/^\d{4}-\d\d-\d\dT/);
+        expect(event?.durationMs).toBeGreaterThanOrEqual(0);
+        expect(event?.clientClass).toBe('other');
+      }
+      expect(new Set(events.map((event) => event?.requestId)).size).toBe(events.length);
+      const serialized = JSON.stringify([...info.mock.calls, ...warn.mock.calls]);
+      for (const secret of [
+        code,
+        nextCode,
+        thirdCode,
+        fourthCode,
+        issued.access_token,
+        issued.refresh_token,
+        rotated.json().access_token,
+        rotated.json().refresh_token,
+        user.restToken,
+        user.refreshCookie,
+        user.userId,
+        ...user.workspaceIds,
+        'https://sensitive.test/private',
+        verifier,
+        'b'.repeat(43),
+      ]) {
+        expect(serialized).not.toContain(secret);
+      }
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it('logs early protocol rejections and server failures without request or exception contents', async () => {
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    const error = vi.spyOn(logger, 'error');
+    const secret = 'private-credential-header-cookie-body-student-data';
+    let find: ReturnType<typeof vi.spyOn> | undefined;
+    try {
+      const post = (payload: string, contentType = 'application/x-www-form-urlencoded') =>
+        testApp.app.inject({
+          method: 'POST',
+          url: '/oauth/token',
+          headers: {
+            'content-type': contentType,
+            cookie: `private=${secret}`,
+            'x-private': secret,
+          },
+          payload,
+        });
+      expect((await post(`client_id=${clientId}&refresh_token=${secret}`)).statusCode).toBe(400);
+      expect(
+        (
+          await post(
+            `grant_type=refresh_token&grant_type=authorization_code&client_id=${clientId}&refresh_token=${secret}`,
+          )
+        ).statusCode,
+      ).toBe(400);
+      expect(
+        (
+          await post(
+            new URLSearchParams({
+              grant_type: 'refresh_token',
+              client_id: secret,
+              refresh_token: secret,
+            }).toString(),
+          )
+        ).statusCode,
+      ).toBe(401);
+      expect((await post(secret, 'application/json')).statusCode).toBe(400);
+      find = vi
+        .spyOn(testApp.provider.RefreshToken, 'find')
+        .mockRejectedValueOnce(new Error(secret));
+      expect((await refresh(secret)).statusCode).toBe(500);
+      const rejected = warn.mock.calls
+        .map((call) => call[1])
+        .filter((field) => field?.event === 'mcp_oauth_diagnostic');
+      expect(rejected).toHaveLength(5);
+      expect(rejected).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            status: 400,
+            oauthError: 'invalid_request',
+            reason: 'grant_type_missing',
+          }),
+          expect.objectContaining({
+            status: 400,
+            oauthError: 'invalid_request',
+            reason: 'duplicate_grant_type',
+          }),
+          expect.objectContaining({ status: 401, oauthError: 'invalid_client' }),
+          expect.objectContaining({
+            status: 400,
+            oauthError: 'invalid_request',
+            reason: 'unsupported_content_type',
+            resourceState: 'unavailable',
+          }),
+          expect.objectContaining({
+            status: 500,
+            oauthError: 'server_error',
+            reason: 'server_failure',
+          }),
+        ]),
+      );
+      expect(
+        JSON.stringify([...info.mock.calls, ...warn.mock.calls, ...error.mock.calls]),
+      ).not.toContain(secret);
+    } finally {
+      find?.mockRestore();
+      info.mockRestore();
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  });
+
+  it('logs provider-supported endpoint aliases without changing their OAuth responses', async () => {
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    try {
+      for (const path of ['/token', '/TOKEN', '/token/', '/TOKEN/',
+        '/token/revocation', '/TOKEN/REVOCATION', '/token/revocation/']) {
+        const before = warn.mock.calls.length;
+        const response = await testApp.app.inject({
+          method: 'POST', url: `/oauth${path}`,
+          headers: { 'content-type': 'application/x-www-form-urlencoded' }, payload: '',
+        });
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error).toBe('invalid_request');
+        const events = warn.mock.calls.slice(before).map((call) => call[1]);
+        expect(events).toEqual([expect.objectContaining({
+          event: 'mcp_oauth_diagnostic', status: 400, oauthError: 'invalid_request',
+          operation: path.toLowerCase().includes('revocation') ? 'revocation' : 'token',
+        })]);
+      }
+      for (const path of ['/auth', '/AUTH', '/auth/']) {
+        const before = warn.mock.calls.length;
+        const response = await testApp.app.inject({ method: 'GET', url: `/oauth${path}` });
+        expect(response.statusCode).toBe(400);
+        expect(warn.mock.calls.slice(before).map((call) => call[1])).toEqual([
+          expect.objectContaining({ event: 'mcp_oauth_diagnostic', operation: 'authorization', status: 400 }),
+        ]);
+      }
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it('preserves server-failure diagnostics when session persistence fails again during cleanup', async () => {
+    const user = await seedUser();
+    const browser = new Browser(testApp.app, user.refreshCookie);
+    await issue(browser);
+    const secret = 'session-persistence-private-credential-student-payload';
+    const save = vi.spyOn(testApp.provider.Session.adapter, 'upsert').mockRejectedValue(new Error(secret));
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    const error = vi.spyOn(logger, 'error');
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await browser.request('GET', authorizeUrl());
+      expect(response.statusCode).toBe(500);
+      expect(save.mock.calls.length).toBeGreaterThanOrEqual(2);
+      const events = warn.mock.calls.map((call) => call[1]).filter((fields) => fields?.event === 'mcp_oauth_diagnostic');
+      expect(events).toEqual([expect.objectContaining({
+        operation: 'authorization', status: 500, oauthError: 'server_error', reason: 'server_failure',
+      })]);
+      expect(JSON.stringify([...info.mock.calls, ...warn.mock.calls, ...error.mock.calls])).not.toContain(secret);
+      expect(error).toHaveBeenCalledWith('MCP OAuth provider request failed', {
+        event: 'mcp_oauth_provider_error', oauthError: 'server_error', reason: 'server_failure',
+      });
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      save.mockRestore();
+      info.mockRestore();
+      warn.mockRestore();
+      error.mockRestore();
+      stderr.mockRestore();
+    }
+  });
+
   it('authorizes an existing user with one workspace and exchanges a single-use PKCE code', async () => {
     const user = await seedUser();
     const browser = new Browser(testApp.app, user.refreshCookie);
@@ -1073,12 +1323,16 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     const issued = await issue(new Browser(testApp.app, user.refreshCookie));
     const bound = await verifyMcpOAuthCredential(testApp.provider, issued.access_token, oauthConfig);
     expect(bound).not.toBeNull();
+    const info = vi.spyOn(logger, 'info');
     const response = await testApp.app.inject({
       method: 'POST',
       url: '/oauth/token/revocation',
       headers: { host: '127.0.0.1:3000', 'content-type': 'application/x-www-form-urlencoded' },
       payload: new URLSearchParams({ client_id: clientId, token: issued.refresh_token }).toString(),
     });
+    const diagnostic = info.mock.calls.map((call) => call[1]).find((fields) => fields?.event === 'mcp_oauth_diagnostic');
+    info.mockRestore();
+    expect(diagnostic).toMatchObject({ operation: 'revocation', status: 200, familyRevoked: true });
     expect(response.statusCode).toBe(200);
     const rows = await withPgClient(async (client) => client.query<{ revoked_at: Date | null }>(
       'SELECT revoked_at FROM mcp_oauth_grants WHERE id = $1', [bound!.id],

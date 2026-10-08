@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { errors, type Adapter, type AdapterPayload } from 'oidc-provider';
+import { type Adapter, type AdapterPayload, errors } from 'oidc-provider';
 import type { PoolClient } from 'pg';
 
 import { withPgClient } from './db.js';
+import { recordOAuthLifecycle } from './mcp-oauth-diagnostics.js';
 
 function digest(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -88,11 +89,18 @@ export class McpOAuthAdapter implements Adapter {
       );
       return true;
     });
-    if (!saved) throw new errors.InvalidGrant('OAuth grant is revoked or expired');
+    if (!saved) {
+      recordOAuthLifecycle('grant_unavailable', payload.grantId as string);
+      throw new errors.InvalidGrant('OAuth grant is revoked or expired');
+    }
+    if (this.kind === 'RefreshToken')
+      recordOAuthLifecycle('refresh_saved', payload.grantId as string);
   }
 
   async find(id: string): Promise<AdapterPayload | undefined> {
     const payload = await this.findWhere('id_hash = $2', digest(id));
+    if (typeof payload?.grantId === 'string')
+      recordOAuthLifecycle('grant_observed', payload.grantId);
     return payload && this.bearerArtifact ? { ...payload, jti: id } : payload;
   }
 
@@ -119,6 +127,9 @@ export class McpOAuthAdapter implements Adapter {
   }
 
   async consume(id: string): Promise<void> {
+    let observedGrantId: string | undefined;
+    let familyRevoked = false;
+    let grantUnavailable = false;
     const consumed = await inTransaction(async (client) => {
       const idHash = digest(id);
       const row = await client.query<{ grant_id: string | null }>(
@@ -126,8 +137,12 @@ export class McpOAuthAdapter implements Adapter {
         [this.kind, idHash],
       );
       const grantId = row.rows[0]?.grant_id;
+      observedGrantId = grantId ?? undefined;
       if (this.grantBoundArtifact) {
-        if (!grantId || !(await lockLiveGrant(client, grantId))) return false;
+        if (!grantId || !(await lockLiveGrant(client, grantId))) {
+          grantUnavailable = true;
+          return false;
+        }
       }
       const result = await client.query(
         `UPDATE mcp_oauth_artifacts SET consumed_at = NOW()
@@ -135,11 +150,22 @@ export class McpOAuthAdapter implements Adapter {
         [this.kind, idHash],
       );
       if (result.rowCount !== 1) {
-        if (grantId) await revokeFamily(client, grantId);
+        if (grantId) {
+          await revokeFamily(client, grantId);
+          familyRevoked = true;
+        }
         return false;
       }
       return true;
     });
+    if (familyRevoked) recordOAuthLifecycle('family_revoked', observedGrantId);
+    if (!consumed)
+      recordOAuthLifecycle(
+        grantUnavailable ? 'grant_unavailable' : 'consume_conflict',
+        observedGrantId,
+      );
+    if (consumed && this.kind === 'RefreshToken')
+      recordOAuthLifecycle('refresh_consumed', observedGrantId);
     // The conflict commits family revocation before the OAuth error is raised.
     // A concurrent issuer must take the same grant row lock before saving tokens.
     if (!consumed) throw new errors.InvalidGrant('OAuth credential was already consumed');
@@ -153,9 +179,11 @@ export class McpOAuthAdapter implements Adapter {
         digest(id),
       ]);
     });
+    if (this.kind === 'Grant') recordOAuthLifecycle('family_revoked', id);
   }
 
   async revokeByGrantId(grantId: string): Promise<void> {
     await inTransaction(async (client) => revokeFamily(client, grantId));
+    recordOAuthLifecycle('family_revoked', grantId);
   }
 }
