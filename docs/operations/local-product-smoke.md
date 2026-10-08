@@ -121,10 +121,6 @@ Learner: I cooked with my sister. Next weekend I want to visit a museum.
 Teacher: Practise past simple questions and talking about future plans.
 ```
 
-If Context says **Saving needs attention / Invalid request** on a checkout preceding ESL-10,
-apply/merge the existing recovery fix in [PR #320](https://github.com/abocha/esl-pipeline/pull/320)
-before rehearsing further. ESL-11's local rehearsal uses that commit as a separate dependency.
-
 For the typed-editor check, copy the **existing read-compatible AssignmentV1 JSON fixture** used
 by the frontend sandbox (not the legacy Markdown fixture, and not a fresh-generation v8 example):
 
