@@ -490,6 +490,193 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     }
   });
 
+  it.each(['expired', 'missing', 'replaced authorization'] as const)(
+    'refreshes a matching stored token after its browser session is %s',
+    async (sessionState) => {
+      const user = await seedUser();
+      const browser = new Browser(testApp.app, user.refreshCookie);
+      const info = vi.spyOn(logger, 'info');
+      const warn = vi.spyOn(logger, 'warn');
+      try {
+        const issued = await issue(browser);
+        const adapter = new McpOAuthAdapter('RefreshToken');
+        const stored = await adapter.find(issued.refresh_token);
+        expect(!!stored).toBe(true);
+        expect(stored?.jti === issued.refresh_token).toBe(true);
+        const issuedDiagnostic = info.mock.calls
+          .map((call) => call[1])
+          .find(
+            (fields) => fields?.event === 'mcp_oauth_diagnostic' && fields?.operation === 'token',
+          );
+        await withPgClient(async (client) => {
+          const result = await client.query<{ matches: boolean; plaintext_absent: boolean }>(
+            `SELECT id_hash = $1 AS matches, NOT (payload ? 'jti') AS plaintext_absent
+             FROM mcp_oauth_artifacts WHERE kind = 'RefreshToken' AND grant_id = $2`,
+            [createHash('sha256').update(issued.refresh_token).digest('hex'), stored!.grantId],
+          );
+          expect(result.rows).toEqual([{ matches: true, plaintext_absent: true }]);
+          if (sessionState === 'expired') {
+            await client.query(
+              "UPDATE mcp_oauth_artifacts SET expires_at = NOW() - INTERVAL '1 second' WHERE kind = 'Session' AND uid = $1",
+              [stored!.sessionUid],
+            );
+          } else if (sessionState === 'missing') {
+            await client.query(
+              "DELETE FROM mcp_oauth_artifacts WHERE kind = 'Session' AND uid = $1",
+              [stored!.sessionUid],
+            );
+          }
+        });
+        if (sessionState === 'replaced authorization') await issue(browser);
+        // The same issued value still resolves through the real PostgreSQL adapter.
+        expect(!!(await adapter.find(issued.refresh_token))).toBe(true);
+        const response = await refresh(issued.refresh_token);
+        const diagnostic = [...info.mock.calls, ...warn.mock.calls]
+          .map((call) => call[1])
+          .find(
+            (fields) =>
+              fields?.event === 'mcp_oauth_diagnostic' && fields?.grantType === 'refresh_token',
+          );
+        expect(diagnostic?.grantRef === issuedDiagnostic?.grantRef).toBe(true);
+        expect(response.statusCode).toBe(200);
+        expect(diagnostic).toMatchObject({
+          refreshConsumed: true,
+          refreshSaved: true,
+          refreshRotated: true,
+          familyRevoked: false,
+        });
+        expect(
+          (await verifyMcpOAuthCredential(
+            testApp.provider,
+            response.json().access_token,
+            oauthConfig,
+          )) !== null,
+        ).toBe(true);
+        const logs = JSON.stringify([...info.mock.calls, ...warn.mock.calls]);
+        for (const secret of [
+          issued.access_token,
+          issued.refresh_token,
+          response.json().access_token,
+          response.json().refresh_token,
+        ]) {
+          expect(logs.includes(secret)).toBe(false);
+        }
+      } finally {
+        info.mockRestore();
+        warn.mockRestore();
+      }
+    },
+  );
+
+  it.each([
+    'revoked grant',
+    'expired grant',
+    'expired refresh',
+    'removed membership',
+    'inactive user',
+  ] as const)('rejects refresh with %s after the browser session ends', async (invalidState) => {
+    const user = await seedUser();
+    const issued = await issue(new Browser(testApp.app, user.refreshCookie));
+    const stored = await new McpOAuthAdapter('RefreshToken').find(issued.refresh_token);
+    await withPgClient(async (client) => {
+      await client.query("DELETE FROM mcp_oauth_artifacts WHERE kind = 'Session' AND uid = $1", [
+        stored!.sessionUid,
+      ]);
+      switch (invalidState) {
+        case 'revoked grant':
+          await client.query('UPDATE mcp_oauth_grants SET revoked_at = NOW() WHERE id = $1', [
+            stored!.grantId,
+          ]);
+          break;
+        case 'expired grant':
+          await client.query(
+            "UPDATE mcp_oauth_grants SET expires_at = NOW() - INTERVAL '1 second' WHERE id = $1",
+            [stored!.grantId],
+          );
+          break;
+        case 'expired refresh':
+          await client.query(
+            "UPDATE mcp_oauth_artifacts SET expires_at = NOW() - INTERVAL '1 second' WHERE kind = 'RefreshToken' AND grant_id = $1",
+            [stored!.grantId],
+          );
+          break;
+        case 'removed membership':
+          await client.query('DELETE FROM workspace_memberships WHERE user_id = $1', [user.userId]);
+          break;
+        case 'inactive user':
+          await client.query('UPDATE users SET is_active = FALSE WHERE id = $1', [user.userId]);
+          break;
+      }
+    });
+    const response = await refresh(issued.refresh_token);
+    expect(response.statusCode >= 400 && response.statusCode < 500).toBe(true);
+    expect(response.json().access_token === undefined).toBe(true);
+  });
+
+  it('distinguishes unknown credentials from a matching legacy token rejected by session binding', async () => {
+    const user = await seedUser();
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    try {
+      const issued = await issue(new Browser(testApp.app, user.refreshCookie));
+      const token = await testApp.provider.RefreshToken.find(issued.refresh_token);
+      expect(!!token).toBe(true);
+      // Recreate the persisted binding on credentials issued before the correction.
+      token!.expiresWithSession = true;
+      await token!.save();
+      await withPgClient(async (client) => {
+        await client.query(
+          "UPDATE mcp_oauth_artifacts SET expires_at = NOW() - INTERVAL '1 second' WHERE kind = 'Session' AND uid = $1",
+          [token!.sessionUid],
+        );
+      });
+      const stored = await new McpOAuthAdapter('RefreshToken').find(issued.refresh_token);
+      expect(!!stored && stored.jti === issued.refresh_token && !stored.consumed).toBe(true);
+      expect((await refresh(issued.refresh_token)).statusCode).toBe(400);
+      const known = warn.mock.calls
+        .map((call) => call[1])
+        .find(
+          (fields) =>
+            fields?.event === 'mcp_oauth_diagnostic' && fields?.grantType === 'refresh_token',
+        );
+      expect(known).toMatchObject({
+        oauthError: 'invalid_grant',
+        reason: 'refresh_not_found',
+        refreshConsumed: false,
+        refreshSaved: false,
+        refreshRotated: false,
+        familyRevoked: false,
+      });
+      const issuedDiagnostic = info.mock.calls
+        .map((call) => call[1])
+        .find(
+          (fields) => fields?.event === 'mcp_oauth_diagnostic' && fields?.operation === 'token',
+        );
+      expect(!!known?.grantRef && known.grantRef === issuedDiagnostic?.grantRef).toBe(true);
+      warn.mockClear();
+      const unknown = randomUUID();
+      expect((await refresh(unknown)).statusCode).toBe(400);
+      const missed = warn.mock.calls
+        .map((call) => call[1])
+        .find((fields) => fields?.event === 'mcp_oauth_diagnostic');
+      expect(missed).toMatchObject({
+        oauthError: 'invalid_grant',
+        reason: 'refresh_not_found',
+        refreshConsumed: false,
+        refreshSaved: false,
+        familyRevoked: false,
+      });
+      expect(missed?.grantRef === undefined).toBe(true);
+      expect(!!(await new McpOAuthAdapter('RefreshToken').find(issued.refresh_token))).toBe(true);
+      const logs = JSON.stringify([...info.mock.calls, ...warn.mock.calls]);
+      for (const secret of [issued.access_token, issued.refresh_token, unknown])
+        expect(logs.includes(secret)).toBe(false);
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
   it('logs sanitized, correlated code/refresh outcomes, replay revocation and new authorization', async () => {
     const user = await seedUser();
     const info = vi.spyOn(logger, 'info');

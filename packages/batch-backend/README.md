@@ -439,6 +439,11 @@ automatically binds one, and requires a selection for multiple. Credential verif
 opaque access token, fixed resource and scope, current active user, current workspace membership,
 grant expiry, and revocation. REST JWTs and OAuth credentials cannot cross the two verifier paths.
 Codes live 60 seconds, access tokens 15 minutes, and grants/refresh tokens 14 days.
+New credentials follow the explicit Pipeline grant rather than the one-hour provider browser
+session: session expiry, logout, or later authorization does not revoke another active connection.
+Explicit grant/token revocation, replay detection, token/grant expiry, and current user/workspace
+authorization still apply. Previously issued session-bound credentials retain their stored binding;
+affected connections need one reauthorization after this correction is deployed.
 Consent submits the exact displayed workspace and rechecks its membership on confirmation. Provider
 artifact writes and family revocation serialize on the Pipeline grant row, so replay or revocation
 cannot leave an overlapping token valid. OAuth cookies use the external `/api/oauth` path and stay
@@ -473,6 +478,9 @@ prove the client received it. A rejected request can have these flags set becaus
 before some later validations. False flags mean no action observed in that request, not that a
 grant is globally valid. `refresh_not_found` cannot distinguish unknown, expired, or previously
 deleted credentials because the adapter filters expired rows and revocation deletes artifacts.
+It also covers provider rejection of a matching stored token's browser-session binding. The adapter
+records `grantRef` when it finds a grant-bearing row, before provider validation; a refresh failure
+with a reference can therefore mean that lookup succeeded and subsequent validation rejected it.
 Other unmapped rejections retain their OAuth code with a generic bounded reason. A new initial
 authorization event shows a client starting authorization; it cannot reveal the client's reason,
 prove a human clicked reconnect, or identify the same client session across unrelated grants.
