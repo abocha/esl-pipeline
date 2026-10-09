@@ -1,6 +1,6 @@
 ---
 name: test-audit
-description: Use when adding, changing, reviewing, or pruning tests in ESL Pipeline. For new tests, apply a value gate; for explicitly requested audits, identify redundant or implementation-coupled tests using read-only evidence first. Do not perform mass deletion automatically.
+description: Use when adding, changing, reviewing, pruning, or diagnosing stale fixtures and snapshots in ESL Pipeline tests. Apply a test-value gate and evidence-first fixture triage; do not update expectations or delete tests mechanically.
 ---
 
 # Test Audit (ESL Pipeline)
@@ -38,6 +38,7 @@ These are **signals for investigation**, never automatic deletion rules:
 - Repeated checks of one contract in multiple packages or layers without a distinct failure mode.
 - White-box assertions about private call shapes when the public behavior is already independently checked.
 - Full copies of manifests, fixtures, export inventories, or configuration constants with no external oracle.
+- Oversized or stale fixture snapshots that fail on incidental fields unrelated to the protected contract.
 - Mock implementations that manufacture the very outcome being asserted.
 - Fake persistence or callback/order fixtures that bypass the real owner, so the claimed state was never produced.
 - Pure capability-flag checks without validating the delivery, acceptance, or acknowledgement promised by the flag.
@@ -56,6 +57,26 @@ Especially protect ESL Pipeline's:
 - provider compatibility, transcription speaker/channel provenance, and user-visible transcript/assignment output.
 
 Do **not** use line coverage alone as a safety argument. It measures execution, not contract or defect detection. Slow, old, or mocked tests are not automatically waste.
+
+## Failing fixtures are not automatic maintenance
+
+Follow [Fixture and snapshot drift](../../../docs/reference/TESTING_GUIDELINES.md#fixture-and-snapshot-drift)
+before changing any failing fixture or snapshot. Identify the owner and independent source of
+truth, then classify the failure: actual bug, intentional contract evolution, irrelevant
+fixture drift, obsolete redundant coverage, or unresolved cause.
+
+- Fix behavior when the implementation violated the contract; don't rewrite expected values.
+- For an intended schema/contract change, update the smallest canonical input fixture and
+  relevant assertions, showing the approved new contract and focused validation evidence.
+- Where fixture churn is unrelated to behavior, prefer stable, compact builders and
+  semantic assertions rather than duplicating entire production objects or snapshots.
+- Preserve pinned historical hashes, golden compatibility samples, and deliberately invalid
+  fixtures. Generated previews and golden oracles are different kinds of evidence.
+- Never blindly regenerate snapshots, make expected values from the implementation under
+  test, or broaden fixture edits merely to get a green suite.
+
+For recurring fixture failures, also ask whether the **test's granularity or ownership**
+is wrong. Show concrete evidence before recommending consolidation or deletion.
 
 ## Audit protocol: gather evidence before edits
 
