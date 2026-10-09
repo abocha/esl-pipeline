@@ -80,6 +80,7 @@ import type {
   RecordingErrorCode,
   RecordStudentPaymentRequest,
   StreamEventMessage,
+  StudentMemoryAvailability,
   StudentScheduleBillingSurfaceResponse,
   TemplateControlPlaneListDto,
   UpdateBusinessSettingsRequest,
@@ -678,6 +679,7 @@ export interface StudentMemorySnapshotRecord {
 }
 
 export interface StudentMemoryOverviewResponse {
+  availability?: StudentMemoryAvailability;
   studentId: string;
   latestReadyStudentMemorySnapshot: StudentMemorySnapshotRecord | null;
   recentReadyLessonMemory: LessonMemoryRecord[];
@@ -714,6 +716,7 @@ export interface StudentMemoryStatusCount {
 }
 
 export interface StudentMemoryHealthResponse {
+  availability?: StudentMemoryAvailability;
   studentId: string;
   latestSnapshot: StudentMemoryLatestSnapshotHealth | null;
   memoryCounts: {

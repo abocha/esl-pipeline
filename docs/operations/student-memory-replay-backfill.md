@@ -30,6 +30,67 @@
 7. OpenAI Batch replay is disabled by default and is not a deployment, target-model, or paid-call
    authorization.
 
+## Evidence availability and continuity (ESL-38)
+
+Existing verified observations are teaching evidence even when the originating assignment is
+historical. Source proof and new execution admission are separate: historical extraction,
+regeneration, initial enrichment and legacy Batch import remain blocked. Never infer missing
+provenance or retrofit confirmed bindings to make old evidence eligible.
+
+Snapshot selection and publication verify both lesson and homework contributors. Homework proof
+requires a retained ready observation, its succeeded source job, the matching root publication
+lineage and the same student throughout that lineage. Historical job format alone does not reject
+this proof. Missing, foreign, deleted or superseded contributors make established history
+repair-required; incremental refresh cannot carry that coverage forward. Explicit rebuild input
+includes only eligible materialized homework observations, while inspection retains raw audit rows.
+
+Memory overview/health, transcript progress and teaching context expose the shared aggregate
+`availability`: `absent`, `available`, `repair_required`, or `repository_unavailable`, with a bounded
+reason and lesson/homework reference counts. Stored status and pending/failed work are independent.
+Counts describe referenced evidence, not complete history or learner mastery. Reads never enqueue
+repair, verify by writing, or change stored status. MCP adds this field beside `context`; its closed
+`mcp_teaching_context.v1` content and disclosure limits remain unchanged.
+
+Genuine source invalidation conservatively rejects contaminated snapshots. New invalidations retain
+`continuityReason: source_invalidated` in existing generation notes under the student lock; blocked
+automatic refreshes retain `continuityReason: repair_required` on their failed intent. Old rows are
+classified from retained successful-result output/history without backfilling guesses. Failed or
+cancelled first intents alone do not establish history. Without an eligible parent, established
+history blocks the normal five-lesson/three-homework bootstrap before generation and at publication.
+A genuine first bootstrap remains bounded; an eligible-parent refresh remains incremental.
+
+An explicitly requested `manual_rebuild_v1_1` or `full_rebuild_v1` with replay key and operator reason
+uses all eligible materialized episodes and the existing currentness/cancellation/idempotency fences.
+This capability does not authorize production invocation. Do not start automatic full-history
+provider work, claim subtraction, learner scans, replay or reconciliation as part of rollout.
+
+### Compatible application rollout and rollback
+
+No table/data migration or new memory artifact schema is required. Preserve observations, reviewed
+profiles/revisions, snapshots and frozen prompt-package bytes. The additive availability result is
+backward compatible for existing consumers that ignore new fields; new frontend fields are optional
+when reading older API responses. Use a minor release for the added public projection; no closed
+MCP context-version change is needed.
+
+For a separately authorized rollout, stop new refresh admission and quiesce **all old API and memory
+worker writers**, including already active snapshot work, before enabling new admission. Do not mix
+old/new workers: an old in-flight refresh could still publish a recent-only bootstrap. Retain queued
+intents and cancellation/supersession evidence. New workers re-read the durable intent, frozen target,
+source state and continuity before processing retained jobs; repair-required work becomes durably
+blocked rather than generated. Coordinate API/worker replacement, then frontend, and restore normal
+admission only with the compatible writer set. GET/health/MCP remain read-only throughout.
+
+The corrected reader may immediately expose already verified stored snapshots without provider calls
+or row rewrites. This is a read-policy correction, not reconstruction. Separately verify availability
+and stored-versus-selectable status after deployment; provider-backed learner recovery needs a new
+bounded approval/preflight. No production recovery is established by local fixtures.
+
+Rollback must quiesce writers again and use a compatible API/worker set. Earlier readers hide
+historical evidence again and earlier workers lack the continuity guard; do not resume their automatic
+refresh processing for repair-required learners. Rollback never revives superseded/cancelled work or
+clears repair notes. Preserve post-rollout writes and audit evidence; prefer forward repair if a safe
+compatible writer set is unavailable. Batch retirement remains ABO-26, outside this change.
+
 ## Disabled OpenAI Batch Replay
 
 Use the Batch tool only for explicit, non-urgent replay of eligible lesson evidence or native AssignmentV1 history after separate maintainer

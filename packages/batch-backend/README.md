@@ -43,6 +43,14 @@ SQL evidence. See [the retirement contract and cutover boundary](../../docs/refe
 
 ## Runtime Surface
 
+ESL-38 separates existing verified memory evidence from historical execution admission. Snapshot
+selection/publication retain exact ownership and source proof, while historical extraction, delivery,
+enrichment and legacy import stay blocked. Established aggregates without an eligible parent require
+explicit repair; automatic refresh cannot silently replace them with bounded bootstrap history.
+Overview, health, transcript progress, prompt packaging and teaching context share bounded availability
+independent of stored status. MCP exposes it beside the unchanged closed v1 context. See
+[continuity and coordinated rollout](../../docs/operations/student-memory-replay-backfill.md#evidence-availability-and-continuity-esl-38).
+
 Core surfaces:
 
 - jobs, drafts, prompt packages, recordings, students, auth

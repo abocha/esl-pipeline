@@ -20,6 +20,13 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
   derived plain speech projections; see
   [the assignment contract](../../docs/reference/ASSIGNMENT_V1.md).
 - Shared errors (`PipelineError`, `ConfigurationError`, etc.)
+- `StudentMemoryAvailability` and its closed runtime schema: aggregate `state`, bounded `reason`,
+  `lessonReferenceCount` and `homeworkReferenceCount`. States are `absent`, `available`,
+  `repair_required`, and `repository_unavailable`; counts never assert completeness or mastery.
+  Memory overview/health, teaching context and transcript progress share this projection. MCP
+  `get_student_teaching_context` adds required result-level `availability` alongside `context`;
+  the nested `mcp_teaching_context.v1` payload/allowlist is unchanged. Existing consumers may ignore
+  the additive result field; new frontend readers tolerate its absence on older API responses.
 - Shared observability shapes (`PipelineLogEvent`, `PipelineLogger`, `noopLogger`)
 - Semantic contract version registry (`CONTRACT_VERSIONS`)
 - Session homework intent, current completion kind/timestamp, immutable exact-source finish

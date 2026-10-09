@@ -8,6 +8,34 @@ import {
 } from '../src/application/student-memory-inspection.js';
 
 describe('application/student-memory-inspection', () => {
+  it('reports stored-ready separately from repair-required and repository-unavailable using read-only dependencies', async () => {
+    const getSelection = vi.fn().mockResolvedValue({
+      snapshot: null,
+      availability: {
+        state: 'repair_required',
+        reason: 'established_history_ineligible',
+        lessonReferenceCount: 19,
+        homeworkReferenceCount: 3,
+      },
+    });
+    const overrides = {
+      students: { getById: vi.fn().mockResolvedValue({ id: 'student-1' }) },
+      snapshots: {
+        getSelection,
+        list: vi.fn().mockResolvedValue([{ id: 'stored-ready', status: 'ready' }]),
+      },
+      lessonMemory: { list: vi.fn().mockResolvedValue([]), listRecentReadyByStudentId: vi.fn() },
+      homeworkMemory: { list: vi.fn().mockResolvedValue([]), listRecentReadyByStudentId: vi.fn() },
+      profileCandidates: { list: vi.fn().mockResolvedValue({ items: [], total: 0 }) },
+    };
+    const health = await getStudentMemoryHealth({ studentId: 'student-1', overrides });
+    expect(health?.latestSnapshot?.status).toBe('ready');
+    expect(health?.availability.state).toBe('repair_required');
+    getSelection.mockRejectedValue(new Error('private storage URL'));
+    const unavailable = await getStudentMemoryHealth({ studentId: 'student-1', overrides });
+    expect(unavailable?.availability.state).toBe('repository_unavailable');
+    expect(JSON.stringify(unavailable?.availability)).not.toContain('private');
+  });
   it('returns null when the student does not exist', async () => {
     const result = await getStudentMemoryOverview({
       studentId: 'student-missing',
@@ -22,10 +50,12 @@ describe('application/student-memory-inspection', () => {
   });
 
   it('uses overview defaults and bundles the latest ready memory artifacts', async () => {
-    const getLatestReadyByStudentId = vi.fn().mockResolvedValue({
-      id: 'snapshot-1',
-      unresolvedIssues: [{ label: 'Articles', note: 'Still unstable.', priority: 'medium' }],
-    });
+    const getSelection = vi.fn().mockResolvedValue(
+      memorySelection({
+        id: 'snapshot-1',
+        unresolvedIssues: [{ label: 'Articles', note: 'Still unstable.', priority: 'medium' }],
+      }),
+    );
     const listRecentReadyLessonMemoryByStudentId = vi.fn().mockResolvedValue([{ id: 'lesson-1' }]);
     const listRecentReadyHomeworkMemoryByStudentId = vi
       .fn()
@@ -46,7 +76,7 @@ describe('application/student-memory-inspection', () => {
           listRecentReadyByStudentId: listRecentReadyHomeworkMemoryByStudentId,
         },
         snapshots: {
-          getLatestReadyByStudentId,
+          getSelection,
           list: vi.fn(),
         },
       },
@@ -90,7 +120,7 @@ describe('application/student-memory-inspection', () => {
           getById: vi.fn().mockResolvedValue({ id: 'student-1' }),
         },
         snapshots: {
-          getLatestReadyByStudentId: vi.fn(),
+          getSelection: vi.fn().mockResolvedValue(memorySelection(null)),
           list,
         },
       },
@@ -242,7 +272,7 @@ describe('application/student-memory-inspection', () => {
           listRecentReadyByStudentId: vi.fn(),
         },
         snapshots: {
-          getLatestReadyByStudentId: vi.fn(),
+          getSelection: vi.fn().mockResolvedValue(memorySelection(null)),
           list: listSnapshots,
         },
         profileCandidates: {
@@ -348,7 +378,7 @@ describe('application/student-memory-inspection', () => {
           listRecentReadyByStudentId: vi.fn(),
         },
         snapshots: {
-          getLatestReadyByStudentId: vi.fn(),
+          getSelection: vi.fn().mockResolvedValue(memorySelection(null)),
           list: vi.fn().mockResolvedValue([]),
         },
         profileCandidates: {
@@ -369,3 +399,15 @@ describe('application/student-memory-inspection', () => {
     });
   });
 });
+
+function memorySelection(snapshot: unknown) {
+  return {
+    snapshot,
+    availability: {
+      state: snapshot ? 'available' : 'absent',
+      reason: snapshot ? 'verified_lineage' : 'no_established_snapshot',
+      lessonReferenceCount: 0,
+      homeworkReferenceCount: 0,
+    },
+  };
+}

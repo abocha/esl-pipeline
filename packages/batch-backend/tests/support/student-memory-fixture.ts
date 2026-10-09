@@ -108,3 +108,28 @@ export async function insertLessonMemory(args: {
   });
   return lessonMemoryId;
 }
+
+/** Seed preserved pre-cutover authority in disposable PostgreSQL fixtures only. */
+export async function makeLessonMemorySourcesHistorical(ids: string[]) {
+  await withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      await client.query(
+        'ALTER TABLE assignment_sessions DISABLE TRIGGER historical_sessions_read_only',
+      );
+      await client.query(
+        `UPDATE assignment_sessions SET confirmed_snapshot =
+        jsonb_set(confirmed_snapshot, '{create}', '{"markdown":"Frozen historical assignment"}'::jsonb)
+        WHERE id IN (SELECT assignment_session_id FROM lesson_memory_entries WHERE id = ANY($1::uuid[]))`,
+        [ids],
+      );
+      await client.query(
+        'ALTER TABLE assignment_sessions ENABLE TRIGGER historical_sessions_read_only',
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}

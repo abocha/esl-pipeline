@@ -457,6 +457,41 @@ describe('StudentLearningPage', () => {
     });
   });
 
+  it.each(['repair_required', 'repository_unavailable'])(
+    'explains %s without suggesting a fresh bootstrap',
+    async (state) => {
+      apiMocks.getStudentMemoryOverview.mockResolvedValue({
+        studentId: 'student-alex',
+        availability: {
+          state,
+          reason:
+            state === 'repair_required'
+              ? 'established_history_ineligible'
+              : 'repository_unavailable',
+          lessonReferenceCount: 19,
+          homeworkReferenceCount: 3,
+        },
+        latestReadyStudentMemorySnapshot: null,
+        recentReadyLessonMemory: [],
+        recentReadyHomeworkMemory: [],
+        unresolvedIssues: [],
+      });
+      renderLearningPage();
+      await waitFor(() =>
+        expect(
+          screen.getAllByText(
+            state === 'repair_required'
+              ? /Stored memory history requires explicit repair/
+              : /Memory retrieval is unavailable/,
+          ).length,
+        ).toBeGreaterThan(0),
+      );
+      expect(
+        screen.queryByText('Generate student memory to strengthen this teaching view.'),
+      ).toBeNull();
+    },
+  );
+
   it('lets a student without a profile start an empty learner profile without falling back to legacy UI', async () => {
     apiMocks.getProfileContent.mockResolvedValueOnce(null);
     const user = userEvent.setup();
@@ -569,7 +604,7 @@ describe('StudentLearningPage', () => {
     renderLearningPage();
 
     expect(
-      await screen.findByText(/No ready student-memory snapshot is available yet/i),
+      (await screen.findAllByText(/No established student-memory snapshot is available yet/i))[0],
     ).toBeTruthy();
     expect(screen.queryByText('incremental_v1_1')).toBeNull();
     expect(screen.queryByText('Content hash')).toBeNull();
@@ -620,7 +655,7 @@ describe('StudentLearningPage', () => {
     renderLearningPage();
 
     expect(
-      await screen.findByText(/No ready student-memory snapshot is available yet/i),
+      (await screen.findAllByText(/No established student-memory snapshot is available yet/i))[0],
     ).toBeTruthy();
     expect(screen.queryByText('incremental_v1_1')).toBeNull();
 

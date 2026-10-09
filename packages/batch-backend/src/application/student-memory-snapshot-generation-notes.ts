@@ -65,6 +65,7 @@ export interface StudentMemorySnapshotSourcesChangedFailureDetails {
   stage: 'snapshot_ready_finalization';
   message: string;
   unavailableLessonMemoryEntryIds: string[];
+  unavailableHomeworkMemoryEntryIds?: string[];
 }
 
 export interface StudentMemorySnapshotCandidateRefreshDecision {

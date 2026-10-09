@@ -8,6 +8,7 @@ import {
   type FindStudentResultDto,
   type GetStudentTeachingContextResultDto,
   mcpProfileSchema,
+  studentMemoryAvailabilitySchema,
 } from '@esl-pipeline/contracts';
 
 import { findStudent } from '../application/find-student.js';
@@ -39,7 +40,9 @@ const findResultSchema = z
     hasMore: z.boolean(),
   })
   .strict();
-const contextResultSchema = z.object({ context: mcpTeachingContextSchema }).strict();
+const contextResultSchema = z
+  .object({ context: mcpTeachingContextSchema, availability: studentMemoryAvailabilitySchema })
+  .strict();
 const profileInputSchema = z.object({}).strict();
 const profileDescription =
   "Return the profile represented by this request's authenticated credentials. The opaque id is unique within this app and remains unchanged across token refresh, reconnection, and display-metadata changes.";
@@ -130,6 +133,7 @@ function createServer(config: McpOAuthConfig, grant: BoundOAuthGrant | null): Mc
           return { isError: true, content: [{ type: 'text', text: 'Student not found.' }] };
         const result: GetStudentTeachingContextResultDto = {
           context: projectMcpTeachingContext(source),
+          availability: source.availability,
         };
         return {
           content: [
@@ -235,7 +239,8 @@ export function registerMcpServer(
       const authorization = request.headers.authorization;
       if (
         (authorization && !/^Bearer ([^\s]+)$/i.test(authorization)) ||
-        (authorization && !(await verifyMcpOAuthCredential(provider, authorization.slice(7), config)))
+        (authorization &&
+          !(await verifyMcpOAuthCredential(provider, authorization.slice(7), config)))
       ) {
         return reply
           .code(401)
