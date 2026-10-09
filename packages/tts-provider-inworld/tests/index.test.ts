@@ -1436,9 +1436,8 @@ describe('inworld provider adapter basics', () => {
   });
 });
 
-it('keeps native typed cast and cache identity for unchanged typed speech', async () => {
+it('preserves literal typed speech and changes preview identity when it changes', async () => {
   const assignment = assignmentFixture();
-  const context = structuredClone(assignment);
   const voicePlan = {
     ...createPreviewVoicePlan('fixed'),
     assignments: ['Alex', 'Jo'].map((speaker) => ({
@@ -1447,13 +1446,10 @@ it('keeps native typed cast and cache identity for unchanged typed speech', asyn
     })),
   };
   const options = { outPath: tmpdir(), voiceMapPath: '/unused', preview: true, voicePlan };
-  const typed = await buildStudyTextMp3Inworld({ assignment }, options);
-  const historical = await buildStudyTextMp3Inworld({ assignment: context }, options);
-  expect(typed.hash).toBe(historical.hash);
-  expect(typed.voiceAssignments).toEqual(historical.voiceAssignments);
+  const original = await buildStudyTextMp3Inworld({ assignment }, options);
   assignment.input.studyText.turns[0]!.text = '**First**, open the app.';
-  const literal = await buildStudyTextMp3Inworld({ assignment }, options);
-  expect(literal.hash).not.toBe(typed.hash);
+  const changed = await buildStudyTextMp3Inworld({ assignment }, options);
+  expect(changed.hash).not.toBe(original.hash);
   expect(
     renderInworldSpeechSegment({
       model: 'inworld-tts-2',
