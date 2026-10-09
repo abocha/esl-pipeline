@@ -782,8 +782,18 @@ describe('canonical no-homework memory durable recovery', () => {
         ]),
       ]),
     );
+    const candidateSnapshot = await insertCanonicalReadyStudentMemorySnapshot({
+      studentId: source.studentId,
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'fixture',
+      model: 'fixture',
+      lessonMemoryEntryIds: [source.id],
+      generationNotes: { triggerSourceKind: 'lesson_memory', triggerSourceEntryId: source.id },
+      ...snapshotContent,
+    });
     const candidates = await refreshStudentProfileCandidatesFromCanonicalMemory({
       studentId: source.studentId,
+      sourceSnapshotId: candidateSnapshot.id,
     });
     expect(candidates?.created).toHaveLength(1);
     expect(candidates?.created[0]).toMatchObject({

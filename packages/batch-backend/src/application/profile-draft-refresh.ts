@@ -9,6 +9,7 @@ import {
   getActiveProfileRevision,
   getProfileRevisionById,
 } from '../domain/profile-revision-repository.js';
+import { isStudentProfileCandidateRepresented } from '../domain/student-profile-candidate-model.js';
 import {
   linkStudentProfileCandidatesToDraftRevision,
   listStudentProfileCandidatesByIds,
@@ -198,6 +199,9 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
   }
 
   const structuredDraft = drafting.structuredProfile;
+  const appliedCandidateIds = selectedCandidates
+    .filter((candidate) => isStudentProfileCandidateRepresented(structuredDraft, candidate))
+    .map((candidate) => candidate.id);
   const draftRevision = await dependencies.profileContent.saveRevision(
     request.studentId,
     renderFoundationalProfileContent(structuredDraft),
@@ -212,7 +216,7 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
 
   await dependencies.candidates.linkToDraft({
     studentId: request.studentId,
-    candidateIds: selectedCandidates.map((candidate) => candidate.id),
+    candidateIds: appliedCandidateIds,
     draftRevisionId: draftRevision.id,
   });
 
@@ -220,7 +224,7 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
     studentId: request.studentId,
     baseRevisionId: baseRevision?.id ?? null,
     draftRevision,
-    includedCandidateIds: selectedCandidates.map((candidate) => candidate.id),
+    includedCandidateIds: appliedCandidateIds,
     provider: drafting.provider,
     model: drafting.model,
     ...(drafting.providerRequestId ? { providerRequestId: drafting.providerRequestId } : {}),
@@ -263,6 +267,7 @@ function validateCandidateSelection(
   selectedCandidates: ProfileDraftRefreshCandidate[],
 ): void {
   const seen = new Set<string>();
+  const requested = new Set(requestedCandidateIds);
 
   if (selectedCandidates.length !== requestedCandidateIds.length) {
     throw new ProfileDraftRefreshError(
@@ -273,7 +278,7 @@ function validateCandidateSelection(
   }
 
   for (const candidate of selectedCandidates) {
-    if (!candidate.id.trim()) {
+    if (!candidate.id.trim() || !requested.has(candidate.id)) {
       throw new ProfileDraftRefreshError(
         'Candidate selection contains an item without an id',
         'profile_candidate_id_missing',

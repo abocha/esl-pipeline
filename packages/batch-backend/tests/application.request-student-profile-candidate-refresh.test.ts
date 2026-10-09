@@ -12,6 +12,32 @@ const params = {
 };
 
 describe('application/request-student-profile-candidate-refresh', () => {
+  it('pins an unpinned manual request once before queue delivery', async () => {
+    const enqueue = vi.fn();
+    const getLatestReadyByStudentId = vi
+      .fn()
+      .mockResolvedValue({ id: 'snapshot-a', studentId: params.studentId });
+    await requestStudentProfileCandidateRefresh({
+      params: { ...params, sourceSnapshotId: null },
+      overrides: { queue: { enqueue }, snapshots: { getLatestReadyByStudentId } },
+    });
+    expect(getLatestReadyByStudentId).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceSnapshotId: 'snapshot-a' }),
+      { jobId: 'student-profile-candidate-refresh:' + params.studentId + ':snapshot-a' },
+    );
+  });
+
+  it('rejects an automatic request without a source snapshot before enqueue', async () => {
+    const enqueue = vi.fn();
+    await expect(
+      requestStudentProfileCandidateRefresh({
+        params: { ...params, sourceSnapshotId: null, trigger: 'student-memory-snapshot-ready' },
+        overrides: { queue: { enqueue } },
+      }),
+    ).rejects.toThrow('explicit sourceSnapshotId');
+    expect(enqueue).not.toHaveBeenCalled();
+  });
   it('uses enqueue for the normal publication path', async () => {
     const enqueue = vi.fn().mockResolvedValue(undefined);
 

@@ -1212,8 +1212,13 @@ export const StudentLearningPage: React.FC = () => {
       });
       setProfileRevisions(revisions.items ?? []);
       setSelectedCandidateIds([]);
+      const excludedCount = candidateIds.filter(
+        (id) => !response.includedCandidateIds.includes(id),
+      ).length;
       setProfileCandidatePromotionSuccess(
-        'Structured draft revision refreshed from approved candidates.',
+        excludedCount > 0
+          ? `Draft refreshed. ${response.includedCandidateIds.length} selected facts are represented; ${excludedCount} remain approved for review.`
+          : 'Structured draft revision refreshed from approved candidates.',
       );
       setProfileSuccess('Draft revision opened in the editor.');
     } catch (error) {

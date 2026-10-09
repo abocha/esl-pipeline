@@ -123,6 +123,23 @@ function renderProfileCandidatesPanel(options: {
 }
 
 describe('ProfileCandidatesPanel', () => {
+  it('labels extraction time explicitly when the lesson occurrence date is unknown', async () => {
+    const user = userEvent.setup();
+    renderProfileCandidatesPanel({
+      candidates: [
+        {
+          ...profileCandidate('candidate-unknown-date', 'pending_review', 'unreviewed', null),
+          sourceLessonStartedAt: null,
+          provenance: {
+            sourceLessonGeneratedAt: NOW,
+            sourceLessonChronology: 'memory_generated_at_fallback',
+          },
+        },
+      ],
+    });
+    await user.click(screen.getByRole('button', { name: 'Details' }));
+    expect(screen.getByText('Extraction date (lesson date unknown):')).toBeTruthy();
+  });
   it('filters approved candidates without showing promoted candidates in the approved queue', async () => {
     const user = userEvent.setup();
     renderProfileCandidatesPanel({

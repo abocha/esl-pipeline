@@ -12,6 +12,9 @@ export const ProfileCandidatePatchSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (new Set(value.candidateIds).size !== value.candidateIds.length) {
+      ctx.addIssue({ code: 'custom', message: 'Candidate IDs must be unique' });
+    }
     if (value.operation === 'no_change' && value.candidateIds.length > 0) {
       ctx.addIssue({ code: 'custom', message: 'no_change patches must not include candidate IDs' });
     }

@@ -542,6 +542,28 @@ and live ChatGPT verification remain separate operator actions; follow the
 
 Student-memory operator workflows:
 
+- Candidate refresh pins an exact eligible snapshot and its recorded selected lesson source before
+  delivery; delayed jobs never resolve latest. Exact ownership/source authority and candidate
+  history are rechecked under the existing student lock. Snapshot inclusion alone does not suppress
+  teacher review, and reviewed decisions/approved text are preserved across duplicate delivery.
+  Successful snapshots superseded by canonical newer aggregates remain candidate sources while
+  their full source lineage is verified; invalidated snapshots and unfinished superseded intents
+  remain excluded. Read and transaction checks share this candidate-specific rule. Ordinary
+  latest-ready selection and operator retry admission retain their existing restrictions.
+- Candidate patch promotion and full draft refresh link/report only selected facts represented in
+  the resulting structured profile. Activation proves current approved wording in the actual active
+  revision; omitted/paraphrased facts stay approved and inherited links remain lineage. Review writes
+  reject a promotion/supersession that won concurrently. Endpoint paths and DTO shapes are unchanged.
+- Lesson recency uses same-student confirmed-source session links to completed lesson `starts_at`,
+  with explicit extraction fallback for unknown dates and deterministic tie breakers. `generatedAt`
+  retains extraction semantics; no existing artifacts/hashes or historical dates are rewritten.
+  See [chronology semantics](../../docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md#chronology-and-read-semantics).
+- Pre-upgrade candidate jobs without a snapshot or recorded lesson source skip with
+  `student_profile_candidate_refresh_skipped` diagnostics. A separately authorized retry must target
+  an eligible snapshot with recorded source context and requested candidate intent. Do not replay
+  source-less jobs against latest or reopen a rejected backlog. ESL-39 adds no schema/data migration;
+  publication, hosted checks and production recovery remain separate operator steps.
+
 - Use the focused replay/backfill runbook. It distinguishes source-checkout `pnpm`/`tsx` commands
   from compiled production-container `node dist/tools/...` commands.
 - Manual full snapshot rebuild is CLI-only during Gate B through the focused replay/backfill tool;
