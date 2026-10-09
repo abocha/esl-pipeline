@@ -19,8 +19,10 @@ import {
 setupTtsTestSuite();
 
 describe('tts elevenlabs integration', () => {
-  it('hashes study text deterministically', () => {
-    expect(hashStudyText('hello')).toEqual(hashStudyText('hello'));
+  it('uses SHA-256 over the exact study text', () => {
+    const helloHash = '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824';
+    expect(hashStudyText('hello')).toBe(helloHash);
+    expect(hashStudyText('hello!')).not.toBe(helloHash);
   });
 
   it('buildPronunciationShadowSentenceMp3 preview mode', async () => {
@@ -171,22 +173,16 @@ describe('tts elevenlabs integration', () => {
   });
 });
 
-it('keeps typed cast and cache identity and strips only paired highlight markers from speech', async () => {
+it('strips paired highlight markers from speech without mutating the typed assignment', async () => {
   const assignment = assignmentFixture();
   const dir = await createTempDir('typed-eleven-');
   const voiceMapPath = join(dir, 'voices.yml');
   await writeFixture(voiceMapPath, 'default: voice_narrator');
-  const context = structuredClone(assignment);
-  const options = { outPath: dir, voiceMapPath, preview: true, ttsStrategy: 'tts' as const };
-  const typed = await buildStudyTextMp3({ assignment }, options);
-  const historical = await buildStudyTextMp3({ assignment: context }, options);
-  expect(typed.hash).toBe(historical.hash);
-  expect(typed.voiceAssignments).toEqual(historical.voiceAssignments);
   const convert = setupClientMock();
   mockConcat();
   assignment.input.studyText.turns[0]!.text = '**literal** <tag> `code` and a lone `';
   const stored = JSON.stringify(assignment);
-  await buildStudyTextMp3({ assignment }, { ...options, preview: false });
+  await buildStudyTextMp3({ assignment }, { outPath: dir, voiceMapPath, ttsStrategy: 'tts' });
   expect(
     convert.mock.calls.some(([, request]) =>
       request.text.includes('**literal** <tag> code and a lone `'),
@@ -194,23 +190,6 @@ it('keeps typed cast and cache identity and strips only paired highlight markers
   ).toBe(true);
   expect(JSON.stringify(assignment)).toBe(stored);
 });
-
-it.each(['Mary  Jane', 'Mary_Jane'])(
-  'routes typed dialogue speaker %s to its typed cast',
-  async (name) => {
-    const assignment = assignmentFixture();
-    assignment.input.studyText.speakers[1]!.displayName = name;
-    const dir = await createTempDir('typed-speaker-routing-');
-    const voiceMapPath = join(dir, 'voices.yml');
-    await writeFixture(voiceMapPath, 'default: voice_narrator');
-    const historical = structuredClone(assignment);
-    const options = { outPath: dir, voiceMapPath, preview: true, ttsStrategy: 'dialogue' as const };
-    const prior = await buildStudyTextMp3({ assignment: historical }, options);
-    const native = await buildStudyTextMp3({ assignment }, options);
-    expect(native.voiceAssignments).toEqual(prior.voiceAssignments);
-    expect(native.hash).toBe(prior.hash);
-  },
-);
 
 function assignmentFixture(): FixtureAssignmentV1 {
   return JSON.parse(

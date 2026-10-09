@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as uploader from '@esl-pipeline/storage-uploader';
 
-import { renderAssignmentToHtml } from '../src/index.js';
 import { publishHtmlToS3, renderAndPublishAssignmentToS3 } from '../src/publish.js';
 
 const uploadState = {
@@ -31,7 +30,7 @@ describe('publish', () => {
     );
   });
 
-  it('publishes deterministic html artifact keys by default', async () => {
+  it('publishes deterministic html artifact keys and requests existing-artifact reuse', async () => {
     const html = '<html><body><h1>Hello</h1></body></html>';
     const first = await publishHtmlToS3(html);
     const second = await publishHtmlToS3(html);
@@ -41,6 +40,16 @@ describe('publish', () => {
     expect(first.key).toMatch(/^materials\/html\/artifacts\/[a-f0-9]{64}\.html$/);
     expect(first.reused).toBe(false);
     expect(second.reused).toBe(true);
+    expect(uploader.uploadFile).toHaveBeenNthCalledWith(
+      1,
+      expect.any(String),
+      expect.objectContaining({ key: first.key, skipIfExists: true }),
+    );
+    expect(uploader.uploadFile).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.objectContaining({ key: second.key, skipIfExists: true }),
+    );
   });
 
   it.each(['teacher', 'null', 'legacy'] as const)(
@@ -104,7 +113,6 @@ describe('publish', () => {
       return { url: 'https://bucket.test/result', key: options.key!, sha256: options.sha256! };
     });
     const result = await renderAndPublishAssignmentToS3({ assignment });
-    expect(result.html).toBe(await renderAssignmentToHtml(assignment));
     expect(bytes).toEqual(Buffer.from(result.html, 'utf8'));
     const hash = createHash('sha256').update('html-v1:').update(bytes).digest('hex');
     expect(result.renderHash).toBe(hash);

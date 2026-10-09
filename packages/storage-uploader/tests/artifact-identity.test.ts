@@ -3,13 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { buildArtifactKey, hashArtifactContent } from '../src/artifact-identity.js';
 
 describe('artifact identity helpers', () => {
-  it('creates deterministic hashes for content', () => {
-    const first = hashArtifactContent('hello');
-    const second = hashArtifactContent('hello');
-    const third = hashArtifactContent('hello!');
-    expect(first).toBe(second);
-    expect(first).toHaveLength(64);
-    expect(first).not.toBe(third);
+  it('matches the independent SHA-256 digest for content', () => {
+    const hash = hashArtifactContent('hello');
+    expect(hash).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+    expect(hashArtifactContent('hello!')).not.toBe(hash);
   });
 
   it('builds deterministic object keys by artifact kind', () => {

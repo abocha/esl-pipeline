@@ -108,11 +108,11 @@ describe('telegram commands - share and approval', () => {
 
   it('does not send a pronunciation attachment when only item clips are present', async () => {
     const registry = createCommandRegistry();
-    const linksCommand = registry.resolve('links');
-    expect(linksCommand).toBeDefined();
+    const shareCommand = registry.resolve('share');
+    expect(shareCommand).toBeDefined();
 
     const context = createBaseContext({
-      command: 'links',
+      command: 'share',
       args: ['job-chunks-only'],
     });
 
@@ -156,7 +156,7 @@ describe('telegram commands - share and approval', () => {
       manifestPath: null,
     });
 
-    await linksCommand?.execute(context);
+    await shareCommand?.execute(context);
 
     const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
     const sentHtml = sendMock.mock.calls.map((call) => call[0].html).join('\n');
@@ -167,8 +167,8 @@ describe('telegram commands - share and approval', () => {
 
   it('shares persisted title and audio links without fetching HTML', async () => {
     const registry = createCommandRegistry();
-    const linksCommand = registry.resolve('links');
-    expect(linksCommand).toBeDefined();
+    const shareCommand = registry.resolve('share');
+    expect(shareCommand).toBeDefined();
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('<html><head><title>Fallback Title</title></head><body>ignored</body></html>', {
@@ -177,7 +177,7 @@ describe('telegram commands - share and approval', () => {
     );
 
     const context = createBaseContext({
-      command: 'links',
+      command: 'share',
       args: ['job-101'],
     });
 
@@ -224,17 +224,17 @@ describe('telegram commands - share and approval', () => {
       manifestPath: null,
     });
 
-    await linksCommand?.execute(context);
+    await shareCommand?.execute(context);
 
     expect(fetchSpy).not.toHaveBeenCalled();
 
     const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
-    expect(sendMock).toHaveBeenCalledTimes(5);
-    expect(sendMock.mock.calls[2]?.[0].html).toContain(
+    expect(sendMock).toHaveBeenCalledTimes(4);
+    expect(sendMock.mock.calls[1]?.[0].html).toContain(
       '<a href="https://app.example.com/jobs/job-101">Homework Assignment: Office Rules &amp; Modal Verbs</a>',
     );
-    expect(sendMock.mock.calls[3]?.[0].html).toContain('audio/final/from-md-study.mp3');
-    expect(sendMock.mock.calls[4]?.[0].html).toContain('audio/pronunciation/from-md-pron.mp3');
+    expect(sendMock.mock.calls[2]?.[0].html).toContain('audio/final/from-md-study.mp3');
+    expect(sendMock.mock.calls[3]?.[0].html).toContain('audio/pronunciation/from-md-pron.mp3');
 
     fetchSpy.mockRestore();
   });
