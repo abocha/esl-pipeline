@@ -116,6 +116,16 @@ default: voice_id_default
     expect(result.hash).toHaveLength(64);
     expect(convertMock).not.toHaveBeenCalled();
     expect(concatSpy).toHaveBeenCalled();
+
+    convertMock.mockClear();
+    const forcedResult = await buildStudyTextMp3FromPath(assignmentPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'tts',
+      force: true,
+    });
+    expect(forcedResult.path).toBe(result.path);
+    expect(convertMock).toHaveBeenCalledTimes(1);
   });
 
   it('reuses monologue chunk cache when final file is missing', async () => {
