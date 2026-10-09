@@ -10,10 +10,12 @@ import {
   insertCanonicalReadyLessonMemoryEntry,
   listLessonMemoryEntries,
   listRecentReadyLessonMemoryByStudentId,
+  listVerifiedReadyLessonMemoryEntriesByIds,
   markLessonMemoryEntryFailed,
   publishConfirmedLessonMemoryEntry,
 } from '../src/domain/lesson-memory-repository.js';
 import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
+import { insertLessonMemory } from './support/student-memory-fixture.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 const hasPgTestEnv = Boolean(process.env.BATCH_BACKEND_TEST_PG?.trim());
@@ -189,6 +191,76 @@ describeIfPg('domain/lesson-memory-repository', () => {
 
   beforeEach(async () => {
     await truncateLessonMemoryTables();
+  });
+
+  it('orders completed lesson occurrences independently of later extraction and labels unknown dates', async () => {
+    const fixture = await createLessonMemoryFixture();
+    const ids: string[] = [];
+    for (const [status, startsAt, generatedAt] of [
+      ['completed', '2026-03-01', '2026-04-10'],
+      ['completed', '2026-03-02', '2026-03-03'],
+      ['scheduled', '2026-12-01', '2026-03-04'],
+      ['canceled', '2026-12-02', '2026-03-05'],
+      ['no_show', '2026-12-03', '2026-03-06'],
+      ['completed', '2026-03-02', '2026-03-04'],
+    ]) {
+      const id = await insertLessonMemory({
+        studentId: fixture.studentId,
+        status: 'ready',
+        withConfirmedSource: true,
+      });
+      ids.push(id);
+      await withPgClient(async (client) => {
+        const lessonId = randomUUID();
+        await client.query(
+          'INSERT INTO student_lessons (id, student_id, starts_at, status) VALUES ($1, $2, $3, $4)',
+          [lessonId, fixture.studentId, startsAt, status],
+        );
+        await client.query(
+          'UPDATE assignment_sessions SET lesson_id = $2 WHERE id = (SELECT assignment_session_id FROM lesson_memory_entries WHERE id = $1)',
+          [id, lessonId],
+        );
+        await client.query('UPDATE lesson_memory_entries SET generated_at = $2 WHERE id = $1', [
+          id,
+          generatedAt,
+        ]);
+      });
+    }
+    const recent = await listRecentReadyLessonMemoryByStudentId(fixture.studentId, { limit: 10 });
+    expect(recent.map((entry) => entry.id)).toEqual([
+      ids[4],
+      ids[3],
+      ids[2],
+      ids[5],
+      ids[1],
+      ids[0],
+    ]);
+    const exact = await listVerifiedReadyLessonMemoryEntriesByIds(fixture.studentId, ids);
+    expect(exact.find((entry) => entry.id === ids[0])).toMatchObject({
+      sourceLessonStartedAt: new Date('2026-03-01'),
+      generatedAt: new Date('2026-04-10'),
+    });
+    for (const id of ids.slice(2, 5))
+      expect(exact.find((entry) => entry.id === id)?.sourceLessonStartedAt).toBeNull();
+    const other = await createLessonMemoryFixture('Other');
+    await withPgClient(async (client) => {
+      const foreignLesson = randomUUID();
+      await client.query(
+        "INSERT INTO student_lessons (id, student_id, starts_at, status) VALUES ($1, $2, '2027-01-01', 'completed')",
+        [foreignLesson, other.studentId],
+      );
+      await client.query(
+        'UPDATE assignment_sessions SET lesson_id = $2 WHERE id = (SELECT assignment_session_id FROM lesson_memory_entries WHERE id = $1)',
+        [ids[0], foreignLesson],
+      );
+    });
+    expect(
+      (await listVerifiedReadyLessonMemoryEntriesByIds(fixture.studentId, [ids[0]!]))[0],
+    ).toMatchObject({
+      sourceLessonId: null,
+      sourceLessonStartedAt: null,
+      generatedAt: new Date('2026-04-10'),
+    });
   });
 
   it('uses confirmed source hash state instead of mutable transcript timestamps', async () => {

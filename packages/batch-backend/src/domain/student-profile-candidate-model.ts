@@ -83,3 +83,30 @@ export const StudentProfileCandidateTargetSectionSchema = z.enum([
   'long_running_strengths',
   'persistent_challenges_constraints',
 ]);
+
+/** Conservative proof of application: case and whitespace may differ, wording must match. */
+export function isStudentProfileCandidateRepresented(
+  profile: unknown,
+  candidate: { targetSection: string; fact: string; approvedFact?: string | null },
+): boolean {
+  if (!profile || typeof profile !== 'object') return false;
+  const fields: Record<string, string[]> = {
+    goals_motivation: ['primaryGoals'],
+    work_communication_context: ['communicationContexts'],
+    interests_personal_context: ['interestsAndUsefulThemes'],
+    learning_preferences_study_habits: ['studyPreferences'],
+    long_running_strengths: ['stableStrengths'],
+    persistent_challenges_constraints: ['persistentChallenges', 'durableConstraints'],
+  };
+  const normalize = (value: string) =>
+    value.normalize('NFC').toLowerCase().replaceAll(/\s+/g, ' ').trim();
+  const expected = normalize(candidate.approvedFact ?? candidate.fact);
+  if (!expected) return false;
+  return (fields[candidate.targetSection] ?? []).some((field) => {
+    const values = (profile as Record<string, unknown>)[field];
+    return (
+      Array.isArray(values) &&
+      values.some((value) => typeof value === 'string' && normalize(value) === expected)
+    );
+  });
+}

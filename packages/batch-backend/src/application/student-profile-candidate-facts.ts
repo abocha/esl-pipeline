@@ -1,6 +1,8 @@
 import type { StudentFact } from '../domain/lesson-memory-model.js';
 import type { StudentProfileCandidateTargetSection } from '../domain/student-profile-candidate-model.js';
 
+export { isStudentProfileCandidateRepresented } from '../domain/student-profile-candidate-model.js';
+
 export function classifyStudentProfileCandidateTargetSection(
   fact: Pick<StudentFact, 'category' | 'fact'>,
 ): StudentProfileCandidateTargetSection | null {

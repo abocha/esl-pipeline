@@ -40,8 +40,49 @@ function makeCandidate(
 }
 
 describe('application/profile-candidate-promotion', () => {
+  it.each([
+    { decision: { operation: 'no_change', candidateIds: [] }, code: 'profile_candidate_no_change' },
+    {
+      decision: { operation: 'apply', candidateIds: ['unselected'] },
+      code: 'profile_candidate_patch_invalid',
+    },
+    {
+      decision: { operation: 'apply', candidateIds: ['candidate-1', 'candidate-1'] },
+      code: 'profile_candidate_patch_invalid',
+    },
+  ] as const)('does not save or link a rejected decision ($code)', async ({ decision, code }) => {
+    const saveRevision = vi.fn();
+    const linkToDraft = vi.fn();
+    await expect(
+      promoteStudentProfileCandidates({
+        request: { studentId: 'tolik', candidateIds: ['candidate-1'] },
+        overrides: {
+          config: loadConfig(),
+          students: { getById: async () => ({ id: 'tolik', student: 'Tolik', voices: {} }) },
+          revisions: { getActive: async () => null, getById: async () => null },
+          candidates: {
+            listByIds: async () => [makeCandidate({ id: 'candidate-1' })],
+            linkToDraft,
+          },
+          drafting: {
+            generate: async () => ({
+              structuredProfile: { ...decision, candidateIds: [...decision.candidateIds] },
+              rawOutput: decision,
+              rawText: JSON.stringify(decision),
+              provider: 'google_ai_studio',
+              model: 'fixture',
+            }),
+          },
+          profileContent: { saveRevision },
+        },
+      }),
+    ).rejects.toMatchObject({ code });
+    expect(saveRevision).not.toHaveBeenCalled();
+    expect(linkToDraft).not.toHaveBeenCalled();
+  });
   it('creates a structured draft revision from an explicit approved candidate subset', async () => {
     const structuredProfile = { operation: 'apply' as const, candidateIds: ['candidate-1'] };
+    const linkToDraft = vi.fn().mockResolvedValue(undefined);
     const generate = vi.fn(async () => ({
       structuredProfile,
       rawOutput: structuredProfile,
@@ -83,7 +124,7 @@ describe('application/profile-candidate-promotion', () => {
       request: {
         studentId: 'tolik',
         reviewerId: 'teacher-1',
-        candidateIds: ['candidate-1'],
+        candidateIds: ['candidate-1', 'candidate-2'],
       },
       overrides: {
         config: loadConfig(),
@@ -99,6 +140,18 @@ describe('application/profile-candidate-promotion', () => {
             id: 'revision-active-1',
             studentId: 'tolik',
             content: '# Existing profile',
+            structuredContent: {
+              schemaVersion: 'foundational_profile_v1',
+              overallLevel: null,
+              primaryGoals: [],
+              communicationContexts: [],
+              interestsAndUsefulThemes: [],
+              stableStrengths: [],
+              persistentChallenges: [],
+              studyPreferences: [],
+              durableConstraints: [],
+              teacherNotes: 'Preserved teacher content. '.repeat(100),
+            },
             contentHash: 'hash-1',
             source: 'starter_profile_form',
             status: 'active',
@@ -120,8 +173,9 @@ describe('application/profile-candidate-promotion', () => {
               approvedFact: 'Plays pickleball regularly and enjoys practical sports examples.',
               evidence: [{ quote: 'I play pickleball every week.', speakerRole: 'student' }],
             }),
+            makeCandidate({ id: 'candidate-2', fact: 'Likes hiking.' }),
           ],
-          linkToDraft: async () => {},
+          linkToDraft,
         },
         drafting: {
           generate,
@@ -135,6 +189,11 @@ describe('application/profile-candidate-promotion', () => {
     expect(result.draftRevision.status).toBe('draft');
     expect(result.baseRevisionId).toBe('revision-active-1');
     expect(result.includedCandidateIds).toEqual(['candidate-1']);
+    expect(linkToDraft).toHaveBeenCalledWith({
+      studentId: 'tolik',
+      candidateIds: ['candidate-1'],
+      draftRevisionId: 'revision-draft-1',
+    });
     expect(saveRevision).toHaveBeenCalledWith(
       'tolik',
       expect.stringContaining('# Foundational Profile'),
@@ -301,7 +360,7 @@ describe('application/profile-candidate-promotion', () => {
     });
   });
 
-  it('rejects suspiciously short promotion drafts even when finish metadata is missing', async () => {
+  it('rejects a full-profile response that does not match the candidate decision schema', async () => {
     const saveRevision = vi.fn();
 
     await expect(
@@ -368,7 +427,7 @@ describe('application/profile-candidate-promotion', () => {
         },
       }),
     ).rejects.toMatchObject({
-      code: 'profile_candidate_draft_truncated',
+      code: 'profile_candidate_patch_invalid',
     });
 
     expect(saveRevision).not.toHaveBeenCalled();

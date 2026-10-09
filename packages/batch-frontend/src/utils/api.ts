@@ -901,7 +901,7 @@ function buildCandidateSourceSummary(record: StudentProfileCandidateApiRecord): 
 
   const parts: string[] = [];
   if (record.sourceSnapshotId) {
-    parts.push('Latest student-memory snapshot');
+    parts.push('Source student-memory snapshot');
   }
   if (record.sourceLessonMemoryIds.length > 0) {
     const lessonCount = record.sourceLessonMemoryIds.length;

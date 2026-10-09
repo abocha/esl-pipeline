@@ -37,6 +37,7 @@ vi.mock('./ProfileCandidatesPanel', () => ({
   ProfileCandidatesPanel: (props: {
     profileCandidates: { id: string; status?: string }[];
     selectedCandidateIds: string[];
+    profileCandidatePromotionSuccess: string | null;
     setSelectedCandidateIds: (next: string[] | ((current: string[]) => string[])) => void;
     onPromoteProfileCandidates: () => void | Promise<void>;
     onReviewProfileCandidate: (
@@ -73,6 +74,9 @@ vi.mock('./ProfileCandidatesPanel', () => ({
       <button type="button" onClick={() => void props.onPromoteProfileCandidates()}>
         Generate Draft Revision
       </button>
+      {props.profileCandidatePromotionSuccess ? (
+        <p>{props.profileCandidatePromotionSuccess}</p>
+      ) : null}
     </div>
   ),
 }));
@@ -1229,8 +1233,7 @@ describe('StudentLearningPage', () => {
     apiMocks.refreshProfileDraftFromApprovedCandidates.mockResolvedValueOnce({
       draftRevisionId: 'revision-draft-2',
       studentId: 'student-alex',
-      includedCandidateIds: ['candidate-alex'],
-      excludedCandidateIds: [],
+      includedCandidateIds: [],
       contentHash: 'hash-draft-2',
       draftRevision: {
         id: 'revision-draft-2',
@@ -1302,6 +1305,11 @@ describe('StudentLearningPage', () => {
       );
     });
     expect(apiMocks.promoteStudentProfileCandidates).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(
+        'Draft refreshed. 0 selected facts are represented; 1 remain approved for review.',
+      ),
+    ).toBeTruthy();
     expect(screen.getByText('Profile Draft Changes')).toBeTruthy();
     expect(
       screen.getByText('Profile Draft Changes').closest('.student-learning-profile-card'),

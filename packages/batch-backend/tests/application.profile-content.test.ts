@@ -103,7 +103,10 @@ function createInMemoryDependencies(seed?: {
           : null,
     },
     candidates: {
-      markPromotedByRevision: async (_revisionId: string) => {},
+      markPromotedByRevision: async (
+        _revisionId: string,
+        _proof: { studentId: string; contentHash: string; structuredContent: unknown },
+      ) => {},
       copyDraftLinks: async (_params: { sourceRevisionId: string; targetRevisionId: string }) => {},
     },
     revisions: {
@@ -353,13 +356,22 @@ describe('application/profile-content (DB-only)', () => {
     ]);
   });
 
-  it('marks linked approved candidates as promoted when a candidate-promotion revision is activated', async () => {
+  it('passes actual activated content proof to candidate reconciliation', async () => {
     const deps = createInMemoryDependencies({
       profiles: [{ id: 'default.md', label: 'Default Profile', content: 'Version 1' }],
     });
-    const markPromotedByRevision = async (revisionId: string) => {
+    const markPromotedByRevision: typeof deps.candidates.markPromotedByRevision = async (
+      revisionId,
+      proof,
+    ) => {
       promotions.push(revisionId);
+      expect(proof).toMatchObject({
+        studentId: activatedStudentId,
+        contentHash: draft.contentHash,
+      });
+      expect(proof.structuredContent).toEqual(draft.structuredContent);
     };
+    const activatedStudentId = 'default.md';
     const promotions: string[] = [];
     deps.candidates.markPromotedByRevision = markPromotedByRevision;
 

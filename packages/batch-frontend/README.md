@@ -106,6 +106,11 @@ Canonical behavior and current status live in:
 - Ordinary Learning page profile edits save directly as active revisions. Draft review controls
   remain available for candidate-derived drafts.
 - Approved-candidate draft refresh opens a review-mediated profile draft and shows a standalone
+  notice when selected facts are omitted or paraphrased: they remain approved for review. Only IDs
+  reported applied by the backend are represented; draft links alone do not establish promotion.
+  Candidate details distinguish completed lesson occurrence time from extraction fallback when
+  the lesson date is unknown. Existing historical candidate dates are not relabeled.
+  The draft review also shows a standalone
   deterministic diff table against the active editor baseline. The table uses shared
   current/proposed headers, field-level change pills, and line-level addition/removal highlights;
   model-generated change classification remains intentionally deferred.

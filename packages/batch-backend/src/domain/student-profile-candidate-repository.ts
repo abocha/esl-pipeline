@@ -7,7 +7,10 @@ import type {
   MemoryConfidence,
   StudentFactAuthority,
 } from './lesson-memory-model.js';
+import { buildVerifiedLessonMemoryEvidenceSqlPredicate } from './lesson-memory-repository.js';
+import { buildProfileCandidateSourceSnapshotSqlPredicate } from './student-memory-snapshot-repository.js';
 import {
+  isStudentProfileCandidateRepresented,
   type StudentProfileCandidateRecord,
   type StudentProfileCandidateReviewState,
   StudentProfileCandidateReviewStateSchema,
@@ -155,68 +158,206 @@ const SELECT_COLUMNS = `
 export async function insertStudentProfileCandidate(
   params: InsertStudentProfileCandidateParams,
 ): Promise<StudentProfileCandidateRecord> {
-  const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query<StudentProfileCandidateRow>(
-      `
-      INSERT INTO student_profile_candidates (
-        id,
-        student_id,
-        target_section,
-        candidate_key,
-        fact,
-        approved_fact,
-        category,
-        authority,
-        confidence,
-        review_needed,
-        source_snapshot_id,
-        source_lesson_memory_ids,
-        source_lesson_id,
-        source_lesson_started_at,
-        source_lesson_title,
-        source_memory_ids,
-        provenance,
-        dedup_decision,
-        evidence,
-        status,
-        review_state
-      )
-      VALUES (
-        $1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
-      )
-      RETURNING ${SELECT_COLUMNS}
-      `,
-      [
-        params.id ?? randomUUID(),
-        params.studentId,
-        params.targetSection,
-        params.candidateKey,
-        params.fact,
-        params.category,
-        params.authority,
-        params.confidence,
-        params.reviewNeeded,
-        params.sourceSnapshotId ?? null,
-        params.sourceLessonMemoryIds ?? [],
-        params.sourceLessonId ?? null,
-        params.sourceLessonStartedAt ?? null,
-        params.sourceLessonTitle ?? null,
-        params.sourceMemoryIds ?? params.sourceLessonMemoryIds ?? [],
-        JSON.stringify(params.provenance ?? {}),
-        JSON.stringify(params.dedupDecision ?? {}),
-        JSON.stringify(params.evidence ?? []),
-        params.status ?? 'pending_review',
-        params.reviewState ?? 'unreviewed',
-      ],
+  return withPgClient((client) => insertCandidateWithClient(client, params));
+}
+export interface PersistStudentProfileCandidateRefreshParams {
+  studentId: string;
+  sourceSnapshotId: string;
+  sourceLessonMemoryIds: string[];
+  expectedActiveRevisionId: string | null;
+  proposals: InsertStudentProfileCandidateParams[];
+}
+
+export interface PersistStudentProfileCandidateRefreshResult {
+  outcome: 'persisted' | 'source_obsolete' | 'active_profile_changed';
+  created: StudentProfileCandidateRecord[];
+  skippedCandidateKeys: string[];
+  skippedDuplicateCandidateKeys: string[];
+  skippedStaleCandidateKeys: string[];
+}
+
+/**
+ * Persist one snapshot-bound candidate batch under the same student row lock used by source
+ * replacement and snapshot finalization. The source checks and candidate-history read therefore
+ * remain current through the history check and inserts.
+ */
+export async function persistStudentProfileCandidateRefresh(
+  params: PersistStudentProfileCandidateRefreshParams,
+): Promise<PersistStudentProfileCandidateRefreshResult> {
+  if (
+    params.proposals.some(
+      (proposal) =>
+        proposal.studentId !== params.studentId ||
+        proposal.sourceSnapshotId !== params.sourceSnapshotId ||
+        !proposal.sourceLessonMemoryIds?.length ||
+        proposal.sourceLessonMemoryIds.some((id) => !params.sourceLessonMemoryIds.includes(id)),
+    )
+  ) {
+    throw new Error(
+      'Candidate proposals must belong to the pinned student, snapshot and lesson evidence',
     );
-    return result.rows[0];
-  });
-
-  if (!row) {
-    throw new Error('Failed to insert student profile candidate');
   }
+  return withPgClient(async (client: PoolClient) => {
+    await client.query('BEGIN');
+    try {
+      const student = await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [
+        params.studentId,
+      ]);
+      if (!student.rows[0]) {
+        await client.query('COMMIT');
+        return sourceObsoleteResult();
+      }
 
+      const activeRevision = await client.query<{ id: string }>(
+        "SELECT id FROM student_profile_revisions WHERE student_id = $1 AND status = 'active'",
+        [params.studentId],
+      );
+      if ((activeRevision.rows[0]?.id ?? null) !== params.expectedActiveRevisionId) {
+        await client.query('COMMIT');
+        return { ...sourceObsoleteResult(), outcome: 'active_profile_changed' };
+      }
+
+      const snapshotResult = await client.query<{ lesson_memory_entry_ids: string[] }>(
+        `
+        SELECT snapshot.lesson_memory_entry_ids
+        FROM student_memory_snapshots AS snapshot
+        WHERE snapshot.id = $1
+          AND snapshot.student_id = $2
+          AND ${buildProfileCandidateSourceSnapshotSqlPredicate('snapshot')}
+        `,
+        [params.sourceSnapshotId, params.studentId],
+      );
+      const snapshot = snapshotResult.rows[0];
+      const pinnedLessonIds = new Set(snapshot?.lesson_memory_entry_ids ?? []);
+      if (!snapshot || params.sourceLessonMemoryIds.some((id) => !pinnedLessonIds.has(id))) {
+        await client.query('COMMIT');
+        return sourceObsoleteResult();
+      }
+
+      if (params.sourceLessonMemoryIds.length > 0) {
+        const sourceRows = await client.query<{ id: string }>(
+          `
+          SELECT lesson.id
+          FROM lesson_memory_entries AS lesson
+          WHERE lesson.id = ANY($1::uuid[])
+            AND lesson.student_id = $2
+            AND lesson.status = 'ready'
+            AND lesson.source_content_hash IS NOT NULL
+            AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson')}
+          `,
+          [params.sourceLessonMemoryIds, params.studentId],
+        );
+        if (sourceRows.rows.length !== new Set(params.sourceLessonMemoryIds).size) {
+          await client.query('COMMIT');
+          return sourceObsoleteResult();
+        }
+      }
+
+      const candidateKeys = [...new Set(params.proposals.map((proposal) => proposal.candidateKey))];
+      const existingRows =
+        candidateKeys.length === 0
+          ? []
+          : (
+              await client.query<StudentProfileCandidateRow>(
+                `
+                SELECT DISTINCT ON (candidate_key) ${SELECT_COLUMNS}
+                FROM student_profile_candidates
+                WHERE student_id = $1 AND candidate_key = ANY($2::text[])
+                  AND NOT (status = 'rejected' AND reviewed_at IS NULL
+                    AND COALESCE(dedup_decision ->> 'decision', '') IN ('stale', 'duplicate'))
+                ORDER BY candidate_key,
+                  CASE WHEN status IN ('pending_review', 'approved', 'promoted') THEN 0 ELSE 1 END,
+                  created_at DESC, id DESC
+                `,
+                [params.studentId, candidateKeys],
+              )
+            ).rows;
+      const existingByKey = new Map(existingRows.map((row) => [row.candidate_key, mapRow(row)]));
+
+      const created: StudentProfileCandidateRecord[] = [];
+      const skippedCandidateKeys: string[] = [];
+      const skippedDuplicateCandidateKeys: string[] = [];
+      const skippedStaleCandidateKeys: string[] = [];
+
+      for (const proposal of params.proposals) {
+        const existing = existingByKey.get(proposal.candidateKey);
+        if (existing) {
+          skippedCandidateKeys.push(proposal.candidateKey);
+          skippedDuplicateCandidateKeys.push(proposal.candidateKey);
+          continue;
+        }
+
+        const inserted = await insertCandidateWithClient(client, proposal);
+        existingByKey.set(proposal.candidateKey, inserted);
+        created.push(inserted);
+      }
+
+      await client.query('COMMIT');
+      return {
+        outcome: 'persisted',
+        created,
+        skippedCandidateKeys,
+        skippedDuplicateCandidateKeys,
+        skippedStaleCandidateKeys,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+async function insertCandidateWithClient(
+  client: PoolClient,
+  params: InsertStudentProfileCandidateParams,
+): Promise<StudentProfileCandidateRecord> {
+  const result = await client.query<StudentProfileCandidateRow>(
+    `
+    INSERT INTO student_profile_candidates (
+      id, student_id, target_section, candidate_key, fact, approved_fact, category, authority,
+      confidence, review_needed, source_snapshot_id, source_lesson_memory_ids, source_lesson_id,
+      source_lesson_started_at, source_lesson_title, source_memory_ids, provenance, dedup_decision,
+      evidence, status, review_state
+    ) VALUES (
+      $1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+    ) RETURNING ${SELECT_COLUMNS}
+    `,
+    [
+      params.id ?? randomUUID(),
+      params.studentId,
+      params.targetSection,
+      params.candidateKey,
+      params.fact,
+      params.category,
+      params.authority,
+      params.confidence,
+      params.reviewNeeded,
+      params.sourceSnapshotId ?? null,
+      params.sourceLessonMemoryIds ?? [],
+      params.sourceLessonId ?? null,
+      params.sourceLessonStartedAt ?? null,
+      params.sourceLessonTitle ?? null,
+      params.sourceMemoryIds ?? params.sourceLessonMemoryIds ?? [],
+      JSON.stringify(params.provenance ?? {}),
+      JSON.stringify(params.dedupDecision ?? {}),
+      JSON.stringify(params.evidence ?? []),
+      params.status ?? 'pending_review',
+      params.reviewState ?? 'unreviewed',
+    ],
+  );
+  const row = result.rows[0];
+  if (!row) throw new Error('Failed to insert student profile candidate');
   return mapRow(row);
+}
+
+function sourceObsoleteResult(): PersistStudentProfileCandidateRefreshResult {
+  return {
+    outcome: 'source_obsolete',
+    created: [],
+    skippedCandidateKeys: [],
+    skippedDuplicateCandidateKeys: [],
+    skippedStaleCandidateKeys: [],
+  };
 }
 
 export async function listStudentProfileCandidates(
@@ -397,6 +538,7 @@ export async function updateStudentProfileCandidateReview(
         reviewed_at = $8
       WHERE student_id = $1
         AND id = $2
+        AND status IN ('pending_review', 'approved', 'rejected')
       RETURNING ${SELECT_COLUMNS}
       `,
       [
@@ -462,6 +604,8 @@ export async function linkStudentProfileCandidatesToDraftRevision(
       FROM student_profile_candidates
       WHERE student_id = $1
         AND id = ANY($2::uuid[])
+        AND EXISTS (SELECT 1 FROM student_profile_revisions revision
+          WHERE revision.id = $3 AND revision.student_id = $1)
       ON CONFLICT (candidate_id, revision_id) DO NOTHING
       `,
       [params.studentId, params.candidateIds, params.draftRevisionId],
@@ -490,6 +634,8 @@ export async function copyStudentProfileCandidateDraftRevisionLinks(
         $2
       FROM student_profile_candidate_draft_revisions
       WHERE revision_id = $1
+        AND EXISTS (SELECT 1 FROM student_profile_revisions target
+          WHERE target.id = $2 AND target.student_id = student_profile_candidate_draft_revisions.student_id)
       ON CONFLICT (candidate_id, revision_id) DO NOTHING
       `,
       [params.sourceRevisionId, params.targetRevisionId],
@@ -499,29 +645,47 @@ export async function copyStudentProfileCandidateDraftRevisionLinks(
 
 export async function markStudentProfileCandidatesPromotedByRevision(
   revisionId: string,
+  proof: { studentId: string; contentHash: string; structuredContent: unknown },
   promotedAt?: Date,
 ): Promise<void> {
   await withPgClient(async (client: PoolClient) => {
-    await client.query(
-      `
-      UPDATE student_profile_candidates
-      SET
-        status = 'promoted',
-        promoted_revision_id = $1,
-        promoted_at = COALESCE($2, NOW()),
-        review_state = 'approved'
-      WHERE status = 'approved'
-        AND (
-          promoted_revision_id = $1
-          OR id IN (
-            SELECT candidate_id
-            FROM student_profile_candidate_draft_revisions
-            WHERE revision_id = $1
-          )
-        )
-      `,
-      [revisionId, promotedAt ?? null],
-    );
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [proof.studentId]);
+      const revision = await client.query<{ structured_content: unknown }>(
+        `SELECT structured_content FROM student_profile_revisions
+         WHERE id = $1 AND student_id = $2 AND status = 'active' AND content_hash = $3`,
+        [revisionId, proof.studentId, proof.contentHash],
+      );
+      if (revision.rows[0]) {
+        const candidates = await client.query<StudentProfileCandidateRow>(
+          `SELECT ${SELECT_COLUMNS} FROM student_profile_candidates
+           WHERE student_id = $2 AND status = 'approved' AND review_state = 'approved'
+             AND (promoted_revision_id = $1 OR id IN (
+               SELECT candidate_id FROM student_profile_candidate_draft_revisions
+               WHERE revision_id = $1 AND student_id = $2
+             )) FOR UPDATE`,
+          [revisionId, proof.studentId],
+        );
+        const profile = revision.rows[0].structured_content ?? proof.structuredContent;
+        const appliedIds = candidates.rows
+          .map(mapRow)
+          .filter((candidate) => isStudentProfileCandidateRepresented(profile, candidate))
+          .map((candidate) => candidate.id);
+        if (appliedIds.length > 0) {
+          await client.query(
+            `UPDATE student_profile_candidates SET status = 'promoted', promoted_revision_id = $1,
+               promoted_at = COALESCE($3, NOW()), review_state = 'approved'
+             WHERE student_id = $4 AND id = ANY($2::uuid[]) AND status = 'approved'`,
+            [revisionId, appliedIds, promotedAt ?? null, proof.studentId],
+          );
+        }
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
 }
 

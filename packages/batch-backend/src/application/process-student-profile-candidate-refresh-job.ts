@@ -13,7 +13,21 @@ export async function processStudentProfileCandidateRefreshJob(args: {
 }): Promise<void> {
   const result = await refreshStudentProfileCandidatesFromCanonicalMemory({
     studentId: args.payload.studentId,
+    sourceSnapshotId: args.payload.sourceSnapshotId ?? null,
   });
+
+  if (result?.outcome === 'skipped') {
+    logger.warn('Source-bound student profile candidate refresh skipped', {
+      event: 'student_profile_candidate_refresh_skipped',
+      studentId: args.payload.studentId,
+      sourceSnapshotId: args.payload.sourceSnapshotId ?? null,
+      trigger: args.payload.trigger,
+      reason: result.skipReason,
+      guidance:
+        'Retry only an eligible snapshot with a recorded lesson source; do not replay source-less jobs against latest memory.',
+    });
+    return;
+  }
 
   logger.info('Student profile candidate refresh processed', {
     event: 'student_profile_candidate_refresh_processed',
