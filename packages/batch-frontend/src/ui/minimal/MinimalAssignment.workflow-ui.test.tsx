@@ -80,7 +80,6 @@ describe('MinimalAssignment - staged workflow UI', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
   });
 
   it('sets the document title for the selected learner and resets it on exit', async () => {
