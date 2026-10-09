@@ -5,7 +5,7 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 import type { BatchBackendConfig } from '../config/env.js';
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import {
-  getHomeworkMemoryEntryById,
+  getVerifiedReadyHomeworkMemoryEntryById,
   listHomeworkMemoryEntries,
   listRecentReadyHomeworkMemoryByStudentId,
 } from '../domain/homework-memory-repository.js';
@@ -120,7 +120,7 @@ export interface ProcessStudentMemorySnapshotJobDependencies {
   };
   homeworkMemory: {
     list: typeof listHomeworkMemoryEntries;
-    getById: typeof getHomeworkMemoryEntryById;
+    getById: typeof getVerifiedReadyHomeworkMemoryEntryById;
     listRecentReadyByStudentId: typeof listRecentReadyHomeworkMemoryByStudentId;
   };
   snapshots: {
@@ -157,7 +157,7 @@ export async function processStudentMemorySnapshotJob(args: {
   };
   const homeworkMemory = args.overrides?.homeworkMemory ?? {
     list: listHomeworkMemoryEntries,
-    getById: getHomeworkMemoryEntryById,
+    getById: getVerifiedReadyHomeworkMemoryEntryById,
     listRecentReadyByStudentId: listRecentReadyHomeworkMemoryByStudentId,
   };
   const defaultSnapshots = {
@@ -458,6 +458,9 @@ export async function processStudentMemorySnapshotJob(args: {
           studentId: args.payload.studentId,
           pendingEntryId: args.payload.pendingEntryId,
           unavailableLessonMemoryEntryIds: error.unavailableLessonMemoryEntryIds,
+          ...(error.unavailableHomeworkMemoryEntryIds.length > 0
+            ? { unavailableHomeworkMemoryEntryIds: error.unavailableHomeworkMemoryEntryIds }
+            : {}),
         });
       }
       await markFailureIfFinalAttempt({
@@ -546,6 +549,9 @@ function addSourcesChangedFailureDetails(args: {
       stage: 'snapshot_ready_finalization',
       message: args.error.message,
       unavailableLessonMemoryEntryIds: args.error.unavailableLessonMemoryEntryIds,
+      ...(args.error.unavailableHomeworkMemoryEntryIds.length > 0
+        ? { unavailableHomeworkMemoryEntryIds: args.error.unavailableHomeworkMemoryEntryIds }
+        : {}),
     },
   };
 }
@@ -1192,6 +1198,7 @@ async function listAllReadyHomeworkMemory(
     list({
       studentId,
       statuses: ['ready'],
+      canonicalOnly: true,
       limit,
       offset,
     }),
