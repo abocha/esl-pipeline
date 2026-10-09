@@ -110,6 +110,71 @@ Keep package-level test scripts that have concrete hosted or diagnostic callers.
 aliases whose only purpose was to assemble the retired local validation hierarchy; do not add a new
 generalized local orchestrator.
 
+## Test design and value
+
+A passing suite is useful evidence only when its assertions protect meaningful behavior. Neither
+the number of tests nor line coverage establishes that agent-authored tests can catch regressions.
+Do not automatically add a test for every code change or ban test creation categorically.
+
+Before adding or materially rewriting a test, identify the observable behavior, invariant, or
+independently owned contract; the credible regression it should detect; and why an existing
+owner-boundary test does not already cover that risk. Prefer one strong check at the behavior's
+primary owner, with additional tests at other layers only for distinct transport, persistence,
+concurrency, or lifecycle risks. Prefer compact, table-driven cases over repeated setup or copies.
+
+Expected outcomes must come from an independent requirement, historical regression, or stable
+contract example, not by calling the same production helper to calculate the expected value.
+Mocks may isolate a dependency, but should not manufacture the result being asserted. Tests of
+implementation details are justified when those details themselves form a durable, observable
+contract; do not create production-only-for-tests exports, flags, or wrappers without a real need.
+
+For a bug fix, demonstrate that its regression test fails on the buggy behavior for the intended
+reason and passes with the repair when this is practical. Do not turn this into a universal
+requirement to reconstruct old code or run an extra full suite.
+
+Use the optional [`test-audit` skill](../../.agents/skills/test-audit/SKILL.md) for the detailed
+authoring gate, scoped audits, and evidence-based pruning. This document owns repository testing
+policy and the current test/CI commands; the skill must not override those rules.
+
+## Fixture and snapshot drift
+
+**A test failing on an outdated fixture is a diagnosis task, not permission to update the
+fixture until CI is green.** A fixture is either current representative test input, a deliberate
+negative/edge case, a generated preview artifact, or a pinned historical/golden contract
+baseline. Identify which kind and which independent authority it represents first.
+
+When a fixture, golden expectation, snapshot, or mock breaks:
+
+1. Inspect the *first relevant failure* and the production/contract change. Identify the
+   fixture's owner and whether the failure is a schema/input mismatch, changed observed behavior,
+   irrelevant presentation drift, or a true regression. Do not bulk-update all failures.
+2. **Bug or unintended behavior change:** repair the implementation; preserve the independent
+   expected result. A failing assertion is not stale merely because code now produces something
+   different.
+3. **Intentional contract change:** update the *smallest canonical* fixture/source factory and
+   affected expectations as part of that change, with an explicit reason and the authoritative
+   new contract. Preserve versioned/historical fixtures and backward-compatibility checks unless
+   the compatibility requirement is itself deliberately changed and approved.
+4. **Incidental fixture churn:** if the behavior is unchanged but an oversized sample or exact
+   snapshot breaks on unrelated fields, narrow the asserted semantic slice, replace duplicated
+   static copies with one small typed test fixture/builder where suitable, or delete truly
+   redundant assertions after proving equivalent surviving coverage. Do not loosen a meaningful
+   invariant just to reduce maintenance.
+5. **Unclear cause:** inspect the owner and callers before editing expectations. Never use
+   wholesale snapshot regeneration, broad find/replace, or current production output as the
+   sole oracle for the new expected value.
+
+Keep variable timestamps, random IDs, ordering not guaranteed by contract, and unrelated optional
+fields out of golden expectations when possible; use deterministic inputs or deliberate
+normalization *only for non-contractual fields*. A full-byte, hash-pinned, or historical fixture
+can be the contract itself and must not be regenerated casually. Generated previews should be
+regenerated from their canonical source with the resulting diff inspected, not hand-edited.
+
+For a fixture-changing PR, report which contract changed (or did not), the specific fixture
+source/expected values changed, why the previous value was obsolete, and which focused test
+confirmed the desired behavior. Avoid growing fixtures or cascading unrelated updates merely to
+make unrelated tests pass.
+
 ## Test portfolio maintenance
 
 During ordinary maintenance, obsolete or superseded assertions may be removed when cheaper or stronger evidence still protects the same meaningful defect class. Before removing coverage, identify the plausible regression it uniquely catches and the surviving evidence for that regression. Do not retain tests merely because they already exist, but do not remove consequential coverage merely because it is mocked, old, slow, or implementation-coupled.
