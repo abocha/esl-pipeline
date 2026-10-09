@@ -43,6 +43,25 @@
 
 ## Backend-Enriched Fields
 
+### Chronology and Read Semantics
+
+`generatedAt` is the artifact extraction timestamp. It is never a lesson occurrence date.
+Lesson-memory reads derive chronology through the verified confirmed source's assignment session,
+constrained to the same student, and its linked `student_lessons` row. Only `completed` lessons
+provide a reliable `starts_at`; scheduled, canceled, no-show, missing and foreign-student links leave
+the occurrence date unknown. No extraction schema or public DTO field is added for this derivation.
+
+Recent verified lesson reads and candidate source selection order by the completed occurrence
+timestamp when present, otherwise extraction time. Extraction time, creation time and ID resolve
+ties deterministically. Unlinked histories keep their extraction fallback order without rewriting
+stored artifacts. Existing candidate API fields `sourceLessonId` and `sourceLessonStartedAt` carry
+known lineage and occurrence time; an unknown occurrence remains null. New candidate provenance
+records `sourceLessonGeneratedAt` and `sourceLessonChronology` as
+`completed_lesson_started_at` or `memory_generated_at_fallback`. The Learning page labels the latter
+as extraction time with an unknown lesson date. Older stored candidates are not retroactively dated.
+
+### Stored Artifact Fields
+
 These fields are persisted by the backend and are not requested from the model:
 
 1. artifact ids

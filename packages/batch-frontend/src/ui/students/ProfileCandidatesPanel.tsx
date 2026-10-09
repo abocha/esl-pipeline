@@ -329,6 +329,13 @@ export function ProfileCandidatesPanel({
                               <strong>Source lesson date:</strong>{' '}
                               {formatCandidateDate(candidate.sourceLessonStartedAt)}
                             </span>
+                            {!candidate.sourceLessonStartedAt &&
+                            typeof candidate.provenance?.sourceLessonGeneratedAt === 'string' ? (
+                              <span>
+                                <strong>Extraction date (lesson date unknown):</strong>{' '}
+                                {formatCandidateDate(candidate.provenance.sourceLessonGeneratedAt)}
+                              </span>
+                            ) : null}
                             <span>
                               <strong>Source memory IDs:</strong>{' '}
                               {candidate.sourceMemoryIds && candidate.sourceMemoryIds.length > 0

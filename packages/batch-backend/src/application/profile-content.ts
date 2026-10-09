@@ -373,7 +373,11 @@ export async function activateProfileRevisionForStudent(
   const activated = await dependencies.revisions.activate(studentId, revisionId);
   if (!activated) return null;
 
-  await dependencies.candidates.markPromotedByRevision(activated.id);
+  await dependencies.candidates.markPromotedByRevision(activated.id, {
+    studentId: activated.studentId,
+    contentHash: activated.contentHash,
+    structuredContent: resolveStructuredContent(activated.structuredContent, activated.content),
+  });
 
   return {
     ...toProfileRevisionSummary(activated),

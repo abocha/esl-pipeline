@@ -162,6 +162,30 @@ revision content/history are preserved.
 
 ## Update Rules
 
+### ESL-39 Candidate Source and Application Proof
+
+Repository source pins candidate delivery to an explicit eligible snapshot and its recorded lesson
+trigger or selected lesson inputs. A delayed A job examines A or skips obsolete evidence; it never
+drifts to B. Snapshot inclusion is not a teacher decision. Source ownership/authority, candidate
+history and insertion are coordinated under the existing student lock, preserving reviewed text and
+decisions without automatic rejected-backlog reopening or a new queue/ledger. Successful snapshots
+superseded only by newer aggregate publication remain valid candidate sources while full source
+lineage stays verified. Source invalidation, explicit obsolete markers and unfinished superseded
+intents remain excluded in both read and transaction checks; latest-ready selection is unchanged.
+
+Both existing draft endpoints report/link only selections represented in the resulting structured
+profile. Patch decisions may select a subset and are validated as closed decision JSON independently
+of base-profile size. Full draft refresh generation is unchanged. Activation checks the actual
+active revision/hash and current approved wording in the relevant field using conservative Unicode,
+case and whitespace equality. Omitted/paraphrased facts remain approved; inherited links are lineage.
+Concurrent review cannot overwrite terminal promotion/supersession.
+
+Completed same-student source-linked lesson dates provide chronology, with explicit extraction
+fallback and unknown occurrence dates otherwise. Learning candidate details label that fallback;
+draft feedback reports omitted selections. Existing DTO shapes, endpoint paths, profile content,
+hashes, frozen prompts and historical candidate records are preserved. No data/schema migration is
+required. ESL-39 local completion does not establish hosted CI, publication or ABO-41 rollout.
+
 Student-area surfaces, profile revisions, memory, timeline and candidate/draft routes authorize the
 student in the authenticated workspace before secondary reads or writes. Foundational Profile is
 student-owned revision history with status as its sole active authority. The direct profile catalog,

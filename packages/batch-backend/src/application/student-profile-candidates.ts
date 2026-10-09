@@ -5,42 +5,34 @@ import type {
   StudentFact,
   StudentFactAuthority,
 } from '../domain/lesson-memory-model.js';
-import { listRecentReadyLessonMemoryByStudentId } from '../domain/lesson-memory-repository.js';
+import { listVerifiedReadyLessonMemoryEntriesByIds } from '../domain/lesson-memory-repository.js';
+import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
-import { getLatestReadyStudentMemorySnapshotByStudentId } from '../domain/student-memory-snapshot-repository.js';
+import { getProfileCandidateSourceStudentMemorySnapshotById } from '../domain/student-memory-snapshot-repository.js';
 import type {
   StudentProfileCandidateRecord,
   StudentProfileCandidateTargetSection,
 } from '../domain/student-profile-candidate-model.js';
 import {
   getStudentProfileCandidateById,
-  insertStudentProfileCandidate,
-  listLatestStudentProfileCandidatesByKeys,
-  supersedePendingStudentProfileCandidates,
+  persistStudentProfileCandidateRefresh,
   updateStudentProfileCandidateReview,
 } from '../domain/student-profile-candidate-repository.js';
+import { deriveFoundationalProfileFromMarkdown } from './foundational-profile.js';
 import {
   buildStudentProfileCandidateKey,
   classifyStudentProfileCandidateTargetSection,
+  isStudentProfileCandidateRepresented,
   isTransientStudentProfileFact,
-  normalizeProfileFactText,
 } from './student-profile-candidate-facts.js';
 import { getStudentProfileById } from './student-profiles-store.js';
-
-const DEFAULT_CORROBORATING_LESSON_LIMIT = 12;
-const PROFILE_CANDIDATE_DEDUP_MODEL = 'gemini-3.1-flash-lite';
 
 const AUTHORITY_PRIORITY: Record<StudentFactAuthority, number> = {
   model_inferred: 0,
   student_stated: 1,
   teacher_confirmed: 2,
 };
-
-const CONFIDENCE_PRIORITY: Record<MemoryConfidence, number> = {
-  low: 0,
-  medium: 1,
-  high: 2,
-};
+const CONFIDENCE_PRIORITY: Record<MemoryConfidence, number> = { low: 0, medium: 1, high: 2 };
 
 type CandidateAction = 'approve' | 'reject' | 'defer';
 
@@ -77,10 +69,12 @@ interface StudentProfileCandidateDraft {
 interface StudentProfileCandidateDedupDecision extends Record<string, unknown> {
   decision: 'created' | 'duplicate' | 'stale';
   reason: string;
-  model: string;
+  model?: string;
 }
 
 export interface RefreshStudentProfileCandidatesResult {
+  outcome: 'processed' | 'skipped';
+  skipReason?: string;
   studentId: string;
   sourceSnapshotId: string | null;
   created: StudentProfileCandidateRecord[];
@@ -97,16 +91,17 @@ interface StudentProfileCandidateDependencies {
     getById: typeof getStudentProfileById;
   };
   snapshots: {
-    getLatestReadyByStudentId: typeof getLatestReadyStudentMemorySnapshotByStudentId;
+    getCandidateSourceById: typeof getProfileCandidateSourceStudentMemorySnapshotById;
   };
   lessonMemory: {
-    listRecentReadyByStudentId: typeof listRecentReadyLessonMemoryByStudentId;
+    listVerifiedReadyByIds: typeof listVerifiedReadyLessonMemoryEntriesByIds;
+  };
+  revisions: {
+    getActive: typeof getActiveProfileRevision;
   };
   candidates: {
     getById: typeof getStudentProfileCandidateById;
-    insert: typeof insertStudentProfileCandidate;
-    listLatestByKeys: typeof listLatestStudentProfileCandidatesByKeys;
-    supersedePending: typeof supersedePendingStudentProfileCandidates;
+    persistRefresh: typeof persistStudentProfileCandidateRefresh;
     updateReview: typeof updateStudentProfileCandidateReview;
   };
 }
@@ -125,104 +120,81 @@ export class StudentProfileCandidateServiceError extends Error {
 
 export async function refreshStudentProfileCandidatesFromCanonicalMemory(args: {
   studentId: string;
-  lessonLimit?: number;
-  insertRejectedDuplicateArtifacts?: boolean;
+  sourceSnapshotId?: string | null;
   overrides?: Partial<StudentProfileCandidateDependencies>;
 }): Promise<RefreshStudentProfileCandidatesResult | null> {
   const students = args.overrides?.students ?? {
     getById: getStudentProfileById,
   };
   const snapshots = args.overrides?.snapshots ?? {
-    getLatestReadyByStudentId: getLatestReadyStudentMemorySnapshotByStudentId,
+    getCandidateSourceById: getProfileCandidateSourceStudentMemorySnapshotById,
   };
   const lessonMemory = args.overrides?.lessonMemory ?? {
-    listRecentReadyByStudentId: listRecentReadyLessonMemoryByStudentId,
+    listVerifiedReadyByIds: listVerifiedReadyLessonMemoryEntriesByIds,
+  };
+  const revisions = args.overrides?.revisions ?? {
+    getActive: getActiveProfileRevision,
   };
   const candidates = args.overrides?.candidates ?? {
     getById: getStudentProfileCandidateById,
-    insert: insertStudentProfileCandidate,
-    listLatestByKeys: listLatestStudentProfileCandidatesByKeys,
-    supersedePending: supersedePendingStudentProfileCandidates,
+    persistRefresh: persistStudentProfileCandidateRefresh,
     updateReview: updateStudentProfileCandidateReview,
   };
 
+  const sourceSnapshotId = args.sourceSnapshotId?.trim();
+  if (!sourceSnapshotId) {
+    return skippedRefresh(args.studentId, 'source_snapshot_id_missing');
+  }
+
+  const snapshot = await snapshots.getCandidateSourceById(sourceSnapshotId);
+  if (!snapshot) return skippedRefresh(args.studentId, 'source_snapshot_unavailable_or_obsolete');
+  if (snapshot.studentId !== args.studentId) {
+    return skippedRefresh(args.studentId, 'source_snapshot_student_mismatch');
+  }
+
+  const selectedLessonMemoryIds = resolveSelectedLessonMemoryIds(snapshot);
+  if (selectedLessonMemoryIds.length === 0) {
+    return skippedRefresh(args.studentId, 'source_lesson_context_unavailable');
+  }
+  if (selectedLessonMemoryIds.some((id) => !snapshot.lessonMemoryEntryIds.includes(id))) {
+    return skippedRefresh(args.studentId, 'source_lesson_context_not_in_snapshot');
+  }
+
   const student = await students.getById(args.studentId);
-  if (!student) {
-    return null;
+  if (!student) return null;
+
+  const lessonMemoryEntries = await lessonMemory.listVerifiedReadyByIds(
+    args.studentId,
+    selectedLessonMemoryIds,
+  );
+  if (lessonMemoryEntries.length !== selectedLessonMemoryIds.length) {
+    return skippedRefresh(args.studentId, 'source_lesson_evidence_unavailable');
   }
 
-  const [snapshot, corroboratingLessonMemory] = await Promise.all([
-    snapshots.getLatestReadyByStudentId(args.studentId),
-    lessonMemory.listRecentReadyByStudentId(args.studentId, {
-      limit: args.lessonLimit ?? DEFAULT_CORROBORATING_LESSON_LIMIT,
-    }),
-  ]);
-
-  if (!snapshot && corroboratingLessonMemory.length === 0) {
-    return {
-      studentId: args.studentId,
-      sourceSnapshotId: null,
-      created: [],
-      skippedCandidateKeys: [],
-      skippedDuplicateCandidateKeys: [],
-      skippedStaleCandidateKeys: [],
-      skippedDuplicateCount: 0,
-      skippedStaleCount: 0,
-      skippedNoProfileWorthyDeltaCount: 0,
-    };
-  }
+  const activeRevision = await revisions.getActive(args.studentId);
+  const activeProfile =
+    activeRevision?.structuredContent ??
+    deriveFoundationalProfileFromMarkdown(activeRevision?.content ?? '');
 
   const proposals = buildCandidateDrafts({
     snapshot,
-    lessonMemoryEntries: corroboratingLessonMemory,
+    lessonMemoryEntries,
   });
-  const existingByKey = await candidates.listLatestByKeys(
-    args.studentId,
-    proposals.map((proposal) => proposal.candidateKey),
-  );
-
-  const created: StudentProfileCandidateRecord[] = [];
-  const skippedCandidateKeys: string[] = [];
-  const skippedDuplicateCandidateKeys: string[] = [];
-  const skippedStaleCandidateKeys: string[] = [];
-
-  for (const proposal of proposals) {
-    if (proposal.dedupDecision.decision !== 'created') {
-      skippedCandidateKeys.push(proposal.candidateKey);
-      skippedStaleCandidateKeys.push(proposal.candidateKey);
-      if (args.insertRejectedDuplicateArtifacts) {
-        await insertRejectedCandidateArtifact({
-          studentId: args.studentId,
-          candidates,
-          proposal,
-          dedupDecision: proposal.dedupDecision,
-        });
-      }
-      continue;
-    }
-
-    const existing = existingByKey.get(proposal.candidateKey);
-    if (!shouldInsertCandidateProposal(proposal, existing)) {
-      skippedCandidateKeys.push(proposal.candidateKey);
-      skippedDuplicateCandidateKeys.push(proposal.candidateKey);
-      if (args.insertRejectedDuplicateArtifacts) {
-        await insertRejectedCandidateArtifact({
-          studentId: args.studentId,
-          candidates,
-          proposal,
-          dedupDecision: {
-            decision: 'duplicate',
-            reason: `Existing candidate ${existing?.id ?? 'unknown'} already covers this fact.`,
-            model: PROFILE_CANDIDATE_DEDUP_MODEL,
-            matchedCandidateId: existing?.id ?? null,
-            matchedStatus: existing?.status ?? null,
-          },
-        });
-      }
-      continue;
-    }
-
-    const inserted = await candidates.insert({
+  const skippedActiveProfileKeys: string[] = [];
+  const reviewProposals = proposals.filter((proposal) => {
+    const represented = isStudentProfileCandidateRepresented(activeProfile, {
+      targetSection: proposal.targetSection,
+      fact: proposal.fact,
+    });
+    if (represented) skippedActiveProfileKeys.push(proposal.candidateKey);
+    return !represented;
+  });
+  const persisted = await candidates.persistRefresh({
+    studentId: args.studentId,
+    sourceSnapshotId: snapshot.id,
+    sourceLessonMemoryIds: selectedLessonMemoryIds,
+    expectedActiveRevisionId: activeRevision?.id ?? null,
+    proposals: reviewProposals.map((proposal) => ({
       studentId: args.studentId,
       targetSection: proposal.targetSection,
       candidateKey: proposal.candidateKey,
@@ -240,58 +212,82 @@ export async function refreshStudentProfileCandidatesFromCanonicalMemory(args: {
       provenance: proposal.provenance,
       dedupDecision: proposal.dedupDecision,
       evidence: proposal.evidence,
-    });
-
-    await candidates.supersedePending({
-      studentId: args.studentId,
-      candidateKey: proposal.candidateKey,
-      supersededById: inserted.id,
-      supersededAt: inserted.createdAt,
-    });
-
-    created.push(inserted);
+    })),
+  });
+  if (persisted.outcome === 'active_profile_changed') {
+    throw new Error(
+      'Active profile changed during source-bound candidate refresh; retry the same snapshot',
+    );
+  }
+  if (persisted.outcome === 'source_obsolete') {
+    return skippedRefresh(args.studentId, 'source_snapshot_or_evidence_became_obsolete');
   }
 
   return {
+    outcome: 'processed',
     studentId: args.studentId,
     sourceSnapshotId: snapshot?.id ?? null,
-    created,
-    skippedCandidateKeys,
-    skippedDuplicateCandidateKeys,
-    skippedStaleCandidateKeys,
-    skippedDuplicateCount: skippedDuplicateCandidateKeys.length,
-    skippedStaleCount: skippedStaleCandidateKeys.length,
+    created: persisted.created,
+    skippedCandidateKeys: [...persisted.skippedCandidateKeys, ...skippedActiveProfileKeys],
+    skippedDuplicateCandidateKeys: [
+      ...persisted.skippedDuplicateCandidateKeys,
+      ...skippedActiveProfileKeys,
+    ],
+    skippedStaleCandidateKeys: persisted.skippedStaleCandidateKeys,
+    skippedDuplicateCount:
+      persisted.skippedDuplicateCandidateKeys.length + skippedActiveProfileKeys.length,
+    skippedStaleCount: persisted.skippedStaleCandidateKeys.length,
     skippedNoProfileWorthyDeltaCount: proposals.length === 0 ? 1 : 0,
   };
 }
 
-async function insertRejectedCandidateArtifact(args: {
-  studentId: string;
-  candidates: StudentProfileCandidateDependencies['candidates'];
-  proposal: StudentProfileCandidateDraft;
-  dedupDecision: StudentProfileCandidateDedupDecision;
-}): Promise<void> {
-  await args.candidates.insert({
-    studentId: args.studentId,
-    targetSection: args.proposal.targetSection,
-    candidateKey: args.proposal.candidateKey,
-    fact: args.proposal.fact,
-    category: args.proposal.category,
-    authority: args.proposal.authority,
-    confidence: args.proposal.confidence,
-    reviewNeeded: args.proposal.reviewNeeded,
-    sourceSnapshotId: args.proposal.sourceSnapshotId,
-    sourceLessonMemoryIds: args.proposal.sourceLessonMemoryIds,
-    sourceLessonId: args.proposal.sourceLessonId,
-    sourceLessonStartedAt: args.proposal.sourceLessonStartedAt,
-    sourceLessonTitle: args.proposal.sourceLessonTitle,
-    sourceMemoryIds: args.proposal.sourceMemoryIds,
-    provenance: args.proposal.provenance,
-    dedupDecision: args.dedupDecision,
-    evidence: args.proposal.evidence,
-    status: 'rejected',
-    reviewState: 'rejected',
-  });
+function skippedRefresh(
+  studentId: string,
+  skipReason: string,
+): RefreshStudentProfileCandidatesResult {
+  return {
+    outcome: 'skipped',
+    skipReason,
+    studentId,
+    sourceSnapshotId: null,
+    created: [],
+    skippedCandidateKeys: [],
+    skippedDuplicateCandidateKeys: [],
+    skippedStaleCandidateKeys: [],
+    skippedDuplicateCount: 0,
+    skippedStaleCount: 0,
+    skippedNoProfileWorthyDeltaCount: 0,
+  };
+}
+
+function resolveSelectedLessonMemoryIds(snapshot: StudentMemorySnapshotRecord): string[] {
+  const notes = snapshot.generationNotes ?? {};
+  const triggerKind = notes.triggerSourceKind;
+  const triggerSourceEntryId =
+    typeof notes.triggerSourceEntryId === 'string'
+      ? notes.triggerSourceEntryId
+      : typeof notes.sourceEntryId === 'string'
+        ? notes.sourceEntryId
+        : null;
+  const included = readStringArray(notes.includedLessonMemoryEntryIds);
+
+  if (triggerKind === 'lesson_memory') {
+    return triggerSourceEntryId ? [triggerSourceEntryId] : [];
+  }
+  if (triggerKind === 'homework_memory') {
+    return included;
+  }
+  if (triggerKind === 'manual') {
+    return triggerSourceEntryId ? [triggerSourceEntryId] : [];
+  }
+  return [];
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(value.filter((item): item is string => typeof item === 'string' && item.length > 0)),
+  ];
 }
 
 export async function approveStudentProfileCandidate(args: {
@@ -347,9 +343,7 @@ async function reviewStudentProfileCandidate(args: {
 }): Promise<StudentProfileCandidateRecord> {
   const candidates = args.overrides?.candidates ?? {
     getById: getStudentProfileCandidateById,
-    insert: insertStudentProfileCandidate,
-    listLatestByKeys: listLatestStudentProfileCandidatesByKeys,
-    supersedePending: supersedePendingStudentProfileCandidates,
+    persistRefresh: persistStudentProfileCandidateRefresh,
     updateReview: updateStudentProfileCandidateReview,
   };
 
@@ -384,9 +378,9 @@ async function reviewStudentProfileCandidate(args: {
 
   if (!updated) {
     throw new StudentProfileCandidateServiceError({
-      code: 'not_found',
-      status: 404,
-      message: 'Student profile candidate not found',
+      code: 'invalid_candidate_state',
+      status: 409,
+      message: 'Candidate changed during review; reload its current state before reviewing it.',
     });
   }
 
@@ -394,32 +388,24 @@ async function reviewStudentProfileCandidate(args: {
 }
 
 function buildCandidateDrafts(args: {
-  snapshot: StudentMemorySnapshotRecord | null;
+  snapshot: StudentMemorySnapshotRecord;
   lessonMemoryEntries: LessonMemoryRecord[];
 }): StudentProfileCandidateDraft[] {
-  const [latestLessonMemory, ...olderLessonMemoryEntries] = [...args.lessonMemoryEntries].sort(
+  const orderedLessons = [...args.lessonMemoryEntries].sort(
     (left, right) =>
+      (right.sourceLessonStartedAt?.getTime() ?? right.generatedAt.getTime()) -
+        (left.sourceLessonStartedAt?.getTime() ?? left.generatedAt.getTime()) ||
       right.generatedAt.getTime() - left.generatedAt.getTime() ||
       right.createdAt.getTime() - left.createdAt.getTime() ||
       right.id.localeCompare(left.id),
   );
-  if (!latestLessonMemory) return [];
-
-  const latestLessonObservations = collectLessonFactObservations([latestLessonMemory]);
-  const staleCandidateKeys = new Set<string>();
-  for (const fact of args.snapshot?.personalFacts ?? []) {
-    const targetSection = classifyTargetSection(fact);
-    if (targetSection) {
-      staleCandidateKeys.add(buildCandidateKey(targetSection, fact.fact));
-    }
-  }
-  for (const [candidateKey] of collectLessonFactObservations(olderLessonMemoryEntries)) {
-    staleCandidateKeys.add(candidateKey);
-  }
+  const observations = collectLessonFactObservations(orderedLessons);
 
   const proposals = new Map<string, StudentProfileCandidateDraft>();
 
-  for (const [candidateKey, observation] of latestLessonObservations) {
+  for (const [candidateKey, observation] of observations) {
+    const sourceLesson = orderedLessons.find((entry) => observation.lessonMemoryIds.has(entry.id));
+    if (!sourceLesson) continue;
     if (
       isTransientStudentProfileFact(observation.fact) ||
       !isStrengthEligible(observation.targetSection, observation.lessonMemoryIds.size)
@@ -437,29 +423,25 @@ function buildCandidateDrafts(args: {
       reviewNeeded: observation.reviewNeeded,
       sourceSnapshotId: args.snapshot?.id ?? null,
       sourceLessonMemoryIds: [...observation.lessonMemoryIds].sort(),
-      sourceLessonId: null,
-      sourceLessonStartedAt: latestLessonMemory.generatedAt,
-      sourceLessonTitle: latestLessonMemory.topicsDiscussed[0]?.topic ?? null,
-      sourceMemoryIds: [latestLessonMemory.id],
+      sourceLessonId: sourceLesson.sourceLessonId ?? null,
+      sourceLessonStartedAt: sourceLesson.sourceLessonStartedAt ?? null,
+      sourceLessonTitle: sourceLesson.lessonTitle ?? sourceLesson.topicsDiscussed[0]?.topic ?? null,
+      sourceMemoryIds: [...observation.lessonMemoryIds].sort(),
       provenance: {
-        sourceKind: 'latest_lesson_memory',
-        sourceLessonMemoryId: latestLessonMemory.id,
-        sourceLessonGeneratedAt: latestLessonMemory.generatedAt.toISOString(),
-        sourceLessonTopic: latestLessonMemory.topicsDiscussed[0]?.topic ?? null,
-        dedupModel: PROFILE_CANDIDATE_DEDUP_MODEL,
+        sourceKind: 'snapshot_selected_lesson_memory',
+        triggerSourceKind: args.snapshot.generationNotes?.triggerSourceKind ?? null,
+        triggerSourceEntryId: args.snapshot.generationNotes?.triggerSourceEntryId ?? null,
+        sourceLessonMemoryId: sourceLesson.id,
+        sourceLessonGeneratedAt: sourceLesson.generatedAt.toISOString(),
+        sourceLessonChronology: sourceLesson.sourceLessonStartedAt
+          ? 'completed_lesson_started_at'
+          : 'memory_generated_at_fallback',
+        sourceLessonTopic: sourceLesson.topicsDiscussed[0]?.topic ?? null,
       },
-      dedupDecision: staleCandidateKeys.has(candidateKey)
-        ? {
-            decision: 'stale',
-            reason: 'The latest lesson repeated a fact already present in prior profile memory.',
-            model: PROFILE_CANDIDATE_DEDUP_MODEL,
-          }
-        : {
-            decision: 'created',
-            reason:
-              'Latest lesson introduced a candidate not found in deterministic prior context.',
-            model: PROFILE_CANDIDATE_DEDUP_MODEL,
-          },
+      dedupDecision: {
+        decision: 'created',
+        reason: 'A pinned eligible lesson source contains this review opportunity.',
+      },
       evidence: dedupeEvidence(observation.evidence),
     });
   }
@@ -504,48 +486,6 @@ function collectLessonFactObservations(
   }
 
   return observations;
-}
-
-function shouldInsertCandidateProposal(
-  proposal: StudentProfileCandidateDraft,
-  existing: StudentProfileCandidateRecord | undefined,
-): boolean {
-  if (!existing) {
-    return true;
-  }
-
-  if (
-    existing.status === 'pending_review' ||
-    existing.status === 'approved' ||
-    existing.status === 'promoted'
-  ) {
-    return false;
-  }
-
-  if (existing.status === 'rejected') {
-    return proposalIsMateriallyImproved(proposal, existing);
-  }
-
-  return true;
-}
-
-function proposalIsMateriallyImproved(
-  proposal: StudentProfileCandidateDraft,
-  existing: StudentProfileCandidateRecord,
-): boolean {
-  if (AUTHORITY_PRIORITY[proposal.authority] > AUTHORITY_PRIORITY[existing.authority]) {
-    return true;
-  }
-  if (CONFIDENCE_PRIORITY[proposal.confidence] > CONFIDENCE_PRIORITY[existing.confidence]) {
-    return true;
-  }
-  if (proposal.sourceLessonMemoryIds.length > existing.sourceLessonMemoryIds.length) {
-    return true;
-  }
-  if (proposal.sourceSnapshotId && !existing.sourceSnapshotId) {
-    return true;
-  }
-  return false;
 }
 
 function classifyTargetSection(

@@ -331,10 +331,7 @@ Recommended strategy enum:
 
 ```ts
 type StudentMemorySnapshotRefreshStrategy =
-  | 'incremental_v1_1'
-  | 'bootstrap_incremental_v1_1'
-  | 'full_rebuild_v1'
-  | 'manual_rebuild_v1_1';
+  'incremental_v1_1' | 'bootstrap_incremental_v1_1' | 'full_rebuild_v1' | 'manual_rebuild_v1_1';
 ```
 
 Recommended behavior:
@@ -364,10 +361,7 @@ Minimum required metadata:
 ```ts
 interface StudentMemorySnapshotCoverage {
   strategy:
-    | 'incremental_v1_1'
-    | 'bootstrap_incremental_v1_1'
-    | 'full_rebuild_v1'
-    | 'manual_rebuild_v1_1';
+    'incremental_v1_1' | 'bootstrap_incremental_v1_1' | 'full_rebuild_v1' | 'manual_rebuild_v1_1';
   parentSnapshotId: string | null;
   trigger: 'lesson-memory-ready' | 'homework-memory-ready' | 'manual-replay';
   triggerSourceKind: 'lesson_memory' | 'homework_memory' | 'manual' | null;
@@ -577,6 +571,14 @@ already records requested intent; retry does not regenerate the snapshot.
 
 ### Candidate Dedup Policy
 
+ESL-39 supersedes the old latest-lesson/snapshot-self-suppression behavior described in this design's
+baseline. Current source binding, reviewed-history preservation, deterministic application proof
+and chronology are specified in the
+[profile enrichment contract](../plans/student-profile-enrichment/README.md#esl-39-source-and-promotion-contract).
+Candidate delivery is pinned to the recorded snapshot/source and writes no model dedup attribution
+or synthetic rejected duplicate/stale artifacts. Historic artifacts remain retained. No optional
+debug-artifact insertion mode is supported by the corrected consumer.
+
 Keep deterministic candidate keys.
 
 Prefer skipping duplicate candidate insertion before creating extra rejected records, unless those rejected records are intentionally used as an audit trail.
@@ -665,10 +667,7 @@ Recommended metric fields:
 ```ts
 interface StudentMemoryJobMetrics {
   workload:
-    | 'lesson_memory'
-    | 'homework_memory'
-    | 'student_memory_snapshot'
-    | 'student_profile_candidates';
+    'lesson_memory' | 'homework_memory' | 'student_memory_snapshot' | 'student_profile_candidates';
 
   provider?: string;
   model?: string;

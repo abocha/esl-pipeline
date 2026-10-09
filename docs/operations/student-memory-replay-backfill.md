@@ -366,6 +366,13 @@ The candidate-only command revalidates snapshot eligibility and recorded candida
 not regenerate memory or infer candidate intent. Do not run either production command without a
 reviewed scope and explicit operator authorization.
 
+ESL-39 candidate consumers additionally require recorded lesson source context on that snapshot.
+Pre-upgrade jobs missing `sourceSnapshotId`, or snapshots without a recorded trigger/selected lesson
+input, skip with `student_profile_candidate_refresh_skipped`. Diagnose the reason before any retry.
+Never substitute the latest snapshot for a source-less job or replay a rejected candidate backlog.
+No automatic migration/relabeling of existing candidate history is required; any backlog recovery
+is a separately reviewed and authorized ABO-41 rollout action.
+
 ## Student Lesson Artifact Export
 
 Use this host-run tool when you need a human-readable zip bundle for one student that includes:
