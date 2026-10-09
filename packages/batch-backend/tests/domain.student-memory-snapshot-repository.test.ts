@@ -114,7 +114,160 @@ async function insertReadySnapshot(args: {
   });
 }
 
+async function insertRetainedHomework(
+  studentId: string,
+  options: { jobStudentId?: string; state?: string; lineage?: string; status?: string } = {},
+) {
+  const jobId = randomUUID();
+  const id = randomUUID();
+  // Seed retained pre-cutover evidence only in this disposable database. Runtime fences stay enabled.
+  await withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      await client.query('ALTER TABLE jobs DISABLE TRIGGER historical_jobs_read_only');
+      await client.query(
+        'ALTER TABLE homework_memory_entries DISABLE TRIGGER historical_homework_memory_read_only',
+      );
+      await client.query(
+        `INSERT INTO jobs (id, student_id, state, md) VALUES ($1, $2, $3, '# Retained historical homework')`,
+        [jobId, options.jobStudentId ?? studentId, options.state ?? 'succeeded'],
+      );
+      if (options.lineage)
+        await client.query(
+          "INSERT INTO jobs (id, student_id, state, md) VALUES ($1, $2, 'succeeded', '# Other publication')",
+          [options.lineage, studentId],
+        );
+      await client.query(
+        `INSERT INTO homework_memory_entries
+        (id, student_id, job_id, assignment_lineage_key, schema_version, provider, model, status, published_at, generated_at, content_hash, homework_summary)
+        VALUES ($1, $2, $3, $4, 'homework-memory.v1', 'openai', 'fixture', $5, NOW(), NOW(), 'retained-publication-hash', 'Retained practice')`,
+        [id, studentId, jobId, options.lineage ?? jobId, options.status ?? 'ready'],
+      );
+      await client.query('ALTER TABLE jobs ENABLE TRIGGER historical_jobs_read_only');
+      await client.query(
+        'ALTER TABLE homework_memory_entries ENABLE TRIGGER historical_homework_memory_read_only',
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+  return { id, jobId };
+}
+
 describeIfPg('domain/student-memory-snapshot-repository', () => {
+  it('accepts retained historical homework publication evidence without executing or rewriting it', async () => {
+    const studentId = await insertStudent();
+    const homework = await insertRetainedHomework(studentId);
+    const frozen = await withPgClient((client) =>
+      client.query('SELECT * FROM homework_memory_entries WHERE id = $1', [homework.id]),
+    );
+    const snapshot = await insertCanonicalReadyStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'openai',
+      model: 'fixture',
+      homeworkMemoryEntryIds: [homework.id],
+      snapshotSummary: 'Established history',
+    });
+    await expect(getStudentMemorySnapshotSelection(studentId)).resolves.toMatchObject({
+      snapshot: { id: snapshot.id },
+      availability: { state: 'available', reason: 'verified_lineage', homeworkReferenceCount: 1 },
+    });
+    expect(
+      (
+        await withPgClient((client) =>
+          client.query('SELECT * FROM homework_memory_entries WHERE id = $1', [homework.id]),
+        )
+      ).rows,
+    ).toEqual(frozen.rows);
+    await expect(
+      withPgClient((client) =>
+        client.query("UPDATE jobs SET state = 'queued' WHERE id = $1", [homework.jobId]),
+      ),
+    ).rejects.toThrow('legacy_assignment_read_only');
+    await expect(
+      withPgClient((client) =>
+        client.query(
+          "UPDATE homework_memory_entries SET homework_summary = 'Regenerated' WHERE id = $1",
+          [homework.id],
+        ),
+      ),
+    ).rejects.toThrow('legacy_assignment_read_only');
+  });
+
+  it.each([
+    'missing',
+    'wrong_student',
+    'wrong_job_student',
+    'wrong_lineage',
+    'unpublished',
+    'superseded',
+    'deleted',
+  ])(
+    'rejects %s homework at publication and marks retained aggregate lineage repair-required',
+    async (kind) => {
+      const studentId = await insertStudent();
+      const otherStudentId = await insertStudent();
+      let id: string = randomUUID();
+      if (kind !== 'missing') {
+        const homework = await insertRetainedHomework(
+          kind === 'wrong_student' ? otherStudentId : studentId,
+          {
+            ...(kind === 'wrong_job_student' ? { jobStudentId: otherStudentId } : {}),
+            ...(kind === 'wrong_lineage' ? { lineage: randomUUID() } : {}),
+            ...(kind === 'unpublished' ? { state: 'failed' } : {}),
+            ...(kind === 'superseded' ? { status: 'superseded' } : {}),
+          },
+        );
+        id = homework.id;
+        if (kind === 'deleted')
+          await withPgClient((client) =>
+            client.query('DELETE FROM homework_memory_entries WHERE id = $1', [id]),
+          );
+      }
+      await expect(
+        insertCanonicalReadyStudentMemorySnapshot({
+          studentId,
+          schemaVersion: 'student-memory-snapshot.v1',
+          provider: 'openai',
+          model: 'fixture',
+          homeworkMemoryEntryIds: [id],
+        }),
+      ).rejects.toMatchObject({
+        name: 'StudentMemorySnapshotSourcesChangedError',
+        unavailableLessonMemoryEntryIds: [],
+        unavailableHomeworkMemoryEntryIds: [id],
+      });
+      const snapshotId = await insertStoredSnapshot({
+        studentId,
+        generatedAt: '2026-10-05T00:00:00Z',
+        lessonMemoryEntryIds: [],
+        homeworkMemoryEntryIds: [id],
+      });
+      await expect(getStudentMemorySnapshotSelection(studentId)).resolves.toMatchObject({
+        snapshot: null,
+        availability: {
+          state: 'repair_required',
+          reason: 'established_history_ineligible',
+          homeworkReferenceCount: 1,
+        },
+      });
+      await expect(getEligibleReadyStudentMemorySnapshotById(snapshotId)).resolves.toBeNull();
+      await expect(
+        ensurePendingStudentMemorySnapshot({
+          studentId,
+          schemaVersion: 'student-memory-snapshot.v1',
+          provider: 'openai',
+          model: 'fixture',
+          sourceEntryId: id,
+          reuseReadyHomeworkSource: true,
+        }),
+      ).rejects.toBeInstanceOf(StudentMemorySnapshotIntentObsoleteError);
+    },
+  );
+
   it('retains confirmed immutable evidence when the transcript working copy is autosaved', async () => {
     const studentId = await insertStudent();
     const lessonId = await insertLessonMemory({
@@ -365,7 +518,7 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
 
   it('supersedes matching pending homework refreshes when eligible ready coverage already exists', async () => {
     const studentId = await insertStudent();
-    const homeworkMemoryEntryId = randomUUID();
+    const homeworkMemoryEntryId = (await insertRetainedHomework(studentId)).id;
     const pending = await ensurePendingStudentMemorySnapshot({
       studentId,
       schemaVersion: 'student-memory.v1',
@@ -409,7 +562,7 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
 
   it('does not reconcile an automatic homework refresh through ineligible ready coverage', async () => {
     const studentId = await insertStudent();
-    const homeworkMemoryEntryId = randomUUID();
+    const homeworkMemoryEntryId = (await insertRetainedHomework(studentId)).id;
     const ineligibleLessonMemoryEntryId = await insertLessonMemory({
       studentId,
       status: 'superseded',

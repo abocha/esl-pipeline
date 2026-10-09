@@ -5,6 +5,7 @@ import type { StudentMemoryAvailability } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { buildVerifiedHomeworkMemoryEvidenceSqlPredicate } from './homework-memory-repository.js';
 import type { StudentFact } from './lesson-memory-model.js';
 import { buildVerifiedLessonMemoryEvidenceSqlPredicate } from './lesson-memory-repository.js';
 import {
@@ -205,9 +206,12 @@ export class StudentMemorySnapshotParentChangedError extends Error {
 }
 
 export class StudentMemorySnapshotSourcesChangedError extends Error {
-  constructor(readonly unavailableLessonMemoryEntryIds: string[]) {
+  constructor(
+    readonly unavailableLessonMemoryEntryIds: string[],
+    readonly unavailableHomeworkMemoryEntryIds: string[] = [],
+  ) {
     super(
-      `Lesson-memory sources changed before student-memory snapshot finalize: ${unavailableLessonMemoryEntryIds.join(', ')}`,
+      `Memory sources changed before student-memory snapshot finalize: lessons ${unavailableLessonMemoryEntryIds.join(', ')}; homework ${unavailableHomeworkMemoryEntryIds.join(', ')}`,
     );
     this.name = 'StudentMemorySnapshotSourcesChangedError';
   }
@@ -258,6 +262,14 @@ export function buildEligibleStudentMemorySnapshotLineageSqlPredicate(
      AND eligible_lesson.source_content_hash IS NOT NULL
      AND ${canonicalLesson}
     WHERE eligible_lesson.id IS NULL
+  ) AND NOT EXISTS (
+    SELECT 1 FROM unnest(${snapshotAlias}.homework_memory_entry_ids) AS source(homework_memory_entry_id)
+    LEFT JOIN homework_memory_entries AS eligible_homework
+      ON eligible_homework.id = source.homework_memory_entry_id
+     AND eligible_homework.student_id = ${snapshotAlias}.student_id
+     AND eligible_homework.status = 'ready'
+     AND ${buildVerifiedHomeworkMemoryEvidenceSqlPredicate('eligible_homework')}
+    WHERE eligible_homework.id IS NULL
   )`;
 }
 
@@ -317,6 +329,15 @@ export async function ensurePendingStudentMemorySnapshot(
           `SELECT id FROM lesson_memory_entries AS lesson
            WHERE lesson.id = $1 AND lesson.student_id = $2 AND lesson.status = 'ready'
              AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson')}`,
+          [params.sourceEntryId, params.studentId],
+        );
+        if (!source.rows[0]) throw new StudentMemorySnapshotIntentObsoleteError();
+      }
+      if (params.reuseReadyHomeworkSource && params.sourceEntryId) {
+        const source = await client.query(
+          `SELECT id FROM homework_memory_entries AS homework
+           WHERE homework.id = $1 AND homework.student_id = $2 AND homework.status = 'ready'
+             AND ${buildVerifiedHomeworkMemoryEvidenceSqlPredicate('homework')}`,
           [params.sourceEntryId, params.studentId],
         );
         if (!source.rows[0]) throw new StudentMemorySnapshotIntentObsoleteError();
@@ -695,6 +716,23 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
         if (unavailableLessonIds.length > 0) {
           throw new StudentMemorySnapshotSourcesChangedError(unavailableLessonIds);
         }
+      }
+
+      const requestedHomeworkIds = [...new Set(params.homeworkMemoryEntryIds ?? [])];
+      if (requestedHomeworkIds.length > 0) {
+        const readyHomeworkResult = await client.query<{ id: string }>(
+          `SELECT homework.id FROM homework_memory_entries homework
+           WHERE homework.student_id = $1 AND homework.id = ANY($2::uuid[])
+             AND homework.status = 'ready'
+             AND ${buildVerifiedHomeworkMemoryEvidenceSqlPredicate('homework')}`,
+          [params.studentId, requestedHomeworkIds],
+        );
+        const readyHomeworkIds = new Set(readyHomeworkResult.rows.map((row) => row.id));
+        const unavailableHomeworkIds = requestedHomeworkIds.filter(
+          (id) => !readyHomeworkIds.has(id),
+        );
+        if (unavailableHomeworkIds.length > 0)
+          throw new StudentMemorySnapshotSourcesChangedError([], unavailableHomeworkIds);
       }
 
       if (params.expectedLatestReadySnapshotId !== undefined) {

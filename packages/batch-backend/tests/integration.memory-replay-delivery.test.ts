@@ -40,6 +40,7 @@ import {
   ensurePendingStudentMemorySnapshot,
   getLatestReadyStudentMemorySnapshotByStudentId,
   getStudentMemorySnapshotById,
+  getStudentMemorySnapshotSelection,
   insertCanonicalReadyStudentMemorySnapshot,
   markStudentMemorySnapshotFailed,
   StudentMemorySnapshotIntentObsoleteError,
@@ -84,13 +85,14 @@ const homeworkContent = {
 };
 const pacer = { run: async (args: { execute: () => Promise<unknown> }) => args.execute() };
 
-async function seed() {
+async function seed(studentName = 'Replay learner') {
   const studentId = randomUUID();
   const jobId = randomUUID();
   const publishedAt = new Date('2026-10-01T00:00:00Z');
   await withPgClient(async (client) => {
-    await client.query("INSERT INTO students (id, student) VALUES ($1, 'Replay learner')", [
+    await client.query('INSERT INTO students (id, student) VALUES ($1, $2)', [
       studentId,
+      studentName,
     ]);
     await client.query(
       `INSERT INTO jobs (id, student_id, state, md, publication_sequence, finished_at, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
@@ -196,6 +198,192 @@ async function readyHomework(source: Awaited<ReturnType<typeof seed>>) {
 }
 
 describe('ordinary replay transactions and DB → BullMQ delivery', () => {
+  it('rejects a queued first-bootstrap homework trigger before provider work when its publication proof is lost', async () => {
+    const source = await seed();
+    const homework = await readyHomework(source);
+    const intent = (
+      await requestStudentMemorySnapshotRefresh({
+        config,
+        params: {
+          studentId: source.studentId,
+          trigger: 'homework-memory-ready',
+          sourceEntryId: homework.id,
+        },
+      })
+    ).entry;
+    await withPgClient((client) =>
+      client.query("UPDATE jobs SET state = 'failed' WHERE id = $1", [source.jobId]),
+    );
+    const extractor = vi.fn().mockResolvedValue({ content: snapshotContent });
+    await expect(
+      processStudentMemorySnapshotJob({
+        config,
+        payload: {
+          kind: 'student-memory-snapshot-refresh',
+          studentId: source.studentId,
+          pendingEntryId: intent.id,
+          provider: 'openai',
+          model: intent.model,
+          trigger: 'homework-memory-ready',
+          sourceEntryId: homework.id,
+        },
+        overrides: { extractor, pacer } as never,
+      }),
+    ).rejects.toThrow('Ready homework memory trigger source not found');
+    expect(extractor).not.toHaveBeenCalled();
+    expect((await getStudentMemorySnapshotById(intent.id))?.status).toBe('failed');
+    expect(await getStudentMemorySnapshotSelection(source.studentId)).toMatchObject({
+      snapshot: null,
+      availability: { state: 'absent' },
+    });
+  });
+
+  it.each(['superseded', 'deleted', 'wrong_student'])(
+    'blocks incremental refresh after an established homework contributor is %s',
+    async (kind) => {
+      const source = await seed();
+      const homework = await readyHomework(source);
+      const original = await insertCanonicalReadyStudentMemorySnapshot({
+        studentId: source.studentId,
+        schemaVersion: 'student-memory-snapshot.v1',
+        provider: 'openai',
+        model: 'fixture',
+        homeworkMemoryEntryIds: [homework.id],
+        ...snapshotContent,
+      });
+      const lessonId = await insertLessonMemory({
+        studentId: source.studentId,
+        status: 'ready',
+        withConfirmedSource: true,
+      });
+      const intent = (
+        await requestStudentMemorySnapshotRefresh({
+          config,
+          params: {
+            studentId: source.studentId,
+            trigger: 'lesson-memory-ready',
+            sourceEntryId: lessonId,
+          },
+        })
+      ).entry;
+      if (kind === 'superseded') await readyHomework(source); // Real canonical replacement supersedes the contributor.
+      if (kind === 'deleted')
+        await withPgClient((client) =>
+          client.query('DELETE FROM homework_memory_entries WHERE id = $1', [homework.id]),
+        );
+      if (kind === 'wrong_student') {
+        const other = await seed('Other learner');
+        await withPgClient((client) =>
+          client.query('UPDATE homework_memory_entries SET student_id = $2 WHERE id = $1', [
+            homework.id,
+            other.studentId,
+          ]),
+        );
+      }
+      const extractor = vi.fn().mockResolvedValue({ content: snapshotContent });
+      await processStudentMemorySnapshotJob({
+        config,
+        payload: {
+          kind: 'student-memory-snapshot-refresh',
+          studentId: source.studentId,
+          pendingEntryId: intent.id,
+          provider: 'openai',
+          model: intent.model,
+          trigger: 'lesson-memory-ready',
+          sourceEntryId: lessonId,
+        },
+        overrides: { extractor, pacer } as never,
+      });
+      expect(extractor).not.toHaveBeenCalled();
+      expect(await getStudentMemorySnapshotSelection(source.studentId)).toMatchObject({
+        snapshot: null,
+        availability: { state: 'repair_required' },
+      });
+      expect(await getStudentMemorySnapshotById(intent.id)).toMatchObject({
+        status: 'failed',
+        generationNotes: { continuityReason: 'repair_required' },
+      });
+      expect(await getStudentMemorySnapshotById(original.id)).toMatchObject({
+        homeworkMemoryEntryIds: [homework.id],
+      });
+    },
+  );
+
+  it('rejects homework invalidation after incremental parent coverage has been read', async () => {
+    const source = await seed();
+    const homework = await readyHomework(source);
+    await insertCanonicalReadyStudentMemorySnapshot({
+      studentId: source.studentId,
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'openai',
+      model: 'fixture',
+      homeworkMemoryEntryIds: [homework.id],
+      ...snapshotContent,
+    });
+    const lessonId = await insertLessonMemory({
+      studentId: source.studentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    const intent = (
+      await requestStudentMemorySnapshotRefresh({
+        config,
+        params: {
+          studentId: source.studentId,
+          trigger: 'lesson-memory-ready',
+          sourceEntryId: lessonId,
+        },
+      })
+    ).entry;
+    const provider = pausedExtraction(snapshotContent);
+    const work = processStudentMemorySnapshotJob({
+      config,
+      payload: {
+        kind: 'student-memory-snapshot-refresh',
+        studentId: source.studentId,
+        pendingEntryId: intent.id,
+        provider: 'openai',
+        model: intent.model,
+        trigger: 'lesson-memory-ready',
+        sourceEntryId: lessonId,
+      },
+      overrides: { extractor: provider.extractor, pacer } as never,
+    });
+    await provider.entered;
+    await readyHomework(source);
+    provider.release();
+    await work;
+    expect(await getStudentMemorySnapshotSelection(source.studentId)).toMatchObject({
+      snapshot: null,
+      availability: { state: 'repair_required' },
+    });
+    expect(await getStudentMemorySnapshotById(intent.id)).toMatchObject({
+      status: 'superseded',
+      generationNotes: { obsoleteReason: 'memory_state_changed' },
+    });
+  });
+
+  it('explicit rebuild excludes ready homework without retained publication proof', async () => {
+    const source = await seed();
+    const valid = await readyHomework(source);
+    const other = await seed('Other learner');
+    const invalidId = randomUUID();
+    await withPgClient((client) =>
+      client.query(
+        `INSERT INTO homework_memory_entries
+      (id, student_id, job_id, assignment_lineage_key, schema_version, provider, model, status, published_at, generated_at)
+      VALUES ($1, $2, $3, $3, 'homework-memory.v1', 'openai', 'fixture', 'ready', NOW(), NOW())`,
+        [invalidId, source.studentId, other.jobId],
+      ),
+    );
+    const intent = await pendingSnapshot(source.studentId);
+    await runSnapshot(intent);
+    expect(
+      (await getLatestReadyStudentMemorySnapshotByStudentId(source.studentId))
+        ?.homeworkMemoryEntryIds,
+    ).toEqual([valid.id]);
+  });
+
   it('explicitly reconstructs all eligible materialized history after invalidation, including old historical episodes, exactly once', async () => {
     const { studentId } = await seed();
     const ids: string[] = [];

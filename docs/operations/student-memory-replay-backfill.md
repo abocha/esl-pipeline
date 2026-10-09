@@ -37,6 +37,13 @@ historical. Source proof and new execution admission are separate: historical ex
 regeneration, initial enrichment and legacy Batch import remain blocked. Never infer missing
 provenance or retrofit confirmed bindings to make old evidence eligible.
 
+Snapshot selection and publication verify both lesson and homework contributors. Homework proof
+requires a retained ready observation, its succeeded source job, the matching root publication
+lineage and the same student throughout that lineage. Historical job format alone does not reject
+this proof. Missing, foreign, deleted or superseded contributors make established history
+repair-required; incremental refresh cannot carry that coverage forward. Explicit rebuild input
+includes only eligible materialized homework observations, while inspection retains raw audit rows.
+
 Memory overview/health, transcript progress and teaching context expose the shared aggregate
 `availability`: `absent`, `available`, `repair_required`, or `repository_unavailable`, with a bounded
 reason and lesson/homework reference counts. Stored status and pending/failed work are independent.

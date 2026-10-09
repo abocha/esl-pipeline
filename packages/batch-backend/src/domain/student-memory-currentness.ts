@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
+import { buildVerifiedHomeworkMemoryEvidenceSqlPredicate } from './homework-memory-repository.js';
 import { buildVerifiedLessonMemoryEvidenceSqlPredicate } from './lesson-memory-repository.js';
 
 export interface StudentMemoryCurrentness {
@@ -23,6 +24,7 @@ export async function readStudentMemoryCurrentness(
      UNION ALL
      SELECT 'homework', id, updated_at::text, content_hash
      FROM homework_memory_entries WHERE student_id = $1 AND status = 'ready'
+       AND ${buildVerifiedHomeworkMemoryEvidenceSqlPredicate('homework_memory_entries')}
      ORDER BY kind, id`,
     [studentId],
   );
