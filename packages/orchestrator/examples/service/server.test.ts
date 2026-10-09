@@ -1,41 +1,19 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import Fastify from 'fastify';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import type { AssignmentV1 } from '@esl-pipeline/contracts';
-
-import { createPipeline, noopLogger, noopMetrics } from '../../src/index.js';
 import { assignmentFixture } from '../../tests/assignment-fixture.js';
+import { createService } from './app.js';
 
-const fastify = Fastify({ logger: false });
+let fastify: ReturnType<typeof createService>;
 let fixturesDir: string;
 
 beforeAll(async () => {
   fixturesDir = await mkdtemp(join(tmpdir(), 'esl-service-example-'));
-  const pipeline = createPipeline({
-    cwd: fixturesDir,
-    logger: noopLogger,
-    metrics: noopMetrics,
-  });
-
-  fastify.post('/jobs', async (request, reply) => {
-    const body = request.body as { md?: string; assignment?: AssignmentV1 };
-    if (!body.md || !body.assignment) {
-      reply.code(400);
-      return { error: 'Missing md path' };
-    }
-    const result = await pipeline.newAssignment({
-      assignment: body.assignment,
-      md: resolve(fixturesDir, body.md ?? 'lesson.md'),
-      withTts: false,
-      dryRun: true,
-      skipImport: true,
-      skipTts: true,
-      skipUpload: true,
-    });
-    return { result };
+  fastify = createService({
+    pipelineRoot: fixturesDir,
+    logger: false,
   });
 
   await fastify.listen({ port: 0, host: '127.0.0.1' });
