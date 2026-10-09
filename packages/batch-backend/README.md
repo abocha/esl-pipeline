@@ -19,6 +19,8 @@ Async workflow API and worker runtime for ESL Pipeline.
 - queue-backed workers
 - durable Postgres-backed workflow state
 - bridge to `@esl-pipeline/orchestrator` for final pipeline semantics
+- Worker entries translate new-assignment and rerun job payloads into orchestrator v2 flags,
+  preserving persisted voice and learning-preset settings and the selected rerun theme.
 
 It does not redefine orchestrator behavior. Contract and architecture detail stay in:
 
