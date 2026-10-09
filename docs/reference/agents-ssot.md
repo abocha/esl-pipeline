@@ -76,6 +76,8 @@ For deep system maps, prefer the linked docs rather than growing this file again
     proves the clip-level audio identity is unchanged; changed clips in a selected family still
     require replacement upload semantics
 - `batch-backend` may orchestrate and persist work, but it must not invent alternate pipeline semantics.
+  Its worker entry maps new-assignment and rerun payloads into orchestrator v2 flags, forwarding
+  persisted voice/learning-preset options and the selected rerun theme.
 
 ### Contracts and compatibility
 

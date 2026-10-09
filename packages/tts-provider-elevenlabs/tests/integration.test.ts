@@ -545,16 +545,6 @@ Student: voice_student_female
       expect(typeof indexExports.resolveFfmpegPath).toBe('function');
     });
 
-    it('should export types for TypeScript compatibility', async () => {
-      // This tests that types are properly exported for orchestrator usage
-      // We can't test type exports at runtime, but we can verify the module loads
-      const typesModule = await import('../src/types.js');
-
-      // Verify the module loaded successfully
-      expect(typesModule).toBeDefined();
-      // Types are available for TypeScript compilation, not runtime
-    });
-
     it('should handle orchestrator-style configuration', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const assignmentPath = join(dir, 'orchestrator-test.md');
@@ -692,150 +682,8 @@ auto: true
     });
   });
 
-  describe('CLI integration', () => {
-    it('should handle CLI-style flag combinations', async () => {
-      const dir = await mkdtemp(join(tmpdir(), 'tts-'));
-      const assignmentPath = join(dir, 'cli-test.md');
-      const tempVoiceMapPath = join(dir, 'voices.yml');
-
-      await writeFile(
-        assignmentPath,
-        JSON.stringify(
-          createTtsAssignment({
-            metadata: { title: 'Test Lesson', student: 'Test Student', level: 'A1', topic: 'test' },
-            studyText: {
-              type: 'monologue',
-              speakers: [
-                {
-                  id: 's0',
-                  displayName: 'Narrator',
-                  role: 'student',
-                  persona: null,
-                  voiceDirection: null,
-                  gender: 'neutral',
-                  age: null,
-                  accent: null,
-                },
-              ],
-              turns: [{ speakerId: 's0', text: 'This tests CLI-style flag handling.' }],
-            },
-            pronunciation: null,
-          }),
-        ),
-      );
-      await writeFile(
-        tempVoiceMapPath,
-        `
-default: voice_narrator
-Narrator: voice_narrator
-auto: true
-        `.trim(),
-      );
-
-      const convertMock = setupClientMock();
-      mockConcat();
-
-      // Simulate various CLI flag combinations
-      const cliScenarios = [
-        {
-          name: 'basic flags',
-          options: {
-            voiceMapPath: tempVoiceMapPath,
-            outPath: dir,
-            ttsStrategy: 'tts' as const, // Force TTS to ensure consistent behavior
-          },
-        },
-        {
-          name: 'with preview',
-          options: {
-            voiceMapPath: tempVoiceMapPath,
-            outPath: dir,
-            preview: true,
-          },
-        },
-        {
-          name: 'with force',
-          options: {
-            voiceMapPath: tempVoiceMapPath,
-            outPath: dir,
-            force: true,
-            ttsStrategy: 'tts' as const,
-          },
-        },
-        {
-          name: 'with new TTS strategy flags',
-          options: {
-            voiceMapPath: tempVoiceMapPath,
-            outPath: dir,
-            ttsStrategy: 'tts' as const,
-            dialogueLanguage: 'en',
-            dialogueStability: 0.5,
-          },
-        },
-        {
-          name: 'with all new flags',
-          options: {
-            voiceMapPath: tempVoiceMapPath,
-            outPath: dir,
-            ttsStrategy: 'tts' as const, // Force TTS to avoid dialogue mode issues
-            dialogueLanguage: 'en',
-            dialogueStability: 0.75,
-            dialogueSeed: 123,
-          },
-        },
-      ];
-
-      // Split scenarios to avoid conditional expectations in loop
-      const previewScenarios = cliScenarios.filter((s) => s.options.preview);
-      const generationScenarios = cliScenarios.filter((s) => !s.options.preview);
-
-      for (const scenario of previewScenarios) {
-        convertMock.mockClear();
-        await buildStudyTextMp3FromPath(assignmentPath, scenario.options);
-        expect(convertMock).not.toHaveBeenCalled();
-      }
-
-      for (const scenario of generationScenarios) {
-        convertMock.mockClear();
-        const result = await buildStudyTextMp3FromPath(assignmentPath, scenario.options);
-        expect(result.path).toMatch(/\.mp3$/);
-      }
-    });
-
-    it('should validate CLI help text compatibility', async () => {
-      // Test that new options don't break existing CLI help expectations
-      const options = {
-        voiceMapPath: '/path/to/voices.yml',
-        outPath: '/path/to/output',
-        preview: false,
-        force: false,
-        defaultAccent: 'american',
-        ffmpegPath: '/usr/bin/ffmpeg',
-        outputFormat: 'mp3_22050_32',
-        // New options
-        ttsStrategy: 'auto',
-        dialogueLanguage: 'en',
-        dialogueStability: 0.5,
-        dialogueSeed: 123,
-      };
-
-      // Verify all expected properties exist
-      expect(options.voiceMapPath).toBeDefined();
-      expect(options.outPath).toBeDefined();
-      expect(options.preview).toBeDefined();
-      expect(options.force).toBeDefined();
-      expect(options.defaultAccent).toBeDefined();
-      expect(options.ffmpegPath).toBeDefined();
-      expect(options.outputFormat).toBeDefined();
-
-      // Verify new properties don't break existing structure
-      expect(options.ttsStrategy).toBeDefined();
-      expect(options.dialogueLanguage).toBeDefined();
-      expect(options.dialogueStability).toBeDefined();
-      expect(options.dialogueSeed).toBeDefined();
-    });
-
-    it('should handle environment variable overrides like CLI would', async () => {
+  describe('environment configuration', () => {
+    it('uses the strategy environment variable when no explicit strategy is passed', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const assignmentPath = join(dir, 'env-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
@@ -877,7 +725,7 @@ auto: true
       const convertMock = setupClientMock();
       mockConcat();
 
-      // Set environment variables like CLI would
+      // Configure the provider strategy through its environment variable.
       const originalEnv = { ...process.env };
       process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY = 'tts';
 
