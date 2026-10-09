@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [20.2.1] - 2026-10-09
+
+### Changed
+
+- Automated release from PR #374: fix(memory): preserve source-bound candidate review and promotion (https://github.com/abocha/esl-pipeline/pull/374)
+
 ## [20.2.0] - 2026-10-09
 
 ### Changed
