@@ -37,13 +37,21 @@ function makeCandidate(
 }
 
 describe('application/profile-draft-refresh', () => {
-  it('generates and saves a complete foundational profile draft from approved candidates', async () => {
+  it.each([
+    [
+      'exact approved wording',
+      'Uses product launches as a useful speaking theme.',
+      ['candidate-1'],
+    ],
+    ['a paraphrase', 'Product launches', []],
+  ])('links only represented approved facts with %s', async (_label, theme, included) => {
+    const linkToDraft = vi.fn().mockResolvedValue(undefined);
     const structuredProfile = {
       schemaVersion: 'foundational_profile_v1' as const,
       overallLevel: 'B1',
       primaryGoals: ['Lead project updates clearly.'],
       communicationContexts: ['Team updates'],
-      interestsAndUsefulThemes: ['Product launches'],
+      interestsAndUsefulThemes: [theme as string],
       stableStrengths: ['Prepared notes'],
       persistentChallenges: ['Article usage'],
       studyPreferences: ['Short practical tasks'],
@@ -79,7 +87,7 @@ describe('application/profile-draft-refresh', () => {
       request: {
         studentId: 'tolik',
         reviewerId: 'teacher-1',
-        candidateIds: ['candidate-1'],
+        candidateIds: ['candidate-1', 'candidate-2'],
       },
       overrides: {
         config: loadConfig(),
@@ -128,8 +136,9 @@ describe('application/profile-draft-refresh', () => {
               approvedFact: 'Uses product launches as a useful speaking theme.',
               evidence: [{ quote: 'Launch meetings are hard.', speakerRole: 'student' }],
             }),
+            makeCandidate({ id: 'candidate-2', fact: 'Likes hiking.' }),
           ],
-          linkToDraft: async () => {},
+          linkToDraft,
         },
         memory: {
           getOverview: async () => ({
@@ -156,7 +165,12 @@ describe('application/profile-draft-refresh', () => {
     });
 
     expect(result.draftRevision.status).toBe('draft');
-    expect(result.includedCandidateIds).toEqual(['candidate-1']);
+    expect(result.includedCandidateIds).toEqual(included);
+    expect(linkToDraft).toHaveBeenCalledWith({
+      studentId: 'tolik',
+      candidateIds: included,
+      draftRevisionId: 'revision-draft-1',
+    });
     expect(generate).toHaveBeenCalledWith(
       expect.objectContaining({
         request: expect.objectContaining({

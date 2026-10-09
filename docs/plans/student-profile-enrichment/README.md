@@ -71,7 +71,8 @@ uses the exact confirmed lesson, and remains visible and correctable by the tuto
    all approved facts in one action.
 9. Stable strengths may be promoted into the foundational profile only when they satisfy explicit
    repeatability and review criteria; they must not be promoted opportunistically.
-10. Rejected facts may be re-proposed only when the evidence set materially changed.
+10. Automatic delivery preserves reviewed candidate history and approved text. Rejected or deferred
+    facts are not automatically reopened by stronger evidence or backlog replay.
 11. Starter profile level may be unknown at creation time; CEFR level is optional in version 1.
 12. The system should use LLMs for bounded synthesis and drafting where structured profile quality
     and rendered readability matter. Outside the one-time onboarding enrichment, the model is not
@@ -187,11 +188,9 @@ Allowed durable categories:
 5. persistent challenges or constraints
 6. repeated stable strengths
 
-Minimum repeatability rule:
-
-1. the fact is supported by at least two distinct canonical source artifacts, or
-2. the fact appears in the latest snapshot and is corroborated by at least one contributing lesson
-   memory entry
+Candidate review eligibility is evaluated from the exact eligible snapshot's selected lesson
+inputs. A durable observation may reach teacher review from one verified lesson; inclusion in the
+snapshot is continuity evidence and does not establish that a teacher has reviewed the fact.
 
 Minimum evidence rule:
 
@@ -200,6 +199,45 @@ Minimum evidence rule:
 3. teacher-confirmed or student-stated support should outrank model inference whenever available
 
 These rules exist specifically to reduce drift and over-promotion.
+
+### ESL-39 Source and Promotion Contract
+
+Candidate jobs carry an explicit `sourceSnapshotId`. A delayed A job reads A's recorded trigger
+lesson, even when B is newer, or skips if A's evidence is obsolete. Ordinary aggregate supersession
+is distinct from source invalidation: successful A remains a candidate source after
+canonical B/C publication supersedes it, provided its full source lineage is still verified and no
+invalidation/obsolete marker exists. The candidate read and persistence transaction share this
+predicate. Unfinished superseded intents do not qualify. Ordinary latest-ready snapshot selection
+and operator retry admission stay unchanged. Homework-triggered snapshots
+use only their recorded selected lesson inputs; homework facts are not profile proposals. A manual
+request pins the eligible snapshot at enqueue time, but a rebuild without a recorded lesson trigger
+does not sweep historical lessons for candidates. Missing source context never falls back to latest.
+
+The existing student lock covers exact snapshot/source revalidation, candidate-history lookup and
+insertion. Candidate keys stay unchanged. Real reviewed, deferred, rejected, promoted and superseded
+history suppresses recreation. Old unreviewed system duplicate/stale artifacts do not establish a
+teacher decision; they remain retained. No synthetic rejected artifacts or model dedup attribution
+are written by the deterministic path. No rejected backlog is reopened automatically.
+
+Both draft paths report and link only applied selections. The legacy
+`/students/:id/profile-candidates/promote` endpoint accepts a closed decision with a unique subset
+of selected candidate IDs; a small decision JSON is valid against a large base profile. Full draft
+refresh retains its full-profile generation behavior. Application proof requires the current
+approved wording in the relevant structured field after Unicode NFC, case and whitespace
+normalization; punctuation, paraphrases and other fields do not establish proof. An omitted or
+paraphrased fact remains approved. Activation repeats that check against the actual active revision
+and current approved wording. Inherited draft links retain lineage and do not prove application.
+Concurrent review updates cannot overwrite promoted or superseded state.
+
+Lesson occurrence dates are derived through the verified source's same-student assignment session
+and linked completed lesson. Extraction timestamps remain extraction timestamps; unknown lesson
+dates remain null. Ordering uses occurrence time when known, otherwise extraction time, followed by
+extraction/creation/ID tie breakers. See the
+[chronology and API semantics](../../reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md#chronology-and-read-semantics).
+
+This correction needs no schema/data migration and preserves stored profile content, revision
+hashes, versions, frozen prompts, endpoint paths and DTO shapes. Existing history is not relabeled.
+Hosted CI, publication and ABO-41 rollout/recovery remain separate completion boundaries.
 
 ### 3. Teacher Review Before Promotion
 

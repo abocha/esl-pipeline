@@ -4,6 +4,7 @@ import {
   applyProfileCandidatePatch,
   validateProfileCandidatePatch,
 } from '../src/application/profile-candidate-patch.js';
+import { isStudentProfileCandidateRepresented } from '../src/domain/student-profile-candidate-model.js';
 
 const baseProfile = {
   schemaVersion: 'foundational_profile_v1' as const,
@@ -19,6 +20,46 @@ const baseProfile = {
 };
 
 describe('application/profile-candidate-patch', () => {
+  it.each([
+    { operation: 'apply', candidateIds: ['a', 'a'] },
+    { operation: 'apply', candidateIds: [] },
+    { operation: 'no_change', candidateIds: ['a'] },
+    { operation: 'apply', candidateIds: ['a'], profile: {} },
+  ])('rejects invalid closed decision %j', (decision) => {
+    expect(() => validateProfileCandidatePatch(decision)).toThrow();
+  });
+
+  it('proves approved wording in its destination field without paraphrase or punctuation matching', () => {
+    const candidate = {
+      targetSection: 'interests_personal_context',
+      fact: 'Old fact',
+      approvedFact: 'Uses C++.',
+    };
+    expect(
+      isStudentProfileCandidateRepresented(
+        { interestsAndUsefulThemes: ['  USES  C++.  '] },
+        candidate,
+      ),
+    ).toBe(true);
+    expect(
+      isStudentProfileCandidateRepresented({ interestsAndUsefulThemes: ['Uses C.'] }, candidate),
+    ).toBe(false);
+    expect(
+      isStudentProfileCandidateRepresented(
+        { interestsAndUsefulThemes: ['Programs in C++.'] },
+        candidate,
+      ),
+    ).toBe(false);
+    expect(isStudentProfileCandidateRepresented({ primaryGoals: ['Uses C++.'] }, candidate)).toBe(
+      false,
+    );
+    expect(
+      isStudentProfileCandidateRepresented(
+        { persistentChallenges: [], durableConstraints: ['Limited time.'] },
+        { targetSection: 'persistent_challenges_constraints', fact: 'Limited time.' },
+      ),
+    ).toBe(true);
+  });
   it('applies only selected approved facts and preserves every unrelated field', () => {
     const result = applyProfileCandidatePatch({
       baseProfile,

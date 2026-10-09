@@ -83,6 +83,10 @@ export interface LessonMemoryRecord {
   transcriptId: string;
   recordingId: string;
   assignmentSessionId?: string | null;
+  /** Same-student scheduled lesson linked through the confirmed assignment session, if available. */
+  sourceLessonId?: string | null;
+  /** Lesson occurrence time only when the linked lesson is completed; never derived from scheduling alone. */
+  sourceLessonStartedAt?: Date | null;
   schemaVersion: string;
   generatedAt: Date;
   provider: string;

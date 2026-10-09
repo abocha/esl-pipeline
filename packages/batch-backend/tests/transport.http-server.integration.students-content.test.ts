@@ -38,6 +38,8 @@ describeHttpServerIntegrationSuite(
     mockRestoreTemplateRevision,
     mockActivateTemplateRevisionForTemplate,
     mockRestoreStudentProfile,
+    mockPromoteStudentProfileCandidates,
+    mockRefreshProfileDraftFromApprovedCandidates,
     mockUpdateStudentProfile,
   }) => {
     it('GET /students returns student profiles', async () => {
@@ -427,6 +429,33 @@ describeHttpServerIntegrationSuite(
           content: '# Draft profile',
         },
       });
+    });
+
+    it('reports only the applied subset through both existing draft endpoints', async () => {
+      for (const [path, mock] of [
+        ['profile-candidates/promote', mockPromoteStudentProfileCandidates],
+        [
+          'profile-drafts/refresh-from-approved-candidates',
+          mockRefreshProfileDraftFromApprovedCandidates,
+        ],
+      ] as const) {
+        mock.mockResolvedValueOnce({
+          studentId: deriveStudentId('Anna'),
+          baseRevisionId: 'active',
+          draftRevision: { id: 'partial-draft', contentHash: 'hash', status: 'draft' },
+          includedCandidateIds: ['candidate-1'],
+        });
+        const response = await app.inject({
+          method: 'POST',
+          url: `/students/${deriveStudentId('Anna')}/${path}`,
+          payload: { candidateIds: ['candidate-1', 'candidate-2'] },
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json().includedCandidateIds).toEqual(['candidate-1']);
+        expect(response.json().excludedCandidateIds).toEqual(
+          path === 'profile-candidates/promote' ? ['candidate-2'] : undefined,
+        );
+      }
     });
 
     it('POST /students/:id/profile-drafts/refresh-from-approved-candidates creates a full draft revision', async () => {

@@ -24,6 +24,8 @@ interface LessonMemoryRow {
   transcript_id: string;
   recording_id: string;
   assignment_session_id?: string | null;
+  source_lesson_id?: string | null;
+  source_lesson_started_at?: Date | null;
   schema_version: string;
   generated_at: Date;
   provider: string;
@@ -86,6 +88,7 @@ export interface ListLessonMemoryEntriesOptions {
   studentId?: string | null;
   transcriptId?: string | null;
   recordingId?: string | null;
+  ids?: readonly string[];
   statuses?: LessonMemoryEntryStatus[];
   limit: number;
   offset: number;
@@ -943,24 +946,30 @@ export async function listLessonMemoryEntries(
 
   if (studentId) {
     values.push(studentId);
-    clauses.push(`student_id = $${values.length}`);
+    clauses.push(`lesson_memory_entries.student_id = $${values.length}`);
   }
 
   if (transcriptId) {
     values.push(transcriptId);
-    clauses.push(`transcript_id = $${values.length}`);
+    clauses.push(`lesson_memory_entries.transcript_id = $${values.length}`);
   }
 
   if (recordingId) {
     values.push(recordingId);
-    clauses.push(`recording_id = $${values.length}`);
+    clauses.push(`lesson_memory_entries.recording_id = $${values.length}`);
+  }
+
+  if (options.ids) {
+    if (options.ids.length === 0) return [];
+    values.push([...options.ids]);
+    clauses.push(`lesson_memory_entries.id = ANY($${values.length}::uuid[])`);
   }
 
   if (statuses && statuses.length > 0) {
     values.push(statuses);
-    clauses.push(`status = ANY($${values.length}::text[])`);
+    clauses.push(`lesson_memory_entries.status = ANY($${values.length}::text[])`);
     if (statuses.length === 1 && statuses[0] === 'ready') {
-      clauses.push('source_content_hash IS NOT NULL');
+      clauses.push('lesson_memory_entries.source_content_hash IS NOT NULL');
     }
   }
   if (canonicalOnly) {
@@ -984,6 +993,11 @@ export async function listLessonMemoryEntries(
         lesson_memory_entries.transcript_id,
         lesson_memory_entries.recording_id,
         lesson_memory_entries.assignment_session_id,
+        CASE WHEN ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
+          THEN source_lesson.id ELSE NULL END AS source_lesson_id,
+        CASE WHEN source_lesson.status = 'completed'
+          AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
+          THEN source_lesson.starts_at ELSE NULL END AS source_lesson_started_at,
         lesson_memory_entries.schema_version,
         lesson_memory_entries.generated_at,
         lesson_memory_entries.provider,
@@ -1009,8 +1023,19 @@ export async function listLessonMemoryEntries(
         lesson_memory_entries.created_at,
         lesson_memory_entries.updated_at
       FROM lesson_memory_entries
+      LEFT JOIN assignment_sessions AS source_session
+        ON source_session.id = lesson_memory_entries.assignment_session_id
+       AND source_session.student_id = lesson_memory_entries.student_id
+      LEFT JOIN student_lessons AS source_lesson
+        ON source_lesson.id = source_session.lesson_id
+       AND source_lesson.student_id = lesson_memory_entries.student_id
       ${whereClause}
-      ORDER BY lesson_memory_entries.generated_at ${orderDirection}, lesson_memory_entries.created_at ${orderDirection}, lesson_memory_entries.id ${orderDirection}
+      ORDER BY COALESCE(
+        CASE WHEN source_lesson.status = 'completed'
+          AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
+          THEN source_lesson.starts_at END,
+        lesson_memory_entries.generated_at
+      ) ${orderDirection}, lesson_memory_entries.generated_at ${orderDirection}, lesson_memory_entries.created_at ${orderDirection}, lesson_memory_entries.id ${orderDirection}
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
       `,
@@ -1020,6 +1045,21 @@ export async function listLessonMemoryEntries(
   });
 
   return rows.map((row) => mapRowToLessonMemory(row));
+}
+
+export async function listVerifiedReadyLessonMemoryEntriesByIds(
+  studentId: string,
+  ids: readonly string[],
+): Promise<LessonMemoryRecord[]> {
+  if (ids.length === 0) return [];
+  return listLessonMemoryEntries({
+    studentId,
+    ids,
+    statuses: ['ready'],
+    limit: ids.length,
+    offset: 0,
+    canonicalOnly: true,
+  });
 }
 
 export async function listRecentReadyLessonMemoryByStudentId(
@@ -1049,6 +1089,8 @@ export async function listRecentReadyLessonMemoryByStudentId(
         lesson_memory_entries.transcript_id,
         lesson_memory_entries.recording_id,
         lesson_memory_entries.assignment_session_id,
+        CASE WHEN source_lesson.status = 'completed' THEN source_lesson.id ELSE NULL END AS source_lesson_id,
+        CASE WHEN source_lesson.status = 'completed' THEN source_lesson.starts_at ELSE NULL END AS source_lesson_started_at,
         lesson_memory_entries.schema_version,
         lesson_memory_entries.generated_at,
         lesson_memory_entries.provider,
@@ -1074,10 +1116,19 @@ export async function listRecentReadyLessonMemoryByStudentId(
         lesson_memory_entries.created_at,
         lesson_memory_entries.updated_at
       FROM lesson_memory_entries
+      LEFT JOIN assignment_sessions AS source_session
+        ON source_session.id = lesson_memory_entries.assignment_session_id
+       AND source_session.student_id = lesson_memory_entries.student_id
+      LEFT JOIN student_lessons AS source_lesson
+        ON source_lesson.id = source_session.lesson_id
+       AND source_lesson.student_id = lesson_memory_entries.student_id
       WHERE ${clauses.join(' AND ')}
         AND lesson_memory_entries.source_content_hash IS NOT NULL
         AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
-      ORDER BY lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
+      ORDER BY COALESCE(
+        CASE WHEN source_lesson.status = 'completed' THEN source_lesson.starts_at END,
+        lesson_memory_entries.generated_at
+      ) DESC, lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
       LIMIT $${limitParam}
       `,
       values,
@@ -1297,6 +1348,8 @@ function mapRowToLessonMemory(row: LessonMemoryRow): LessonMemoryRecord {
     transcriptId: row.transcript_id,
     recordingId: row.recording_id,
     assignmentSessionId: row.assignment_session_id ?? null,
+    sourceLessonId: row.source_lesson_id ?? null,
+    sourceLessonStartedAt: row.source_lesson_started_at ?? null,
     schemaVersion: row.schema_version,
     generatedAt: row.generated_at,
     provider: row.provider,

@@ -9,6 +9,7 @@ import {
   getActiveProfileRevision,
   getProfileRevisionById,
 } from '../domain/profile-revision-repository.js';
+import { isStudentProfileCandidateRepresented } from '../domain/student-profile-candidate-model.js';
 import {
   linkStudentProfileCandidatesToDraftRevision,
   listStudentProfileCandidatesByIds,
@@ -185,11 +186,18 @@ export async function promoteStudentProfileCandidates(args: {
   assertCandidatePromotionDraftIsComplete({
     draftText: drafting.rawText,
     finishReason: drafting.finishReason,
-    baseProfileContent:
-      renderStructuredProfileForComparison(baseStructuredProfile) ?? baseRevision?.content ?? '',
   });
 
-  const candidatePatch = drafting.structuredProfile as ProfileCandidatePatch;
+  let candidatePatch: ProfileCandidatePatch;
+  try {
+    candidatePatch = validateProfileCandidatePatch(drafting.structuredProfile);
+  } catch (error) {
+    throw new ProfileCandidatePromotionError(
+      error instanceof Error ? error.message : String(error),
+      'profile_candidate_patch_invalid',
+      502,
+    );
+  }
   if (candidatePatch.operation === 'no_change') {
     throw new ProfileCandidatePromotionError(
       'No selected candidate was safe to promote; no draft revision was saved.',
@@ -220,6 +228,20 @@ export async function promoteStudentProfileCandidates(args: {
     );
   }
   const renderedDraft = renderFoundationalProfileContent(structuredDraft);
+  const appliedCandidateIds = selectedCandidates
+    .filter(
+      (candidate) =>
+        candidatePatch.candidateIds.includes(candidate.id) &&
+        isStudentProfileCandidateRepresented(structuredDraft, candidate),
+    )
+    .map((candidate) => candidate.id);
+  if (appliedCandidateIds.length === 0) {
+    throw new ProfileCandidatePromotionError(
+      'No selected approved fact was represented in the completed profile.',
+      'profile_candidate_no_change',
+      409,
+    );
+  }
 
   const draftRevision = await dependencies.profileContent.saveRevision(
     request.studentId,
@@ -235,7 +257,7 @@ export async function promoteStudentProfileCandidates(args: {
 
   await dependencies.candidates.linkToDraft({
     studentId: request.studentId,
-    candidateIds: selectedCandidates.map((candidate) => candidate.id),
+    candidateIds: appliedCandidateIds,
     draftRevisionId: draftRevision.id,
   });
 
@@ -243,7 +265,7 @@ export async function promoteStudentProfileCandidates(args: {
     studentId: request.studentId,
     baseRevisionId: baseRevision?.id ?? null,
     draftRevision,
-    includedCandidateIds: selectedCandidates.map((candidate) => candidate.id),
+    includedCandidateIds: appliedCandidateIds,
     provider: drafting.provider,
     model: drafting.model,
     ...(drafting.providerRequestId ? { providerRequestId: drafting.providerRequestId } : {}),
@@ -283,6 +305,7 @@ function validateCandidateSelection(
   selectedCandidates: ProfilePromotionCandidate[],
 ): void {
   const seen = new Set<string>();
+  const requested = new Set(requestedCandidateIds);
 
   if (selectedCandidates.length !== requestedCandidateIds.length) {
     throw new ProfileCandidatePromotionError(
@@ -293,7 +316,7 @@ function validateCandidateSelection(
   }
 
   for (const candidate of selectedCandidates) {
-    if (!candidate.id.trim()) {
+    if (!candidate.id.trim() || !requested.has(candidate.id)) {
       throw new ProfileCandidatePromotionError(
         'Candidate selection contains an item without an id',
         'profile_candidate_id_missing',
@@ -430,7 +453,6 @@ function buildPromotionEnvelope(args: {
 function assertCandidatePromotionDraftIsComplete(args: {
   draftText: string;
   finishReason?: string;
-  baseProfileContent: string;
 }): void {
   if (!isCompleteTextGenerationFinishReason(args.finishReason)) {
     throw new ProfileCandidatePromotionError(
@@ -441,7 +463,6 @@ function assertCandidatePromotionDraftIsComplete(args: {
   }
 
   const draftText = args.draftText.trim();
-  const baseProfileContent = args.baseProfileContent.trim();
   if (!draftText) {
     throw new ProfileCandidatePromotionError(
       'Profile draft generation returned empty output. No draft was saved.',
@@ -449,21 +470,4 @@ function assertCandidatePromotionDraftIsComplete(args: {
       502,
     );
   }
-
-  // Promotions should preserve most of the base profile. A dramatic collapse in output length
-  // is a strong signal that the generation stopped early even if the provider omitted metadata.
-  if (
-    baseProfileContent.length >= 1_500 &&
-    draftText.length < Math.floor(baseProfileContent.length * 0.4)
-  ) {
-    throw new ProfileCandidatePromotionError(
-      'Profile draft generation appears truncated compared with the base profile. No draft was saved.',
-      'profile_candidate_draft_truncated',
-      502,
-    );
-  }
-}
-
-function renderStructuredProfileForComparison(profile: FoundationalProfile | null): string | null {
-  return profile ? renderFoundationalProfileContent(profile) : null;
 }

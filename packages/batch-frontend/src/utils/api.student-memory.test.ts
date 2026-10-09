@@ -217,7 +217,7 @@ describe('utils/api student memory fetchers', () => {
       proposedFact: 'Uses English in sprint planning and client calls.',
       approvedFactText: 'Uses English with product, engineering, and client teams.',
       targetSection: 'work_communication_context',
-      sourceSummary: 'Latest student-memory snapshot + 2 lesson memory entries',
+      sourceSummary: 'Source student-memory snapshot + 2 lesson memory entries',
     });
   });
 

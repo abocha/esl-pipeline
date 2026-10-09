@@ -273,6 +273,27 @@ export function buildEligibleStudentMemorySnapshotLineageSqlPredicate(
   )`;
 }
 
+/** Candidate opportunities survive aggregate supersession, but never source invalidation. */
+export function buildProfileCandidateSourceSnapshotSqlPredicate(snapshotAlias: string): string {
+  const lineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate(snapshotAlias);
+  return `(
+    ${snapshotAlias}.status = 'ready' OR (
+      ${snapshotAlias}.status = 'superseded'
+      AND ${buildEstablishedSnapshotSqlPredicate(snapshotAlias)}
+      AND ${snapshotAlias}.generation_notes ->> 'continuityReason' IS NULL
+      AND EXISTS (
+        SELECT 1 FROM student_memory_snapshots AS candidate_successor
+        WHERE candidate_successor.id = ${snapshotAlias}.superseded_by_id
+          AND candidate_successor.id <> ${snapshotAlias}.id
+          AND candidate_successor.student_id = ${snapshotAlias}.student_id
+          AND ${buildEstablishedSnapshotSqlPredicate('candidate_successor')}
+      )
+    )
+  ) AND ${snapshotAlias}.generation_notes ->> 'obsoleteReason' IS NULL
+    AND COALESCE(${snapshotAlias}.generation_notes ->> 'continuityReason', '') <> 'source_invalidated'
+    AND ${lineage}`;
+}
+
 export async function ensurePendingStudentMemorySnapshot(
   params: EnsurePendingStudentMemorySnapshotParams,
 ): Promise<EnsurePendingStudentMemorySnapshotResult> {
@@ -1082,6 +1103,21 @@ export async function getEligibleReadyStudentMemorySnapshotById(
     return result.rows[0];
   });
 
+  return row ? mapRowToStudentMemorySnapshot(row) : null;
+}
+
+export async function getProfileCandidateSourceStudentMemorySnapshotById(
+  id: string,
+): Promise<StudentMemorySnapshotRecord | null> {
+  const predicate = buildProfileCandidateSourceSnapshotSqlPredicate('snapshot');
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query<StudentMemorySnapshotRow>(
+      `SELECT snapshot.* FROM student_memory_snapshots AS snapshot
+       WHERE snapshot.id = $1 AND ${predicate}`,
+      [id],
+    );
+    return result.rows[0];
+  });
   return row ? mapRowToStudentMemorySnapshot(row) : null;
 }
 
