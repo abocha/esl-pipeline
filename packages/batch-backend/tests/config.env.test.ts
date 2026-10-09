@@ -32,6 +32,8 @@ describe('config/env - core defaults', () => {
     await withEnv(
       {
         NODE_ENV: 'test',
+        ESL_PIPELINE_MANIFEST_STORE: undefined,
+        ESL_PIPELINE_CONFIG_PROVIDER: undefined,
       },
       async () => {
         const cfg = await loadConfigFresh();
@@ -63,9 +65,8 @@ describe('config/env - core defaults', () => {
           expect.arrayContaining(['gemma-4-31b-it', 'gemma-4-26b-a4b-it']),
         );
         // Orchestrator core defaults
-        expect(cfg.orchestrator.manifestStore).toBeDefined();
-        expect(['filesystem', 's3']).toContain(cfg.orchestrator.manifestStore);
-        expect(['local', 'http']).toContain(cfg.orchestrator.configProvider);
+        expect(cfg.orchestrator.manifestStore).toBe('filesystem');
+        expect(cfg.orchestrator.configProvider).toBe('local');
         expect(cfg.jobOptions.allowStaticFallback).toBe(false);
         expect(cfg.voiceRanker).toEqual({
           enabled: true,
