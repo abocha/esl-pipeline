@@ -38,8 +38,10 @@ describe('runProviderFallbackLadder', () => {
   it('falls back to next candidate for recoverable non-timeout errors', async () => {
     const runCandidate = vi
       .fn<(_candidate: Candidate) => Promise<string>>()
-      .mockRejectedValueOnce(new Error('rate limit'))
-      .mockResolvedValueOnce('fallback-ok');
+      .mockImplementation(async (candidate) => {
+        if (candidate.id === 'openai') throw new Error('rate limit');
+        return 'fallback-ok';
+      });
 
     const result = await runProviderFallbackLadder<Candidate, string, MappedError>({
       candidates: [{ id: 'openai' }, { id: 'google' }],
@@ -53,7 +55,10 @@ describe('runProviderFallbackLadder', () => {
     });
 
     expect(result).toBe('fallback-ok');
-    expect(runCandidate).toHaveBeenCalledTimes(2);
+    expect(runCandidate.mock.calls.map(([candidate]) => candidate.id)).toEqual([
+      'openai',
+      'google',
+    ]);
   });
 
   it('fails fast on contract errors', async () => {
