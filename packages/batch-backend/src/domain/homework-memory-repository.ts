@@ -127,6 +127,29 @@ export interface ListHomeworkMemoryEntriesOptions {
   limit: number;
   offset: number;
   order?: 'asc' | 'desc';
+  canonicalOnly?: boolean;
+}
+
+/** Retained publication proof, independent of permission to execute historical jobs. */
+export function buildVerifiedHomeworkMemoryEvidenceSqlPredicate(entryAlias: string): string {
+  if (!/^[a-z_][a-z0-9_]*$/.test(entryAlias)) {
+    throw new Error('Invalid homework-memory SQL alias');
+  }
+  return `EXISTS (
+    WITH RECURSIVE upstream AS (
+      SELECT id, source_job_id, student_id, state FROM jobs WHERE id = ${entryAlias}.job_id
+      UNION
+      SELECT parent.id, parent.source_job_id, parent.student_id, parent.state
+      FROM jobs parent JOIN upstream child ON parent.id = child.source_job_id
+    )
+    SELECT 1 FROM upstream source
+    WHERE source.id = ${entryAlias}.job_id AND source.state = 'succeeded'
+      AND source.student_id = ${entryAlias}.student_id
+      AND EXISTS (SELECT 1 FROM upstream root
+        WHERE root.source_job_id IS NULL AND root.id = ${entryAlias}.assignment_lineage_key)
+      AND NOT EXISTS (SELECT 1 FROM upstream
+        WHERE student_id IS DISTINCT FROM ${entryAlias}.student_id)
+  )`;
 }
 
 export interface ListRecentReadyHomeworkMemoryOptions {
@@ -845,6 +868,20 @@ export async function getHomeworkMemoryEntryById(id: string): Promise<HomeworkMe
   return row ? mapRowToHomeworkMemory(row) : null;
 }
 
+export async function getVerifiedReadyHomeworkMemoryEntryById(
+  id: string,
+): Promise<HomeworkMemoryRecord | null> {
+  return withPgClient(async (client) => {
+    const result = await client.query(
+      `SELECT * FROM homework_memory_entries homework
+      WHERE homework.id = $1 AND homework.status = 'ready'
+        AND ${buildVerifiedHomeworkMemoryEvidenceSqlPredicate('homework')}`,
+      [id],
+    );
+    return result.rows[0] ? mapRowToHomeworkMemory(result.rows[0]) : null;
+  });
+}
+
 export async function getLatestReadyHomeworkMemoryByAssignmentLineageKey(
   assignmentLineageKey: string,
 ): Promise<HomeworkMemoryRecord | null> {
@@ -900,6 +937,7 @@ export async function listHomeworkMemoryEntries(
     limit,
     offset,
     order = 'desc',
+    canonicalOnly = false,
   } = options;
   const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
@@ -923,6 +961,8 @@ export async function listHomeworkMemoryEntries(
     values.push(statuses);
     clauses.push(`status = ANY($${values.length}::text[])`);
   }
+  if (canonicalOnly)
+    clauses.push(buildVerifiedHomeworkMemoryEvidenceSqlPredicate('homework_memory_entries'));
 
   values.push(limit);
   const limitParam = values.length;
@@ -956,7 +996,11 @@ export async function listRecentReadyHomeworkMemoryByStudentId(
   options: ListRecentReadyHomeworkMemoryOptions,
 ): Promise<HomeworkMemoryRecord[]> {
   const values: (string | number)[] = [studentId];
-  const clauses = ['student_id = $1', `status = 'ready'`];
+  const clauses = [
+    'student_id = $1',
+    `status = 'ready'`,
+    buildVerifiedHomeworkMemoryEvidenceSqlPredicate('homework_memory_entries'),
+  ];
 
   if (options.excludeAssignmentLineageKey) {
     values.push(options.excludeAssignmentLineageKey);

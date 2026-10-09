@@ -21,7 +21,12 @@ import { refreshStudentProfileCandidatesFromCanonicalMemory } from '../src/appli
 import { getStudentTeachingContext } from '../src/application/student-teaching-context.js';
 import { getTranscriptProcessingStatus } from '../src/application/transcript-processing-status.js';
 import { loadConfig } from '../src/config/env.js';
-import { getLessonMemoryEntryById } from '../src/domain/lesson-memory-repository.js';
+import {
+  ensurePendingLessonMemoryEntry,
+  getLessonMemoryEntryById,
+  insertCanonicalReadyLessonMemoryEntry,
+  publishConfirmedLessonMemoryEntry,
+} from '../src/domain/lesson-memory-repository.js';
 import {
   listReadyLessonMemoryMissingSnapshotObligations,
   listRecoverableMemoryDeliveries,
@@ -38,7 +43,10 @@ import {
   createStudentMemoryQueue,
   createStudentMemoryWorker,
 } from '../src/infrastructure/student-memory-queue.js';
-import { insertLessonMemory } from './support/student-memory-fixture.js';
+import {
+  insertLessonMemory,
+  makeLessonMemorySourcesHistorical,
+} from './support/student-memory-fixture.js';
 import { requirePgTestEnv, requireRedisTestEnv } from './support/test-env.js';
 
 requirePgTestEnv();
@@ -217,6 +225,73 @@ async function restartAndReconcile(
 }
 
 describe('canonical no-homework memory durable recovery', () => {
+  it('keeps historical extraction, publication, delivery and enrichment blocked while existing observations remain readable', async () => {
+    const pending = await seed('pending', 'create');
+    const ready = await seed('ready', 'create');
+    const operationId = randomUUID();
+    await withPgClient((client) =>
+      client.query(
+        `INSERT INTO profile_initial_enrichment_operations
+      (id,student_id,assignment_session_id,recording_id,transcript_id,transcript_storage_uri,transcript_hash,
+       source_identity_kind,source_fingerprint_scheme,source_fingerprint)
+      SELECT $1,l.student_id,l.assignment_session_id,l.recording_id,l.transcript_id,l.source_storage_uri,l.source_content_hash,
+       r.source_identity_kind,r.source_fingerprint_scheme,r.source_fingerprint
+      FROM lesson_memory_entries l JOIN recordings r ON r.id=l.recording_id WHERE l.id=$2`,
+        [operationId, ready.id],
+      ),
+    );
+    await makeLessonMemorySourcesHistorical([pending.id, ready.id]);
+    const before = await getLessonMemoryEntryById(pending.id);
+    const extractor = vi.fn();
+    await processLessonMemoryJob({
+      config,
+      payload: pending.payload,
+      overrides: lessonOverrides(extractor),
+    });
+    expect(extractor).not.toHaveBeenCalled();
+    await expect(
+      requestLessonMemoryGeneration({
+        config,
+        params: { ...pending.payload, assignmentSessionId: pending.sessionId, trigger: 'replay' },
+      }),
+    ).rejects.toThrow('Historical');
+    await expect(
+      ensurePendingLessonMemoryEntry({
+        ...pending.payload,
+        assignmentSessionId: pending.sessionId,
+        schemaVersion: 'lesson-memory.v1',
+      }),
+    ).rejects.toThrow('Historical');
+    await expect(
+      insertCanonicalReadyLessonMemoryEntry({
+        ...pending.payload,
+        assignmentSessionId: pending.sessionId,
+        schemaVersion: 'lesson-memory.v1',
+      }),
+    ).rejects.toThrow('Historical');
+    await expect(
+      publishConfirmedLessonMemoryEntry({
+        ...pending.payload,
+        id: pending.id,
+        assignmentSessionId: pending.sessionId,
+        schemaVersion: 'lesson-memory.v1',
+      }),
+    ).resolves.toBeNull();
+    expect(await listRecoverableMemoryDeliveries()).toEqual([]);
+    expect(await listReadyLessonMemoryMissingSnapshotObligations()).toEqual([]);
+    const reconcile = vi.fn();
+    await enqueuePendingProfileInitialEnrichments({ reconcile });
+    expect(reconcile).not.toHaveBeenCalled();
+    const enrichmentGenerator = vi.fn();
+    await reconcileProfileInitialEnrichmentOperation(operationId, config, enrichmentGenerator);
+    expect(enrichmentGenerator).not.toHaveBeenCalled();
+    expect(await getLessonMemoryEntryById(pending.id)).toEqual(before);
+    const context = await getStudentTeachingContext({
+      workspaceId: '00000000-0000-4000-8000-000000000001',
+      studentId: ready.studentId,
+    });
+    expect(context?.recentLessons).toHaveLength(1);
+  });
   beforeEach(async () => {
     await createStudentMemoryQueue().queue.obliterate({ force: true });
     await withPgClient((client) =>
@@ -397,6 +472,12 @@ describe('canonical no-homework memory durable recovery', () => {
       provider: 'openai',
       model: 'fixture',
       lessonMemoryEntryIds: [source.id],
+      generationNotes: {
+        trigger: 'manual-replay',
+        strategy: 'manual_rebuild_v1_1',
+        replayKey: 'fixture-repair',
+        operatorReason: 'Explicit fixture reconstruction',
+      },
       ...snapshotContent,
     });
     expect((await getLatestReadyStudentMemorySnapshotByStudentId(source.studentId))?.id).toBe(

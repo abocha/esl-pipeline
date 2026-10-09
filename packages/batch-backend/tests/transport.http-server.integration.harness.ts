@@ -873,6 +873,12 @@ export function describeHttpServerIntegrationSuite(
         order: 'desc',
       });
       mockGetStudentMemoryOverview.mockResolvedValue({
+        availability: {
+          state: 'absent',
+          reason: 'no_established_snapshot',
+          lessonReferenceCount: 0,
+          homeworkReferenceCount: 0,
+        },
         studentId: deriveStudentId('Anna'),
         latestReadyStudentMemorySnapshot: null,
         recentReadyLessonMemory: [],
@@ -880,6 +886,12 @@ export function describeHttpServerIntegrationSuite(
         unresolvedIssues: [],
       });
       mockGetStudentMemoryHealth.mockResolvedValue({
+        availability: {
+          state: 'absent',
+          reason: 'no_established_snapshot',
+          lessonReferenceCount: 0,
+          homeworkReferenceCount: 0,
+        },
         studentId: deriveStudentId('Anna'),
         latestSnapshot: null,
         memoryCounts: {

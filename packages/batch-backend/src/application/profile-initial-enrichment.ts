@@ -4,7 +4,7 @@ import type { PoolClient } from 'pg';
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
-import { buildCanonicalLessonMemoryAuthoritySqlPredicate } from '../domain/lesson-memory-repository.js';
+import { buildLessonMemoryExecutionSqlPredicate } from '../domain/lesson-memory-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
@@ -163,7 +163,7 @@ async function authority(
           AND assignment_session_id = $3 AND recording_id = $4 AND transcript_id = $5
           AND source_storage_uri = $6 AND source_content_hash = $7
           AND status = 'ready'
-          AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
+          AND ${buildLessonMemoryExecutionSqlPredicate('lesson_memory_entries')}
       )) AS evidence_valid
      FROM students p LEFT JOIN student_profile_revisions pr ON pr.student_id = p.id AND pr.status = 'active'
      WHERE p.id = $1`,
@@ -332,7 +332,7 @@ async function prepareOrCommit(
            AND student_id = $2 AND recording_id = $3 AND transcript_id = $4
            AND source_storage_uri = $5 AND source_content_hash = $6
            AND status = 'ready'
-           AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
+           AND ${buildLessonMemoryExecutionSqlPredicate('lesson_memory_entries')}
          ORDER BY generated_at DESC LIMIT 1`,
         [
           op.assignment_session_id,

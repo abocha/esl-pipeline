@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
+import type { StudentMemoryAvailability } from '@esl-pipeline/contracts';
+
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { buildVerifiedHomeworkMemoryEvidenceSqlPredicate } from './homework-memory-repository.js';
 import type { StudentFact } from './lesson-memory-model.js';
-import { buildCanonicalLessonMemoryAuthoritySqlPredicate } from './lesson-memory-repository.js';
+import { buildVerifiedLessonMemoryEvidenceSqlPredicate } from './lesson-memory-repository.js';
 import {
   readStudentMemoryCurrentness,
   type StudentMemoryCurrentness,
@@ -89,6 +92,99 @@ export class StudentMemorySnapshotIntentObsoleteError extends Error {
   }
 }
 
+export class StudentMemorySnapshotRepairRequiredError extends Error {
+  constructor() {
+    super('Established student-memory history requires an explicitly authorized full rebuild.');
+    this.name = 'StudentMemorySnapshotRepairRequiredError';
+  }
+}
+
+export interface StudentMemorySnapshotSelection {
+  snapshot: StudentMemorySnapshotRecord | null;
+  availability: StudentMemoryAvailability;
+}
+
+// Successful result rows survive supersession. Pending/failed/cancelled first intents
+// alone do not establish an aggregate. Older rows without notes are classified from
+// retained successful output/history, without guessing or backfilling provenance.
+function buildEstablishedSnapshotSqlPredicate(alias: string): string {
+  return `(${alias}.status = 'ready' OR (${alias}.status = 'superseded' AND (
+    ${alias}.content_hash IS NOT NULL OR ${alias}.snapshot_summary IS NOT NULL
+    OR ${alias}.generation_notes ->> 'pendingEntryId' IS NOT NULL
+    OR jsonb_array_length(COALESCE(${alias}.stable_strengths, '[]'::jsonb)) > 0
+    OR jsonb_array_length(COALESCE(${alias}.recurring_issues, '[]'::jsonb)) > 0
+    OR jsonb_array_length(COALESCE(${alias}.personal_facts, '[]'::jsonb)) > 0
+    OR ${alias}.generation_notes ->> 'continuityReason' = 'source_invalidated'
+  )))`;
+}
+
+/** One statement gives consumers a coherent read-only selection and explanation. */
+export async function readStudentMemorySnapshotSelection(
+  client: PoolClient,
+  studentId: string,
+): Promise<StudentMemorySnapshotSelection> {
+  const lineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot');
+  const result = await client.query<StudentMemorySnapshotRow & { eligible: boolean }>(
+    `SELECT snapshot.*, (snapshot.status = 'ready' AND ${lineage}) AS eligible
+     FROM student_memory_snapshots snapshot
+     WHERE snapshot.student_id = $1 AND ${buildEstablishedSnapshotSqlPredicate('snapshot')}
+     ORDER BY (snapshot.status = 'ready' AND ${lineage}) DESC,
+       snapshot.generated_at DESC, snapshot.created_at DESC, snapshot.id DESC LIMIT 1`,
+    [studentId],
+  );
+  const row = result.rows[0];
+  return {
+    snapshot: row?.eligible ? mapRowToStudentMemorySnapshot(row) : null,
+    availability: {
+      state: row ? (row.eligible ? 'available' : 'repair_required') : 'absent',
+      reason: row
+        ? row.eligible
+          ? 'verified_lineage'
+          : 'established_history_ineligible'
+        : 'no_established_snapshot',
+      lessonReferenceCount: row?.lesson_memory_entry_ids?.length ?? 0,
+      homeworkReferenceCount: row?.homework_memory_entry_ids?.length ?? 0,
+    },
+  };
+}
+
+export async function getStudentMemorySnapshotSelection(
+  studentId: string,
+): Promise<StudentMemorySnapshotSelection> {
+  return withPgClient((client) => readStudentMemorySnapshotSelection(client, studentId));
+}
+
+/** Persist blocked refreshes under the same lock as source invalidation/publication. */
+export async function markStudentMemorySnapshotRepairRequired(
+  studentId: string,
+  intentId: string,
+): Promise<void> {
+  await withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [studentId]);
+      if (
+        (await readStudentMemorySnapshotSelection(client, studentId)).availability.state !==
+        'repair_required'
+      ) {
+        await client.query('COMMIT');
+        return;
+      }
+      await client.query(
+        `UPDATE student_memory_snapshots SET status = 'failed',
+         generation_notes = COALESCE(generation_notes, '{}'::jsonb) ||
+           jsonb_build_object('continuityReason', 'repair_required', 'errorMessage', 'Established memory history requires explicit full rebuild'),
+         updated_at = NOW() WHERE id = $1 AND student_id = $2 AND status = 'pending'`,
+        [intentId, studentId],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
 export class StudentMemorySnapshotParentChangedError extends Error {
   readonly studentId: string;
   readonly expectedLatestReadySnapshotId: string | null;
@@ -110,9 +206,12 @@ export class StudentMemorySnapshotParentChangedError extends Error {
 }
 
 export class StudentMemorySnapshotSourcesChangedError extends Error {
-  constructor(readonly unavailableLessonMemoryEntryIds: string[]) {
+  constructor(
+    readonly unavailableLessonMemoryEntryIds: string[],
+    readonly unavailableHomeworkMemoryEntryIds: string[] = [],
+  ) {
     super(
-      `Lesson-memory sources changed before student-memory snapshot finalize: ${unavailableLessonMemoryEntryIds.join(', ')}`,
+      `Memory sources changed before student-memory snapshot finalize: lessons ${unavailableLessonMemoryEntryIds.join(', ')}; homework ${unavailableHomeworkMemoryEntryIds.join(', ')}`,
     );
     this.name = 'StudentMemorySnapshotSourcesChangedError';
   }
@@ -152,7 +251,7 @@ export function buildEligibleStudentMemorySnapshotLineageSqlPredicate(
     throw new Error('Invalid student-memory snapshot SQL alias');
   }
 
-  const canonicalLesson = buildCanonicalLessonMemoryAuthoritySqlPredicate('eligible_lesson');
+  const canonicalLesson = buildVerifiedLessonMemoryEvidenceSqlPredicate('eligible_lesson');
   return `NOT EXISTS (
     SELECT 1
     FROM unnest(${snapshotAlias}.lesson_memory_entry_ids) AS source(lesson_memory_entry_id)
@@ -163,6 +262,14 @@ export function buildEligibleStudentMemorySnapshotLineageSqlPredicate(
      AND eligible_lesson.source_content_hash IS NOT NULL
      AND ${canonicalLesson}
     WHERE eligible_lesson.id IS NULL
+  ) AND NOT EXISTS (
+    SELECT 1 FROM unnest(${snapshotAlias}.homework_memory_entry_ids) AS source(homework_memory_entry_id)
+    LEFT JOIN homework_memory_entries AS eligible_homework
+      ON eligible_homework.id = source.homework_memory_entry_id
+     AND eligible_homework.student_id = ${snapshotAlias}.student_id
+     AND eligible_homework.status = 'ready'
+     AND ${buildVerifiedHomeworkMemoryEvidenceSqlPredicate('eligible_homework')}
+    WHERE eligible_homework.id IS NULL
   )`;
 }
 
@@ -221,7 +328,16 @@ export async function ensurePendingStudentMemorySnapshot(
         const source = await client.query(
           `SELECT id FROM lesson_memory_entries AS lesson
            WHERE lesson.id = $1 AND lesson.student_id = $2 AND lesson.status = 'ready'
-             AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson')}`,
+             AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson')}`,
+          [params.sourceEntryId, params.studentId],
+        );
+        if (!source.rows[0]) throw new StudentMemorySnapshotIntentObsoleteError();
+      }
+      if (params.reuseReadyHomeworkSource && params.sourceEntryId) {
+        const source = await client.query(
+          `SELECT id FROM homework_memory_entries AS homework
+           WHERE homework.id = $1 AND homework.student_id = $2 AND homework.status = 'ready'
+             AND ${buildVerifiedHomeworkMemoryEvidenceSqlPredicate('homework')}`,
           [params.sourceEntryId, params.studentId],
         );
         if (!source.rows[0]) throw new StudentMemorySnapshotIntentObsoleteError();
@@ -571,6 +687,19 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
 
       const requestedLessonIds = [...new Set(params.lessonMemoryEntryIds ?? [])];
+      const selection = await readStudentMemorySnapshotSelection(client, params.studentId);
+      if (
+        selection.availability.state === 'repair_required' &&
+        !(
+          params.generationNotes?.trigger === 'manual-replay' &&
+          ['full_rebuild_v1', 'manual_rebuild_v1_1'].includes(
+            String(params.generationNotes?.strategy),
+          ) &&
+          params.generationNotes?.replayKey &&
+          params.generationNotes?.operatorReason
+        )
+      )
+        throw new StudentMemorySnapshotRepairRequiredError();
       if (requestedLessonIds.length > 0) {
         const readyLessonResult = await client.query<{ id: string }>(
           `SELECT lesson_memory_entries.id FROM lesson_memory_entries
@@ -578,7 +707,7 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
              AND lesson_memory_entries.id = ANY($2::uuid[])
              AND lesson_memory_entries.status = 'ready'
              AND lesson_memory_entries.source_content_hash IS NOT NULL
-             AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
+             AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
            `,
           [params.studentId, requestedLessonIds],
         );
@@ -587,6 +716,23 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
         if (unavailableLessonIds.length > 0) {
           throw new StudentMemorySnapshotSourcesChangedError(unavailableLessonIds);
         }
+      }
+
+      const requestedHomeworkIds = [...new Set(params.homeworkMemoryEntryIds ?? [])];
+      if (requestedHomeworkIds.length > 0) {
+        const readyHomeworkResult = await client.query<{ id: string }>(
+          `SELECT homework.id FROM homework_memory_entries homework
+           WHERE homework.student_id = $1 AND homework.id = ANY($2::uuid[])
+             AND homework.status = 'ready'
+             AND ${buildVerifiedHomeworkMemoryEvidenceSqlPredicate('homework')}`,
+          [params.studentId, requestedHomeworkIds],
+        );
+        const readyHomeworkIds = new Set(readyHomeworkResult.rows.map((row) => row.id));
+        const unavailableHomeworkIds = requestedHomeworkIds.filter(
+          (id) => !readyHomeworkIds.has(id),
+        );
+        if (unavailableHomeworkIds.length > 0)
+          throw new StudentMemorySnapshotSourcesChangedError([], unavailableHomeworkIds);
       }
 
       if (params.expectedLatestReadySnapshotId !== undefined) {
@@ -891,48 +1037,7 @@ export async function getStudentMemorySnapshotById(
 export async function getLatestReadyStudentMemorySnapshotByStudentId(
   studentId: string,
 ): Promise<StudentMemorySnapshotRecord | null> {
-  const eligibleLineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot');
-  const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
-      SELECT
-        id,
-        student_id,
-        schema_version,
-        generated_at,
-        provider,
-        model,
-        status,
-        source_kind,
-        lesson_memory_entry_ids,
-        homework_memory_entry_ids,
-        content_hash,
-        generation_notes,
-        stable_strengths,
-        recurring_issues,
-        active_review_backlog,
-        recent_progress,
-        personal_facts,
-        recommended_assignment_directions,
-        unresolved_issues,
-        snapshot_summary,
-        superseded_by_id,
-        superseded_at,
-        created_at,
-        updated_at
-      FROM student_memory_snapshots AS snapshot
-      WHERE snapshot.student_id = $1
-        AND snapshot.status = 'ready'
-        AND ${eligibleLineage}
-      ORDER BY snapshot.generated_at DESC, snapshot.created_at DESC, snapshot.id DESC
-      LIMIT 1
-      `,
-      [studentId],
-    );
-    return result.rows[0];
-  });
-
-  return row ? mapRowToStudentMemorySnapshot(row) : null;
+  return (await getStudentMemorySnapshotSelection(studentId)).snapshot;
 }
 
 export async function getEligibleReadyStudentMemorySnapshotById(

@@ -1145,6 +1145,7 @@ async function reconcileConfirmedLessonMemoryIntent(
     if (oldIds.length > 0) {
       await client.query(
         `UPDATE student_memory_snapshots SET status = 'superseded', superseded_by_id = NULL,
+         generation_notes = COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object('continuityReason', 'source_invalidated'),
          superseded_at = $2, updated_at = NOW()
          WHERE student_id = $1 AND status = 'ready'
            AND lesson_memory_entry_ids && $3::uuid[]`,
@@ -1153,6 +1154,7 @@ async function reconcileConfirmedLessonMemoryIntent(
     }
     await client.query(
       `UPDATE student_memory_snapshots SET status = 'superseded', superseded_by_id = NULL,
+       generation_notes = COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object('obsoleteReason', 'source_invalidated'),
        superseded_at = $2, updated_at = NOW()
        WHERE student_id = $1 AND status = 'pending'`,
       [session.studentId, lessonMemory.requestedAt],

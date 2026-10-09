@@ -341,7 +341,7 @@ HTML; typed preview uses the same renderer. No active PMD projection or temporar
 is created. Native React renderer 3 / manifest schema 6 carry canonical assignment and publication
 metadata; API 9 / validator 3 retire Markdown processing while manifest contract 4 keeps historical
 read semantics. Historical Markdown and renderer-1 manifests are read-only evidence under ABO-30.
-No correction, retry, rerun, resume, rendering, TTS, publication, memory processing or conversion is supported. Editable JSON authority, source authorization, CAS,
+No historical correction, retry, rerun, resume, rendering, TTS, publication, fresh memory extraction or conversion is supported. Previously materialized, verified lesson/homework observations may be read and used in student-memory snapshot derivation under the existing exact ownership, confirmed-binding, identity/URI/hash and replacement checks (ESL-38). This evidence exception never admits historical extraction, regeneration, enrichment recovery or Batch legacy import. Editable JSON authority, source authorization, CAS,
 lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
 [AssignmentV1](ASSIGNMENT_V1.md) for the canonical execution contract.
 Migration 0065 admits renderer-3 job writes with existing artifact checks and the frozen-identity

@@ -14,6 +14,10 @@ export {
   type McpTeachingContextDto,
   type McpTeachingNoteDto,
 } from './mcp-teaching-context.js';
+export {
+  type StudentMemoryAvailability,
+  studentMemoryAvailabilitySchema,
+} from './student-memory-availability.js';
 
 export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed';
 
@@ -273,6 +277,7 @@ export interface AssignmentConfirmedSnapshot {
 
 export interface AssignmentSessionDto {
   transcriptProcessing?: {
+    availability?: import('./student-memory-availability.js').StudentMemoryAvailability;
     lessonMemory: 'not_requested' | 'pending' | 'ready' | 'failed' | 'superseded';
     snapshot: 'not_requested' | 'pending' | 'ready' | 'failed' | 'superseded';
     enrichment:

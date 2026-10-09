@@ -57,6 +57,12 @@ describe('application/legacy-profile-normalization', () => {
         },
         memory: {
           getOverview: async () => ({
+            availability: {
+              state: 'absent',
+              reason: 'no_established_snapshot',
+              lessonReferenceCount: 0,
+              homeworkReferenceCount: 0,
+            },
             studentId: 'tolik',
             latestReadyStudentMemorySnapshot: {
               id: 'snapshot-1',

@@ -6,7 +6,7 @@ import type { ProcessLessonMemoryJobPayload } from '../application/process-lesso
 import type { StudentMemoryQueuePayload } from '../application/process-student-memory-job.js';
 import type { StudentMemorySnapshotRefreshStrategy } from '../application/student-memory-snapshot-generation-notes.js';
 import { withPgClient } from '../infrastructure/db.js';
-import { buildCanonicalLessonMemoryAuthoritySqlPredicate } from './lesson-memory-repository.js';
+import { buildLessonMemoryExecutionSqlPredicate } from './lesson-memory-repository.js';
 
 /** Serialize the delivery decision against source replacement and terminalization. */
 export async function deliverCanonicalPendingLessonMemory(
@@ -31,7 +31,7 @@ export async function deliverCanonicalPendingLessonMemory(
          AND l.status = 'pending' AND l.assignment_session_id = $3
          AND l.transcript_id = $4 AND l.recording_id = $5
          AND l.source_storage_uri = $6 AND l.source_content_hash = $7
-         AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('l')} FOR UPDATE OF l`,
+         AND ${buildLessonMemoryExecutionSqlPredicate('l')} FOR UPDATE OF l`,
         [
           payload.pendingEntryId,
           payload.studentId,
@@ -96,7 +96,7 @@ export async function listRecoverableMemoryDeliveries(
       SELECT 'lesson', l.id, l.student_id, NULL, l.provider, l.model, l.generation_notes,
       l.transcript_id, l.recording_id, l.assignment_session_id, l.source_storage_uri, l.source_content_hash
       FROM lesson_memory_entries l
-      WHERE l.status = 'pending' AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('l')}
+      WHERE l.status = 'pending' AND ${buildLessonMemoryExecutionSqlPredicate('l')}
       ) SELECT * FROM deliveries ORDER BY (generation_notes ->> 'deliveryCheckedAt') NULLS FIRST, id LIMIT $1`,
       [limit],
     );
@@ -160,7 +160,7 @@ export async function listReadyLessonMemoryMissingSnapshotObligations(limit = 50
     const result = await client.query<{ id: string; student_id: string }>(
       `SELECT l.id, l.student_id FROM lesson_memory_entries l
        JOIN assignment_sessions a ON a.id = l.assignment_session_id
-       WHERE l.status = 'ready' AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('l')}
+       WHERE l.status = 'ready' AND ${buildLessonMemoryExecutionSqlPredicate('l')}
          AND (a.homework_intent = 'none' OR EXISTS (
            SELECT 1 FROM jsonb_array_elements(a.transcript_completion_history) event
            WHERE event -> 'source' = a.confirmed_snapshot -> 'source'))
@@ -191,7 +191,7 @@ export async function markMemoryDeliveryChecked(payload: StudentMemoryQueuePaylo
     client.query(
       `UPDATE ${table} SET generation_notes =
     COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object('deliveryCheckedAt', clock_timestamp())
-    WHERE id = $1${payload.kind === 'lesson-memory-generate' ? ` AND status = 'pending' AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}` : ''}`,
+    WHERE id = $1${payload.kind === 'lesson-memory-generate' ? ` AND status = 'pending' AND ${buildLessonMemoryExecutionSqlPredicate('lesson_memory_entries')}` : ''}`,
       [payload.pendingEntryId],
     ),
   );

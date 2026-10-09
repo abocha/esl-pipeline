@@ -5,7 +5,7 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 import type { BatchBackendConfig } from '../config/env.js';
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import {
-  getHomeworkMemoryEntryById,
+  getVerifiedReadyHomeworkMemoryEntryById,
   listHomeworkMemoryEntries,
   listRecentReadyHomeworkMemoryByStudentId,
 } from '../domain/homework-memory-repository.js';
@@ -22,11 +22,13 @@ import {
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
 import {
   admitStudentMemorySnapshotIntent,
-  getLatestReadyStudentMemorySnapshotByStudentId,
   getStudentMemorySnapshotById,
+  getStudentMemorySnapshotSelection,
   markStudentMemorySnapshotFailed,
+  markStudentMemorySnapshotRepairRequired,
   StudentMemorySnapshotIntentObsoleteError,
   StudentMemorySnapshotParentChangedError,
+  StudentMemorySnapshotRepairRequiredError,
   StudentMemorySnapshotSourcesChangedError,
   supersedePendingStudentMemorySnapshotsForStudent,
   updateStudentMemorySnapshotGenerationNotes,
@@ -118,14 +120,15 @@ export interface ProcessStudentMemorySnapshotJobDependencies {
   };
   homeworkMemory: {
     list: typeof listHomeworkMemoryEntries;
-    getById: typeof getHomeworkMemoryEntryById;
+    getById: typeof getVerifiedReadyHomeworkMemoryEntryById;
     listRecentReadyByStudentId: typeof listRecentReadyHomeworkMemoryByStudentId;
   };
   snapshots: {
     admitIntent?: typeof admitStudentMemorySnapshotIntent;
     captureCurrentness?: typeof captureStudentMemoryCurrentness;
     getById: typeof getStudentMemorySnapshotById;
-    getLatestReadyByStudentId: typeof getLatestReadyStudentMemorySnapshotByStudentId;
+    getSelection: typeof getStudentMemorySnapshotSelection;
+    markRepairRequired: typeof markStudentMemorySnapshotRepairRequired;
     markFailed: typeof markStudentMemorySnapshotFailed;
     supersedePendingForStudent: typeof supersedePendingStudentMemorySnapshotsForStudent;
     updateGenerationNotes: typeof updateStudentMemorySnapshotGenerationNotes;
@@ -154,14 +157,15 @@ export async function processStudentMemorySnapshotJob(args: {
   };
   const homeworkMemory = args.overrides?.homeworkMemory ?? {
     list: listHomeworkMemoryEntries,
-    getById: getHomeworkMemoryEntryById,
+    getById: getVerifiedReadyHomeworkMemoryEntryById,
     listRecentReadyByStudentId: listRecentReadyHomeworkMemoryByStudentId,
   };
   const defaultSnapshots = {
     admitIntent: admitStudentMemorySnapshotIntent,
     captureCurrentness: captureStudentMemoryCurrentness,
     getById: getStudentMemorySnapshotById,
-    getLatestReadyByStudentId: getLatestReadyStudentMemorySnapshotByStudentId,
+    getSelection: getStudentMemorySnapshotSelection,
+    markRepairRequired: markStudentMemorySnapshotRepairRequired,
     markFailed: markStudentMemorySnapshotFailed,
     supersedePendingForStudent: supersedePendingStudentMemorySnapshotsForStudent,
     updateGenerationNotes: updateStudentMemorySnapshotGenerationNotes,
@@ -405,6 +409,10 @@ export async function processStudentMemorySnapshotJob(args: {
     }
   } catch (error) {
     if (error instanceof StudentMemorySnapshotIntentObsoleteError) return;
+    if (error instanceof StudentMemorySnapshotRepairRequiredError) {
+      await snapshots.markRepairRequired(args.payload.studentId, args.payload.pendingEntryId);
+      return;
+    }
     if (isStudentMemoryPacingDeferredError(error)) {
       throw error;
     }
@@ -450,6 +458,9 @@ export async function processStudentMemorySnapshotJob(args: {
           studentId: args.payload.studentId,
           pendingEntryId: args.payload.pendingEntryId,
           unavailableLessonMemoryEntryIds: error.unavailableLessonMemoryEntryIds,
+          ...(error.unavailableHomeworkMemoryEntryIds.length > 0
+            ? { unavailableHomeworkMemoryEntryIds: error.unavailableHomeworkMemoryEntryIds }
+            : {}),
         });
       }
       await markFailureIfFinalAttempt({
@@ -538,6 +549,9 @@ function addSourcesChangedFailureDetails(args: {
       stage: 'snapshot_ready_finalization',
       message: args.error.message,
       unavailableLessonMemoryEntryIds: args.error.unavailableLessonMemoryEntryIds,
+      ...(args.error.unavailableHomeworkMemoryEntryIds.length > 0
+        ? { unavailableHomeworkMemoryEntryIds: args.error.unavailableHomeworkMemoryEntryIds }
+        : {}),
     },
   };
 }
@@ -547,10 +561,7 @@ async function buildSnapshotRefreshRequest(args: {
   pendingGenerationNotes: Record<string, unknown> | null;
   lessonMemory: ProcessStudentMemorySnapshotJobDependencies['lessonMemory'];
   homeworkMemory: ProcessStudentMemorySnapshotJobDependencies['homeworkMemory'];
-  snapshots: Pick<
-    ProcessStudentMemorySnapshotJobDependencies['snapshots'],
-    'getLatestReadyByStudentId'
-  >;
+  snapshots: Pick<ProcessStudentMemorySnapshotJobDependencies['snapshots'], 'getSelection'>;
   snapshotPromptBudget: StudentMemorySnapshotPromptBudget;
 }): Promise<{
   strategy: StudentMemorySnapshotRefreshStrategy;
@@ -568,7 +579,7 @@ async function buildSnapshotRefreshRequest(args: {
   triggerProfileWorthyStudentFactCount: number;
 }> {
   if (args.payload.trigger === 'manual-replay') {
-    const parentSnapshot = await args.snapshots.getLatestReadyByStudentId(args.payload.studentId);
+    const parentSnapshot = (await args.snapshots.getSelection(args.payload.studentId)).snapshot;
     const strategy = resolveManualSnapshotRefreshStrategy({
       payload: args.payload,
       pendingGenerationNotes: args.pendingGenerationNotes,
@@ -620,9 +631,10 @@ async function buildSnapshotRefreshRequest(args: {
     };
   }
 
-  const latestReadySnapshot = await args.snapshots.getLatestReadyByStudentId(
-    args.payload.studentId,
-  );
+  const selection = await args.snapshots.getSelection(args.payload.studentId);
+  if (selection.availability.state === 'repair_required')
+    throw new StudentMemorySnapshotRepairRequiredError();
+  const latestReadySnapshot = selection.snapshot;
   const contextLimits = resolveIncrementalContextLimits({
     trigger: args.payload.trigger,
     hasParentSnapshot: Boolean(latestReadySnapshot),
@@ -1186,6 +1198,7 @@ async function listAllReadyHomeworkMemory(
     list({
       studentId,
       statuses: ['ready'],
+      canonicalOnly: true,
       limit,
       offset,
     }),

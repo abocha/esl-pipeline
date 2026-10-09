@@ -22,6 +22,29 @@ describeHttpServerIntegrationSuite(
     mockGetStudentScheduleBillingSurface,
     mockResolvePrimaryWorkspaceIdForUser,
   }) => {
+    it('GET memory reports repair-required separately from stored-ready health without requesting work', async () => {
+      const studentId = deriveStudentId('Anna');
+      const availability = {
+        state: 'repair_required',
+        reason: 'established_history_ineligible',
+        lessonReferenceCount: 19,
+        homeworkReferenceCount: 3,
+      };
+      mockGetStudentMemoryOverview.mockResolvedValueOnce({
+        studentId,
+        availability,
+        latestReadyStudentMemorySnapshot: null,
+        recentReadyLessonMemory: [],
+        recentReadyHomeworkMemory: [],
+        unresolvedIssues: [],
+      });
+      const response = await app.inject({ method: 'GET', url: `/students/${studentId}/memory` });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        availability,
+        latestReadyStudentMemorySnapshot: null,
+      });
+    });
     it('GET /students/:id/memory returns the overview payload for authenticated inspection', async () => {
       const studentId = deriveStudentId('Anna');
       mockGetStudentMemoryOverview.mockResolvedValueOnce({
