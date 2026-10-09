@@ -139,19 +139,34 @@ jobs:
       - name: Initialize repository policy logs
         run: mkdir -p tmp/ci-logs/repository-policy
 
-      - name: Validate environment template
-        id: env_template
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm env:validate:example 2>&1 | tee tmp/ci-logs/repository-policy/env-validate-example.log
+      - parallel:
+          - name: Validate environment template
+            id: env_template
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm env:validate:example 2>&1 | tee tmp/ci-logs/repository-policy/env-validate-example.log
 
-      - name: Tooling tests
-        id: tooling_tests
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm test:tooling 2>&1 | tee tmp/ci-logs/repository-policy/test-tooling.log
+          - name: Tooling tests
+            id: tooling_tests
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm test:tooling 2>&1 | tee tmp/ci-logs/repository-policy/test-tooling.log
+
+          - name: Contract version consistency
+            id: contract_versions
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm release:verify:contracts 2>&1 | tee tmp/ci-logs/repository-policy/release-verify-contracts.log
+
+          - name: Orchestrator boundary guardrails
+            id: orchestrator_boundary
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm guard:orchestrator:boundary 2>&1 | tee tmp/ci-logs/repository-policy/guard-orchestrator-boundary.log
 
       - name: Verify repo hygiene tools
         shell: bash
@@ -171,47 +186,34 @@ jobs:
           "$RUNNER_TEMP/jactionlint-bin/jactionlint" --version | grep -F "${jactionlint_version}"
           echo "$RUNNER_TEMP/jactionlint-bin" >> "$GITHUB_PATH"
 
-      - name: Lint GitHub workflows
-        id: lint_workflows
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm run lint:workflows 2>&1 | tee tmp/ci-logs/repository-policy/lint-workflows.log
+      - parallel:
+          - name: Lint GitHub workflows
+            id: lint_workflows
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm run lint:workflows 2>&1 | tee tmp/ci-logs/repository-policy/lint-workflows.log
 
-      - name: Lint shell scripts
-        id: lint_shell
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm run lint:shell 2>&1 | tee tmp/ci-logs/repository-policy/lint-shell.log
+          - name: Lint shell scripts
+            id: lint_shell
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm run lint:shell 2>&1 | tee tmp/ci-logs/repository-policy/lint-shell.log
 
-      - name: Lint Docker configuration
-        id: docker_lint
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm docker:lint 2>&1 | tee tmp/ci-logs/repository-policy/docker-lint.log
+          - name: Lint Docker configuration
+            id: docker_lint
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm docker:lint 2>&1 | tee tmp/ci-logs/repository-policy/docker-lint.log
 
-      - name: Dependency audit
-        id: dependency_audit
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm deps:audit:strict 2>&1 | tee tmp/ci-logs/repository-policy/deps-audit-strict.log
-
-      - name: Contract version consistency
-        id: contract_versions
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm release:verify:contracts 2>&1 | tee tmp/ci-logs/repository-policy/release-verify-contracts.log
-
-      - name: Orchestrator boundary guardrails
-        id: orchestrator_boundary
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm guard:orchestrator:boundary 2>&1 | tee tmp/ci-logs/repository-policy/guard-orchestrator-boundary.log
+          - name: Dependency audit
+            id: dependency_audit
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm deps:audit:strict 2>&1 | tee tmp/ci-logs/repository-policy/deps-audit-strict.log
 
       - name: Docs sanity checks
         id: docs_sanity
