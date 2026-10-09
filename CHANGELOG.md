@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [20.2.0] - 2026-10-09
+
+### Changed
+
+- Automated release from PR #371: feat(memory): rehabilitate evidence authority and availability (https://github.com/abocha/esl-pipeline/pull/371)
+
 ## [20.1.0] - 2026-10-08
 
 ### Changed
