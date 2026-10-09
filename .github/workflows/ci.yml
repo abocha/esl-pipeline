@@ -159,16 +159,17 @@ jobs:
           set -euo pipefail
           command -v shellcheck
           shellcheck --version
-          actionlint_version=1.7.11
-          actionlint_archive="actionlint_${actionlint_version}_linux_amd64.tar.gz"
-          actionlint_sha256=900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a
-          mkdir -p "$RUNNER_TEMP/actionlint-bin"
+          jactionlint_version=2.0.2
+          jactionlint_archive="jactionlint_${jactionlint_version}_linux_amd64.tar.gz"
+          jactionlint_sha256=026bce6d0ef196f5b22bf43acb1348d47c5d0a5ae61d6ec3bdba1229a823161b
+          mkdir -p "$RUNNER_TEMP/jactionlint-bin"
           curl --fail --silent --show-error --location \
-            "https://github.com/rhysd/actionlint/releases/download/v${actionlint_version}/${actionlint_archive}" \
-            --output "$RUNNER_TEMP/${actionlint_archive}"
-          echo "${actionlint_sha256}  $RUNNER_TEMP/${actionlint_archive}" | sha256sum --check
-          tar -xzf "$RUNNER_TEMP/${actionlint_archive}" -C "$RUNNER_TEMP/actionlint-bin"
-          echo "$RUNNER_TEMP/actionlint-bin" >> "$GITHUB_PATH"
+            "https://github.com/jdx/jactionlint/releases/download/v${jactionlint_version}/${jactionlint_archive}" \
+            --output "$RUNNER_TEMP/${jactionlint_archive}"
+          echo "${jactionlint_sha256}  $RUNNER_TEMP/${jactionlint_archive}" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/${jactionlint_archive}" -C "$RUNNER_TEMP/jactionlint-bin" jactionlint
+          "$RUNNER_TEMP/jactionlint-bin/jactionlint" --version | grep -F "${jactionlint_version}"
+          echo "$RUNNER_TEMP/jactionlint-bin" >> "$GITHUB_PATH"
 
       - name: Lint GitHub workflows
         id: lint_workflows

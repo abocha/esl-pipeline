@@ -369,36 +369,46 @@ test('diagnostics run weekly or manually and preserve producer failures', () => 
   }
 });
 
-test('static tooling bootstrap verifies bundled shellcheck before extracting verified actionlint', () => {
+test('static tooling bootstrap verifies bundled shellcheck before extracting verified jactionlint', () => {
   const bootstrap = namedStep(jobBlock('repository-policy'), 'Verify repo hygiene tools');
   assert.doesNotMatch(bootstrap, /apt-get (?:update|install)/u);
   assert.match(bootstrap, /command -v shellcheck/u);
   assert.match(bootstrap, /shellcheck --version/u);
-  assert.match(bootstrap, /actionlint_version=1\.7\.11/u);
+  assert.equal(
+    JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).scripts[
+      'lint:workflows'
+    ],
+    'jactionlint --profile correctness',
+  );
+  assert.match(bootstrap, /jactionlint_version=2\.0\.2/u);
   assert.match(
     bootstrap,
-    /actionlint_archive="actionlint_\$\{actionlint_version\}_linux_amd64\.tar\.gz"/u,
+    /jactionlint_archive="jactionlint_\$\{jactionlint_version\}_linux_amd64\.tar\.gz"/u,
   );
   assert.match(
     bootstrap,
-    /https:\/\/github\.com\/rhysd\/actionlint\/releases\/download\/v\$\{actionlint_version\}\/\$\{actionlint_archive\}/u,
+    /https:\/\/github\.com\/jdx\/jactionlint\/releases\/download\/v\$\{jactionlint_version\}\/\$\{jactionlint_archive\}/u,
   );
   assert.match(
     bootstrap,
-    /actionlint_sha256=900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a/u,
+    /jactionlint_sha256=026bce6d0ef196f5b22bf43acb1348d47c5d0a5ae61d6ec3bdba1229a823161b/u,
   );
 
   const dollar = '$';
-  const archiveVariable = `${dollar}{actionlint_archive}`;
-  const checksumVariable = `${dollar}{actionlint_sha256}`;
+  const archiveVariable = `${dollar}{jactionlint_archive}`;
+  const checksumVariable = `${dollar}{jactionlint_sha256}`;
   const download = bootstrap.indexOf(`--output "$RUNNER_TEMP/${archiveVariable}"`);
   const verify = bootstrap.indexOf(
     `echo "${checksumVariable}  $RUNNER_TEMP/${archiveVariable}" | sha256sum --check`,
   );
   const extract = bootstrap.indexOf(
-    `tar -xzf "$RUNNER_TEMP/${archiveVariable}" -C "$RUNNER_TEMP/actionlint-bin"`,
+    `tar -xzf "$RUNNER_TEMP/${archiveVariable}" -C "$RUNNER_TEMP/jactionlint-bin" jactionlint`,
   );
   assert.ok(download >= 0 && download < verify && verify < extract);
+  assert.match(
+    bootstrap.slice(extract),
+    /\/jactionlint-bin\/jactionlint" --version \| grep -F "\$\{jactionlint_version\}"/u,
+  );
 });
 
 test('tooling tests remain an unconditional static guard', () => {

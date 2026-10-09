@@ -20,7 +20,7 @@
     "scripts/smoke/telegram-ops/fake-backend.mjs",
     "scripts/smoke/telegram-ops/fake-telegram-api.mjs"
   ],
-  "ignoreBinaries": ["actionlint", "rg", "shellcheck"],
+  "ignoreBinaries": ["jactionlint", "rg", "shellcheck"],
   "workspaces": {
     ".": {
       "ignoreDependencies": ["fastify"]
