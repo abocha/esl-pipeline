@@ -5,7 +5,7 @@ import { createGoogleSttProvider } from '../src/index.js';
 
 describe('stt-provider-google', () => {
   it('uses gs:// input directly without staging upload', async () => {
-    const recognize = vi.fn(async () => [
+    const recognize = vi.fn(async (_request: Record<string, unknown>) => [
       {
         results: [
           {
@@ -56,12 +56,21 @@ describe('stt-provider-google', () => {
     expect(result.provider).toBe('google');
     expect(result.fallbackUsed).toBe(false);
     expect(result.segments).toHaveLength(2);
+    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(recognize.mock.calls[0]?.[0]).toMatchObject({
+      uri: 'gs://input-bucket/rec.wav',
+      config: {
+        features: {
+          multiChannelMode: 'SEPARATE_RECOGNITION_PER_CHANNEL',
+        },
+      },
+    });
     expect(save).not.toHaveBeenCalled();
   });
 
   it('stages non-gs URI input and falls back when primary collapses to one channel', async () => {
     const recognize = vi
-      .fn()
+      .fn<(_request: Record<string, unknown>) => Promise<unknown>>()
       .mockResolvedValueOnce([
         {
           results: [
@@ -134,6 +143,26 @@ describe('stt-provider-google', () => {
     expect(result.fallbackUsed).toBe(true);
     expect(result.segments[0]?.speaker).toBe(0);
     expect(result.segments[1]?.speaker).toBe(1);
+    const requests = recognize.mock.calls.map(([request]) => request);
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.uri).toMatch(/^gs:\/\/staging-bucket\/stt-staging\/rec-1-/);
+    expect(requests[1]?.uri).toBe(requests[0]?.uri);
+    expect(requests[0]).toMatchObject({
+      config: {
+        features: {
+          multiChannelMode: 'SEPARATE_RECOGNITION_PER_CHANNEL',
+        },
+      },
+    });
+    expect(requests[0]).not.toHaveProperty('config.features.diarizationConfig');
+    expect(requests[1]).toMatchObject({
+      config: {
+        features: {
+          diarizationConfig: { minSpeakerCount: 2, maxSpeakerCount: 2 },
+        },
+      },
+    });
+    expect(requests[1]).not.toHaveProperty('config.features.multiChannelMode');
   });
 
   it('requires staging bucket', async () => {
