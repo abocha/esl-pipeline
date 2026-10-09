@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [20.2.2] - 2026-10-09
+
+### Changed
+
+- Automated release from PR #373: test: strengthen regression coverage across packages (https://github.com/abocha/esl-pipeline/pull/373)
+
 ## [20.2.1] - 2026-10-09
 
 ### Changed
