@@ -417,6 +417,46 @@ test('tooling tests remain an unconditional static guard', () => {
   assert.doesNotMatch(step, /^\s+if:/mu);
 });
 
+test('parallel repository policy checks fail closed and retain per-check evidence', () => {
+  const policy = jobBlock('repository-policy');
+  const parallelStarts = [...policy.matchAll(/^ {6}- parallel:$/gmu)].map((match) => match.index);
+  assert.equal(parallelStarts.length, 2);
+  const verifyTools = policy.indexOf('      - name: Verify repo hygiene tools');
+  const docsSanity = policy.indexOf('      - name: Docs sanity checks');
+  assert.ok(parallelStarts[0] < verifyTools && verifyTools < parallelStarts[1]);
+  assert.ok(docsSanity > parallelStarts[1]);
+
+  const parallelGroups = [
+    policy.slice(parallelStarts[0], parallelStarts[1]),
+    policy.slice(parallelStarts[1], docsSanity),
+  ];
+  for (const group of parallelGroups) assert.doesNotMatch(group, /continue-on-error:/u);
+
+  for (const [groupIndex, name, id, logPath] of [
+    [0, 'Validate environment template', 'env_template', 'env-validate-example.log'],
+    [0, 'Tooling tests', 'tooling_tests', 'test-tooling.log'],
+    [0, 'Contract version consistency', 'contract_versions', 'release-verify-contracts.log'],
+    [
+      0,
+      'Orchestrator boundary guardrails',
+      'orchestrator_boundary',
+      'guard-orchestrator-boundary.log',
+    ],
+    [1, 'Lint GitHub workflows', 'lint_workflows', 'lint-workflows.log'],
+    [1, 'Lint shell scripts', 'lint_shell', 'lint-shell.log'],
+    [1, 'Lint Docker configuration', 'docker_lint', 'docker-lint.log'],
+    [1, 'Dependency audit', 'dependency_audit', 'deps-audit-strict.log'],
+  ]) {
+    const step = namedStep(parallelGroups[groupIndex], name);
+    assert.match(step, new RegExp(`id: ${id}\\n`, 'u'));
+    assert.match(step, new RegExp(`tee tmp/ci-logs/repository-policy/${logPath}`, 'u'));
+    assert.match(policy, new RegExp(`steps\\.${id}\\.outcome`, 'u'));
+    assert.ok(policy.includes(`logPath":"tmp/ci-logs/repository-policy/${logPath}`));
+  }
+
+  assert.match(policy, /if: always\(\)[\s\S]*name: Upload repository policy logs/u);
+});
+
 test('diagnostic workflows use explicit concurrency and bounded artifact retention', () => {
   const diagnostics = readFileSync(
     new URL('../../.github/workflows/ci-diagnostics.yml', import.meta.url),
