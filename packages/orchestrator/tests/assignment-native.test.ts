@@ -162,7 +162,8 @@ describe('native typed execution', () => {
           '-e',
           `
         globalThis.fetch = () => { throw new Error('Network read'); };
-        await import('./index.js');
+        const mod = await import('./index.js');
+        if (typeof mod.createPipeline !== 'function') throw new Error('Missing createPipeline export');
       `,
         ],
         { cwd: isolated },
