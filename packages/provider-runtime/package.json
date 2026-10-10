@@ -2,7 +2,7 @@
   "name": "@esl-pipeline/provider-runtime",
   "version": "1.0.0",
   "private": true,
-  "license": "MIT",
+  "license": "UNLICENSED",
   "type": "module",
   "exports": {
     ".": {
