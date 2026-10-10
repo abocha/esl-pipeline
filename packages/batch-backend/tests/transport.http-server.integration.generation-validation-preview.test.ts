@@ -111,6 +111,20 @@ describeHttpServerIntegrationSuite(
       );
     });
 
+    it.each(['google_ai_studio', 'openrouter'])(
+      'rejects fresh %s draft requests before generation',
+      async (provider: string) => {
+        const generateDraft = vi.spyOn(generateDraftModule, 'generateDraft').mockClear();
+        const response = await app.inject({
+          method: 'POST',
+          url: '/generation/drafts',
+          payload: { promptPackageId: 'prompt-1', provider, model: 'frozen-model' },
+        });
+        expect(response.statusCode).toBe(400);
+        expect(generateDraft).not.toHaveBeenCalled();
+      },
+    );
+
     it('POST /generation/drafts returns 404 when prompt package is missing', async () => {
       const generateDraft = vi.spyOn(generateDraftModule, 'generateDraft');
       generateDraft.mockClear();

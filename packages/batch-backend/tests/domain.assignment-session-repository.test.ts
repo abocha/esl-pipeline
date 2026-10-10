@@ -1791,6 +1791,87 @@ describe('domain/assignment-session-repository persistence contract', () => {
     expect(row.rows[0]).toEqual({ state: 'queued', submission_id: null });
   });
 
+  it.each([
+    { provider: 'google_ai_studio', model: 'gemma-4-31b-it', claimed: false },
+    { provider: 'openrouter', model: 'historical-openrouter', claimed: false },
+    { provider: 'openai', model: 'gemma-4-31b-it', claimed: false },
+    { provider: 'google_ai_studio', model: 'gemma-4-31b-it', claimed: true },
+  ] as const)(
+    'terminalizes frozen $provider/$model before reservation without overwriting a competing claim ($claimed)',
+    async ({ provider, model, claimed }) => {
+      const { operationId } = await createInitialEnrichmentWithEvidence('ready');
+      const { loadConfig } = await import('../src/config/env.js');
+      const { reconcileProfileInitialEnrichmentOperation } = await import(
+        '../src/application/profile-initial-enrichment.js'
+      );
+      const { createStudentMemoryGenerationPacer } = await import(
+        '../src/application/student-memory-generation-pacing.js'
+      );
+      const config = loadConfig();
+      const generator = vi.fn();
+      // Freeze a real evidence-derived input without dispatch, then model a pre-migration target.
+      await reconcileProfileInitialEnrichmentOperation(operationId, config, generator, {
+        run: vi.fn().mockResolvedValue({ skipped: true }),
+      } as never);
+      const frozen = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        const row = await client.query(
+          'UPDATE profile_initial_enrichment_operations SET generation_provider=$2, generation_model=$3 WHERE id=$1 RETURNING generation_input',
+          [operationId, provider, model],
+        );
+        return row.rows[0]!.generation_input;
+      });
+      const reserve = vi.fn();
+      const recordActual = vi.fn();
+      const fetch = vi.fn();
+      vi.stubGlobal('fetch', fetch);
+      const realPacer = createStudentMemoryGenerationPacer(config, {
+        repository: { reserve, recordActual, getUsage: vi.fn() },
+      });
+      const submissionId = randomUUID();
+      const pacer = claimed
+        ? {
+            run: async (args: Parameters<typeof realPacer.run>[0]) => {
+              await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+                client.query(
+                  "UPDATE profile_initial_enrichment_operations SET state='submitting', submission_id=$2, submission_reserved_at=NOW() WHERE id=$1",
+                  [operationId, submissionId],
+                ),
+              );
+              return realPacer.run(args);
+            },
+          }
+        : realPacer;
+      try {
+        await reconcileProfileInitialEnrichmentOperation(
+          operationId,
+          config,
+          generator,
+          pacer as never,
+        );
+        const row = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+          client.query(
+            'SELECT state, failure_code, submission_id, generation_provider, generation_model, generation_input FROM profile_initial_enrichment_operations WHERE id=$1',
+            [operationId],
+          ),
+        );
+        expect(row.rows[0]).toMatchObject({
+          state: claimed ? 'submitting' : 'failed',
+          ...(claimed ? {} : { failure_code: 'provider_rejected' }),
+          submission_id: claimed ? submissionId : null,
+          generation_provider: provider,
+          generation_model: model,
+          generation_input: frozen,
+        });
+        expect(generator).not.toHaveBeenCalled();
+        expect(reserve).not.toHaveBeenCalled();
+        expect(recordActual).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
   it('terminalizes a non-minute budget preflight without reserving provider submission', async () => {
     const { operationId } = await createInitialEnrichmentWithEvidence('ready');
     const { loadConfig } = await import('../src/config/env.js');

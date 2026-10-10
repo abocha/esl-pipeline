@@ -1,6 +1,5 @@
 import {
   existsSync,
-  mkdirSync,
   mkdtempSync,
   readFileSync,
   renameSync,
@@ -9,11 +8,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SpeechPlannerEvalAttemptRecord } from '../src/application/speech-planner-evaluator.js';
-import { loadConfig } from '../src/config/env.js';
 import {
   assertEvaluationSourceRevision,
   parseEvalSpeechPlannerArgs,
@@ -23,6 +21,7 @@ import {
 
 const roots: string[] = [];
 afterEach(() => {
+  vi.unstubAllGlobals();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -37,12 +36,11 @@ describe('eval speech planner CLI', () => {
   });
   it('defaults to a provider-free 120-attempt dry-run', async () => {
     const stdout = vi.fn();
-    const executeAttempt = vi.fn();
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
     const result = await runEvalSpeechPlannerCli([], {
       stdout,
-      config: loadConfig(),
       gitSha: 'a'.repeat(40),
-      executeAttempt,
     });
 
     expect(result).toMatchObject({
@@ -53,40 +51,9 @@ describe('eval speech planner CLI', () => {
       postgresAdapters: 0,
       currentDayUsage: 'unverified',
     });
-    expect(executeAttempt).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
     expect(JSON.stringify(stdout.mock.calls)).not.toMatch(/api[_-]?key|credential/i);
-  });
-
-  it('prints required allowlist remediation in dry-run without provider calls', async () => {
-    const base = loadConfig();
-    const stdout = vi.fn();
-    const executeAttempt = vi.fn();
-    const result = await runEvalSpeechPlannerCli([], {
-      stdout,
-      config: {
-        ...base,
-        generation: {
-          ...base.generation,
-          models: {
-            ...base.generation.models,
-            googleAiStudio: {
-              ...base.generation.models.googleAiStudio,
-              allowed: ['gemini-3.1-flash-lite'],
-            },
-          },
-        },
-      },
-      gitSha: 'a'.repeat(40),
-      executeAttempt,
-    });
-
-    expect(result).toMatchObject({ mode: 'dry-run', providerCalls: 0 });
-    expect(JSON.parse(stdout.mock.calls[0]![0] as string)).toMatchObject({
-      allowlistReady: false,
-      missingRequiredModels: ['gemini-3.5-flash-lite'],
-      plannerAttempts: 120,
-    });
-    expect(executeAttempt).not.toHaveBeenCalled();
   });
 
   it('parses explicit matrix, usage, audio, private, output, and resume flags', () => {
@@ -114,36 +81,24 @@ describe('eval speech planner CLI', () => {
     });
   });
 
-  it('fails closed before live provider construction without explicit usage', async () => {
-    const config = loadConfig();
-    const executeAttempt = vi.fn();
-    await expect(
-      runEvalSpeechPlannerCli(['--live'], {
-        stdout: vi.fn(),
-        config: {
-          ...config,
-          generation: {
-            ...config.generation,
-            providers: {
-              ...config.generation.providers,
-              googleAiStudio: {
-                ...config.generation.providers.googleAiStudio,
-                apiKey: 'configured-but-not-printed',
-              },
-            },
-          },
-        },
-        gitSha: 'a'.repeat(40),
-        executeAttempt,
-      }),
-    ).rejects.toThrow('--used-today');
-    expect(executeAttempt).not.toHaveBeenCalled();
+  it('rejects live evaluation before any HTTP request', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    try {
+      await expect(runEvalSpeechPlannerCli(['--live'], { stdout: vi.fn() })).rejects.toThrow(
+        'offline-only',
+      );
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('runs checked-in offline outputs without Gemini, Inworld, budget, or Postgres construction', async () => {
     const root = mkdtempSync(join(tmpdir(), 'speech-eval-cli-'));
     roots.push(root);
-    const executeAttempt = vi.fn();
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
     const result = await runEvalSpeechPlannerCli(
       [
         '--offline-output-fixtures=packages/batch-backend/fixtures/speech-planner-eval/planner-outputs-v1.json',
@@ -151,9 +106,7 @@ describe('eval speech planner CLI', () => {
       ],
       {
         stdout: vi.fn(),
-        config: loadConfig(),
         gitSha: 'a'.repeat(40),
-        executeAttempt,
       },
     );
     expect(result).toMatchObject({
@@ -163,7 +116,8 @@ describe('eval speech planner CLI', () => {
       postgresAdapters: 0,
       completedAttempts: 6,
     });
-    expect(executeAttempt).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
     expect(
       JSON.parse(readFileSync(join(result.runDirectory!, 'summary.json'), 'utf8')),
     ).toMatchObject({
@@ -176,14 +130,12 @@ describe('eval speech planner CLI', () => {
     await expect(
       runEvalSpeechPlannerCli(['--private-fixture=fixtures/issue-154.json', '--private-only'], {
         stdout: vi.fn(),
-        config: loadConfig(),
         gitSha: 'a'.repeat(40),
       }),
     ).rejects.toThrow('tmp/speech-planner-eval-private');
     await expect(
       runEvalSpeechPlannerCli(['--audio=selected'], {
         stdout: vi.fn(),
-        config: loadConfig(),
         gitSha: 'a'.repeat(40),
       }),
     ).rejects.toThrow('--audio=selected requires --live');
@@ -194,7 +146,7 @@ describe('eval speech planner CLI', () => {
           '--private-only',
           '--output=packages/batch-backend/private-eval-output',
         ],
-        { stdout: vi.fn(), config: loadConfig(), gitSha: 'a'.repeat(40) },
+        { stdout: vi.fn(), gitSha: 'a'.repeat(40) },
       ),
     ).rejects.toThrow('Private evaluation output must remain under the ignored tmp root');
   });
@@ -205,151 +157,6 @@ describe('eval speech planner CLI', () => {
       '--private-only',
     ]);
     expect(parsed.privateFixture).toContain(join('tmp', 'speech-planner-eval-private'));
-  });
-
-  it('resumes a private custom matrix from run metadata without repeating custom flags', async () => {
-    const repoRoot = resolve(process.cwd(), '../..');
-    const fixtureRoot = join(
-      repoRoot,
-      'tmp',
-      'speech-planner-eval-private',
-      `resume-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    );
-    const outputRoot = join(fixtureRoot, 'runs');
-    roots.push(fixtureRoot);
-    mkdirSync(fixtureRoot, { recursive: true });
-    const publicCorpus = JSON.parse(
-      readFileSync(
-        join(repoRoot, 'packages/batch-backend/fixtures/speech-planner-eval/corpus-v1.json'),
-        'utf8',
-      ),
-    ) as unknown[];
-    const privateFixture = join(fixtureRoot, 'issue-154.json');
-    writeFileSync(privateFixture, JSON.stringify(publicCorpus[0]), 'utf8');
-    const base = loadConfig();
-    const config = {
-      ...base,
-      generation: {
-        ...base.generation,
-        models: {
-          ...base.generation.models,
-          googleAiStudio: {
-            ...base.generation.models.googleAiStudio,
-            allowed: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'],
-          },
-        },
-        providers: {
-          ...base.generation.providers,
-          googleAiStudio: {
-            ...base.generation.providers.googleAiStudio,
-            apiKey: 'configured-but-not-printed',
-          },
-        },
-      },
-    };
-    const executeAttempt = vi.fn(async (args: { prepared: { segments: { id: string }[] } }) => ({
-      promptPolicyVersion: 'speech-performance-v2-inworld-tts2' as const,
-      promptHash: 'test-prompt-hash',
-      rawText: JSON.stringify({
-        segments: args.prepared.segments.map(({ id }) => ({ id })),
-      }),
-      validation: { status: 'valid' as const },
-      latencyMs: 1,
-    }));
-
-    const first = await runEvalSpeechPlannerCli(
-      [
-        '--live',
-        '--used-today=0',
-        `--private-fixture=${privateFixture}`,
-        '--private-only',
-        '--repetitions=1',
-        `--output=${outputRoot}`,
-      ],
-      { stdout: vi.fn(), config, gitSha: 'a'.repeat(40), executeAttempt },
-    );
-    expect(first).toMatchObject({ mode: 'live', providerCalls: 4, completedAttempts: 4 });
-    executeAttempt.mockClear();
-
-    const resumed = await runEvalSpeechPlannerCli(
-      ['--live', '--used-today=4', `--resume-run=${first.runDirectory!}`],
-      { stdout: vi.fn(), config, gitSha: 'a'.repeat(40), executeAttempt },
-    );
-    expect(resumed).toMatchObject({ mode: 'live', providerCalls: 0, completedAttempts: 4 });
-    expect(executeAttempt).not.toHaveBeenCalled();
-
-    const failedAudio = vi.fn(async () => {
-      throw new Error('synthetic audio interruption');
-    });
-    await expect(
-      runEvalSpeechPlannerCli(
-        ['--live', '--audio=selected', '--used-today=4', `--resume-run=${first.runDirectory!}`],
-        {
-          stdout: vi.fn(),
-          config,
-          gitSha: 'a'.repeat(40),
-          executeAttempt,
-          inworldConfigured: true,
-          writeSelectedAudio: failedAudio,
-        },
-      ),
-    ).rejects.toThrow('synthetic audio interruption');
-    const failedMetadata = JSON.parse(
-      readFileSync(join(first.runDirectory!, 'run.json'), 'utf8'),
-    ) as { status: string; environmentFlags: { selectedAudio: boolean }; activities: unknown[] };
-    expect(failedMetadata).toMatchObject({
-      status: 'partial',
-      environmentFlags: { selectedAudio: true },
-    });
-    expect(failedMetadata.activities).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'selected_audio',
-          status: 'failed',
-          preflight: expect.objectContaining({ usedToday: 4, plannerAttempts: 0 }),
-        }),
-      ]),
-    );
-
-    const plannerOnlyResume = await runEvalSpeechPlannerCli(
-      ['--live', '--used-today=4', `--resume-run=${first.runDirectory!}`],
-      { stdout: vi.fn(), config, gitSha: 'a'.repeat(40), executeAttempt },
-    );
-    expect(plannerOnlyResume).toMatchObject({ providerCalls: 0, synthesisCalls: 0 });
-    expect(JSON.parse(readFileSync(join(first.runDirectory!, 'run.json'), 'utf8'))).toMatchObject({
-      status: 'partial',
-      environmentFlags: { selectedAudio: true },
-    });
-
-    const completedAudio = vi.fn(async () => 4);
-    const audioResult = await runEvalSpeechPlannerCli(
-      ['--live', '--audio=selected', '--used-today=4', `--resume-run=${first.runDirectory!}`],
-      {
-        stdout: vi.fn(),
-        config,
-        gitSha: 'a'.repeat(40),
-        executeAttempt,
-        inworldConfigured: true,
-        writeSelectedAudio: completedAudio,
-      },
-    );
-    expect(audioResult).toMatchObject({ providerCalls: 0, synthesisCalls: 4 });
-    const completedMetadata = JSON.parse(
-      readFileSync(join(first.runDirectory!, 'run.json'), 'utf8'),
-    ) as { status: string; environmentFlags: { selectedAudio: boolean }; activities: unknown[] };
-    expect(completedMetadata).toMatchObject({
-      status: 'completed',
-      environmentFlags: { selectedAudio: true },
-    });
-    expect(completedMetadata.activities).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'selected_audio',
-          status: 'completed',
-          synthesisCalls: 4,
-        }),
-      ]),
-    );
   });
 
   it('writes selected audio through the direct Inworld synthesis path', async () => {

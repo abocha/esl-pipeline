@@ -286,11 +286,10 @@ describe('application/get-job-options', () => {
       },
     ]);
     expect(result).not.toHaveProperty('notionDatabases');
-    expect(
-      result.generation?.modelOptions
-        .filter((option) => option.provider === 'google_ai_studio')
-        .map((option) => option.id),
-    ).toEqual(expect.arrayContaining(['gemma-4-31b-it', 'gemma-4-26b-a4b-it']));
+    expect(result.generation?.providers).toEqual(['openai']);
+    expect(result.generation?.modelOptions.every((option) => option.provider === 'openai')).toBe(
+      true,
+    );
     expect(result.voiceAccents.length).toBeGreaterThan(0);
     expect(Array.isArray(result.voices)).toBe(true);
     expect(result.supportedActions).toHaveLength(3);

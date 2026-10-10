@@ -59,18 +59,13 @@ describe('config/env - core defaults', () => {
         expect(cfg.worker.ttsCacheMaintenanceIntervalMinutes).toBe(60);
         expect(cfg.worker.ttsCacheMaintenanceLockKey).toBe('910021');
         expect(cfg.generation.providers.openai.requestTimeoutMs).toBe(240_000);
-        expect(cfg.generation.providers.googleAiStudio.requestTimeoutMs).toBe(240_000);
-        expect(cfg.generation.providers.openrouter.requestTimeoutMs).toBe(240_000);
-        expect(cfg.generation.models.googleAiStudio.allowed).toEqual(
-          expect.arrayContaining(['gemma-4-31b-it', 'gemma-4-26b-a4b-it']),
-        );
         // Orchestrator core defaults
         expect(cfg.orchestrator.manifestStore).toBe('filesystem');
         expect(cfg.orchestrator.configProvider).toBe('local');
         expect(cfg.jobOptions.allowStaticFallback).toBe(false);
         expect(cfg.voiceRanker).toEqual({
           enabled: true,
-          model: 'gemma-4-31b-it',
+          model: 'gpt-5.6-luna',
           maxOutputTokens: 1200,
           rpmBudget: 12,
           dailyRequestBudget: 1000,
@@ -542,40 +537,19 @@ describe('config/env - explicit generation targets', () => {
       },
     );
   });
-  it('routes workloads independently including explicit Google and OpenRouter choices', async () => {
-    await withEnv(
-      {
-        NODE_ENV: 'test',
-        GEN_LESSON_MEMORY_PROVIDER: 'google_ai_studio',
-        GEN_GOOGLE_MODEL: 'gemini-3-flash-preview',
-        GEN_HOMEWORK_MEMORY_MODEL: 'memory-custom',
-        GEN_PROFILE_DRAFT_PROVIDER: 'openrouter',
-        GEN_PROFILE_DRAFT_MODEL: 'operator/model',
-      },
-      async () => {
-        const cfg = await loadConfigFresh();
-        expect(cfg.generation.targets.lesson_memory).toEqual({
-          provider: 'google_ai_studio',
-          model: 'gemini-3-flash-preview',
-        });
-        expect(cfg.generation.targets.homework_memory).toEqual({
-          provider: 'openai',
-          model: 'memory-custom',
-        });
-        expect(cfg.generation.targets.profile_revision_drafting).toEqual({
-          provider: 'openrouter',
-          model: 'operator/model',
-        });
-        expect(cfg.generation.targets.draft_generation.model).toBe('gpt-6.1-sol');
-      },
-    );
-  });
-  it('rejects unknown providers and OpenRouter without an explicit model', async () => {
-    await withEnv({ NODE_ENV: 'test', GEN_ASSIGNMENT_PROVIDER: 'invalid' }, async () => {
-      await expect(loadConfigFresh()).rejects.toThrow();
-    });
-    await withEnv({ NODE_ENV: 'test', GEN_PROFILE_DRAFT_PROVIDER: 'openrouter' }, async () => {
-      await expect(loadConfigFresh()).rejects.toThrow('GEN_PROFILE_DRAFT_MODEL');
+  it.each(['google_ai_studio', 'openrouter', 'invalid'])(
+    'rejects retired or unknown provider %s at startup',
+    async (provider) => {
+      await withEnv({ NODE_ENV: 'test', GEN_LESSON_MEMORY_PROVIDER: provider }, async () => {
+        await expect(loadConfigFresh()).rejects.toThrow('Generation provider must be openai');
+      });
+    },
+  );
+  it('keeps explicit OpenAI workload overrides independent', async () => {
+    await withEnv({ NODE_ENV: 'test', GEN_HOMEWORK_MEMORY_MODEL: 'gpt-6.1-sol' }, async () => {
+      const cfg = await loadConfigFresh();
+      expect(cfg.generation.targets.homework_memory.model).toBe('gpt-6.1-sol');
+      expect(cfg.generation.targets.lesson_memory.model).toBe('gpt-5.6-luna');
     });
   });
   it('retains safety mode validation', async () => {

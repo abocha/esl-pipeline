@@ -112,12 +112,12 @@ describe('application/homework-memory-extraction', () => {
     const result = await extractHomeworkMemoryContent({
       config: createGenerationConfig(),
       request: {
-        provider: 'openrouter',
-        model: 'qwen/qwen3.5',
+        provider: 'openai',
+        model: 'gpt-5.6-luna',
         prompt: 'Extract homework memory',
       },
       executors: {
-        openrouter: executor,
+        openai: executor,
       },
     });
 
@@ -128,7 +128,7 @@ describe('application/homework-memory-extraction', () => {
     expect(executor).toHaveBeenCalledWith({
       config: createGenerationConfig(),
       request: {
-        model: 'qwen/qwen3.5',
+        model: 'gpt-5.6-luna',
         prompt: 'Extract homework memory',
         maxOutputTokens: undefined,
         responseSchema: {

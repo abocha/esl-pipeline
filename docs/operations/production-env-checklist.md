@@ -283,14 +283,13 @@ promotion, and bounded health checks without restarting services.
 
 ## Provider Keys and Cost Guardrails
 
-Set only providers required by the current core hosted assignment flow.
+All active LLM workloads use OpenAI. Follow the [ESL-41 combined rollout/rollback](openai-llm-migration.md)
+for provider variable removal; independent STT/TTS credentials stay intact.
 
 Canonical examples to verify against current code/docs:
 
 ```bash
-OPENAI_API_KEY=<if direct generation uses OpenAI>
-GEMINI_API_KEY=<if direct generation, speech planning, or Google AI Studio fallback uses Gemini>
-OPENROUTER_API_KEY=<if OpenRouter fallback is enabled>
+OPENAI_API_KEY=<required for active LLM generation, speech planning and voice ranking>
 ESL_STT_DEFAULT_PROVIDER=elevenlabs
 ESL_STT_TRUSTED_SPLIT_PROVIDER=deepgram
 ESL_STT_PROVIDER_ELEVENLABS_API_KEY=<required for ordinary mixed recordings>

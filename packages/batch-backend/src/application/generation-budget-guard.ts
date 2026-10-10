@@ -11,6 +11,7 @@ import {
   recordGenerationActualUsage,
   reserveGenerationBudget,
 } from '../domain/generation-budget-repository.js';
+import { assertSupportedGenerationTarget } from './generation-policy.js';
 
 const ESTIMATED_CHARS_PER_TOKEN = 4;
 
@@ -287,25 +288,12 @@ function resolveProviderLimits(
   config: BatchBackendConfig['generation'],
   provider: GenerationProvider,
 ) {
-  if (provider === 'openai') {
-    return {
-      rpmBudget: config.providers.openai.rpmBudget,
-      tpmBudget: config.providers.openai.tpmBudget,
-      dailyRequestBudget: config.providers.openai.dailyRequestBudget,
-      dailyTokenBudget: config.providers.openai.dailyTokenBudget,
-    };
-  }
-  if (provider === 'google_ai_studio') {
-    return {
-      rpmBudget: config.providers.googleAiStudio.rpmBudget,
-      dailyRequestBudget: config.providers.googleAiStudio.dailyRequestBudget,
-      dailyTokenBudget: undefined,
-    };
-  }
+  assertSupportedGenerationTarget({ provider, model: '' });
   return {
-    rpmBudget: config.providers.openrouter.rpmBudget,
-    dailyRequestBudget: config.providers.openrouter.dailyRequestBudget,
-    dailyTokenBudget: config.providers.openrouter.dailyTokenBudget,
+    rpmBudget: config.providers.openai.rpmBudget,
+    tpmBudget: config.providers.openai.tpmBudget,
+    dailyRequestBudget: config.providers.openai.dailyRequestBudget,
+    dailyTokenBudget: config.providers.openai.dailyTokenBudget,
   };
 }
 
@@ -313,15 +301,8 @@ function resolveAllowedModels(
   config: BatchBackendConfig['generation'],
   provider: GenerationProvider,
 ): Set<string> {
-  if (provider === 'openai') {
-    return new Set(config.models.openai.allowed.map((model) => model.trim()).filter(Boolean));
-  }
-  if (provider === 'google_ai_studio') {
-    return new Set(
-      config.models.googleAiStudio.allowed.map((model) => model.trim()).filter(Boolean),
-    );
-  }
-  return new Set(config.models.openrouter.allowed.map((model) => model.trim()).filter(Boolean));
+  if (provider !== 'openai') return new Set();
+  return new Set(config.models.openai.allowed.map((model) => model.trim()).filter(Boolean));
 }
 
 export function getConfiguredGenerationAllowedModels(
@@ -391,6 +372,7 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
   repository: GenerationBudgetRepository;
   limits?: GenerationBudgetLimits;
 }): Promise<GenerationBudgetUsage> {
+  assertSupportedGenerationTarget(args);
   const generationConfig = args.config.generation;
 
   if (

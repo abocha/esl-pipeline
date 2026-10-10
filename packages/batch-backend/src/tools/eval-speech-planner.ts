@@ -23,14 +23,6 @@ import {
 } from '@esl-pipeline/tts-provider-inworld';
 
 import {
-  getConfiguredGenerationAllowedModels,
-  getConfiguredSpeechPlannerLimits,
-} from '../application/generation-budget-guard.js';
-import {
-  executeSpeechPlannerAttempt,
-  type SpeechPlannerAttemptResult,
-} from '../application/speech-performance-planner.js';
-import {
   buildSpeechPlannerEvalMatrix,
   loadOfflineSpeechPlannerOutputs,
   loadSpeechPlannerEvalFixtures,
@@ -42,17 +34,9 @@ import {
   type SpeechPlannerEvalVariant,
 } from '../application/speech-planner-eval-fixtures.js';
 import {
-  createSpeechPlannerEvalBudgetRepository,
-  preflightSpeechPlannerEval,
-  SpeechPlannerEvalRateLimiter,
-} from '../application/speech-planner-eval-preflight.js';
-import {
-  beginSpeechPlannerEvalRunActivity,
-  finishSpeechPlannerEvalRunActivity,
   readSpeechPlannerEvalRunMetadata,
   runSpeechPlannerEvaluation,
   type SpeechPlannerEvalAttemptRecord,
-  type SpeechPlannerEvalRunContext,
   type SpeechPlannerEvalRunMetadata,
 } from '../application/speech-planner-evaluator.js';
 import {
@@ -61,8 +45,6 @@ import {
   selectSpeechPlannerAudioBlocks,
   writeBlindListeningReport,
 } from '../application/speech-planner-listening-report.js';
-import type { BatchBackendConfig } from '../config/env.js';
-import { loadConfig } from '../config/env.js';
 
 const DEFAULT_CORPUS = 'packages/batch-backend/fixtures/speech-planner-eval/corpus-v1.json';
 const DEFAULT_PRICES =
@@ -249,40 +231,23 @@ export interface EvalSpeechPlannerCliResult {
   runDirectory?: string;
 }
 
-type AttemptExecutor = typeof executeSpeechPlannerAttempt;
-
-function readCompletedAttemptIds(runDirectory: string): Set<string> {
-  const attemptsPath = join(runDirectory, 'attempts.jsonl');
-  if (!existsSync(attemptsPath)) return new Set();
-  const lines = readFileSync(attemptsPath, 'utf8').split(/\r?\n/u).filter(Boolean);
-  return new Set(lines.map((line) => (JSON.parse(line) as { attemptId: string }).attemptId));
-}
-
 export async function runEvalSpeechPlannerCli(
   argv: readonly string[],
   dependencies: {
     stdout?: (message: string) => void;
-    config?: BatchBackendConfig;
     gitSha?: string;
-    executeAttempt?: AttemptExecutor;
-    inworldConfigured?: boolean;
-    writeSelectedAudio?: (args: {
-      runDirectory: string;
-      records: SpeechPlannerEvalAttemptRecord[];
-    }) => Promise<number>;
   } = {},
 ): Promise<EvalSpeechPlannerCliResult> {
   let options = parseEvalSpeechPlannerArgs(argv);
+  if (options.live)
+    throw new Error('The historical Gemini speech evaluation matrix is offline-only after ESL-41.');
   const resumeDirectory = options.resumeRun ? resolveInputPath(options.resumeRun) : undefined;
   const resumeMetadata: SpeechPlannerEvalRunMetadata | undefined = resumeDirectory
     ? readSpeechPlannerEvalRunMetadata(resumeDirectory)
     : undefined;
   if (resumeMetadata) {
     if (resumeMetadata.mode === 'live' && !options.live) {
-      throw new Error('Resuming a live speech planner evaluation requires --live.');
-    }
-    if (resumeMetadata.mode === 'offline' && options.live) {
-      throw new Error('An offline speech planner evaluation cannot be resumed with --live.');
+      throw new Error('Historical live speech evaluations cannot be resumed after ESL-41.');
     }
     const saved = resumeMetadata.resolvedConfig;
     options = {
@@ -302,17 +267,6 @@ export async function runEvalSpeechPlannerCli(
   if (options.audio === 'selected' && !options.live) {
     throw new Error('--audio=selected requires --live.');
   }
-  if (
-    options.audio === 'selected' &&
-    !(dependencies.inworldConfigured ?? createInworldClientProvider().isConfigured())
-  ) {
-    throw new Error(
-      '--audio=selected requires ESL_TTS_PROVIDER_INWORLD_API_KEY or INWORLD_API_KEY.',
-    );
-  }
-  if (options.offlineOutputFixtures && options.live) {
-    throw new Error('--offline-output-fixtures is mutually exclusive with --live.');
-  }
   if (options.privateOnly && !options.privateFixture) {
     throw new Error('--private-only requires --private-fixture.');
   }
@@ -323,7 +277,6 @@ export async function runEvalSpeechPlannerCli(
     assertPrivateArtifactPath(options.resumeRun ?? options.output);
   }
   const stdout = dependencies.stdout ?? console.log;
-  const config = dependencies.config ?? loadConfig();
   const gitSha =
     dependencies.gitSha ??
     resolveEvaluationGitSha(options.live || options.offlineOutputFixtures !== undefined);
@@ -339,8 +292,6 @@ export async function runEvalSpeechPlannerCli(
       models: options.models,
       promptPolicies: options.prompts,
     });
-  const allowedModels = getConfiguredGenerationAllowedModels(config.generation, 'google_ai_studio');
-  const limits = getConfiguredSpeechPlannerLimits(config);
   if (options.offlineOutputFixtures) {
     const runDirectory = options.resumeRun
       ? resolveInputPath(options.resumeRun)
@@ -395,18 +346,14 @@ export async function runEvalSpeechPlannerCli(
         },
         preflight: {
           status: 'not_applicable',
-          allowedModels,
+          allowedModels: [],
           requiredModels: [...SPEECH_PLANNER_EVAL_MODELS],
-          missingRequiredModels: SPEECH_PLANNER_EVAL_MODELS.filter(
-            (model) => !allowedModels.includes(model),
-          ),
-          allowlistReady: SPEECH_PLANNER_EVAL_MODELS.every((model) =>
-            allowedModels.includes(model),
-          ),
-          credentialsPresent: Boolean(config.generation.providers.googleAiStudio.apiKey),
+          missingRequiredModels: [],
+          allowlistReady: false,
+          credentialsPresent: false,
           usageVerified: false,
-          dailyLimit: limits.dailyRequestBudget ?? 0,
-          rpm: limits.rpmBudget ?? 0,
+          dailyLimit: 0,
+          rpm: 0,
           plannerAttempts: offlineVariants.length,
           compatibilityChecks: 0,
         },
@@ -441,21 +388,6 @@ export async function runEvalSpeechPlannerCli(
     stdout(JSON.stringify(result));
     return result;
   }
-  const completedAttemptIds = resumeDirectory
-    ? readCompletedAttemptIds(resumeDirectory)
-    : new Set<string>();
-  const preflight = preflightSpeechPlannerEval({
-    variants,
-    live: options.live,
-    credentialsPresent: Boolean(config.generation.providers.googleAiStudio.apiKey),
-    usedToday: options.usedToday,
-    dailyLimit: limits.dailyRequestBudget ?? 0,
-    rpm: limits.rpmBudget ?? 0,
-    allowedModels,
-    completedAttemptIds,
-  });
-  if (!preflight.allowed) throw new Error(preflight.remediation);
-
   const dryResult: EvalSpeechPlannerCliResult = {
     mode: 'dry-run',
     plannerAttempts: variants.length,
@@ -472,12 +404,6 @@ export async function runEvalSpeechPlannerCli(
         models: options.models,
         prompts: options.prompts,
         repetitions: options.repetitions,
-        configuredDailyLimit: limits.dailyRequestBudget,
-        configuredRpm: limits.rpmBudget,
-        remainingDailyCapacity: preflight.remainingDailyCapacity,
-        allowlistReady: preflight.allowlistReady,
-        missingRequiredModels: preflight.missingRequiredModels,
-        requiredAllowlist: SPEECH_PLANNER_EVAL_MODELS,
         priceSnapshot: priceSnapshot.version,
         output: resolveInputPath(options.output),
       }),
@@ -485,151 +411,7 @@ export async function runEvalSpeechPlannerCli(
     return dryResult;
   }
 
-  const runDirectory = resumeDirectory
-    ? resumeDirectory
-    : resolve(
-        resolveInputPath(options.output),
-        makeRunId(options.offlineOutputFixtures ? 'offline' : 'baseline'),
-      );
-  if (options.usedToday === undefined) {
-    throw new Error('Live evaluation requires --used-today=<nonnegative integer>.');
-  }
-  const repository = createSpeechPlannerEvalBudgetRepository({ usedToday: options.usedToday });
-  const limiter = new SpeechPlannerEvalRateLimiter({ rpm: limits.rpmBudget ?? 0 });
-  const executeAttempt = dependencies.executeAttempt ?? executeSpeechPlannerAttempt;
-  let providerCalls = 0;
-  const liveRunContext = {
-    mode: 'live',
-    resolvedConfig: {
-      corpusPath: artifactInputPath(options.corpus),
-      priceSnapshotPath: artifactInputPath(options.priceSnapshot),
-      ...(options.privateFixture
-        ? { privateFixturePath: artifactInputPath(options.privateFixture) }
-        : {}),
-      models: options.models,
-      promptPolicies: options.prompts,
-      repetitions: options.repetitions,
-      privateOnly: options.privateOnly,
-    },
-    environmentFlags: {
-      live: true,
-      offlineOutputFixtures: false,
-      selectedAudio: options.audio === 'selected',
-      privateOnly: options.privateOnly,
-      postgresAdapters: 0,
-    },
-    preflight: {
-      status: 'allowed',
-      allowedModels,
-      requiredModels: [...SPEECH_PLANNER_EVAL_MODELS],
-      missingRequiredModels: preflight.missingRequiredModels,
-      allowlistReady: preflight.allowlistReady,
-      credentialsPresent: Boolean(config.generation.providers.googleAiStudio.apiKey),
-      usageVerified: preflight.usageVerified,
-      usedToday: options.usedToday,
-      dailyLimit: limits.dailyRequestBudget ?? 0,
-      rpm: limits.rpmBudget ?? 0,
-      remainingDailyCapacity: preflight.remainingDailyCapacity,
-      plannerAttempts: preflight.plannerAttempts,
-      compatibilityChecks: preflight.compatibilityChecks,
-    },
-  } satisfies SpeechPlannerEvalRunContext;
-  const run = await runSpeechPlannerEvaluation({
-    runDirectory,
-    gitSha,
-    variants,
-    fixtures,
-    priceSnapshot,
-    resume: Boolean(options.resumeRun),
-    runContext: liveRunContext,
-    executeVariant: async (variant) => {
-      const fixture = fixtures.find((candidate) => candidate.id === variant.fixtureId)!;
-      await limiter.acquire();
-      providerCalls += 1;
-      const startedAt = new Date();
-      try {
-        const attempt: SpeechPlannerAttemptResult = await executeAttempt({
-          config: {
-            ...config,
-            speechPlanner: { ...config.speechPlanner, model: variant.model },
-          },
-          prepared: fixture.prepared,
-          promptPolicyVersion: variant.promptPolicyVersion,
-          repository,
-        });
-        const endedAt = new Date();
-        return {
-          status: 'completed' as const,
-          rawText: attempt.rawText ?? '',
-          latencyMs: attempt.latencyMs,
-          returnedModel: attempt.returnedModel,
-          providerRequestId: attempt.providerRequestId,
-          finishReason: attempt.finishReason,
-          usage: attempt.usage,
-          fallbackUsed: Boolean(attempt.fallback),
-          startedAt: startedAt.toISOString(),
-          endedAt: endedAt.toISOString(),
-        };
-      } catch (error) {
-        const code =
-          error && typeof error === 'object' && 'code' in error
-            ? String((error as { code?: unknown }).code)
-            : 'provider_error';
-        const status =
-          error && typeof error === 'object' && 'status' in error
-            ? Number((error as { status?: unknown }).status)
-            : undefined;
-        if (
-          variant.compatibilitySmoke &&
-          (status === 400 || status === 404 || code.includes('MODEL') || code.includes('INVALID'))
-        ) {
-          return { status: 'compatibility_failure' as const, category: code };
-        }
-        return { status: 'provider_error' as const, category: code };
-      }
-    },
-  });
-  let synthesisCalls = 0;
-  if (options.audio === 'selected') {
-    const activityId = beginSpeechPlannerEvalRunActivity({
-      runDirectory,
-      kind: 'selected_audio',
-      runContext: liveRunContext,
-    });
-    try {
-      synthesisCalls = await (dependencies.writeSelectedAudio ?? writeSelectedInworldAudio)({
-        runDirectory,
-        records: run.records,
-      });
-      finishSpeechPlannerEvalRunActivity({
-        runDirectory,
-        activityId,
-        status: 'completed',
-        synthesisCalls,
-      });
-    } catch (error) {
-      finishSpeechPlannerEvalRunActivity({
-        runDirectory,
-        activityId,
-        status: 'failed',
-        normalizedErrorCategory: 'selected_audio_failed',
-      });
-      throw error;
-    }
-  }
-  const result: EvalSpeechPlannerCliResult = {
-    mode: 'live',
-    plannerAttempts: preflight.plannerAttempts,
-    compatibilityChecks: preflight.compatibilityChecks,
-    providerCalls,
-    synthesisCalls,
-    postgresAdapters: 0,
-    currentDayUsage: options.usedToday,
-    completedAttempts: run.records.length,
-    runDirectory,
-  };
-  stdout(JSON.stringify(result));
-  return result;
+  throw new Error('Historical speech evaluation supports dry-run and offline fixtures only.');
 }
 
 export async function writeSelectedInworldAudio(

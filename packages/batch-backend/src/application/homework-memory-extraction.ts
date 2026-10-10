@@ -3,10 +3,9 @@ import type { ZodIssue } from 'zod';
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import { assertSupportedGenerationTarget } from './generation-policy.js';
 import {
-  executeGoogleStructuredGeneration,
   executeOpenAiStructuredGeneration,
-  executeOpenRouterStructuredGeneration,
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
@@ -27,10 +26,10 @@ type StructuredProviderExecutor = (args: {
   request: ProviderStructuredExecutionRequest;
 }) => Promise<ProviderStructuredExecutionResult>;
 
-const DEFAULT_STRUCTURED_EXECUTORS: Record<GenerationProvider, StructuredProviderExecutor> = {
+const DEFAULT_STRUCTURED_EXECUTORS: Partial<
+  Record<GenerationProvider, StructuredProviderExecutor>
+> = {
   openai: executeOpenAiStructuredGeneration,
-  google_ai_studio: executeGoogleStructuredGeneration,
-  openrouter: executeOpenRouterStructuredGeneration,
 };
 
 export interface ExtractHomeworkMemoryContentRequest {
@@ -64,8 +63,9 @@ export class HomeworkMemoryExtractionValidationError extends Error {
 export async function extractHomeworkMemoryContent(args: {
   config: BatchBackendConfig['generation'];
   request: ExtractHomeworkMemoryContentRequest;
-  executors?: Partial<Record<GenerationProvider, StructuredProviderExecutor>>;
+  executors?: Partial<Partial<Record<GenerationProvider, StructuredProviderExecutor>>>;
 }): Promise<ExtractHomeworkMemoryContentResult> {
+  assertSupportedGenerationTarget(args.request);
   const executors = {
     ...DEFAULT_STRUCTURED_EXECUTORS,
     ...args.executors,

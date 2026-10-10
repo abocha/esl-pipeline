@@ -15,6 +15,7 @@ import {
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
 import { GenerationBudgetExceededError } from './generation-budget-guard.js';
+import { ProviderExecutionError } from './generation-providers.js';
 import {
   generateProfileRevisionDraft,
   ProfileRevisionDraftingError,
@@ -560,15 +561,18 @@ export async function reconcileProfileInitialEnrichmentOperation(
     if (!reserved.submissionId) {
       // A permanent preflight rejection has not reached the provider. Resolve it
       // durably so the queue does not retry an impossible request forever.
-      if (error instanceof GenerationBudgetExceededError) {
+      const retiredTarget =
+        error instanceof ProviderExecutionError &&
+        (error.code === 'unsupported_provider' || error.code === 'unsupported_model');
+      if (error instanceof GenerationBudgetExceededError || retiredTarget) {
         await withTransaction(async (client) => {
           const op = await lockOperation(client, id);
           if (op?.state !== 'queued') return;
           await client.query(
             `UPDATE profile_initial_enrichment_operations
-             SET state = 'failed', failure_code = 'budget_unavailable', updated_at = NOW()
+             SET state = 'failed', failure_code = $2, updated_at = NOW()
              WHERE id = $1`,
-            [id],
+            [id, retiredTarget ? 'provider_rejected' : 'budget_unavailable'],
           );
         });
         return;

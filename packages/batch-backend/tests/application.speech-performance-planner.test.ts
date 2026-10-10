@@ -215,7 +215,7 @@ describe('application/speech-performance-planner', () => {
       buildSpeechPlannerRequest(
         createPrepared(),
         'speech-performance-v1-restrained-natural',
-        'gemini-3.1-flash-lite',
+        'gpt-5.6-luna',
       ),
     ).toMatchObject({
       prompt: expectedPrompt,
@@ -227,7 +227,7 @@ describe('application/speech-performance-planner', () => {
       buildSpeechPlannerRequest(
         createPrepared(),
         'speech-performance-v1-restrained-natural',
-        'gemini-3.1-flash-lite',
+        'gpt-5.6-luna',
       ).responseSchema.schema.properties.segments.items.properties,
     ).toMatchObject({
       pauseBeforeMs: { maximum: 3000 },
@@ -269,16 +269,16 @@ describe('application/speech-performance-planner', () => {
           ...config.generation,
           providers: {
             ...config.generation.providers,
-            googleAiStudio: {
-              ...config.generation.providers.googleAiStudio,
+            openai: {
+              ...config.generation.providers.openai,
               apiKey: undefined,
             },
           },
         },
         speechPlanner: {
           enabled: true,
-          provider: 'google_ai_studio' as const,
-          model: 'gemini-3.1-flash-lite',
+          provider: 'openai' as const,
+          model: 'gpt-5.6-luna',
           maxOutputTokens: 2400,
           rpmBudget: 4,
           dailyRequestBudget: 120,
@@ -433,7 +433,7 @@ describe('application/speech-performance-planner', () => {
       prepared: createPrepared(),
       promptPolicyVersion: 'speech-performance-v2-inworld-tts2' as const,
       promptHash: 'a'.repeat(64),
-      plannerModel: 'gemini-3.5-flash-lite',
+      plannerModel: 'gpt-5.6-luna',
       generatedAt: '2026-07-29T00:00:00.000Z',
       latencyMs: 0,
     };

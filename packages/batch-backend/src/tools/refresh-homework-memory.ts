@@ -78,8 +78,10 @@ function parseArgs(argv: string[]): CliOptions {
       if (!value) {
         throw new Error('Missing value for --provider');
       }
-      if (value !== 'openai' && value !== 'google_ai_studio' && value !== 'openrouter') {
-        throw new Error('Invalid --provider. Use openai, google_ai_studio, or openrouter');
+      if (value !== 'openai') {
+        throw new Error(
+          'Invalid --provider. Use openai; Google AI Studio and OpenRouter generation are retired',
+        );
       }
       options.provider = value;
       index += 1;

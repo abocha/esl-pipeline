@@ -175,12 +175,12 @@ describe('application/lesson-memory-extraction', () => {
       extractLessonMemoryContent({
         config: createGenerationConfig(),
         request: {
-          provider: 'google_ai_studio',
-          model: 'gemini-3.1-pro-preview',
+          provider: 'openai',
+          model: 'gpt-5.6-luna',
           prompt: 'Extract lesson memory',
         },
         executors: {
-          google_ai_studio: executor,
+          openai: executor,
         },
       }),
     ).rejects.toBeInstanceOf(LessonMemoryExtractionValidationError);

@@ -858,10 +858,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       selectedTtsStrategy: publishTtsStrategySchema.nullable().optional(),
       selectedTtsModel: z.string().nullable().optional(),
       selectedPreset: z.string().nullable().optional(),
-      selectedGenerationProvider: z
-        .enum(['openai', 'google_ai_studio', 'openrouter'])
-        .nullable()
-        .optional(),
+      selectedGenerationProvider: z.enum(['openai']).nullable().optional(),
       selectedGenerationModel: z.string().nullable().optional(),
       teacherNotes: z.string().max(20_000).nullable().optional(),
       selectedProfileRevisionId: postgresUuidSchema.nullable().optional(),

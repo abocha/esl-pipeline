@@ -203,7 +203,7 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
 
       const schema = z.object({
         promptPackageId: z.string().min(1),
-        provider: z.enum(['openai', 'google_ai_studio', 'openrouter']).optional(),
+        provider: z.enum(['openai']).optional(),
         model: z.string().min(1).optional(),
         maxOutputTokens: z.number().int().positive().optional(),
         stream: z.boolean().optional(),
