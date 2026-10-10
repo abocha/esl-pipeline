@@ -22,6 +22,7 @@ and does not run the transcription worker or call paid providers by default.
 
 For a fresh supported Ubuntu host, start with
 [production host bootstrap](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap).
+For host loss, use the [replacement-host recovery inventory and disposable rehearsal](replacement-host-recovery.md).
 
 For AssignmentV1 activation, consult the [ESL-29 preparation record](assignment-v1-activation.md)
 **only as dated rollout evidence**. Its frozen v7 hashes and release identities predate the current
