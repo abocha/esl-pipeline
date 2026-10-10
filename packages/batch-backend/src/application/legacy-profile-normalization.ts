@@ -7,7 +7,10 @@ import {
   FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
-import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  createGenerationRequestEnvelope,
+  flattenGenerationRequestEnvelope,
+} from './generation-request-envelope.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -109,18 +112,13 @@ export async function normalizeLegacyStudentProfile(args: {
     );
   }
 
-  const prompt = buildLegacyNormalizationPrompt({
-    studentName: student.student,
-    activeProfileContent: activeRevision.content,
-    memoryOverview: overview,
-    reviewerNote: request.reviewerNote ?? null,
-  });
   const envelope = buildLegacyNormalizationEnvelope({
     studentName: student.student,
     activeProfileContent: activeRevision.content,
     memoryOverview: overview,
     reviewerNote: request.reviewerNote ?? null,
   });
+  const prompt = flattenGenerationRequestEnvelope(envelope);
 
   const drafting = await dependencies.drafting.generate({
     request: {
@@ -172,9 +170,14 @@ function buildLegacyNormalizationEnvelope(args: {
 }) {
   return createGenerationRequestEnvelope({
     workload: 'profile_revision',
+    promptVersion: 'learner_memory_generation_v2',
     instructions: [
       'Normalize a legacy ESL student profile into a durable foundational profile.',
       'Preserve durable teacher-authored truths, omit transient continuity, and do not invent facts.',
+      'Remove or compress tactical continuity that now belongs in canonical student memory.',
+      'If information is clearly transient, recent, or already better represented by current memory, omit it from the normalized profile unless it is genuinely durable context.',
+      'Keep the result readable, coherent, and teacher-trustworthy.',
+      'Return only a closed foundational_profile_v1 JSON object.',
     ].join('\n'),
     sources: [
       { id: 'student-name', label: 'STUDENT_NAME', content: args.studentName },
@@ -225,79 +228,4 @@ function getDependencies(
       saveRevision: saveProfileRevisionContent,
     },
   };
-}
-
-function buildLegacyNormalizationPrompt(args: {
-  studentName: string;
-  activeProfileContent: string;
-  memoryOverview: StudentMemoryOverview;
-  reviewerNote: string | null;
-}): string {
-  const snapshotPayload = args.memoryOverview.latestReadyStudentMemorySnapshot
-    ? {
-        id: args.memoryOverview.latestReadyStudentMemorySnapshot.id,
-        generatedAt: args.memoryOverview.latestReadyStudentMemorySnapshot.generatedAt.toISOString(),
-        snapshotSummary:
-          args.memoryOverview.latestReadyStudentMemorySnapshot.snapshotSummary ?? null,
-        stableStrengths: args.memoryOverview.latestReadyStudentMemorySnapshot.stableStrengths,
-        recurringIssues: args.memoryOverview.latestReadyStudentMemorySnapshot.recurringIssues,
-        personalFacts: args.memoryOverview.latestReadyStudentMemorySnapshot.personalFacts,
-        unresolvedIssues: args.memoryOverview.latestReadyStudentMemorySnapshot.unresolvedIssues,
-      }
-    : null;
-
-  const lessonPayload = args.memoryOverview.recentReadyLessonMemory.map((entry) => ({
-    id: entry.id,
-    generatedAt: entry.generatedAt.toISOString(),
-    lessonSummary: entry.lessonSummary ?? null,
-    studentFacts: entry.studentFacts,
-    progressSignals: entry.progressSignals,
-    followUpRecommendations: entry.followUpRecommendations,
-  }));
-
-  const homeworkPayload = args.memoryOverview.recentReadyHomeworkMemory.map((entry) => ({
-    id: entry.id,
-    generatedAt: entry.generatedAt.toISOString(),
-    homeworkSummary: entry.homeworkSummary ?? null,
-    topic: entry.topic ?? null,
-    reviewTargets: entry.reviewTargets,
-    taskList: entry.taskList,
-    teacherFollowUpCues: entry.teacherFollowUpCues,
-  }));
-
-  return [
-    'You are normalizing a legacy ESL student profile into the new foundational-profile architecture.',
-    'Output only the normalized profile markdown. Do not add commentary, JSON, or fences.',
-    'Preserve durable foundational truths from the current profile.',
-    'Remove or compress tactical continuity that now belongs in canonical student memory.',
-    'Do not invent new durable facts.',
-    'If information is clearly transient, recent, or already better represented by current memory, omit it from the normalized profile unless it is genuinely durable context.',
-    'Keep the result readable, coherent, and teacher-trustworthy.',
-    '',
-    '[STUDENT_NAME]',
-    args.studentName,
-    '',
-    '[CURRENT_ACTIVE_PROFILE]',
-    args.activeProfileContent,
-    '',
-    '[LATEST_READY_STUDENT_MEMORY_SNAPSHOT]',
-    snapshotPayload
-      ? JSON.stringify(snapshotPayload, null, 2)
-      : 'No ready student-memory snapshot available.',
-    '',
-    '[RECENT_READY_LESSON_MEMORY]',
-    lessonPayload.length > 0
-      ? JSON.stringify(lessonPayload, null, 2)
-      : 'No recent ready lesson-memory entries available.',
-    '',
-    '[RECENT_READY_HOMEWORK_MEMORY]',
-    homeworkPayload.length > 0
-      ? JSON.stringify(homeworkPayload, null, 2)
-      : 'No recent ready homework-memory entries available.',
-    '',
-    '[REVIEWER_NOTE]',
-    args.reviewerNote ?? 'No reviewer note provided.',
-    '',
-    'Output only the normalized profile markdown.',
-  ].join('\n');
 }

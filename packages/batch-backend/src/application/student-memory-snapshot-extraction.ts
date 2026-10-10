@@ -10,7 +10,10 @@ import {
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
-import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
+import {
+  type GenerationRequestEnvelopeV1,
+  resolveGenerationRequestText,
+} from './generation-request-envelope.js';
 import { assertEvidenceSourcesInEnvelope } from './source-evidence-validation.js';
 import {
   STUDENT_MEMORY_SNAPSHOT_CONTENT_JSON_SCHEMA,
@@ -80,7 +83,7 @@ export async function extractStudentMemorySnapshotContent(args: {
     config: args.config,
     request: {
       model: args.request.model,
-      prompt: args.request.prompt,
+      prompt: resolveGenerationRequestText(args.request),
       ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
       maxOutputTokens: args.request.maxOutputTokens,
       responseSchema: {

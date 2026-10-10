@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ProviderStructuredExecutionRequest } from '../src/application/generation-providers.js';
 import {
   ProfileCandidatePromotionError,
   promoteStudentProfileCandidates,
 } from '../src/application/profile-candidate-promotion.js';
 import { loadConfig } from '../src/config/env.js';
 import type { StudentProfileCandidateRecord } from '../src/domain/student-profile-candidate-model.js';
+import { assertMemoryRequest } from './support/memory-request-capture.js';
 
 function makeCandidate(
   overrides: Partial<StudentProfileCandidateRecord> & Pick<StudentProfileCandidateRecord, 'id'>,
@@ -209,6 +211,10 @@ describe('application/profile-candidate-promotion', () => {
         }),
       }),
     );
+    const captured = (
+      generate.mock.calls as unknown as [{ request: ProviderStructuredExecutionRequest }][]
+    )[0]![0].request;
+    await assertMemoryRequest('profile-promotion', { ...captured, model: 'fixture' });
     expect(generate).toHaveBeenCalledWith(
       expect.objectContaining({
         request: expect.objectContaining({

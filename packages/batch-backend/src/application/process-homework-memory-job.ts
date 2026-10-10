@@ -8,15 +8,13 @@ import {
   supersedePendingHomeworkMemoryEntriesForAssignmentLineage,
 } from '../domain/homework-memory-repository.js';
 import { obsoleteMemoryReplayIntent } from '../domain/memory-replay-delivery.js';
+import { flattenGenerationRequestEnvelope } from './generation-request-envelope.js';
 import {
   HistoricalAssignmentReadOnlyError,
   requireTypedAssignment,
 } from './historical-assignment.js';
 import { generateHomeworkMemoryFromSource } from './homework-memory-generation.js';
-import {
-  buildHomeworkMemoryEnvelope,
-  buildHomeworkMemoryPrompt,
-} from './homework-memory-prompt.js';
+import { buildHomeworkMemoryEnvelope } from './homework-memory-prompt.js';
 import { resolveHomeworkMemorySourceFromSucceededJob } from './homework-memory-source.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 import {
@@ -139,12 +137,10 @@ export async function processHomeworkMemoryJob(args: {
       return;
     }
 
-    const prompt = buildHomeworkMemoryPrompt({
-      source,
-    });
     const envelope = buildHomeworkMemoryEnvelope({
       source,
     });
+    const prompt = flattenGenerationRequestEnvelope(envelope);
 
     const result = await pacer.run({
       workload: 'homework_memory',

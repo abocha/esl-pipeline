@@ -43,6 +43,28 @@ Versioned request envelopes still own OpenAI reasoning and verbosity: assignment
 lesson/homework/profile medium/low, snapshot high/low. AssignmentV1 pins its schema in the existing envelope; memory/profile schemas remain unchanged.
 ABO-6 prompt bootstrap and admin activation remain separate from deployment.
 
+### Effective learner-memory inputs (ESL-40)
+
+Lesson/homework memory, full/incremental snapshots, profile refresh, candidate promotion and legacy
+profile normalization build one `GenerationRequestEnvelopeV1`, with prompt policy
+`learner_memory_generation_v2`. Diagnostic text and token estimation use its instructions plus
+two newlines plus input. OpenAI retains separate `instructions`/`input`; currently supported
+Google/OpenRouter transports render that same text. Prompt-only initial enrichment and speech
+planning retain their existing requests. No model, schema, cap, retry or routing change is implied.
+The estimator retains its existing four-characters-per-token convention and output allowance;
+it does not add schema or transport-token overhead. Estimates remain approximations, not billed usage.
+
+The policy consolidates existing instructions: lesson speaker/noise/confidence guidance, snapshot
+continuity and review guidance, and durable profile guidance. Candidate promotion keeps ESL-39's
+bounded patch decision, replacing the stale full-rewrite text; normalization requests its existing
+foundational JSON schema rather than the stale Markdown instruction. Source manifests and envelope
+source payloads remain intact. Captured synthetic before requests and reconciled instruction fixtures
+live in `packages/batch-backend/tests/fixtures/memory-generation-{before,after}/`.
+
+ESL-41 owns the approved migration away from Google AI Studio LLM workloads. This consolidation uses
+the existing adapters only; provider removal, credentials and workload migration remain separate.
+OpenRouter stays outside automatic routing. ABO-26 separately owns gated Batch retirement.
+
 ### Explicit model rosters
 
 `GEN_ALLOWED_MODELS_*` remains an explicit selection roster for job options and an independent

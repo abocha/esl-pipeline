@@ -35,6 +35,7 @@ import {
 } from '../domain/student-memory-snapshot-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { estimateGenerationTokens } from './generation-budget-guard.js';
+import { flattenGenerationRequestEnvelope } from './generation-request-envelope.js';
 import {
   reconcileStudentProfileCandidateRefresh,
   type requestStudentProfileCandidateRefresh,
@@ -66,9 +67,7 @@ import {
 } from './student-memory-snapshot-hashes.js';
 import {
   buildIncrementalStudentMemorySnapshotEnvelope,
-  buildIncrementalStudentMemorySnapshotPrompt,
   buildStudentMemorySnapshotEnvelope,
-  buildStudentMemorySnapshotPrompt,
   type IncrementalStudentMemorySnapshotTriggerSource,
 } from './student-memory-snapshot-prompt.js';
 import { isProfileWorthyStudentFact } from './student-profile-candidate-facts.js';
@@ -597,14 +596,11 @@ async function buildSnapshotRefreshRequest(args: {
       throw new Error('No canonical lesson/homework memory available for student-memory snapshot');
     }
 
-    const prompt = buildStudentMemorySnapshotPrompt({
-      lessonMemoryEntries: readyLessonMemory,
-      homeworkMemoryEntries: readyHomeworkMemory,
-    });
     const envelope = buildStudentMemorySnapshotEnvelope({
       lessonMemoryEntries: readyLessonMemory,
       homeworkMemoryEntries: readyHomeworkMemory,
     });
+    const prompt = flattenGenerationRequestEnvelope(envelope);
     const lessonMemoryEntryIds = readyLessonMemory.map((entry: LessonMemoryRecord) => entry.id);
     const homeworkMemoryEntryIds = readyHomeworkMemory.map(
       (entry: HomeworkMemoryRecord) => entry.id,
@@ -941,18 +937,13 @@ function buildIncrementalSnapshotRequestFromContext(args: {
   includedHomeworkMemoryEntryIds: string[];
   promptMetrics: StudentMemorySnapshotPromptMetrics;
 } {
-  const prompt = buildIncrementalStudentMemorySnapshotPrompt({
-    previousSnapshot: args.previousSnapshot,
-    triggerSource: args.triggerSource,
-    supportingLessonMemoryEntries: args.supportingLessonMemoryEntries,
-    supportingHomeworkMemoryEntries: args.supportingHomeworkMemoryEntries,
-  });
   const envelope = buildIncrementalStudentMemorySnapshotEnvelope({
     previousSnapshot: args.previousSnapshot,
     triggerSource: args.triggerSource,
     supportingLessonMemoryEntries: args.supportingLessonMemoryEntries,
     supportingHomeworkMemoryEntries: args.supportingHomeworkMemoryEntries,
   });
+  const prompt = flattenGenerationRequestEnvelope(envelope);
   const includedLessonMemoryEntryIds = uniqueIds([
     ...(args.triggerSource.kind === 'lesson_memory' ? [args.triggerSource.entry.id] : []),
     ...args.supportingLessonMemoryEntries.map((entry) => entry.id),

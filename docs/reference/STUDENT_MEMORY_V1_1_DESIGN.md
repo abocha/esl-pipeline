@@ -20,6 +20,22 @@
   - `packages/batch-backend/src/application/student-profile-candidates.ts`
   - `packages/batch-backend/schema.sql`
 
+## Current effective request contract (ESL-40)
+
+The shipped v1.1 incremental path retains its existing parent/trigger/supporting-context selection,
+optional-context drop, hard-budget rejection, manual-rebuild warning, retry and currentness rules.
+Lesson/homework/snapshot and affected profile builders now construct one v1 request envelope with
+`learner_memory_generation_v2` prompt policy. Snapshot `promptByteLength` measures UTF-8 bytes of
+the effective instructions plus input; `inputTokenEstimate` uses the existing character estimator
+on that same content. Pacing adds the unchanged output allowance. Provider-specific request transport
+does not maintain a second teaching-policy copy. Corrected estimates can alter admission without
+retuning caps. Previously stored request evidence remains immutable.
+
+See [provider policy](GENERATION_PROVIDER_POLICY.md#effective-learner-memory-inputs-esl-40) for
+instruction reconciliation and the [replay runbook](../operations/student-memory-replay-backfill.md#effective-request-transition-esl-40)
+for queued-work transition and rollback. The dated design observations below describe the original
+v1.1 investigation rather than the current implementation baseline.
+
 ## Executive Summary
 
 Student Memory v1 is architecturally sound, but its long-term snapshot refresh path is currently unbounded.

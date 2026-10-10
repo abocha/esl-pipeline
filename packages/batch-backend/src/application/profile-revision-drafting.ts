@@ -30,7 +30,10 @@ import {
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
-import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
+import {
+  type GenerationRequestEnvelopeV1,
+  resolveGenerationRequestText,
+} from './generation-request-envelope.js';
 import type { ProfileCandidatePatch } from './profile-candidate-patch.js';
 
 type ProviderExecutor = (args: {
@@ -176,7 +179,7 @@ export async function generateProfileRevisionDraft(args: {
         config,
         provider: target.provider,
         model: target.model,
-        prompt: args.request.prompt,
+        prompt: resolveGenerationRequestText(args.request),
         maxOutputTokens: args.request.maxOutputTokens,
         now: now(),
         repository: budgetRepository,
@@ -198,7 +201,7 @@ export async function generateProfileRevisionDraft(args: {
       config: config.generation,
       request: {
         model: target.model,
-        prompt: args.request.prompt,
+        prompt: resolveGenerationRequestText(args.request),
         ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
         maxOutputTokens: args.request.maxOutputTokens,
         responseSchema: args.request.responseSchema ?? {

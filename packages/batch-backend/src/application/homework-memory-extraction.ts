@@ -10,7 +10,10 @@ import {
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
-import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
+import {
+  type GenerationRequestEnvelopeV1,
+  resolveGenerationRequestText,
+} from './generation-request-envelope.js';
 import {
   HOMEWORK_MEMORY_CONTENT_JSON_SCHEMA,
   HOMEWORK_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
@@ -78,7 +81,7 @@ export async function extractHomeworkMemoryContent(args: {
     config: args.config,
     request: {
       model: args.request.model,
-      prompt: args.request.prompt,
+      prompt: resolveGenerationRequestText(args.request),
       ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
       maxOutputTokens: args.request.maxOutputTokens,
       responseSchema: {

@@ -81,6 +81,12 @@ For deep system maps, prefer the linked docs rather than growing this file again
 
 ### Contracts and compatibility
 
+- Learner-memory and affected profile generation use one effective request envelope for instructions
+  and input. Provider diagnostic text and budget estimation derive from that content; transport
+  differences do not own separate teaching policies. Prompt-only initial enrichment stays supported.
+  Preserve stored historical request evidence and the separately gated Batch retirement boundary.
+  See [generation policy](GENERATION_PROVIDER_POLICY.md#effective-learner-memory-inputs-esl-40).
+
 - Public request/response DTO changes must go through `@esl-pipeline/contracts`.
 - Do not silently rename or repurpose manifest/config fields.
 - Backward compatibility should remain unless a breaking change is explicit, planned, and versioned.
