@@ -95,10 +95,7 @@ test('backend offline deploy uses layer-persisted fetched artifacts', () => {
     backend,
     /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --filter [^\n]+ deploy --prod \/app\/deployed/u,
   );
-  assert.doesNotMatch(
-    backend,
-    /--mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11/u,
-  );
+  assert.doesNotMatch(backend, /--mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11/u);
 });
 
 test('bot portable deployment reuses its cached store without persisting it', () => {
@@ -158,7 +155,9 @@ test('release publication pulls refreshed upstream bases', () => {
   );
   assert.match(releaseWorkflow, /^\s+pull: true$/mu);
   assert.match(releaseWorkflow, /cache-from: type=gha,scope=batch-backend/u);
-  assert.match(releaseWorkflow, /cache-to: type=gha,mode=max,scope=batch-backend/u);
+  assert.match(releaseWorkflow, /cache-from: type=gha,scope=batch-frontend/u);
+  assert.match(releaseWorkflow, /cache-from: type=gha,scope=telegram-ops-bot/u);
+  assert.doesNotMatch(releaseWorkflow, /^\s+cache-to:/mu);
 });
 
 test('library-only orchestrator has no standalone image surface', () => {

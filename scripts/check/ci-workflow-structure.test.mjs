@@ -307,12 +307,21 @@ test('unit/component lane keeps a conservative worker budget and measurement evi
   assert.match(unit, /unit-resource-usage\.txt/u);
 });
 
-test('media is independently selectable and integration does not install FFmpeg', () => {
+test('media prerequisites overlap and complete before the independently selected media tests', () => {
   const media = jobBlock('recording-media');
-  assert.match(media, /apt-get install --yes --no-install-recommends ffmpeg/u);
+  const prerequisiteStart = media.indexOf('- name: Install media prerequisites and build');
+  const mediaTestsStart = media.indexOf('- name: Backend recording media tests');
+  assert.ok(prerequisiteStart >= 0 && mediaTestsStart > prerequisiteStart);
+  const prerequisites = media.slice(prerequisiteStart, mediaTestsStart);
+  assert.match(prerequisites, /shell:\s*bash/u);
+  assert.match(prerequisites, /apt-get update/u);
+  assert.match(prerequisites, /apt-get install --yes --no-install-recommends ffmpeg/u);
+  assert.match(prerequisites, /&\s*$/mu);
+  assert.match(prerequisites, /pnpm install --frozen-lockfile/u);
+  assert.match(prerequisites, /pnpm --filter @esl-pipeline\/batch-backend\.\.\. run build/u);
+  assert.match(prerequisites, /\bwait\b/u);
   assert.match(media, /pnpm --filter @esl-pipeline\/batch-backend test:media/u);
   assert.doesNotMatch(media, /pnpm test:integration/u);
-  assert.match(media, /pnpm --filter @esl-pipeline\/batch-backend\.\.\. run build/u);
   assert.match(jobBlock('deterministic-integration'), /pnpm test:integration/u);
   assert.doesNotMatch(jobBlock('deterministic-integration'), /ffmpeg|test:media/u);
 });
