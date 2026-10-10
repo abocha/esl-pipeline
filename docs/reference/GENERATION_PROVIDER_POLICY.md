@@ -95,9 +95,9 @@ See the [inventory and Decisions comparison](../operations/openai-llm-migration.
   price snapshots and reports remain historical evidence, not active live targets. Live `--live`
   requests fail before provider construction. New provider evaluation requires separate authority.
 - OpenAI account capacity, pricing and data-sharing eligibility are operator-verified inputs;
-  no complimentary-token allowance is hardcoded. Keep local request/token guards and the
+  the app-local caps below do not guarantee complimentary billing. Keep local request/token guards and the
   organization's approved learner-data policy.
-- Provider/model RPM, daily requests, daily tokens, and spend accounting remain separate. Each
+- Per-model RPM/TPM and daily requests, shared-group daily tokens, and spend accounting remain separate. Each
   typed-timeout retry reserves another physical request before execution; actual returned usage is
   recorded once for the successful logical call.
 - Prompt policy `contextual-bracket-annotation-v1` gives Luna complete dialogue or monologue
@@ -127,7 +127,7 @@ See the [inventory and Decisions comparison](../operations/openai-llm-migration.
   `GEN_OPENAI_RETRY_*`. Its single-candidate use of the shared provider-runtime
   helper cannot switch targets. The shared ladder remains for independent TTS adapter behavior;
   ABO-9 does not redesign TTS.
-- `GEN_SAFETY_MODE=hard_stop` retains atomic provider/model budget reservation, UTC rollover and
+- `GEN_SAFETY_MODE=hard_stop` retains atomic model-group daily and per-model minute reservation, UTC rollover and
   actual usage accounting. `0` budgets remain intentional blocks. `off` / `warn` preserve their
   existing bypass behavior for capacity limits. `GEN_MAX_OUTPUT_TOKENS_HARD=12000` is enforced
   regardless of that mode; the removed paid-spend switch cannot bypass it.
@@ -178,3 +178,73 @@ with only enabled voice ranking still configured on Gemma. See the checklist for
 - [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
 - [`docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`](OPENAI_RESPONSES_WS2B_PROFILE.md)
 - [`docs/reference/env.md`](env.md)
+
+## OpenAI model-group daily budgets (ESL-45)
+
+`GEN_OPENAI_EFFICIENT_DAILY_TOKEN_BUDGET=2250000` and
+`GEN_OPENAI_LARGER_DAILY_TOKEN_BUDGET=225000` are the approved app-local reserved-token caps,
+with 10% headroom beneath the maintainer-reported Build DSI allowances. Group membership is the
+explicit reviewed list in `domain/openai-model-groups.ts`: Luna 5.6/Terra 5.6 share efficient;
+Sol 6.1/Sol 6/Luna 6 share larger. Unknown names (including unreviewed dated aliases and fine-tuned
+models) reject before dispatch even in off/warn mode. Model selection and the configured roster
+remain separate. New membership needs source verification; no prefix-based guessing.
+
+The [OpenAI sharing-data FAQ](https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai)
+identifies shared groups, 00:00 UTC resets, and whole-request billing when a request crosses the
+allowance. Enrollment and other organization/project activity are outside this application guard.
+No account sharing setting is changed. Reservations are conservative admission estimates, not paid
+usage: `ceil(effective request text length / 4) + requested output allowance`. Unused reservations
+are not refunded. Returned actual token usage remains separately attributed to its original model.
+Quota results expose model reserved/actual and group reserved/actual counters; legacy daily-token
+used/remaining fields now describe group reservations. Actual usage does not reset reservation headroom.
+
+PostgreSQL takes a transaction-scoped advisory lock for provider/group/UTC-day **before** summing
+existing per-model day counters, then checks and updates the same minute/day rows atomically. All
+group members use the same lock, including speech planning/ranking and the backend live fixture evaluator (which requires PostgreSQL). No new persistence/migration,
+reconciliation job or refund lifecycle is introduced. In-memory test admission uses the same groups.
+
+### Bounded limits audit: KEEP / CHANGE
+
+| Limit / workload                                                                                                | Decision                                                                                | Reason                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Per-model daily 120000 token cap                                                                                | CHANGE: remove `GEN_OPENAI_DAILY_TOKEN_BUDGET` from effective admission                 | The approved shared-group policy replaces it; old counter rows remain authoritative.                                                                                                                                                                                                  |
+| Implicit 40 daily requests                                                                                      | CHANGE: no default; `GEN_OPENAI_DAILY_REQUEST_BUDGET` is an optional validated override | Request count is not the selected daily token policy; an unexplained legacy ceiling would block that policy. Explicit operator limits remain enforced.                                                                                                                                |
+| RPM 3 / TPM 160000                                                                                              | KEEP                                                                                    | Existing minute pacing and concurrency controls; no account-capacity evidence authorizes raising them.                                                                                                                                                                                |
+| Assignment, lesson/homework extraction, snapshots, profile refresh/promotion: 12000 hard/default output ceiling | KEEP                                                                                    | Reservations, not measured output truncation/quality, caused the incident. Shrinking structured-output ceilings without evidence risks incomplete results. Omitted output limits now explicitly send the same hard-cap default to OpenAI, closing the reservation/transport mismatch. |
+| Initial profile enrichment / legacy normalization: 2800                                                         | KEEP                                                                                    | Existing bounded structured profile requests.                                                                                                                                                                                                                                         |
+| Speech planner: 12000, RPM 4, requests/day 120                                                                  | KEEP                                                                                    | Independent physical-call and retry controls; also participates in shared daily token admission.                                                                                                                                                                                      |
+| Voice ranker: 1200, RPM 12, requests/day 1000                                                                   | KEEP                                                                                    | Small structured shortlist request; also participates in shared daily token admission.                                                                                                                                                                                                |
+
+Caps accept only nonnegative safe integers; zero intentionally stops new work. `hard_stop` remains
+the default. Profile refresh and older candidate promotion preserve `budget_exceeded` HTTP 429 with
+safe group-reservation/reset guidance and bounded provider/model/limit fields. Refusal writes no draft
+or candidate link. Provider timeout, failure, currentness and idempotency behavior remain unchanged.
+
+### Separately authorized cutover / rollback
+
+Set the two group variables to the values above. Remove `GEN_OPENAI_DAILY_TOKEN_BUDGET` and remove
+the old `GEN_OPENAI_DAILY_REQUEST_BUDGET=40` unless explicitly retained as an operator ceiling.
+Keep `GEN_SAFETY_MODE=hard_stop`, current output caps, targets and minute/ranker/planner limits.
+No production configuration change is authorized by implementation alone.
+
+Quiesce intake and **all** API, profile, memory, assignment and speech/ranking writers before swapping
+the compatible image set. Do not overlap old/new writers: old code does not take the group lock.
+Once old calls have drained, new readers sum retained same-day per-model rows, so there is no UTC-day
+usage reset or backfill. Any retained positive reservation with an unclassified model blocks both
+groups until 00:00 UTC or a reviewed membership update; the row is never deleted or reassigned.
+Zero-reservation/actual-only rows do not block reserved-token admission. Verify effective group caps, writer image parity, safe quota responses and
+model/group counters with metadata-only probes. Do not trigger paid smoke calls or memory replay.
+
+Rollback quiesces writers again, retains counter rows, and restores the prior image/environment set.
+Old code cannot enforce shared groups. Keep generation intake/workers disabled until a compatible
+forward release restores group admission, or until separately approved operator safeguards are in
+place; a UTC reset alone does not make per-model old code safe for shared-group policy.
+
+API 11.1 adds optional quota fields; existing consumers may ignore them. All original model counters
+and frozen request evidence remain unchanged. Live backend evaluator execution also rejects
+`NODE_ENV=test` to prevent process-local accounting.
+
+The standalone locked pilot `scripts/evaluation/assignment-quality.ts` is a separately authorized
+experiment, not a backend runtime caller; its external project traffic is outside this app-local
+ledger. Do not run that pilot or other external paid activity against the budgeted project during
+cutover/rollout. Organization-wide usage synchronization remains outside ESL-45.

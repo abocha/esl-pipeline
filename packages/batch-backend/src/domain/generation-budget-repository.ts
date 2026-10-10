@@ -3,6 +3,11 @@ import type { PoolClient } from 'pg';
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
+import {
+  getOpenAiModelGroup,
+  OPENAI_MODEL_GROUPS,
+  type OpenAiModelGroup,
+} from './openai-model-groups.js';
 
 export type GenerationBudgetLimitType =
   | 'rpm'
@@ -19,6 +24,10 @@ export interface GenerationBudgetUsage {
   requestsToday: number;
   reservedTokensToday: number;
   actualTokensToday: number;
+  dailyTokenGroup?: OpenAiModelGroup;
+  groupReservedTokensToday?: number;
+  groupActualTokensToday?: number;
+  unclassifiedReservedTokensToday?: number;
 }
 
 export interface GenerationBudgetLimits {
@@ -191,6 +200,35 @@ function sanitizeNonNegativeInt(value: number): number {
   return Math.floor(value);
 }
 
+async function readGroupUsage(
+  client: PoolClient,
+  provider: GenerationProvider,
+  model: string,
+  dayStart: Date,
+) {
+  const group = getOpenAiModelGroup(model);
+  const result = await client.query<CounterRow & { unclassified_reserved_tokens: string }>(
+    `SELECT COALESCE(sum(reserved_tokens) FILTER (WHERE model = ANY($3::text[])), 0) AS reserved_tokens,
+      COALESCE(sum(actual_tokens) FILTER (WHERE model = ANY($3::text[])), 0) AS actual_tokens,
+      COALESCE(sum(reserved_tokens) FILTER (WHERE NOT model = ANY($4::text[]) AND reserved_tokens > 0), 0) AS unclassified_reserved_tokens,
+      0 AS request_count
+     FROM generation_budget_counters WHERE bucket_type = 'day'
+       AND bucket_start = $1 AND provider = $2`,
+    [
+      dayStart,
+      provider,
+      OPENAI_MODEL_GROUPS[group],
+      [...OPENAI_MODEL_GROUPS.efficient, ...OPENAI_MODEL_GROUPS.larger],
+    ],
+  );
+  return {
+    dailyTokenGroup: group,
+    groupReservedTokensToday: asNumber(result.rows[0]?.reserved_tokens),
+    groupActualTokensToday: asNumber(result.rows[0]?.actual_tokens),
+    unclassifiedReservedTokensToday: asNumber(result.rows[0]?.unclassified_reserved_tokens),
+  };
+}
+
 export async function reserveGenerationBudget(
   input: ReserveGenerationBudgetInput,
 ): Promise<GenerationBudgetReservationResult> {
@@ -199,8 +237,15 @@ export async function reserveGenerationBudget(
   const dayStart = startOfUtcDay(input.now);
 
   return withPgClient(async (client) => {
-    await client.query('BEGIN');
+    await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
     try {
+      const group = getOpenAiModelGroup(input.model);
+      // Serialize all members before reading their sum. Existing day rows are the
+      // ledger, including reservations made before this release; no backfill.
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        `generation-budget:${input.provider}:${group}:${dayStart.toISOString()}`,
+      ]);
+      const groupUsage = await readGroupUsage(client, input.provider, input.model, dayStart);
       await ensureCounterRow({
         client,
         bucketType: 'minute',
@@ -242,6 +287,26 @@ export async function reserveGenerationBudget(
       const nextDayRequests = dayRequests + 1;
       const nextDayReservedTokens = dayReservedTokens + estimatedTokens;
 
+      if (groupUsage.unclassifiedReservedTokensToday > 0) {
+        await client.query('ROLLBACK');
+        return {
+          allowed: false,
+          reason: {
+            limitType: 'model_not_allowed',
+            window: 'day',
+            limit: 0,
+            used: groupUsage.unclassifiedReservedTokensToday,
+          },
+          usage: {
+            requestsPerMinuteUsed: minuteRequests,
+            requestsToday: dayRequests,
+            reservedTokensToday: dayReservedTokens,
+            actualTokensToday: dayActualTokens,
+            ...groupUsage,
+          },
+        };
+      }
+
       if (
         input.limits.rpmBudget !== undefined &&
         input.limits.rpmBudget !== null &&
@@ -262,6 +327,7 @@ export async function reserveGenerationBudget(
             requestsToday: dayRequests,
             reservedTokensToday: dayReservedTokens,
             actualTokensToday: dayActualTokens,
+            ...groupUsage,
           },
         };
       }
@@ -286,6 +352,7 @@ export async function reserveGenerationBudget(
             requestsToday: dayRequests,
             reservedTokensToday: dayReservedTokens,
             actualTokensToday: dayActualTokens,
+            ...groupUsage,
           },
         };
       }
@@ -310,6 +377,7 @@ export async function reserveGenerationBudget(
             requestsToday: dayRequests,
             reservedTokensToday: dayReservedTokens,
             actualTokensToday: dayActualTokens,
+            ...groupUsage,
           },
         };
       }
@@ -318,7 +386,7 @@ export async function reserveGenerationBudget(
         input.limits.dailyTokenBudget !== undefined &&
         input.limits.dailyTokenBudget !== null &&
         input.limits.dailyTokenBudget >= 0 &&
-        nextDayReservedTokens > input.limits.dailyTokenBudget
+        groupUsage.groupReservedTokensToday + estimatedTokens > input.limits.dailyTokenBudget
       ) {
         await client.query('ROLLBACK');
         return {
@@ -327,13 +395,14 @@ export async function reserveGenerationBudget(
             limitType: 'daily_tokens',
             window: 'day',
             limit: input.limits.dailyTokenBudget,
-            used: dayReservedTokens,
+            used: groupUsage.groupReservedTokensToday,
           },
           usage: {
             requestsPerMinuteUsed: minuteRequests,
             requestsToday: dayRequests,
             reservedTokensToday: dayReservedTokens,
             actualTokensToday: dayActualTokens,
+            ...groupUsage,
           },
         };
       }
@@ -374,6 +443,8 @@ export async function reserveGenerationBudget(
           requestsToday: nextDayRequests,
           reservedTokensToday: nextDayReservedTokens,
           actualTokensToday: dayActualTokens,
+          ...groupUsage,
+          groupReservedTokensToday: groupUsage.groupReservedTokensToday + estimatedTokens,
         },
       };
     } catch (error) {
@@ -443,6 +514,7 @@ export async function getGenerationBudgetUsage(
     });
 
     return {
+      ...(await readGroupUsage(client, input.provider, input.model, dayStart)),
       requestsPerMinuteUsed: asNumber(minuteRow.request_count),
       requestsToday: asNumber(dayRow.request_count),
       reservedTokensToday: asNumber(dayRow.reserved_tokens),

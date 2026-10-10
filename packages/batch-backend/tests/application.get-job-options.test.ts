@@ -155,8 +155,10 @@ describe('application/get-job-options', () => {
         modelOptions: buildGenerationOptions().modelOptions,
         quota: expect.objectContaining({
           source: 'hybrid',
-          requestsPerMinute: 5,
-          requestsPerDay: 20,
+          requestsPerMinute: 3,
+          requestsPerDay: null,
+          dailyTokenGroup: 'larger',
+          dailyTokenBudget: 225000,
         }),
       }),
     );

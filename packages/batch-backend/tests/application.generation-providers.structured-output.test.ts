@@ -48,6 +48,35 @@ describe('application/generation-providers structured output', () => {
     vi.restoreAllMocks();
   });
 
+  it.each([executeOpenAiGeneration, executeOpenAiStructuredGenerationRaw])(
+    'sends the configured output bound when a caller omits it',
+    async (execute) => {
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockResolvedValue(
+        createJsonResponse({
+          id: 'bounded',
+          model: 'gpt-5.6-luna',
+          status: 'completed',
+          output_text: '{}',
+          usage: { input_tokens: 2, output_tokens: 1, total_tokens: 3 },
+        }),
+      );
+      const config = createGenerationConfig();
+      config.maxOutputTokensHard = 321;
+      await execute({
+        config,
+        request: {
+          model: 'gpt-5.6-luna',
+          prompt: 'synthetic',
+          responseSchema: { name: 'fixture', schema: { type: 'object' }, strict: true },
+        },
+      });
+      expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))).toMatchObject({
+        max_output_tokens: 321,
+      });
+    },
+  );
+
   it('uses one parser for direct, wrapped, array, empty, and malformed JSON text', () => {
     expect(parseStructuredJsonText('{"segments":[]}')).toMatchObject({
       status: 'parsed',

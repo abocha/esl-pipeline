@@ -191,7 +191,7 @@ export interface BatchBackendConfig {
         requestTimeoutMs: number;
         retryMax: number;
         retryBackoffMs: number;
-        dailyTokenBudget?: number;
+        dailyTokenBudgets: { efficient: number; larger: number };
         dailyRequestBudget?: number;
         rpmBudget?: number;
         tpmBudget?: number;
@@ -707,11 +707,22 @@ export function loadConfig(): BatchBackendConfig {
   const generationOpenAiRetryBackoffMs = readInt('GEN_OPENAI_RETRY_BACKOFF_MS', 250);
   const generationOpenAiRpmBudget = readInt('GEN_OPENAI_RPM_BUDGET', 3);
   const generationOpenAiTpmBudget = readInt('GEN_OPENAI_TPM_BUDGET', 160_000);
-  const generationOpenAiDailyRequestBudget = readInt('GEN_OPENAI_DAILY_REQUEST_BUDGET', 40);
+  const readBudget = (name: string, fallback?: number): number | undefined => {
+    const raw = readString(name);
+    if (!raw) return fallback;
+    const value = Number(raw);
+    if (!Number.isSafeInteger(value) || value < 0)
+      throw new Error(`${name} must be a nonnegative safe integer`);
+    return value;
+  };
+  const generationOpenAiDailyRequestBudget = readBudget('GEN_OPENAI_DAILY_REQUEST_BUDGET');
 
   const openAiApiKey = readString('OPENAI_API_KEY');
 
-  const generationOpenAiDailyTokenBudget = readInt('GEN_OPENAI_DAILY_TOKEN_BUDGET', 120_000);
+  const generationOpenAiDailyTokenBudgets = {
+    efficient: readBudget('GEN_OPENAI_EFFICIENT_DAILY_TOKEN_BUDGET', 2_250_000)!,
+    larger: readBudget('GEN_OPENAI_LARGER_DAILY_TOKEN_BUDGET', 225_000)!,
+  };
 
   const extendedApiEnabled = readBool('BATCH_BACKEND_ENABLE_EXTENDED_API', true);
   const speechPlannerEnabled = readBool('ESL_TTS_SPEECH_PLANNER_ENABLED', false);
@@ -908,7 +919,7 @@ export function loadConfig(): BatchBackendConfig {
           requestTimeoutMs: generationOpenAiTimeoutMs,
           retryMax: generationOpenAiRetryMax,
           retryBackoffMs: generationOpenAiRetryBackoffMs,
-          dailyTokenBudget: generationOpenAiDailyTokenBudget,
+          dailyTokenBudgets: generationOpenAiDailyTokenBudgets,
           dailyRequestBudget: generationOpenAiDailyRequestBudget,
           rpmBudget: generationOpenAiRpmBudget,
           tpmBudget: generationOpenAiTpmBudget,

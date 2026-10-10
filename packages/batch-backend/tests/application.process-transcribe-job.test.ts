@@ -1681,7 +1681,7 @@ function createConfig(): BatchBackendConfig {
           requestTimeoutMs: 240_000,
           retryMax: 1,
           retryBackoffMs: 250,
-          dailyTokenBudget: 120_000,
+          dailyTokenBudgets: { efficient: 120_000, larger: 120_000 },
           dailyRequestBudget: 40,
           rpmBudget: 3,
         },

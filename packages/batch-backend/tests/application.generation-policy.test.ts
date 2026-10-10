@@ -91,7 +91,33 @@ describe('explicit OpenAI workload generation routing', () => {
       usedRequestsToday: 3,
       usedTokensToday: 100,
       rpmRemaining: 1,
-      dailyRequestRemaining: 37,
+      dailyRequestRemaining: null,
     });
+  });
+});
+
+it('reports group reservations independently from model attribution and actual usage', () => {
+  const quota = buildQuotaSnapshot({
+    config: loadConfig().generation,
+    provider: 'openai',
+    model: 'gpt-5.6-terra',
+    usage: {
+      requestsPerMinuteUsed: 0,
+      requestsToday: 1,
+      reservedTokensToday: 12000,
+      actualTokensToday: 3000,
+      dailyTokenGroup: 'efficient',
+      groupReservedTokensToday: 125653,
+      groupActualTokensToday: 54912,
+    },
+  });
+  expect(quota).toMatchObject({
+    dailyTokenGroup: 'efficient',
+    dailyTokenBudget: 2250000,
+    usedTokensToday: 125653,
+    dailyTokenRemaining: 2124347,
+    reservedTokensToday: 12000,
+    actualTokensToday: 3000,
+    groupActualTokensToday: 54912,
   });
 });

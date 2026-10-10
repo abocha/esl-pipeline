@@ -70,7 +70,7 @@ describe('application/student-memory-generation-pacing', () => {
     await pacer.run({
       workload: 'lesson_memory',
       provider: 'openai',
-      model: 'fixture',
+      model: 'gpt-5.6-luna',
       prompt,
       maxOutputTokens: 125,
       execute: async () => ({ usage: { totalTokens: 77 } }),
@@ -78,15 +78,15 @@ describe('application/student-memory-generation-pacing', () => {
     const estimatedTokens =
       Math.ceil((envelope.instructions.length + 2 + envelope.input.length) / 4) + 125;
     expect(repository.reserve).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: 'openai', model: 'fixture', estimatedTokens }),
+      expect.objectContaining({ provider: 'openai', model: 'gpt-5.6-luna', estimatedTokens }),
     );
     expect(metrics.increment).toHaveBeenCalledWith(
       'student_memory_generation_estimated_tokens',
       estimatedTokens,
-      expect.objectContaining({ provider: 'openai', model: 'fixture' }),
+      expect.objectContaining({ provider: 'openai', model: 'gpt-5.6-luna' }),
     );
     expect(repository.recordActual).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: 'openai', model: 'fixture', actualTokens: 77 }),
+      expect.objectContaining({ provider: 'openai', model: 'gpt-5.6-luna', actualTokens: 77 }),
     );
   });
   it.each([

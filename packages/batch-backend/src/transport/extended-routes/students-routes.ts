@@ -18,6 +18,7 @@ import {
   ProfileDraftRefreshError,
   refreshProfileDraftFromApprovedCandidates,
 } from '../../application/profile-draft-refresh.js';
+import { ProfileRevisionDraftingError } from '../../application/profile-revision-drafting.js';
 import {
   getStudentMemoryHealth,
   getStudentMemoryOverview,
@@ -1220,6 +1221,19 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             details: error.issues,
           });
         }
+        if (error instanceof ProfileRevisionDraftingError && error.category === 'budget_exceeded') {
+          return reply.code(429).send({
+            error: 'budget_exceeded',
+            code: 'budget_exceeded',
+            message: error.message,
+            provider: error.provider,
+            model: error.model,
+            limitType: error.limitType,
+            limit: error.limit,
+            used: error.used,
+            window: error.window,
+          });
+        }
         if (error instanceof ProfileCandidatePromotionError) {
           return reply.code(error.status).send({
             error: error.code,
@@ -1304,6 +1318,19 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             error: 'validation_failed',
             message: 'Invalid request body',
             details: error.issues,
+          });
+        }
+        if (error instanceof ProfileRevisionDraftingError && error.category === 'budget_exceeded') {
+          return reply.code(429).send({
+            error: 'budget_exceeded',
+            code: 'budget_exceeded',
+            message: error.message,
+            provider: error.provider,
+            model: error.model,
+            limitType: error.limitType,
+            limit: error.limit,
+            used: error.used,
+            window: error.window,
           });
         }
         if (error instanceof ProfileDraftRefreshError) {
