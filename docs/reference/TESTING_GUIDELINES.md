@@ -48,10 +48,10 @@ base and default branches, but PR-created caches are scoped to the PR merge ref 
 automatically readable by base/default-branch or other PR workflows. The prior PR exporter used a
 separate `pr-batch-backend` scope; with that exporter removed, this job no longer imports that
 orphaned scope. The release workflow uses a separate scope, so its cache is not an input to this job.
-Release builds retain their max-mode export. Their `pull_request_target` trigger has read-only access
-to the default-branch cache by default; `ignore-error=true` lets image publication succeed when that
-export fails. Shared image inputs and workspace changes that affect the backend select the job;
-unrelated PRs skip it. `CI gate` requires the job to succeed whenever selected.
+Release image builds retain their cache imports and do not export caches. Their `pull_request_target`
+trigger keeps the default read-only cache access; the workflow does not grant write-capable cache
+access. Shared image inputs and workspace changes that affect the backend select the job; unrelated
+PRs skip it. `CI gate` requires the job to succeed whenever selected.
 
 Historical PR job observations took 166s, 195s, 198s, and 157s, with respective max-mode cache
 exports of 21s, 24s, 72s, and 22s. Subtracting only each run's own export time gives counterfactual
@@ -66,6 +66,13 @@ erase those estimated minute savings. Compare successive changed-source PR runs,
 SHA reruns, before concluding that removing PR cache exports reduced billed minutes.
 
 ## Local feedback ladder
+
+The `recording-media` job installs FFmpeg concurrently with frozen pnpm dependency installation
+and the backend prerequisite build in one Bash step. The step waits for apt completion, propagates
+apt/install/build failures, and waits for apt during exit cleanup before media tests can run.
+Build/test logs and the required `CI gate` remain unchanged. Reduced wall time and rounded billed
+job-minutes are predictions until hosted CI measures them against the 61s/78s baseline; report the
+observed duration even if it remains above 60 seconds.
 
 While editing, run the narrowest relevant command:
 
@@ -164,13 +171,13 @@ baseline. Identify which kind and which independent authority it represents firs
 
 When a fixture, golden expectation, snapshot, or mock breaks:
 
-1. Inspect the *first relevant failure* and the production/contract change. Identify the
+1. Inspect the _first relevant failure_ and the production/contract change. Identify the
    fixture's owner and whether the failure is a schema/input mismatch, changed observed behavior,
    irrelevant presentation drift, or a true regression. Do not bulk-update all failures.
 2. **Bug or unintended behavior change:** repair the implementation; preserve the independent
    expected result. A failing assertion is not stale merely because code now produces something
    different.
-3. **Intentional contract change:** update the *smallest canonical* fixture/source factory and
+3. **Intentional contract change:** update the _smallest canonical_ fixture/source factory and
    affected expectations as part of that change, with an explicit reason and the authoritative
    new contract. Preserve versioned/historical fixtures and backward-compatibility checks unless
    the compatibility requirement is itself deliberately changed and approved.
@@ -185,7 +192,7 @@ When a fixture, golden expectation, snapshot, or mock breaks:
 
 Keep variable timestamps, random IDs, ordering not guaranteed by contract, and unrelated optional
 fields out of golden expectations when possible; use deterministic inputs or deliberate
-normalization *only for non-contractual fields*. A full-byte, hash-pinned, or historical fixture
+normalization _only for non-contractual fields_. A full-byte, hash-pinned, or historical fixture
 can be the contract itself and must not be regenerated casually. Generated previews should be
 regenerated from their canonical source with the resulting diff inspected, not hand-edited.
 
