@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [20.2.3] - 2026-10-10
+
+### Changed
+
+- Automated release from PR #375: Migrate workflow linting and parallelize CI policy checks (https://github.com/abocha/esl-pipeline/pull/375)
+
 ## [20.2.2] - 2026-10-09
 
 ### Changed
