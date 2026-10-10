@@ -83,11 +83,10 @@ function addEnabledFeatureRequirements(env: NodeJS.ProcessEnv, errors: string[])
         'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider openai requires OPENAI_API_KEY.',
       );
     }
-    if (provider === 'google_ai_studio' && !hasValue(env.GEMINI_API_KEY)) {
-      errors.push(
-        'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider google_ai_studio requires GEMINI_API_KEY.',
-      );
-    }
+  }
+
+  if (isEnabled(env.ESL_TTS_VOICE_RANKER_ENABLED) && !hasValue(env.OPENAI_API_KEY)) {
+    errors.push('ESL_TTS_VOICE_RANKER_ENABLED=true requires OPENAI_API_KEY.');
   }
 
   if (

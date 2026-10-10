@@ -8,7 +8,7 @@ import type { AssignmentSessionDto } from '../../contracts/src/index.js';
 
 describe('contracts/assignment confirmation contract version', () => {
   it('publishes the current assignment contract versions', () => {
-    expect(API_CONTRACT_VERSION).toBe('10.0.0');
+    expect(API_CONTRACT_VERSION).toBe('11.0.0');
     expect(DB_CONTRACT_VERSION).toBe('4.0.0');
   });
 

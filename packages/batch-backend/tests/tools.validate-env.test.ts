@@ -88,12 +88,6 @@ describe('environment validation', () => {
       missingCredentialError:
         'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider openai requires OPENAI_API_KEY.',
     },
-    {
-      provider: 'google_ai_studio',
-      credential: 'GEMINI_API_KEY=test-gemini-key',
-      missingCredentialError:
-        'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider google_ai_studio requires GEMINI_API_KEY.',
-    },
   ])(
     'requires only the selected $provider speech-planner credential',
     ({ provider, credential, missingCredentialError }) => {

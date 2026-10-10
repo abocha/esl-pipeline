@@ -23,9 +23,7 @@ import {
 } from './generation-budget-guard.js';
 import { resolveGenerationTarget } from './generation-policy.js';
 import {
-  executeGoogleStructuredGeneration,
   executeOpenAiStructuredGeneration,
-  executeOpenRouterStructuredGeneration,
   ProviderExecutionError,
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
@@ -41,10 +39,8 @@ type ProviderExecutor = (args: {
   request: ProviderStructuredExecutionRequest;
 }) => Promise<ProviderStructuredExecutionResult>;
 
-const DEFAULT_EXECUTORS: Record<GenerationProvider, ProviderExecutor> = {
+const DEFAULT_EXECUTORS: Partial<Record<GenerationProvider, ProviderExecutor>> = {
   openai: executeOpenAiStructuredGeneration,
-  google_ai_studio: executeGoogleStructuredGeneration,
-  openrouter: executeOpenRouterStructuredGeneration,
 };
 
 const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRules = {
@@ -53,12 +49,6 @@ const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRule
       rateLimitCodes: ['rate_limit_exceeded'],
       timeoutStatusMin: 500,
       timeoutCodes: ['server_error'],
-    },
-    google_ai_studio: {
-      timeoutStatusMin: 500,
-    },
-    openrouter: {
-      timeoutStatuses: [500, 502, 503],
     },
   },
 };

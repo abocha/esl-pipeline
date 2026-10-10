@@ -106,6 +106,7 @@ export interface VoiceOption {
   category?: string | null;
 }
 
+// Includes retired providers for historical persisted provenance; fresh LLM requests admit OpenAI only.
 export type GenerationProvider = 'openai' | 'google_ai_studio' | 'openrouter';
 
 export type GenerationErrorCategory =

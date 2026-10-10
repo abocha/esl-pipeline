@@ -120,7 +120,7 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
 
   const speechPlannerBinding = createBackendSpeechPerformancePlanner(config);
   const voiceRanker =
-    config.voiceRanker?.enabled && config.generation.providers.googleAiStudio.apiKey
+    config.voiceRanker?.enabled && config.generation.providers.openai.apiKey
       ? createBackendVoicePlanRanker(config)
       : undefined;
   cachedPipeline = createPipeline({

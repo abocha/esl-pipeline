@@ -400,19 +400,18 @@ High-signal env groups for this package:
 Each generation workload resolves one provider/model target via `resolveGenerationTarget()`.
 Assignment/profile calls fail explicitly without local retries or automatic model/provider switching.
 Memory queue intents and initial profile enrichment freeze the target before execution and retain
-existing durable retry/recovery semantics. Google and OpenRouter adapters support explicit choices;
+existing durable retry/recovery semantics. Fresh calls support OpenAI only; retired-provider jobs reject explicitly without retargeting;
 model rosters serve UI selection and Batch/planner guards. Job options no longer expose fallback
 rank/tier metadata. See the [target policy and env rollout](../../docs/reference/GENERATION_PROVIDER_POLICY.md)
 for workload env pairs, retained capacity controls, and deleted settings.
 
-The speech-planner evaluation CLI is database-free and fail-closed. Its fixed live baseline counts
-physical provider requests with no automatic retry, while checked-in TTS 1.5 identity controls run
-through the production capability, renderer, and analysis boundaries with zero provider calls. See
-the evaluation runbook for immutable artifact, resume, privacy, and current-day budget requirements.
+The historical Gemini speech-planner evaluation CLI is database-free and offline-only. Checked-in
+raw outputs, model/price evidence and reports remain intact; `--live` fails before construction.
+Inworld semantic voice ranking uses one strict OpenAI Responses Luna request, low reasoning/verbosity
+and existing deterministic failure recovery. See the [ESL-41 inventory and combined rollout](../../docs/operations/openai-llm-migration.md).
 
 Production study-text planning remains disabled until explicitly enabled, with `openai` plus
-`gpt-5.6-luna` selected by default. Providers use separate credentials, allowlists, and
-provider/model budgets; OpenAI planner calls use high reasoning, low verbosity, `store: false`, and
+`gpt-5.6-luna` selected by default. Planner and ranker share OpenAI credentials and provider/model token budgets; OpenAI planner calls use high reasoning, low verbosity, `store: false`, and
 each typed-timeout retry reserves a physical request. `contextual-bracket-annotation-v1` gives Luna
 the complete dialogue or monologue assignment as read-only context and accepts only ordered
 TTS-only annotation insertions that restore authored text exactly. Pronunciation never invokes the

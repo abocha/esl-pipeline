@@ -8,7 +8,11 @@
 - Last Verified Against: 2026-07-29 repo state.
 - Owner: backend and TTS maintainers.
 - Review Cadence: after speech-planner model, prompt, renderer, or evaluation-contract changes.
-- Status: `active`.
+- Status: `archive`.
+
+> ESL-41 retires live execution of this Gemini matrix. Dry-run and checked-in offline outputs
+> remain supported for historical evidence; `--live` fails before any provider or TTS construction.
+> The live/resume instructions below describe past behavior only. See [current migration policy](openai-llm-migration.md).
 
 ## Purpose and Safety Boundary
 

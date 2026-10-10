@@ -196,7 +196,7 @@ function isUiPublishTtsStrategy(value: string | null | undefined): value is UiPu
 }
 
 function isGenerationProvider(value: string | null | undefined): value is GenerationProvider {
-  return value === 'openai' || value === 'google_ai_studio' || value === 'openrouter';
+  return value === 'openai';
 }
 
 function buildFirstProfileSourceAuthorityKey(

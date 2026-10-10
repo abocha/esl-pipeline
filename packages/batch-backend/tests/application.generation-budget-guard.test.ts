@@ -10,22 +10,46 @@ import {
 import { loadConfig } from '../src/config/env.js';
 
 describe('generation budget guard', () => {
-  it('exposes Gemini eval allowlist and configured Google limits without resolving a repository', () => {
+  it('removes retired provider budget admission and retains OpenAI limits', () => {
     const config = loadConfig();
-
-    expect(getConfiguredGenerationAllowedModels(config.generation, 'google_ai_studio')).toContain(
-      'gemini-3.5-flash-lite',
-    );
-    expect(getConfiguredGenerationProviderLimits(config.generation, 'google_ai_studio')).toEqual({
-      rpmBudget: 4,
-      dailyRequestBudget: 12,
-      dailyTokenBudget: undefined,
+    expect(getConfiguredGenerationAllowedModels(config.generation, 'google_ai_studio')).toEqual([]);
+    expect(() =>
+      getConfiguredGenerationProviderLimits(config.generation, 'google_ai_studio'),
+    ).toThrow('is retired');
+    expect(getConfiguredGenerationProviderLimits(config.generation, 'openai')).toMatchObject({
+      rpmBudget: 3,
+      tpmBudget: 160_000,
+      dailyRequestBudget: 40,
     });
     expect(getConfiguredSpeechPlannerLimits(config)).toEqual({
       rpmBudget: 4,
       dailyRequestBudget: 120,
     });
   });
+
+  it.each(['off', 'warn', 'hard_stop'] as const)(
+    'rejects frozen retired targets before any budget work in %s mode',
+    async (safetyMode) => {
+      const config = loadConfig();
+      config.generation.safetyMode = safetyMode;
+      const reserve = vi.fn();
+      const getUsage = vi.fn();
+      for (const provider of ['google_ai_studio', 'openrouter'] as const) {
+        await expect(
+          enforceGenerationBudgetBeforeAttempt({
+            config,
+            provider,
+            model: 'frozen-model',
+            prompt: 'source',
+            now: new Date(),
+            repository: { reserve, getUsage, recordActual: vi.fn() },
+          }),
+        ).rejects.toMatchObject({ code: 'unsupported_provider', status: 400, provider });
+      }
+      expect(reserve).not.toHaveBeenCalled();
+      expect(getUsage).not.toHaveBeenCalled();
+    },
+  );
 
   it('uses one exported token estimate for reservations and pacing', () => {
     expect(
