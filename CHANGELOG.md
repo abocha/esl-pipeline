@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.0.0] - 2026-10-10
+
+### Changed
+
+- Automated release from PR #382: feat(generation)!: migrate Google AI Studio LLM workloads to OpenAI (ESL-41) (https://github.com/abocha/esl-pipeline/pull/382)
+
 ## [20.2.4] - 2026-10-10
 
 ### Changed
