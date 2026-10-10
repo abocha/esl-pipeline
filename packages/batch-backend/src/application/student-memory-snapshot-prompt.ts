@@ -34,78 +34,6 @@ export interface BuildIncrementalStudentMemorySnapshotPromptParams {
   supportingHomeworkMemoryEntries: HomeworkMemoryRecord[];
 }
 
-export function buildStudentMemorySnapshotPrompt(
-  params: BuildStudentMemorySnapshotPromptParams,
-): string {
-  const lessonPayload = params.lessonMemoryEntries.map((entry) => ({
-    id: entry.id,
-    generatedAt: entry.generatedAt.toISOString(),
-    lessonSummary: entry.lessonSummary ?? null,
-    topicsDiscussed: entry.topicsDiscussed,
-    mistakePatterns: entry.mistakePatterns,
-    grammarReviewed: entry.grammarReviewed,
-    grammarWatchlist: entry.grammarWatchlist,
-    vocabularyFocus: entry.vocabularyFocus,
-    pronunciationFocus: entry.pronunciationFocus,
-    studentFacts: entry.studentFacts,
-    progressSignals: entry.progressSignals,
-    followUpRecommendations: entry.followUpRecommendations,
-  }));
-  const homeworkPayload = params.homeworkMemoryEntries.map((entry) => ({
-    id: entry.id,
-    generatedAt: entry.generatedAt.toISOString(),
-    homeworkSummary: entry.homeworkSummary ?? null,
-    topic: entry.topic ?? null,
-    grammarTargets: entry.grammarTargets,
-    vocabularyTargets: entry.vocabularyTargets,
-    reviewTargets: entry.reviewTargets,
-    taskList: entry.taskList,
-    pronunciationFocus: entry.pronunciationFocus,
-    studyTextType: entry.studyTextType ?? null,
-    inputType: entry.inputType ?? null,
-    communicativeOutcome: entry.communicativeOutcome ?? null,
-    teacherFollowUpCues: entry.teacherFollowUpCues,
-  }));
-
-  return [
-    'You are generating a canonical long-term student-memory snapshot for ESL homework generation.',
-    'Treat lesson-memory entries and homework-memory entries as co-equal canonical history sources.',
-    'Use lesson memory for observed performance and use homework memory for assigned practice, review loops, task continuity, and teacher follow-up intent.',
-    'Surface stable strengths, recurring issues, active review backlog, recent progress, personal facts, recommended assignment directions, and unresolved issues.',
-    'Be selective and confidence-aware. Preserve authority and confidence for personal facts.',
-    '',
-    '[LESSON_MEMORY_ENTRIES]',
-    JSON.stringify(lessonPayload, null, 2),
-    '',
-    '[HOMEWORK_MEMORY_ENTRIES]',
-    JSON.stringify(homeworkPayload, null, 2),
-  ].join('\n');
-}
-
-export function buildIncrementalStudentMemorySnapshotPrompt(
-  params: BuildIncrementalStudentMemorySnapshotPromptParams,
-): string {
-  return [
-    'You are updating an existing long-term ESL student-memory snapshot.',
-    'Do not rebuild from full history. Use the previous snapshot as durable state, incorporate the new canonical source, and use supporting context only to avoid local contradictions or duplicate backlog items.',
-    'Preserve still-valid long-term facts from the previous snapshot. Remove or de-emphasize stale items only when the new evidence clearly contradicts them.',
-    'When preserving prior personal facts, cite the previous snapshot source unless the trigger or supporting sources provide newer evidence.',
-    'Do not invent facts. Do not duplicate semantically identical items. Keep the snapshot compact and useful for homework generation.',
-    '',
-    '[PREVIOUS_SNAPSHOT]',
-    JSON.stringify(buildPreviousSnapshotPayload(params.previousSnapshot), null, 2),
-    '',
-    '[TRIGGER_SOURCE]',
-    JSON.stringify(buildTriggerSourcePayload(params.triggerSource), null, 2),
-    '',
-    '[SUPPORTING_LESSON_MEMORY_ENTRIES]',
-    JSON.stringify(params.supportingLessonMemoryEntries.map(buildLessonMemoryPayload), null, 2),
-    '',
-    '[SUPPORTING_HOMEWORK_MEMORY_ENTRIES]',
-    JSON.stringify(params.supportingHomeworkMemoryEntries.map(buildHomeworkMemoryPayload), null, 2),
-  ].join('\n');
-}
-
 export function buildStudentMemorySnapshotEnvelope(params: BuildStudentMemorySnapshotPromptParams) {
   const sources = [
     ...params.lessonMemoryEntries.map((entry) => ({
@@ -121,9 +49,13 @@ export function buildStudentMemorySnapshotEnvelope(params: BuildStudentMemorySna
   ];
   return createGenerationRequestEnvelope({
     workload: 'student_memory_snapshot',
+    promptVersion: 'learner_memory_generation_v2',
     instructions: [
       'You are generating a canonical long-term student-memory snapshot for ESL homework generation.',
       'Treat lesson-memory and homework-memory entries as co-equal canonical history sources.',
+      'Use lesson memory for observed performance and use homework memory for assigned practice, review loops, task continuity, and teacher follow-up intent.',
+      'Surface stable strengths, recurring issues, active review backlog, recent progress, personal facts, recommended assignment directions, and unresolved issues.',
+      'Be selective and confidence-aware. Preserve authority and confidence for personal facts.',
       'Be selective and confidence-aware; omit unsupported claims.',
       'Every personal-fact evidence item must cite a sourceId from the source manifest and preserve a short excerpt.',
     ].join('\n'),
@@ -174,9 +106,13 @@ export function buildIncrementalStudentMemorySnapshotEnvelope(
   ];
   return createGenerationRequestEnvelope({
     workload: 'student_memory_snapshot',
+    promptVersion: 'learner_memory_generation_v2',
     instructions: [
       'You are updating a canonical long-term student-memory snapshot for ESL homework generation.',
       'Use previous snapshot state, one new canonical trigger source, and bounded supporting context.',
+      'Do not rebuild from full history. Use the previous snapshot as durable state, incorporate the new canonical source, and use supporting context only to avoid local contradictions or duplicate backlog items.',
+      'Preserve still-valid long-term facts from the previous snapshot. Remove or de-emphasize stale items only when the new evidence clearly contradicts them.',
+      'Do not invent facts. Do not duplicate semantically identical items. Keep the snapshot compact and useful for homework generation.',
       'Be selective and confidence-aware; omit unsupported claims.',
       'When preserving prior personal facts, cite the previous snapshot source unless the trigger or supporting sources provide newer evidence.',
       'Every personal-fact evidence item must cite a sourceId from the source manifest and preserve a short excerpt.',

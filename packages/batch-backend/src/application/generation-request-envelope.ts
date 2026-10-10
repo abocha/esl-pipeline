@@ -102,6 +102,16 @@ export function flattenGenerationRequestEnvelope(envelope: GenerationRequestEnve
   return `${envelope.instructions}\n\n${envelope.input}`;
 }
 
+/** The same instruction/input content used by provider transport and local accounting. */
+export function resolveGenerationRequestText(request: {
+  prompt?: string;
+  envelope?: GenerationRequestEnvelopeV1;
+}): string {
+  if (request.envelope) return flattenGenerationRequestEnvelope(request.envelope);
+  if (request.prompt?.trim()) return request.prompt;
+  throw new Error('Provider generation request requires prompt or envelope');
+}
+
 export function isGenerationRequestEnvelope(value: unknown): value is GenerationRequestEnvelopeV1 {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<GenerationRequestEnvelopeV1>;

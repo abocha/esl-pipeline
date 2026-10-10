@@ -19,7 +19,10 @@ import {
   type FoundationalProfile,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
-import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  createGenerationRequestEnvelope,
+  flattenGenerationRequestEnvelope,
+} from './generation-request-envelope.js';
 import {
   applyProfileCandidatePatch,
   PROFILE_CANDIDATE_PATCH_JSON_SCHEMA,
@@ -150,18 +153,13 @@ export async function promoteStudentProfileCandidates(args: {
     baseRevision?.structuredContent ??
     deriveFoundationalProfileFromMarkdown(baseRevision?.content ?? '');
 
-  const prompt = buildPromotionPrompt({
-    studentName: student.student,
-    baseStructuredProfile,
-    selectedCandidates,
-    reviewerNote: request.reviewerNote ?? null,
-  });
   const envelope = buildPromotionEnvelope({
     studentName: student.student,
     baseStructuredProfile,
     selectedCandidates,
     reviewerNote: request.reviewerNote ?? null,
   });
+  const prompt = flattenGenerationRequestEnvelope(envelope);
 
   const drafting = await dependencies.drafting.generate({
     request: {
@@ -358,54 +356,6 @@ function validateCandidateSelection(
   }
 }
 
-function buildPromotionPrompt(args: {
-  studentName: string;
-  baseStructuredProfile: FoundationalProfile | null;
-  selectedCandidates: ProfilePromotionCandidate[];
-  reviewerNote: string | null;
-}): string {
-  const candidatePayload = args.selectedCandidates.map((candidate) => ({
-    id: candidate.id,
-    targetSection: candidate.targetSection,
-    category: candidate.category,
-    approvedFact: (candidate.approvedFact ?? candidate.fact).trim(),
-    originalFact: candidate.fact,
-    authority: candidate.authority,
-    confidence: candidate.confidence,
-    evidence: candidate.evidence,
-    sourceSnapshotId: candidate.sourceSnapshotId ?? null,
-    sourceLessonMemoryIds: candidate.sourceLessonMemoryIds ?? [],
-  }));
-
-  return [
-    'You are drafting a foundational student profile revision for an ESL homework system.',
-    'Return only one JSON object matching the foundational_profile_v1 schema.',
-    'This is a bounded promotion pass, not a full rewrite from scratch.',
-    'Preserve unrelated teacher-authored truths whenever possible.',
-    'Integrate only the selected approved candidate facts below.',
-    'Do not invent new durable facts beyond the selected candidate set.',
-    'Favor omission over invention.',
-    'You may smooth wording and deduplicate overlap where that improves coherence.',
-    'Keep arrays concise and durable. Teacher-only ambiguity belongs in teacherNotes.',
-    '',
-    '[STUDENT_NAME]',
-    args.studentName,
-    '',
-    '[BASE_STRUCTURED_PROFILE]',
-    args.baseStructuredProfile
-      ? JSON.stringify(args.baseStructuredProfile, null, 2)
-      : 'No existing structured profile. Build the first durable profile from the approved facts only.',
-    '',
-    '[SELECTED_APPROVED_CANDIDATES]',
-    JSON.stringify(candidatePayload, null, 2),
-    '',
-    '[REVIEWER_NOTE]',
-    args.reviewerNote ?? 'No reviewer note provided.',
-    '',
-    'Output only valid JSON.',
-  ].join('\n');
-}
-
 function buildPromotionEnvelope(args: {
   studentName: string;
   baseStructuredProfile: FoundationalProfile | null;
@@ -414,11 +364,13 @@ function buildPromotionEnvelope(args: {
 }) {
   return createGenerationRequestEnvelope({
     workload: 'profile_candidate_patch',
+    promptVersion: 'learner_memory_generation_v2',
     instructions: [
       'Decide whether selected approved candidates are safe to promote into the student profile.',
       'Return only a closed profile_candidate_patch_v1 JSON object.',
       'Use operation apply only with IDs from SELECTED_APPROVED_CANDIDATES.',
       'Use no_change with no IDs when no selected candidate should be promoted.',
+      'Integrate only selected approved candidate facts. Do not invent new durable facts beyond the selected candidate set. Favor omission over invention.',
       'Do not rewrite profile fields or invent wording; the backend preserves unrelated fields and applies approved facts.',
     ].join('\n'),
     sources: [

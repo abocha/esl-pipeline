@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ProviderStructuredExecutionRequest } from '../src/application/generation-providers.js';
 import { refreshProfileDraftFromApprovedCandidates } from '../src/application/profile-draft-refresh.js';
 import { loadConfig } from '../src/config/env.js';
 import type { StudentProfileCandidateRecord } from '../src/domain/student-profile-candidate-model.js';
+import { assertMemoryRequest } from './support/memory-request-capture.js';
 
 function makeCandidate(
   overrides: Partial<StudentProfileCandidateRecord> & Pick<StudentProfileCandidateRecord, 'id'>,
@@ -164,6 +166,10 @@ describe('application/profile-draft-refresh', () => {
       },
     });
 
+    const captured = (
+      generate.mock.calls as unknown as [{ request: ProviderStructuredExecutionRequest }][]
+    )[0]![0].request;
+    await assertMemoryRequest('profile-refresh', { ...captured, model: 'fixture' });
     expect(result.draftRevision.status).toBe('draft');
     expect(result.includedCandidateIds).toEqual(included);
     expect(linkToDraft).toHaveBeenCalledWith({

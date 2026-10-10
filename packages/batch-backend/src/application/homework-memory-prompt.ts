@@ -16,6 +16,7 @@ export function buildHomeworkMemoryEnvelope(args: {
   requireTypedAssignment(args.source.assignment);
   return createGenerationRequestEnvelope({
     workload: 'homework_memory',
+    promptVersion: 'learner_memory_generation_v2',
     instructions: [
       'You are generating canonical homework memory for one published ESL assignment.',
       'Focus on student-facing pedagogic targets, compact teacher follow-up cues, and review continuity.',
@@ -48,28 +49,4 @@ export function buildHomeworkMemoryEnvelope(args: {
       strict: true,
     },
   });
-}
-
-export function buildHomeworkMemoryPrompt(args: {
-  source: Pick<
-    HomeworkMemorySourceBundle,
-    'publishTargets' | 'publishedAt' | 'assignmentLineageKey' | 'assignment' | 'artifact' | 'format'
-  >;
-}): string {
-  requireTypedAssignment(args.source.assignment);
-  return [
-    'You are generating canonical homework memory for one published ESL assignment.',
-    'Focus on pedagogic targets and teacher follow-up. Do not reproduce the full study text or answer key.',
-    '[PUBLISHED_ASSIGNMENT_V1]',
-    JSON.stringify(
-      {
-        artifact: args.source.artifact,
-        assignment: args.source.assignment,
-        publishTargets: args.source.publishTargets,
-        publishedAt: args.source.publishedAt,
-      },
-      null,
-      2,
-    ),
-  ].join('\n');
 }

@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { flattenGenerationRequestEnvelope } from '../src/application/generation-request-envelope.js';
 import { generateStudentMemorySnapshot } from '../src/application/student-memory-snapshot-generation.js';
 import { buildStudentMemorySnapshotGenerationNotes } from '../src/application/student-memory-snapshot-generation-notes.js';
-import {
-  buildIncrementalStudentMemorySnapshotEnvelope,
-  buildIncrementalStudentMemorySnapshotPrompt,
-} from '../src/application/student-memory-snapshot-prompt.js';
+import { buildIncrementalStudentMemorySnapshotEnvelope } from '../src/application/student-memory-snapshot-prompt.js';
 import type { StudentMemorySnapshotRecord } from '../src/domain/student-memory-snapshot-model.js';
 
 describe('application/student-memory-snapshot-generation', () => {
@@ -66,27 +64,24 @@ describe('application/student-memory-snapshot-generation', () => {
       teacherFollowUpCues: [],
     };
 
-    const prompt = buildIncrementalStudentMemorySnapshotPrompt({
-      previousSnapshot,
-      triggerSource,
-      supportingLessonMemoryEntries: [supportingLesson],
-      supportingHomeworkMemoryEntries: [supportingHomework],
-    } as never);
     const envelope = buildIncrementalStudentMemorySnapshotEnvelope({
       previousSnapshot,
       triggerSource,
       supportingLessonMemoryEntries: [supportingLesson],
       supportingHomeworkMemoryEntries: [supportingHomework],
     } as never);
+    const prompt = flattenGenerationRequestEnvelope(envelope);
 
-    expect(prompt).toContain('You are updating an existing long-term ESL student-memory snapshot.');
-    expect(prompt).toContain('[PREVIOUS_SNAPSHOT]');
+    expect(prompt).toContain(
+      'You are updating a canonical long-term student-memory snapshot for ESL homework generation.',
+    );
+    expect(prompt).toContain('label="PREVIOUS_STUDENT_MEMORY_SNAPSHOT"');
     expect(prompt).toContain('Parent summary with known tense issues.');
-    expect(prompt).toContain('[TRIGGER_SOURCE]');
+    expect(prompt).toContain('label="TRIGGER_LESSON_MEMORY_ENTRY"');
     expect(prompt).toContain('Trigger lesson focused on airport conversations.');
-    expect(prompt).toContain('[SUPPORTING_LESSON_MEMORY_ENTRIES]');
+    expect(prompt).toContain('label="SUPPORTING_LESSON_MEMORY_ENTRY"');
     expect(prompt).toContain('Supporting lesson about hotel check-in.');
-    expect(prompt).toContain('[SUPPORTING_HOMEWORK_MEMORY_ENTRIES]');
+    expect(prompt).toContain('label="SUPPORTING_HOMEWORK_MEMORY_ENTRY"');
     expect(prompt).toContain('Supporting homework practiced travel advice.');
     expect(envelope.sourceManifest.map((source) => source.id)).toEqual([
       'student-memory-snapshot:snapshot-parent',
@@ -144,21 +139,16 @@ describe('application/student-memory-snapshot-generation', () => {
       },
     };
 
-    const prompt = buildIncrementalStudentMemorySnapshotPrompt({
-      previousSnapshot,
-      triggerSource,
-      supportingLessonMemoryEntries: [],
-      supportingHomeworkMemoryEntries: [],
-    } as never);
     const envelope = buildIncrementalStudentMemorySnapshotEnvelope({
       previousSnapshot,
       triggerSource,
       supportingLessonMemoryEntries: [],
       supportingHomeworkMemoryEntries: [],
     } as never);
+    const prompt = flattenGenerationRequestEnvelope(envelope);
 
-    expect(prompt).toContain('"sourceId": "student-memory-snapshot:snapshot-parent"');
-    expect(prompt).not.toContain('"sourceId": "lesson-memory:old-lesson"');
+    expect(prompt).toContain('"sourceId":"student-memory-snapshot:snapshot-parent"');
+    expect(prompt).not.toContain('"sourceId":"lesson-memory:old-lesson"');
     expect(prompt).toContain('Original sourceId: lesson-memory:old-lesson');
     expect(prompt).toContain(
       'When preserving prior personal facts, cite the previous snapshot source unless the trigger or supporting sources provide newer evidence.',

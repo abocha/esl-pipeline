@@ -40,6 +40,13 @@ Provider/model detail stays in
 
 ### Ordinary memory replay
 
+ESL-40 retains the existing diagnostic field shapes while making snapshot byte/token metrics and
+budget decisions describe the effective envelope instructions/input sent to the provider. Optional
+context removal is reflected in both that envelope and its source manifest; accurate estimates may
+change drop/reject decisions without changing caps. The frontend continues to display the persisted
+backend decision. See [effective request policy](../reference/GENERATION_PROVIDER_POLICY.md#effective-learner-memory-inputs-esl-40)
+and [queued-work transition](../operations/student-memory-replay-backfill.md#effective-request-transition-esl-40).
+
 ESL-38 shares aggregate availability across selection, health, prompt packaging, transcript progress,
 teaching context and Learning. `absent`, `available`, `repair_required` and `repository_unavailable`
 are separate from stored status and pending/failed work. Reference counts describe lineage only.
