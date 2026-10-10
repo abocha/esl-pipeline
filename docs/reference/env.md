@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: environment contract reference.
-- Last Verified Against: 2026-09-09 recording-ingest closeout state.
+- Last Verified Against: 2026-10-10 ESL-41 provider migration.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after environment contract changes.
 - Status: `reference`.
@@ -82,14 +82,13 @@ Primary groups:
   - Expressive study-text planning uses opt-in `ESL_TTS_SPEECH_PLANNER_ENABLED`, explicit
     `ESL_TTS_SPEECH_PLANNER_PROVIDER`, optional model/output-token controls, and separate
     `ESL_TTS_SPEECH_PLANNER_*_BUDGET` limits. The planner remains disabled until explicitly enabled,
-    with `openai` plus exact `gpt-5.6-luna` selected by default. Gemini models remain allowlisted for
-    historical evidence and explicit overrides only.
-  - Google speech planning uses server-side `GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY` and
+    with `openai` plus exact `gpt-5.6-luna` selected by default. Google AI Studio and OpenRouter LLM overrides are retired.
+  - Speech planning uses `OPENAI_API_KEY` and
     sends `store: false`. Credentials, allowlists, RPM/daily request limits, token budgets, and
     spend accounting remain provider/model keyed. Typed timeout retries stay within one provider
     and reserve every physical request attempt.
-  - Live speech-planner evaluation must opt in at the CLI, verify both exact stable IDs in `GEN_ALLOWED_MODELS_GOOGLE`, supply current-day request usage explicitly, and fit the full requested matrix within `ESL_TTS_SPEECH_PLANNER_DAILY_REQUEST_BUDGET`. It never raises daily or RPM limits implicitly.
-  - Inworld voice planning uses `ESL_TTS_VOICE_RANKER_ENABLED`, optional `ESL_TTS_VOICE_RANKER_MODEL`, optional `ESL_TTS_VOICE_RANKER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_VOICE_RANKER_*_BUDGET` limits. The default semantic ranker is `gemma-4-31b-it`.
+  - The historical Gemini speech-planner evaluation matrix is offline-only; `--live` fails before provider construction.
+  - Inworld voice planning uses `ESL_TTS_VOICE_RANKER_ENABLED`, optional `ESL_TTS_VOICE_RANKER_MODEL`, optional `ESL_TTS_VOICE_RANKER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_VOICE_RANKER_*_BUDGET` limits. The default semantic ranker uses OpenAI Responses `gpt-5.6-luna`, low reasoning/verbosity, strict JSON, `store: false`, and OpenAI token budgets.
   - Local planner inspection can opt into full validated or rejected plan logs with `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true`. Voice-ranker inspection can opt into shortlist and failure details with `ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN=true`. Leave these disabled outside short-lived debugging because logs may include learner text.
   - Pronunciation primary/item synthesis never uses the speech planner. Dialogue and monologue
     study-text synthesis do; `auto` resolves dialogue only for two or more distinct authored
@@ -157,20 +156,20 @@ Read next:
 Primary groups:
 
 - Provider credentials:
-  - `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`
+  - `OPENAI_API_KEY`
 - Explicit workload targets:
   - `GEN_ASSIGNMENT_PROVIDER/MODEL`, `GEN_LESSON_MEMORY_PROVIDER/MODEL`,
     `GEN_HOMEWORK_MEMORY_PROVIDER/MODEL`, `GEN_STUDENT_MEMORY_SNAPSHOT_PROVIDER/MODEL`,
     `GEN_PROFILE_DRAFT_PROVIDER/MODEL` (each slash names two env variables)
-  - default provider is OpenAI; assignment defaults to Sol 6.1, memory/profile to Luna 5.6
-  - provider-only debug defaults: `GEN_OPENAI_MODEL`, `GEN_GOOGLE_MODEL`, `GEN_OPENROUTER_MODEL`
-  - `GEN_ALLOWED_MODELS_*` is an explicit selection roster and Batch/planner guard, never fallback
+  - only OpenAI is admitted; assignment defaults to Sol 6.1, memory/profile to Luna 5.6
+  - bounded workload model default: `GEN_OPENAI_MODEL`
+  - `GEN_ALLOWED_MODELS_OPENAI` is an explicit selection roster and Batch/planner guard, never fallback
 - Output protection and budgets:
   - `GEN_MAX_OUTPUT_TOKENS_HARD`, `GEN_SAFETY_MODE`, `GEN_*_BUDGET`
 - Disabled Batch replay:
   - `STUDENT_MEMORY_OPENAI_BATCH_ENABLED` defaults to `false` and gates every remote Batch action
 - Timeouts/retries:
-  - `GEN_*_REQUEST_TIMEOUT_MS`; speech planning alone uses `GEN_OPENAI_RETRY_*` / `GEN_GOOGLE_RETRY_*`
+  - `GEN_OPENAI_REQUEST_TIMEOUT_MS`; speech planning alone uses `GEN_OPENAI_RETRY_*`
   - assignment/profile provider failure is explicit; memory workers retain durable queue retries
 - Removed fallback and paid-spend variables are ignored. Use the linked target-policy rollout
   procedure to translate existing env settings before deployment.
@@ -178,6 +177,7 @@ Primary groups:
 Read next:
 
 - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](GENERATION_PROVIDER_POLICY.md)
+- [ESL-41 combined rollout/rollback](../operations/openai-llm-migration.md)
 
 ### Postgres ops and backups
 

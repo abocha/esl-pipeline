@@ -35,7 +35,6 @@ import {
   resolveGenerationBudgetRepository,
 } from './generation-budget-guard.js';
 import {
-  executeGoogleStructuredGenerationRaw,
   executeOpenAiStructuredGenerationRaw,
   ProviderExecutionError,
   type ProviderStructuredExecutionRequest,
@@ -50,14 +49,12 @@ type SpeechPlannerExecutor = (args: {
 }) => Promise<ProviderStructuredRawExecutionResult>;
 
 const DEFAULT_EXECUTORS: Record<SpeechPlannerProvider, SpeechPlannerExecutor> = {
-  google_ai_studio: executeGoogleStructuredGenerationRaw,
   openai: executeOpenAiStructuredGenerationRaw,
 };
 
 const SPEECH_PLANNER_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRules = {
   byProvider: {
     openai: { timeoutStatusMin: 500, timeoutCodes: ['server_error'] },
-    google_ai_studio: { timeoutStatusMin: 500 },
   },
 };
 
@@ -239,7 +236,8 @@ export function evaluateSpeechPlannerRawOutput(args: {
   returnedModel?: string;
   providerRequestId?: string;
   finishReason?: string;
-  plannerProvider?: SpeechPlannerProvider;
+  // Offline historical evaluation retains its original provider evidence.
+  plannerProvider?: SpeechPlannerProvider | 'google_ai_studio';
 }): SpeechPlannerAttemptResult {
   const baseMetadata = {
     promptPolicyVersion: args.promptPolicyVersion,
@@ -489,35 +487,23 @@ async function recordUsage(
 
 function credentialForProvider(
   config: BatchBackendConfig['generation'],
-  provider: SpeechPlannerProvider,
+  _provider: SpeechPlannerProvider,
 ): string | undefined {
-  return provider === 'openai'
-    ? config.providers.openai.apiKey
-    : config.providers.googleAiStudio.apiKey;
+  return config.providers.openai.apiKey;
 }
 
 function retryMaxForProvider(
   config: BatchBackendConfig['generation'],
-  provider: SpeechPlannerProvider,
+  _provider: SpeechPlannerProvider,
 ): number {
-  return Math.max(
-    0,
-    provider === 'openai'
-      ? config.providers.openai.retryMax
-      : config.providers.googleAiStudio.retryMax,
-  );
+  return Math.max(0, config.providers.openai.retryMax);
 }
 
 function retryBackoffForProvider(
   config: BatchBackendConfig['generation'],
-  provider: SpeechPlannerProvider,
+  _provider: SpeechPlannerProvider,
 ): number {
-  return Math.max(
-    0,
-    provider === 'openai'
-      ? config.providers.openai.retryBackoffMs
-      : config.providers.googleAiStudio.retryBackoffMs,
-  );
+  return Math.max(0, config.providers.openai.retryBackoffMs);
 }
 
 function mapSpeechPlannerProviderError(

@@ -51,12 +51,6 @@ const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRule
       timeoutStatusMin: 500,
       timeoutCodes: ['server_error'],
     },
-    google_ai_studio: {
-      timeoutStatusMin: 500,
-    },
-    openrouter: {
-      timeoutStatuses: [500, 502, 503],
-    },
   },
 };
 

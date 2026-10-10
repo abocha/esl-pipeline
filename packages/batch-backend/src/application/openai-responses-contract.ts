@@ -14,6 +14,7 @@ export interface OpenAiResponsesRequestBodyArgs {
   prompt?: string;
   envelope?: GenerationRequestEnvelopeV1;
   responseSchema?: OpenAiResponsesSchema;
+  settings?: GenerationRequestEnvelopeV1['settings'];
   maxOutputTokens?: number;
   store?: boolean;
 }
@@ -30,9 +31,10 @@ export function buildOpenAiResponsesRequestBody(
   args: OpenAiResponsesRequestBodyArgs,
 ): Record<string, unknown> {
   const input = args.envelope?.input ?? requirePrompt(args.prompt);
+  const settings = args.envelope?.settings ?? args.settings;
   const text = args.responseSchema
     ? {
-        ...(args.envelope ? { verbosity: args.envelope.settings.textVerbosity } : {}),
+        ...(settings ? { verbosity: settings.textVerbosity } : {}),
         format: {
           type: 'json_schema',
           name: args.responseSchema.name,
@@ -43,8 +45,8 @@ export function buildOpenAiResponsesRequestBody(
             : {}),
         },
       }
-    : args.envelope
-      ? { verbosity: args.envelope.settings.textVerbosity }
+    : settings
+      ? { verbosity: settings.textVerbosity }
       : undefined;
 
   return {
@@ -53,7 +55,7 @@ export function buildOpenAiResponsesRequestBody(
     ...(args.envelope ? { instructions: args.envelope.instructions } : {}),
     stream: false,
     ...(text ? { text } : {}),
-    ...(args.envelope ? { reasoning: { effort: args.envelope.settings.reasoningEffort } } : {}),
+    ...(settings ? { reasoning: { effort: settings.reasoningEffort } } : {}),
     ...(typeof args.maxOutputTokens === 'number'
       ? { max_output_tokens: args.maxOutputTokens }
       : {}),

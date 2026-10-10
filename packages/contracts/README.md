@@ -49,3 +49,7 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
   `recording_too_long`, `no_audio`, `corrupt_media`, `unsupported_media`,
   `multiple_audio_streams`, `preparation_failed`, `speakers_not_separated`, and
   `transcription_provider_account_unavailable`, and `transcription_unavailable_after_retries`.
+
+ESL-41 advances API to 11: fresh generation and operator selections admit only OpenAI. The
+`GenerationProvider` union retains retired Google/OpenRouter identifiers for stored provenance and
+read projections. DB 4, manifest 4, prompt 3 and validator 3 remain unchanged.

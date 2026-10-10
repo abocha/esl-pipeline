@@ -32,21 +32,6 @@ function createConfig(
 
           allowed: ['gpt-6.1-sol', 'gpt-5-mini'],
         },
-        googleAiStudio: {
-          model: 'gemini-3-flash-preview',
-
-          allowed: [
-            'gemini-3-flash-preview',
-            'gemini-2.5-flash-lite',
-            'gemini-2.5-pro',
-            'gemini-custom-001',
-          ],
-        },
-        openrouter: {
-          model: 'openrouter/test-primary',
-
-          allowed: ['openrouter/test-primary', 'openrouter/test-fallback'],
-        },
       },
       providers: {
         openai: {
@@ -55,24 +40,6 @@ function createConfig(
           requestTimeoutMs: 5_000,
           retryMax: 1,
           retryBackoffMs: 0,
-          dailyTokenBudget: 1_000_000,
-          dailyRequestBudget: 1_000,
-          rpmBudget: 1_000,
-        },
-        googleAiStudio: {
-          ...base.generation.providers.googleAiStudio,
-          apiKey: 'google-key',
-          requestTimeoutMs: 5_000,
-          retryMax: 1,
-          retryBackoffMs: 0,
-          dailyRequestBudget: 1_000,
-          rpmBudget: 1_000,
-        },
-        openrouter: {
-          ...base.generation.providers.openrouter,
-          apiKey: 'openrouter-key',
-          requestTimeoutMs: 5_000,
-
           dailyTokenBudget: 1_000_000,
           dailyRequestBudget: 1_000,
           rpmBudget: 1_000,

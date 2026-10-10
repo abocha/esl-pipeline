@@ -86,6 +86,9 @@ For deep system maps, prefer the linked docs rather than growing this file again
   differences do not own separate teaching policies. Prompt-only initial enrichment stays supported.
   Preserve stored historical request evidence and the separately gated Batch retirement boundary.
   See [generation policy](GENERATION_PROVIDER_POLICY.md#effective-learner-memory-inputs-esl-40).
+- ESL-41 admits only OpenAI for fresh LLM work and maintenance. Retired Google AI Studio/OpenRouter
+  targets fail before dispatch; frozen jobs and historical provenance are never silently retargeted.
+  Independent STT/TTS and the separately default-off OpenAI Batch lane remain unchanged.
 
 - Public request/response DTO changes must go through `@esl-pipeline/contracts`.
 - Do not silently rename or repurpose manifest/config fields.

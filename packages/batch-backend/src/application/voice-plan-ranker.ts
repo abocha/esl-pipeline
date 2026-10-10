@@ -8,15 +8,17 @@ import type { BatchBackendConfig } from '../config/env.js';
 import {
   enforceGenerationBudgetBeforeAttempt,
   type GenerationBudgetGuardDependencies,
+  getConfiguredGenerationProviderLimits,
   recordGenerationBudgetUsageAfterSuccess,
   resolveGenerationBudgetRepository,
 } from './generation-budget-guard.js';
 import {
-  executeGoogleStructuredGeneration,
+  executeOpenAiStructuredGeneration,
+  ProviderExecutionError,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
 
-type GoogleStructuredExecutor = typeof executeGoogleStructuredGeneration;
+type OpenAiStructuredExecutor = typeof executeOpenAiStructuredGeneration;
 
 const VOICE_RANK_RESPONSE_SCHEMA = {
   name: 'tts_voice_plan_ranking',
@@ -46,18 +48,18 @@ const VOICE_RANK_RESPONSE_SCHEMA = {
 export function createBackendVoicePlanRanker(
   config: BatchBackendConfig,
   overrides: {
-    executor?: GoogleStructuredExecutor;
+    executor?: OpenAiStructuredExecutor;
     budget?: GenerationBudgetGuardDependencies;
     now?: () => Date;
   } = {},
 ): VoicePlanRanker {
-  const executor = overrides.executor ?? executeGoogleStructuredGeneration;
+  const executor = overrides.executor ?? executeOpenAiStructuredGeneration;
   const now = overrides.now ?? (() => new Date());
   const repository = resolveGenerationBudgetRepository({ config, overrides: overrides.budget });
 
   return {
     metadata: {
-      provider: 'google_ai_studio',
+      provider: 'openai',
       model: config.voiceRanker.model,
       generatedAt: now().toISOString(),
     },
@@ -66,27 +68,41 @@ export function createBackendVoicePlanRanker(
       const prompt = buildVoiceRankerPrompt(request);
       await enforceGenerationBudgetBeforeAttempt({
         config,
-        provider: 'google_ai_studio',
+        provider: 'openai',
         model: config.voiceRanker.model,
         prompt,
         maxOutputTokens: config.voiceRanker.maxOutputTokens,
         now: now(),
         repository,
         limits: {
+          ...getConfiguredGenerationProviderLimits(config.generation, 'openai'),
           rpmBudget: config.voiceRanker.rpmBudget,
           dailyRequestBudget: config.voiceRanker.dailyRequestBudget,
         },
       });
-      const result = await executor({
-        config: config.generation,
-        request: {
-          model: config.voiceRanker.model,
-          prompt,
-          maxOutputTokens: config.voiceRanker.maxOutputTokens,
-          responseSchema: VOICE_RANK_RESPONSE_SCHEMA,
-        },
-      });
+      let result: ProviderStructuredExecutionResult;
+      try {
+        result = await executor({
+          config: config.generation,
+          request: {
+            model: config.voiceRanker.model,
+            prompt,
+            maxOutputTokens: config.voiceRanker.maxOutputTokens,
+            responseSchema: VOICE_RANK_RESPONSE_SCHEMA,
+            store: false,
+            settings: { reasoningEffort: 'low', textVerbosity: 'low' },
+          },
+        });
+      } catch (error) {
+        if (error instanceof ProviderExecutionError && error.usage) {
+          await recordUsage(config, repository, now, error);
+        }
+        throw error;
+      }
       await recordUsage(config, repository, now, result);
+      if (result.finishReason && !['completed', 'stop', 'STOP'].includes(result.finishReason)) {
+        throw new Error(`Voice ranking response did not complete (${result.finishReason}).`);
+      }
       return validateVoiceRankResult(request, result.output);
     },
   };
@@ -123,12 +139,22 @@ function validateVoiceRankResult(
     throw new Error('Voice ranker output must select exactly one voice per speaker.');
   }
   const seenSpeakers = new Set<string>();
+  const voiceCounts = new Map<string, number>();
+  for (const selection of selections) {
+    voiceCounts.set(selection.voiceId, (voiceCounts.get(selection.voiceId) ?? 0) + 1);
+  }
   return {
     selections: selections.map((selection) => {
       const speaker = String(selection.speaker ?? '');
       const voiceId = String(selection.voiceId ?? '');
       if (!shortlistBySpeaker.get(speaker)?.has(voiceId) || seenSpeakers.has(speaker)) {
         throw new Error('Voice ranker output selected an unknown speaker or shortlist voice.');
+      }
+      if (
+        (voiceCounts.get(voiceId) ?? 0) > 1 &&
+        [...shortlistBySpeaker.get(speaker)!].some((candidate) => candidate !== voiceId)
+      ) {
+        throw new Error('Voice ranker output reused a shortlist voice despite an alternative.');
       }
       seenSpeakers.add(speaker);
       return {
@@ -143,11 +169,11 @@ async function recordUsage(
   config: BatchBackendConfig,
   repository: ReturnType<typeof resolveGenerationBudgetRepository>,
   now: () => Date,
-  result: ProviderStructuredExecutionResult,
+  result: Pick<ProviderStructuredExecutionResult, 'usage'>,
 ): Promise<void> {
   await recordGenerationBudgetUsageAfterSuccess({
     config,
-    provider: 'google_ai_studio',
+    provider: 'openai',
     model: config.voiceRanker.model,
     usageTotalTokens: result.usage?.totalTokens,
     now: now(),

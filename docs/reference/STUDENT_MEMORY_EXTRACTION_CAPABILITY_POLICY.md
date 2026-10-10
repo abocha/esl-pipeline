@@ -5,7 +5,7 @@
 - Audience: founder, maintainers, backend implementers, AI agents.
 - Read Time: 7 minutes.
 - Authority Level: canonical extraction-capability policy for student-memory generation.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-10-10 ESL-41 capability/routing state.
 - Owner: founder-maintainer + backend maintainers.
 - Review Cadence: monthly or after provider/runtime capability changes.
 - Status: `reference`.
@@ -21,7 +21,7 @@
 
 Homework draft generation and memory extraction are not the same workload.
 
-- Homework generation is prose-first and can tolerate a broader provider/model surface.
+- Homework generation requires strict AssignmentV1 on OpenAI GPT-6.1 Sol.
 - Memory extraction is schema-first and must produce stable machine-readable artifacts.
 
 Version 1 should therefore use capability-based routing for extraction, not provider-indifferent
@@ -41,8 +41,8 @@ routing.
    supported providers.
 8. LLM extraction outputs cover semantic content only. Backend-owned metadata, lineage, ids, and
    lifecycle fields are not requested from the model.
-9. OpenRouter remains an acceptable provider path for canonical extraction when the selected model
-   explicitly supports structured outputs and routing is configured to require those parameters.
+9. ESL-41 supports OpenAI Responses strict JSON for active extraction. Google AI Studio and
+   OpenRouter invocations are retired; historical model/provider evidence remains readable.
 
 ## Capability Tiers
 
@@ -56,9 +56,6 @@ Definition:
 Examples of supported patterns from current provider docs:
 
 - OpenAI structured outputs / schema-constrained responses
-- Gemini `responseMimeType=application/json` plus `responseJsonSchema`
-- Anthropic structured outputs
-- OpenRouter `response_format.type = json_schema` for compatible models
 
 Version 1 policy:
 
@@ -170,18 +167,11 @@ The backend owns:
 
 This boundary keeps extraction schemas smaller, more portable, and less error-prone.
 
-## OpenRouter Compatibility Rule
+## Retired provider paths
 
-OpenRouter remains a valid extraction provider path in version 1 if and only if:
-
-1. the selected model advertises structured-output support
-2. provider routing is configured to require the needed parameters
-3. the request uses `response_format.type = json_schema`
-4. the schema is supplied in strict mode
-5. the model passes the same local/business validation as direct-provider paths
-
-This means cheap OpenRouter-served models may be usable for canonical extraction, but only when they
-actually satisfy the structured-output contract. Price alone is not a capability signal.
+Google AI Studio and OpenRouter are not active extraction transports after ESL-41. Do not add
+compatibility adapters or retarget frozen work. Preserve stored source/evidence, prompt envelopes,
+validation, lineage, usage and job state. The historical provider profiles remain archived evidence.
 
 ## Operational Guidance
 

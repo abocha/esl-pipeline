@@ -64,8 +64,8 @@ describe('application/profile-draft-refresh', () => {
       structuredProfile,
       rawOutput: structuredProfile,
       rawText: JSON.stringify(structuredProfile),
-      provider: 'google_ai_studio' as const,
-      model: 'gemini-3-flash-preview',
+      provider: 'openai' as const,
+      model: 'gpt-5.6-luna',
       finishReason: 'stop',
     }));
     const saveRevision = vi.fn(async () => ({

@@ -4,8 +4,13 @@
 
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 9 minutes.
-- Authority Level: implementation-driving reference for WS2B Google GenAI integration.
+- Authority Level: historical implementation reference for WS2B Google GenAI integration.
 - Last Updated: 2026-04-09.
+
+- Status: `archive`.
+
+> Historical implementation evidence. ESL-41 retired this LLM transport; this document does not
+> authorize active configuration, provider calls or fallback. See [current generation policy](GENERATION_PROVIDER_POLICY.md).
 
 ## Purpose
 

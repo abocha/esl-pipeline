@@ -82,8 +82,6 @@ export function smokeEnv(
     // Keep the Create action reachable so it can assemble a fresh prompt package.
     // Without a key, the provider adapter rejects before any network request.
     GEN_OPENAI_DAILY_REQUEST_BUDGET: '1',
-    GEN_GOOGLE_DAILY_REQUEST_BUDGET: '0',
-    GEN_OPENROUTER_DAILY_REQUEST_BUDGET: '0',
     TMPDIR: stateDir,
   };
 }

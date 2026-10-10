@@ -584,6 +584,28 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(400);
     });
 
+    it.each(['google_ai_studio', 'openrouter'])(
+      'rejects fresh %s recovery selections before updating the session',
+      async (provider: string) => {
+        const update = vi
+          .spyOn(assignmentSessionsModule, 'updateAssignmentSessionRecoveryForUser')
+          .mockClear();
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/assignment-sessions/${session.id}/recovery`,
+          payload: {
+            expectedRevision: 1,
+            patch: {
+              selectedGenerationProvider: provider,
+              selectedGenerationModel: 'frozen-model',
+            },
+          },
+        });
+        expect(response.statusCode).toBe(400);
+        expect(update).not.toHaveBeenCalled();
+      },
+    );
+
     it('rejects retired catalog profile selection in recovery and context writes', async () => {
       const recovery = await app.inject({
         method: 'PATCH',

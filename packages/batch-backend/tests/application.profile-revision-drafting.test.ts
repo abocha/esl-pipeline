@@ -61,7 +61,7 @@ describe('application/profile-revision-drafting single target', () => {
       repository.recordActual.mock.invocationCallOrder[0]!,
     );
   });
-  it.each(['openai', 'google_ai_studio', 'openrouter'] as const)(
+  it.each(['openai'] as const)(
     'reserves the effective %s envelope and rejects before dispatch when denied',
     async (provider) => {
       const base = loadConfig();
@@ -160,7 +160,7 @@ describe('application/profile-revision-drafting single target', () => {
           },
           overrides: {
             config,
-            executors: { openai: execute, google_ai_studio: vi.fn(), openrouter: vi.fn() },
+            executors: { openai: execute },
             budget: {
               repository: {
                 reserve,
