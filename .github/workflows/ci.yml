@@ -501,23 +501,41 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install deps
-        run: pnpm install --frozen-lockfile
-
       - name: Initialize recording-media logs
         run: mkdir -p tmp/ci-logs/recording-media
 
-      - name: Build media test prerequisites
+      - name: Install media prerequisites and build
         id: build
         shell: bash
         run: |
-          set -o pipefail
-          pnpm --filter @esl-pipeline/batch-backend... run build 2>&1 | tee tmp/ci-logs/recording-media/build.log
+          set -Eeuo pipefail
 
-      - name: Install FFmpeg for recording media tests
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ffmpeg
+          apt_pid=''
+          cleanup() {
+            if [[ -n "$apt_pid" ]]; then
+              wait "$apt_pid" || true
+            fi
+          }
+          trap cleanup EXIT
+
+          sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg &
+          apt_pid=$!
+
+          install_status=0
+          pnpm install --frozen-lockfile || install_status=$?
+
+          build_status=0
+          if (( install_status == 0 )); then
+            pnpm --filter @esl-pipeline/batch-backend... run build 2>&1 | tee tmp/ci-logs/recording-media/build.log || build_status=$?
+          fi
+
+          apt_status=0
+          wait "$apt_pid" || apt_status=$?
+          apt_pid=''
+
+          if (( install_status != 0 )); then exit "$install_status"; fi
+          if (( build_status != 0 )); then exit "$build_status"; fi
+          if (( apt_status != 0 )); then exit "$apt_status"; fi
 
       - name: Backend recording media tests
         id: media_tests
