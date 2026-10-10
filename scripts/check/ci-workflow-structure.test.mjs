@@ -325,6 +325,7 @@ test('production backend packaging matches the release build path', () => {
   assert.match(packaging, /platforms: linux\/amd64/u);
   assert.match(packaging, /pull: true/u);
   assert.match(packaging, /push: false/u);
+  assert.doesNotMatch(packaging, /cache-from:|cache-to:/u);
 });
 
 test('build_unit lanes keep duplicated builds without sharding or matrix fanout', () => {
