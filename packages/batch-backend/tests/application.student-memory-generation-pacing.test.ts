@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { GenerationBudgetRepository } from '../src/application/generation-budget-guard.js';
 import { ProviderExecutionError } from '../src/application/generation-providers.js';
+import { flattenGenerationRequestEnvelope } from '../src/application/generation-request-envelope.js';
+import { buildLessonMemoryEnvelope } from '../src/application/lesson-memory-prompt.js';
 import {
   createStudentMemoryGenerationPacer,
   StudentMemoryPacingDeferredError,
@@ -52,6 +54,41 @@ function createMetrics() {
 }
 
 describe('application/student-memory-generation-pacing', () => {
+  it('reserves and reports the effective envelope text plus the output allowance', async () => {
+    const envelope = buildLessonMemoryEnvelope({
+      transcriptId: 'fixture',
+      transcriptText: 'Student: Synthetic travel story.',
+    });
+    const prompt = flattenGenerationRequestEnvelope(envelope);
+    const repository = createRepository(vi.fn().mockResolvedValue({ allowed: true, usage: USAGE }));
+    const metrics = createMetrics();
+    const pacer = createStudentMemoryGenerationPacer(createConfig(), {
+      repository,
+      metrics,
+      now: () => NOW,
+    });
+    await pacer.run({
+      workload: 'lesson_memory',
+      provider: 'openai',
+      model: 'fixture',
+      prompt,
+      maxOutputTokens: 125,
+      execute: async () => ({ usage: { totalTokens: 77 } }),
+    });
+    const estimatedTokens =
+      Math.ceil((envelope.instructions.length + 2 + envelope.input.length) / 4) + 125;
+    expect(repository.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'openai', model: 'fixture', estimatedTokens }),
+    );
+    expect(metrics.increment).toHaveBeenCalledWith(
+      'student_memory_generation_estimated_tokens',
+      estimatedTokens,
+      expect.objectContaining({ provider: 'openai', model: 'fixture' }),
+    );
+    expect(repository.recordActual).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'openai', model: 'fixture', actualTokens: 77 }),
+    );
+  });
   it.each([
     ['rpm', 'budget_rpm_minute'],
     ['tpm', 'budget_tpm_minute'],

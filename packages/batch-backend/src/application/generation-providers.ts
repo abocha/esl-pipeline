@@ -2,8 +2,8 @@ import type { GenerateDraftUsage, GenerationProvider } from '@esl-pipeline/contr
 
 import type { BatchBackendConfig } from '../config/env.js';
 import {
-  flattenGenerationRequestEnvelope,
   type GenerationRequestEnvelopeV1,
+  resolveGenerationRequestText,
 } from './generation-request-envelope.js';
 import {
   buildOpenAiResponsesRequestBody,
@@ -34,19 +34,6 @@ export interface ProviderStructuredExecutionRequest {
   maxOutputTokens?: number;
   store?: boolean;
   admission?: 'assignment_v1';
-}
-
-function resolveProviderPrompt(request: {
-  prompt?: string;
-  envelope?: GenerationRequestEnvelopeV1;
-}): string {
-  if (request.envelope) {
-    return flattenGenerationRequestEnvelope(request.envelope);
-  }
-  if (request.prompt?.trim()) {
-    return request.prompt;
-  }
-  throw new Error('Provider generation request requires prompt or envelope');
 }
 
 export interface ProviderExecutionResult {
@@ -685,7 +672,7 @@ export async function executeGoogleGeneration(args: {
         contents: [
           {
             role: 'user',
-            parts: [{ text: args.request.prompt }],
+            parts: [{ text: resolveGenerationRequestText(args.request) }],
           },
         ],
         ...(typeof args.request.maxOutputTokens === 'number'
@@ -787,7 +774,7 @@ export async function executeGoogleStructuredGenerationRaw(args: {
         contents: [
           {
             role: 'user',
-            parts: [{ text: args.request.prompt }],
+            parts: [{ text: resolveGenerationRequestText(args.request) }],
           },
         ],
         generationConfig,
@@ -910,7 +897,7 @@ export async function executeOpenRouterGeneration(args: {
         messages: [
           {
             role: 'user',
-            content: args.request.prompt,
+            content: resolveGenerationRequestText(args.request),
           },
         ],
         ...(typeof args.request.maxOutputTokens === 'number'
@@ -1010,7 +997,7 @@ export async function executeOpenRouterStructuredGeneration(args: {
         messages: [
           {
             role: 'user',
-            content: args.request.prompt,
+            content: resolveGenerationRequestText(args.request),
           },
         ],
         response_format: {

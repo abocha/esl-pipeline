@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildHeuristicTranscriptAnalysis,
-  extractStudentOnlyTranscript,
-  mergeTranscriptAnalysis,
-  normalizeTranscriptAnalysis,
-  resolveStudentTrackTranscriptUri,
-} from '../src/application/student-lesson-history.js';
+import { extractStudentOnlyTranscript } from '../src/application/student-lesson-history.js';
 
 describe('student-lesson-history helpers', () => {
   it('extracts student-only lines from timeline and stack transcript formats', () => {
@@ -41,107 +35,5 @@ Great explanation.
     expect(studentOnly).toContain('Because I saw the same in class yesterday.');
     expect(studentOnly).not.toContain('Hello there');
     expect(studentOnly).not.toContain('Great explanation.');
-  });
-
-  it('builds heuristic analysis with vocabulary and grammar hints', () => {
-    const analysis = buildHeuristicTranscriptAnalysis({
-      text: 'I am agree. She go to school. I very like reading books about planets.',
-      provider: 'heuristic',
-      model: null,
-    });
-
-    expect(analysis.source).toBe('heuristic');
-    expect(analysis.lessonSummary.length).toBeGreaterThan(0);
-    expect(analysis.vocabularyFocus.length).toBeGreaterThan(0);
-    expect(analysis.grammarWatchlist.join(' ')).toMatch(
-      /I am agree|he\/she goes|Adverb placement/i,
-    );
-  });
-
-  it('normalizes and merges transcript analysis payloads', () => {
-    const normalized = normalizeTranscriptAnalysis({
-      version: 1,
-      generatedAt: '2026-01-10T00:00:00.000Z',
-      provider: 'openai',
-      model: 'gpt-4o-mini',
-      lessonSummary: 'Student improved confidence.',
-      vocabularyFocus: ['confidence'],
-      grammarWatchlist: ['Third-person present tense agreement ("he/she goes")'],
-      source: 'batch_llm',
-    });
-    expect(normalized).not.toBeNull();
-
-    const merged = mergeTranscriptAnalysis({ provider: 'deepgram' }, normalized!);
-    expect(merged.provider).toBe('deepgram');
-    expect(merged.analysis).toBeDefined();
-  });
-
-  it('resolves student track URI from speaker track summary metadata', () => {
-    const uri = resolveStudentTrackTranscriptUri({
-      speakerTracks: {
-        transcripts: [
-          { speaker: 0, label: 'Teacher', uri: 'local://transcripts/teacher.txt' },
-          { speaker: 1, label: 'Student', uri: 'local://transcripts/student.txt' },
-        ],
-      },
-    });
-    expect(uri).toBe('local://transcripts/student.txt');
-  });
-
-  it('uses the tutor-confirmed mapping for mixed speaker orderings', () => {
-    const uri = resolveStudentTrackTranscriptUri({
-      audioTopology: 'mixed_recording',
-      speakerRoleMapping: {
-        version: 'speaker-role-mapping-v1',
-        provenance: 'tutor_confirmed',
-        confidence: null,
-        roles: [
-          { speaker: 0, role: 'student' },
-          { speaker: 1, role: 'teacher' },
-        ],
-      },
-      speakerTracks: {
-        transcripts: [
-          { speaker: 0, uri: 'local://transcripts/speaker0.txt' },
-          { speaker: 1, uri: 'local://transcripts/speaker1.txt' },
-        ],
-      },
-    });
-    expect(uri).toBe('local://transcripts/speaker0.txt');
-  });
-
-  it('uses the tutor-confirmed mapping when the student is the second diarized speaker', () => {
-    const uri = resolveStudentTrackTranscriptUri({
-      audioTopology: 'mixed_recording',
-      speakerRoleMapping: {
-        version: 'speaker-role-mapping-v1',
-        provenance: 'tutor_confirmed',
-        confidence: null,
-        roles: [
-          { speaker: 0, role: 'teacher' },
-          { speaker: 1, role: 'student' },
-        ],
-      },
-      speakerTracks: {
-        transcripts: [
-          { speaker: 0, uri: 'local://transcripts/speaker0.txt' },
-          { speaker: 1, uri: 'local://transcripts/speaker1.txt' },
-        ],
-      },
-    });
-    expect(uri).toBe('local://transcripts/speaker1.txt');
-  });
-
-  it('does not infer a student from a mixed numeric diarization ID', () => {
-    const uri = resolveStudentTrackTranscriptUri({
-      audioTopology: 'mixed_recording',
-      speakerTracks: {
-        transcripts: [
-          { speaker: 0, uri: 'local://transcripts/speaker0.txt' },
-          { speaker: 1, uri: 'local://transcripts/speaker1.txt' },
-        ],
-      },
-    });
-    expect(uri).toBeNull();
   });
 });

@@ -368,6 +368,7 @@ describe('application/process-student-memory-snapshot-job', () => {
       }),
     );
     const request = generator.mock.calls[0]?.[0].request;
+    expect(request.prompt).toBe(`${request.envelope.instructions}\n\n${request.envelope.input}`);
     expect(request.pendingGenerationNotes).toMatchObject({
       trigger: 'lesson-memory-ready',
       sourceEntryId: 'lesson-1',
@@ -1224,6 +1225,17 @@ describe('application/process-student-memory-snapshot-job', () => {
     expect(request.prompt).toContain('lesson-compact-trigger');
     expect(request.prompt).not.toContain('OPTIONAL_SUPPORTING_CONTEXT_SHOULD_BE_DROPPED');
     expect(request.prompt).not.toContain('OPTIONAL_HOMEWORK_CONTEXT_SHOULD_BE_DROPPED');
+    expect(request.prompt).toBe(`${request.envelope.instructions}\n\n${request.envelope.input}`);
+    expect(request.envelope.sourceManifest).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'SUPPORTING_LESSON_MEMORY_ENTRY' }),
+        expect.objectContaining({ label: 'SUPPORTING_HOMEWORK_MEMORY_ENTRY' }),
+      ]),
+    );
+    expect(request.pendingGenerationNotes).toMatchObject({
+      promptByteLength: Buffer.byteLength(request.prompt, 'utf8'),
+      inputTokenEstimate: Math.ceil(request.prompt.length / 4),
+    });
     expect(request.envelope.sourceManifest).toEqual([
       {
         id: 'student-memory-snapshot:snapshot-ready-parent',

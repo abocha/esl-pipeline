@@ -5,6 +5,7 @@ import {
   normalizeLegacyStudentProfile,
 } from '../src/application/legacy-profile-normalization.js';
 import { loadConfig } from '../src/config/env.js';
+import { assertMemoryRequest } from './support/memory-request-capture.js';
 
 describe('application/legacy-profile-normalization', () => {
   it('creates a draft revision from active profile content and canonical memory', async () => {
@@ -92,24 +93,31 @@ describe('application/legacy-profile-normalization', () => {
           }),
         },
         drafting: {
-          generate: async () => ({
-            structuredProfile: {
-              schemaVersion: 'foundational_profile_v1',
-              overallLevel: 'B1',
-              primaryGoals: ['Lead updates more confidently.'],
-              communicationContexts: ['Weekly work meetings'],
-              interestsAndUsefulThemes: ['Travel examples'],
-              stableStrengths: ['Strong listening'],
-              persistentChallenges: ['Verb tense stability'],
-              studyPreferences: ['Structured explanations'],
-              durableConstraints: [],
-              teacherNotes: 'Keep the profile practical and durable.',
-            },
-            rawOutput: {},
-            rawText: '# Normalized profile',
-            provider: 'google_ai_studio',
-            model: 'gemini-3-flash-preview',
-          }),
+          generate: async ({ request }) => {
+            await assertMemoryRequest('profile-normalization', {
+              ...request,
+              model: 'fixture',
+              responseSchema: request.envelope!.responseSchema!,
+            });
+            return {
+              structuredProfile: {
+                schemaVersion: 'foundational_profile_v1',
+                overallLevel: 'B1',
+                primaryGoals: ['Lead updates more confidently.'],
+                communicationContexts: ['Weekly work meetings'],
+                interestsAndUsefulThemes: ['Travel examples'],
+                stableStrengths: ['Strong listening'],
+                persistentChallenges: ['Verb tense stability'],
+                studyPreferences: ['Structured explanations'],
+                durableConstraints: [],
+                teacherNotes: 'Keep the profile practical and durable.',
+              },
+              rawOutput: {},
+              rawText: '# Normalized profile',
+              provider: 'google_ai_studio',
+              model: 'gemini-3-flash-preview',
+            };
+          },
         },
         profileContent: {
           saveRevision,

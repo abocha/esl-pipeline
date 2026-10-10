@@ -22,7 +22,10 @@ import {
   type FoundationalProfile,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
-import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  createGenerationRequestEnvelope,
+  flattenGenerationRequestEnvelope,
+} from './generation-request-envelope.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -155,13 +158,6 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
   const baseStructuredProfile =
     baseRevision?.structuredContent ??
     deriveFoundationalProfileFromMarkdown(baseRevision?.content ?? '');
-  const prompt = buildRefreshPrompt({
-    studentName: student.student,
-    baseStructuredProfile,
-    selectedCandidates,
-    memoryOverview,
-    reviewerNote: request.reviewerNote ?? null,
-  });
   const envelope = buildRefreshEnvelope({
     studentName: student.student,
     baseStructuredProfile,
@@ -169,6 +165,7 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
     memoryOverview,
     reviewerNote: request.reviewerNote ?? null,
   });
+  const prompt = flattenGenerationRequestEnvelope(envelope);
 
   const drafting = await dependencies.drafting.generate({
     request: {
@@ -345,43 +342,6 @@ function buildMemoryPayload(memoryOverview: StudentMemoryOverview | null) {
   };
 }
 
-function buildRefreshPrompt(args: {
-  studentName: string;
-  baseStructuredProfile: FoundationalProfile | null;
-  selectedCandidates: ProfileDraftRefreshCandidate[];
-  memoryOverview: StudentMemoryOverview | null;
-  reviewerNote: string | null;
-}): string {
-  return [
-    'You are drafting a refreshed foundational student profile for an ESL homework system.',
-    'Return only one JSON object matching the foundational_profile_v1 schema.',
-    'Write a complete refreshed foundational_profile_v1 draft, not a candidate patch.',
-    'Preserve durable teacher-authored truths, integrate selected approved candidates where useful, use memory evidence for context, and favor omission over invention.',
-    'Keep arrays concise and durable. Teacher-only ambiguity belongs in teacherNotes.',
-    '',
-    '[STUDENT_NAME]',
-    args.studentName,
-    '',
-    '[BASE_STRUCTURED_PROFILE]',
-    args.baseStructuredProfile
-      ? JSON.stringify(args.baseStructuredProfile, null, 2)
-      : 'No existing structured profile.',
-    '',
-    '[APPROVED_PROFILE_CANDIDATES]',
-    JSON.stringify(buildCandidatePayload(args.selectedCandidates), null, 2),
-    '',
-    '[STUDENT_MEMORY_OVERVIEW]',
-    args.memoryOverview
-      ? JSON.stringify(buildMemoryPayload(args.memoryOverview), null, 2)
-      : 'No ready student-memory overview available.',
-    '',
-    '[REVIEWER_NOTE]',
-    args.reviewerNote ?? 'No reviewer note provided.',
-    '',
-    'Output only valid JSON.',
-  ].join('\n');
-}
-
 function buildRefreshEnvelope(args: {
   studentName: string;
   baseStructuredProfile: FoundationalProfile | null;
@@ -391,7 +351,10 @@ function buildRefreshEnvelope(args: {
 }) {
   return createGenerationRequestEnvelope({
     workload: 'profile_revision',
+    promptVersion: 'learner_memory_generation_v2',
     instructions: [
+      'You are drafting a refreshed foundational student profile for an ESL homework system.',
+      'Keep arrays concise and durable. Teacher-only ambiguity belongs in teacherNotes.',
       'Write a complete refreshed foundational_profile_v1 draft, not a candidate patch.',
       'Preserve durable teacher-authored truths, integrate selected approved candidates where useful, use memory evidence for context, and favor omission over invention.',
       'Return only a closed foundational_profile_v1 JSON object.',

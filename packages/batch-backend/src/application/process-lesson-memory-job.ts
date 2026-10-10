@@ -18,8 +18,9 @@ import {
   type GenerateLessonMemoryEntryDependencies,
   generateLessonMemoryEntry,
 } from './generate-lesson-memory-entry.js';
+import { flattenGenerationRequestEnvelope } from './generation-request-envelope.js';
 import { isHistoricalAssignmentSessionId } from './historical-assignment.js';
-import { buildLessonMemoryEnvelope, buildLessonMemoryPrompt } from './lesson-memory-prompt.js';
+import { buildLessonMemoryEnvelope } from './lesson-memory-prompt.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 import {
   createStudentMemoryGenerationPacer,
@@ -126,15 +127,12 @@ export async function processLessonMemoryJob(args: {
     if (actualHash !== args.payload.sourceContentHash) {
       throw new Error('Confirmed lesson-memory source hash mismatch');
     }
-    const prompt = buildLessonMemoryPrompt({
-      transcriptText,
-      teacherNotes: null,
-    });
     const envelope = buildLessonMemoryEnvelope({
       transcriptId: args.payload.transcriptId,
       transcriptText,
       teacherNotes: null,
     });
+    const prompt = flattenGenerationRequestEnvelope(envelope);
 
     const result = await pacer.run({
       workload: 'lesson_memory',

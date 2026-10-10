@@ -55,6 +55,14 @@ independent of stored status. MCP exposes it beside the unchanged closed v1 cont
 
 Core surfaces:
 
+- ESL-40 memory/profile builders produce one envelope (`learner_memory_generation_v2`); provider
+  requests, pacing reservations and snapshot byte/token diagnostics use its effective instruction/input
+  content. Initial enrichment retains its prompt-only reservation/result/recovery path. See
+  [provider policy](../../docs/reference/GENERATION_PROVIDER_POLICY.md#effective-learner-memory-inputs-esl-40)
+  and [queued-work transition](../../docs/operations/student-memory-replay-backfill.md#effective-request-transition-esl-40).
+  Unused heuristic/history packaging is removed; canonical `student-memory-package` remains the
+  prompt-package input and student-only transcript extraction remains supported.
+
 - jobs, drafts, prompt packages, recordings, students, auth
 - tutor-pasted transcript sources under `POST /recordings/transcript-source`; these create a
   student-owned recording/transcript pair with `manual_transcript` source and `manual` provider

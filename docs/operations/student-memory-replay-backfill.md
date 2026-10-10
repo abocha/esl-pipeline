@@ -91,6 +91,35 @@ refresh processing for repair-required learners. Rollback never revives supersed
 clears repair notes. Preserve post-rollout writes and audit evidence; prefer forward repair if a safe
 compatible writer set is unavailable. Batch retirement remains ABO-26, outside this change.
 
+## Effective request transition (ESL-40)
+
+Memory and affected profile builders now use policy `learner_memory_generation_v2` inside the
+existing v1 envelope. OpenAI keeps its split instructions/input and other currently supported
+providers receive the envelope's flattened text. Snapshot diagnostics and pacing now account for
+that effective text. Correct estimates may change optional-context dropping or hard-budget admission;
+caps are unchanged, hard rejection dispatches no provider request, and explicit manual rebuild still
+warns rather than rejecting on its warning threshold. No caching or live call is needed for this change.
+
+Queued ordinary memory jobs reconstruct their request at execution time. For a separately authorized
+rollout after ESL-39, pause new memory enqueueing and quiesce API/profile and memory workers; let
+active calls finish and record durable results before swapping the compatible application image set.
+Pending jobs then reconstruct v2 requests with their frozen provider/model, source identity, strategy,
+reason and candidate/currentness policy intact. Stop the rollout if old writers or unresolved active
+calls remain. Do not trigger replay, regeneration or learner recovery as a rollout side effect.
+
+Existing stored prompt packages, request envelopes/hashes, snapshots, episodes, profile revisions,
+and Batch audit state are retained verbatim. Frozen submitted Batch bodies/results continue to use
+their stored evidence; the new builders apply only to newly constructed requests. No database
+migration or provider/env change is required. Rollback first quiesces the new writers, then restores
+the prior compatible API/worker image set that includes ESL-38 and ESL-39; it must not reinterpret
+stored request evidence or revive superseded/cancelled intents.
+
+The uncalled transcript-summary/heuristic/history-package fallback is removed. Prompt creation uses
+canonical `student-memory-package`; `extractStudentOnlyTranscript` remains an extraction helper.
+Do not use old fallback functions as a replay/recovery procedure. Dedicated Batch runtime, schema,
+default-off settings, claim arbitration and historical legacy rejection remain; retirement is still
+ABO-26. Google LLM migration is ESL-41, outside this rollout.
+
 ## Disabled OpenAI Batch Replay
 
 Use the Batch tool only for explicit, non-urgent replay of eligible lesson evidence or native AssignmentV1 history after separate maintainer
