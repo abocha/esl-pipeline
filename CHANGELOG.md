@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.1.0] - 2026-10-10
+
+### Changed
+
+- Automated release from PR #386: feat(generation): enforce shared OpenAI model-group daily budgets (https://github.com/abocha/esl-pipeline/pull/386)
+
 ## [21.0.1] - 2026-10-10
 
 ### Changed
