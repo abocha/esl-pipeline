@@ -1220,7 +1220,7 @@ describe('ordinary replay transactions and DB → BullMQ delivery', () => {
     expect(adopted.generationNotes?.replayKey).toBe('adopt-online');
     const request = (
       replayKey: string,
-      providerOverride: 'openai' | 'openrouter',
+      providerOverride: 'openai' | 'openrouter' | 'google_ai_studio',
       modelOverride: string,
     ) =>
       requestHomeworkMemoryGeneration({
@@ -1235,14 +1235,26 @@ describe('ordinary replay transactions and DB → BullMQ delivery', () => {
         },
         overrides: { source: { resolveFromSucceededJob: vi.fn().mockResolvedValue(source) } },
       });
-    const original = (await request('a', 'openai', 'frozen-model'))!.entry;
-    const same = (await request('a', 'openrouter', 'new-config-model'))!.entry;
+    const original = (await request('a', 'openai', 'gpt-5.6-luna'))!.entry;
+    const same = (await request('a', 'openai', 'gpt-6.1-sol'))!.entry;
     expect(same.id).toBe(original.id);
     expect(same.provider).toBe('openai');
-    expect(same.model).toBe('frozen-model');
+    expect(same.model).toBe('gpt-5.6-luna');
     const queued = (await createStudentMemoryQueue().queue.getJobs(['waiting']))[0]!;
-    expect(queued.data).toMatchObject({ provider: 'openai', model: 'frozen-model' });
-    const next = (await request('b', 'openrouter', 'new-config-model'))!.entry;
+    expect(queued.data).toMatchObject({ provider: 'openai', model: 'gpt-5.6-luna' });
+    // Fresh retired overrides are rejected even when a replay key already exists.
+    for (const provider of ['openrouter', 'google_ai_studio'] as const) {
+      await expect(request('a', provider, 'retired-model')).rejects.toMatchObject({
+        code: 'unsupported_provider',
+        provider,
+      });
+    }
+    expect(await getHomeworkMemoryEntryById(original.id)).toMatchObject({
+      provider: 'openai',
+      model: 'gpt-5.6-luna',
+      status: 'pending',
+    });
+    const next = (await request('b', 'openai', 'gpt-6.1-sol'))!.entry;
     expect(next.id).not.toBe(original.id);
     expect((await getHomeworkMemoryEntryById(original.id))?.status).toBe('superseded');
     const late = await commitCanonicalReadyHomeworkMemoryEntry({
@@ -1262,7 +1274,7 @@ describe('ordinary replay transactions and DB → BullMQ delivery', () => {
         strategy: 'manual_rebuild_v1_1',
         operatorReason: 'Original',
         providerOverride: 'openai',
-        modelOverride: 'snapshot-frozen',
+        modelOverride: 'gpt-5.6-luna',
       },
     });
     const sameSnapshot = await requestStudentMemorySnapshotRefresh({
@@ -1273,12 +1285,12 @@ describe('ordinary replay transactions and DB → BullMQ delivery', () => {
         replayKey: 'snapshot-a',
         strategy: 'full_rebuild_v1',
         operatorReason: 'Changed resubmission',
-        providerOverride: 'openrouter',
-        modelOverride: 'other',
+        providerOverride: 'openai',
+        modelOverride: 'gpt-6.1-sol',
       },
     });
     expect(sameSnapshot.entry.id).toBe(firstSnapshot.entry.id);
-    expect(sameSnapshot.entry.model).toBe('snapshot-frozen');
+    expect(sameSnapshot.entry.model).toBe('gpt-5.6-luna');
     expect(sameSnapshot.entry.generationNotes?.strategy).toBe('manual_rebuild_v1_1');
   });
 
