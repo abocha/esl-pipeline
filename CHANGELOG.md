@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [20.2.4] - 2026-10-10
+
+### Changed
+
+- Automated release from PR #381: fix(memory): unify effective generation inputs and retire dead packaging (https://github.com/abocha/esl-pipeline/pull/381)
+
 ## [20.2.3] - 2026-10-10
 
 ### Changed
