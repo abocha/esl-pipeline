@@ -14,7 +14,8 @@ import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-ha
 const { resolveGenerationTargetMock } = vi.hoisted(() => ({
   resolveGenerationTargetMock: vi.fn(),
 }));
-vi.mock('../src/application/generation-policy.js', () => ({
+vi.mock(import('../src/application/generation-policy.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
   resolveGenerationTarget: resolveGenerationTargetMock,
 }));
 
