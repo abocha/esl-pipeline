@@ -17,6 +17,7 @@ const postgresFiles = [
   'integration.student-area-authorization.test.ts',
   'transport.mcp-oauth.postgres.test.ts',
   'domain.job-repository.test.ts',
+  'domain.generation-budget-repository.test.ts',
   'domain.revision-repository.test.ts',
   'domain.lesson-memory-repository.test.ts',
   'domain.homework-memory-repository.test.ts',

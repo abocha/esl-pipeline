@@ -126,6 +126,12 @@ export interface GenerationModelOption {
 }
 
 export interface GenerationQuotaView {
+  dailyTokenGroup?: 'efficient' | 'larger';
+  reservedTokensToday?: number | null;
+  actualTokensToday?: number | null;
+  groupReservedTokensToday?: number | null;
+  groupActualTokensToday?: number | null;
+  unclassifiedReservedTokensToday?: number | null;
   source: GenerationQuotaSource;
   lastUpdatedAt: string;
   dashboardUrl?: string;

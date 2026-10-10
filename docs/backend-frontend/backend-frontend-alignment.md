@@ -223,3 +223,12 @@ read semantics. Historical Markdown and renderer-1 manifests are read-only evide
 No historical correction, retry, rerun, resume, rendering, TTS, publication, fresh memory extraction or conversion is supported. Previously materialized, verified lesson/homework observations may be read and used in student-memory snapshot derivation under the existing exact ownership, confirmed-binding, identity/URI/hash and replacement checks (ESL-38). This evidence exception never admits historical extraction, regeneration, enrichment recovery or Batch legacy import. Editable JSON authority, source authorization, CAS,
 lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
 [AssignmentV1](../reference/ASSIGNMENT_V1.md) for the canonical execution contract.
+
+### Shared OpenAI quota projection (ESL-45)
+
+API 11.1 adds optional model-group and separate model/group reserved/actual token counters to
+`GenerationQuotaView`. Daily-token used/remaining values describe the selected model's shared
+reservation group; they are not paid spend. Defaults are 2.25M efficient / 225k larger per UTC day.
+Profile refresh and candidate promotion preserve typed quota refusals as HTTP 429, with actionable
+nonsecret messages displayed by the existing frontend API error path. Refusal saves no draft.
+See [generation policy and compatible rollout](../reference/GENERATION_PROVIDER_POLICY.md#openai-model-group-daily-budgets-esl-45).

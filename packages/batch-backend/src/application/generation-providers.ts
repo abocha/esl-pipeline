@@ -212,7 +212,12 @@ export async function executeOpenAiGeneration(args: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(buildOpenAiResponsesRequestBody(args.request)),
+      body: JSON.stringify(
+        buildOpenAiResponsesRequestBody({
+          ...args.request,
+          maxOutputTokens: args.request.maxOutputTokens ?? args.config.maxOutputTokensHard,
+        }),
+      ),
     },
     args.config.providers.openai.requestTimeoutMs,
   );
@@ -325,7 +330,12 @@ export async function executeOpenAiStructuredGenerationRaw(args: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(buildOpenAiResponsesRequestBody(args.request)),
+      body: JSON.stringify(
+        buildOpenAiResponsesRequestBody({
+          ...args.request,
+          maxOutputTokens: args.request.maxOutputTokens ?? args.config.maxOutputTokensHard,
+        }),
+      ),
     },
     args.config.providers.openai.requestTimeoutMs,
   );

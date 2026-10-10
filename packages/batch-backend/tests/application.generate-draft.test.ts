@@ -40,7 +40,7 @@ function createConfig(
           requestTimeoutMs: 5_000,
           retryMax: 1,
           retryBackoffMs: 0,
-          dailyTokenBudget: 1_000_000,
+          dailyTokenBudgets: { efficient: 1_000_000, larger: 1_000_000 },
           dailyRequestBudget: 1_000,
           rpmBudget: 1_000,
         },

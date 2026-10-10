@@ -7,6 +7,7 @@ import type {
 
 import type { BatchBackendConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
+import { getOpenAiModelGroup } from '../domain/openai-model-groups.js';
 import { ProviderExecutionError } from './generation-providers.js';
 
 export interface GenerationTarget {
@@ -71,11 +72,12 @@ export function buildQuotaSnapshot(args: {
   const requestsPerMinute = args.config.providers.openai.rpmBudget ?? null;
   const tokensPerMinute = args.config.providers.openai.tpmBudget ?? null;
   const requestsPerDay = args.config.providers.openai.dailyRequestBudget ?? null;
-  const dailyTokenBudget = args.config.providers.openai.dailyTokenBudget ?? null;
+  const dailyTokenBudget =
+    args.config.providers.openai.dailyTokenBudgets[getOpenAiModelGroup(args.model)];
 
   const usedRequestsToday = usage?.requestsToday ?? null;
   const usedTokensToday = usage
-    ? Math.max(usage.reservedTokensToday, usage.actualTokensToday)
+    ? (usage.groupReservedTokensToday ?? usage.reservedTokensToday)
     : null;
   const rpmUsed = usage?.requestsPerMinuteUsed ?? null;
 
@@ -87,6 +89,12 @@ export function buildQuotaSnapshot(args: {
     tokensPerMinute,
     requestsPerDay,
     dailyTokenBudget,
+    dailyTokenGroup: getOpenAiModelGroup(args.model),
+    reservedTokensToday: usage?.reservedTokensToday ?? null,
+    actualTokensToday: usage?.actualTokensToday ?? null,
+    groupReservedTokensToday: usage?.groupReservedTokensToday ?? null,
+    groupActualTokensToday: usage?.groupActualTokensToday ?? null,
+    unclassifiedReservedTokensToday: usage?.unclassifiedReservedTokensToday ?? null,
     usedRequestsToday,
     usedTokensToday,
     dailyRequestBudget: requestsPerDay,
@@ -97,9 +105,11 @@ export function buildQuotaSnapshot(args: {
         : Math.max(0, requestsPerDay - usedRequestsToday),
     dailyTokenUsed: usedTokensToday,
     dailyTokenRemaining:
-      dailyTokenBudget === undefined || dailyTokenBudget === null || usedTokensToday === null
-        ? null
-        : Math.max(0, dailyTokenBudget - usedTokensToday),
+      (usage?.unclassifiedReservedTokensToday ?? 0) > 0
+        ? 0
+        : dailyTokenBudget === undefined || dailyTokenBudget === null || usedTokensToday === null
+          ? null
+          : Math.max(0, dailyTokenBudget - usedTokensToday),
     rpmBudget: requestsPerMinute,
     rpmUsed,
     rpmRemaining:

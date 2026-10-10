@@ -1,3 +1,4 @@
+import { ProfileRevisionDraftingError } from '../src/application/profile-revision-drafting.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
 
 describeHttpServerIntegrationSuite(
@@ -9,9 +10,52 @@ describeHttpServerIntegrationSuite(
     it,
     mockApproveStudentProfileCandidate,
     mockDeferStudentProfileCandidate,
+    mockRefreshProfileDraftFromApprovedCandidates,
+    mockPromoteStudentProfileCandidates,
     mockListStudentProfileCandidatesForStudent,
     mockRejectStudentProfileCandidate,
   }) => {
+    it.each(['refresh-from-approved-candidates', 'promote'])(
+      'returns a typed safe quota refusal for %s',
+      async (operation: string) => {
+        const mock =
+          operation === 'refresh-from-approved-candidates'
+            ? mockRefreshProfileDraftFromApprovedCandidates
+            : mockPromoteStudentProfileCandidates;
+        mock.mockRejectedValueOnce(
+          new ProfileRevisionDraftingError({
+            category: 'budget_exceeded',
+            provider: 'openai',
+            model: 'gpt-5.6-luna',
+            message: 'Daily reserved-token budget exhausted. Wait for 00:00 UTC.',
+            limitType: 'daily_tokens',
+            limit: 2250000,
+            used: 2249000,
+            window: 'day',
+          }),
+        );
+        const url =
+          operation === 'refresh-from-approved-candidates'
+            ? `/students/${deriveStudentId('Anna')}/profile-drafts/${operation}`
+            : `/students/${deriveStudentId('Anna')}/profile-candidates/${operation}`;
+        const response = await app.inject({
+          method: 'POST',
+          url,
+          payload: { candidateIds: ['candidate-1'] },
+        });
+        expect(response.statusCode).toBe(429);
+        expect(response.json()).toMatchObject({
+          error: 'budget_exceeded',
+          code: 'budget_exceeded',
+          limitType: 'daily_tokens',
+          limit: 2250000,
+          used: 2249000,
+          window: 'day',
+          message: expect.stringContaining('00:00 UTC'),
+        });
+      },
+    );
+
     it('GET /students/:id/profile-candidates parses status and review-state filters', async () => {
       const studentId = deriveStudentId('Anna');
       mockListStudentProfileCandidatesForStudent.mockResolvedValueOnce({

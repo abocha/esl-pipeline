@@ -156,7 +156,7 @@ describe('application/voice-plan-ranker', () => {
       expect.objectContaining({
         provider: 'openai',
         model: 'gpt-5.6-luna',
-        limits: expect.objectContaining({ tpmBudget: 160_000, dailyTokenBudget: 120_000 }),
+        limits: expect.objectContaining({ tpmBudget: 160_000, dailyTokenBudget: 2_250_000 }),
       }),
     );
     expect(recordActual).toHaveBeenCalledWith(

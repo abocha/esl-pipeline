@@ -92,7 +92,7 @@ describe('application/profile-revision-drafting single target', () => {
         envelope,
         operation: 'profile_revision_refresh' as const,
         providerOverride: provider,
-        modelOverride: 'fixture',
+        modelOverride: 'gpt-5.6-luna',
         maxOutputTokens: 125,
       };
       await expect(
@@ -102,7 +102,7 @@ describe('application/profile-revision-drafting single target', () => {
         }),
       ).rejects.toMatchObject({ limitType: 'daily_tokens', window: 'day' });
       expect(reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ provider, model: 'fixture', estimatedTokens }),
+        expect.objectContaining({ provider, model: 'gpt-5.6-luna', estimatedTokens }),
       );
       expect(execute).not.toHaveBeenCalled();
       expect(repository.recordActual).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe('application/profile-revision-drafting single target', () => {
         `${envelope.instructions}\n\n${envelope.input}`,
       );
       expect(repository.recordActual).toHaveBeenCalledWith(
-        expect.objectContaining({ provider, model: 'fixture', actualTokens: 99 }),
+        expect.objectContaining({ provider, model: 'gpt-5.6-luna', actualTokens: 99 }),
       );
     },
   );

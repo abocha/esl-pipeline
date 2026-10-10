@@ -229,6 +229,12 @@ Read next:
   - `GEN_SAFETY_MODE=hard_stop`
   - `GEN_MAX_OUTPUT_TOKENS_HARD=12000`
 - Direct generation provider requests default to 240000 ms unless overridden per provider.
+- `GEN_OPENAI_EFFICIENT_DAILY_TOKEN_BUDGET=2250000` and
+  `GEN_OPENAI_LARGER_DAILY_TOKEN_BUDGET=225000` cap shared model-group reservations per UTC day.
+  Nonnegative safe integers are required; zero is an intentional stop. Unknown model groups fail closed.
+  The obsolete `GEN_OPENAI_DAILY_TOKEN_BUDGET` is ignored; remove it at authorized cutover.
+  `GEN_OPENAI_DAILY_REQUEST_BUDGET` has no default; an explicit nonnegative ceiling remains supported.
+  See [group policy and cutover](GENERATION_PROVIDER_POLICY.md#openai-model-group-daily-budgets-esl-45).
 - `GEN_OPENAI_TPM_BUDGET` defaults to `160000`; it is an operator capacity setting, not a billing or
   plan-tier setting.
 - The opt-in live generation evaluation entrypoint loads `.env` before it checks

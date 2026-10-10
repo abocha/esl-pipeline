@@ -331,46 +331,13 @@ async function withQuotaUsage(
     });
     return {
       ...generation,
-      quota: {
-        ...buildQuotaSnapshot({
-          config: runtimeConfig.generation,
-          provider,
-          model,
-          usage,
-          now: new Date(),
-        }),
-        ...generation.quota,
-        usedRequestsToday: usage.requestsToday,
-        usedTokensToday: Math.max(usage.reservedTokensToday, usage.actualTokensToday),
-        dailyRequestUsed: usage.requestsToday,
-        dailyRequestRemaining:
-          (generation.quota.dailyRequestBudget ?? generation.quota.requestsPerDay ?? null) === null
-            ? null
-            : Math.max(
-                0,
-                (generation.quota.dailyRequestBudget ?? generation.quota.requestsPerDay ?? 0) -
-                  usage.requestsToday,
-              ),
-        dailyTokenUsed: Math.max(usage.reservedTokensToday, usage.actualTokensToday),
-        dailyTokenRemaining:
-          generation.quota.dailyTokenBudget === undefined ||
-          generation.quota.dailyTokenBudget === null
-            ? null
-            : Math.max(
-                0,
-                generation.quota.dailyTokenBudget -
-                  Math.max(usage.reservedTokensToday, usage.actualTokensToday),
-              ),
-        rpmUsed: usage.requestsPerMinuteUsed,
-        rpmRemaining:
-          (generation.quota.rpmBudget ?? generation.quota.requestsPerMinute ?? null) === null
-            ? null
-            : Math.max(
-                0,
-                (generation.quota.rpmBudget ?? generation.quota.requestsPerMinute ?? 0) -
-                  usage.requestsPerMinuteUsed,
-              ),
-      },
+      quota: buildQuotaSnapshot({
+        config: runtimeConfig.generation,
+        provider,
+        model,
+        usage,
+        now: new Date(),
+      }),
     };
   } catch (error) {
     logger.warn(

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ProviderStructuredExecutionRequest } from '../src/application/generation-providers.js';
 import { refreshProfileDraftFromApprovedCandidates } from '../src/application/profile-draft-refresh.js';
+import { ProfileRevisionDraftingError } from '../src/application/profile-revision-drafting.js';
 import { loadConfig } from '../src/config/env.js';
 import type { StudentProfileCandidateRecord } from '../src/domain/student-profile-candidate-model.js';
 import { assertMemoryRequest } from './support/memory-request-capture.js';
@@ -46,6 +47,7 @@ describe('application/profile-draft-refresh', () => {
       ['candidate-1'],
     ],
     ['a paraphrase', 'Product launches', []],
+    ['quota refusal', 'Product launches', []],
   ])('links only represented approved facts with %s', async (_label, theme, included) => {
     const linkToDraft = vi.fn().mockResolvedValue(undefined);
     const structuredProfile = {
@@ -85,7 +87,17 @@ describe('application/profile-draft-refresh', () => {
       structuredContent: structuredProfile,
     }));
 
-    const result = await refreshProfileDraftFromApprovedCandidates({
+    const quotaError = new ProfileRevisionDraftingError({
+      category: 'budget_exceeded',
+      provider: 'openai',
+      model: 'gpt-5.6-luna',
+      message: 'Daily group budget exhausted.',
+      limitType: 'daily_tokens',
+      limit: 2250000,
+      used: 2250000,
+    });
+    if (_label === 'quota refusal') generate.mockRejectedValueOnce(quotaError);
+    const attempt = refreshProfileDraftFromApprovedCandidates({
       request: {
         studentId: 'tolik',
         reviewerId: 'teacher-1',
@@ -166,6 +178,15 @@ describe('application/profile-draft-refresh', () => {
       },
     });
 
+    const outcome = await attempt.then(
+      (result) => ({ result, error: null }),
+      (error) => ({ result: null, error }),
+    );
+    expect(outcome.error).toBe(_label === 'quota refusal' ? quotaError : null);
+    expect(saveRevision).toHaveBeenCalledTimes(_label === 'quota refusal' ? 0 : 1);
+    expect(linkToDraft).toHaveBeenCalledTimes(_label === 'quota refusal' ? 0 : 1);
+    if (!outcome.result) return;
+    const result = outcome.result;
     const captured = (
       generate.mock.calls as unknown as [{ request: ProviderStructuredExecutionRequest }][]
     )[0]![0].request;

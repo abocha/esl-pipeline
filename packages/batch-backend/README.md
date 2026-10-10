@@ -685,3 +685,13 @@ and completed against the shipped v5 template after explicit paid-call authoriza
 cases remain private. The activation recommendation is CHANGE: repair a cue that leaks the target
 aspect and an overgeneralized learner self-check, with minor label and language-annotation findings
 recorded separately. No template activation or deployment is part of that evaluation.
+
+### OpenAI shared daily admission
+
+ESL-45 reserves OpenAI tokens against efficient/larger model groups (2.25M/225k per UTC day).
+Minute and daily usage rows retain the original provider/model. Atomic PostgreSQL group admission
+sums those rows under a transaction lock, including same-day pre-upgrade reservations; no migration
+or refund job is required. Profile refresh/promotion quota refusals return 429 before draft writes.
+See [generation policy](../../docs/reference/GENERATION_PROVIDER_POLICY.md#openai-model-group-daily-budgets-esl-45)
+for explicit membership, counter semantics, the bounded caps audit, and required writer quiescence
+on separately authorized deployment/rollback.

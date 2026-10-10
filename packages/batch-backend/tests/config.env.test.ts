@@ -732,3 +732,50 @@ describe('config/env - postgres pool tuning', () => {
     ).rejects.toThrow('PG_CONNECTION_TIMEOUT_MS must be between 100 and 120000');
   });
 });
+
+describe('OpenAI daily group config', () => {
+  it('uses agreed caps and ignores the obsolete per-model daily cap', async () => {
+    await withEnv(
+      {
+        GEN_OPENAI_EFFICIENT_DAILY_TOKEN_BUDGET: undefined,
+        GEN_OPENAI_LARGER_DAILY_TOKEN_BUDGET: undefined,
+        GEN_OPENAI_DAILY_TOKEN_BUDGET: '1',
+        GEN_OPENAI_DAILY_REQUEST_BUDGET: undefined,
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.generation.providers.openai.dailyTokenBudgets).toEqual({
+          efficient: 2250000,
+          larger: 225000,
+        });
+        expect(cfg.generation.providers.openai.dailyRequestBudget).toBeUndefined();
+        expect(cfg.generation.safetyMode).toBe('hard_stop');
+      },
+    );
+  });
+  it.each(['-1', '1.5', 'garbage', 'Infinity', '9007199254740992'])(
+    'rejects invalid cap %s',
+    async (value) => {
+      await withEnv({ GEN_OPENAI_EFFICIENT_DAILY_TOKEN_BUDGET: value }, async () => {
+        await expect(loadConfigFresh()).rejects.toThrow('nonnegative safe integer');
+      });
+    },
+  );
+  it('supports a zero stop cap and explicit request limit', async () => {
+    await withEnv(
+      {
+        GEN_OPENAI_EFFICIENT_DAILY_TOKEN_BUDGET: '0',
+        GEN_OPENAI_LARGER_DAILY_TOKEN_BUDGET: '100',
+        GEN_OPENAI_DAILY_REQUEST_BUDGET: '4',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.generation.providers.openai.dailyTokenBudgets).toEqual({
+          efficient: 0,
+          larger: 100,
+        });
+        expect(cfg.generation.providers.openai.dailyRequestBudget).toBe(4);
+      },
+    );
+  });
+});

@@ -138,7 +138,8 @@
 | `GEN_LESSON_MEMORY_PROVIDER` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_MAX_OUTPUT_TOKENS_HARD` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_DAILY_REQUEST_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
-| `GEN_OPENAI_DAILY_TOKEN_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_EFFICIENT_DAILY_TOKEN_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_LARGER_DAILY_TOKEN_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_MODEL` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_REQUEST_TIMEOUT_MS` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_RETRY_BACKOFF_MS` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
