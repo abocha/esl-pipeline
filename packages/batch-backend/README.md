@@ -559,10 +559,16 @@ Student-memory operator workflows:
   their full source lineage is verified; invalidated snapshots and unfinished superseded intents
   remain excluded. Read and transaction checks share this candidate-specific rule. Ordinary
   latest-ready selection and operator retry admission retain their existing restrictions.
-- Candidate patch promotion and full draft refresh link/report only selected facts represented in
-  the resulting structured profile. Activation proves current approved wording in the actual active
-  revision; omitted/paraphrased facts stay approved and inherited links remain lineage. Review writes
-  reject a promotion/supersession that won concurrently. Endpoint paths and DTO shapes are unchanged.
+- Full draft refresh deterministically preserves selected approved wording in its mapped structured
+  fields after generation, reusing the candidate patch application. The reviewed diff shows those
+  insertions; normalized exact duplicates are retained once. Paraphrases, merged facts and moved
+  wording remain visible for teacher review rather than being deleted by semantic inference.
+  Both draft paths report only represented
+  IDs and additive `omittedCandidates` reasons. Activation returns additive `candidatePromotion`
+  counts/IDs/reasons and still proves current approved wording in the actual active revision.
+  Removed/changed facts stay approved; inherited links alone do not prove application. Repeated
+  activation reports already promoted facts in that revision without changing promotion timestamps.
+  Review writes reject a promotion/supersession that won concurrently. Endpoint paths are unchanged.
 - Lesson recency uses same-student confirmed-source session links to completed lesson `starts_at`,
   with explicit extraction fallback for unknown dates and deterministic tie breakers. `generatedAt`
   retains extraction semantics; no existing artifacts/hashes or historical dates are rewritten.

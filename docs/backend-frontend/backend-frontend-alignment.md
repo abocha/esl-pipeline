@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 3 minutes.
 - Authority Level: Canonical status tracker.
-- Last Verified Against: 2026-10-07 no-homework transcript UI and history placement (ESL-35).
+- Last Verified Against: 2026-10-11 deterministic candidate application and promotion feedback (ESL-47).
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while alpha work continues.
 - Status: `active`.
@@ -182,16 +182,21 @@ intents remain excluded in both read and transaction checks; latest-ready select
 
 Both existing draft endpoints report/link only selections represented in the resulting structured
 profile. Patch decisions may select a subset and are validated as closed decision JSON independently
-of base-profile size. Full draft refresh generation is unchanged. Activation checks the actual
+of base-profile size. Full draft refresh now applies selected approved wording deterministically to
+the generated profile before saving and linking the draft. Activation checks the actual
 active revision/hash and current approved wording in the relevant field using conservative Unicode,
-case and whitespace equality. Omitted/paraphrased facts remain approved; inherited links are lineage.
+case and whitespace equality. Removed or changed facts remain approved; inherited links are lineage.
 Concurrent review cannot overwrite terminal promotion/supersession.
 
 Completed same-student source-linked lesson dates provide chronology, with explicit extraction
 fallback and unknown occurrence dates otherwise. Learning candidate details label that fallback;
-draft feedback reports omitted selections. Existing DTO shapes, endpoint paths, profile content,
-hashes, frozen prompts and historical candidate records are preserved. No data/schema migration is
-required. ESL-39 local completion does not establish hosted CI, publication or ABO-41 rollout.
+draft feedback reports applied/omitted selections and activation reports actual promotions/omissions.
+API 11.2 adds optional omission and promotion metadata; old-server responses remain readable.
+Normalized exact duplicates are retained once, while paraphrases, merged items and moved wording
+remain visible alongside the approved item for teacher review. The UI asks the tutor to review
+repeated wording before activation. Semantic similarity never deletes content or supplies promotion
+proof. Endpoint paths, profile schema, frozen prompts and historical records are preserved; no
+data/schema migration is required. Publication and deployment remain separate operational gates.
 
 Student-area surfaces, profile revisions, memory, timeline and candidate/draft routes authorize the
 student in the authenticated workspace before secondary reads or writes. Foundational Profile is

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createEmptyFoundationalProfile } from '../src/application/foundational-profile.js';
 import type { ProviderStructuredExecutionRequest } from '../src/application/generation-providers.js';
 import { refreshProfileDraftFromApprovedCandidates } from '../src/application/profile-draft-refresh.js';
 import { ProfileRevisionDraftingError } from '../src/application/profile-revision-drafting.js';
@@ -40,15 +41,70 @@ function makeCandidate(
 }
 
 describe('application/profile-draft-refresh', () => {
+  it('reports zero applied for empty approved wording without reviving the original fact', async () => {
+    const profile = createEmptyFoundationalProfile();
+    const linkToDraft = vi.fn(async () => {});
+    const result = await refreshProfileDraftFromApprovedCandidates({
+      request: { studentId: 'tolik', candidateIds: ['empty'] },
+      overrides: {
+        config: loadConfig(),
+        students: { getById: async () => ({ id: 'tolik', student: 'Tolik', voices: {} }) },
+        revisions: { getActive: async () => null, getById: async () => null },
+        memory: { getOverview: async () => null },
+        candidates: {
+          listByIds: async () => [
+            makeCandidate({ id: 'empty', fact: 'Original fact.', approvedFact: ' ' }),
+          ],
+          linkToDraft,
+        },
+        drafting: {
+          generate: async () => ({
+            structuredProfile: profile,
+            rawOutput: profile,
+            rawText: JSON.stringify(profile),
+            provider: 'openai',
+            model: 'fixture',
+            finishReason: 'stop',
+          }),
+        },
+        profileContent: {
+          saveRevision: async () => ({
+            id: 'draft-empty',
+            studentId: 'tolik',
+            contentHash: 'hash',
+            source: 'profile_revision_refresh',
+            status: 'draft',
+            versionNumber: 1,
+            versionLabel: 'v1',
+            activatedAt: null,
+            deprecatedAt: null,
+            createdAt: '2026-10-11T00:00:00Z',
+            createdBy: null,
+            restoredFromRevisionId: null,
+            content: '',
+            structuredContent: profile,
+          }),
+        },
+      },
+    });
+    expect(result.includedCandidateIds).toEqual([]);
+    expect(result.omittedCandidates).toEqual([
+      { candidateId: 'empty', reason: 'empty_approved_fact' },
+    ]);
+    expect(linkToDraft).toHaveBeenCalledWith(expect.objectContaining({ candidateIds: [] }));
+    expect(result.draftRevision.structuredContent?.interestsAndUsefulThemes).toEqual([]);
+  });
   it.each([
     [
       'exact approved wording',
       'Uses product launches as a useful speaking theme.',
-      ['candidate-1'],
+      ['candidate-1', 'candidate-2'],
     ],
-    ['a paraphrase', 'Product launches', []],
+    ['a paraphrase', 'Product launches', ['candidate-1', 'candidate-2']],
+    ['merged wording', 'Product launches and hiking', ['candidate-1', 'candidate-2']],
+    ['moved wording', 'Unrelated theme', ['candidate-1', 'candidate-2']],
     ['quota refusal', 'Product launches', []],
-  ])('links only represented approved facts with %s', async (_label, theme, included) => {
+  ])('preserves selected approved wording despite %s', async (_label, theme, included) => {
     const linkToDraft = vi.fn().mockResolvedValue(undefined);
     const structuredProfile = {
       schemaVersion: 'foundational_profile_v1' as const,
@@ -70,22 +126,24 @@ describe('application/profile-draft-refresh', () => {
       model: 'gpt-5.6-luna',
       finishReason: 'stop',
     }));
-    const saveRevision = vi.fn(async () => ({
-      id: 'revision-draft-1',
-      studentId: 'tolik',
-      contentHash: 'hash',
-      source: 'profile_revision_refresh' as const,
-      status: 'draft' as const,
-      versionNumber: 3,
-      versionLabel: 'v3',
-      activatedAt: null,
-      deprecatedAt: null,
-      createdAt: '2026-03-22T00:00:00.000Z',
-      createdBy: 'teacher-1',
-      restoredFromRevisionId: null,
-      content: '# Foundational Profile',
-      structuredContent: structuredProfile,
-    }));
+    const saveRevision = vi.fn(
+      async (_studentId: string, _content: string, options?: { structuredContent?: unknown }) => ({
+        id: 'revision-draft-1',
+        studentId: 'tolik',
+        contentHash: 'hash',
+        source: 'profile_revision_refresh' as const,
+        status: 'draft' as const,
+        versionNumber: 3,
+        versionLabel: 'v3',
+        activatedAt: null,
+        deprecatedAt: null,
+        createdAt: '2026-03-22T00:00:00.000Z',
+        createdBy: 'teacher-1',
+        restoredFromRevisionId: null,
+        content: '# Foundational Profile',
+        structuredContent: options?.structuredContent as typeof structuredProfile,
+      }),
+    );
 
     const quotaError = new ProfileRevisionDraftingError({
       category: 'budget_exceeded',
@@ -193,6 +251,21 @@ describe('application/profile-draft-refresh', () => {
     await assertMemoryRequest('profile-refresh', { ...captured, model: 'fixture' });
     expect(result.draftRevision.status).toBe('draft');
     expect(result.includedCandidateIds).toEqual(included);
+    // Exact duplicates appear once. Paraphrases and merged items remain visible for teacher review;
+    // semantic similarity must neither delete provider content nor confer application proof.
+    expect(result.draftRevision.structuredContent?.interestsAndUsefulThemes).toEqual(
+      _label === 'exact approved wording'
+        ? ['Uses product launches as a useful speaking theme.', 'Likes hiking.']
+        : [theme, 'Uses product launches as a useful speaking theme.', 'Likes hiking.'],
+    );
+    expect(saveRevision.mock.calls[0]?.[2]).toMatchObject({
+      structuredContent: {
+        interestsAndUsefulThemes: expect.arrayContaining([
+          'Uses product launches as a useful speaking theme.',
+          'Likes hiking.',
+        ]),
+      },
+    });
     expect(linkToDraft).toHaveBeenCalledWith({
       studentId: 'tolik',
       candidateIds: included,

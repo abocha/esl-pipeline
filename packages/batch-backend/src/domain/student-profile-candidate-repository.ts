@@ -647,8 +647,8 @@ export async function markStudentProfileCandidatesPromotedByRevision(
   revisionId: string,
   proof: { studentId: string; contentHash: string; structuredContent: unknown },
   promotedAt?: Date,
-): Promise<void> {
-  await withPgClient(async (client: PoolClient) => {
+): Promise<StudentProfileCandidatePromotionResult> {
+  return withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [proof.studentId]);
@@ -657,36 +657,62 @@ export async function markStudentProfileCandidatesPromotedByRevision(
          WHERE id = $1 AND student_id = $2 AND status = 'active' AND content_hash = $3`,
         [revisionId, proof.studentId, proof.contentHash],
       );
-      if (revision.rows[0]) {
-        const candidates = await client.query<StudentProfileCandidateRow>(
-          `SELECT ${SELECT_COLUMNS} FROM student_profile_candidates
-           WHERE student_id = $2 AND status = 'approved' AND review_state = 'approved'
+      const result: StudentProfileCandidatePromotionResult = {
+        linkedCandidateCount: 0,
+        promotedCandidateIds: [],
+        omittedCandidates: [],
+      };
+      const candidates = await client.query<StudentProfileCandidateRow>(
+        `SELECT ${SELECT_COLUMNS} FROM student_profile_candidates
+           WHERE student_id = $2
              AND (promoted_revision_id = $1 OR id IN (
                SELECT candidate_id FROM student_profile_candidate_draft_revisions
                WHERE revision_id = $1 AND student_id = $2
-             )) FOR UPDATE`,
-          [revisionId, proof.studentId],
-        );
-        const profile = revision.rows[0].structured_content ?? proof.structuredContent;
-        const appliedIds = candidates.rows
-          .map(mapRow)
-          .filter((candidate) => isStudentProfileCandidateRepresented(profile, candidate))
-          .map((candidate) => candidate.id);
-        if (appliedIds.length > 0) {
-          await client.query(
-            `UPDATE student_profile_candidates SET status = 'promoted', promoted_revision_id = $1,
-               promoted_at = COALESCE($3, NOW()), review_state = 'approved'
-             WHERE student_id = $4 AND id = ANY($2::uuid[]) AND status = 'approved'`,
-            [revisionId, appliedIds, promotedAt ?? null, proof.studentId],
-          );
+             )) ORDER BY id FOR UPDATE`,
+        [revisionId, proof.studentId],
+      );
+      const profile = revision.rows[0]?.structured_content ?? proof.structuredContent;
+      result.linkedCandidateCount = candidates.rows.length;
+      const appliedIds: string[] = [];
+      for (const candidate of candidates.rows.map(mapRow)) {
+        const reason = !revision.rows[0]
+          ? 'revision_changed'
+          : candidate.status === 'promoted' && candidate.promotedRevisionId !== revisionId
+            ? 'promoted_elsewhere'
+            : !['approved', 'promoted'].includes(candidate.status) ||
+                candidate.reviewState !== 'approved'
+              ? 'not_approved'
+              : !isStudentProfileCandidateRepresented(profile, candidate)
+                ? 'fact_not_represented'
+                : null;
+        if (reason) {
+          result.omittedCandidates.push({ candidateId: candidate.id, reason });
+        } else {
+          result.promotedCandidateIds.push(candidate.id);
+          if (candidate.status === 'approved') appliedIds.push(candidate.id);
         }
       }
+      if (appliedIds.length > 0) {
+        await client.query(
+          `UPDATE student_profile_candidates SET status = 'promoted', promoted_revision_id = $1,
+               promoted_at = COALESCE($3, NOW()), review_state = 'approved'
+             WHERE student_id = $4 AND id = ANY($2::uuid[]) AND status = 'approved'`,
+          [revisionId, appliedIds, promotedAt ?? null, proof.studentId],
+        );
+      }
       await client.query('COMMIT');
+      return result;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
     }
   });
+}
+
+export interface StudentProfileCandidatePromotionResult {
+  linkedCandidateCount: number;
+  promotedCandidateIds: string[];
+  omittedCandidates: Array<{ candidateId: string; reason: string }>;
 }
 
 function mapRow(row: StudentProfileCandidateRow): StudentProfileCandidateRecord {

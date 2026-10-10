@@ -612,6 +612,24 @@ function formatDraftDiffChangeType(changeType: ProfileDraftDiffItem['changeType'
   return 'Changed';
 }
 
+function describeCandidateOmissions(omissions: Array<{ reason: string }>): string {
+  const reasons: Record<string, string> = {
+    empty_approved_fact: 'Approved wording was empty.',
+    provider_omitted: 'The candidate was omitted from the proposed patch.',
+    fact_not_represented: 'Approved wording is absent or changed in its target field.',
+    not_approved: 'The candidate is no longer approved.',
+    promoted_elsewhere: 'The candidate was already promoted in another revision.',
+    revision_changed: 'The active revision changed before promotion could be verified.',
+  };
+  return [
+    ...new Set(
+      omissions.map(({ reason }) => reasons[reason] ?? 'Application could not be verified.'),
+    ),
+  ]
+    .map((reason) => ` ${reason}`)
+    .join('');
+}
+
 export const StudentLearningPage: React.FC = () => {
   const { student, studentId, studentLoading, studentError, refreshStudent } =
     useStudentAreaContext();
@@ -1126,11 +1144,16 @@ export const StudentLearningPage: React.FC = () => {
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      await activateProfileRevision(profileStudentId, currentRevision.id);
+      const activated = await activateProfileRevision(profileStudentId, currentRevision.id);
       await Promise.all([reloadCurrentLearningSurface(), refreshStudent()]);
       setProfileDraftDiffBase(null);
       setProfileError(null);
-      setProfileSuccess('Draft activated.');
+      const promotion = activated.candidatePromotion;
+      setProfileSuccess(
+        promotion
+          ? `Draft activated. ${promotion.promotedCandidateIds.length} of ${promotion.linkedCandidateCount} linked facts promoted; ${promotion.omittedCandidates.length} omitted.${describeCandidateOmissions(promotion.omittedCandidates)}`
+          : 'Draft activated. Candidate promotion was not reported by the server.',
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to activate the draft.';
       setProfileError(message);
@@ -1216,9 +1239,7 @@ export const StudentLearningPage: React.FC = () => {
         (id) => !response.includedCandidateIds.includes(id),
       ).length;
       setProfileCandidatePromotionSuccess(
-        excludedCount > 0
-          ? `Draft refreshed. ${response.includedCandidateIds.length} selected facts are represented; ${excludedCount} remain approved for review.`
-          : 'Structured draft revision refreshed from approved candidates.',
+        `Draft refreshed. ${response.includedCandidateIds.length} of ${candidateIds.length} selected facts applied; ${excludedCount} omitted.${describeCandidateOmissions(response.omittedCandidates ?? (excludedCount > 0 ? [{ reason: 'fact_not_represented' }] : []))} Review the changes and repeated wording before activating.`,
       );
       setProfileSuccess('Draft revision opened in the editor.');
     } catch (error) {
