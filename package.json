@@ -18,7 +18,7 @@
     "type": "git",
     "url": "https://github.com/abocha/esl-pipeline.git"
   },
-  "license": "ISC",
+  "license": "UNLICENSED",
   "author": "",
   "type": "module",
   "main": "index.js",

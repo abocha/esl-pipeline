@@ -2,7 +2,7 @@
   "name": "@esl-pipeline/batch-backend",
   "version": "1.10.0",
   "private": true,
-  "license": "MIT",
+  "license": "UNLICENSED",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

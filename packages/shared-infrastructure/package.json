@@ -2,7 +2,7 @@
   "name": "@esl-pipeline/shared-infrastructure",
   "version": "1.2.0",
   "private": true,
-  "license": "MIT",
+  "license": "UNLICENSED",
   "type": "module",
   "exports": {
     ".": {
