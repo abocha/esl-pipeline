@@ -732,8 +732,6 @@ jobs:
           push: false
           provenance: false
           sbom: false
-          cache-from: type=gha,scope=pr-batch-backend
-          cache-to: type=gha,mode=max,scope=pr-batch-backend,ignore-error=true
 
   ci-gate:
     name: CI gate

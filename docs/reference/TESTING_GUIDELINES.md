@@ -41,10 +41,29 @@ If hosted CI fails, inspect that job's logs and retained manifest, then reproduc
 command, configuration, and prerequisites. Do not replace a failing hosted job with a repository-wide
 local approximation.
 
-The conditional `production backend packaging` job reuses the release production-image scope and
-executes the same backend Dockerfile, Buildx action, target platform, and fresh-base behavior as the
-release image build, without pushing an image. Shared image inputs and workspace changes that affect
-the backend select it; unrelated PRs skip it. `CI gate` requires the job to succeed whenever selected.
+The conditional `production backend packaging` job executes the same backend Dockerfile, Buildx
+action, target platform, and fresh-base behavior as the release image build, without pushing an image.
+It does not import or export a BuildKit cache. PR workflows can restore accessible caches from the
+base and default branches, but PR-created caches are scoped to the PR merge ref and are not
+automatically readable by base/default-branch or other PR workflows. The prior PR exporter used a
+separate `pr-batch-backend` scope; with that exporter removed, this job no longer imports that
+orphaned scope. The release workflow uses a separate scope, so its cache is not an input to this job.
+Release builds retain their max-mode export. Their `pull_request_target` trigger has read-only access
+to the default-branch cache by default; `ignore-error=true` lets image publication succeed when that
+export fails. Shared image inputs and workspace changes that affect the backend select the job;
+unrelated PRs skip it. `CI gate` requires the job to succeed whenever selected.
+
+Historical PR job observations took 166s, 195s, 198s, and 157s, with respective max-mode cache
+exports of 21s, 24s, 72s, and 22s. Subtracting only each run's own export time gives counterfactual
+durations of about 145s, 171s, 126s, and 135s without export. These are not measured no-cache
+durations: removing cache imports can also require rebuilding the build-stage toolchain and rerunning
+`pnpm fetch`, while the persisted fetched pnpm artifacts keep deployment offline. BuildKit logs marked
+`pnpm fetch` as `CACHED`, but restoring that layer still took 25–29s; a cache miss would execute the
+command and incur its own work. Consequently, exporter-only subtraction overstates likely net savings.
+With nearest-minute job billing, the exporter-only estimates cross a minute boundary for the 195s
+and 198s observations (4 to 3 minutes), but not for 166s or 157s (3 to 3 minutes). Rebuild work can
+erase those estimated minute savings. Compare successive changed-source PR runs, not only identical-
+SHA reruns, before concluding that removing PR cache exports reduced billed minutes.
 
 ## Local feedback ladder
 
