@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.2.1] - 2026-10-11
+
+### Changed
+
+- Automated release from PR #390: fix(deploy): support canonical domain migration to app.eslpipeline.com (https://github.com/abocha/esl-pipeline/pull/390)
+
 ## [21.2.0] - 2026-10-11
 
 ### Changed
