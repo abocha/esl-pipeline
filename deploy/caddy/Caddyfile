@@ -40,4 +40,11 @@
 	import application
 }
 
+# The public marketing page is independent from the authenticated app and OAuth origin.
+eslpipeline.com {
+	encode zstd gzip
+	root * /srv/landing
+	file_server
+}
+
 import transition-{$CADDY_TRANSITION_MODE:disabled}
