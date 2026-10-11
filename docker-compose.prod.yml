@@ -92,6 +92,7 @@ services:
       - batch-frontend
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/landing:/srv/landing:ro
       - caddy_data:/data
       - caddy_config:/config
     environment:
