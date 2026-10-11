@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.3.1] - 2026-10-11
+
+### Changed
+
+- Automated release from PR #394: fix(landing): polish two English phrases (ESL-49) (https://github.com/abocha/esl-pipeline/pull/394)
+
 ## [21.3.0] - 2026-10-11
 
 ### Changed
