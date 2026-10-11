@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.2.0] - 2026-10-11
+
+### Changed
+
+- Automated release from PR #389: fix(profile): preserve approved facts and report actual promotions (https://github.com/abocha/esl-pipeline/pull/389)
+
 ## [21.1.0] - 2026-10-10
 
 ### Changed
