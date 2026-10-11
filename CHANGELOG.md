@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.3.0] - 2026-10-11
+
+### Changed
+
+- Automated release from PR #392: feat(landing): publish public ESL Pipeline site at eslpipeline.com (ESL-48) (https://github.com/abocha/esl-pipeline/pull/392)
+
 ## [21.2.1] - 2026-10-11
 
 ### Changed
