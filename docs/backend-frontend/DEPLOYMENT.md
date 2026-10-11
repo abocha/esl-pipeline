@@ -430,27 +430,35 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
    bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
    ```
 
-   On the VPS, the deploy script reads `CADDY_PUBLIC_HOSTNAME` and `CADDY_ACME_EMAIL` from
+   On the VPS, the deploy script reads `CADDY_PUBLIC_HOSTNAME`, `CADDY_ACME_EMAIL`, and the temporary
+   `CADDY_TRANSITION_*` settings from
    server-local `/opt/esl-pipeline/.env` when those values are not already exported.
    Explicit shell exports still take precedence for one-off overrides. Do not put these values in
    the generated deploy state files under `/var/lib/esl-pipeline/deploy`.
 
 4. The script resolves all requested manifest digests. If a digest is already the current local
    image, it adds the new SHA tag locally instead of downloading the layers. It records image refs,
-   digests, and the Caddy configuration digest under `/var/lib/esl-pipeline/deploy`, then prints its
+   digests, application configuration digest and Caddy configuration digest under `/var/lib/esl-pipeline/deploy`, then prints its
    plan. Every deploy checks the requested backend's packaged migration inventory and compatibility
    metadata against the read-only PostgreSQL migration ledger. Backend digest changes trigger
    Postgres health, a verified pre-migration backup, migrations,
    backend workers, frontend, and Caddy recreation. Frontend changes recreate frontend and Caddy;
-   bot changes recreate the enabled bot; Caddy configuration changes recreate Caddy. An alias-only
+   bot changes recreate the enabled bot; Caddyfile or effective edge-environment changes recreate Caddy.
+   The requested backend image validates production environment before runtime changes. Changes to
+   `.env` or production Compose recreate the enabled application services and edge without database
+   work when backend image digests match. An alias-only
    release updates state and runs bounded health checks without backup, migration, or service restart work.
-   The first deploy after this behavior lands recreates Caddy once because older state has no Caddy
-   digest.
+   Older state without the application configuration digest causes one runtime recreation.
 5. If checks fail after services update, follow the script's compatibility-gated recovery guidance.
    It prints a command using `/var/lib/esl-pipeline/deploy/previous-images.env` only when that
    backend runtime supports the planned schema. An incompatible boundary blocks that command.
 
 ### Schema compatibility and recovery
+
+For a canonical origin change, follow [the domain migration runbook](../operations/canonical-domain-migration.md).
+It stages direct Caddy HTTPS on both application hosts, switches the single MCP issuer/resource,
+and pairs environment rollback with explicit connector reconnection. Image state alone cannot
+roll back an issuer change.
 
 `packages/batch-backend/migrations/runtime-compatibility.json` ships inside the backend image.
 Every migration ID must have a declaration; the release contract check rejects missing entries,

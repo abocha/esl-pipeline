@@ -39,6 +39,8 @@
 | `BCRYPT_ROUNDS` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `CADDY_ACME_EMAIL` | `.env.example` | misc | `docs/reference/env.md` |
 | `CADDY_PUBLIC_HOSTNAME` | `.env.example` | misc | `docs/reference/env.md` |
+| `CADDY_TRANSITION_HOSTNAME` | `.env.example` | misc | `docs/reference/env.md` |
+| `CADDY_TRANSITION_MODE` | `.env.example` | misc | `docs/reference/env.md` |
 | `COMPOSE_PROJECT_NAME` | `.env.example` | misc | `docs/reference/env.md` |
 | `CORS_CREDENTIALS` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `CORS_ORIGIN` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |

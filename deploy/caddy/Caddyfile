@@ -2,9 +2,42 @@
 	email {$CADDY_ACME_EMAIL}
 }
 
-{$CADDY_PUBLIC_HOSTNAME} {
+(application) {
 	encode zstd gzip
 	reverse_proxy batch-frontend:8080 {
 		header_up X-Forwarded-Proto {scheme}
 	}
 }
+
+# One temporary browser/API host; OAuth and MCP belong only to the canonical host.
+(transition-disabled) {
+}
+
+(transition-serve) {
+	{$CADDY_TRANSITION_HOSTNAME} {
+		@oauth path /api/oauth /api/oauth/* /api/mcp /api/mcp/* /.well-known/* /api/.well-known/*
+		header @oauth Cache-Control no-store
+		respond @oauth "Use the canonical MCP endpoint" 410
+		import application
+	}
+}
+
+(transition-redirect) {
+	{$CADDY_TRANSITION_HOSTNAME} {
+		# Never forward writes, OAuth state, API credentials or query strings across origins.
+		@page {
+			method GET HEAD
+			not path /api /api/* /.well-known /.well-known/*
+			expression `{http.request.uri.query} == ""`
+		}
+		header Cache-Control no-store
+		redir @page https://{$CADDY_PUBLIC_HOSTNAME}{uri} 302
+		respond "Open the canonical application URL and sign in again" 410
+	}
+}
+
+{$CADDY_PUBLIC_HOSTNAME} {
+	import application
+}
+
+import transition-{$CADDY_TRANSITION_MODE:disabled}

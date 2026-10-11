@@ -16,7 +16,7 @@ test('builds caddy validate docker args with an absolute Caddyfile bind mount', 
   assert.doesNotMatch(args[3], /\$\{PWD\}/);
   assert.equal(path.isAbsolute(args[3].split(':/etc/caddy/Caddyfile:ro')[0]), true);
   assert.deepEqual(args.slice(-5), [
-    'caddy:2-alpine',
+    'caddy:2.11-alpine',
     'caddy',
     'validate',
     '--config',

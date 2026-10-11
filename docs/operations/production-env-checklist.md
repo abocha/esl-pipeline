@@ -93,7 +93,7 @@ REFRESH_TOKEN_EXPIRES_IN=7d
 REFRESH_COOKIE_NAME=esl_refresh
 REFRESH_COOKIE_SAMESITE=lax
 REFRESH_COOKIE_SECURE=true
-# REFRESH_COOKIE_DOMAIN=<set only if needed>
+# REFRESH_COOKIE_DOMAIN must remain absent (host-only cookies).
 REFRESH_COOKIE_PATH=/
 BCRYPT_ROUNDS=12
 ```
@@ -143,7 +143,9 @@ data entry. Real tutor access must use the Caddy edge profile, HTTPS, and
 Configure the edge profile only after DNS can point at the Ubuntu 24.04 VPS:
 
 ```bash
-CADDY_PUBLIC_HOSTNAME=<alpha-public-hostname>
+CADDY_PUBLIC_HOSTNAME=app.eslpipeline.com
+CADDY_TRANSITION_MODE=disabled
+# CADDY_TRANSITION_HOSTNAME is absent outside the migration window.
 CADDY_ACME_EMAIL=<operator-email-for-acme-notices>
 ```
 
@@ -258,8 +260,11 @@ The manual deploy script writes image refs and digests only under:
 /var/lib/esl-pipeline/deploy/deployments.log
 ```
 
-The image state files also record `CADDY_CONFIG_DIGEST`. On the first deployment after upgrading an
-older state file, the missing digest intentionally causes one Caddy recreation.
+The state files also record `CADDY_CONFIG_DIGEST` (Caddyfile plus effective hostname, transition
+settings and ACME email) and `APPLICATION_CONFIG_DIGEST` (`.env` plus production Compose contents).
+An environment-only change recreates application services and edge without database work. A missing
+application digest in older state intentionally causes one runtime recreation. Only digests are
+stored; environment contents and secrets are never copied into image state or deployment logs.
 
 Do not put application secrets in those state files. Keep `.env` in the application
 checkout with restrictive permissions. Authenticate to GHCR on the VPS with a read-only production
@@ -278,8 +283,12 @@ bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
 
 The command is unchanged. Read the printed plan before completion: database backup/migration runs
 only when the backend digest changes, and Compose recreates only the affected dependency set. A
-release whose images and Caddy configuration are unchanged performs local SHA aliasing, state
+release whose images, application configuration and Caddy configuration are unchanged performs local SHA aliasing, state
 promotion, and bounded health checks without restarting services.
+
+For the staged move from `esl-pipeline.run.place`, follow
+[canonical domain migration](canonical-domain-migration.md). Do not replace production OAuth URLs
+until the new DNS-only host has valid direct Caddy HTTPS and its browser/API smoke passes.
 
 ## Provider Keys and Cost Guardrails
 

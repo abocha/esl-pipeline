@@ -96,6 +96,8 @@ services:
       - caddy_config:/config
     environment:
       CADDY_PUBLIC_HOSTNAME: ${CADDY_PUBLIC_HOSTNAME:-}
+      CADDY_TRANSITION_HOSTNAME: ${CADDY_TRANSITION_HOSTNAME:-}
+      CADDY_TRANSITION_MODE: ${CADDY_TRANSITION_MODE:-disabled}
       CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-}
     ports:
       - '0.0.0.0:80:80'

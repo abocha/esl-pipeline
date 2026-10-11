@@ -7,6 +7,25 @@ import { validateEnvironment } from '../src/tools/validate-env.js';
 
 describe('environment validation', () => {
   const testDirs: string[] = [];
+  const production = [
+    'NODE_ENV=production',
+    'PG_ENABLED=true',
+    'PG_HOST=postgres',
+    'PG_USER=esl',
+    'PG_PASSWORD=non-default-password',
+    'PG_DATABASE=esl_batch',
+    'REDIS_ENABLED=true',
+    'REDIS_HOST=redis',
+    'JWT_SECRET=non-default-jwt-secret',
+    'REFRESH_COOKIE_SECURE=true',
+    'CADDY_PUBLIC_HOSTNAME=app.eslpipeline.com',
+    'ENABLE_CORS=false',
+    'MCP_OAUTH_ENABLED=true',
+    'MCP_OAUTH_ISSUER=https://app.eslpipeline.com/api/oauth',
+    'MCP_OAUTH_RESOURCE=https://app.eslpipeline.com/api/mcp',
+    'MCP_OAUTH_COOKIE_KEYS=["test-cookie-key-with-at-least-32-characters"]',
+    'MCP_OAUTH_JWKS={"keys":[{"kty":"RSA","d":"test-private-key"}]}',
+  ];
 
   afterEach(() => {
     for (const dir of testDirs.splice(0)) {
@@ -57,6 +76,56 @@ describe('environment validation', () => {
     expect(validateEnvironment({ cwd, profile: 'development', shellEnv: {} }).errors).toContain(
       'Duplicate key: NODE_ENV',
     );
+  });
+
+  it('accepts canonical OAuth on the new host with temporary browser access on the old host', () => {
+    const cwd = writeFixture(
+      [
+        ...production,
+        'CADDY_TRANSITION_HOSTNAME=esl-pipeline.run.place',
+        'CADDY_TRANSITION_MODE=serve',
+      ].join('\n'),
+    );
+    expect(validateEnvironment({ cwd, profile: 'production', shellEnv: {} }).errors).toEqual([]);
+  });
+
+  it('validates the effective container environment without reading a host-owned .env', () => {
+    const cwd = writeFixture('MALFORMED SECRET FILE MUST NOT BE READ');
+    const shellEnv = Object.fromEntries(
+      production.map((line) => {
+        const separator = line.indexOf('=');
+        return [line.slice(0, separator), line.slice(separator + 1)];
+      }),
+    );
+    expect(
+      validateEnvironment({ cwd, profile: 'production', runtime: true, shellEnv }).errors,
+    ).toEqual([]);
+    expect(
+      validateEnvironment({
+        cwd,
+        profile: 'production',
+        runtime: true,
+        shellEnv: { ...shellEnv, MCP_OAUTH_RESOURCE: 'https://esl-pipeline.run.place/api/mcp' },
+      }).errors.join('\n'),
+    ).toContain('canonical HTTPS origin');
+  });
+
+  it.each([
+    ['MCP_OAUTH_ISSUER', 'https://esl-pipeline.run.place/api/oauth', 'canonical HTTPS origin'],
+    ['MCP_OAUTH_RESOURCE', 'https://esl-pipeline.run.place/api/mcp', 'canonical HTTPS origin'],
+    ['REFRESH_COOKIE_DOMAIN', '.eslpipeline.com', 'host-only cookies'],
+    ['ENABLE_CORS', 'true', 'ENABLE_CORS=false'],
+    ['REFRESH_COOKIE_PATH', '/api/auth', 'REFRESH_COOKIE_PATH=/'],
+    ['BATCH_BACKEND_ENABLE_EXTENDED_API', 'false', 'BATCH_BACKEND_ENABLE_EXTENDED_API=true'],
+    ['MCP_OAUTH_COOKIE_KEYS', '[]', 'cookie signing keys'],
+    ['MCP_OAUTH_JWKS', '{"keys":[]}', 'private signing JWKS'],
+  ])('rejects unsafe production %s without exposing configured values', (key, value, message) => {
+    const cwd = writeFixture(
+      [...production.filter((line) => !line.startsWith(`${key}=`)), `${key}=${value}`].join('\n'),
+    );
+    const errors = validateEnvironment({ cwd, profile: 'production', shellEnv: {} }).errors;
+    expect(errors.join('\n')).toContain(message);
+    expect(errors.join('\n')).not.toContain('test-private-key');
   });
 
   it('reports unsupported backend configuration values', () => {

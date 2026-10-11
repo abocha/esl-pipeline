@@ -145,6 +145,21 @@ Primary groups:
     keys secret, separate from the REST JWT secret. Retain keys across restarts; rotate with overlap.
     The `/api/mcp` URL is both the OAuth audience and the stateless Streamable HTTP resource.
     This setting remains false by default; production activation is a separate step.
+  - Caddy production keeps `REFRESH_COOKIE_DOMAIN` absent, `REFRESH_COOKIE_SECURE=true`,
+    `REFRESH_COOKIE_PATH=/`, and `ENABLE_CORS=false`. Cookies and browser storage are host-specific;
+    a canonical-host change requires browser login and MCP reconnection.
+  - `CADDY_PUBLIC_HOSTNAME` is the single canonical public hostname; when MCP OAuth is enabled,
+    its issuer/resource must be exactly `https://<CADDY_PUBLIC_HOSTNAME>/api/oauth` and `/api/mcp`.
+    Production environment validation checks alignment, OAuth key configuration and the enabled
+    extended API before deployment can recreate services.
+    `validate-env --runtime --profile production` checks the effective container environment;
+    the default file mode continues to check `.env` syntax and duplicate keys locally.
+  - `CADDY_TRANSITION_MODE` defaults to `disabled` with `CADDY_TRANSITION_HOSTNAME` absent.
+    `serve` temporarily exposes the same application/API on one distinct hostname while rejecting
+    its OAuth/MCP/discovery routes with 410. `redirect` permits only query-free GET/HEAD browser
+    paths to move to the canonical HTTPS origin with uncached 302 responses; APIs, writes and
+    query-bearing requests return 410. This is an edge transition, not a second OAuth issuer.
+    See [canonical domain migration](../operations/canonical-domain-migration.md).
 
 Read next:
 

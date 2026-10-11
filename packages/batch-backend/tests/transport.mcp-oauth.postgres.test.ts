@@ -1516,6 +1516,111 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     });
   });
 
+  it('cuts OAuth over and back without accepting credentials from the other resource', async () => {
+    const oldConfig = {
+      ...oauthConfig,
+      issuer: 'https://esl-pipeline.run.place/api/oauth',
+      resource: 'https://esl-pipeline.run.place/api/mcp',
+      allowHttpForTests: false,
+    };
+    const newConfig = {
+      ...oldConfig,
+      issuer: 'https://app.eslpipeline.com/api/oauth',
+      resource: 'https://app.eslpipeline.com/api/mcp',
+    };
+    const oldApp = await makeApp(oldConfig);
+    const newApp = await makeApp(newConfig);
+    try {
+      const user = await seedUser();
+      const issueAt = async (target: TestApp, config: McpOAuthConfig) => {
+        const browser = new Browser(target.app, user.refreshCookie, new URL(config.issuer).origin);
+        const { callback } = await authorize(
+          browser,
+          user.workspaceIds[0],
+          config.issuer,
+          config.resource,
+        );
+        expect(callback?.statusCode).toBe(303);
+        const callbackUrl = new URL(callback!.headers.location!);
+        expect(callbackUrl.searchParams.get('iss')).toBe(config.issuer);
+        const response = await browser.request(
+          'POST',
+          `${config.issuer}/token`,
+          new URLSearchParams({
+            grant_type: 'authorization_code',
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            code: callbackUrl.searchParams.get('code')!,
+            code_verifier: verifier,
+            resource: config.resource,
+          }).toString(),
+        );
+        expect(response.statusCode).toBe(200);
+        return response.json() as { access_token: string; refresh_token: string };
+      };
+      const oldTokens = await issueAt(oldApp, oldConfig);
+      const newTokens = await issueAt(newApp, newConfig);
+      const oldGrant = await verifyMcpOAuthCredential(
+        oldApp.provider,
+        oldTokens.access_token,
+        oldConfig,
+      );
+      const newGrant = await verifyMcpOAuthCredential(
+        newApp.provider,
+        newTokens.access_token,
+        newConfig,
+      );
+      expect(oldGrant).not.toBeNull();
+      expect(newGrant).not.toBeNull();
+      expect((await getMcpProfile(oldGrant!))?.id).toBe((await getMcpProfile(newGrant!))?.id);
+      expect(
+        await verifyMcpOAuthCredential(newApp.provider, oldTokens.access_token, newConfig),
+      ).toBeNull();
+      expect(
+        await verifyMcpOAuthCredential(oldApp.provider, newTokens.access_token, oldConfig),
+      ).toBeNull();
+      for (const [target, config, foreignTokens, foreignResource] of [
+        [newApp, newConfig, oldTokens, oldConfig.resource],
+        [oldApp, oldConfig, newTokens, newConfig.resource],
+      ] as const) {
+        const metadata = await target.app.inject('/.well-known/oauth-protected-resource/api/mcp');
+        expect(metadata.json()).toMatchObject({
+          resource: config.resource,
+          authorization_servers: [config.issuer],
+        });
+        const browser = new Browser(target.app, undefined, new URL(config.issuer).origin);
+        for (const requestedResource of [foreignResource, config.resource]) {
+          const response = await browser.request(
+            'POST',
+            `${config.issuer}/token`,
+            new URLSearchParams({
+              grant_type: 'refresh_token',
+              client_id: clientId,
+              refresh_token: foreignTokens.refresh_token,
+              resource: requestedResource,
+            }).toString(),
+          );
+          expect(response.statusCode).toBe(400);
+          expect(response.json()).not.toHaveProperty('access_token');
+        }
+        const rpc = await target.app.inject({
+          method: 'POST',
+          url: '/mcp',
+          headers: {
+            origin: new URL(foreignResource).origin,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          payload: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+        });
+        expect(rpc.statusCode).toBe(403);
+      }
+    } finally {
+      await oldApp.app.close();
+      await newApp.app.close();
+    }
+  });
+
   it('accepts ChatGPT CIMD metadata without registering another user identity', async () => {
     const metadata = {
       client_id: 'https://chatgpt.com/oauth/client.json',
@@ -1858,14 +1963,14 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     expect(nginx).toContain('https https;');
     expect(nginx).toContain('proxy_set_header X-Forwarded-Host $host;');
     expect(nginx).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
-    const httpsIssuer = 'https://pipeline.example.test/api/oauth';
-    const httpsResource = 'https://pipeline.example.test/api/mcp';
+    const httpsIssuer = 'https://app.eslpipeline.com/api/oauth';
+    const httpsResource = 'https://app.eslpipeline.com/api/mcp';
     const config: McpOAuthConfig = { ...oauthConfig, issuer: httpsIssuer, resource: httpsResource,
       allowHttpForTests: false };
     const httpsApp = await makeApp(config);
     try {
       const user = await seedUser();
-      const browser = new Browser(httpsApp.app, user.refreshCookie, 'https://pipeline.example.test');
+      const browser = new Browser(httpsApp.app, user.refreshCookie, 'https://app.eslpipeline.com');
       const discovery = await browser.request('GET', `${httpsIssuer}/.well-known/openid-configuration`);
       expect(discovery.statusCode).toBe(200);
       expect(discovery.json()).toMatchObject({
@@ -1880,8 +1985,9 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
       const setCookie = initial.headers['set-cookie'];
       expect(JSON.stringify(setCookie)).toMatch(/; secure(?:;|\")/i);
       expect(browser.cookieHeaderFor(initial.headers.location!)).toContain('mcp_oauth_interaction=');
-      expect(browser.cookieHeaderFor('http://pipeline.example.test/api/oauth/interaction/x'))
+      expect(browser.cookieHeaderFor('http://app.eslpipeline.com/api/oauth/interaction/x'))
         .not.toContain('mcp_oauth_interaction=');
+      expect(browser.cookieHeaderFor('https://esl-pipeline.run.place/api/oauth/interaction/x')).toBe('');
       const consent = await follow(browser, initial);
       expect(consent.statusCode).toBe(200);
     } finally {

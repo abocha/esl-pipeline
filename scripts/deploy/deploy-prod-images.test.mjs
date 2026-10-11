@@ -14,7 +14,7 @@ test('production deploy resolves remote digests and locally aliases unchanged im
 test('production deploy persists Caddy configuration state and uses the pure planner', () => {
   assert.match(deployScript, /deploy-prod-images-plan\.sh/);
   assert.match(deployScript, /CADDY_CONFIG_DIGEST/);
-  assert.match(deployScript, /sha256sum "\$\{APP_DIR\}\/deploy\/caddy\/Caddyfile"/);
+  assert.match(deployScript, /application_config_digest\(\)/);
   assert.match(deployScript, /build_deployment_plan/);
 });
 

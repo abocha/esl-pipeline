@@ -169,6 +169,8 @@ function expectRefreshCookie(
       }),
     ]),
   );
+  const refresh = response.cookies.find((cookie) => cookie.name === 'refresh');
+  expect(refresh).not.toHaveProperty('domain');
 }
 
 describe('registerAuthUserRoutes authentication contracts', () => {

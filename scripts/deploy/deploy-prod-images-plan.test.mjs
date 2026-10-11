@@ -18,6 +18,8 @@ function plan({
   requestedCaddy = 'caddy-old',
   opsBotEnabled = 'false',
   edgeEnabled = 'true',
+  currentApplication = 'application-old',
+  requestedApplication = 'application-old',
 } = {}) {
   const result = spawnSync(
     'bash',
@@ -33,14 +35,15 @@ function plan({
       requestedCaddy,
       opsBotEnabled,
       edgeEnabled,
+      currentApplication,
+      requestedApplication,
     ],
     { encoding: 'utf8' },
   );
   assert.equal(result.status, 0, result.stderr);
-  const [backend, frontend, bot, caddy, database, edge, initial, services] = result.stdout
-    .trim()
-    .split('|');
-  return { backend, frontend, bot, caddy, database, edge, initial, services };
+  const [backend, frontend, bot, caddy, database, edge, initial, services, application] =
+    result.stdout.trim().split('|');
+  return { backend, frontend, bot, caddy, database, edge, initial, services, application };
 }
 
 test('first deployment performs database work and starts the complete enabled runtime', () => {
@@ -61,6 +64,7 @@ test('first deployment performs database work and starts the complete enabled ru
     initial: 'true',
     services:
       'batch-backend batch-worker transcribe-worker student-memory-worker batch-frontend telegram-ops-bot',
+    application: 'false',
   });
 });
 
@@ -113,5 +117,25 @@ test('alias-only releases require no runtime work', () => {
     edge: 'false',
     initial: 'false',
     services: '',
+    application: 'false',
   });
+});
+
+test('environment-only cutover restarts the enabled runtime without database work', () => {
+  const result = plan({ requestedApplication: 'application-new', opsBotEnabled: 'true' });
+  assert.equal(result.application, 'true');
+  assert.equal(result.backend, 'false');
+  assert.equal(result.database, 'false');
+  assert.equal(result.edge, 'true');
+  assert.equal(
+    result.services,
+    'batch-backend batch-worker transcribe-worker student-memory-worker batch-frontend telegram-ops-bot',
+  );
+});
+
+test('missing application state triggers a one-time runtime refresh', () => {
+  const result = plan({ currentApplication: '' });
+  assert.equal(result.application, 'true');
+  assert.equal(result.database, 'false');
+  assert.equal(result.services.includes('telegram-ops-bot'), false);
 });

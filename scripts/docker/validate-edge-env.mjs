@@ -5,6 +5,8 @@ const LOCAL_EDGE_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
 export function validateEdgeEnv(env = process.env) {
   const hostname = readRequiredEnv(env, 'CADDY_PUBLIC_HOSTNAME');
   const email = readRequiredEnv(env, 'CADDY_ACME_EMAIL');
+  const transitionHostname = env.CADDY_TRANSITION_HOSTNAME?.trim() || '';
+  const transitionMode = env.CADDY_TRANSITION_MODE?.trim() || 'disabled';
 
   if (!isPlainPublicDnsHostname(hostname)) {
     throw new Error('CADDY_PUBLIC_HOSTNAME must be a plain public DNS hostname.');
@@ -13,7 +15,21 @@ export function validateEdgeEnv(env = process.env) {
     throw new Error('CADDY_ACME_EMAIL must be a valid email address.');
   }
 
-  return { hostname, email };
+  if (!['disabled', 'serve', 'redirect'].includes(transitionMode)) {
+    throw new Error('CADDY_TRANSITION_MODE must be disabled, serve, or redirect.');
+  }
+  if (transitionMode === 'disabled' && transitionHostname) {
+    throw new Error('Clear CADDY_TRANSITION_HOSTNAME when CADDY_TRANSITION_MODE=disabled.');
+  }
+  if (
+    transitionMode !== 'disabled' &&
+    (!isPlainPublicDnsHostname(transitionHostname) ||
+      transitionHostname.toLowerCase() === hostname.toLowerCase())
+  ) {
+    throw new Error('CADDY_TRANSITION_HOSTNAME must be a distinct plain public DNS hostname.');
+  }
+
+  return { hostname, email, transitionHostname, transitionMode };
 }
 
 function isPlainPublicDnsHostname(value) {

@@ -22,11 +22,14 @@ build_deployment_plan() {
   local requested_caddy="$8"
   local include_ops_bot="$9"
   local include_edge="${10}"
+  local current_application_config="${11}"
+  local requested_application_config="${12}"
 
   BACKEND_CHANGED=false
   FRONTEND_CHANGED=false
   BOT_CHANGED=false
   CADDY_CONFIG_CHANGED=false
+  APPLICATION_CONFIG_CHANGED=false
   INITIAL_DEPLOY=false
   DATABASE_WORK_REQUIRED=false
   EDGE_RESTART_REQUIRED=false
@@ -36,9 +39,15 @@ build_deployment_plan() {
     INITIAL_DEPLOY=true
   fi
 
+  if deployment_plan_changed "$current_application_config" "$requested_application_config"; then
+    APPLICATION_CONFIG_CHANGED=true
+  fi
+
   if deployment_plan_changed "$current_backend" "$requested_backend"; then
     BACKEND_CHANGED=true
     DATABASE_WORK_REQUIRED=true
+  fi
+  if [[ "$BACKEND_CHANGED" == "true" || "$APPLICATION_CONFIG_CHANGED" == "true" ]]; then
     DEPLOYMENT_SERVICES+=(
       batch-backend
       batch-worker
@@ -50,15 +59,18 @@ build_deployment_plan() {
 
   if deployment_plan_changed "$current_frontend" "$requested_frontend"; then
     FRONTEND_CHANGED=true
-    if [[ "$BACKEND_CHANGED" != "true" ]]; then
+    if [[ "$BACKEND_CHANGED" != "true" && "$APPLICATION_CONFIG_CHANGED" != "true" ]]; then
       DEPLOYMENT_SERVICES+=(batch-frontend)
     fi
   fi
 
-  if deployment_plan_bool "$include_ops_bot" \
-    && deployment_plan_changed "$current_bot" "$requested_bot"; then
-    BOT_CHANGED=true
-    DEPLOYMENT_SERVICES+=(telegram-ops-bot)
+  if deployment_plan_bool "$include_ops_bot"; then
+    if deployment_plan_changed "$current_bot" "$requested_bot"; then
+      BOT_CHANGED=true
+    fi
+    if [[ "$BOT_CHANGED" == "true" || "$APPLICATION_CONFIG_CHANGED" == "true" ]]; then
+      DEPLOYMENT_SERVICES+=(telegram-ops-bot)
+    fi
   fi
 
   if deployment_plan_bool "$include_edge" \
@@ -69,19 +81,20 @@ build_deployment_plan() {
   if deployment_plan_bool "$include_edge" \
     && [[ "$BACKEND_CHANGED" == "true" \
       || "$FRONTEND_CHANGED" == "true" \
+      || "$APPLICATION_CONFIG_CHANGED" == "true" \
       || "$CADDY_CONFIG_CHANGED" == "true" ]]; then
     EDGE_RESTART_REQUIRED=true
   fi
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  [[ "$#" -eq 10 ]] || {
-    echo "expected 10 deployment-plan arguments" >&2
+  [[ "$#" -eq 12 ]] || {
+    echo "expected 12 deployment-plan arguments" >&2
     exit 2
   }
   build_deployment_plan "$@"
-  printf '%s|%s|%s|%s|%s|%s|%s|%s\n' \
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
     "$BACKEND_CHANGED" "$FRONTEND_CHANGED" "$BOT_CHANGED" "$CADDY_CONFIG_CHANGED" \
     "$DATABASE_WORK_REQUIRED" "$EDGE_RESTART_REQUIRED" "$INITIAL_DEPLOY" \
-    "${DEPLOYMENT_SERVICES[*]}"
+    "${DEPLOYMENT_SERVICES[*]}" "$APPLICATION_CONFIG_CHANGED"
 fi
