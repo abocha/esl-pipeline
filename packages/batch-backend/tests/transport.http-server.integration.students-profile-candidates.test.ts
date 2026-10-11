@@ -14,7 +14,85 @@ describeHttpServerIntegrationSuite(
     mockPromoteStudentProfileCandidates,
     mockListStudentProfileCandidatesForStudent,
     mockRejectStudentProfileCandidate,
+    mockActivateProfileRevisionForStudent,
   }) => {
+    it.each(['refresh-from-approved-candidates', 'promote'])(
+      'returns applied IDs and omission reasons for %s',
+      async (operation: string) => {
+        const studentId = deriveStudentId('Anna');
+        const result = {
+          studentId,
+          baseRevisionId: null,
+          draftRevision: {
+            id: 'draft-1',
+            studentId,
+            contentHash: 'hash',
+            source: 'profile_revision_refresh' as const,
+            status: 'draft' as const,
+            versionNumber: 1,
+            versionLabel: 'v1',
+            activatedAt: null,
+            deprecatedAt: null,
+            createdAt: '2026-10-11T00:00:00Z',
+            createdBy: null,
+            restoredFromRevisionId: null,
+            content: 'Draft',
+          },
+          includedCandidateIds: ['candidate-1'],
+          omittedCandidates: [{ candidateId: 'candidate-2', reason: 'empty_approved_fact' }],
+          provider: 'openai' as const,
+          model: 'fixture',
+        };
+        const mock =
+          operation === 'promote'
+            ? mockPromoteStudentProfileCandidates
+            : mockRefreshProfileDraftFromApprovedCandidates;
+        mock.mockResolvedValueOnce(result);
+        const response = await app.inject({
+          method: 'POST',
+          url: `/students/${studentId}/${operation === 'promote' ? 'profile-candidates/promote' : 'profile-drafts/refresh-from-approved-candidates'}`,
+          payload: { candidateIds: ['candidate-1', 'candidate-2'] },
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({
+          includedCandidateIds: result.includedCandidateIds,
+          omittedCandidates: result.omittedCandidates,
+        });
+      },
+    );
+
+    it('returns zero promotion and its reason on successful activation', async () => {
+      const studentId = deriveStudentId('Anna');
+      const candidatePromotion = {
+        linkedCandidateCount: 1,
+        promotedCandidateIds: [],
+        omittedCandidates: [{ candidateId: 'candidate-1', reason: 'fact_not_represented' }],
+      };
+      const revisionId = '00000000-0000-4000-8000-000000000047';
+      mockActivateProfileRevisionForStudent.mockResolvedValueOnce({
+        id: revisionId,
+        studentId,
+        contentHash: 'hash',
+        source: 'profile_revision_refresh',
+        status: 'active',
+        versionNumber: 1,
+        versionLabel: 'v1',
+        activatedAt: '2026-10-11T00:00:00Z',
+        deprecatedAt: null,
+        createdAt: '2026-10-11T00:00:00Z',
+        createdBy: null,
+        restoredFromRevisionId: null,
+        content: 'Draft',
+        candidatePromotion,
+      });
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${studentId}/profile/revisions/${revisionId}/activate`,
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().candidatePromotion).toEqual(candidatePromotion);
+    });
+
     it.each(['refresh-from-approved-candidates', 'promote'])(
       'returns a typed safe quota refusal for %s',
       async (operation: string) => {

@@ -1307,7 +1307,7 @@ describe('StudentLearningPage', () => {
     expect(apiMocks.promoteStudentProfileCandidates).not.toHaveBeenCalled();
     expect(
       await screen.findByText(
-        'Draft refreshed. 0 selected facts are represented; 1 remain approved for review.',
+        'Draft refreshed. 0 of 1 selected facts applied; 1 omitted. Approved wording is absent or changed in its target field. Review the changes and repeated wording before activating.',
       ),
     ).toBeTruthy();
     expect(screen.getByText('Profile Draft Changes')).toBeTruthy();
@@ -1338,6 +1338,20 @@ describe('StudentLearningPage', () => {
         }),
       );
     });
+    apiMocks.activateProfileRevision.mockResolvedValueOnce({
+      id: 'revision-draft-3',
+      candidatePromotion: {
+        linkedCandidateCount: 1,
+        promotedCandidateIds: [],
+        omittedCandidates: [{ candidateId: 'candidate-alex', reason: 'fact_not_represented' }],
+      },
+    });
+    await user.click(screen.getByRole('button', { name: 'Activate Draft' }));
+    expect(
+      await screen.findByText(
+        'Draft activated. 0 of 1 linked facts promoted; 1 omitted. Approved wording is absent or changed in its target field.',
+      ),
+    ).toBeTruthy();
   });
 
   it('limits older profile versions behind a view-all control', async () => {

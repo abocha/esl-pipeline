@@ -105,9 +105,12 @@ Canonical behavior and current status live in:
   snapshot profile identifiers remain obsolete provenance metadata.
 - Ordinary Learning page profile edits save directly as active revisions. Draft review controls
   remain available for candidate-derived drafts.
-- Approved-candidate draft refresh opens a review-mediated profile draft and shows a standalone
-  notice when selected facts are omitted or paraphrased: they remain approved for review. Only IDs
-  reported applied by the backend are represented; draft links alone do not establish promotion.
+- Approved-candidate draft refresh opens a review-mediated profile draft with selected approved
+  wording preserved in its mapped fields. Generation shows selected/applied/omitted counts and
+  omission reasons; activation shows actual linked/promoted/omitted counts and reasons. Facts
+  removed or changed during review remain unpromoted. Only IDs reported applied by the backend
+  are represented; draft links alone do not establish promotion. Older activation responses without
+  promotion metadata are explicitly reported as unverified.
   Candidate details distinguish completed lesson occurrence time from extraction fallback when
   the lesson date is unknown. Existing historical candidate dates are not relabeled.
   The draft review also shows a standalone

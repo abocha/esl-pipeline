@@ -314,6 +314,11 @@ export interface ProfileRevisionSummaryResponse {
 export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryResponse {
   content: string;
   structuredContent?: ProfileContentResponse['structuredContent'];
+  candidatePromotion?: {
+    linkedCandidateCount: number;
+    promotedCandidateIds: string[];
+    omittedCandidates: Array<{ candidateId: string; reason: string }>;
+  };
 }
 
 export interface SaveProfileDraftRevisionRequest {
@@ -884,6 +889,7 @@ export interface StudentProfileCandidatePromotionRequest {
 export interface StudentProfileCandidatePromotionResponse {
   draftRevisionId: string;
   includedCandidateIds: string[];
+  omittedCandidates?: Array<{ candidateId: string; reason: string }>;
   excludedCandidateIds: string[];
   contentHash?: string | null;
   draftRevision?: ProfileRevisionDetailResponse;

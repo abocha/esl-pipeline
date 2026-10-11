@@ -1203,6 +1203,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         return reply.send({
           draftRevisionId: result.draftRevision.id,
           includedCandidateIds: result.includedCandidateIds,
+          omittedCandidates: result.omittedCandidates,
           excludedCandidateIds: body.candidateIds.filter(
             (candidateId) => !result.includedCandidateIds.includes(candidateId),
           ),
@@ -1301,6 +1302,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           draftRevisionId: result.draftRevision.id,
           baseRevisionId: result.baseRevisionId,
           includedCandidateIds: result.includedCandidateIds,
+          omittedCandidates: result.omittedCandidates,
           contentHash: result.draftRevision.contentHash,
           draftRevision: result.draftRevision,
           provider: result.provider,

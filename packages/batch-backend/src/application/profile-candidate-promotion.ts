@@ -70,6 +70,7 @@ export interface PromoteStudentProfileCandidatesResult {
   baseRevisionId: string | null;
   draftRevision: ProfileRevisionDetailResponse;
   includedCandidateIds: string[];
+  omittedCandidates: Array<{ candidateId: string; reason: string }>;
   provider: GenerateProfileRevisionDraftResult['provider'];
   model: GenerateProfileRevisionDraftResult['model'];
   providerRequestId?: string;
@@ -264,6 +265,14 @@ export async function promoteStudentProfileCandidates(args: {
     baseRevisionId: baseRevision?.id ?? null,
     draftRevision,
     includedCandidateIds: appliedCandidateIds,
+    omittedCandidates: selectedCandidates
+      .filter((candidate) => !appliedCandidateIds.includes(candidate.id))
+      .map((candidate) => ({
+        candidateId: candidate.id,
+        reason: candidatePatch.candidateIds.includes(candidate.id)
+          ? 'empty_approved_fact'
+          : 'provider_omitted',
+      })),
     provider: drafting.provider,
     model: drafting.model,
     ...(drafting.providerRequestId ? { providerRequestId: drafting.providerRequestId } : {}),

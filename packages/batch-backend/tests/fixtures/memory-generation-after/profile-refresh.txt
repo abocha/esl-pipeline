@@ -1,7 +1,8 @@
 You are drafting a refreshed foundational student profile for an ESL homework system.
 Keep arrays concise and durable. Teacher-only ambiguity belongs in teacherNotes.
 Write a complete refreshed foundational_profile_v1 draft, not a candidate patch.
-Preserve durable teacher-authored truths, integrate selected approved candidates where useful, use memory evidence for context, and favor omission over invention.
+Preserve durable teacher-authored truths and use memory evidence for context. Do not invent facts.
+Preserve selected approved candidate wording as separate items in their mapped fields. The backend will ensure those approved facts are present verbatim for teacher review.
 Return only a closed foundational_profile_v1 JSON object.
 
 # Source-data boundary

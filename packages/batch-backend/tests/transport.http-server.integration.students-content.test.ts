@@ -412,6 +412,7 @@ describeHttpServerIntegrationSuite(
         draftRevisionId: 'profile-revision-draft',
         includedCandidateIds: ['candidate-1'],
         excludedCandidateIds: [],
+        omittedCandidates: [],
         contentHash: 'profile-draft-hash',
         draftRevision: {
           id: 'profile-revision-draft',
@@ -472,6 +473,7 @@ describeHttpServerIntegrationSuite(
         draftRevisionId: 'profile-revision-refreshed-draft',
         baseRevisionId: 'profile-revision-active',
         includedCandidateIds: ['candidate-1'],
+        omittedCandidates: [],
         contentHash: 'profile-refreshed-draft-hash',
         draftRevision: {
           id: 'profile-revision-refreshed-draft',

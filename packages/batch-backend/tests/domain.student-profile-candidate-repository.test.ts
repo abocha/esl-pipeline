@@ -3,7 +3,13 @@ import './support/bootstrap-pg-test-env.js';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { createEmptyFoundationalProfile } from '../src/application/foundational-profile.js';
 import { processStudentProfileCandidateRefreshJob } from '../src/application/process-student-profile-candidate-refresh-job.js';
+import {
+  activateProfileRevisionForStudent,
+  saveProfileRevisionContent,
+} from '../src/application/profile-content.js';
+import { refreshProfileDraftFromApprovedCandidates } from '../src/application/profile-draft-refresh.js';
 import {
   approveStudentProfileCandidate,
   refreshStudentProfileCandidatesFromCanonicalMemory,
@@ -102,7 +108,7 @@ async function activateWithProfile(
     ),
   );
   await activateProfileRevision(studentId, revisionId);
-  await markStudentProfileCandidatesPromotedByRevision(revisionId, {
+  return markStudentProfileCandidatesPromotedByRevision(revisionId, {
     studentId,
     contentHash,
     structuredContent: profile,
@@ -863,6 +869,124 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
       expect(links.rows.map((row) => row.revision_id).sort()).toEqual(
         [generatedRevisionId, editedRevisionId].sort(),
       );
+    },
+  );
+
+  it.each([false, true])(
+    'preserves approved wording through persisted draft, edits and activation (remove=%s)',
+    async (remove) => {
+      const studentId = randomUUID();
+      await withPgClient((client) =>
+        client.query("INSERT INTO students (id, student) VALUES ($1, 'Ari')", [studentId]),
+      );
+      const candidates = await Promise.all(
+        ['Prefers short drills.', 'Enjoys climbing.', 'Unselected fact.'].map((fact, index) =>
+          insertStudentProfileCandidate({
+            studentId,
+            targetSection:
+              index === 0 ? 'learning_preferences_study_habits' : 'interests_personal_context',
+            candidateKey: fact,
+            fact,
+            category: 'preference',
+            authority: 'teacher_confirmed',
+            confidence: 'high',
+            reviewNeeded: false,
+            status: 'approved',
+            reviewState: 'approved',
+            sourceLessonMemoryIds: [],
+            evidence: [],
+          }),
+        ),
+      );
+      const selectedIds = candidates.slice(0, 2).map((c) => c.id);
+      const generatedProfile = {
+        ...createEmptyFoundationalProfile(),
+        studyPreferences: ['Brief exercises and outdoor activities.'],
+        teacherNotes: 'Prefers short drills. Enjoys climbing.',
+      };
+      const draft = await refreshProfileDraftFromApprovedCandidates({
+        request: { studentId, candidateIds: selectedIds },
+        overrides: {
+          students: { getById: async () => ({ id: studentId, student: 'Ari', voices: {} }) },
+          memory: { getOverview: async () => null },
+          drafting: {
+            generate: async () => ({
+              structuredProfile: generatedProfile,
+              rawOutput: generatedProfile,
+              rawText: JSON.stringify(generatedProfile),
+              provider: 'openai',
+              model: 'fixture',
+              finishReason: 'stop',
+            }),
+          },
+        },
+      });
+      expect([...draft.includedCandidateIds].sort()).toEqual([...selectedIds].sort());
+      expect(draft.draftRevision.structuredContent).toMatchObject({
+        studyPreferences: expect.arrayContaining(['Prefers short drills.']),
+        interestsAndUsefulThemes: ['Enjoys climbing.'],
+      });
+      const links = await withPgClient((client) =>
+        client.query(
+          'SELECT candidate_id FROM student_profile_candidate_draft_revisions WHERE revision_id=$1',
+          [draft.draftRevision.id],
+        ),
+      );
+      expect(links.rows.map((r) => r.candidate_id).sort()).toEqual([...selectedIds].sort());
+      const premature = await markStudentProfileCandidatesPromotedByRevision(
+        draft.draftRevision.id,
+        {
+          studentId,
+          contentHash: draft.draftRevision.contentHash,
+          structuredContent: draft.draftRevision.structuredContent,
+        },
+      );
+      expect(premature.promotedCandidateIds).toEqual([]);
+      expect(premature.omittedCandidates).toEqual(
+        expect.arrayContaining(
+          selectedIds.map((candidateId) => ({ candidateId, reason: 'revision_changed' })),
+        ),
+      );
+      const foreign = await markStudentProfileCandidatesPromotedByRevision(draft.draftRevision.id, {
+        studentId: randomUUID(),
+        contentHash: draft.draftRevision.contentHash,
+        structuredContent: draft.draftRevision.structuredContent,
+      });
+      expect(foreign).toEqual({
+        linkedCandidateCount: 0,
+        promotedCandidateIds: [],
+        omittedCandidates: [],
+      });
+      const editedProfile = {
+        ...draft.draftRevision.structuredContent!,
+        studyPreferences: remove
+          ? ['Brief exercises and outdoor activities.']
+          : draft.draftRevision.structuredContent!.studyPreferences,
+      };
+      const edited = await saveProfileRevisionContent(studentId, '', {
+        status: 'draft',
+        structuredContent: editedProfile,
+        inheritCandidateLinksFromRevisionId: draft.draftRevision.id,
+      });
+      const activated = await activateProfileRevisionForStudent(studentId, edited.id);
+      expect(activated?.candidatePromotion).toEqual({
+        linkedCandidateCount: 2,
+        promotedCandidateIds: expect.arrayContaining(remove ? [candidates[1]!.id] : selectedIds),
+        omittedCandidates: remove
+          ? [{ candidateId: candidates[0]!.id, reason: 'fact_not_represented' }]
+          : [],
+      });
+      expect(activated?.candidatePromotion?.promotedCandidateIds).toHaveLength(remove ? 1 : 2);
+      expect(await getStudentProfileCandidateById(studentId, candidates[0]!.id)).toMatchObject({
+        status: remove ? 'approved' : 'promoted',
+        promotedRevisionId: remove ? null : edited.id,
+      });
+      expect(await getStudentProfileCandidateById(studentId, candidates[2]!.id)).toMatchObject({
+        status: 'approved',
+        promotedRevisionId: null,
+      });
+      const retry = await activateProfileRevisionForStudent(studentId, edited.id);
+      expect(retry?.candidatePromotion).toEqual(activated?.candidatePromotion);
     },
   );
 

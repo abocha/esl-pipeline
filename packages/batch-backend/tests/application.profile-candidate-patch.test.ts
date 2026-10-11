@@ -90,6 +90,24 @@ describe('application/profile-candidate-patch', () => {
     ).toBe(baseProfile);
   });
 
+  it('deduplicates normalized approved wording across both challenge fields and skips empty approval', () => {
+    const result = applyProfileCandidatePatch({
+      baseProfile: { ...baseProfile, durableConstraints: ['LIMITED   TIME.'] },
+      patch: { operation: 'apply', candidateIds: ['time', 'empty'] },
+      selectedCandidates: [
+        { id: 'time', targetSection: 'persistent_challenges_constraints', fact: 'Limited time.' },
+        {
+          id: 'empty',
+          targetSection: 'interests_personal_context',
+          fact: 'Original fact.',
+          approvedFact: ' ',
+        },
+      ],
+    });
+    expect(result).toEqual({ ...baseProfile, durableConstraints: ['LIMITED   TIME.'] });
+    expect(baseProfile.durableConstraints).toEqual([]);
+  });
+
   it('rejects candidate IDs that were not selected and approved for this request', () => {
     expect(() =>
       applyProfileCandidatePatch({

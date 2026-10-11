@@ -26,6 +26,7 @@ import {
   createGenerationRequestEnvelope,
   flattenGenerationRequestEnvelope,
 } from './generation-request-envelope.js';
+import { applyProfileCandidatePatch } from './profile-candidate-patch.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -69,6 +70,7 @@ export interface RefreshProfileDraftFromApprovedCandidatesResult {
   baseRevisionId: string | null;
   draftRevision: ProfileRevisionDetailResponse;
   includedCandidateIds: string[];
+  omittedCandidates: Array<{ candidateId: string; reason: string }>;
   provider: GenerateProfileRevisionDraftResult['provider'];
   model: GenerateProfileRevisionDraftResult['model'];
   providerRequestId?: string;
@@ -195,7 +197,11 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
     );
   }
 
-  const structuredDraft = drafting.structuredProfile;
+  const structuredDraft = applyProfileCandidatePatch({
+    baseProfile: drafting.structuredProfile,
+    patch: { operation: 'apply', candidateIds: request.candidateIds },
+    selectedCandidates,
+  })!;
   const appliedCandidateIds = selectedCandidates
     .filter((candidate) => isStudentProfileCandidateRepresented(structuredDraft, candidate))
     .map((candidate) => candidate.id);
@@ -222,6 +228,9 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
     baseRevisionId: baseRevision?.id ?? null,
     draftRevision,
     includedCandidateIds: appliedCandidateIds,
+    omittedCandidates: selectedCandidates
+      .filter((candidate) => !appliedCandidateIds.includes(candidate.id))
+      .map((candidate) => ({ candidateId: candidate.id, reason: 'empty_approved_fact' })),
     provider: drafting.provider,
     model: drafting.model,
     ...(drafting.providerRequestId ? { providerRequestId: drafting.providerRequestId } : {}),
@@ -356,7 +365,8 @@ function buildRefreshEnvelope(args: {
       'You are drafting a refreshed foundational student profile for an ESL homework system.',
       'Keep arrays concise and durable. Teacher-only ambiguity belongs in teacherNotes.',
       'Write a complete refreshed foundational_profile_v1 draft, not a candidate patch.',
-      'Preserve durable teacher-authored truths, integrate selected approved candidates where useful, use memory evidence for context, and favor omission over invention.',
+      'Preserve durable teacher-authored truths and use memory evidence for context. Do not invent facts.',
+      'Preserve selected approved candidate wording as separate items in their mapped fields. The backend will ensure those approved facts are present verbatim for teacher review.',
       'Return only a closed foundational_profile_v1 JSON object.',
     ].join('\n'),
     sources: [

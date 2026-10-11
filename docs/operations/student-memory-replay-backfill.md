@@ -64,6 +64,34 @@ uses all eligible materialized episodes and the existing currentness/cancellatio
 This capability does not authorize production invocation. Do not start automatic full-history
 provider work, claim subtraction, learner scans, replay or reconciliation as part of rollout.
 
+### Approved-candidate draft application (ESL-47)
+
+Full draft refresh preserves the exact selected approved facts in their mapped structured fields
+after model generation, using the existing deterministic patch application. Review the resulting
+profile diff before activation. Semantically similar model wording may coexist with the preserved
+fact; semantic deduplication does not authorize removing approved wording.
+
+Draft responses retain `includedCandidateIds` and add `omittedCandidates` with candidate IDs and
+reasons. Empty approved wording is omitted rather than falling back to the original fact. The older
+candidate-patch endpoint preserves its explicit model decision and reports provider omissions.
+Activation adds `candidatePromotion` (`linkedCandidateCount`, `promotedCandidateIds`,
+`omittedCandidates`). Promotion still requires the same student, the actual active revision/hash,
+current approval and normalized whole-item equality in a mapped field. Changed/deleted wording,
+rejection, promotion elsewhere or a competing active revision is reported rather than promoted.
+Retries report facts already promoted by that revision without rewriting their promotion timestamps.
+
+The Learning page reports applied/omitted and promoted/omitted counts and reasons. Older servers
+without activation metadata are explicitly reported as not having verified promotion. These additive
+response fields need a minor release under the versioning model and a coordinated API/frontend
+rollout when separately authorized. No schema migration, retroactive candidate relabeling, snapshot
+repair or provider replay is part of this correction.
+
+For a web/MCP availability discrepancy, first compare fresh responses for the same student IDs,
+authenticated workspace, deployed images, database target and response/cache timestamps. Both paths
+use the shared snapshot selector. `available` proves eligible referenced evidence, not complete
+historical coverage; `repair_required` does not by itself prove damaged observations. Keep missing
+confirmed-source proof and superseded source references excluded while preparing an explicit rebuild.
+
 ### Compatible application rollout and rollback
 
 No table/data migration or new memory artifact schema is required. Preserve observations, reviewed

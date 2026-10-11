@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Context baseline.
-- Last Verified Against: 2026-09-09 recording-ingest closeout state.
+- Last Verified Against: 2026-10-11 native assignment, transcript completion and profile review audit.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly.
 - Status: `active`.
@@ -27,6 +27,8 @@
 - Monorepo with orchestrator-centric pipeline architecture.
 - Batch system is active through the five-step assignment builder: Student, Lesson source, Teaching
   context, Create, and Review & share.
+- Transcript-only lessons use the explicit Review & finish path instead of homework generation;
+  completed transcripts remain in student history and can later be promoted to homework.
 - Lesson sources may be supported direct-audio/cheap-demux recording uploads or tutor-pasted
   transcripts; both remain workspace/student-owned and converge on the same prompt, draft, approval,
   and publish pipeline.
@@ -44,7 +46,8 @@
   `stt-provider-*` own provider contracts and adapters.
 - Product runtime: `contracts`, `shared-infrastructure`, `batch-backend`, `batch-frontend`, and
   `telegram-ops-bot` own DTOs, shared runtime support, API/workers, UI, and optional ops bot.
-- Publishing: `html-publisher` and `storage-uploader` own rendered artifacts and storage.
+- Learner presentation: `learner-handout` owns native React preview and deterministic HTML rendering;
+  `html-publisher` owns publication identity and `storage-uploader` owns storage.
 
 ## Do / Don't
 

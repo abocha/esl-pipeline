@@ -1045,6 +1045,7 @@ export function describeHttpServerIntegrationSuite(
           content: '# Draft profile',
         },
         includedCandidateIds: ['candidate-1'],
+        omittedCandidates: [],
         provider: 'google_ai_studio',
         model: 'gemini-3-flash-preview',
       });
@@ -1067,6 +1068,7 @@ export function describeHttpServerIntegrationSuite(
           content: '# Refreshed foundational profile',
         },
         includedCandidateIds: ['candidate-1'],
+        omittedCandidates: [],
         provider: 'google_ai_studio',
         model: 'gemini-3-flash-preview',
       });
