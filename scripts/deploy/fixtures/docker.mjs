@@ -103,9 +103,14 @@ else if (args[0] === 'run') {
   else if (command === 'exec' && tail[1] === 'postgres')
     output(readFileSync(`${directory}/applied.json`, 'utf8'));
   else if (command === 'run') {
-    if (scenario.migrationFail) fail();
+    if (tail.includes('migrate') && scenario.migrationFail) fail();
+    if (tail.includes('dist/tools/validate-env.js') && scenario.environmentFail) fail();
+    if (tail.includes('caddy-edge') && tail.includes('validate') && scenario.caddyValidationFail)
+      fail();
   } else if (command === 'exec') {
     if (tail.at(-1) === 'verify' && scenario.verifyFail) fail();
+    if (tail.includes('caddy-edge') && tail.includes('cat'))
+      output('reverse_proxy batch-frontend:8080');
   } else if (command === 'up') {
     if (scenario.upFail) fail();
     running = [

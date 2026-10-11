@@ -23,6 +23,10 @@ and does not run the transcription worker or call paid providers by default.
 For a fresh supported Ubuntu host, start with
 [production host bootstrap](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap).
 
+For the application and MCP origin cutover to `app.eslpipeline.com`, use
+[canonical-domain-migration.md](canonical-domain-migration.md), including DNS-only HTTPS staging,
+browser checks, explicit ChatGPT reconnection and same-release environment rollback.
+
 For AssignmentV1 activation, consult the [ESL-29 preparation record](assignment-v1-activation.md)
 **only as dated rollout evidence**. Its frozen v7 hashes and release identities predate the current
 v8 template/schema contract. Refresh live deployment, template, schema and rollback identities

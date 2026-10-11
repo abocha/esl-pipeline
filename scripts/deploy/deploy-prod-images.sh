@@ -135,6 +135,16 @@ load_edge_env_from_application_env_file() {
   elif value="$(read_env_file_value "$env_file" CADDY_ACME_EMAIL)"; then
     export CADDY_ACME_EMAIL="$value"
   fi
+
+  # Explicit empty shell values can clear a transition saved in .env.
+  if [[ ! -v CADDY_TRANSITION_HOSTNAME ]]; then
+    value="$(read_env_file_value "$env_file" CADDY_TRANSITION_HOSTNAME || true)"
+    export CADDY_TRANSITION_HOSTNAME="$value"
+  fi
+  if [[ ! -v CADDY_TRANSITION_MODE ]]; then
+    value="$(read_env_file_value "$env_file" CADDY_TRANSITION_MODE || true)"
+    export CADDY_TRANSITION_MODE="${value:-disabled}"
+  fi
 }
 
 validate_edge_configuration() {
@@ -142,21 +152,7 @@ validate_edge_configuration() {
     return 0
   fi
 
-  local hostname="${CADDY_PUBLIC_HOSTNAME:-}"
-  local email="${CADDY_ACME_EMAIL:-}"
-  hostname="$(trim_whitespace "$hostname")"
-  email="$(trim_whitespace "$email")"
-
-  [[ -n "$hostname" ]] || die "CADDY_PUBLIC_HOSTNAME is required when the edge profile is enabled"
-  [[ -n "$email" ]] || die "CADDY_ACME_EMAIL is required when the edge profile is enabled"
-  [[ "$hostname" != "localhost" && "$hostname" != "127.0.0.1" ]] \
-    || die "CADDY_PUBLIC_HOSTNAME must be a plain public DNS hostname"
-  [[ "$hostname" == *.* && "$hostname" != *"/"* && "$hostname" != *":"* ]] \
-    || die "CADDY_PUBLIC_HOSTNAME must be a plain public DNS hostname"
-  [[ "$hostname" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] \
-    || die "CADDY_PUBLIC_HOSTNAME must be a plain public DNS hostname"
-  [[ "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] \
-    || die "CADDY_ACME_EMAIL must be a valid email address"
+  node "${APP_DIR}/scripts/docker/validate-edge-env.mjs" || die "invalid Caddy edge configuration"
 }
 
 handle_failure() {
@@ -246,7 +242,7 @@ validate_state_file() {
     [[ "$line" == \#* ]] && continue
     key="${line%%=*}"
     case "$key" in
-      BATCH_BACKEND_IMAGE | BATCH_FRONTEND_IMAGE | TELEGRAM_OPS_BOT_IMAGE | BATCH_BACKEND_DIGEST | BATCH_FRONTEND_DIGEST | TELEGRAM_OPS_BOT_DIGEST | CADDY_CONFIG_DIGEST) ;;
+      BATCH_BACKEND_IMAGE | BATCH_FRONTEND_IMAGE | TELEGRAM_OPS_BOT_IMAGE | BATCH_BACKEND_DIGEST | BATCH_FRONTEND_DIGEST | TELEGRAM_OPS_BOT_DIGEST | CADDY_CONFIG_DIGEST | APPLICATION_CONFIG_DIGEST) ;;
       *) die "state file ${file} contains non-image key: ${key}" ;;
     esac
   done <"$file"
@@ -329,7 +325,20 @@ state_value() {
 caddy_config_digest() {
   local caddyfile="${APP_DIR}/deploy/caddy/Caddyfile"
   [[ -f "$caddyfile" ]] || die "Caddyfile not found: ${caddyfile}"
-  printf 'sha256:%s' "$(sha256sum "${APP_DIR}/deploy/caddy/Caddyfile" | awk '{ print $1 }')"
+  # Include effective interpolation values, including shell overrides.
+  printf 'sha256:%s' "$(
+    { cat "$caddyfile"; printf '\0%s\0%s\0%s\0%s' \
+        "${CADDY_PUBLIC_HOSTNAME:-}" "${CADDY_ACME_EMAIL:-}" \
+        "${CADDY_TRANSITION_HOSTNAME:-}" "${CADDY_TRANSITION_MODE:-disabled}"; } \
+      | sha256sum | awk '{ print $1 }'
+  )"
+}
+
+application_config_digest() {
+  # Store only a digest, never environment contents or secrets, in deployment state.
+  printf 'sha256:%s' "$(
+    sha256sum "${APP_DIR}/.env" "$COMPOSE_FILE" | awk '{ print $1 }' | sha256sum | awk '{ print $1 }'
+  )"
 }
 
 write_pending_env() {
@@ -340,6 +349,7 @@ write_pending_env() {
   local frontend_digest="$5"
   local bot_digest="$6"
   local caddy_digest="$7"
+  local application_digest="$8"
 
   PENDING_ENV="${DEPLOY_STATE_DIR}/pending-${SHA}.env"
   umask 0077
@@ -349,6 +359,7 @@ write_pending_env() {
     printf 'BATCH_BACKEND_DIGEST=%s\n' "$backend_digest"
     printf 'BATCH_FRONTEND_DIGEST=%s\n' "$frontend_digest"
     printf 'CADDY_CONFIG_DIGEST=%s\n' "$caddy_digest"
+    printf 'APPLICATION_CONFIG_DIGEST=%s\n' "$application_digest"
     if ops_bot_enabled; then
       printf 'TELEGRAM_OPS_BOT_IMAGE=%s\n' "$bot_image"
       printf 'TELEGRAM_OPS_BOT_DIGEST=%s\n' "$bot_digest"
@@ -578,7 +589,7 @@ run_smoke_checks() {
 }
 
 print_deployment_plan() {
-  info "Deployment plan: backend_changed=${BACKEND_CHANGED} frontend_changed=${FRONTEND_CHANGED} bot_changed=${BOT_CHANGED} caddy_changed=${CADDY_CONFIG_CHANGED}"
+  info "Deployment plan: backend_changed=${BACKEND_CHANGED} frontend_changed=${FRONTEND_CHANGED} bot_changed=${BOT_CHANGED} caddy_changed=${CADDY_CONFIG_CHANGED} application_config_changed=${APPLICATION_CONFIG_CHANGED}"
   info "Deployment plan: initial=${INITIAL_DEPLOY} database_work=${DATABASE_WORK_REQUIRED} edge_restart=${EDGE_RESTART_REQUIRED} services=${DEPLOYMENT_SERVICES[*]:-none}"
 }
 
@@ -667,9 +678,9 @@ main() {
   docker_root="$(docker info --format '{{.DockerRootDir}}')"
   check_disk_free "Docker data filesystem" "$docker_root"
 
-  local backend_image frontend_image bot_image backend_digest frontend_digest bot_digest caddy_digest
+  local backend_image frontend_image bot_image backend_digest frontend_digest bot_digest caddy_digest application_digest
   local current_backend_image current_frontend_image current_bot_image
-  local current_backend_digest current_frontend_digest current_bot_digest current_caddy_digest
+  local current_backend_digest current_frontend_digest current_bot_digest current_caddy_digest current_application_digest
   backend_image="$(image_ref batch-backend)"
   frontend_image="$(image_ref batch-frontend)"
   bot_image="$(image_ref telegram-ops-bot)"
@@ -681,6 +692,7 @@ main() {
   current_frontend_digest="$(state_value BATCH_FRONTEND_DIGEST)"
   current_bot_digest="$(state_value TELEGRAM_OPS_BOT_DIGEST)"
   current_caddy_digest="$(state_value CADDY_CONFIG_DIGEST)"
+  current_application_digest="$(state_value APPLICATION_CONFIG_DIGEST)"
 
   prepare_image "$backend_image" "$current_backend_image" "$current_backend_digest"
   backend_digest="$PREPARED_IMAGE_DIGEST"
@@ -694,7 +706,8 @@ main() {
   fi
 
   caddy_digest="$(caddy_config_digest)"
-  write_pending_env "$backend_image" "$frontend_image" "$bot_image" "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest"
+  application_digest="$(application_config_digest)"
+  write_pending_env "$backend_image" "$frontend_image" "$bot_image" "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest" "$application_digest"
 
   local include_bot=false include_edge=false
   ops_bot_enabled && include_bot=true
@@ -702,11 +715,26 @@ main() {
   build_deployment_plan \
     "$current_backend_digest" "$current_frontend_digest" "$current_bot_digest" "$current_caddy_digest" \
     "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest" \
-    "$include_bot" "$include_edge"
+    "$include_bot" "$include_edge" "$current_application_digest" "$application_digest"
   print_deployment_plan
 
   compose_with_env "$PENDING_ENV" config --quiet
   compose_with_env "$PENDING_ENV" config --format json | node "${APP_DIR}/scripts/deploy/schema-compatibility.mjs" check-compose
+
+  if edge_enabled; then
+    compose_with_env "$PENDING_ENV" run --rm --no-deps \
+      caddy-edge caddy validate --config /etc/caddy/Caddyfile
+  fi
+
+  # Validate the requested image's production contract before stopping or recreating anything.
+  # The edge hostname override must agree with the backend's issuer/resource in .env.
+  local -a validation_edge_args=()
+  if edge_enabled; then
+    validation_edge_args=(-e "CADDY_PUBLIC_HOSTNAME=${CADDY_PUBLIC_HOSTNAME}")
+  fi
+  compose_with_env "$PENDING_ENV" run --rm --no-deps \
+    "${validation_edge_args[@]}" \
+    batch-backend node dist/tools/validate-env.js --runtime --profile production
 
   # Always check schema compatibility, including image downgrade and alias-only attempts.
   require_postgres_healthy
@@ -717,11 +745,11 @@ main() {
     include_bot=true
     prepare_image "$bot_image" "$current_bot_image" "$current_bot_digest"
     bot_digest="$PREPARED_IMAGE_DIGEST"
-    write_pending_env "$backend_image" "$frontend_image" "$bot_image" "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest"
+    write_pending_env "$backend_image" "$frontend_image" "$bot_image" "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest" "$application_digest"
     build_deployment_plan \
       "$current_backend_digest" "$current_frontend_digest" "$current_bot_digest" "$current_caddy_digest" \
       "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest" \
-      "$include_bot" "$include_edge"
+      "$include_bot" "$include_edge" "$current_application_digest" "$application_digest"
     print_deployment_plan
     compose_with_env "$PENDING_ENV" config --quiet
     compose_with_env "$PENDING_ENV" config --format json | node "${APP_DIR}/scripts/deploy/schema-compatibility.mjs" check-compose

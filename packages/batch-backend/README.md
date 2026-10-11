@@ -431,7 +431,15 @@ supports a custom PostgreSQL adapter, existing-user lookup, Pipeline-owned inter
 resource indicators without introducing another user directory or hosted identity provider.
 
 Set the `MCP_OAUTH_*` variables described in [`docs/reference/env.md`](../../docs/reference/env.md)
-to activate it. Public URLs use the existing `/api` proxy. Available surfaces are:
+to activate it. Public URLs use the existing `/api` proxy.
+
+Production canonical URLs are `https://app.eslpipeline.com/api/oauth` and
+`https://app.eslpipeline.com/api/mcp`. The production validator requires them to match
+`CADDY_PUBLIC_HOSTNAME`, with secure host-only refresh cookies and same-origin API access.
+Changing origin requires fresh browser login and explicit MCP reconnection; use the
+[domain cutover/rollback runbook](../../docs/operations/canonical-domain-migration.md).
+
+Available surfaces are:
 
 - `/api/.well-known/oauth-protected-resource`: metadata for the `/api/mcp` resource.
 - `/api/mcp`: stateless Streamable HTTP MCP endpoint. Discovery exposes two read-only tools without

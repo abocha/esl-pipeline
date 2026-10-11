@@ -23,16 +23,37 @@ function deploy(scenario = {}) {
       'verify-workers-ready.mjs',
     ])
       cpSync(new URL(file, import.meta.url), join(directory, 'scripts/deploy', file));
+    cpSync(
+      new URL('../docker/validate-edge-env.mjs', import.meta.url),
+      join(directory, 'scripts/docker/validate-edge-env.mjs'),
+    );
     cpSync(new URL('fixtures/docker.mjs', import.meta.url), join(directory, 'bin/docker'));
     writeFileSync(join(directory, 'bin/curl'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     writeFileSync(join(directory, 'bin/aws'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     // cpSync preserves the executable fixture's mode.
-    writeFileSync(join(directory, '.env'), '');
+    const applicationEnv = scenario.edge
+      ? 'CADDY_PUBLIC_HOSTNAME=app.eslpipeline.com\nCADDY_ACME_EMAIL=ops@example.com\nCADDY_TRANSITION_HOSTNAME=esl-pipeline.run.place\nCADDY_TRANSITION_MODE=serve\n'
+      : '';
+    writeFileSync(join(directory, '.env'), applicationEnv);
     writeFileSync(join(directory, 'docker-compose.prod.yml'), 'services: {}\n');
-    writeFileSync(join(directory, 'deploy/caddy/Caddyfile'), 'test\n');
+    writeFileSync(join(directory, 'deploy/caddy/Caddyfile'), 'reverse_proxy batch-frontend:8080\n');
+    const digest = (value) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
+    const caddyDigest = digest(
+      'reverse_proxy batch-frontend:8080\n' +
+        '\0' +
+        (scenario.edge
+          ? 'app.eslpipeline.com\0ops@example.com\0esl-pipeline.run.place\0serve'
+          : '\0\0disabled'),
+    );
+    const applicationDigest = digest(
+      [
+        createHash('sha256').update(applicationEnv).digest('hex'),
+        createHash('sha256').update('services: {}\n').digest('hex'),
+      ].join('\n') + '\n',
+    );
     writeFileSync(
       join(directory, 'state/current-images.env'),
-      `BATCH_BACKEND_IMAGE=${previousImage}\nBATCH_BACKEND_DIGEST=${scenario.aliasOnly ? `ghcr.io/abocha/esl-pipeline/batch-backend@sha256:${'b'.repeat(64)}` : 'old'}\nBATCH_FRONTEND_IMAGE=frontend-old\nBATCH_FRONTEND_DIGEST=${scenario.aliasOnly ? `ghcr.io/abocha/esl-pipeline/batch-frontend@sha256:${'b'.repeat(64)}` : 'old'}\nTELEGRAM_OPS_BOT_IMAGE=bot-old\nTELEGRAM_OPS_BOT_DIGEST=ghcr.io/abocha/esl-pipeline/telegram-ops-bot@sha256:${'b'.repeat(64)}\nCADDY_CONFIG_DIGEST=sha256:${createHash('sha256').update('test\n').digest('hex')}\n`,
+      `BATCH_BACKEND_IMAGE=${previousImage}\nBATCH_BACKEND_DIGEST=${scenario.aliasOnly ? `ghcr.io/abocha/esl-pipeline/batch-backend@sha256:${'b'.repeat(64)}` : 'old'}\nBATCH_FRONTEND_IMAGE=frontend-old\nBATCH_FRONTEND_DIGEST=${scenario.aliasOnly ? `ghcr.io/abocha/esl-pipeline/batch-frontend@sha256:${'b'.repeat(64)}` : 'old'}\nTELEGRAM_OPS_BOT_IMAGE=bot-old\nTELEGRAM_OPS_BOT_DIGEST=ghcr.io/abocha/esl-pipeline/telegram-ops-bot@sha256:${'b'.repeat(64)}\nCADDY_CONFIG_DIGEST=${scenario.caddyEnvChanged ? 'previous-edge-config' : caddyDigest}\nAPPLICATION_CONFIG_DIGEST=${scenario.applicationEnvChanged ? 'previous-application-config' : applicationDigest}\n`,
     );
     writeFileSync(join(directory, 'scenario.json'), JSON.stringify({ ...scenario, previousImage }));
     writeFileSync(
@@ -106,9 +127,13 @@ echo schema > "\${prefix}_schema.sql"
           DEPLOY_TEST_DIR: directory,
           DEPLOY_STATE_DIR: join(directory, 'state'),
           DEPLOY_MIN_FREE_MB: '0',
-          DEPLOY_INCLUDE_EDGE: 'false',
+          DEPLOY_INCLUDE_EDGE: String(Boolean(scenario.edge)),
           DEPLOY_INCLUDE_OPS_BOT: 'false',
           COMPOSE_PROFILES: '',
+          CADDY_PUBLIC_HOSTNAME: '',
+          CADDY_ACME_EMAIL: '',
+          CADDY_TRANSITION_HOSTNAME: scenario.edge ? 'esl-pipeline.run.place' : '',
+          CADDY_TRANSITION_MODE: scenario.edge ? 'serve' : 'disabled',
           BACKUP_FAIL: String(Boolean(scenario.backupFail)),
           BACKUP_INTEGRITY_FAIL: String(Boolean(scenario.backupIntegrityFail)),
         },
@@ -124,7 +149,8 @@ echo schema > "\${prefix}_schema.sql"
         readFileSync(join(directory, 'state/rollback-compatibility.json'), 'utf8'),
       );
     } catch {}
-    return { ...result, events, record, output: result.stdout + result.stderr };
+    const state = readFileSync(join(directory, 'state/current-images.env'), 'utf8');
+    return { ...result, events, record, state, output: result.stdout + result.stderr };
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -167,6 +193,77 @@ test('alias-only deploy performs compatibility and existing verification without
   for (const predicate of [migration, recreate, (e) => e[0] === 'stop', (e) => e[0] === 'backup'])
     assert.equal(index(result, predicate), -1);
   assert.match(result.output, /deployment_workers_ready/);
+});
+
+test('environment-only domain cutover with unchanged images recreates runtime and persists config state', () => {
+  const result = deploy({
+    aliasOnly: true,
+    edge: true,
+    applicationEnvChanged: true,
+    caddyEnvChanged: true,
+  });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(index(result, migration), -1);
+  assert.equal(
+    index(result, (e) => e[0] === 'backup'),
+    -1,
+  );
+  const updates = result.events.filter(recreate);
+  assert.equal(updates.length, 2);
+  for (const service of [
+    'batch-backend',
+    'batch-worker',
+    'transcribe-worker',
+    'student-memory-worker',
+    'batch-frontend',
+  ])
+    assert.ok(updates[0].includes(service));
+  assert.ok(updates[1].includes('caddy-edge'));
+  assert.match(result.state, /APPLICATION_CONFIG_DIGEST=sha256:[a-f0-9]{64}/);
+  assert.doesNotMatch(result.state, /app\.eslpipeline\.com|ops@example\.com/);
+});
+
+test('Caddy environment-only change recreates edge even when image and application digests match', () => {
+  const result = deploy({ aliasOnly: true, edge: true, caddyEnvChanged: true });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.events.filter(recreate).length, 1);
+  assert.ok(result.events.find(recreate).includes('caddy-edge'));
+  assert.equal(index(result, migration), -1);
+});
+
+test('failed production environment preflight leaves the old runtime and state intact', () => {
+  const result = deploy({ aliasOnly: true, applicationEnvChanged: true, environmentFail: true });
+  assert.equal(result.status, 1, result.output);
+  assert.equal(index(result, recreate), -1);
+  assert.equal(index(result, migration), -1);
+  assert.equal(
+    index(result, (e) => e[0] === 'stop'),
+    -1,
+  );
+  assert.match(result.state, /APPLICATION_CONFIG_DIGEST=previous-application-config/);
+});
+
+test('failed Caddy validation leaves the old runtime and state intact', () => {
+  const result = deploy({
+    aliasOnly: true,
+    edge: true,
+    caddyEnvChanged: true,
+    caddyValidationFail: true,
+  });
+  assert.equal(result.status, 1, result.output);
+  assert.equal(index(result, recreate), -1);
+  assert.equal(index(result, migration), -1);
+  assert.equal(
+    index(result, (e) => e[0] === 'stop'),
+    -1,
+  );
+});
+
+test('matching edge and application environment digests do not restart unchanged images', () => {
+  const result = deploy({ aliasOnly: true, edge: true });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(index(result, recreate), -1);
+  assert.equal(index(result, migration), -1);
 });
 
 test('incompatible deploy plans before stopping every writer, backup, and migrate; restarts unchanged live bot', () => {
