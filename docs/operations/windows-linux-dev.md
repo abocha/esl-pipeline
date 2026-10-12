@@ -51,6 +51,12 @@ Host dependencies and Docker dependencies are intentionally separate:
 - Do not copy `node_modules` between Windows, WSL, Linux, and Docker.
 - Re-run `pnpm install` on each host checkout you want to use directly.
 
+Docker development and Telegram smoke services disable workspace injection through pnpm's
+configuration environment variable, using live workspace symlinks across their separate mounts.
+Their non-frozen install may
+update the bind-mounted lockfile's injection setting; a normal host `pnpm install` restores the
+repository's default. Production packaging retains injected workspace dependencies.
+
 If Docker dependency state is stale or corrupted, reset only the Docker dependency volumes:
 
 ```bash

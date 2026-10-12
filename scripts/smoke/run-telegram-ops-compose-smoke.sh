@@ -19,6 +19,7 @@ SMOKE_SHARE_JOB_ID="${TELEGRAM_SMOKE_SHARE_JOB_ID:-job-smoke-1}"
 SMOKE_OP_ID="${TELEGRAM_SMOKE_OP_ID:-smoke-op-1}"
 
 mkdir -p "${ARTIFACT_DIR}"
+created_env_file=0
 
 compose() {
   docker compose -p "${PROJECT_NAME}" -f "${COMPOSE_FILE}" --profile "${PROFILE}" "$@"
@@ -109,6 +110,9 @@ cleanup() {
   curl -fsS "${BACKEND_URL}/_test/state" >"${ARTIFACT_DIR}/fake-backend-state.json" 2>/dev/null
 
   compose down --volumes --remove-orphans >"${ARTIFACT_DIR}/compose-down.txt" 2>&1
+  if [[ "${created_env_file}" -eq 1 && ! -s "${ROOT_DIR}/.env" ]]; then
+    rm -f "${ROOT_DIR}/.env"
+  fi
 
   if [[ "${exit_code}" -eq 0 ]]; then
     echo "Telegram compose smoke completed successfully. Artifacts: ${ARTIFACT_DIR}"
@@ -119,6 +123,13 @@ cleanup() {
   exit "${exit_code}"
 }
 trap cleanup EXIT
+
+# Compose also reads env_file entries from non-smoke services when collecting logs
+# and tearing down. A clean CI checkout has no .env; never replace a developer's file.
+if [[ ! -e "${ROOT_DIR}/.env" ]]; then
+  (set -o noclobber; : >"${ROOT_DIR}/.env")
+  created_env_file=1
+fi
 
 export TELEGRAM_SMOKE_BACKEND_SECRET="${TELEGRAM_SMOKE_BACKEND_SECRET:-smoke-secret}"
 export TELEGRAM_SMOKE_BACKEND_EMAIL="${TELEGRAM_SMOKE_BACKEND_EMAIL:-ops-bot@example.com}"

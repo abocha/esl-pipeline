@@ -102,6 +102,7 @@ services:
       PG_CONTAINER_NAME: ${COMPOSE_PROJECT_NAME:-esl-pipeline}-postgres-1
       PG_APPLICATION_NAME: esl-pipeline-api
       PG_POOL_MAX: '8'
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
@@ -129,6 +130,7 @@ services:
     environment:
       NODE_ENV: development
       BATCH_BACKEND_URL: http://batch-backend:8080
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     ports:
@@ -156,6 +158,7 @@ services:
       FILESYSTEM_UPLOAD_DIR: /app/uploads
       PG_APPLICATION_NAME: esl-pipeline-batch-worker
       PG_POOL_MAX: '6'
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
@@ -176,6 +179,7 @@ services:
     volumes: *dev_workspace_volumes
     environment:
       CI: 'true'
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     command: >
@@ -183,7 +187,7 @@ services:
         dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/orchestrator/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/tts-provider-inworld/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
         mkdir -p $$dependency_paths /pnpm/store &&
         chmod -R 0777 $$dependency_paths &&
-        pnpm install &&
+        pnpm install --no-frozen-lockfile &&
         pnpm -r --filter './packages/*' run build &&
         find /app/packages -mindepth 2 -maxdepth 2 -type d -name dist -exec chown -R ${UID:-1000}:${GID:-1000} {} \\; &&
         chown -R ${UID:-1000}:${GID:-1000} $$dependency_paths
@@ -271,6 +275,7 @@ services:
       FILESYSTEM_UPLOAD_DIR: /app/uploads
       PG_APPLICATION_NAME: esl-pipeline-student-memory-worker
       PG_POOL_MAX: '4'
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
@@ -294,6 +299,7 @@ services:
       NODE_ENV: development
       PG_APPLICATION_NAME: esl-pipeline-telegram-ops-bot
       PG_POOL_MAX: '2'
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
@@ -317,6 +323,7 @@ services:
     volumes: *dev_workspace_volumes
     environment:
       NODE_ENV: development
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
       TELEGRAM_OPS_BOT_ENABLED: 'true'
@@ -416,9 +423,12 @@ services:
       target: default
     volumes: *dev_workspace_volumes
     environment:
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
       CI: 'false'
+    # Development uses live workspace symlinks: post-build injection cannot
+    # hardlink files between the source bind mount and node_modules volumes.
     command: >
       sh -lc "
         dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/orchestrator/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/tts-provider-inworld/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
@@ -445,6 +455,7 @@ services:
     volumes: *dev_workspace_volumes
     environment:
       NODE_ENV: development
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     command: >
@@ -471,6 +482,7 @@ services:
       FILESYSTEM_UPLOAD_DIR: /app/uploads
       PG_APPLICATION_NAME: esl-pipeline-transcribe-worker
       PG_POOL_MAX: '4'
+      PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
