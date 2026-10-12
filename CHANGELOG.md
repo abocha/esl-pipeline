@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.3.3] - 2026-10-12
+
+### Changed
+
+- Automated release from PR #399: docs(dx): streamline agent validation routes (ESL-52) (https://github.com/abocha/esl-pipeline/pull/399)
+
 ## [21.3.2] - 2026-10-12
 
 ### Changed
