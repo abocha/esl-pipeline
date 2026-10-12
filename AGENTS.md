@@ -26,6 +26,9 @@ Use the smallest current route that answers the task.
 - Use `docs/README.md`, the owning package README, active plan, or task-specific doc for normal
   repository work.
 - Use `docs/reference/DOCS_IA_MAP.md` only when the documentation route is unclear.
+- For local validation, start with the
+  [evidence decision route](docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route), then the
+  owning package's execution recipe. Load validation-system or test-audit skills only for their triggers.
 - Read `docs/reference/agents-ssot.md` when work touches contracts, invariants, persistence,
   security/auth, validation policy, production, or repository administration.
 - For delegated execution, approved plans/Goal Contracts, role routing, context reuse, or review
@@ -38,7 +41,8 @@ Use the smallest current route that answers the task.
   leave requested work unfinished, identify the controlling requirement and explain why it applies.
 
 Current code/configuration and live Git/CI/GitHub state outrank dated plans, evidence records, and
-archive material for facts that can change.
+archive material for facts that can change. Remembered context can locate decisions and owners;
+verify remembered commands and mutable facts against those current sources.
 
 ## Repo-wide invariants
 
@@ -85,22 +89,15 @@ non-trivial. Straightforward pattern-following work does not need a complexity r
 
 ## Evidence and validation
 
-Prefer the lowest-cost reliable evidence path and stop when it answers the decision.
+Focused local evidence is the default; hosted PR CI is the comprehensive merge gate. Prefer the
+lowest-cost reliable evidence and stop when it answers the decision. All required hosted checks
+must pass before merge.
 
-- Focused local evidence is the default while editing and before handoff.
-- Do not automatically run a repository-wide local gate. Use broader local/service-backed evidence
-  only for a concrete plausible wider failure, environment behavior under test, unavailable hosted
-  equivalent, or reproduction/diagnosis of a specific hosted-CI failure.
-- Hosted PR CI is the comprehensive merge gate. A focused local pass can make work ready for hosted
-  CI; it does not make a PR merge-ready.
-- Diagnose hosted failures from the exact selected job and its logs/artifacts. Do not substitute a
-  neighboring summary or unrelated broad local run.
-- Inspect existing retained evidence before rerunning. Do not repeatedly rerun unchanged failures to
-  obtain a green result; allow at most one isolated rerun when it can resolve a real uncertainty.
-- Follow `docs/reference/TESTING_GUIDELINES.md` and owning package scripts for current commands.
-  Invoke `esl-pipeline-validation-evidence` only when its validation-system trigger applies.
-
-All hosted checks required by current repository policy must pass before merge.
+The [testing guide](docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route) owns evidence
+selection, broader-check conditions, hosted diagnosis, reuse and completion. Package READMEs own
+execution recipes; scripts and test configuration own current commands and prerequisites. Validation
+contracts remain in the [SSOT](docs/reference/agents-ssot.md#runtime-and-verification-baseline).
+Invoke `esl-pipeline-validation-evidence` only when changing or diagnosing the validation system itself.
 
 ## Review
 

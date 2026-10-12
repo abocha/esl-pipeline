@@ -218,9 +218,9 @@ Update together:
 - pnpm
 - system ffmpeg where provider flows require it
 
-Required repo checks for behavior changes:
+Validation contracts (execution and evidence selection are owned by the
+[testing guide](TESTING_GUIDELINES.md#choose-the-evidence-route) and package execution recipes):
 
-- During editing, run the narrowest relevant package, file, or `vitest related --run` lane first.
 - Focused local checks are the default. Broad local aggregation requires a concrete plausible wider
   failure to catch before CI, local environment behavior under test, unavailable equivalent hosted
   evidence, or a specific CI failure being reproduced or diagnosed. Diff breadth alone is not a
@@ -258,10 +258,8 @@ Required repo checks for behavior changes:
   gate only after relevant source, configuration, toolchain, or a diagnosed prerequisite condition
   changed. Stop and report a stable infrastructure or prerequisite failure instead of assembling a
   green cache through reruns.
-- Use the smallest relevant package test, typecheck, lint, or build command while editing and before
-  pushing. Use `pnpm test:backend:db:worker` only for a concrete local PostgreSQL/Redis diagnostic.
-  It is a narrow reachability, environment-construction, and Windows-compatible invocation helper,
-  not a comprehensive local CI wrapper.
+- Local DB/worker helpers remain narrow reachability, environment-construction and invocation tools
+  for concrete diagnostics, not comprehensive local CI wrappers.
 
 Canonical blocking PR check names are `CI gate`, `repository policy (node 24.x)`,
 `build + code quality (node 24.x)`, `unit + component (node 24.x)`,
@@ -271,11 +269,8 @@ Canonical blocking PR check names are `CI gate`, `repository policy (node 24.x)`
 single branch-protection requirement when repository plan capabilities permit. Every selected job
 must succeed; a required job that is missing, cancelled, or unexpectedly skipped fails the gate.
 
-Docs-heavy changes also require:
-
-- `pnpm docs:generate:indexes`
-- `pnpm format`
-- `pnpm docs:check`
+Docs changes require synchronized generated references, formatting and the applicable documentation
+checks from the [docs-only recipe](TESTING_GUIDELINES.md#docs-only-changes).
 
 ## Environment and Entrypoints
 
