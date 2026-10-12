@@ -59,16 +59,20 @@ reproduce that job's actual command, configuration, and prerequisites. Use
 
 ## Operational Entry Point (Backend-First)
 
+Start each core service in its own terminal:
+
 ```bash
-pnpm dev:batch
+pnpm --filter @esl-pipeline/batch-backend dev:api
+pnpm --filter @esl-pipeline/batch-backend dev:worker
+pnpm --filter @esl-pipeline/batch-backend dev:student-memory-worker
+pnpm --filter @esl-pipeline/batch-frontend dev
 ```
 
-This starts the **core** API, batch worker, student-memory worker, and frontend on the host;
-`dev:batch` is not the full recording/STT stack. For frontend-only iteration without a backend,
+These start the API, batch worker, student-memory worker, and frontend on the host. For frontend-only iteration without a backend,
 use the mock-auth sandbox documented in
 [`packages/batch-frontend/README.md`](../packages/batch-frontend/README.md).
 
-The root command does not start the separate transcription worker. When testing OPUS transcription,
+The commands above do not start the separate transcription worker. When testing OPUS transcription,
 start it in another shell:
 
 ```bash

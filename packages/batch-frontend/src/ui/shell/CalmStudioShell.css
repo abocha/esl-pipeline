@@ -27,6 +27,15 @@
   display: none;
 }
 
+.calm-shell__logout-error {
+  margin: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-control);
+  color: var(--cs-ink);
+  background: var(--cs-surface-muted);
+}
+
 .calm-shell__rail {
   grid-column: 1;
   grid-row: 1 / -1;

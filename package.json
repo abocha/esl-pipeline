@@ -35,7 +35,6 @@
     "clean:artifacts": "node -e \"const fs=require('node:fs'); for (const dir of ['out','tmp','uploads']) fs.rmSync(dir,{recursive:true,force:true});\"",
     "deps:audit": "pnpm exec knip --dependencies --reporter compact --no-progress --no-exit-code",
     "deps:audit:strict": "pnpm exec knip --dependencies --reporter compact --no-progress",
-    "dev:batch": "concurrently -k -n api,worker,memory,frontend -c cyan,magenta,yellow,green \"pnpm --filter @esl-pipeline/batch-backend dev:api\" \"pnpm --filter @esl-pipeline/batch-backend dev:worker\" \"pnpm --filter @esl-pipeline/batch-backend dev:student-memory-worker\" \"pnpm --filter @esl-pipeline/batch-frontend dev\"",
     "dev:orchestrator": "pnpm --filter @esl-pipeline/orchestrator dev",
     "dev:telegram-ops-bot": "pnpm --filter @esl-pipeline/telegram-ops-bot dev",
     "docker:caddy:validate": "pnpm docker:prod:edge:env && node scripts/docker/validate-caddy-config.mjs",
@@ -138,18 +137,17 @@
     "voices:sync:watch": "pnpm exec tsx packages/tts-provider-elevenlabs/src/tools/sync-voices-cli.ts --watch"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.13",
-    "@types/node": "^24.13.4",
-    "@vitest/coverage-v8": "^5.0.0",
-    "concurrently": "^10.0.5",
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "^24.19.2",
+    "@vitest/coverage-v8": "^5.0.3",
     "dclint": "3.1.0",
-    "knip": "^6.35.1",
-    "prettier": "^3.9.6",
-    "tsx": "^4.23.13",
-    "turbo": "^2.10.12",
+    "knip": "^6.41.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "turbo": "^2.11.7",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0",
-    "ws": "8.21.3"
+    "vitest": "^5.0.3",
+    "ws": "8.22.0"
   },
   "packageManager": "pnpm@11.10.0+sha512.0b7f8b98060031904c017e3a41eb187a16d40eeb829b95c4f8cb03681761fc4ab53dd219115b9b447f4dce1a05a214764461e7d3703392a9f32f9511ce8c86c8",
   "engines": {

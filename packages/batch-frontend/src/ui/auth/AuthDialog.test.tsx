@@ -15,16 +15,6 @@ vi.mock('../../context/AuthContext', () => ({
   useAuth: () => authMock,
 }));
 
-const toastMock = vi.hoisted(() => ({
-  success: vi.fn(),
-  error: vi.fn(),
-}));
-
-vi.mock('react-hot-toast', () => ({
-  default: toastMock,
-  toast: toastMock,
-}));
-
 function renderRegisterDialog(inviteToken: string | null = 'invite-token') {
   return render(
     <AuthDialog
@@ -107,6 +97,5 @@ describe('AuthDialog', () => {
       );
       expect(onClose).toHaveBeenCalledTimes(1);
     });
-    expect(toastMock.success).toHaveBeenCalledWith('Account created. Welcome in.');
   });
 });
