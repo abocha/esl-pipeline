@@ -43,9 +43,6 @@
         "js-yaml",
         "zod"
       ]
-    },
-    "packages/batch-backend": {
-      "ignoreDependencies": ["pino-pretty"]
     }
   }
 }

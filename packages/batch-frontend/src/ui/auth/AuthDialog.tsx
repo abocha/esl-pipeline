@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import toast from 'react-hot-toast';
 
 import { useAuth } from '../../context/AuthContext';
 
@@ -179,12 +178,10 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
       try {
         if (mode === 'login') {
           await login(email, password);
-          toast.success('Welcome back!');
           onClose();
         } else {
           await register(email, password, 'user', inviteToken ?? undefined);
           onRegistered?.(email);
-          toast.success('Account created. Welcome in.');
           onClose();
         }
       } catch (error_: unknown) {

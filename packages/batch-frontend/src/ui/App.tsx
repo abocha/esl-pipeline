@@ -1,5 +1,4 @@
 import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
@@ -98,6 +97,7 @@ function oauthContinuation(location: Location): string | null {
 export const App: React.FC = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [prefillEmail, setPrefillEmail] = useState('');
   const [inviteToken, setInviteToken] = useState<string | null>(() =>
     extractInviteTokenFromLocation(window.location),
@@ -143,13 +143,13 @@ export const App: React.FC = () => {
   };
 
   const handleLogout = useCallback(async () => {
+    setLogoutError(null);
     try {
       await logout();
-      toast.success('Logged out successfully');
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'Unable to logout. Please try again.';
-      toast.error(message);
+      setLogoutError(message);
     }
   }, [logout]);
 
@@ -177,10 +177,11 @@ export const App: React.FC = () => {
           onLogin={openLogin}
           onRegister={openRegister}
         />
+        {logoutError && <p role="alert">{logoutError}</p>}
       </div>
     );
   } else {
-    appBody = <AuthenticatedApp user={user} onLogout={handleLogout} />;
+    appBody = <AuthenticatedApp user={user} onLogout={handleLogout} logoutError={logoutError} />;
   }
 
   return (
@@ -208,9 +209,10 @@ export const App: React.FC = () => {
 interface AuthenticatedAppProps {
   user: ReturnType<typeof useAuth>['user'];
   onLogout: () => void;
+  logoutError: string | null;
 }
 
-const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) => {
+const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, logoutError }) => {
   if (!user) return null;
   return (
     <Routes>
@@ -219,6 +221,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
           <CalmStudioShell
             user={user}
             onLogout={onLogout}
+            logoutError={logoutError}
             sandboxMode={isFrontendSandboxEnabled()}
           />
         }

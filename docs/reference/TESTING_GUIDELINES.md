@@ -14,6 +14,11 @@ Use the smallest reliable local evidence for the change in progress. Hosted PR C
 comprehensive merge gate. Local commands do not emulate the hosted gate and are not a substitute
 for a successful `CI gate`.
 
+The root Vitest configuration aliases HTML publication and storage upload to their canonical
+compiled workspace entries. This keeps upload mocks shared across pnpm's injected workspace
+copies while exercising the real renderer and publication flow. Build the package graph before
+running these prebuilt tests; do not replace their imports with unbuilt source aliases.
+
 Hosted CI selects evidence by changed risk surface using deterministic ownership rules in
 `scripts/check/workspace-change-scope.mjs`. The workspace graph and transitive dependents drive
 ordinary build/unit impact. Those two hosted jobs currently execute workspace-wide; package impact

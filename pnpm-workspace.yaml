@@ -17,14 +17,14 @@ overrides:
   ioredis: ^6.0.0
   minimatch: ^10.2.4
   rollup: ^4.59.0
-  undici: ^7.29.0
+  undici: ^7.29.1
   uuid: ^11.1.1
   yaml: ^2.8.3
 
 # The published cookie types import Fastify but omit it from package metadata.
 # Keep the type augmentation attached to the backend's Fastify identity under pnpm's isolated linker.
 packageExtensions:
-  '@fastify/cookie@11.1.2':
+  '@fastify/cookie@11.1.3':
     peerDependencies:
       fastify: ^5.12.3
 
@@ -37,8 +37,8 @@ allowBuilds:
   unrs-resolver: true
 
 minimumReleaseAgeExclude:
-  - undici@7.29.0
+  - undici@7.29.1
   - '@types/node@24.13.4'
   - fast-uri@3.1.6
   - js-yaml@4.3.2
-  - zod@4.6.4
+  - zod@4.6.4 || 4.6.6

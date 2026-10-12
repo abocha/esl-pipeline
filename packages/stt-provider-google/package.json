@@ -30,13 +30,13 @@
   "dependencies": {
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/stt-core": "workspace:*",
-    "@google-cloud/speech": "^7.5.0",
-    "@google-cloud/storage": "^7.21.0"
+    "@google-cloud/speech": "^8.1.1",
+    "@google-cloud/storage": "^8.4.0"
   },
   "devDependencies": {
-    "@types/node": "^24.13.4",
+    "@types/node": "^24.19.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": ">=24.15.0"

@@ -29,6 +29,7 @@ import './CalmStudioShell.css';
 export interface CalmStudioShellProps {
   user: User;
   onLogout: () => void;
+  logoutError?: string | null;
   sandboxMode?: boolean;
   children?: React.ReactNode;
 }
@@ -71,6 +72,7 @@ export function CalmStudioShell({
   user,
   onLogout,
   sandboxMode = false,
+  logoutError,
   children,
 }: CalmStudioShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -221,6 +223,11 @@ export function CalmStudioShell({
         ) : null}
 
         <main id="main-content" className="calm-shell__main" tabIndex={-1}>
+          {logoutError && (
+            <p role="alert" className="calm-shell__logout-error">
+              {logoutError}
+            </p>
+          )}
           {children ?? <Outlet />}
         </main>
       </div>

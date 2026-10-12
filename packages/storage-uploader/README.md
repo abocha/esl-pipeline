@@ -8,10 +8,11 @@ for student-facing primary audio exports while preserving the original generated
 ## CLI
 
 ```
-pnpm --filter @esl-pipeline/storage-uploader exec storage-uploader --file ./out/lesson.mp3 [--public]
+pnpm --filter @esl-pipeline/storage-uploader exec storage-uploader --file ./out/lesson.mp3 [--prefix lessons] [--public-read] [--presign 3600]
 ```
 
 Outputs JSON containing the derived key and URL.
+Use `--help` to list options. `--file` is required; `--presign` accepts a positive integer number of seconds.
 
 ## Environment
 
