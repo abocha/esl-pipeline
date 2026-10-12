@@ -610,34 +610,64 @@ Student-memory operator workflows:
 
 ## Validation
 
-From repo root:
+Choose evidence using the [repo decision route](../../docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route).
+The commands below run from repo root. The [package scripts](package.json) own command spelling;
+[`vitest.projects.mjs`](vitest.projects.mjs) owns test membership and project options.
+
+### Run one test
+
+Find the test's path relative to `tests/` in `BACKEND_TEST_PROJECT_FILES`. Explicit project entries
+take precedence; `pure` is the discovered remainder. Do not infer prerequisites from the filename.
+For a quick read-only lookup from repo root, replace the example test below:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-backend build
-pnpm --filter @esl-pipeline/batch-backend test
-pnpm --filter @esl-pipeline/batch-backend test:integration:http
-pnpm --filter @esl-pipeline/batch-backend test:media
-pnpm --filter @esl-pipeline/batch-backend db:verify-baseline
+node --input-type=module -e 'import { BACKEND_TEST_PROJECT_FILES as projects } from "./packages/batch-backend/vitest.projects.mjs"; const file = "config.pure-environment.test.ts"; console.log(Object.entries(projects).filter(([, files]) => files.includes(file)).map(([name]) => name));'
 ```
 
-Backend tests are classified by prerequisite in [`vitest.projects.mjs`](vitest.projects.mjs): pure unit,
-deterministic in-process HTTP, PostgreSQL migrations, PostgreSQL queries, PostgreSQL + Redis worker
-integration, or the real FFmpeg-backed media boundary. The configuration retains the established HTTP
-integration prefix and positively lists the other non-pure prerequisites; pure unit is the guarded
-discovered remainder. Package scripts select named Vitest projects, so update the configuration once
-when a test's prerequisites change. Project setup owns the safe test environment before modules load,
-including scrubbing ambient service and provider credentials from direct pure-test entrypoints.
+An empty result means the path is not assigned; do not treat it as a pure test or successful evidence.
+Build the backend and its workspace dependencies when their compiled outputs are missing or affected,
+then invoke only the selected project and file:
+
+```bash
+pnpm --filter @esl-pipeline/batch-backend test:unit:setup
+pnpm --filter @esl-pipeline/batch-backend exec vitest run --config vitest.config.ts --project <project> tests/<test-file>
+```
+
+Replace `<project>` and `<test-file>` with the resolved project and full path relative to `tests/`.
+The direct Vitest command assumes
+current compiled outputs; it does not run the setup/build script. `test:unit` performs setup itself;
+`test:unit:prebuilt` and the HTTP, database, worker and media scripts assume setup has already run.
+
+### Prerequisites and interpretation
+
+Project setup owns the environment before test modules load:
+
+- `pure` and deterministic `http` need no running PostgreSQL/Redis or provider credentials. Setup
+  isolates ambient service/provider inputs; the HTTP project does not exercise Redis delivery.
+- `migrations` and `postgres` need a disposable PostgreSQL test database. Use explicit
+  `BATCH_BACKEND_TEST_PG` targeting a database ending in `_test`; [PG setup](src/bootstrap/pg-test-env.ts)
+  owns URL validation and safe environment construction. The suites may create, migrate or reset
+  test state; do not point them at a development or production database.
+- `worker` additionally needs disposable Redis via `BATCH_BACKEND_TEST_REDIS`; the
+  [service environment helper](tests/support/test-env.ts) owns its validation.
+- `media` needs FFmpeg; the pure environment setup keeps provider/service inputs isolated.
+
+The [project setup](tests/setup/project-env.mjs) is authoritative for these requirements. A focused
+pass covers the selected test's assertions; deterministic HTTP evidence does not prove real DB/Redis
+delivery. A service suite cannot be replaced with a pure-project invocation to obtain a pass.
+
+For a concrete multi-suite PostgreSQL/Redis diagnostic, the existing root `test:backend:db:worker`
+helper checks reachability and constructs environment before invoking the database/worker scripts.
+It assumes current builds and available test services; inspect the
+[helper](../../scripts/test/run-backend-db-worker-check.mjs) for current behavior. It does not start
+services or perform a general CI rehearsal.
 
 `db:generate-baseline` and `db:verify-baseline` require a Postgres connection that can create and drop temporary databases on the target server.
 
 For repository-wide merge evidence, use hosted PR CI. If a hosted job fails, reproduce that job's
 actual command and prerequisites from its retained logs; do not run a local aggregate approximation.
 
-Docs-only changes use:
-
-```bash
-pnpm docs:check
-```
+Docs-only changes use the [repo docs recipe](../../docs/reference/TESTING_GUIDELINES.md#docs-only-changes).
 
 ## Related
 

@@ -33,32 +33,13 @@ triggered repository skill.
 
 ## Validation mapping
 
-### Focused local evidence
-
-Use the narrowest reliable route owned by `docs/reference/TESTING_GUIDELINES.md` and the affected
-package or tool: a focused test when it protects a plausible regression, `vitest related --run`, or
-the owning package's test, typecheck, lint, or build command. Reversible, low-impact changes do not
-need tests that merely mirror the edit. Docs-only work uses the repository-owned documentation lane:
-
-```text
-pnpm docs:generate:indexes
-pnpm format
-pnpm docs:check
-```
-
-### Broader local evidence
-
-Broader local or service-backed evidence is conditional, not automatic. Use it only for a concrete
-suspected cross-package/environment failure, an unavailable hosted equivalent, or reproduction of a
-specific hosted-CI failure. `pnpm test:backend:db:worker` is a narrow PostgreSQL/Redis diagnostic,
-not a comprehensive local CI gate.
-
-### Hosted / CI-owned evidence
-
-- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) owns comprehensive PR validation and
-  each selected job's exact commands and prerequisites.
-- Every job required by current repository policy must pass; the fail-closed `CI gate` owns the
-  aggregate merge result. Focused local evidence does not establish merge readiness.
+Use the [evidence decision route](../docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route)
+for focused local work and conditions for broader evidence. Follow its
+[docs-only recipe](../docs/reference/TESTING_GUIDELINES.md#docs-only-changes),
+[hosted failure route](../docs/reference/TESTING_GUIDELINES.md#hosted-pr-ci-job-reproduction), and
+[evidence applicability/completion rules](../docs/reference/TESTING_GUIDELINES.md#evidence-and-merge-boundary)
+as applicable. Package READMEs own local execution recipes; manifests, test configuration and the
+selected [CI job](../.github/workflows/ci.yml) own exact commands and prerequisites.
 
 ### Manual or environment-owned evidence
 

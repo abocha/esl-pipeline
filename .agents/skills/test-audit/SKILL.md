@@ -23,7 +23,7 @@ The repository's `AGENTS.md`, `docs/reference/agents-ssot.md`, and
 Before writing or retaining a test, articulate:
 
 1. Which externally observable behavior, invariant, or independent contract does it protect?
-2. Which plausible defect would cause this test to fail for the *right reason*?
+2. Which plausible defect would cause this test to fail for the _right reason_?
 3. Where is the strongest existing owner-boundary check, and what distinct risk would another test cover?
 4. Does testing require adding exports, toggles, wrappers, or injection points unused in production? If yes, prefer verifying through the actual owner boundary.
 
@@ -48,32 +48,22 @@ These are **signals for investigation**, never automatic deletion rules:
 
 ## The retention bar
 
-**Keep** tests that independently protect an observable protocol or user outcome, public contracts/DTOs, backwards compatibility, migrations, storage integrity, security/auth, durable state, release/config defaults, provider request compatibility, or cross-language formats. An implementation-facing or mocked test can be valuable when it enforces one of those contracts and there is no stronger equivalent.
+Use the guide's [test portfolio maintenance policy](../../../docs/reference/TESTING_GUIDELINES.md#test-portfolio-maintenance)
+to decide retention. The four questions and signals above support that decision; they do
+not create a separate coverage policy.
 
 Especially protect ESL Pipeline's:
+
 - worker leases, retries, concurrency, duplicate suppression, acknowledgements, and idempotency;
 - upload identity, deterministic keys, persisted publication truth, replay, and recovery;
 - schema migrations, historical evidence, authorization and workspace isolation;
 - provider compatibility, transcription speaker/channel provenance, and user-visible transcript/assignment output.
 
-Do **not** use line coverage alone as a safety argument. It measures execution, not contract or defect detection. Slow, old, or mocked tests are not automatically waste.
-
 ## Failing fixtures are not automatic maintenance
 
 Follow [Fixture and snapshot drift](../../../docs/reference/TESTING_GUIDELINES.md#fixture-and-snapshot-drift)
-before changing any failing fixture or snapshot. Identify the owner and independent source of
-truth, then classify the failure: actual bug, intentional contract evolution, irrelevant
-fixture drift, obsolete redundant coverage, or unresolved cause.
-
-- Fix behavior when the implementation violated the contract; don't rewrite expected values.
-- For an intended schema/contract change, update the smallest canonical input fixture and
-  relevant assertions, showing the approved new contract and focused validation evidence.
-- Where fixture churn is unrelated to behavior, prefer stable, compact builders and
-  semantic assertions rather than duplicating entire production objects or snapshots.
-- Preserve pinned historical hashes, golden compatibility samples, and deliberately invalid
-  fixtures. Generated previews and golden oracles are different kinds of evidence.
-- Never blindly regenerate snapshots, make expected values from the implementation under
-  test, or broaden fixture edits merely to get a green suite.
+before changing any failing fixture or snapshot. That section owns failure classification,
+historical/golden preservation, permitted repairs and the required fixture-change evidence.
 
 For recurring fixture failures, also ask whether the **test's granularity or ownership**
 is wrong. Show concrete evidence before recommending consolidation or deletion.
@@ -87,7 +77,7 @@ is wrong. Show concrete evidence before recommending consolidation or deletion.
    - tested behavior and a credible regression;
    - what the assertion really proves, including mock and fixture limitations;
    - production caller or independent contract owner;
-   - any stronger test that *actually* remains after removal;
+   - any stronger test that _actually_ remains after removal;
    - why it was introduced or retained, including relevant history;
    - possible production/test-support simplification;
    - risk and precise focused validation command.
@@ -100,6 +90,7 @@ is wrong. Show concrete evidence before recommending consolidation or deletion.
 Use exact current owner commands from `docs/reference/TESTING_GUIDELINES.md` and package scripts, not OpenClaw-specific commands. Run the narrowest trustworthy test(s), targeted formatting, and `git diff --check`; broaden only for a concrete plausible risk. On a PR, hosted CI remains the full merge gate.
 
 When editing, report separately:
+
 - production/tooling lines removed or added;
 - test/fixture lines removed or added;
 - valuable test cases retained despite suspicious patterns;
