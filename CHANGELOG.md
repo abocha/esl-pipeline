@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.3.2] - 2026-10-12
+
+### Changed
+
+- Automated release from PR #396: chore(deps): refresh dependencies and remove convenience packages (https://github.com/abocha/esl-pipeline/pull/396)
+
 ## [21.3.1] - 2026-10-11
 
 ### Changed
