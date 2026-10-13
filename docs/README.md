@@ -21,22 +21,26 @@
 
 ## Categories
 
-| Need                                          | Start with                                                                         |
-| --------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Repository orientation or local development   | [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) or [`QUICK_START.md`](QUICK_START.md) |
-| Product/runtime contracts and system behavior | [`reference/`](reference/) and the owning package README                           |
-| Operations or a current procedure             | [`operations/README.md`](operations/README.md)                                     |
-| Product/design work                           | [`design/README.md`](design/README.md)                                             |
-| Durable active planning                       | [`plans/README.md`](plans/README.md)                                               |
-| Documentation upkeep and routing              | [`reference/DOCS_GOVERNANCE.md`](reference/DOCS_GOVERNANCE.md)                     |
-| Named-task execution context                  | [`superpowers/README.md`](superpowers/README.md)                                   |
-| Unfinished/disposable exploration             | [`drafts/README.md`](drafts/README.md)                                             |
-| Historical rationale or prior execution       | [`archive/README.md`](archive/README.md)                                           |
-| Generated inventories                         | [`generated/README.md`](generated/README.md)                                       |
+| Need                                          | Start with                                                                                                      |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Repository orientation or local development   | [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) or [`QUICK_START.md`](QUICK_START.md)                              |
+| Product/runtime contracts and system behavior | [`reference/`](reference/) and the owning package README                                                        |
+| Operations or a current procedure             | [`operations/README.md`](operations/README.md)                                                                  |
+| Product/design work                           | [`design/README.md`](design/README.md)                                                                          |
+| Planning priorities, backlog, or decisions    | [`github-issue-intake-and-codex-work-selection.md`](operations/github-issue-intake-and-codex-work-selection.md) |
+| Approved repository execution plans           | [`plans/README.md`](plans/README.md)                                                                            |
+| Documentation upkeep and routing              | [`reference/DOCS_GOVERNANCE.md`](reference/DOCS_GOVERNANCE.md)                                                  |
+| Named-task execution context                  | [`superpowers/README.md`](superpowers/README.md)                                                                |
+| Unfinished/disposable exploration             | [`drafts/README.md`](drafts/README.md)                                                                          |
+| Historical rationale or prior execution       | [`archive/README.md`](archive/README.md)                                                                        |
+| Generated inventories                         | [`generated/README.md`](generated/README.md)                                                                    |
 
 ## Lifecycle Boundaries
 
-- `docs/plans/**` is the only durable active planning system.
+- Linear owns the planning backlog and durable decisions. The `ESL Execution` team tracks bounded
+  repository work and syncs to GitHub Issues; use [`the intake runbook`](operations/github-issue-intake-and-codex-work-selection.md)
+  to select work. `docs/plans/**` holds approved repository execution plans when a multi-step task
+  benefits from one; it is not the planning backlog.
 - `docs/superpowers/**` is named-task execution context, not general current truth.
 - `docs/drafts/**` is non-authoritative and excluded from normal task routing.
 - Dated operational evidence records a bounded observation; it never replaces the current procedure.

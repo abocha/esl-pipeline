@@ -13,8 +13,10 @@
 ## Scope
 
 `docs/superpowers/**` is a temporary workspace for a named design, review, or implementation task.
-It is not a second durable planning hierarchy: [`docs/plans/`](../plans/README.md) is the only
-durable active planning system, and current behavior remains owned by code, package READMEs,
+It is not a backlog or a durable planning hierarchy. Linear owns the planning backlog and durable
+decisions; the [`intake runbook`](../operations/github-issue-intake-and-codex-work-selection.md)
+routes work selection. Approved repository execution plans, when useful for multi-step work, follow
+the [`plans lifecycle`](../plans/README.md). Current behavior remains owned by code, package READMEs,
 references, and runbooks.
 
 An artifact here is authoritative only when the task that explicitly names it is active. Its presence

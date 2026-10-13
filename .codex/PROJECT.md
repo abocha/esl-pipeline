@@ -13,6 +13,10 @@ product policies belong in root `AGENTS.md` and the ESL SSOT.
 - Documentation: start with [`docs/README.md`](../docs/README.md); use
   [`docs/reference/DOCS_IA_MAP.md`](../docs/reference/DOCS_IA_MAP.md) only when that category route is
   unclear, then read the task-specific active document or owning package README.
+- Planning: select repository work through the
+  [`issue intake runbook`](../docs/operations/github-issue-intake-and-codex-work-selection.md);
+  Linear owns backlog and durable decisions. Use [`docs/plans/README.md`](../docs/plans/README.md)
+  for approved repository execution-plan lifecycle, and the generated index only as a lookup aid.
 - Validation and CI: use
   [`docs/reference/TESTING_GUIDELINES.md`](../docs/reference/TESTING_GUIDELINES.md) with current
   repository scripts, manifests, test configuration, and hosted workflow configuration.
@@ -54,9 +58,9 @@ and the applicable current operations runbook's authorized rollout/rollback and 
 ## Common ownership boundaries
 
 - Orchestrator/manifest semantics: `packages/orchestrator`; route through
-  `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`,
-  `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`, and
-  `docs/reference/pipeline-manifest.md`.
+  `packages/orchestrator/README.md`, `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`, and
+  `docs/reference/pipeline-manifest.md`; use `docs/reference/agents-ssot.md` for cross-package
+  ownership and invariants.
 - Public contracts: `packages/contracts` and transport consumers; `@esl-pipeline/contracts`,
   manifest compatibility rules, and the ESL SSOT remain authoritative.
 - Backend workflow/persistence: `packages/batch-backend` owns PostgreSQL, Redis, queues, workers,

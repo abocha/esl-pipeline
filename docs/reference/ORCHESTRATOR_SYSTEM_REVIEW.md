@@ -32,11 +32,9 @@
 - `packages/orchestrator/src/runtime/stage-reporter.ts`
   - Stage event logging/metrics/callback emission.
 - `packages/orchestrator/src/runtime/audio-artifacts.ts`
-  - Manifest artifact normalization and deterministic audio key generation.
-- `packages/orchestrator/src/runtime/markdown-cache.ts`
-  - Markdown content cache/read lifecycle for manifest/hash/validation pathways.
+  - Native manifest artifact normalization and deterministic audio key generation.
 - `packages/orchestrator/src/runtime/publish-utils.ts`
-  - Markdown audio-link insertion, heading color mapping, title resolution.
+  - Heading-theme resolution through shared infrastructure.
 - `packages/orchestrator/src/runtime/tts-telemetry.ts`
   - TTS spend summary, provider error categorization, voice telemetry helpers.
 - `packages/orchestrator/src/runtime/voice-preferences.ts`
@@ -62,11 +60,11 @@
   - unchecked families reuse prior published artifacts and keep their existing persisted defaults
   - checked families overwrite the published artifact even when deterministic upload keys or semantic hashes are unchanged
   - provider-specific voice identifiers are only reusable when the rerun stays on the same provider family; provider changes must fall back to provider-scoped voice resolution instead of inheriting stale foreign voice IDs
-- Batch-backend correction children are deliberately not reruns. They materialize and hash-check a
-  newly frozen draft object, then invoke `newAssignment` with child-owned manifest/output identity.
-  All normal Markdown-dependent planning and synthesis runs again; only normal content-addressed
-  caches may reuse genuinely identical generated content. `republishOnly` retains its historical
-  frozen-Markdown and artifact-reuse meaning.
+- Batch-backend correction children are deliberately not reruns. They validate the frozen draft's
+  AssignmentV1 artifact and invoke `newAssignment` with child-owned manifest/output identity. The
+  parent manifest and generated audio are not inherited. A `republishOnly` rerun requires an
+  executable schema-6 manifest and reuses its selected audio artifacts while rebuilding publication.
+  Historical Markdown manifests remain read-only and cannot be rerun or republished.
 
 ### Stable Contracts
 
@@ -91,14 +89,13 @@
 
 ### Confirmed Overlaps / Seams
 
-- Markdown publish helpers are now shared through `@esl-pipeline/shared-infrastructure` (with thin orchestrator/backend wrappers).
 - Config path resolution is consumed in batch-backend for profile/config surfaces and by orchestrator itself.
 - Observability concerns are split: orchestrator emits stage telemetry; batch-backend maps those events into service logger/metrics systems.
 
 ### Boundary Health Snapshot
 
 - Good boundary: canonical stage behavior remains in orchestrator.
-- Good boundary: markdown preview/publish helpers were extracted to shared-infrastructure and are no longer duplicated across orchestrator/backend runtime code.
+- Good boundary: structured AssignmentV1 is rendered by `html-publisher` and `learner-handout`; the orchestrator only supplies native execution data and heading-theme inputs.
 - Good boundary: worker orchestration concerns are better placed in batch-backend, not orchestrator.
 
 ## Refactor Constraints
@@ -109,9 +106,8 @@
 
 ## Related
 
-- `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
-- `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`
-- `docs/reference/agents-ssot.md`
+- `packages/orchestrator/README.md` for current public API and package usage
+- `docs/reference/agents-ssot.md` for cross-package ownership invariants
 - `docs/reference/pipeline-manifest.md`
 - `packages/orchestrator/src`
 - `packages/batch-backend/src`

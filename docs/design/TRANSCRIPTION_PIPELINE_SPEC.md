@@ -25,12 +25,21 @@
 2. `docs/backend-frontend/backend-frontend-alignment.md`
 3. `docs/PIPELINE_INTEGRATION_VISION.md`
 
+This is a cross-package design route for the recording/transcription workflow, not an exhaustive
+route inventory or proof of deployment or live provider readiness. The repository source contains
+the described recording, transcript, and recovery behavior; current details are owned by the
+[batch-backend README](../../packages/batch-backend/README.md) and STT package adapters. AssignmentV1
+publication and historical Markdown compatibility are owned by
+[AssignmentV1](../reference/ASSIGNMENT_V1.md).
+
 ## Current State
 
-- Bounded upload-based ingestion and durable run/queue-backed transcription are active.
-- Transcript review/edit, prompt package generation, draft save, and materialize+approve are active.
-- Prompt template/profile selection is DB-canonical (active revisions in Postgres).
-- STT execution is provider-agnostic (`stt-core` + provider adapters) with active providers:
+- Repository source implements bounded upload-based ingestion and durable run/queue-backed
+  transcription.
+- Repository source implements transcript review/edit, prompt package generation, draft save, and
+  materialize+approve.
+- Prompt template/profile selection uses active revisions in Postgres as its source contract.
+- STT execution is provider-agnostic (`stt-core` + provider adapters); source exposes these adapters:
   - `deepgram`
   - `elevenlabs` (Scribe v2)
   - `google` (Cloud STT V2 with required GCS staging for non-`gs://` inputs)
@@ -47,7 +56,8 @@
 - `recording upload operation`: workspace-scoped browser operation UUID plus immutable physical
   candidates; candidate reconciliation is distinct from recording-owned retained-audio cleanup.
 - `prompt package`: template/profile/notes/transcript assembly output.
-- `draft`: user-provided markdown artifact prior to approval.
+- `draft`: typed AssignmentV1 artifact prior to approval. Historical Markdown drafts remain
+  read-only under [AssignmentV1](../reference/ASSIGNMENT_V1.md).
 - `job`: orchestrator handoff and publish lifecycle.
 
 ## Core Invariants
@@ -95,7 +105,7 @@
 - 2 GiB source guard, 10 GiB temp-disk reserve, and 100-minute duration enforcement
 - corrupt, no-audio, multiple-audio-stream, or unsupported container/codec rejection
 - missing FFmpeg/ffprobe or failed stream-copy/re-probe
-- provider outages (Deepgram, Notion, TTS, S3)
+- provider outages (Deepgram, ElevenLabs, Google Cloud STT, TTS, S3)
 - STT provider credential/prerequisite drift (Deepgram token, ElevenLabs key, Google project/staging bucket)
 - stale run claims, ambiguous provider outcomes, and exhausted submission reservations
 - retained-audio deletion permission or ownership failures

@@ -16,6 +16,16 @@ Define the long-term tutor experience for establishing learner context before th
 assignment. This document records the approved product behavior and its authority boundaries. It is
 not an implementation plan.
 
+## Implementation and Activation Boundary
+
+Current source includes the durable initial-enrichment operation, source-bound profile drafting,
+and candidate-review workflow described here. Runtime behavior and recovery details are owned by
+the [batch-backend README](../../packages/batch-backend/README.md) and the
+[student-profile enrichment contract](../plans/student-profile-enrichment/README.md). Source
+presence establishes implementation, not production configuration, successful activation, cohort
+readiness, or completion of the student-system roadmap phase. Those statuses require product and
+operator evidence.
+
 ## Product Decision
 
 Profile drafts, activation, revision identifiers, hashes, and recovery mechanics are internal

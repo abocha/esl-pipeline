@@ -1,15 +1,18 @@
 # Orchestrator Ownership Ledger
 
+> Archived historical decision ledger. Current cross-package ownership invariants live in
+> [the repository SSOT](../../reference/agents-ssot.md); current runtime stages are mapped in
+> [Orchestrator System Review](../../reference/ORCHESTRATOR_SYSTEM_REVIEW.md).
+
 ## Meta
 
 - Audience: maintainers and AI agents making cross-package refactor decisions.
 - Read Time: 8 minutes.
-- Authority Level: decision ledger for Keep/Move/Extract/Retire outcomes; the system review owns
-  the canonical runtime stage map.
+- Authority Level: historical decision ledger for Keep/Move/Extract/Retire outcomes.
 - Last Verified Against: 2026-08-12 repo state.
 - Owner: orchestrator + batch-backend maintainers.
 - Review Cadence: update on every ownership-affecting refactor PR.
-- Status: `active`.
+- Status: `archived`.
 
 ## Decision Rubric (Apply To Every Overlap)
 

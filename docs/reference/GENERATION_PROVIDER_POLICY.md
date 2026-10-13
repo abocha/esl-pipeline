@@ -15,8 +15,8 @@
 `resolveGenerationTarget()` resolves one `{ provider, model }`. Failures never select a different
 model or provider. Assignment/profile generation makes one physical request and returns a normalized
 failure; existing durable queues own background retries. Assignment generation requires strict AssignmentV1 on OpenAI GPT-6.1 Sol, admits completed
-non-refusal direct JSON, validates locally and deterministically renders PMD. Unsupported assignment
-overrides fail before dispatch. There is no model-driven Markdown repair. See
+non-refusal direct JSON, validates locally, and returns the typed object for native HTML publication.
+Unsupported assignment overrides fail before dispatch. There is no model-driven Markdown repair. See
 [AssignmentV1](ASSIGNMENT_V1.md) for prompt cutover and compatibility boundaries.
 
 | Workload                                                | Provider default | Model default  | Exact env target                                                            |

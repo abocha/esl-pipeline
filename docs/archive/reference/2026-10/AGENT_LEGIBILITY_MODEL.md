@@ -1,14 +1,18 @@
 # Agent Legibility Model
 
+> Historical reference. Current documentation rules live in
+> [`DOCS_GOVERNANCE.md`](../../../reference/DOCS_GOVERNANCE.md); the operating workflow lives in
+> [`DOCS_GARDENING_PLAYBOOK.md`](../../../reference/DOCS_GARDENING_PLAYBOOK.md).
+
 ## Meta
 
 - Audience: maintainers and AI agents improving repo readability.
 - Read Time: 6 minutes.
-- Authority Level: docs system design reference.
+- Authority Level: historical reference.
 - Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major docs-tooling changes.
-- Status: `reference`.
+- Status: `archive`.
 
 ## Purpose
 
@@ -150,7 +154,7 @@ Common pairings in this repo:
 
 ## Related
 
-- [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](HARNESS_AGENTIC_DOCS_MODEL.md)
-- [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
-- [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)
-- [`docs/generated/README.md`](../generated/README.md)
+- [`HARNESS_AGENTIC_DOCS_MODEL.md`](HARNESS_AGENTIC_DOCS_MODEL.md)
+- [Current documentation governance](../../../reference/DOCS_GOVERNANCE.md)
+- [Current gardening procedure](../../../reference/DOCS_GARDENING_PLAYBOOK.md)
+- [Generated documentation index](../../../generated/README.md)

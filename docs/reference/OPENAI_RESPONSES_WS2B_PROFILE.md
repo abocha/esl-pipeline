@@ -1,10 +1,19 @@
 # OpenAI Responses WS2B Implementation Profile
 
+> Historical WS2B design profile. Its API coverage, workload mapping, and error/fallback examples
+> are not the current implementation contract. Current OpenAI request parsing is owned by
+> `packages/batch-backend/src/application/openai-responses-contract.ts` and
+> `generation-providers.ts`. The current adapter sends non-streaming requests with raw `fetch`,
+> accepts completed direct JSON for AssignmentV1, and returns normalized failures without provider
+> fallback. Workload targets and retry policy are owned by
+> [Generation Target Policy](GENERATION_PROVIDER_POLICY.md). Do not use this profile to add
+> provider methods or infer live account/configuration state.
+
 ## Meta
 
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 10 minutes.
-- Authority Level: implementation-driving reference for WS2B OpenAI integration.
+- Authority Level: historical implementation-design reference for WS2B OpenAI integration.
 - Last Updated: 2026-07-11.
 
 ## Purpose

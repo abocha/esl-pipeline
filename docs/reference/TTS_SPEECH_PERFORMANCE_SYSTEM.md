@@ -12,8 +12,8 @@
 
 ## Purpose
 
-Define the provider-neutral speech-performance layer that sits between clean lesson Markdown and
-provider-specific TTS synthesis. This layer keeps pedagogical authoring portable while allowing
+Define the provider-neutral speech-performance layer that sits between typed AssignmentV1
+study-text input and provider-specific TTS synthesis. This layer keeps pedagogical authoring portable while allowing
 capable models such as Inworld TTS-2 to receive expressive delivery guidance.
 
 ## Pipeline Contract
@@ -32,28 +32,34 @@ plan, or performance source context.
 The stage is skipped when study-text TTS is disabled, when a rerun is republish-only, or when a
 rerun regenerates pronunciation audio without regenerating study-text audio.
 
-## Authored Markdown Contract
+## Typed Assignment Contract
 
-Learner-facing Markdown stays clean. `speaker_profiles` captures stable semantic cast information:
+`input.studyText.speakers` captures stable semantic cast information in the typed AssignmentV1
+shape (illustrative excerpt):
 
-```yaml
-speaker_profiles:
-  - id: Maya
-    display_name: Maya
-    role: project manager clarifying an unrealistic deadline
-    persona: warm, practical, and direct
-    gender: female
-    age: adult
-    accent: american
-    voice_direction: calm, neutral, clear, conversational adult voice
+```json
+{
+  "id": "Maya",
+  "displayName": "Maya",
+  "role": "Project manager clarifying an unrealistic deadline",
+  "persona": null,
+  "voiceDirection": "Calm, clear, conversational adult voice",
+  "gender": "female",
+  "age": null,
+  "accent": null
+}
 ```
+
+Every speaker includes the typed camelCase `displayName`, `voiceDirection`, and nullable fields;
+`persona`, `age`, and `accent` may be `null` as shown. The orchestrator projects typed speakers
+into the internal speech-planning representation. That projection is not a second authoring format.
 
 Provider catalogs do not shape authored content. `role` and optional `persona` are descriptive text.
 `gender`, `age`, and regional `accent` remain basic provider-neutral hints. Optional
-`voice_direction` describes the desired vocal qualities without naming provider tags. Placeholder
+`voiceDirection` describes the desired vocal qualities without naming provider tags. Placeholder
 accents such as `neutral`, `standard`, and `default` are ignored because they describe qualities,
-not regions. Provider-specific `voice` and dynamic `style` values do not belong in generated
-Markdown. Operators apply explicit voice overrides through runtime configuration such as
+not regions. Provider-specific `voice` and dynamic `style` values do not belong in AssignmentV1.
+Operators apply explicit voice overrides through runtime configuration such as
 `voices.yml`, job flags, or provider settings.
 
 ## Capability Ownership
@@ -88,8 +94,9 @@ The voice plan is structured JSON resolved before speech planning. It contains:
 
 The Inworld adapter retains the documented typed SDK voice fields and builds deterministic English
 shortlists. Explicit `voices.yml` mappings and configured defaults win first. Automatic selection
-uses `gemma-4-31b-it` by default to rank suitable shortlist candidates against stable
-speaker-profile intent. Capability decisions do not use voice tags. The current typed SDK catalog
+uses the ranker workload target owned by [Generation Target Policy](GENERATION_PROVIDER_POLICY.md)
+to rank suitable shortlist candidates against stable speaker-profile intent. Capability decisions
+do not use voice tags. The current typed SDK catalog
 surface provides identifiers, names, language code, description, tags, and source; fields absent
 from that surface are not guessed from the raw response.
 
@@ -128,31 +135,14 @@ policy `contextual-bracket-annotation-v1` to produce schema-v2 plans. The fixed 
 evaluation baseline continues to exercise the v1/v2 schema-v1 policies without reinterpretation.
 
 Batch backend injects a structured-output planner into the orchestrator. The planner remains
-disabled by default, with OpenAI and exact `gpt-5.6-luna` selected when enabled without overrides:
-
-```text
-ESL_TTS_SPEECH_PLANNER_ENABLED=false
-ESL_TTS_SPEECH_PLANNER_PROVIDER=openai
-ESL_TTS_SPEECH_PLANNER_MODEL=gpt-5.6-luna
-ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS=12000
-ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=false
-ESL_TTS_SPEECH_PLANNER_RPM_BUDGET=4
-ESL_TTS_SPEECH_PLANNER_DAILY_REQUEST_BUDGET=120
-
-ESL_TTS_VOICE_RANKER_ENABLED=true
-ESL_TTS_VOICE_RANKER_MODEL=gemma-4-31b-it
-ESL_TTS_VOICE_RANKER_MAX_OUTPUT_TOKENS=1200
-ESL_TTS_VOICE_RANKER_RPM_BUDGET=12
-ESL_TTS_VOICE_RANKER_DAILY_REQUEST_BUDGET=1000
-ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN=false
-```
-
-The planner remains disabled until explicitly enabled. Its built-in selection is OpenAI plus exact
-`gpt-5.6-luna`; alternate compatible providers and models require explicit overrides. Google uses
-`GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY`. Provider/model
-allowlists, RPM, daily requests, daily tokens, and spend accounting remain separate, and there is
-no cross-provider fallback. OpenAI planner calls use strict structured output, high reasoning,
-low verbosity, and `store: false`.
+disabled by default. Planner and ranker targets, limits and environment wiring are owned by
+[Generation Target Policy](GENERATION_PROVIDER_POLICY.md) and the backend environment reference.
+Those LLM workload policies do not govern the independent STT/TTS provider adapters. The planner
+remains disabled until explicitly enabled. Provider and model selection follow current workload
+policy and environment validation, with `OPENAI_API_KEY` as the LLM credential. RPM, daily
+requests, daily tokens, and spend accounting remain separate, and there is no cross-provider
+fallback. OpenAI planner calls use strict structured output, high reasoning, low verbosity, and
+`store: false`.
 
 Only typed provider timeouts may retry, within the selected provider. Every physical attempt
 reserves the provider/model request budget before execution; one successful logical call records
@@ -189,12 +179,12 @@ Invalid prompted plans continue with identity synthesis. Routine warning logs in
 quality issue codes/counts. With `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true`, the same warning also
 includes the rejected parsed output and raw model text. These fields can include learner text.
 
-Voice-plan logs report whether the optional Inworld Gemma ranker selected voices, skipped ranking,
+Voice-plan logs report whether the optional Inworld OpenAI ranker selected voices, skipped ranking,
 or fell back to deterministic catalog scoring. Set `ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN=true` for
 full shortlist diagnostics and ranker failure messages. Inspect the result with:
 Malformed structured ranker responses also include the rejected raw model text under this debug
 flag. The backend ranker asks only for speaker and voice IDs; free-text model rationales are omitted
-to keep the Gemma response compact and reliable.
+to keep the ranker response compact and reliable.
 
 ```powershell
 docker compose logs batch-worker | Select-String "Speech performance planner|Inworld voice ranker"
@@ -287,7 +277,7 @@ promoted into a standalone Telegram attachment.
 
 ## Manifest And Rerun Provenance
 
-Manifest schema `5` adds:
+Manifest schema `5` historically added:
 
 ```text
 voicePlans.studyText
@@ -296,6 +286,8 @@ speechPlans.studyText
 audioArtifacts.studyText.speechPlanHash
 ```
 
+These fields remain part of the current schema `6` manifest; see the
+[pipeline manifest reference](pipeline-manifest.md) for the current schema and compatibility rules.
 The top-level plans store validated neutral provenance. The audio artifact links to the consumed
 voice-plan and speech-plan hashes. New voice plans use the explicit `ranked`, `deterministic`, and
 `fallback` modes. Schema-5 manifests written before this clarification may contain `resolved`;

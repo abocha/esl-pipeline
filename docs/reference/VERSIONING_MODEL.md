@@ -1,4 +1,4 @@
-# Versioning Model (Private Monorepo)
+# Versioning Model (Public Repository, Private npm Packages)
 
 ## Meta
 
@@ -16,7 +16,9 @@ This repo uses a hybrid versioning model with two independent tracks:
 1. Repo release version (`vX.Y.Z` tag + root `package.json` version) for deployment/release tracking.
 2. Explicit contract versions for API and runtime compatibility surfaces.
 
-This repository is private-only. npm publishing is not part of the release process.
+The repository is publicly viewable. Root package metadata keeps npm packages private and npm
+publishing is not part of the release process. Public source visibility does not imply that the
+hosted service is generally available; see the root README for the product and hosting boundary.
 
 ## Sources Of Truth
 

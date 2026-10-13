@@ -26,6 +26,9 @@ Library-only ESL pipeline engine for the monorepo.
 
 Operational execution and workspace-scoped teaching-context reads belong to
 `@esl-pipeline/batch-backend`.
+Cross-package ownership invariants are maintained in
+[`docs/reference/agents-ssot.md`](../../docs/reference/agents-ssot.md); this README owns the
+current package API and execution recipe.
 
 ## Public API
 

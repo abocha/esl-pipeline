@@ -81,20 +81,29 @@ Rollback:
 
 ## 4) Monitoring and Readiness Checks
 
-Watch `/metrics/readiness`:
+The backend `/metrics/readiness` response currently includes these job-derived readiness fields:
 
 - `voiceAlignment.validationFailures`
 - `voiceAlignment.strictMismatches`
 - `voiceAlignment.providerErrors`
 - `voiceAlignment.providerErrorBreakdown`
-- `voiceAlignment.fallbackSelections` / `reuseSelections` (nullable until fully persisted)
+- `voiceAlignment.fallbackSelections` and `reuseSelections` (nullable until persisted)
 
-Also watch metric streams/logs:
+The validation, strict-mismatch and provider-error values are classified from failed-job records;
+fallback/reuse selections remain null because selection telemetry is not persisted in the jobs table.
+They are readiness API fields, not a promise that identically named metrics are exported.
 
-- `esl.voice_alignment.validation_failures`
-- `esl.voice_alignment.shadow_mismatch`
-- `esl.voice_alignment.shadow_mismatch_total`
-- `esl.voice_alignment.provider_error`
+The orchestrator emits these selection telemetry names when a metrics adapter is supplied:
+`esl.voice_alignment.selection_total`, `esl.voice_alignment.fallback_selections`, and
+`esl.voice_alignment.reuse_selections`. It also emits `esl.voice_alignment.provider_error` on
+provider failure. The current metrics facade is a no-op by default, so code emission does not prove
+that a deployed metrics backend receives or exposes these streams.
+
+The former `esl.voice_alignment.validation_failures` and shadow-mismatch stream names are not emitted
+by the checked current sources. Do not configure alerts for them as active streams. The existing
+`VOICE_ALIGNMENT_V2_*` flags remain the controls for strictness and shadow behavior; flags do not
+imply that corresponding telemetry is exported. Confirm the deployed adapter and readiness source
+before making an operational decision from any signal.
 
 ## 5) Common Failures and Remediation
 

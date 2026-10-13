@@ -37,8 +37,10 @@ preserving as the system evolves.
 - Use [`docs/reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md`](HOMEWORK_PROMPTING_SYSTEM_GUIDE.md)
   for the current runtime prompt-package shape, section-order guidance, and prompt-assembly
   recommendations.
-- Use [`docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md`](../plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)
-  for memory-aware prompt assembly/runtime behavior.
+- See the historical
+  [`student-memory phase 5 plan`](../archive/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)
+  for design rationale; current prompt assembly/runtime behavior is owned by the provider policy
+  and backend contracts linked above.
 - Use the template file itself for exact output wording and syntax requirements.
 
 ## Locked Decisions
@@ -86,10 +88,12 @@ Runtime note:
 
 ## Section-by-Section Assignment Contract
 
-The headings below describe the current deterministic PMD presentation. AssignmentV1 generation
-supplies domain content; the renderer owns headings and formatting. See
-[AssignmentV1](ASSIGNMENT_V1.md) for schema, admission and Slice 1 boundaries. The pedagogical
-content remains the default contract for future prompt revisions.
+The headings below describe the pedagogical content and section order for the native AssignmentV1
+handout. AssignmentV1 generation supplies typed domain content; `learner-handout` owns native HTML
+presentation. See [AssignmentV1](ASSIGNMENT_V1.md) and the
+[`learner-handout` package](../../packages/learner-handout/README.md) for schema, admission and
+rendering contracts. The pedagogical content remains the default contract for future prompt
+revisions.
 
 ### 1. `## 1. 🎯 This Week's Mission Briefing`
 
@@ -439,5 +443,5 @@ method while improving the surrounding system.
 
 - [`hw_prompt_assignment_v1.md`](../../packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md)
 - [`docs/reference/PRESET_V2_SPEC.md`](PRESET_V2_SPEC.md)
-- [`docs/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md`](../plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md)
-- [`docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md`](../plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)
+- [`Archived student-memory phase 4 plan`](../archive/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md)
+- [`Archived student-memory phase 5 plan`](../archive/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)

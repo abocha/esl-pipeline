@@ -253,20 +253,22 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   validate schema plus domain constraints before storage or CAS. The text field is pretty-printed
   JSON for the temporary textarea bridge; it is never a separately saved editor buffer.
 - Create confirmation, Share, correction and rerun jobs preserve that reference. Jobs separately
-  pin native renderer version 2 (historical Slice 2 jobs retain version 1). The worker rereads and
+  pin native renderer version 3 (historical jobs retain their frozen renderer version). The worker rereads and
   verifies frozen JSON and passes AssignmentV1 directly to orchestrator/TTS/HTML without temporary
   Markdown. Typed preview authorizes the pinned prompt and validates the same object before native
-  rendering. Job DTOs carry title/icon/main-audio publication metadata for direct bot sharing. Homework memory consumes typed content directly and namespaces its
-  dedup hash by format/schema; legacy and pending Markdown jobs retain explicit legacy dispatch.
+  HTML publication. Job DTOs carry title/icon/main-audio publication metadata for direct bot
+  sharing. Homework memory consumes typed content directly and namespaces its dedup hash by
+  format/schema; historical Markdown is read-only and is not dispatched for current execution.
 - Materialization rejects typed/legacy job-format mismatches before execution or relinking.
   Typed reruns do not require a local Markdown source: frozen JSON supplies content, while a
   stable manifest identity under `assignments/` (or `corrections/`) retains publication artifacts
   without a Markdown source file. Native manifests use schema 6 and canonical AssignmentV1 hashes;
-  explicit legacy jobs keep schema 5. API 8 / manifest 4 mark these execution changes.
-- Migration 0063 admits native renderer 2 alongside historical renderer 1 without rewriting jobs
-  or relaxing artifact/frozen-identity checks. Apply it before native job writes. Newly requested
-  typed reruns pin renderer 2 while preserving their source job. Previous Slice 2 executors cannot
-  execute renderer-2 jobs; previous-image recovery remains blocked after native writes.
+  historical manifests retain their read semantics. See [AssignmentV1](../../docs/reference/ASSIGNMENT_V1.md).
+- Migration 0065 admits native renderer 3. Migration 0063 and renderer 2 describe the historical
+  ESL-6 checkpoint recorded in [AssignmentV1](../../docs/reference/ASSIGNMENT_V1.md), not current
+  deployment guidance. Current image and migration compatibility is governed by
+  [`runtime-compatibility.json`](migrations/runtime-compatibility.json); inspect it before proposing
+  rollback. Do not infer compatibility from renderer history.
 - Migration 0062 retains existing rows as `markdown`, freezes draft formats and job artifact
   references, and leaves historical readers executable. API 7 / DB 2 mark the authority cutover;
   prompt, validator and manifest contracts are unchanged. Previous-image rollback is deliberately
@@ -354,20 +356,20 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   writers, or restoring the paired pre-migration backup; no image-only downgrade is implied.
 - `POST /jobs/:publishedJobId/publish-correction` is the distinct post-Share correction command. It
   serializes on the stable request/job ID, locks and compares the authoritative mutable draft
-  version/hash, and transactionally reserves one `source_job_id` child against the server-owned
-  content-addressed Markdown URI. Replay must match the recorded parent, draft, version, and hash.
-  The correction worker hash-validates that immutable input and runs normal new-assignment pipeline
-  semantics with child-owned manifest/output identity. It does not read or merge the parent's
-  generated audio or manifest.
+  version/hash, and transactionally reserves one `source_job_id` child with the frozen AssignmentV1
+  artifact. Replay must match the recorded parent, draft, version, artifact and hash. The correction
+  worker verifies that artifact and runs normal native new-assignment semantics with child-owned
+  manifest/output identity. It does not read or merge the parent's generated audio or manifest.
 - Initial publication and a successful published correction both request homework-memory extraction.
   The lineage root remains the conceptual assignment identity while the memory row records the job
-  that produced its Markdown. A correction with changed content supersedes the lineage's prior ready
-  memory and triggers the normal snapshot refresh; ordinary reruns remain memory-neutral. The
+  that produced its typed assignment. A correction with changed content supersedes the lineage's
+  prior ready memory and triggers the normal snapshot refresh; ordinary reruns remain memory-neutral. The
   canonical commit locks the lineage and accepts only current pending work and no older publication
   than the current ready entry, so later publication wins even when extraction completes out of
   order.
-- Historical `republishOnly` remains a rerun of the parent's frozen Markdown with its existing
-  artifact-reuse contract. It is not a draft-correction path.
+- `republishOnly` is a typed rerun mode. It requires an executable schema-6 manifest, reuses its
+  selected audio artifacts, and rebuilds publication. It is distinct from the post-Share correction
+  path. Historical Markdown manifests are read-only and cannot be republished.
 
 Migration `0044_assignment_step_confirmation_contract` is an intentional closed-alpha cutover. With
 the API and workers stopped, it deletes pre-cutover assignment sessions, drafts, and prompt packages
@@ -723,12 +725,11 @@ ESL-33 tightens the shipped v8 instructions to mark supplied bracketed lexical h
 author useful formula chunks, and keep each cue closed before a newline between alternatives.
 The hint must not supply an inflected answer or decisive grammatical choice. No schema/marker
 change, active revision replacement or prompt-package repinning is performed by this refinement.
-The bounded
-[ESL-28 learner-quality evaluation](../../docs/operations/assignment-quality-evaluation.md) is prepared
-and completed against the shipped v5 template after explicit paid-call authorization. Its three real
-cases remain private. The activation recommendation is CHANGE: repair a cue that leaks the target
-aspect and an overgeneralized learner self-check, with minor label and language-annotation findings
-recorded separately. No template activation or deployment is part of that evaluation.
+The reusable [assignment-quality evaluation method](../../docs/operations/assignment-quality-evaluation.md)
+is separate from completed history: [ESL-28](../../docs/archive/operations/assignment-quality-evaluation-esl-28.md)
+and [ESL-31](../../docs/archive/operations/assignment-quality-reevaluation-esl-31.md). Those fixed
+records retain their decisions and private evidence; they are not current authorization or proof of
+deployment activation.
 
 ### OpenAI shared daily admission
 

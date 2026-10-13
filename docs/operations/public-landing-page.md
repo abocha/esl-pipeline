@@ -18,6 +18,11 @@ MCP OAuth issuer/resource remain exclusively on `https://app.eslpipeline.com`. T
 
 ## One-time DNS and rollout (operator-owned, not performed by this PR)
 
+The sequence below records the one-time rollout plan, not current deployment evidence. This audit
+did not check DNS, the host, Caddy, the live page, or rollout completion. Treat each step as
+unverified until an operator records a dated check against the intended release; do not infer that
+any step remains pending or has completed from this plan alone.
+
 1. After the PR is reviewed/merged and a release is published, add a Cloudflare **A** record at
    the zone apex (`@`) pointing to the existing Lightsail IP `56.10.15.24`; use **DNS only**
    (grey cloud), not proxied, to stay consistent with the app's >100 MB recording transport.

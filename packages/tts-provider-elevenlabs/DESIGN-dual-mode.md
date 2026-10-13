@@ -1,7 +1,10 @@
-# ElevenLabs TTS Strategy Design (Current)
+# ElevenLabs TTS Strategy Implementation Notes
 
-This document describes the current “dual path” audio generation behavior in
-`@esl-pipeline/tts-provider-elevenlabs`.
+The adapter source is authoritative for strategy selection, chunking, and preview behavior. These
+notes summarize the implemented strategy at the time of review; verify
+[`src/index.ts`](src/index.ts), [`src/dialogue.ts`](src/dialogue.ts), and the shared
+[`tts-core` contract](../tts-core/README.md) before changing provider behavior. This document does
+not establish provider-account availability or live activation.
 
 ## Terminology
 
@@ -32,7 +35,7 @@ Rules:
 To avoid unnatural prosody resets and “speeding up” on simple text, the `tts` path synthesizes
 larger text chunks instead of line-by-line, controlled by:
 
-- `ELEVENLABS_TTS_MAX_CHARS` (default `4500`)
+- `ESL_TTS_PROVIDER_ELEVENLABS_MAX_CHARS` (default `4500`)
 
 ## Dialogue Preview Behavior
 
@@ -43,6 +46,9 @@ without an API key.
 ## Speaker → Voice Assignment
 
 Voice assignment uses:
+
+The adapter consumes internal projected `speaker_profiles` metadata. It is not an AssignmentV1
+authoring shape; authoring fields and nullability are defined by the typed contract.
 
 - `voices.yml` overrides (per-speaker / default)
 - optional `speaker_profiles` metadata (gender/role/accent/style)

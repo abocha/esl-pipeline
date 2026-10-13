@@ -58,6 +58,6 @@ When the same docs issue appears 2+ times in PR review:
 
 ## Related
 
-- [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](../reference/HARNESS_AGENTIC_DOCS_MODEL.md)
-- [`docs/reference/DOCS_GOVERNANCE.md`](../reference/DOCS_GOVERNANCE.md)
-- [`docs/reference/DOCS_QUALITY_SCORE.md`](../reference/DOCS_QUALITY_SCORE.md)
+- [`Archived agentic docs model`](../../reference/2026-10/HARNESS_AGENTIC_DOCS_MODEL.md)
+- [`Current docs governance`](../../../reference/DOCS_GOVERNANCE.md)
+- [`Historical docs quality score`](../../reference/2026-08/DOCS_QUALITY_SCORE.md)

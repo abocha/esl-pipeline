@@ -118,8 +118,27 @@ Before advancing `Last Verified Against` on an enforced document:
 - Keep one-off outcomes and acceptance criteria in the task prompt or active plan.
 - Move repeated procedures into skills and deterministic requirements into scripts, hooks, or CI
   rather than relying on prose reminders.
-- Treat repository-tracked docs and code as the durable system of record; chat-only decisions are
-  incomplete until encoded in the appropriate source.
+- Use Linear as the durable source for backlog, prioritization, and planning decisions. Use
+  repository-tracked code and docs as the durable source for implemented behavior, product/runtime
+  contracts, and procedures; chat-only decisions are incomplete until recorded in the appropriate
+  owner.
+
+## Documentation Shape and Update Pairings
+
+- Keep `AGENTS.md` and other router docs short: route to the smallest authoritative set rather than
+  repeating subsystem manuals. Use progressive disclosure from the repository entrypoint to the
+  category router and task-specific owner.
+- Reference docs define stable contracts, invariants, models, and policy. Runbooks give safe ordered
+  operating steps and diagnostics. Specs record active design assumptions and interface boundaries.
+  Plans sequence approved work and acceptance; they do not report current behavior. Generated
+  references expose inventories and lookup surfaces, with their generator and canonical owner named.
+- Hand-written docs explain meaning and decisions; prefer generated references for inventories that
+  would otherwise drift. Structured gardening artifacts are the source of truth for each run, and
+  their Markdown summaries are renderings of those artifacts.
+- Pair behavior changes with the SSOT or alignment doc and the owning package README or runbook;
+  pair new plans with the plan router and relevant topic router; pair docs-tooling changes with this
+  governance contract and the gardening playbook; pair archive moves with the archive index and every
+  active router that linked to the old path.
 
 This boundary follows OpenAI's current
 [`AGENTS.md` guidance](https://learn.chatgpt.com/docs/agent-configuration/agents-md) and
@@ -129,5 +148,4 @@ prefer concise practical guidance, and separate durable conventions from reusabl
 ## Related
 
 - [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)
-- [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](HARNESS_AGENTIC_DOCS_MODEL.md)
 - [`docs/generated/README.md`](../generated/README.md)

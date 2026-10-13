@@ -32,6 +32,11 @@ For AssignmentV1 activation, consult the [ESL-29 preparation record](assignment-
 v8 template/schema contract. Refresh live deployment, template, schema and rollback identities
 before proposing any new activation; do not execute the historical v7 instructions unchanged.
 
+For a newly authorized AssignmentV1 quality evaluation, use the current
+[evaluation method](assignment-quality-evaluation.md). ESL-28 and ESL-31 are completed historical
+outcomes in [`docs/archive/operations/`](../archive/operations/); their paid commands are not a
+current authorization or instruction to repeat those calls.
+
 For on-host container, filesystem, CPU/memory-pressure, and public-route checks, see
 [`host-runtime-health.md`](host-runtime-health.md). It is separate from PostgreSQL backup health
 and does not establish off-host availability or worker job progress.
