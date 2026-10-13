@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.3.4] - 2026-10-13
+
+### Changed
+
+- Automated release from PR #402: docs: consolidate agent-facing ownership and current guidance (ESL-54) (https://github.com/abocha/esl-pipeline/pull/402)
+
 ## [21.3.3] - 2026-10-12
 
 ### Changed
