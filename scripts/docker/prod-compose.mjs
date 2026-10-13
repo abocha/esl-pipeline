@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { assertProductionEnv, assertRuntimeSecrets } from '../deploy/production-paths.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const composeFile = path.join(rootDir, 'docker-compose.prod.yml');
@@ -23,17 +24,35 @@ if (args.length === 0) {
 }
 
 const env = { ...process.env };
+env.ESL_PRODUCTION_ENV_FILE ??= '/etc/esl-pipeline/production.env';
+if (rootDir === '/opt/esl-pipeline') {
+  assertProductionEnv(env.ESL_PRODUCTION_ENV_FILE, rootDir);
+  assertRuntimeSecrets(rootDir);
+}
 if (usePlaceholderImages) {
   env.BATCH_BACKEND_IMAGE ??= `${placeholderPrefix}/batch-backend:${placeholderSha}`;
   env.BATCH_FRONTEND_IMAGE ??= `${placeholderPrefix}/batch-frontend:${placeholderSha}`;
   env.TELEGRAM_OPS_BOT_IMAGE ??= `${placeholderPrefix}/telegram-ops-bot:${placeholderSha}`;
 }
 
-const child = spawn('docker', ['compose', '-p', projectName, '-f', composeFile, ...args], {
-  cwd: rootDir,
-  env,
-  stdio: 'inherit',
-});
+const child = spawn(
+  'docker',
+  [
+    'compose',
+    '-p',
+    projectName,
+    '-f',
+    composeFile,
+    '--env-file',
+    env.ESL_PRODUCTION_ENV_FILE,
+    ...args,
+  ],
+  {
+    cwd: rootDir,
+    env,
+    stdio: 'inherit',
+  },
+);
 
 child.on('exit', (code, signal) => {
   if (signal) {

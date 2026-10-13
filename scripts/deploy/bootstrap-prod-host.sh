@@ -24,8 +24,9 @@ esac
 [[ -d /run/systemd/system ]] || die "a running systemd host is required (not an ordinary Docker container)"
 # Never follow operator-owned links or recursively change unknown contents.
 paths=(
-  /opt/esl-pipeline /opt/esl-pipeline/.secrets /opt/esl-pipeline/uploads
+  /etc/esl-pipeline /opt/esl-pipeline /opt/esl-pipeline/.secrets /opt/esl-pipeline/uploads
   /opt/esl-pipeline/uploads/drafts /var/lib/esl-pipeline /var/lib/esl-pipeline/deploy
+  /var/lib/esl-pipeline/deploy/backups /var/lib/esl-pipeline/deploy/backups/postgres
   /var/lib/esl-pipeline/ops /var/lib/esl-pipeline/ops/backups
   /var/lib/esl-pipeline/ops/backups/postgres /var/lib/esl-pipeline/ops/backups/postgres/remote-restore
   /var/lib/esl-pipeline/ops/logs /var/lib/esl-pipeline/ops/reports

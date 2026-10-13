@@ -49,7 +49,7 @@ test('production deploy asserts the running Caddy upstream points at the fronten
 test('production deploy requires the canonical server-local application env file for Caddy edge values', () => {
   assert.match(deployScript, /load_edge_env_from_application_env_file\(\)/);
   assert.match(deployScript, /read_env_file_value\(\)/);
-  assert.match(deployScript, /\$\{APP_DIR\}\/\.env/);
+  assert.match(deployScript, /\/etc\/esl-pipeline\/production\.env/);
   assert.doesNotMatch(deployScript, /\.env\.batch-backend/);
   assert.match(deployScript, /CADDY_PUBLIC_HOSTNAME/);
   assert.match(deployScript, /CADDY_ACME_EMAIL/);
@@ -71,6 +71,6 @@ test('production deploy requires the canonical server-local application env file
   );
   assert.match(
     deployScript,
-    /\[\[ -f "\$\{APP_DIR\}\/\.env" \]\][\s\S]*load_edge_env_from_application_env_file[\s\S]*validate_edge_configuration/,
+    /\[\[ -f "\$\{ESL_PRODUCTION_ENV_FILE\}" \]\][\s\S]*load_edge_env_from_application_env_file[\s\S]*validate_edge_configuration/,
   );
 });

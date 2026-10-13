@@ -31,7 +31,7 @@ services:
       PG_POOL_MAX: '8'
       BATCH_BACKEND_ENABLE_OPS_CONTROL: ${BATCH_BACKEND_ENABLE_OPS_CONTROL:-false}
     env_file:
-      - .env
+      - ${ESL_PRODUCTION_ENV_FILE:-/etc/esl-pipeline/production.env}
     ports:
       - '127.0.0.1:${BATCH_BACKEND_HOST_PORT:-8080}:8080'
     restart: unless-stopped
@@ -82,7 +82,7 @@ services:
       PG_APPLICATION_NAME: esl-pipeline-batch-worker
       PG_POOL_MAX: '6'
     env_file:
-      - .env
+      - ${ESL_PRODUCTION_ENV_FILE:-/etc/esl-pipeline/production.env}
     command: ['node', 'dist/transport/worker-runner.js']
     restart: unless-stopped
 
@@ -205,7 +205,7 @@ services:
       PG_APPLICATION_NAME: esl-pipeline-student-memory-worker
       PG_POOL_MAX: '4'
     env_file:
-      - .env
+      - ${ESL_PRODUCTION_ENV_FILE:-/etc/esl-pipeline/production.env}
     command: ['node', 'dist/transport/student-memory-worker.js']
     restart: unless-stopped
 
@@ -217,7 +217,7 @@ services:
       PG_APPLICATION_NAME: esl-pipeline-telegram-ops-bot
       PG_POOL_MAX: '2'
     env_file:
-      - .env
+      - ${ESL_PRODUCTION_ENV_FILE:-/etc/esl-pipeline/production.env}
     restart: unless-stopped
     profiles:
       - ops-bot
@@ -249,7 +249,7 @@ services:
       PG_APPLICATION_NAME: esl-pipeline-transcribe-worker
       PG_POOL_MAX: '4'
     env_file:
-      - .env
+      - ${ESL_PRODUCTION_ENV_FILE:-/etc/esl-pipeline/production.env}
     command: ['node', 'dist/transport/transcribe-worker.js']
     restart: unless-stopped
 

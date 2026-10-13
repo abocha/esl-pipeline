@@ -37,8 +37,9 @@ PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops
 
 The generic local default is `${XDG_STATE_HOME:-$HOME/.local/state}/esl-pipeline/ops`. See
 [`postgres-ops-health.md`](postgres-ops-health.md) for the directory layout and ownership boundary.
-Scripts load `<repo>/.env` by default; use `PG_BACKUP_ENV_FILE=/absolute/host/path` to select another
-host environment file.
+Development scripts load `<repo>/.env` by default; use `PG_BACKUP_ENV_FILE=/absolute/host/path` to select another
+host environment file. Production wrappers require `/etc/esl-pipeline/production.env` and
+validate its protected path before sourcing.
 
 ## Commands
 
@@ -160,7 +161,7 @@ systemctl list-timers --all 'esl-postgres-*' --no-pager
 
 The installer requires root, only accepts `/opt/esl-pipeline`, and reloads systemd on every
 successful pass, including when unit files already match. Enabling timers remains a separate
-operator action. The oneshot scripts read `/opt/esl-pipeline/.env`; set
+operator action. The oneshot scripts read `/etc/esl-pipeline/production.env`; set
 `PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops` there. Backup and restore operations require
 Docker access; all operations that query or upload S3 require the configured least-privilege S3/KMS
 credentials. Do not put credentials in unit files.

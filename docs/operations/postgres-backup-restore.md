@@ -39,7 +39,8 @@ For S3 archival + automated scheduling, see
 
 Override any default with env vars:
 
-By default, the script loads `.env` when present. Set `PG_BACKUP_ENV_FILE` to use a different env
+Development loads `.env` when present. Production wrappers require the protected
+`/etc/esl-pipeline/production.env`; see [operator migration](production-config-reconciliation.md). For development, set `PG_BACKUP_ENV_FILE` to use a different env
 file.
 
 ```bash

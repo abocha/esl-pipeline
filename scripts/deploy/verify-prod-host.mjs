@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertProductionEnv, assertRuntimeSecrets, productionEnv } from './production-paths.mjs';
 
 export function verifyFirewall(firewall, port) {
   if (!/^[0-9]{1,5}$/u.test(port ?? '') || Number(port) < 1 || Number(port) > 65535) return false;
@@ -15,7 +16,9 @@ export function verifyFirewall(firewall, port) {
     });
   return (
     /Status: active/u.test(firewall) &&
-    /Default: deny \(incoming\), allow \(outgoing\), disabled \(routed\)/u.test(firewall) &&
+    /Default: deny \(incoming\), allow \(outgoing\), (?:disabled|deny) \(routed\)/u.test(
+      firewall,
+    ) &&
     safeRules &&
     [...allowedPorts].every((p) => rules.some((line) => line.startsWith(`${p}/tcp `)))
   );
@@ -60,6 +63,12 @@ function main() {
     }
   }
   check(
+    'config-directory',
+    'bootstrap',
+    metadata('/etc/esl-pipeline', 0, 0, 0o750),
+    'Protected production configuration directory',
+  );
+  check(
     'checkout',
     'bootstrap',
     root === '/opt/esl-pipeline',
@@ -75,6 +84,8 @@ function main() {
   check('systemd', 'bootstrap', existsSync('/run/systemd/system'), 'Running systemd manager');
   for (const directory of [
     'deploy',
+    'deploy/backups',
+    'deploy/backups/postgres',
     'ops',
     'ops/backups',
     'ops/backups/postgres',
@@ -231,14 +242,30 @@ function main() {
     'host-firewall',
     'operator',
     verifyFirewall(firewall, port),
-    'Operator must preserve tested SSH access and configure UFW deny incoming, allow outgoing, routed disabled; only approved SSH TCP port and TCP 80/443 allowed. Bootstrap never edits/enables UFW. Docker published ports bypass UFW: retain repository loopback bindings.',
+    'Operator must preserve tested SSH access and configure UFW deny incoming, allow outgoing, routed deny/disabled with no forwarding allow rules; only approved SSH TCP port and TCP 80/443 allowed. Bootstrap never edits/enables UFW. Docker published ports bypass UFW: retain repository loopback bindings.',
   );
-  const envPath = `${root}/.env`;
+  const envPath = productionEnv;
+  let trustedEnv = false;
+  let trustedSecrets = false;
+  try {
+    assertProductionEnv(envPath, root);
+    trustedEnv = true;
+  } catch {}
+  try {
+    assertRuntimeSecrets(root);
+    trustedSecrets = true;
+  } catch {}
+  check(
+    'trusted-config-paths',
+    'operator',
+    trustedEnv && trustedSecrets,
+    'Protect all ancestors, tracked privileged code and runtime-only secrets; no backups or symlinks in secrets mount',
+  );
   check(
     'external-env',
     'operator',
-    metadata(envPath, 0, 0, 0o600, false) && lstatSync(envPath).size > 0,
-    'Provision nonempty root:root 0600 .env securely; host scripts source it as shell code. Validate production values through existing env checklist before deployment.',
+    trustedEnv && metadata(envPath, 0, 0, 0o600, false) && lstatSync(envPath).size > 0,
+    'Provision nonempty root:root 0600 /etc/esl-pipeline/production.env securely; host scripts source it as shell code. Validate production values through existing env checklist before deployment.',
   );
   const googlePath = `${root}/.secrets/google-service-account.json`;
   check(

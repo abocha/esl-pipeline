@@ -11,7 +11,7 @@ image="esl-bootstrap-rehearsal:$$"
 cleanup() {
   if [[ -n "${ESL_BOOTSTRAP_EVIDENCE_DIR:-}" ]]; then
     mkdir -p "$ESL_BOOTSTRAP_EVIDENCE_DIR"
-    for file in first.log first.json second.log second.json before-second after-second symlink.log malformed.log malformed.json unsupported.log deploy-missing-env.log monitor-missing-env.log compose.json ufw.log firewall.json firewall-unsafe.json; do
+    for file in first.log first.json second.log second.json before-second after-second symlink.log malformed.log malformed.json unsupported.log deploy-missing-env.log monitor-missing-env.log compose.json migration.log migration.json ufw.log ufw-status.log firewall.json firewall-unsafe.json completed; do
       docker cp "$container:/tmp/$file" "$ESL_BOOTSTRAP_EVIDENCE_DIR/$file" 2>/dev/null || true
     done
   fi
@@ -39,7 +39,9 @@ for ((attempt = 0; attempt < 30; attempt++)); do
 done
 docker exec "$container" systemctl is-active --quiet multi-user.target
 # Include tracked and new nonignored source, never host credentials, node_modules or runtime data.
-(cd "$ROOT_DIR"; git ls-files --cached --others --exclude-standard -z | tar --null -T - -cf "$work_dir/repository.tar")
+# Windows/WSL checkouts may expose files as uid 1000/mode 0777. The disposable fixture models
+# root-owned reviewed source; normalize archive metadata only, never the developer checkout.
+(cd "$ROOT_DIR"; git ls-files --cached --others --exclude-standard -z | tar --owner=0 --group=0 --mode=go-w --null -T - -cf "$work_dir/repository.tar")
 docker cp "$work_dir/repository.tar" "$container:/tmp/repository.tar"
 docker exec -i "$container" bash -s <<'REHEARSAL'
 set -euo pipefail
@@ -135,16 +137,112 @@ cp /tmp/os-release-original /etc/os-release
 expect_exit 1 bash scripts/deploy/deploy-prod-images.sh 0000000000000000000000000000000000000000 > /tmp/deploy-missing-env.log 2>&1
 grep -q 'missing required env file' /tmp/deploy-missing-env.log
 expect_exit 1 bash scripts/docker/run-host-runtime-health-alert.sh > /tmp/monitor-missing-env.log 2>&1
-grep -q 'environment file is missing' /tmp/monitor-missing-env.log
+grep -q 'Missing trusted path' /tmp/monitor-missing-env.log
 [[ ! -e /var/lib/esl-pipeline/deploy/current-images.env ]]
 # Compose render only, with explicit disposable image refs and a comment-only fixture environment.
-printf '# Disposable Compose configuration fixture; no secrets or deployment\n' > .env
-chmod 0600 .env
+printf '# Disposable Compose configuration fixture; no secrets or deployment\n' > /etc/esl-pipeline/production.env
+chmod 0600 /etc/esl-pipeline/production.env
 BATCH_BACKEND_IMAGE=fixture/backend:rehearsal BATCH_FRONTEND_IMAGE=fixture/frontend:rehearsal docker compose -f docker-compose.prod.yml config --format json > /tmp/compose.json
 # Compose serializes default false as an absent JSON key; explicit true must still fail.
 jq -e '.services["batch-backend"].volumes | any(.source == "/opt/esl-pipeline/uploads" and .bind.create_host_path != true)' /tmp/compose.json
 jq -e '.services["batch-backend"].volumes | any(.source == "/opt/esl-pipeline/.secrets" and .read_only == true and .bind.create_host_path != true)' /tmp/compose.json
-rm .env
+rm /etc/esl-pipeline/production.env
+# Real config reconciliation with synthetic credentials, an ordinary protected Git checkout,
+# and a container on this disposable host's own daemon. No application/provider is invoked.
+(
+  set -euo pipefail
+  git init -q
+  git add .
+  git -c user.name=Rehearsal -c user.email=rehearsal@example.invalid commit -qm 'Synthetic reviewed host fixture'
+  printf 'REHEARSAL_PROVIDER_API_KEY=synthetic-provider-key\nREHEARSAL_PUBLISHED_PORT=19876\n' > .env
+  chmod 0600 .env
+  printf '{"rehearsal":true}\n' > .secrets/google-service-account.json
+  cp .env .secrets/.env.backup-rehearsal
+  chown 1000:1000 .secrets .secrets/* .secrets/.env.backup-rehearsal
+  chmod 0700 .secrets
+  chmod 0600 .secrets/* .secrets/.env.backup-rehearsal
+  chown 1000:1000 /opt/esl-pipeline
+  chmod 0755 /opt/esl-pipeline
+  expect_exit 1 node scripts/deploy/production-paths.mjs deploy "$PWD" /var/lib/esl-pipeline/deploy
+
+  install -d -o root -g root -m 0700 /var/lib/esl-pipeline-config-backups/rehearsal
+  install -o root -g root -m 0600 .env /var/lib/esl-pipeline-config-backups/rehearsal/previous.env
+  install -o root -g root -m 0600 .secrets/google-service-account.json /var/lib/esl-pipeline-config-backups/rehearsal/previous-google.json
+  install -o root -g root -m 0600 .env /etc/esl-pipeline/production.env
+  cmp -s .env /etc/esl-pipeline/production.env
+  chown 0:0 /opt/esl-pipeline
+  chmod 0750 /opt/esl-pipeline
+  chown 0:1000 .secrets .secrets/google-service-account.json
+  chmod 0750 .secrets
+  chmod 0640 .secrets/google-service-account.json
+  # The mounted operator backup is rejected even after directory/key metadata is reconciled.
+  expect_exit 1 node scripts/deploy/production-paths.mjs deploy "$PWD" /var/lib/esl-pipeline/deploy
+  cmp -s .secrets/.env.backup-rehearsal /var/lib/esl-pipeline-config-backups/rehearsal/previous.env
+  mv .secrets/.env.backup-rehearsal /var/lib/esl-pipeline-config-backups/rehearsal/old-mounted-backup.env
+  chown 0:0 /var/lib/esl-pipeline-config-backups/rehearsal/old-mounted-backup.env
+  chmod 0600 /var/lib/esl-pipeline-config-backups/rehearsal/old-mounted-backup.env
+  node scripts/deploy/production-paths.mjs deploy "$PWD" /var/lib/esl-pipeline/deploy
+  expect_exit 1 node scripts/deploy/production-paths.mjs deploy "$PWD" /var/lib/esl-pipeline/deploy "$PWD/.env"
+  node --test scripts/deploy/production-paths.test.mjs
+
+  mkdir /tmp/config-probe
+  cat > /tmp/config-probe/Dockerfile <<'PROBE_IMAGE'
+FROM scratch
+COPY /bin/busybox /bin/busybox
+ENTRYPOINT ["/bin/busybox", "sh"]
+PROBE_IMAGE
+  # Ubuntu's static BusyBox is a synthetic local runtime, not a production application image.
+  apt-get install -y --no-install-recommends busybox-static
+  install -D /bin/busybox /tmp/config-probe/bin/busybox
+  docker build -t bootstrap-config-probe:rehearsal /tmp/config-probe
+  cat > /tmp/config-probe.yml <<'PROBE_COMPOSE'
+services:
+  credential-probe:
+    image: ${REHEARSAL_IMAGE:?Supply synthetic image state}
+    user: '1000:1000'
+    network_mode: none
+    env_file:
+      - /etc/esl-pipeline/production.env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /app/secrets/google-service-account.json
+      INTERPOLATED_PORT: ${REHEARSAL_PUBLISHED_PORT:?Supply canonical config}
+    volumes:
+      - /opt/esl-pipeline/.secrets:/app/secrets:ro
+      - /opt/esl-pipeline/uploads:/app/uploads
+PROBE_COMPOSE
+  printf 'REHEARSAL_IMAGE=bootstrap-config-probe:rehearsal\n' > /tmp/config-images.env
+  chmod 0600 /tmp/config-images.env
+  run_probe() {
+    docker compose -p esl-config-rehearsal -f /tmp/config-probe.yml \
+      --env-file /etc/esl-pipeline/production.env --env-file /tmp/config-images.env \
+      run --interactive=false --rm --no-deps credential-probe -ec '
+        test "$REHEARSAL_PROVIDER_API_KEY" = synthetic-provider-key
+        test "$INTERPOLATED_PORT" = 19876
+        test -r "$GOOGLE_APPLICATION_CREDENTIALS"
+        test ! -w "$GOOGLE_APPLICATION_CREDENTIALS"
+        test ! -e /app/secrets/.env.backup-rehearsal
+        touch /app/uploads/drafts/rehearsal-marker
+        test "$(id -u)" = 1000
+      '
+  }
+  run_probe
+  # Removing the old path does not affect the canonical consumer or container startup.
+  rm .env
+  node scripts/deploy/production-paths.mjs deploy "$PWD" /var/lib/esl-pipeline/deploy
+  run_probe
+  # Operator rollback restores exact previous env bytes without remounting operator backups.
+  install -o root -g root -m 0600 /var/lib/esl-pipeline-config-backups/rehearsal/previous.env .env
+  cmp -s .env /var/lib/esl-pipeline-config-backups/rehearsal/previous.env
+  cmp -s .secrets/google-service-account.json /var/lib/esl-pipeline-config-backups/rehearsal/previous-google.json
+  test ! -e .secrets/.env.backup-rehearsal
+  docker image rm bootstrap-config-probe:rehearsal
+  rm uploads/drafts/rehearsal-marker
+  node scripts/deploy/verify-prod-host.mjs 22 > /tmp/migration.json || test "$?" = 2
+  jq -e 'any(.checks[]; .id == "trusted-config-paths" and .passed == true) and any(.checks[]; .id == "external-env" and .passed == true)' /tmp/migration.json
+  printf 'PASS: config migration, real UID-1000 container credentials/env loading, removal of old path, and config rollback.\n'
+) > /tmp/migration.log 2>&1
+cat /tmp/migration.log
+rm .env /etc/esl-pipeline/production.env .secrets/google-service-account.json
 # UFW lives solely in this container network namespace; kernel limitations are retained as evidence.
 ufw default deny incoming
 ufw default allow outgoing
@@ -152,6 +250,8 @@ ufw allow 22/tcp
 ufw allow 80/tcp
 ufw allow 443/tcp
 if ufw --force enable > /tmp/ufw.log 2>&1; then
+  ufw status verbose > /tmp/ufw-status.log 2>&1
+  cat /tmp/ufw-status.log
   expect_exit 2 bash scripts/deploy/bootstrap-prod-host.sh verify 22 > /tmp/firewall.json
   jq -e 'any(.checks[]; .id == "host-firewall" and .passed == true)' /tmp/firewall.json
   ufw allow 8080/tcp
@@ -162,4 +262,8 @@ else
   cat /tmp/ufw.log
 fi
 printf 'PASS: fresh bootstrap, rerun convergence, real systemd integration, paths/runtime permissions, logging defaults, failure boundaries, and Compose/deploy contracts.\n'
+touch /tmp/completed
 REHEARSAL
+# docker exec is fed a streamed script: nested CLI probes must never consume that input.
+# Require an explicit marker instead of treating premature script EOF as successful completion.
+docker exec "$container" test -f /tmp/completed

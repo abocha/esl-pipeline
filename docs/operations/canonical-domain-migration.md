@@ -49,7 +49,7 @@ shell after the operator phase.
 
 ## Configuration stages
 
-Edit these values in `/opt/esl-pipeline/.env`; change existing assignments instead of appending
+Edit these values in `/etc/esl-pipeline/production.env`; change existing assignments instead of appending
 duplicates. Preserve `CADDY_ACME_EMAIL`, `MCP_OAUTH_COOKIE_KEYS`, `MCP_OAUTH_JWKS` and all other
 credentials. No frontend rebuild or CORS allowlist is needed.
 

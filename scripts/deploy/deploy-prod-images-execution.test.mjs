@@ -36,6 +36,10 @@ function deploy(scenario = {}) {
       : '';
     writeFileSync(join(directory, '.env'), applicationEnv);
     writeFileSync(join(directory, 'docker-compose.prod.yml'), 'services: {}\n');
+    writeFileSync(
+      join(directory, 'scripts/deploy/production-paths.mjs'),
+      '// Deployment flow fixture only; real permission guard has its own Linux behavioral tests.\n',
+    );
     writeFileSync(join(directory, 'deploy/caddy/Caddyfile'), 'reverse_proxy batch-frontend:8080\n');
     const digest = (value) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
     const caddyDigest = digest(
@@ -126,6 +130,7 @@ echo schema > "\${prefix}_schema.sql"
           PATH: `${directory}/bin:${process.env.PATH}`,
           DEPLOY_TEST_DIR: directory,
           DEPLOY_STATE_DIR: join(directory, 'state'),
+          ESL_PRODUCTION_ENV_FILE: join(directory, '.env'),
           DEPLOY_MIN_FREE_MB: '0',
           DEPLOY_INCLUDE_EDGE: String(Boolean(scenario.edge)),
           DEPLOY_INCLUDE_OPS_BOT: 'false',

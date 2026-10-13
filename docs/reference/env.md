@@ -17,36 +17,31 @@
 
 ## Canonical Files
 
-- `.env`
-  - the sole application configuration file for local development, Compose, backend services,
-    workers, host tools, backups, and VPS deployment
-- `.secrets/`
-  - mounted credential files only; not a dotenv replacement
-- `/var/lib/esl-pipeline/deploy/*.env`
-  - generated image-state only; never application configuration
-- Generated lookup:
-  - [`docs/generated/env-surface-index.md`](../generated/env-surface-index.md)
+- `.env`: local development and development Compose configuration.
+- `/etc/esl-pipeline/production.env`: canonical production application configuration, root:root
+  `0600`, under root-owned protected ancestors; also used by privileged host tools.
+- `.secrets/`: runtime credential files only, mounted read-only; never operator env backups.
+  Production keeps the existing Google credential path with directory root:1000 `0750` and file
+  root:1000 `0640`, under the protected checkout.
+- `/var/lib/esl-pipeline/deploy/*.env`: generated image state, except explicitly retained restricted
+  operator migration snapshots; image state is never a substitute for application configuration.
+- [Generated key lookup](../generated/env-surface-index.md).
 
-Direct CLI/tool entrypoints accept a legacy `.env.batch-backend` only when `.env` is absent, emit a
-deprecation warning, and never merge the two files. That bridge is removed next release. Compose
-and production deployment already require `.env`.
+Direct development CLI entrypoints retain their existing `.env.batch-backend` fallback when `.env`
+is absent. Production Compose and privileged host wrappers use the protected canonical path.
+`ESL_PRODUCTION_ENV_FILE` selects the Compose input for isolated local configuration fixtures;
+production host guards require the canonical path. It is not a production path override.
 
 ## Validation and Migration
 
-```bash
-# Local development
-pnpm env:validate -- --profile=development
+Local development uses `pnpm env:validate -- --profile=development`. Production values are validated
+through the published backend image by the existing deployment preflight, using the same Compose
+environment as runtime. Do not run a production validator against a stale checkout-local `.env` or
+print rendered Compose configuration containing real secrets.
 
-# VPS preflight (also run edge/image validators when those surfaces apply)
-pnpm env:validate -- --profile=production
-pnpm docker:prod:edge:env
-pnpm docker:prod:images:env
-```
-
-To migrate an existing VPS: back up `/opt/esl-pipeline/.env.batch-backend`, rename it to `.env`,
-run the production validation plus applicable edge/image preflights, then recreate/deploy and verify
-the backend, workers, and backup tooling. The validator checks file shape, duplicate keys, selected
-profile requirements, and backend-supported values without printing secrets.
+For existing hosts, use the [ESL-53 operator migration](../operations/production-config-reconciliation.md).
+Prepare and review repository changes first; live migration and deployment require maintainer
+involvement. Preserve credentials, signing identity, backups and image rollback metadata.
 
 ## Bootstrap Policy
 
