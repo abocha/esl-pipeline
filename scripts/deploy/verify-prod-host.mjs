@@ -16,7 +16,9 @@ export function verifyFirewall(firewall, port) {
     });
   return (
     /Status: active/u.test(firewall) &&
-    /Default: deny \(incoming\), allow \(outgoing\), disabled \(routed\)/u.test(firewall) &&
+    /Default: deny \(incoming\), allow \(outgoing\), (?:disabled|deny) \(routed\)/u.test(
+      firewall,
+    ) &&
     safeRules &&
     [...allowedPorts].every((p) => rules.some((line) => line.startsWith(`${p}/tcp `)))
   );
@@ -240,7 +242,7 @@ function main() {
     'host-firewall',
     'operator',
     verifyFirewall(firewall, port),
-    'Operator must preserve tested SSH access and configure UFW deny incoming, allow outgoing, routed disabled; only approved SSH TCP port and TCP 80/443 allowed. Bootstrap never edits/enables UFW. Docker published ports bypass UFW: retain repository loopback bindings.',
+    'Operator must preserve tested SSH access and configure UFW deny incoming, allow outgoing, routed deny/disabled with no forwarding allow rules; only approved SSH TCP port and TCP 80/443 allowed. Bootstrap never edits/enables UFW. Docker published ports bypass UFW: retain repository loopback bindings.',
   );
   const envPath = productionEnv;
   let trustedEnv = false;

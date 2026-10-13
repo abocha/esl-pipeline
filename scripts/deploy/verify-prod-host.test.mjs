@@ -17,6 +17,10 @@ To                         Action      From
 
 test('UFW verifier accepts the approved SSH port with source restrictions and IPv4/IPv6 web rules', () => {
   assert.equal(verifyFirewall(baseline, '2222'), true);
+  assert.equal(
+    verifyFirewall(baseline.replace('disabled (routed)', 'deny (routed)'), '2222'),
+    true,
+  );
 });
 
 test('UFW verifier fails closed on missing/inactive/unsafe/unsupported policies', () => {
@@ -33,7 +37,8 @@ test('UFW verifier fails closed on missing/inactive/unsafe/unsupported policies'
     `${baseline}Anywhere on eth0           ALLOW FWD   Anywhere on eth1\n`,
     `${baseline}OpenSSH                    ALLOW IN    Anywhere\n`,
   ])
-    assert.equal(verifyFirewall(status, '2222'), false, status);
+    for (const variant of [status, status.replace('disabled (routed)', 'deny (routed)')])
+      assert.equal(verifyFirewall(variant, '2222'), false, variant);
   for (const port of [undefined, '', '0', '65536', '22;echo', '22']) {
     assert.equal(verifyFirewall(baseline, port), false, String(port));
   }

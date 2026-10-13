@@ -138,7 +138,8 @@ The documented network baseline allows only the approved SSH TCP port and HTTP/H
 The repo does not specify SSH source networks or a safe replacement for arbitrary host firewall
 policy. Bootstrap therefore installs UFW but **never edits, resets, or enables firewall policy**.
 An operator must test SSH access, configure UFW default deny incoming/allow outgoing with routed
-traffic disabled, and allow the approved SSH TCP port and TCP 80/443 (optionally source-restricted).
+traffic denied (UFW reports `deny` or `disabled`) and no forwarding allow rules, and allow the approved
+SSH TCP port and TCP 80/443 (optionally source-restricted).
 Preflight fails if UFW is inactive or has additional inbound allows/unsupported rule shapes; reconcile
 custom policy explicitly. Check IPv4 and IPv6 and keep a recovery console available when changing
 firewall policy. Provider firewalls, DNS, and cloud resources are outside this command.
@@ -162,7 +163,11 @@ The rehearsal builds a fresh Ubuntu 24.04 systemd baseline, then exercises actua
 installation, first apply, second apply, directory/runtime permissions, installed units and inactive
 enabled timers, effective Docker log defaults, missing inputs, malformed/unsupported state, and
 existing Compose/deploy entrypoints. It uses no production access or credentials and removes its
-own container/image on exit; evidence can be retained outside the checkout. Docker data gets tmpfs
+own container/image on exit; evidence can be retained outside the checkout. The ESL-53 fixture also
+reconciles synthetic config/key ownership, rejects mounted env backups and alternate env paths,
+starts a real UID-1000 container with the protected env and read-only Google mount, verifies removal
+of the old env path, and restores the config snapshot. Nested probes have stdin disabled and a final
+completion marker prevents a prematurely consumed script from reporting success. Docker data gets tmpfs
 backing in the disposable container so nested overlay snapshotting does not depend on Cloud's outer
 filesystem. No production application is started. The UFW check runs in the disposable network
 namespace; if the Cloud kernel cannot execute its IPv6/netfilter operations, the runner retains that
