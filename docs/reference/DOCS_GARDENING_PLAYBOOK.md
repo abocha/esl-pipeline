@@ -2,90 +2,166 @@
 
 ## Meta
 
-- Audience: maintainers and AI agents curating docs quality.
-- Read Time: 5 minutes.
+- Audience: maintainers and AI agents resolving documentation drift.
 - Authority Level: operational playbook.
 - Last Verified Against: 2026-09-30 docs-gardening scripts and workflow.
 - Owner: founder-maintainer + automation agents.
-- Review Cadence: weekly.
+- Review Cadence: after ownership/tooling changes or recurring documentation confusion.
 - Status: `reference`.
 
-## Purpose
+## Purpose and ownership
 
-- Provide the repeatable workflow for the v2 docs-gardening harness.
-- Keep the loop short: hard gate, generated report, heuristic queue, manual triage.
+Make documentation support sound decisions for the task being reviewed. Resolve consequential
+conflicts, confusing routes and lifecycle drift while preserving useful intent and history.
+Completion is a semantic judgment supported by source evidence; check counts, age, coverage and
+wording polish do not establish it.
 
-## Standard Loop
+This playbook owns the maintenance procedure. [Governance](DOCS_GOVERNANCE.md) owns documentation
+policy and verification-date rules; the [testing guide](TESTING_GUIDELINES.md#docs-only-changes)
+owns validation selection. The [gardening skill](../../.agents/skills/esl-pipeline-docs-gardening/SKILL.md)
+selects a bounded entry route. Existing scripts and configuration own mechanical behavior.
 
-1. Run `pnpm docs:garden`.
-2. For PR work, run `pnpm docs:check:pr -- --from <base> --to <head>`; use `pnpm docs:check`
-   when a full configured-scope audit is intended.
-3. For plan-only lifecycle updates, run `pnpm docs:generate:plans-index` instead of regenerating
-   every generated index.
-4. Review the rolling issue queue.
-5. Update docs, routing, archive state, or governance policy as needed.
+## Change-driven upkeep
 
-## What Each Artifact Is For
+Use this route when an authorized change retires a concept, moves ownership, changes an interface
+described in several places, or completes an execution plan. Ordinary isolated edits can update
+their owner directly.
 
-- `docs:garden`: single harness entrypoint for the weekly gardening run.
-- `docs:check:pr`: PR hard gate for structural validity; age-only freshness is always advisory.
-- `docs:check`: full configured-scope hard check, including repository-wide freshness age.
-- `tmp/docs-gardening.json`: canonical structured snapshot for the run.
-- `tmp/docs-gardening-issue.json` / `.md`: rolling issue payload generated from the snapshot.
-- `tmp/docs-health-report.json` / `.md`: health snapshot and scorecard rendering.
-- `tmp/docs-stale-active.json` / `.md`: heuristic queue for manual review.
-- `tmp/docs-plan-lifecycle.json` / `.md`: hard-gated plan lifecycle, editability, and current-focus report.
-- Rolling issue: triage surface for unresolved warnings and candidates.
+Start from the changed behavior and the agent task it affects. For example: “How would an agent
+submit and publish a fresh assignment using this guidance?” Identify the source/contract owner,
+then search active guidance for affected concepts, old names and inbound consumers. Follow concrete
+dependencies; a cutover is not a reason to reread every document.
 
-The weekly workflow uploads the complete artifact set above for 30 days. Its rolling-issue lookup
-paginates through all repository issues before deciding whether to create, update, reopen, or close
-the single gardening issue.
+Update the owning guidance, replace competing copies of mutable facts with useful owner links,
+and distinguish retained historical statements. At task closure, apply the
+[plan lifecycle contract](../plans/README.md#lifecycle-contract): preserve any still-useful procedure
+in its owner before archiving completed execution context, or retain an explicitly justified roadmap.
+Repair routes in the same change. Do not archive based on age or missing inbound links alone.
 
-## Triage Rules
+## Scoped semantic review
 
-### Fix now
+Begin with the named claim, confusing task route or subsystem. State the decision the review could
+change and what evidence would support leaving the guidance alone. Walk through a representative
+task using current entrypoints and inspect the claims required to make its decisions.
 
-- Broken links.
-- Missing or invalid metadata/freshness.
-- Age-only freshness is advisory in PR checks; scheduled/full gardening retains repository-wide
-  age enforcement.
-- Route hints or governance requirements that are mechanically failing.
-- Active plan lifecycle violations: completed/superseded plans under `docs/plans/`, missing exit
-  triggers or current focus on routed active plans, non-editable active statuses, non-editable router
-  targets, or orphan standalone plans.
+Identify the precise surface: a runtime default, public response, internal projection, emitted
+metric stream, deployed observation and intended contract can describe different things. Trace the
+relevant caller or mapper when that distinction matters. A name match or nearby green test is not
+proof that the documented surface exists.
 
-### Review manually
+Current source establishes implementation. When implementation disagrees with a binding invariant,
+determine whether the defect is in code, documentation or unresolved intent before changing either.
+Source presence does not establish production activation, cohort readiness, provider-account state
+or residual learner-data eligibility. Resolve routine repository questions; leave genuinely missing
+product/operator evidence explicit with its owner and practical consequence.
 
-- Stale-active candidates.
-- Repeated warnings that are not yet hard failures.
-- Ambiguous archive versus refresh decisions.
-- P1 stale-by-age candidates in the weekly queue; authoritative docs should be verified first even
-  when they are not yet hard-gate failures.
+## Periodic triage
 
-### Archive or split
+The existing [weekly workflow](../../.github/workflows/docs-gardening.yml) runs `pnpm docs:garden`,
+retains generated evidence and updates the rolling gardening issue. It supplies leads; it does not
+perform semantic review or authorize fixes. A maintenance task must select and resolve an area.
 
-- Docs that are no longer routed by active docs.
-- Mixed-purpose docs that keep generating stale noise.
-- Inventory-style docs that are better generated than hand-maintained.
-- Low-signal content galleries should usually be tuned in the gardening config rather than routed
-  just to satisfy generic no-route heuristics.
-- Implementation plans should normally archive after their PR lands unless they remain explicit
-  roadmaps.
+Use a relevant existing report when its revision and inputs still apply. Run gardening when a
+fresh mechanical snapshot answers the maintenance question; targeted change work does not require
+a full snapshot first. Read the generator's reported artifact paths and relevant findings rather
+than loading every artifact or creating another hand-maintained catalog.
 
-## Habitual Checkpoints
+Prioritize active misleading guidance, recurring task confusion and recently changed ownership or
+contracts. Rotate attention among coherent areas during maintenance; review after significant
+cutovers when the affected routes warrant it. Age/overlap/no-route heuristics are investigation
+leads, not correctness or archival verdicts. Historical material and runtime prompt/fixture content
+retain their separate roles.
 
-- Keep router docs short.
-- Keep generated artifacts data-first.
-- Keep policy in governance docs, not in scripts or workflow comments.
-- Keep the issue body readable for a stressed maintainer.
+Turn candidates into bounded questions and use the scoped review above. Keep the rolling issue as
+the generated triage surface under Governance. Record durable planning decisions or deferred work
+through [the intake boundary](../operations/github-issue-intake-and-codex-work-selection.md);
+existing execution issues remain their scope authority. A skill invocation does not authorize new
+tracker mutations, recurring automations or external messages.
 
-## Non-Goals
+## Semantic disposition
 
-- Do not auto-archive on heuristic output alone.
-- Do not expand the loop with extra manual steps unless they reduce false positives.
-- Do not duplicate policy across multiple reference docs.
+For each material finding, explain the affected claim/route, evidence, plausible consequence for an
+agent and the surviving owner. Review what the prose actually asserts; avoid inventing a stronger
+claim to refute. Keep accurate, useful summaries even when source contains more detail. Additional
+implementation detail or caveats should change a needed decision; an incidental wording preference
+needs no finding or edit.
 
-## Related
+- KEEP when evidence supports the relevant guidance, intent or historical role. This is a completed
+  review outcome.
+- CORRECT a contradicted factual claim or consequential ambiguity at its owner.
+- CONSOLIDATE when competing guidance causes reconciliation or drift. Choose the surviving owner
+  first; transfer unique current material and replace duplicates with direct routes.
+- ARCHIVE completed or superseded context after preserving useful current guidance and repairing
+  consumers. Keep observed outcomes and provenance immutable; supersede with new dated evidence.
+- REMOVE only when redundancy or uselessness is established and useful material/consumers survive.
+- DEFER when a named missing fact or decision materially prevents a verdict. State its owner and
+  consequence; ordinary source investigation is part of the task, not a question to offload by default.
 
-- [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
-- [`docs/generated/README.md`](../generated/README.md)
+Keep product intent, implementation, procedure and evidence distinguishable. Hand-written guidance
+should explain meaning, prerequisites and decisions; executable/generated owners should carry
+mutable inventories. Scope a move's consumer search to repository links, source references and
+known callers rather than treating a zero-link result as proof of no consumers.
+
+## Bounded Luna questions
+
+Delegate when independent judgment or investigation would materially help. Simple checks can stay
+with the primary. Group related questions by shared source context rather than spawning per file
+or checklist item. When subagents are authorized, use GPT-6 Luna/high for these bounded read-only
+documentation investigations; honor an explicit user routing override and report unavailable routing.
+Use in-task subagents; the separate Luna Lab Dispatch skill's root-task dispatch and tracker actions
+do not belong to this procedure.
+
+Give the investigator the question, the decision it could change, relevant docs/source starting
+points, permitted resources/actions and sufficient evidence for stopping. Let evidence contradict
+the hypothesis. For an independent behavioral trial, provide the realistic request and raw artifacts
+without the intended answer, suspected defect or proposed fix.
+
+Useful questions include:
+
+- What route would an agent follow for this task, and what current contracts support its decisions?
+- Which observations can an operator actually obtain through this runbook?
+- What useful guidance would archiving this completed plan lose, and where does it belong?
+- What establishes this readiness statement, and what remains unestablished?
+
+Ask for a supported conclusion, located evidence, practical consequence and material uncertainty.
+Do not require a defect quota, score or fresh report for every check. Read-only assignments include
+no edits, builds, broad tests, provider/data/production calls or tracker updates unless specifically
+within the task's authorization. The primary integrates findings and owns the final verdict;
+check concrete ambiguities or consequential claims rather than repeating every investigation.
+Consequential contract/product/operational decisions retain their existing authority and review route.
+
+## Mechanical evidence
+
+Follow the [docs-only recipe](TESTING_GUIDELINES.md#docs-only-changes), using the applicable existing
+generator and explicit changed-path formatting. A non-empty committed base/head comparison is
+required by `docs:check:pr`; it reads current working-tree documents. The PR checker retains
+configured structural/metadata/lifecycle gates and advisory age-only warnings. Its local-link
+coverage and limitations belong to the [checker implementation](../../scripts/docs/check-pr-docs.mjs)
+and tests; structural green cannot certify claims, intent or live state.
+
+The [verification procedure](DOCS_GOVERNANCE.md#verification-procedure) remains required before
+advancing an enforced document's `Last Verified Against`, including the full `pnpm docs:check`.
+Editing selected claims does not establish a full-document audit. Preserve the date unless that
+obligation is satisfied; source evidence for the actual review can be recorded in the task or PR.
+
+Inspect generated changes and fix affected paths/anchors and known consumers. Run focused tooling
+tests when the tooling changes. Respect authored-doc versus runtime prompt/fixture boundaries.
+Do not run provider, learner-data or production probes merely to refresh prose.
+
+## Completion boundary
+
+Conclude when scoped task routes support correct decisions, identified material contradictions are
+resolved, unique invariants/rationale survive, required evidence is obtained and consequential
+uncertainty is appropriately bounded with its owner. Explain why the guidance is usable and what
+practical risk remains. Passing checks supports that judgment; it does not replace it.
+
+Further investigation or edits need a concrete way to change the disposition or prevent a plausible
+task failure. Cosmetic refinement, exhaustive rereading and hypothetical ambiguity do not keep a
+closed review open. Reopen only when new evidence or a missing requirement changes its basis.
+
+Prefer corrected owners, repaired consumers and a concise explanation in the existing task/PR.
+Create a disposition inventory, dated record or separate artifact only when its scope or future
+reader justifies maintenance. Distinguish a completed investigation from completed implementation,
+and local/hosted evidence from unperformed product, provider or operational verification.
+New work starts from its task or execution issue; a repository plan is useful only when that work
+benefits from an approved multi-step artifact. Archiving an old plan does not require creating a new one.

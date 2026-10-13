@@ -38,6 +38,7 @@ skills-lock.json
 !.agents/skills/esl-pipeline-validation-evidence/SKILL.md
 !.agents/skills/esl-pipeline-deployment-change-checklist/
 !.agents/skills/esl-pipeline-deployment-change-checklist/SKILL.md
+!.agents/skills/esl-pipeline-docs-gardening/
 .codex/**
 !.codex/ORCHESTRATION.md
 !.codex/WORKFLOW_MODES.md

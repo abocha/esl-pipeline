@@ -1,0 +1,4 @@
+interface:
+  display_name: 'ESL Documentation Gardening'
+  short_description: 'Resolve scoped documentation drift with evidence'
+  default_prompt: 'Use $esl-pipeline-docs-gardening to review the named documentation route, resolve material drift, and preserve useful history.'

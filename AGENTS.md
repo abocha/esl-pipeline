@@ -26,6 +26,8 @@ Use the smallest current route that answers the task.
 - Use `docs/README.md`, the owning package README, active plan, or task-specific doc for normal
   repository work.
 - Use `docs/reference/DOCS_IA_MAP.md` only when the documentation route is unclear.
+- For documentation audits, consolidation, or cutovers that invalidate scattered guidance, use
+  `.agents/skills/esl-pipeline-docs-gardening/SKILL.md` and the gardening playbook's scoped route.
 - For local validation, start with the
   [evidence decision route](docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route), then the
   owning package's execution recipe. Load validation-system or test-audit skills only for their triggers.
@@ -138,5 +140,7 @@ project skill when its trigger applies.
   contracts.
 - Relevant evidence is current enough for the changed surface and is reported accurately.
 - Required docs/generated references are synchronized where affected.
+- Completed execution context follows the plan lifecycle; preserve unique current guidance and
+  repair affected routes before archiving it.
 - Remaining hosted, manual, environment, deployment, or authorization-owned steps are stated
   explicitly rather than implied complete.

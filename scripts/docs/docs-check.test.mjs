@@ -106,6 +106,25 @@ test('structural documentation failures remain blocking alongside PR age warning
   assert.match(result.warnings.join('\n'), /stale-doc-age-only/u);
 });
 
+test('configured PR docs accept angle-bracket links with spaces and percent-decoded paths', () => {
+  const repoRoot = makeRepo({
+    'docs/reference/example.md': documentation(
+      '2026-02-01',
+      '[spaced](<guide file.md>) and [encoded](guide%20file.md)',
+    ),
+    'docs/reference/guide file.md': '# Guide\n',
+  });
+
+  const result = runDocsChecks('non_core', {
+    repoRoot,
+    config: baseConfig,
+    freshnessMode: 'pr',
+    now,
+  });
+
+  assert.deepEqual(result.errors, []);
+});
+
 test('missing freshness metadata remains blocking in PR mode', () => {
   const repoRoot = makeRepo({
     'docs/reference/example.md': documentation(staleDate).replace(

@@ -23,6 +23,12 @@
   structural failures, metadata, links, route hints, and lifecycle rules. Age-only freshness is
   always advisory in PR mode, regardless of which documents or packages changed; missing or invalid
   freshness metadata remains blocking.
+- PR mode also checks introduced local path/Markdown-anchor failures in authored changed Markdown
+  and directly affected unchanged consumers against the merge base. This includes skills, package
+  guidance and archive moves beyond the configured set; raw runtime prompt/fixture content is
+  excluded. Existing debt in this additional scope is not promoted to a merge block. The
+  [implementation](../../scripts/docs/pr-markdown-links.mjs) and its cases define supported syntax;
+  configured gates retain their existing enforcement.
 - Scheduled `pnpm docs:garden` and full `pnpm docs:check` retain repository-wide age enforcement.
   Gardening publishes the health, stale-active, plan-lifecycle, and rolling-issue artifacts.
 - Freshness is an age signal, not proof that a document is accurate. Advancing the
@@ -94,6 +100,11 @@
 - Update core docs when behavior, scope, or contracts change.
 - Update this doc when the harness model changes.
 - Keep the policy concise here; move operational steps to the playbook.
+- For cutovers and completed execution context, apply the playbook's
+  [change-driven upkeep](DOCS_GARDENING_PLAYBOOK.md#change-driven-upkeep). Semantic review judges
+  whether scoped task routes support sound decisions and preserve intent; structural checks,
+  age signals and coverage counts are supporting evidence. Further edits need a material task
+  consequence, and KEEP is a valid completed outcome.
 
 ## Verification Procedure
 

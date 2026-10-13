@@ -142,7 +142,9 @@ function validateLinks({ content, relPath, repoRoot, config, errors }) {
   for (const match of content.matchAll(linkRegex)) {
     const rawTarget = (match[1] ?? '').trim();
     if (!rawTarget) continue;
-    const target = rawTarget.split(/\s+/)[0].replaceAll(/^<|>$/g, '');
+    const target = rawTarget.startsWith('<')
+      ? (rawTarget.match(/^<([^>]*)>/u)?.[1] ?? rawTarget)
+      : rawTarget.split(/\s+/)[0].replaceAll(/^<|>$/g, '');
 
     if (
       target.startsWith('http://') ||
@@ -158,7 +160,7 @@ function validateLinks({ content, relPath, repoRoot, config, errors }) {
       continue;
     }
 
-    const noFragment = target.split('#')[0];
+    const noFragment = decodeLinkTarget(target.split('#')[0]);
     if (!noFragment) continue;
 
     const docDir = path.dirname(path.join(repoRoot, relPath));
@@ -173,6 +175,14 @@ function validateLinks({ content, relPath, repoRoot, config, errors }) {
     }
 
     errors.push(`[broken-link] ${relPath} -> ${target}`);
+  }
+}
+
+function decodeLinkTarget(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
   }
 }
 
