@@ -13,6 +13,9 @@ product policies belong in root `AGENTS.md` and the ESL SSOT.
 - Documentation: start with [`docs/README.md`](../docs/README.md); use
   [`docs/reference/DOCS_IA_MAP.md`](../docs/reference/DOCS_IA_MAP.md) only when that category route is
   unclear, then read the task-specific active document or owning package README.
+- Documentation drift and lifecycle: use the
+  [gardening skill](../.agents/skills/esl-pipeline-docs-gardening/SKILL.md) for its narrow triggers;
+  the [playbook](../docs/reference/DOCS_GARDENING_PLAYBOOK.md) owns semantic review and upkeep.
 - Planning: select repository work through the
   [`issue intake runbook`](../docs/operations/github-issue-intake-and-codex-work-selection.md);
   Linear owns backlog and durable decisions. Use [`docs/plans/README.md`](../docs/plans/README.md)

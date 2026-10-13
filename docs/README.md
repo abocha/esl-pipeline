@@ -29,7 +29,7 @@
 | Product/design work                           | [`design/README.md`](design/README.md)                                                                          |
 | Planning priorities, backlog, or decisions    | [`github-issue-intake-and-codex-work-selection.md`](operations/github-issue-intake-and-codex-work-selection.md) |
 | Approved repository execution plans           | [`plans/README.md`](plans/README.md)                                                                            |
-| Documentation upkeep and routing              | [`reference/DOCS_GOVERNANCE.md`](reference/DOCS_GOVERNANCE.md)                                                  |
+| Documentation upkeep and routing              | [`reference/DOCS_GARDENING_PLAYBOOK.md`](reference/DOCS_GARDENING_PLAYBOOK.md)                                  |
 | Named-task execution context                  | [`superpowers/README.md`](superpowers/README.md)                                                                |
 | Unfinished/disposable exploration             | [`drafts/README.md`](drafts/README.md)                                                                          |
 | Historical rationale or prior execution       | [`archive/README.md`](archive/README.md)                                                                        |
@@ -51,4 +51,5 @@
 - Prefer current references, runbooks, and package READMEs over task artifacts or archive material.
 - Re-read the exact active plan after context loss; use the recovery procedure in
   [`playbooks/RESTART_TOMORROW.md`](playbooks/RESTART_TOMORROW.md), not a stale handoff record.
-- If documentation conflicts, code and [`agents-ssot.md`](reference/agents-ssot.md) win.
+- Current source establishes implementation; [`agents-ssot.md`](reference/agents-ssot.md) owns
+  binding invariants. Diagnose a disagreement before rewriting either as current truth.

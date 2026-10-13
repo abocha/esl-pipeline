@@ -74,7 +74,13 @@ to a formatting audit or the hosted job that requires it, not the ordinary docs-
 
 Replace `<base>` and `<head>` with the actual comparison refs. PR mode validates the configured
 documents structurally and treats age-only findings as advisory; it is not a changed-files-only
-checker. The comparison requires a non-empty committed diff; after a task commit exists, compare its
+checker. It also compares local path/Markdown-anchor regressions in authored changed Markdown and
+directly affected unchanged consumers against the merge base, including skills and archive moves
+outside the configured set. Existing debt in that additional scope remains non-blocking; raw runtime
+prompt/fixture content is excluded. The [link checker](../../scripts/docs/pr-markdown-links.mjs)
+defines its supported syntax; literal source references and unsupported Markdown forms still need
+inspection when material. These checks do not establish semantic currentness.
+The comparison requires a non-empty committed diff; after a task commit exists, compare its
 actual base and head. The checker reads current working-tree documents. Inspect the resulting Git
 diff after generation or formatting.
 
