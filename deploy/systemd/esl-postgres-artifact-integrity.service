@@ -2,7 +2,7 @@
 Description=ESL Pipeline production Postgres artifact integrity check
 Wants=network-online.target
 After=docker.service network-online.target
-ConditionPathExists=/opt/esl-pipeline/.env
+ConditionPathExists=/etc/esl-pipeline/production.env
 
 [Service]
 Type=oneshot

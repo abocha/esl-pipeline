@@ -23,6 +23,10 @@ and does not run the transcription worker or call paid providers by default.
 For a fresh supported Ubuntu host, start with
 [production host bootstrap](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap).
 
+For an existing host with mixed checkout/configuration ownership, use the maintainer-controlled
+[production configuration reconciliation](production-config-reconciliation.md). Repository preparation
+does not authorize or prove live migration.
+
 For the application and MCP origin cutover to `app.eslpipeline.com`, use
 [canonical-domain-migration.md](canonical-domain-migration.md), including DNS-only HTTPS staging,
 browser checks, explicit ChatGPT reconnection and same-release environment rollback.

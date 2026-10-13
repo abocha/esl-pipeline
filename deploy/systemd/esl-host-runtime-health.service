@@ -6,6 +6,6 @@ After=network-online.target docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/esl-pipeline
-ExecStartPre=/usr/bin/test -f /opt/esl-pipeline/.env
+ExecStartPre=/usr/bin/test -f /etc/esl-pipeline/production.env
 ExecStart=/usr/bin/bash /opt/esl-pipeline/scripts/docker/run-host-runtime-health-alert.sh
 TimeoutStartSec=2min

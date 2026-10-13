@@ -58,7 +58,7 @@ sudo bash /opt/esl-pipeline/scripts/deploy/bootstrap-prod-host.sh verify <SSH-po
 `apply` ends with the same read-only JSON verification as `verify`. Exit **0** means bootstrap
 invariants and the limited external-file/firewall checks pass; **2** means bootstrap is complete but
 operator inputs remain; **1** means a failed host invariant or unsafe/unsupported state. Inspect
-`bootstrapComplete`, `externalInputsPresent`, and each check's requirement. Missing `.env` and an
+`bootstrapComplete`, `externalInputsPresent`, and each check's requirement. Missing `production.env` and an
 unconfigured firewall on a fresh host are expected exit-2 results, never fabricated configuration.
 `productionReadiness` always says `not-assessed`; even exit 0 does not validate secret values,
 provider/IAM access, DNS, a database, backups, or application health. No image-state file is invented.
@@ -84,7 +84,8 @@ The shell path uses apt and the existing systemd installer, with no provisioning
   These are the existing deploy and backup/monitoring contracts, not alternate state locations.
 - Creates `uploads/` and `uploads/drafts/` as `1000:1000`, mode `0750`, for the backend image's
   `node` user. Creates `.secrets/` as `root:1000`, mode `0750`, so that runtime can traverse its
-  read-only mount. Root runs deployment and the existing systemd jobs; no host Docker-group user
+  read-only mount. Only the Google credential belongs there; operator env snapshots are never mounted. Root owns tracked checkout files and Git metadata without group/other write permission.
+  Root runs deployment and the existing systemd jobs; no host Docker-group user
   is created (Docker access would grant root-equivalent privileges).
 - Sets Docker daemon defaults to `json-file`, `max-size=10m`, `max-file=5`, preserving unrelated
   daemon settings. Malformed/conflicting configuration fails. If changing settings requires restarting
@@ -111,11 +112,11 @@ also fail explicitly rather than being guessed away.
 
 ### External inputs and verification-only assumptions
 
-Provision `/opt/esl-pipeline/.env` securely as a nonempty **root:root `0600`** file, outside Git.
+Provision `/etc/esl-pipeline/production.env` securely as a nonempty **root:root `0600`** file, outside Git.
 Do not copy `.env.example` unchanged onto a production host. Use it as a variable catalog alongside
 [`production-env-checklist.md`](../operations/production-env-checklist.md) and
 [`env.md`](../reference/env.md); supply actual operator-controlled values through a secure channel.
-The existing host wrappers **source `.env` as shell code**: only trusted operators may write it,
+The existing host wrappers **source `production.env` as shell code**: only trusted operators may write it,
 and assignments must also be valid for Compose. Bootstrap never sources or prints it.
 
 Set the existing host contract `PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops` and production
@@ -329,8 +330,8 @@ For the Ubuntu 24.04 VPS closed-alpha path, use the optional Caddy edge profile 
 to the host:
 
 ```bash
-# Export these in the same shell where you run local edge validation commands; Compose may read
-# `.env`, but the Node validator invoked by the pnpm scripts reads the current process environment.
+# Export these in the same shell where you run local edge validation commands; Compose reads
+# `/etc/esl-pipeline/production.env`, but the Node validator invoked by the pnpm scripts reads the current process environment.
 export CADDY_PUBLIC_HOSTNAME=alpha.example.com
 export CADDY_ACME_EMAIL=ops@example.com
 pnpm docker:prod:edge:config
@@ -340,7 +341,7 @@ pnpm docker:prod:ps
 ```
 
 TODO for the next deployment tooling rollout: remove this validator/export mismatch by making the
-edge validation commands load the canonical application `.env` with the same precedence as
+edge validation commands load the canonical production `/etc/esl-pipeline/production.env` with the same precedence as
 `scripts/deploy/deploy-prod-images.sh`, or by adding a wrapper that does so. Until then, export
 `CADDY_PUBLIC_HOSTNAME` and `CADDY_ACME_EMAIL` in the shell before running `pnpm docker:prod:edge:*`
 or `pnpm docker:caddy:validate`.
@@ -432,7 +433,7 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
 
    On the VPS, the deploy script reads `CADDY_PUBLIC_HOSTNAME`, `CADDY_ACME_EMAIL`, and the temporary
    `CADDY_TRANSITION_*` settings from
-   server-local `/opt/esl-pipeline/.env` when those values are not already exported.
+   server-local `/etc/esl-pipeline/production.env` when those values are not already exported.
    Explicit shell exports still take precedence for one-off overrides. Do not put these values in
    the generated deploy state files under `/var/lib/esl-pipeline/deploy`.
 
@@ -445,7 +446,7 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
    backend workers, frontend, and Caddy recreation. Frontend changes recreate frontend and Caddy;
    bot changes recreate the enabled bot; Caddyfile or effective edge-environment changes recreate Caddy.
    The requested backend image validates production environment before runtime changes. Changes to
-   `.env` or production Compose recreate the enabled application services and edge without database
+   `production.env` or production Compose recreate the enabled application services and edge without database
    work when backend image digests match. An alias-only
    release updates state and runs bounded health checks without backup, migration, or service restart work.
    Older state without the application configuration digest causes one runtime recreation.
@@ -583,28 +584,23 @@ cp .env.example .env
 Populate required credentials/keys referenced in:
 [`docs/reference/env.md`](../reference/env.md)
 
-### One-time environment migration
+### Production configuration reconciliation (ESL-53)
 
-If this VPS still has `.env.batch-backend`, back it up and rename it before deploying:
+Production uses `/etc/esl-pipeline/production.env` as root:root `0600` under protected,
+root-owned ancestors. Development continues using repository-local `.env`. Do not create a
+compatibility symlink through the checkout or keep operator env backups in `.secrets`.
 
-```bash
-cd /opt/esl-pipeline
-cp .env.batch-backend .env.batch-backend.backup
-mv .env.batch-backend .env
-pnpm env:validate -- --profile=production
-pnpm docker:prod:edge:env # when the Caddy edge profile is enabled
-pnpm docker:prod:images:env # when generated image state is present
-```
-
-Then deploy/recreate services and verify backend health, all workers, and backup tooling. Compose and
-the deploy script require `.env`; the legacy filename is accepted only by direct host tools during
-this release bridge.
+Existing hosts must follow the [reversible operator migration](../operations/production-config-reconciliation.md)
+before deploying this tooling. This repository change prepares that migration; it does not mean
+production has migrated. Root performs checkout updates and deployment through the operator's sudo
+workflow. The deployment guard rejects unsafe configuration/code/state paths and an unclean checkout;
+it deliberately permits a selected published image SHA different from checkout HEAD.
 
 If Google STT/TTS uses a service-account file, create it outside git on the VPS before deployment:
 
 ```bash
-mkdir -p /opt/esl-pipeline/.secrets
-# Place google-service-account.json in /opt/esl-pipeline/.secrets with restricted permissions.
+sudo install -d -o root -g 1000 -m 0750 /opt/esl-pipeline/.secrets
+# Securely provision google-service-account.json as root:1000 0640. No env backups here.
 ```
 
 Production Compose mounts that directory into backend-image services as read-only `/app/secrets`;

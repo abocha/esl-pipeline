@@ -118,8 +118,8 @@ The service reads the same `PG_BACKUP_ALERT_TELEGRAM_*` destination settings as 
 alerts. It keeps its transition state separately at
 `/var/lib/esl-pipeline/ops/state/host-runtime-health-alert-state.json` and writes dated logs under
 `/var/lib/esl-pipeline/ops/logs/`, pruning its own logs after 30 days by default. Tokens and chat
-identifiers stay in the host `.env`; systemd unit files contain no credentials. Thresholds can be
-overridden in that host-only `.env`; documented defaults are in [`.env.example`](../../.env.example).
+identifiers stay in the protected `/etc/esl-pipeline/production.env`; systemd unit files contain no credentials. Thresholds can be
+overridden in that protected production env; documented defaults are in [`.env.example`](../../.env.example).
 
 Failure, severity escalation, recovery, and cooldown-repeat alerts follow the PostgreSQL alert
 transition rules. Delivery failures leave the transition pending for retry. The service exit status

@@ -135,16 +135,16 @@ cp /tmp/os-release-original /etc/os-release
 expect_exit 1 bash scripts/deploy/deploy-prod-images.sh 0000000000000000000000000000000000000000 > /tmp/deploy-missing-env.log 2>&1
 grep -q 'missing required env file' /tmp/deploy-missing-env.log
 expect_exit 1 bash scripts/docker/run-host-runtime-health-alert.sh > /tmp/monitor-missing-env.log 2>&1
-grep -q 'environment file is missing' /tmp/monitor-missing-env.log
+grep -q 'Missing trusted path' /tmp/monitor-missing-env.log
 [[ ! -e /var/lib/esl-pipeline/deploy/current-images.env ]]
 # Compose render only, with explicit disposable image refs and a comment-only fixture environment.
-printf '# Disposable Compose configuration fixture; no secrets or deployment\n' > .env
-chmod 0600 .env
+printf '# Disposable Compose configuration fixture; no secrets or deployment\n' > /etc/esl-pipeline/production.env
+chmod 0600 /etc/esl-pipeline/production.env
 BATCH_BACKEND_IMAGE=fixture/backend:rehearsal BATCH_FRONTEND_IMAGE=fixture/frontend:rehearsal docker compose -f docker-compose.prod.yml config --format json > /tmp/compose.json
 # Compose serializes default false as an absent JSON key; explicit true must still fail.
 jq -e '.services["batch-backend"].volumes | any(.source == "/opt/esl-pipeline/uploads" and .bind.create_host_path != true)' /tmp/compose.json
 jq -e '.services["batch-backend"].volumes | any(.source == "/opt/esl-pipeline/.secrets" and .read_only == true and .bind.create_host_path != true)' /tmp/compose.json
-rm .env
+rm /etc/esl-pipeline/production.env
 # UFW lives solely in this container network namespace; kernel limitations are retained as evidence.
 ufw default deny incoming
 ufw default allow outgoing

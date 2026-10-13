@@ -24,12 +24,16 @@ pg_backup_resolve_host_state_dir() {
     echo "ERROR: PG_BACKUP_HOST_STATE_DIR must be an absolute host path: $state_dir" >&2
     return 1
   fi
+  if [[ "${ROOT_DIR:-}" == /opt/esl-pipeline || "${PG_COMPOSE_PROJECT:-}" == esl-pipeline-prod ]]; then
+    node "${ROOT_DIR}/scripts/deploy/production-paths.mjs" ops-state "${state_dir%/}" || return 1
+  fi
   printf '%s' "${state_dir%/}"
 }
 
 pg_backup_set_production_defaults() {
   local root_dir="$1"
   export PG_COMPOSE_PROJECT="${PG_COMPOSE_PROJECT:-esl-pipeline-prod}"
+  export PG_BACKUP_ENV_FILE="${PG_BACKUP_ENV_FILE:-/etc/esl-pipeline/production.env}"
   export PG_COMPOSE_FILE="${PG_COMPOSE_FILE:-${root_dir}/docker-compose.prod.yml}"
   export PG_CONTAINER_NAME="${PG_CONTAINER_NAME:-${PG_COMPOSE_PROJECT}-postgres-1}"
   export PG_BACKUP_HOST_STATE_DIR="${PG_BACKUP_HOST_STATE_DIR:-/var/lib/esl-pipeline/ops}"
@@ -63,4 +67,14 @@ pg_backup_latest_remote_dump() {
     --prefix "$prefix" \
     --query 'sort_by((Contents || `[]`)[?ends_with(Key, `.dump`)], &LastModified)[-1].[Key,LastModified]' \
     --output text
+}
+
+# Development keeps repo-local .env. Production wrappers/systemd use one protected file.
+pg_backup_select_env_file() {
+  local root_dir="$1" env_file="$2"
+  if [[ "$root_dir" == /opt/esl-pipeline || "${PG_COMPOSE_PROJECT:-}" == esl-pipeline-prod || "${PG_COMPOSE_FILE:-}" == */docker-compose.prod.yml ]]; then
+    env_file="${PG_BACKUP_ENV_FILE:-/etc/esl-pipeline/production.env}"
+    node "$root_dir/scripts/deploy/production-paths.mjs" env "$root_dir" "$env_file" || return 1
+  fi
+  printf '%s' "$env_file"
 }

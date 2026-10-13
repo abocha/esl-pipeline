@@ -100,10 +100,13 @@ test('production operations unit inventory captures live jobs and adds the six-h
       name,
     );
     if (name === 'esl-postgres-ops-alert.service') {
-      assert.match(service, /ExecStartPre=\/usr\/bin\/test -f \/opt\/esl-pipeline\/\.env/u);
+      assert.match(
+        service,
+        /ExecStartPre=\/usr\/bin\/test -f \/etc\/esl-pipeline\/production\.env/u,
+      );
       assert.doesNotMatch(service, /ConditionPathExists=/u);
     } else {
-      assert.match(service, /ConditionPathExists=\/opt\/esl-pipeline\/\.env/u, name);
+      assert.match(service, /ConditionPathExists=\/etc\/esl-pipeline\/production\.env/u, name);
     }
     assert.doesNotMatch(service, /Environment(File)?=.*(TOKEN|SECRET|PASSWORD)/iu, name);
   }
@@ -129,7 +132,7 @@ test('host runtime unit is docker-ordered, credential-free, and scheduled every 
   assert.match(service, /Type=oneshot/u);
   assert.match(service, /After=network-online\.target docker\.service/u);
   assert.doesNotMatch(service, /Requires=docker\.service/u);
-  assert.match(service, /ExecStartPre=\/usr\/bin\/test -f \/opt\/esl-pipeline\/\.env/u);
+  assert.match(service, /ExecStartPre=\/usr\/bin\/test -f \/etc\/esl-pipeline\/production\.env/u);
   assert.match(
     service,
     /ExecStart=\/usr\/bin\/bash \/opt\/esl-pipeline\/scripts\/docker\/run-host-runtime-health-alert\.sh/u,

@@ -9,7 +9,8 @@ COMMON_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-ops-common.sh"
 # shellcheck source=scripts/docker/postgres-ops-common.sh
 . "$COMMON_SCRIPT"
 
-ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
+ENV_FILE="$(pg_backup_select_env_file "$ROOT_DIR" "${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}")"
+[[ "$ENV_FILE" != /etc/esl-pipeline/production.env ]] || umask 0077
 
 if [[ ! -x "$BACKUP_SCRIPT" ]]; then
   echo "ERROR: backup script is missing or not executable: $BACKUP_SCRIPT" >&2

@@ -6,6 +6,6 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/esl-pipeline
-ExecStartPre=/usr/bin/test -f /opt/esl-pipeline/.env
+ExecStartPre=/usr/bin/test -f /etc/esl-pipeline/production.env
 ExecStart=/usr/bin/bash /opt/esl-pipeline/scripts/docker/run-postgres-ops-alert.sh
 TimeoutStartSec=5min

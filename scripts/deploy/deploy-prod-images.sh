@@ -5,6 +5,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${APP_DIR}/scripts/deploy/deploy-prod-images-plan.sh"
 COMPOSE_FILE="${COMPOSE_FILE:-${APP_DIR}/docker-compose.prod.yml}"
 PROJECT_NAME="${PROJECT_NAME:-esl-pipeline-prod}"
+export ESL_PRODUCTION_ENV_FILE="${ESL_PRODUCTION_ENV_FILE:-/etc/esl-pipeline/production.env}"
 DEPLOY_STATE_DIR="${DEPLOY_STATE_DIR:-/var/lib/esl-pipeline/deploy}"
 ESL_IMAGE_PREFIX="${ESL_IMAGE_PREFIX:-ghcr.io/abocha/esl-pipeline}"
 DEPLOY_MIN_FREE_MB="${DEPLOY_MIN_FREE_MB:-2048}"
@@ -121,7 +122,7 @@ load_edge_env_from_application_env_file() {
     return 0
   fi
 
-  local env_file="${APP_DIR}/.env"
+  local env_file="${ESL_PRODUCTION_ENV_FILE}"
   local value
 
   if [[ -n "${CADDY_PUBLIC_HOSTNAME:-}" ]]; then
@@ -175,7 +176,7 @@ EOF
     cat >&2 <<EOF
 
 Application rollback instructions:
-  docker compose -p ${PROJECT_NAME} -f "${COMPOSE_FILE}" --env-file "${PREVIOUS_ENV}" up -d --no-build
+  docker compose -p ${PROJECT_NAME} -f "${COMPOSE_FILE}" --env-file "${ESL_PRODUCTION_ENV_FILE}" --env-file "${PREVIOUS_ENV}" up -d --no-build
 
 Rollback warning:
   This only rolls application images back. It does not restore PostgreSQL.
@@ -217,7 +218,7 @@ compose_with_env() {
   shift
   local compose_cmd=()
   compose_args compose_cmd
-  "${compose_cmd[@]}" --env-file "$env_file" "$@"
+  "${compose_cmd[@]}" --env-file "$ESL_PRODUCTION_ENV_FILE" --env-file "$env_file" "$@"
 }
 
 validate_sha() {
@@ -337,7 +338,7 @@ caddy_config_digest() {
 application_config_digest() {
   # Store only a digest, never environment contents or secrets, in deployment state.
   printf 'sha256:%s' "$(
-    sha256sum "${APP_DIR}/.env" "$COMPOSE_FILE" | awk '{ print $1 }' | sha256sum | awk '{ print $1 }'
+    sha256sum "${ESL_PRODUCTION_ENV_FILE}" "$COMPOSE_FILE" | awk '{ print $1 }' | sha256sum | awk '{ print $1 }'
   )"
 }
 
@@ -656,7 +657,9 @@ main() {
   require_command node
 
   [[ -f "$COMPOSE_FILE" ]] || die "compose file not found: ${COMPOSE_FILE}"
-  [[ -f "${APP_DIR}/.env" ]] || die "missing required env file: ${APP_DIR}/.env"
+  [[ -f "${ESL_PRODUCTION_ENV_FILE}" ]] || die "missing required env file: ${ESL_PRODUCTION_ENV_FILE}"
+  node "${APP_DIR}/scripts/deploy/production-paths.mjs" deploy "$APP_DIR" "$DEPLOY_STATE_DIR" "$ESL_PRODUCTION_ENV_FILE" || die "unsafe production paths or checkout"
+  export PG_BACKUP_ENV_FILE="$ESL_PRODUCTION_ENV_FILE"
   load_edge_env_from_application_env_file
   validate_edge_configuration
 
