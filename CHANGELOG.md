@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.3.5] - 2026-10-13
+
+### Changed
+
+- Automated release from PR #405: fix(deploy): protect production configuration and reconcile host ownership (ESL-53) (https://github.com/abocha/esl-pipeline/pull/405)
+
 ## [21.3.4] - 2026-10-13
 
 ### Changed
