@@ -133,32 +133,28 @@ test(
     writeFileSync(key, '{}', { mode: 0o640 });
     chownSync(key, 0, 1000);
     assertRuntimeSecrets(root);
-    const readable = spawnSync('setpriv', [
-      '--reuid=1000',
-      '--regid=1000',
-      '--clear-groups',
-      'sh',
-      '-c',
-      'test -r "$1" && ! test -w "$1"',
-      'fixture',
-      key,
-    ]);
+    const probeCredential = () =>
+      spawnSync(
+        process.execPath,
+        [
+          '-e',
+          `
+      const fs = require('node:fs');
+      if (process.getuid() !== 1000 || process.getgid() !== 1000) process.exit(2);
+      try {
+        fs.accessSync(process.argv[1], fs.constants.R_OK);
+        try { fs.accessSync(process.argv[1], fs.constants.W_OK); process.exit(1); }
+        catch { process.exit(0); }
+      } catch { process.exit(1); }
+    `,
+          key,
+        ],
+        { uid: 1000, gid: 1000 },
+      );
     // Host checkout is root-only. Runtime accesses the bind-mounted directory without traversing it.
-    assert.notEqual(readable.status, 0);
+    assert.equal(probeCredential().status, 1);
     chmodSync(root, 0o751);
-    assert.equal(
-      spawnSync('setpriv', [
-        '--reuid=1000',
-        '--regid=1000',
-        '--clear-groups',
-        'sh',
-        '-c',
-        'test -r "$1" && ! test -w "$1"',
-        'fixture',
-        key,
-      ]).status,
-      0,
-    );
+    assert.equal(probeCredential().status, 0);
     chmodSync(root, 0o750);
     writeFileSync(join(secrets, '.env.backup'), 'fixture-only\n');
     assert.throws(() => assertRuntimeSecrets(root), /Unexpected runtime secret/);
