@@ -1,11 +1,17 @@
 # Student Memory v1.1 Design: Bounded Snapshot Refresh and Memory Observability
 
+> Archived design and implementation rationale. Its incremental-refresh proposal is implemented;
+> current workload policy is owned by [Generation Target Policy](../../reference/GENERATION_PROVIDER_POLICY.md),
+> current lineage and recovery rules by the backend README and repository SSOT, and execution
+> history by the student-memory replay runbook. The sections below are historical design context,
+> not current implementation instructions or activation evidence.
+
 ## Meta
 
-- Suggested path: `docs/reference/STUDENT_MEMORY_V1_1_DESIGN.md`
+- Original path: `docs/reference/STUDENT_MEMORY_V1_1_DESIGN.md`
 - Audience: founder-maintainer, Codex implementation agents, backend/frontend maintainers.
-- Authority level: design reference for the v1.1 student-memory hardening slice.
-- Status: validated design reference; execution is split under `docs/plans/student-memory-system-upgrade/`.
+- Authority level: historical design record for the v1.1 student-memory hardening slice.
+- Status: `archived`; implementation outcome is recorded in current package owners and the replay runbook.
 - Intended timing: before Closed Alpha.
 - Scope type: structural v1 improvement, not a v2 rewrite.
 - Last verified against: 2026-07-01 repo state.
@@ -20,7 +26,7 @@
   - `packages/batch-backend/src/application/student-profile-candidates.ts`
   - `packages/batch-backend/schema.sql`
 
-## Current effective request contract (ESL-40)
+## ESL-40 effective request contract at archival
 
 The shipped v1.1 incremental path retains its existing parent/trigger/supporting-context selection,
 optional-context drop, hard-budget rejection, manual-rebuild warning, retry and currentness rules.
@@ -31,8 +37,8 @@ on that same content. Pacing adds the unchanged output allowance. Provider-speci
 does not maintain a second teaching-policy copy. Corrected estimates can alter admission without
 retuning caps. Previously stored request evidence remains immutable.
 
-See [provider policy](GENERATION_PROVIDER_POLICY.md#effective-learner-memory-inputs-esl-40) for
-instruction reconciliation and the [replay runbook](../operations/student-memory-replay-backfill.md#effective-request-transition-esl-40)
+See [provider policy](../../reference/GENERATION_PROVIDER_POLICY.md#effective-learner-memory-inputs-esl-40) for
+instruction reconciliation and the [replay runbook](../../operations/student-memory-replay-backfill.md#effective-request-transition-esl-40)
 for queued-work transition and rollback. The dated design observations below describe the original
 v1.1 investigation rather than the current implementation baseline.
 
@@ -590,7 +596,7 @@ already records requested intent; retry does not regenerate the snapshot.
 ESL-39 supersedes the old latest-lesson/snapshot-self-suppression behavior described in this design's
 baseline. Current source binding, reviewed-history preservation, deterministic application proof
 and chronology are specified in the
-[profile enrichment contract](../plans/student-profile-enrichment/README.md#esl-39-source-and-promotion-contract).
+[profile enrichment contract](../../plans/student-profile-enrichment/README.md#esl-39-source-and-promotion-contract).
 Candidate delivery is pinned to the recorded snapshot/source and writes no model dedup attribution
 or synthetic rejected duplicate/stale artifacts. Historic artifacts remain retained. No optional
 debug-artifact insertion mode is supported by the corrected consumer.

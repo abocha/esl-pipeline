@@ -81,11 +81,13 @@ Suggested package ownership:
 
 ## Current Implementation Baseline
 
-The roadmap below is the original readiness sequence, but several target surfaces are now live:
+The roadmap below is the original readiness sequence. The following target surfaces exist in
+repository source; this inventory does not establish deployment, live activation, tutor adoption, or
+readiness-gate completion:
 
 - direct draft generation is exposed through `POST /generation/drafts` and the minimal assignment
   flow
-- dedicated student-area pages are live for `Overview`, `Learning`, `History`, and Schedule &
+- dedicated student-area pages exist in source for `Overview`, `Learning`, `History`, and Schedule &
   Billing
 - Schedule & Billing records lesson credits, lessons, payments, recurrence preferences, and
   reminders
@@ -155,6 +157,10 @@ Exit criteria:
 - Remaining lesson calculations are consistent and test-covered.
 
 ## Objective Readiness Scorecard (Grounding Scaffold)
+
+This scorecard is a product measurement rubric, not a current metrics record. It contains no
+verified cohort, usage, release-readiness, or live-activation evidence. Product and founder decisions
+must use current observed evidence; repository implementation does not satisfy these gates by itself.
 
 Track weekly. Do not rely on intuition alone.
 

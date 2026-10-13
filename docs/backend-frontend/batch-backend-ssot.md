@@ -58,7 +58,14 @@ Main entrypoints:
 
 Env reference: [`docs/reference/env.md`](../reference/env.md)
 
-## Canonical API Surface (Active)
+## Selected API Examples
+
+The routes below illustrate principal API areas; this list is intentionally not exhaustive. For a
+generated lookup of direct route registrations, including assignment-session routes, use the
+[backend route index](../generated/backend-route-index.md). It scans `app.<method>(...)` calls and
+may omit plugin or dynamically registered routes. For those surfaces, inspect the current route
+registration code (including `registerExtendedRoutes` and MCP registrations). Route registrations
+remain the source of truth.
 
 - Auth: `/auth/*`
 - Recordings/transcripts:

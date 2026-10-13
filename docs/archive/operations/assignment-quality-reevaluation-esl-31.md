@@ -1,5 +1,8 @@
 # Changed-policy AssignmentV1 reevaluation (ESL-31)
 
+> Archived completed evaluation. This is immutable historical procedure/outcome evidence; its
+> `--live --authorize=ESL-31` examples must not be rerun or treated as current authorization.
+
 ## Meta
 
 - Audience: maintainer and the agent executing ESL-31.
@@ -7,13 +10,13 @@
 - Last Verified Against: 2026-10-06 fixed two-call evaluation after ESL-30 and its language-annotation follow-up.
 - Owner: founder-maintainer.
 - Review Cadence: when this fixed reevaluation changes or concludes.
-- Status: `active`.
+- Status: `archived`.
 
 ## Decision and boundary
 
 After ESL-30, does the fixed sample support activating the repaired AssignmentV1 generation policy
 for direct learner use without routine manual repair? This is a changed-policy gate, not another
-full ESL-28 benchmark. The existing [ESL-28 conclusion](assignment-quality-evaluation.md) remains
+full ESL-28 benchmark. The existing [ESL-28 conclusion](assignment-quality-evaluation-esl-28.md) remains
 CHANGE for v5. This fixed v6 evaluation is **complete: CHANGE before activation**. The final
 campaign activation decision after subsequent remediation is **KEEP**, recorded below;
 the earlier run remains preserved.
@@ -229,6 +232,6 @@ ESL-31 is Done in Linear. The current ESL-29 instruction explicitly accepts that
 the earlier v6 CHANGE record and private artifacts above remain unchanged historical evidence.
 This annotation does not claim a new provider run or invent missing evaluation artifacts.
 
-Use [ESL-29 activation preparation](assignment-v1-activation.md) for exact v7 identity, renderer-3
+Use [ESL-29 activation preparation](../../operations/assignment-v1-activation.md) for exact v7 identity, renderer-3
 migration/deployment ordering, production default change and rollback. Production activation,
 deployment and any live work remain separately authorized.

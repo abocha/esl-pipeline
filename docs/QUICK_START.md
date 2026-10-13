@@ -49,8 +49,11 @@ full Docker dev stack as a fidelity/debug fallback.
 
 ```bash
 pnpm --filter @esl-pipeline/<package> test
-pnpm docs:check
 ```
+
+For documentation-only changes, use the [docs-only recipe](reference/TESTING_GUIDELINES.md#docs-only-changes),
+which selects PR-mode structural checks. The full `pnpm docs:check` audit retains repository-wide
+freshness enforcement and is required before advancing a document's `Last Verified Against` date.
 
 Run the smallest relevant package test, typecheck, lint, or build while editing and before pushing.
 Hosted PR CI is the comprehensive merge gate. If a hosted job fails, inspect its logs/artifacts and

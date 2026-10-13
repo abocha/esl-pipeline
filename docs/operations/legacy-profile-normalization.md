@@ -1,5 +1,14 @@
 # Legacy Profile Normalization
 
+Source review: the current [`profile:migrate-legacy` CLI](../../packages/batch-backend/src/tools/migrate-legacy-profiles.ts)
+supports dry-run reports and explicit apply; this runbook's apply example selects `draft`. The
+separate [single-student normalization tool](../../packages/batch-backend/src/tools/normalize-legacy-profile.ts)
+creates a draft from current profile and memory inputs. The tools do not establish that any eligible
+legacy profile remains in a live workspace, and the bulk CLI also supports `--status active` outside
+this runbook's draft-only steps. No learner records or deployed state were inspected. Require
+separately authorized current eligibility and an explicit activation decision; command availability
+does not prove residual work or retirement completion.
+
 ## Meta
 
 - Audience: operator-maintainer using the live student system during transition.
@@ -132,5 +141,5 @@ If the normalized revision performs poorly:
 ## Related
 
 - [`docs/plans/student-profile-enrichment/README.md`](../plans/student-profile-enrichment/README.md)
-- [`docs/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md`](../plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md)
+- [`docs/archive/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md`](../archive/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md)
 - [`docs/operations/student-memory-replay-backfill.md`](student-memory-replay-backfill.md)

@@ -12,20 +12,25 @@
 ## Purpose
 
 - Keep the phased student-system direction stable.
-- Show what is complete versus what still needs UX or operational hardening.
+- Record phased implementation and product direction without treating source presence as proof of
+  deployment, live activation, cohort readiness, or product-phase acceptance.
+
+This roadmap contains historical phase labels and implementation observations. The labels have not
+been reconciled against current product decisions or live operator evidence. Current source and
+package owners establish implementation; product and operator evidence establish activation and
+readiness. Use the [Linear product backlog](../../AGENTS.md#planning-github-and-repository-administration)
+and the relevant operational owner for current status.
 
 ## Current Baseline
 
-- student metadata CRUD is live
-- profile revisions and binding history are live
-- prompt lineage and drift metadata are live
-- student timeline and job provenance are live
-- dedicated student-area routes are live for `Overview`, `Learning`, `History`, and Schedule &
-  Billing; the legacy all-in-one workspace has been retired from the frontend source
-- Schedule & Billing now owns lesson credits, payments, reminders, and operational scheduling
-  state; teacher business dashboard views link back to each student's schedule-billing surface
-- elapsed scheduled lessons can now become teacher-confirmed homework follow-ups; published
-  homework keeps `lessonId` lineage through assignment and memory records
+- repository source implements student metadata CRUD; profile revisions and binding history;
+  prompt lineage and drift metadata; and student timeline and job provenance
+- dedicated student-area routes exist in source for `Overview`, `Learning`, `History`, and
+  Schedule & Billing; the legacy all-in-one workspace has been retired from the frontend source
+- Schedule & Billing owns lesson credits, payments, reminders, and operational scheduling state in
+  source; teacher business dashboard views link back to each student's schedule-billing surface
+- source includes teacher-confirmed homework follow-ups for elapsed scheduled lessons; published
+  homework retains `lessonId` lineage through assignment and memory records
 
 ## Return-To-Track Checklist
 
@@ -87,9 +92,9 @@
 
 - status: complete / maintenance
 - current outcome:
-  - workspace route is live
-  - profile/binding management is live
-  - assignment history, timeline, and provenance panels are live
+  - workspace route exists in source
+  - profile/binding management exists in source
+  - assignment history, timeline, and provenance panels exist in source
 - remaining focus:
   - keep the current workspace operational while traffic moves to the dedicated student-area pages
   - destructive-action guardrails
@@ -104,7 +109,11 @@
 
 ### Phase F: Teacher-verified profile enrichment
 
-- status: planned
+- status: implementation present; product phase completion and production activation unverified
+- status boundary:
+  - current source implements initial profile enrichment, candidate generation, and teacher review
+  - source presence does not prove production activation, cohort readiness, or phase acceptance;
+    confirm those states with product and operator evidence
 - target outcome:
   - starter teacher-authored profile at student creation
   - automatic one-time evidence enrichment for an empty or tutor-seeded profile during the first
@@ -114,12 +123,13 @@
 - active plan:
   - [`docs/design/FIRST_PROFILE_ONBOARDING.md`](../design/FIRST_PROFILE_ONBOARDING.md)
   - [`docs/plans/student-profile-enrichment/README.md`](../plans/student-profile-enrichment/README.md)
-  - [`docs/plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md`](../plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md)
-  - [`docs/plans/student-area-redesign/phase-3-profile-generation-migration-and-prompt-packaging.md`](../plans/student-area-redesign/phase-3-profile-generation-migration-and-prompt-packaging.md)
+  - archived phase rationale: [`phase 2`](../archive/plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md)
+  - archived phase rationale: [`phase 3`](../archive/plans/student-area-redesign/phase-3-profile-generation-migration-and-prompt-packaging.md)
 
 ### Phase G: Live transition and operator adoption
 
-- status: planned
+- recorded status: planned in the archived phase plan; current implementation and activation status
+  are not established by that label
 - target outcome:
   - safe mixed-state operation while legacy overloaded profiles still exist
   - one-student-at-a-time normalization into the new profile-plus-memory model
@@ -127,24 +137,29 @@
 - note:
   - this is a temporary transition layer, not a new permanent architecture tier
 - active docs:
-  - [`docs/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md`](../plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md)
+  - archived phase rationale: [`phase 5 live transition and operator adoption`](../archive/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md)
   - [`docs/operations/legacy-profile-normalization.md`](../operations/legacy-profile-normalization.md)
 
 ### Phase H: Student area redesign and operational expansion
 
-- status: in progress
+- recorded status: in progress; product-phase completion and live activation have not been
+  reconciled against current product and operator evidence
 - current outcome:
-  - dedicated student-area page model is live:
+  - repository source contains the dedicated student-area page model:
     - `Overview`
     - `Learning`
     - `Schedule & Billing`
     - `History`
-  - route-level backend surfaces are live for overview, learning, history, and schedule-billing
+  - route-level backend surfaces exist for overview, learning, history, and schedule-billing
   - schedule/billing records lesson credits, lessons, payments, recurrence preferences, and
     reminders
   - business schedule/stats views summarize operational state and deep-link into student
     schedule-billing pages
-  - elapsed lesson homework follow-ups are live across student and business schedule surfaces
+  - source includes elapsed-lesson homework follow-ups across student and business schedule
+    surfaces
+- implementation owners:
+  - [batch-frontend README](../../packages/batch-frontend/README.md)
+  - [batch-backend README](../../packages/batch-backend/README.md)
 - remaining focus:
   - structured canonical learner profile replacing markdown authoring as the long-term product
     model
@@ -154,9 +169,9 @@
   - [`docs/plans/student-area-redesign/README.md`](../plans/student-area-redesign/README.md)
   - [`docs/reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md`](SCHEDULE_BILLING_PRODUCT_DECISIONS.md)
   - [`docs/reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md`](TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md)
-  - [`docs/plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md`](../plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md)
-  - [`docs/plans/student-area-redesign/phase-4-overview-page-and-cross-domain-summaries.md`](../plans/student-area-redesign/phase-4-overview-page-and-cross-domain-summaries.md)
-  - [`docs/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md`](../plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md)
+  - archived phase rationale: [`phase 1`](../archive/plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md)
+  - archived phase rationale: [`phase 4`](../archive/plans/student-area-redesign/phase-4-overview-page-and-cross-domain-summaries.md)
+  - archived phase rationale: [`phase 5 scheduling, billing, reminders, and history`](../archive/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md)
 
 ## Cross-Phase Rules
 

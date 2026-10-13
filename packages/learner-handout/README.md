@@ -308,7 +308,7 @@ source provenance and Part prefixes remain. Historical icon/copy experiments are
 not supported production variants or public presentation options.
 
 The full-lesson fixture remains the retained ESL-33 teaching input with local tone audio. Earlier
-visual iterations and acceptance evidence are recorded in the project-root design-qa.md and retained
+visual iterations and acceptance evidence are recorded in the [archived ESL-33 design review](../../docs/archive/notes/2026-10/esl-33-handout-design-qa.md) and retained
 D:/tmp/esl-33-* evidence directories. Final focused source/build/test and desktop/phone sanity evidence
 is in D:/tmp/esl-33-final-icons/. These are local presentation/control checks, not hosted CI,
 provider speech-quality evidence or production activation. The validation commands and compatibility

@@ -29,15 +29,23 @@
 
 ## Current Baseline
 
-- shipped structured prompt snapshot (live activation is operator-owned):
+- current repository structured prompt snapshot (live activation is operator-owned and is not
+  established by this source reference):
   - `packages/batch-backend/prompt-assets/templates/hw_prompt_assignment_v1.md`
 - runtime default lineage:
   - learning preset id: `general-english`
   - learning preset version: `v2`
   - prompt alias: `current`
 
-`general-english@v1` remains available only as explicit compatibility for persisted historical jobs;
-new General English jobs use `v2`.
+The backend source defaults new jobs to `general-english@v2` with the `current` alias. The
+`general-english@v1` sandbox fixture remains an explicit compatibility example for historical jobs;
+it does not establish runtime default or activation. See the [backend preset provenance owner](../../packages/batch-backend/README.md).
+
+The current backend exposes a single typed `LearningPresetOption`; job options may come from the
+orchestrator or the explicitly gated static fallback, and assignment jobs retain preset/prompt
+provenance. The general versioned preset catalog and prompt-snapshot persistence described below
+remain architectural intent unless executable owners document otherwise. This source comparison
+does not establish which options or revisions are activated in a deployed environment.
 
 ## Contract Shape
 

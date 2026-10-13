@@ -1,5 +1,16 @@
 # Ordinary Recording Ingest Rollout
 
+Source review: migrations `0049`-`0053` are a historical recording-ingest feature chain. The current
+packaged migration set and each migration's compatibility must be resolved from
+[`migrations/runtime-compatibility.json`](../../packages/batch-backend/migrations/runtime-compatibility.json)
+and the packaged migration files before planning any apply. The recording ingest/runtime and cleanup
+controls remain owned by the current backend implementation and [env reference](../reference/env.md).
+The runbook's preflight, deletion and rollback gates remain useful only after reconciling the
+deployed image/schema and operation with those current owners. No recording/run data or production
+state was inspected. Migration and command presence proves neither residual work nor rollout
+completion. Require current, separately authorized, record-bound evidence before use; keep cleanup
+disabled until the current deletion safeguards have been rehearsed.
+
 ## Meta
 
 - Audience: production operators and maintainers.

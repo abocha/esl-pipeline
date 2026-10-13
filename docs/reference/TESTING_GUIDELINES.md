@@ -79,8 +79,11 @@ actual base and head. The checker reads current working-tree documents. Inspect 
 diff after generation or formatting.
 
 Use `pnpm docs:check` for a full audit with repository-wide age enforcement, such as scheduled
-gardening. Do not turn an unrelated age warning into additional cleanup during a bounded change.
-The [docs governance contract](DOCS_GOVERNANCE.md#harness-contract) owns the distinction between modes.
+gardening. Before advancing an enforced document's `Last Verified Against` date, follow the
+[governed verification procedure](DOCS_GOVERNANCE.md#verification-procedure) and record what was
+reviewed; an ordinary docs-only PR does not itself satisfy that audit. Do not turn an unrelated age
+warning into additional cleanup during a bounded change. The
+[docs governance contract](DOCS_GOVERNANCE.md#harness-contract) owns the distinction between modes.
 
 ## Hosted PR CI job reproduction
 

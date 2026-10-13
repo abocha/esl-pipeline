@@ -88,5 +88,4 @@ the single gardening issue.
 ## Related
 
 - [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
-- [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](HARNESS_AGENTIC_DOCS_MODEL.md)
 - [`docs/generated/README.md`](../generated/README.md)

@@ -1,14 +1,18 @@
 # Orchestrator API v2 Migration Guide (Cutover Stage)
 
+> Archived historical migration record. The API v2 cutover and compatibility-adapter retirement are
+> complete. Use [the orchestrator package README](../../../packages/orchestrator/README.md) for the
+> current public API.
+
 ## Meta
 
 - Audience: maintainers and implementing agents.
 - Read Time: 5 minutes.
-- Authority Level: active migration and cutover guidance.
+- Authority Level: historical migration record.
 - Last Verified Against: 2026-09-13 repo state.
 - Owner: orchestrator maintainers + automation agents.
 - Review Cadence: weekly while migration/cutover notes remain active.
-- Status: `active`.
+- Status: `archived`.
 
 ## Summary
 

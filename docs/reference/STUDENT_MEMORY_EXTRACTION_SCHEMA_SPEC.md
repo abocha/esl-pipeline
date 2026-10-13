@@ -4,7 +4,7 @@
 
 - Audience: founder, maintainers, backend implementers, AI agents.
 - Read Time: 10 minutes.
-- Authority Level: canonical extraction-schema reference for student-memory content generation.
+- Authority Level: semantic design reference; runtime response schemas are owned by backend source.
 - Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + backend maintainers.
 - Review Cadence: monthly or after extraction-contract changes.
@@ -15,15 +15,25 @@
 - Lock the exact semantic JSON shapes expected from LLM extraction for lesson memory, homework
   memory, and student-memory snapshots.
 - Keep extraction-output contracts separate from backend-owned persistence metadata.
-- Make canonical extraction implementation decision-complete before code is written.
+- Preserve semantic design decisions that informed implementation; executable schemas and
+  validators now define the runtime contract.
 
 ## Relationship to Other Docs
 
+This document preserves design decisions and rationale for structured extraction. Use the current
+schemas, validators, prompts, and persistence DTOs in `packages/batch-backend/src` as the executable
+contract; this document is not a field-by-field mirror of that code. Current lesson evidence
+requires a `sourceId` selected from the request manifest and validated against the generation
+envelope. The Zod parser's `legacy` default is compatibility handling; the fresh-generation JSON
+schema requires the field. The older persistence note below that assigns source IDs to the backend
+is historical. Use the package README for current lineage and read-eligibility rules.
+
 - Use [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
   for capability-tier and provider-policy rules.
-- Use [`docs/plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md`](../plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md)
-  for persisted artifact contracts.
-- Use this doc for the exact JSON content objects returned by the model before backend enrichment.
+- The archived [`phase 1 design`](../archive/plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md)
+  records persisted-artifact design rationale; current contracts are owned by backend source.
+- Use this doc for extraction design rationale; use backend schemas for the exact current JSON
+  content objects returned by the model before persistence.
 
 ## Locked Decisions
 
@@ -160,6 +170,7 @@ These fields are persisted by the backend and are not requested from the model:
 
 ```json
 {
+  "sourceId": "request-manifest source id",
   "quote": "string",
   "speakerRole": "student | teacher | null",
   "evidenceNote": "string | null",
@@ -178,6 +189,7 @@ Rules:
 
 ```json
 {
+  "sourceId": "request-manifest source id",
   "observedForm": "string",
   "suggestedTarget": "string | null",
   "evidenceQuote": "string | null",
@@ -197,6 +209,7 @@ Rules:
 
 ```json
 {
+  "sourceId": "request-manifest source id",
   "observedIssue": "string",
   "focusWords": ["string"],
   "evidenceQuote": "string | null",
@@ -223,6 +236,7 @@ Rules:
   "confidence": "low | medium | high",
   "evidence": [
     {
+      "sourceId": "request-manifest source id",
       "quote": "string",
       "speakerRole": "student | teacher | null",
       "evidenceNote": "string | null",
@@ -236,7 +250,8 @@ Rules:
 Rules:
 
 1. `evidence` defaults to `[]`.
-2. Backend attaches source artifact ids during persistence.
+2. Each evidence item identifies its request-manifest source; backend validates that ID against
+   the generation envelope before persistence.
 
 ### `NamedNote`
 
@@ -485,16 +500,14 @@ The backend should reject or retry outputs when:
 
 When extraction shape changes:
 
-1. update this spec first
-2. update the corresponding plan/reference docs if persisted artifact contracts change
-3. update backend schemas and validation
-4. update prompts/provider adapters
-5. update tests and fixtures
+The original change sequence below is retained as historical design guidance, not a current
+implementation procedure. For changes, follow the current repository workflow and update executable
+backend schemas, validators, persistence contracts, prompts, and focused evidence together.
 
 ## Related
 
 - [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
-- [`docs/plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md`](../plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md)
-- [`docs/plans/student-memory-system-upgrade/phase-2-lesson-memory-pipeline.md`](../plans/student-memory-system-upgrade/phase-2-lesson-memory-pipeline.md)
-- [`docs/plans/student-memory-system-upgrade/phase-3-homework-memory-pipeline.md`](../plans/student-memory-system-upgrade/phase-3-homework-memory-pipeline.md)
-- [`docs/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md`](../plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md)
+- [Archived phase 1 design](../archive/plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md)
+- [Archived phase 2 design](../archive/plans/student-memory-system-upgrade/phase-2-lesson-memory-pipeline.md)
+- [Archived phase 3 design](../archive/plans/student-memory-system-upgrade/phase-3-homework-memory-pipeline.md)
+- [Archived phase 4 design](../archive/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md)

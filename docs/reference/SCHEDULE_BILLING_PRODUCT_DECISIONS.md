@@ -143,5 +143,5 @@ The first schedule-to-homework workflow is an in-app operator reminder:
 
 - [`docs/reference/STUDENT_SYSTEM_ROADMAP.md`](STUDENT_SYSTEM_ROADMAP.md)
 - [`docs/reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md`](TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md)
-- [`docs/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md`](../plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md)
+- [Archived phase 5 design rationale](../archive/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md)
 - [`docs/plans/student-area-redesign/README.md`](../plans/student-area-redesign/README.md)

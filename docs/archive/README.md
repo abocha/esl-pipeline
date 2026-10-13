@@ -14,6 +14,10 @@ Use active docs in `docs/README.md` for current implementation guidance.
 - Release archive: `docs/archive/release/README.md`
 - Plans archive: `docs/archive/plans/README.md`
 - Draft archive: `docs/archive/drafts/README.md`
+- Completed assignment-quality experiments:
+  [ESL-28](operations/assignment-quality-evaluation-esl-28.md) and
+  [ESL-31](operations/assignment-quality-reevaluation-esl-31.md); current evaluation method lives in
+  [operations](../operations/assignment-quality-evaluation.md).
 
 ## Layout Convention
 

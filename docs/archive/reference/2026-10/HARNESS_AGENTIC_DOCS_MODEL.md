@@ -1,14 +1,18 @@
 # Harness Agentic Docs Model (v2)
 
+> Historical reference. Current governance and checker behavior are defined by
+> [`DOCS_GOVERNANCE.md`](../../../reference/DOCS_GOVERNANCE.md); the gardening workflow lives in
+> [`DOCS_GARDENING_PLAYBOOK.md`](../../../reference/DOCS_GARDENING_PLAYBOOK.md).
+
 ## Meta
 
 - Audience: maintainers and AI agents improving docs operations.
 - Read Time: 5 minutes.
-- Authority Level: docs system design and operating model.
+- Authority Level: historical reference.
 - Last Verified Against: 2026-04-03 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major workflow/tooling changes.
-- Status: `reference`.
+- Status: `archive`.
 
 ## Purpose
 
@@ -53,6 +57,6 @@
 
 ## Related
 
-- [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
-- [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)
-- [`docs/generated/README.md`](../generated/README.md)
+- [Current documentation governance](../../../reference/DOCS_GOVERNANCE.md)
+- [Current gardening procedure](../../../reference/DOCS_GARDENING_PLAYBOOK.md)
+- [Generated documentation index](../../../generated/README.md)

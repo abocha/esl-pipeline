@@ -1,5 +1,10 @@
 # ESL-33 selected handout design QA
 
+> Historical ESL-33 acceptance record, moved from root `design-qa.md` during ESL-54.
+> Local paths, observations and validation outcomes below belong to those bounded runs.
+> For current presentation and validation procedure, use the
+> [learner-handout README](../../../../packages/learner-handout/README.md).
+
 final result: passed
 
 **Findings**

@@ -1,5 +1,10 @@
 # ElevenLabs API Documentation Notes
 
+Historical API notes only. The installed `@elevenlabs/elevenlabs-js` types and this package's
+adapter source own the executable request and response contract. These examples have not been
+verified against current live provider documentation; do not use the retry, endpoint, or response
+claims here as normative behavior.
+
 ## Text-to-Dialogue API
 
 **Endpoint**: `POST https://api.elevenlabs.io/v1/text-to-dialogue`

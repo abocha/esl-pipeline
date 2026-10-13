@@ -1,5 +1,14 @@
 # Student-owned profile revision cutover (ABO-12)
 
+Source review: [migration 0059](../../packages/batch-backend/migrations/0059_student_owned_profile_revisions.sql)
+makes `student_profile_revisions` the runtime authority while
+retaining legacy profile/revision/binding tables for provenance and operator reconciliation. The
+cutover procedure's restored-backup inventory and mapping safeguards still match that source
+boundary. The repository cannot establish which legacy rows remain in production, whether they are
+eligible for attribution, or whether a deployed cutover is complete. No learner data or deployed
+state was inspected. Do not infer retirement from the migration or source; require current,
+separately authorized restored-backup evidence before cleanup and preserve lineage/recovery data.
+
 ## Meta
 
 - Audience: maintainers and operators.

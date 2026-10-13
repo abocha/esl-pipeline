@@ -65,4 +65,4 @@
 
 - [`DOCS_GARDENING_SCORECARD.md`](DOCS_GARDENING_SCORECARD.md)
 - [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](../../../reference/DOCS_GARDENING_PLAYBOOK.md)
-- [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](../../../reference/HARNESS_AGENTIC_DOCS_MODEL.md)
+- [`Archived agentic docs model`](../2026-10/HARNESS_AGENTIC_DOCS_MODEL.md)

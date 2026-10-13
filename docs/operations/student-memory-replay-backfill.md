@@ -1,5 +1,16 @@
 # Student Memory Replay and Backfill
 
+Source review: current ordinary-memory replay is represented by
+[migration 0061](../../packages/batch-backend/migrations/0061_ordinary_memory_replay.sql);
+[migration 0064](../../packages/batch-backend/migrations/0064_historical_markdown_read_only.sql)
+retires historical Markdown execution as read-only and requires confirmed remote Batch status for
+the legacy homework boundary. Batch actions remain separately gated by
+`STUDENT_MEMORY_OPENAI_BATCH_ENABLED` and this runbook's authorization rules. Snapshot/replay tools
+apply source, lineage, currentness and idempotency checks; they do not establish which live students
+have residual eligible work or whether production cutover/replay is complete. No learner records or
+deployed state were inspected. Preserve the documented backup, lineage and rollback safeguards and
+require current, separately authorized, record-bound evidence before a mutating operation.
+
 ## Meta
 
 - Audience: operators and implementation agents maintaining the batch backend.

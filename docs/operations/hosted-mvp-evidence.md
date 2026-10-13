@@ -5,7 +5,8 @@
 - Audience: founder/operator, Codex, implementation agents.
 - Last Verified Against: 2026-07-23 first-profile assignment incident; 2026-07-16 production
   deployment and automated smoke; 2026-07-14 manual main-flow smoke.
-- Status: private hosted baseline passed; keep this record current after material redeploys or rehearsals.
+- Status: historical hosted baseline evidence. Preserve these observations as recorded; a later
+  deployment or rehearsal requires a separate dated evidence record and does not update this one.
 - Related historical plan: `docs/archive/plans/standalone/slice-1-private-hosted-environment.md`.
 
 ## Latest Deployment Evidence
