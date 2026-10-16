@@ -82,7 +82,8 @@ and [`docs/reference/pipeline-manifest.md`](../../docs/reference/pipeline-manife
 
 Unit tests use the root pure-provider setup before module imports: ambient credentials and env-file
 autoload are disabled, external Node requests fail before dispatch, and loopback fixtures remain
-available. See the [testing guide](../../docs/reference/TESTING_GUIDELINES.md#local-feedback-ladder)
+available. `test:unit` and `test:unit:prebuilt` also run the poisoned-environment subprocess check
+before the regular suite. See the [testing guide](../../docs/reference/TESTING_GUIDELINES.md#local-feedback-ladder)
 for the poisoned-environment regression and prebuilt prerequisites.
 
 ```bash

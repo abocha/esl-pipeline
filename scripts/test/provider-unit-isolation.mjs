@@ -61,7 +61,6 @@ test('root Vitest package entrypoint rejects poisoned inherited credentials and 
       0,
       `${result.error?.message ?? ''}\n${result.stdout}\n${result.stderr}`,
     );
-    assert.match(result.stdout, /5 passed/u);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

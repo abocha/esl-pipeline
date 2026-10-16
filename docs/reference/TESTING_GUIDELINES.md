@@ -56,7 +56,9 @@ requests. Literal loopback addresses and localhost remain available to intention
 Integration suites (including ElevenLabs' `tests/integration.test.ts`) and backend project/service
 classification retain their existing setup. This guard covers in-process Node transports, not
 arbitrary subprocesses or native networking. Reproduce the dummy-credential/env-file regression
-after building the orchestrator test prerequisites:
+after building the orchestrator test prerequisites. The orchestrator's `test:unit:prebuilt` runs
+this poisoned-environment check before its regular suite, so both `test:unit` and the hosted
+post-build unit job enforce it without adding build prerequisites to repository-policy tests:
 
 ```bash
 pnpm --filter @esl-pipeline/orchestrator test:unit:setup

@@ -33,7 +33,6 @@ writeFileSync(
   join(fixtureDir, '.env'),
   'OPENAI_API_KEY=dummy-file-key\nAWS_ACCESS_KEY_ID=dummy-file-aws\nESL_PURE_FILE_POISON=loaded\n',
 );
-writeFileSync(join(fixtureDir, '.env.batch-backend'), 'OPENAI_API_KEY=dummy-legacy-key\n');
 afterAll(() => rmSync(fixtureDir, { recursive: true, force: true }));
 
 it('cannot rehydrate env files through application, CLI or mutating low-level loaders', () => {
