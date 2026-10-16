@@ -131,6 +131,9 @@ Canonical behavior and current status live in:
   reserved for exhausted or ambiguous outcomes.
 - New structured assignments use a temporary whole-document JSON textarea. It loads pretty-printed
   validated AssignmentV1 and displays syntax, schema-path and domain errors while the tutor edits.
+  Before an editable draft exists and while generation is pending, editor validation feedback is
+  deferred. Empty content remains ineligible for save, preview, confirmation and publication;
+  clearing an existing draft still reports a syntax error.
   Invalid text remains browser-local: autosave, Preview, Continue, Share and correction cannot admit
   it. Reload resumes the latest valid saved JSON; invalid buffers have no durable storage. Valid
   saves retain working-version CAS and conflicts preserve the local buffer. Canonical object

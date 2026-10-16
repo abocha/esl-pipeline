@@ -678,6 +678,9 @@ export function useMinimalAssignmentAuthoringController({
     state.draft?.validationContext ??
     state.promptPackage?.requestEnvelope?.assignmentContext ??
     state.generatedValidationContext;
+  const editableDraftAvailable = Boolean(
+    state.draft || state.draftFormat || state.draftText.trim(),
+  );
   const typedDraft = useMemo(() => {
     if (!structuredDraft)
       return {
@@ -685,6 +688,8 @@ export function useMinimalAssignmentAuthoringController({
         canonical: state.draftText.trim(),
         error: 'Historical Markdown assignments are read-only.',
       };
+    if (state.generatingDraft || !editableDraftAvailable)
+      return { assignment: null, canonical: null, error: null };
     try {
       if (!validationContext)
         throw new Error('Assignment validation context is missing. Reload the saved draft.');
@@ -697,8 +702,14 @@ export function useMinimalAssignmentAuthoringController({
         error: error instanceof Error ? error.message : String(error),
       };
     }
-  }, [structuredDraft, state.draftText, validationContext]);
-  const draftValid = !typedDraft.error;
+  }, [
+    structuredDraft,
+    state.generatingDraft,
+    editableDraftAvailable,
+    state.draftText,
+    validationContext,
+  ]);
+  const draftValid = Boolean(typedDraft.assignment);
   const isCurrentDraftValid = useCallback(() => {
     if (!structuredDraft) return false;
     if (!validationContext) return false;

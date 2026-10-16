@@ -15,6 +15,8 @@ vi.mock('../../utils/api', async () => ({
   updateDraft: vi.fn(),
   fetchDraft: vi.fn(),
   renderHtmlPreview: vi.fn(),
+  generateDraft: vi.fn(),
+  createDraft: vi.fn(),
 }));
 
 const assignment: AssignmentV1 = {
@@ -110,7 +112,7 @@ const params = {
   onDraftPronunciationModeDetected: vi.fn(),
   onTeacherNotesResolved: vi.fn(),
 };
-function setup(saved = draft()) {
+function setup(saved = draft(), overrides: Partial<AuthoringHydrationSnapshot> = {}) {
   const hook = renderHook(() => useMinimalAssignmentAuthoringController(params));
   act(() =>
     hook.result.current.applyHydrationSnapshot({
@@ -137,6 +139,7 @@ function setup(saved = draft()) {
       lastPreviewedDraftHash: null,
       validation: null,
       validationError: null,
+      ...overrides,
     } as unknown as AuthoringHydrationSnapshot),
   );
   return hook;
@@ -150,6 +153,115 @@ afterEach(() => {
 });
 
 describe('AssignmentV1 authoring and historical access', () => {
+  it('does not report validation errors before a draft exists or admit empty content', async () => {
+    const { result } = renderHook(() => useMinimalAssignmentAuthoringController(params));
+    expect(result.current.assignmentValidationError).toBeNull();
+    expect(result.current.draftValid).toBe(false);
+    expect(result.current.canPublishWithPreview).toBe(false);
+    await act(async () => {
+      expect(await result.current.saveDraft()).toBeNull();
+      expect(await result.current.flushDraftAutosave()).toBeNull();
+      await result.current.previewDraft();
+    });
+    expect(api.createDraft).not.toHaveBeenCalled();
+    expect(api.updateDraft).not.toHaveBeenCalled();
+    expect(api.renderHtmlPreview).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [undefined, true],
+    [context, true],
+    [context, false],
+  ] as const)(
+    'waits for generated content with prompt context %j and persistence success %s',
+    async (assignmentContext, saveSucceeds) => {
+      const { result } = setup(draft(), {
+        draft: null,
+        draftText: '',
+        promptPackage: {
+          id: 'prompt-1',
+          text: 'Prompt',
+          requestEnvelope: { promptVersion: 'assignment_v1', assignmentContext },
+        } as AuthoringHydrationSnapshot['promptPackage'],
+      });
+      expect(result.current.assignmentValidationError).toBeNull();
+      expect(result.current.draftValid).toBe(false);
+      let complete!: (value: api.GenerateDraftResponse) => void;
+      vi.mocked(api.generateDraft).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      );
+      if (saveSucceeds) {
+        vi.mocked(api.createDraft).mockResolvedValueOnce(draft());
+      } else {
+        vi.mocked(api.createDraft).mockRejectedValueOnce(new Error('Draft save failed'));
+      }
+      let generation!: ReturnType<typeof result.current.generateDraft>;
+      act(() => {
+        generation = result.current.generateDraft();
+      });
+      expect(result.current.generatingDraft).toBe(true);
+      expect(result.current.assignmentValidationError).toBeNull();
+      expect(result.current.draftValid).toBe(false);
+      expect(result.current.canPublishWithPreview).toBe(false);
+      await act(async () => {
+        complete({
+          text: draft().text,
+          format: 'assignment_v1',
+          validationContext: context,
+          provider: 'openai',
+          model: 'test-model',
+          quota: { source: 'configured', lastUpdatedAt: '2026-10-17T00:00:00Z' },
+        });
+        await generation;
+      });
+      expect(result.current.generatingDraft).toBe(false);
+      expect(result.current.assignmentValidationError).toBeNull();
+      expect(result.current.draftValid).toBe(true);
+      expect(result.current.draft?.assignment).toEqual(saveSucceeds ? assignment : undefined);
+      expect(result.current.draftError).toBe(saveSucceeds ? null : 'Draft save failed');
+      act(() => result.current.setDraftText(''));
+      expect(result.current.assignmentValidationError).toContain('syntax error');
+      expect(result.current.draftValid).toBe(false);
+      expect(result.current.canPublishWithPreview).toBe(false);
+    },
+  );
+
+  it('reports missing validation context for an existing editable draft', () => {
+    const { result } = setup({ ...draft(), validationContext: undefined }, { promptPackage: null });
+    expect(result.current.assignmentValidationError).toContain('validation context is missing');
+    expect(result.current.draftValid).toBe(false);
+  });
+
+  it('defers existing editor errors during regeneration and restores them if generation fails', async () => {
+    const { result } = setup();
+    act(() => result.current.setDraftText('{'));
+    expect(result.current.assignmentValidationError).toContain('syntax error');
+    let fail!: (error: Error) => void;
+    vi.mocked(api.generateDraft).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    let generation!: ReturnType<typeof result.current.generateDraft>;
+    act(() => {
+      generation = result.current.generateDraft();
+    });
+    expect(result.current.generatingDraft).toBe(true);
+    expect(result.current.assignmentValidationError).toBeNull();
+    expect(result.current.draftValid).toBe(false);
+    await act(async () => {
+      fail(new Error('Generation failed'));
+      await generation;
+    });
+    expect(result.current.generationError).toContain('Generation failed');
+    expect(result.current.assignmentValidationError).toContain('syntax error');
+    expect(result.current.draftText).toBe('{');
+  });
+
   it('keeps original Markdown inspectable and rejects edits, autosave, preview, and regeneration', async () => {
     const historical = {
       ...draft(),
@@ -259,6 +371,7 @@ describe('AssignmentV1 authoring and historical access', () => {
   });
 
   it.each([
+    ['', 'syntax error'],
     ['{', 'syntax error'],
     [
       JSON.stringify({ ...assignment, metadata: { ...assignment.metadata, title: 3 } }),
