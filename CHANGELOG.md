@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.3.7] - 2026-10-16
+
+### Changed
+
+- Automated release from PR #407: fix(frontend): defer pending assignment validation (ESL-19) (https://github.com/abocha/esl-pipeline/pull/407)
+
 ## [21.3.6] - 2026-10-16
 
 ### Changed
