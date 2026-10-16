@@ -70,6 +70,7 @@ function buildCacheKey(opts: {
  * Based on orchestrator/src/pipeline.ts:loadEnvFiles
  */
 export function loadEnvFiles(options: LoadEnvOptions = {}): Record<string, string> {
+  if (process.env.VALIDATION_TEST_CLASS === 'pure' && options.assignToProcess !== false) return {};
   const cwd = resolve(options.cwd ?? process.cwd());
   const files = (options.files && options.files.length > 0 ? options.files : ['.env']).map(
     (file) => (isAbsolute(file) ? file : resolve(cwd, file)),
@@ -154,6 +155,9 @@ export function loadEnvFiles(options: LoadEnvOptions = {}): Record<string, strin
  * Load env files and return a summary of what happened (without exposing values).
  */
 export function loadEnvFilesWithSummary(options: LoadEnvOptions = {}): LoadEnvSummary {
+  if (process.env.VALIDATION_TEST_CLASS === 'pure' && options.assignToProcess !== false) {
+    return { loadedFiles: [], missingFiles: [], assignedKeys: [], overriddenKeys: [] };
+  }
   const cwd = resolve(options.cwd ?? process.cwd());
   const files = (options.files && options.files.length > 0 ? options.files : ['.env']).map(
     (file) => (isAbsolute(file) ? file : resolve(cwd, file)),
