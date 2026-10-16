@@ -9,12 +9,8 @@ describe('scheduling time formatting', () => {
     );
   });
 
-  it('preserves date-only values without shifting their calendar day', () => {
-    expect(dateInputInTimezone('2026-05-08', 'America/Los_Angeles')).toBe('2026-05-08');
-  });
-
   it('uses the workspace calendar day for datetime values', () => {
-    expect(dateInputInTimezone('2026-05-08T06:30:00.000Z', 'America/Los_Angeles')).toBe(
+    expect(dateInputInTimezone(new Date('2026-05-08T06:30:00.000Z'), 'America/Los_Angeles')).toBe(
       '2026-05-07',
     );
   });

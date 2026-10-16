@@ -15,9 +15,6 @@ export function dateTimeInputInTimezone(value: Date | string, timezone: string):
   return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`;
 }
 
-export function dateInputInTimezone(value: Date | string, timezone: string): string {
-  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value.slice(0, 10);
-  }
+export function dateInputInTimezone(value: Date, timezone: string): string {
   return dateTimeInputInTimezone(value, timezone).slice(0, 10);
 }
