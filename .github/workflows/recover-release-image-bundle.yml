@@ -79,7 +79,10 @@ jobs:
             echo "Release tag and previous tag must differ"
             exit 1
           fi
-          bash scripts/release/verify-release-image-bundle.sh --refs-only
+          if [[ "$(git rev-list -n 1 "$RELEASE_TAG")" != "$RELEASE_SHA" ]]; then
+            echo "Release tag ${RELEASE_TAG} does not resolve to ${RELEASE_SHA}"
+            exit 1
+          fi
           if [[ "$REUSE_BATCH_BACKEND" != "true" && "$REUSE_BATCH_FRONTEND" != "true" && "$REUSE_TELEGRAM_OPS_BOT" != "true" ]]; then
             echo "Select at least one image to reuse"
             exit 1
@@ -108,8 +111,23 @@ jobs:
               "${IMAGE_PREFIX}/${name}:${PREVIOUS_TAG}"
           }
 
+          verify_image() {
+            local name="$1"
+            local sha_digest
+            local tag_digest
+            sha_digest="$(docker buildx imagetools inspect "${IMAGE_PREFIX}/${name}:${RELEASE_SHA}" | awk '$1 == "Digest:" { print $2; exit }')"
+            tag_digest="$(docker buildx imagetools inspect "${IMAGE_PREFIX}/${name}:${RELEASE_TAG}" | awk '$1 == "Digest:" { print $2; exit }')"
+            if [[ -z "$sha_digest" || "$sha_digest" != "$tag_digest" ]]; then
+              echo "Release refs for ${name} do not resolve to the same digest"
+              exit 1
+            fi
+            echo "Verified ${name} at ${sha_digest}"
+          }
+
           [[ "$REUSE_BATCH_BACKEND" == "true" ]] && reuse_image batch-backend
           [[ "$REUSE_BATCH_FRONTEND" == "true" ]] && reuse_image batch-frontend
           [[ "$REUSE_TELEGRAM_OPS_BOT" == "true" ]] && reuse_image telegram-ops-bot
 
-          bash scripts/release/verify-release-image-bundle.sh
+          verify_image batch-backend
+          verify_image batch-frontend
+          verify_image telegram-ops-bot

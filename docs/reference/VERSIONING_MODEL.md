@@ -106,12 +106,9 @@ For `release:patch`, `release:minor`, or `release:major`, it then:
 The release workflow publishes images but does not deploy them. Production deployment remains a
 separate operator action using the immutable release SHA.
 
-Before registry writes, publication checks the current remote release tag against that SHA.
-After building/reusing images, it verifies that all three SHA and version refs have matching
-registry digests and writes a **Verified deployment image bundle** receipt to the Actions summary.
-Use the receipt's published release SHA for deployment, not the workflow event's PR head SHA.
-Re-run `scripts/release/verify-release-image-bundle.sh` before handoff as described in the
-[deployment flow](../backend-frontend/DEPLOYMENT.md#production-deployment-flow).
+After successful image publication/reuse, the Actions summary records the release tag, published
+release SHA and three SHA-tagged image references. Use that published SHA for deployment, not the
+workflow event's PR head SHA. Deployment resolves the requested images through its existing preflight.
 
 Git history rewrites change descendant commit identities and tag targets without changing existing
 GHCR SHA tags. ESL-44's v21.0.0 mismatch came from the later ABO-50 rewrite: publication used

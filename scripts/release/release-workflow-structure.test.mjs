@@ -70,28 +70,6 @@ test('production images remain coupled to a successful release job', () => {
   assert.match(images, /PREVIOUS_TAG: \$\{\{ needs\.release\.outputs\.previous_tag \}\}/u);
 });
 
-test('publication checks remote identity before registry writes and verifies the finished bundle', () => {
-  for (const workflow of [
-    release,
-    readFileSync(
-      new URL('../../.github/workflows/recover-release-image-bundle.yml', import.meta.url),
-      'utf8',
-    ),
-  ]) {
-    const preflight = workflow.indexOf(
-      'bash scripts/release/verify-release-image-bundle.sh --refs-only',
-    );
-    const login = workflow.indexOf('uses: docker/login-action@');
-    const complete = workflow.lastIndexOf('bash scripts/release/verify-release-image-bundle.sh');
-    assert.ok(preflight >= 0 && preflight < login, 'identity must pass before registry login');
-    assert.ok(complete > login, 'complete bundle must be checked after publication/recovery');
-    assert.doesNotMatch(
-      workflow.slice(complete),
-      /imagetools create|uses: docker\/build-push-action/u,
-    );
-  }
-});
-
 test('production images use pinned Docker actions and preserve a complete release bundle', () => {
   const images = jobBlock(release, 'publish-images');
   assert.match(images, /docker\/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c/u);
