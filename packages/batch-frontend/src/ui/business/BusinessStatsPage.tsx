@@ -2,36 +2,35 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { type BusinessStatsSurface, getBusinessStatsSurface } from '../../utils/api';
-import { currentMonthInput, formatDateRange, formatHours, formatMoney } from './business-format';
+import { formatDateRange, formatHours, formatMoney } from './business-format';
 
 export const BusinessStatsPage: React.FC = () => {
-  const [month, setMonth] = useState(currentMonthInput);
+  const [monthOverride, setMonthOverride] = useState<string | undefined>();
   const [surface, setSurface] = useState<BusinessStatsSurface | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const latestLoadRequestRef = useRef(0);
+  const month = monthOverride ?? surface?.month ?? '';
 
-  const load = useCallback(
-    async (nextMonth = month) => {
-      const requestId = latestLoadRequestRef.current + 1;
-      latestLoadRequestRef.current = requestId;
-      setLoading(true);
-      setError(null);
-      try {
-        const nextSurface = await getBusinessStatsSurface({ month: nextMonth });
-        if (latestLoadRequestRef.current !== requestId) return;
-        setSurface(nextSurface);
-      } catch (loadError: unknown) {
-        if (latestLoadRequestRef.current !== requestId) return;
-        setError(loadError instanceof Error ? loadError.message : 'Business stats failed.');
-      } finally {
-        if (latestLoadRequestRef.current === requestId) {
-          setLoading(false);
-        }
+  const load = useCallback(async () => {
+    const requestId = latestLoadRequestRef.current + 1;
+    latestLoadRequestRef.current = requestId;
+    setLoading(true);
+    setError(null);
+    try {
+      const params = monthOverride === undefined ? {} : { month: monthOverride };
+      const nextSurface = await getBusinessStatsSurface(params);
+      if (latestLoadRequestRef.current !== requestId) return;
+      setSurface(nextSurface);
+    } catch (loadError: unknown) {
+      if (latestLoadRequestRef.current !== requestId) return;
+      setError(loadError instanceof Error ? loadError.message : 'Business stats failed.');
+    } finally {
+      if (latestLoadRequestRef.current === requestId) {
+        setLoading(false);
       }
-    },
-    [month],
-  );
+    }
+  }, [monthOverride]);
 
   useEffect(() => {
     void load();
@@ -68,12 +67,16 @@ export const BusinessStatsPage: React.FC = () => {
         className="business-toolbar"
         onSubmit={(event) => {
           event.preventDefault();
-          void load(month);
+          void load();
         }}
       >
         <label>
           Month
-          <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+          <input
+            type="month"
+            value={month}
+            onChange={(event) => setMonthOverride(event.target.value)}
+          />
         </label>
         <button type="submit">Refresh</button>
       </form>

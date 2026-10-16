@@ -87,6 +87,10 @@ Core surfaces:
   [ABO-12 reconciliation](../../docs/operations/student-profile-revision-cutover.md) explains
   the frozen legacy archive and exact historical IDs retained for assignments and prompt packages.
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
+- Lesson create/update accepts either the existing offset-bearing `startsAt` or `localStartsAt`
+  (`YYYY-MM-DDTHH:mm`) with an explicit IANA timezone. Local wall times use PostgreSQL's
+  `timestamp AT TIME ZONE` conversion, matching recurrence's DST policy; supplying both time forms
+  is rejected. The UI preserves the original instant when a lesson time is unchanged.
 - tutor business dashboard and student schedule/billing routes resolve the active workspace from the
   authenticated tutor's membership before application reads or writes. Foreign students, lessons,
   and mismatched child rows use non-enumerating not-found responses and are never mutated; legacy

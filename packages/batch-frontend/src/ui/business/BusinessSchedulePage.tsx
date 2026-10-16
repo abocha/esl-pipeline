@@ -8,54 +8,52 @@ import {
   undoLatestHiddenStudentReminder,
   updateStudentLesson,
 } from '../../utils/api';
-import {
-  addDaysInput,
-  formatDate,
-  formatDateTime,
-  formatMoney,
-  todayInput,
-} from './business-format';
+import { formatDate, formatDateTime, formatMoney } from './business-format';
 
 function formatReminderLessonDetail(
   summary?: BusinessScheduleSurface['reminders'][number]['lessonSummary'] | null,
+  timezone?: string,
 ): string {
   if (!summary) return 'Lesson no longer available';
   const topic = summary.title?.trim() ? summary.title.trim() : 'Untitled lesson';
-  const date = summary.startsAt ? formatDateTime(summary.startsAt) : 'Not scheduled yet';
+  const date = summary.startsAt ? formatDateTime(summary.startsAt, timezone) : 'Not scheduled yet';
   return `${date} · ${topic} · Lesson ${summary.lessonId}`;
 }
 
 export const BusinessSchedulePage: React.FC = () => {
   const navigate = useNavigate();
-  const [from, setFrom] = useState(todayInput);
-  const [to, setTo] = useState(() => addDaysInput(7));
+  const [fromOverride, setFromOverride] = useState<string | undefined>();
+  const [toOverride, setToOverride] = useState<string | undefined>();
   const [surface, setSurface] = useState<BusinessScheduleSurface | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingLessonId, setSavingLessonId] = useState<string | null>(null);
   const latestLoadRequestRef = useRef(0);
+  const from = fromOverride ?? surface?.from ?? '';
+  const to = toOverride ?? surface?.to ?? '';
 
-  const load = useCallback(
-    async (range = { from, to }) => {
-      const requestId = latestLoadRequestRef.current + 1;
-      latestLoadRequestRef.current = requestId;
-      setLoading(true);
-      setError(null);
-      try {
-        const nextSurface = await getBusinessScheduleSurface(range);
-        if (latestLoadRequestRef.current !== requestId) return;
-        setSurface(nextSurface);
-      } catch (loadError: unknown) {
-        if (latestLoadRequestRef.current !== requestId) return;
-        setError(loadError instanceof Error ? loadError.message : 'Business schedule failed.');
-      } finally {
-        if (latestLoadRequestRef.current === requestId) {
-          setLoading(false);
-        }
+  const load = useCallback(async () => {
+    const requestId = latestLoadRequestRef.current + 1;
+    latestLoadRequestRef.current = requestId;
+    setLoading(true);
+    setError(null);
+    try {
+      const range =
+        fromOverride === undefined && toOverride === undefined
+          ? {}
+          : { from: fromOverride, to: toOverride };
+      const nextSurface = await getBusinessScheduleSurface(range);
+      if (latestLoadRequestRef.current !== requestId) return;
+      setSurface(nextSurface);
+    } catch (loadError: unknown) {
+      if (latestLoadRequestRef.current !== requestId) return;
+      setError(loadError instanceof Error ? loadError.message : 'Business schedule failed.');
+    } finally {
+      if (latestLoadRequestRef.current === requestId) {
+        setLoading(false);
       }
-    },
-    [from, to],
-  );
+    }
+  }, [fromOverride, toOverride]);
 
   useEffect(() => {
     void load();
@@ -75,7 +73,7 @@ export const BusinessSchedulePage: React.FC = () => {
         status,
         consumesCredit: status === 'completed',
       });
-      await load({ from, to });
+      await load();
     } catch (actionError: unknown) {
       setError(actionError instanceof Error ? actionError.message : 'Unable to update lesson.');
     } finally {
@@ -120,7 +118,7 @@ export const BusinessSchedulePage: React.FC = () => {
     setError(null);
     try {
       await hideStudentLessonFollowupReminder(reminder.studentId, reminder.lessonId);
-      await load({ from, to });
+      await load();
     } catch (actionError: unknown) {
       setError(actionError instanceof Error ? actionError.message : 'Unable to hide reminder.');
     } finally {
@@ -135,7 +133,7 @@ export const BusinessSchedulePage: React.FC = () => {
     setError(null);
     try {
       await undoLatestHiddenStudentReminder(latest.studentId);
-      await load({ from, to });
+      await load();
     } catch (actionError: unknown) {
       setError(actionError instanceof Error ? actionError.message : 'Unable to undo reminder.');
     } finally {
@@ -159,19 +157,36 @@ export const BusinessSchedulePage: React.FC = () => {
         className="business-toolbar"
         onSubmit={(event) => {
           event.preventDefault();
-          void load({ from, to });
+          void load();
         }}
       >
         <label>
           From
-          <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          <input
+            type="date"
+            value={from}
+            onChange={(event) => {
+              setFromOverride(event.target.value);
+              setToOverride(to);
+            }}
+          />
         </label>
         <label>
           To
-          <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          <input
+            type="date"
+            value={to}
+            onChange={(event) => {
+              setFromOverride(from);
+              setToOverride(event.target.value);
+            }}
+          />
         </label>
         <button type="submit">Refresh</button>
       </form>
+      {surface ? (
+        <p className="business-muted">Times shown in {surface.settings.timezone}</p>
+      ) : null}
 
       <div className="business-metric-grid">
         <Metric label="Today" value={String(surface?.today.length ?? 0)} detail="lessons" />
@@ -201,8 +216,8 @@ export const BusinessSchedulePage: React.FC = () => {
                   <div>
                     <strong>{lesson.studentName}</strong>
                     <span>
-                      {formatDateTime(lesson.startsAt)} · {lesson.durationMinutes} min ·{' '}
-                      {lesson.status}
+                      {formatDateTime(lesson.startsAt, surface?.settings.timezone)} ·{' '}
+                      {lesson.durationMinutes} min · {lesson.status}
                       {lesson.homework.status === 'not_planned' ? ' · No homework planned' : ''}
                     </span>
                   </div>
@@ -285,7 +300,12 @@ export const BusinessSchedulePage: React.FC = () => {
                   <strong>{reminder.studentName}</strong>
                   <span>{reminder.title}</span>
                   {reminder.lessonSummary ? (
-                    <small>{formatReminderLessonDetail(reminder.lessonSummary)}</small>
+                    <small>
+                      {formatReminderLessonDetail(
+                        reminder.lessonSummary,
+                        surface?.settings.timezone,
+                      )}
+                    </small>
                   ) : null}
                   {reminder.actionIntent === 'complete_lesson_and_start_assignment' &&
                   reminder.lessonId ? (
@@ -321,7 +341,11 @@ export const BusinessSchedulePage: React.FC = () => {
             {surface?.latestHiddenReminder ? (
               <div className="business-hidden-reminder">
                 <span>
-                  Hidden: {formatReminderLessonDetail(surface.latestHiddenReminder.lessonSummary)}
+                  Hidden:{' '}
+                  {formatReminderLessonDetail(
+                    surface.latestHiddenReminder.lessonSummary,
+                    surface.settings.timezone,
+                  )}
                 </span>
                 <button
                   type="button"

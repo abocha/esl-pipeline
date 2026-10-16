@@ -33,7 +33,7 @@ export function formatDateRange(from: string, to: string): string {
   return `${formatDate(from)} – ${formatDate(to)}`;
 }
 
-export function formatDateTime(value: string): string {
+export function formatDateTime(value: string, timezone?: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
@@ -42,6 +42,7 @@ export function formatDateTime(value: string): string {
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
+        ...(timezone ? { timeZone: timezone } : {}),
       });
 }
 

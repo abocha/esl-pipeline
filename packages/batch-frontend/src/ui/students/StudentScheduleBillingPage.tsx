@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   addStudentPackage,
   createStudentLesson,
+  getBusinessSettings,
   getStudentScheduleBillingSurface,
   hideStudentLessonFollowupReminder,
   recordStudentPayment,
@@ -13,7 +14,7 @@ import {
   updateStudentLessonPlan,
   upsertPrimaryStudentLessonRecurrence,
 } from '../../utils/api';
-import { TIMEZONE_OPTIONS } from '../../utils/timezones';
+import { dateInputInTimezone, dateTimeInputInTimezone } from '../../utils/scheduling-time';
 import { useStudentAreaContext } from './StudentAreaContext';
 import {
   StudentAreaActionLink,
@@ -50,22 +51,23 @@ interface RecurrenceFormState {
   slots: RecurrenceSlotForm[];
 }
 
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
 });
 
-function formatDateTime(value?: string | null): string {
+function formatDateTime(value: string | null | undefined, timezone: string): string {
   if (!value) return 'Not scheduled yet';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Not scheduled yet' : DATE_TIME_FORMATTER.format(date);
+  return Number.isNaN(date.getTime())
+    ? 'Not scheduled yet'
+    : date.toLocaleString('en-US', {
+        timeZone: timezone,
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
 }
 
 function formatDate(value?: string | null): string {
@@ -86,39 +88,13 @@ function formatCredits(value: number): string {
 }
 
 function formatReminderLessonDetail(
-  summary?: StudentScheduleBillingSurface['reminders'][number]['lessonSummary'] | null,
+  summary: StudentScheduleBillingSurface['reminders'][number]['lessonSummary'] | null | undefined,
+  timezone: string,
 ): string {
   if (!summary) return 'Lesson no longer available';
   const topic = summary.title?.trim() ? summary.title.trim() : 'Untitled lesson';
-  const date = formatDateTime(summary.startsAt);
+  const date = formatDateTime(summary.startsAt, timezone);
   return `${date} · ${topic} · Lesson ${summary.lessonId}`;
-}
-
-function toIsoFromDateTimeLocal(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
-}
-
-function todayInput(): string {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate(),
-  ).padStart(2, '0')}`;
-}
-
-function defaultLessonStartInput(): string {
-  return `${todayInput()}T10:00`;
-}
-
-function toDateTimeLocal(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return defaultLessonStartInput();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 export const StudentScheduleBillingPage: React.FC = () => {
@@ -126,6 +102,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
   const navigate = useNavigate();
   const studentName = student?.student ?? 'this student';
   const [surface, setSurface] = useState<StudentScheduleBillingSurface | null>(null);
+  const [workspaceTimezone, setWorkspaceTimezone] = useState('UTC');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
@@ -138,7 +115,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
   });
   const [recurrenceForm, setRecurrenceForm] = useState({
     timezone: 'UTC',
-    startsOn: todayInput(),
+    startsOn: '',
     status: 'active' as 'active' | 'paused',
     generationHorizonDays: '56',
     localStartTime: '11:00',
@@ -153,9 +130,8 @@ export const StudentScheduleBillingPage: React.FC = () => {
     note: '',
   });
   const [lessonForm, setLessonForm] = useState({
-    startsAt: defaultLessonStartInput(),
+    startsAt: '',
     durationMinutes: '60',
-    timezone: 'UTC',
     title: '',
     notes: '',
   });
@@ -167,9 +143,8 @@ export const StudentScheduleBillingPage: React.FC = () => {
   });
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [lessonEditForm, setLessonEditForm] = useState({
-    startsAt: defaultLessonStartInput(),
+    startsAt: '',
     durationMinutes: '60',
-    timezone: 'UTC',
     title: '',
     notes: '',
     consumesCredit: true,
@@ -182,11 +157,15 @@ export const StudentScheduleBillingPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const nextSurface = await getStudentScheduleBillingSurface(studentId);
+        const [nextSurface, settings] = await Promise.all([
+          getStudentScheduleBillingSurface(studentId),
+          getBusinessSettings(),
+        ]);
         if (!active) return;
         setSurface(nextSurface);
+        setWorkspaceTimezone(settings.timezone);
         setPlanForm({
-          timezone: nextSurface.lessonPlan.timezone,
+          timezone: nextSurface.recurrenceRule?.timezone ?? settings.timezone,
           defaultDurationMinutes: String(nextSurface.lessonPlan.defaultDurationMinutes),
           cadence: nextSurface.lessonPlan.cadence ?? '',
           preferredTimes: nextSurface.lessonPlan.preferredTimes ?? '',
@@ -194,10 +173,10 @@ export const StudentScheduleBillingPage: React.FC = () => {
         });
         setLessonForm((current) => ({
           ...current,
-          timezone: nextSurface.lessonPlan.timezone,
+          startsAt: `${dateInputInTimezone(new Date(), settings.timezone)}T10:00`,
           durationMinutes: String(nextSurface.lessonPlan.defaultDurationMinutes),
         }));
-        setRecurrenceFormFromSurface(nextSurface, setRecurrenceForm);
+        setRecurrenceFormFromSurface(nextSurface, settings.timezone, setRecurrenceForm);
       } catch (loadError: unknown) {
         if (!active) return;
         setError(loadError instanceof Error ? loadError.message : 'Schedule and billing failed.');
@@ -243,7 +222,6 @@ export const StudentScheduleBillingPage: React.FC = () => {
 
   const startHomeworkForLesson = async (
     lessonId: string,
-    lessonStatus?: StudentScheduleBillingSurface['lessons'][number]['status'] | null,
   ): Promise<StudentScheduleBillingSurface> => {
     if (!lessonId) {
       throw new Error('Lesson follow-up is missing lesson context.');
@@ -251,21 +229,14 @@ export const StudentScheduleBillingPage: React.FC = () => {
     if (!surface) {
       throw new Error('Schedule surface is not loaded.');
     }
-    const nextSurface =
-      lessonStatus === 'scheduled'
-        ? await updateStudentLesson(studentId, lessonId, {
-            status: 'completed',
-            consumesCredit: true,
-          })
-        : surface;
     navigateToLessonAssignment(lessonId);
-    return nextSurface;
+    return surface;
   };
 
   const startHomeworkFromReminder = async (
     reminder: StudentScheduleBillingSurface['reminders'][number],
   ): Promise<StudentScheduleBillingSurface> => {
-    return startHomeworkForLesson(reminder.lessonId ?? '', reminder.lessonStatus);
+    return startHomeworkForLesson(reminder.lessonId ?? '');
   };
 
   const hideReminder = async (
@@ -312,7 +283,11 @@ export const StudentScheduleBillingPage: React.FC = () => {
       <div className="student-schedule-billing-grid">
         <StudentAreaMetricCard
           eyebrow="Next lesson"
-          value={surface.nextLesson ? formatDateTime(surface.nextLesson.startsAt) : 'Not scheduled'}
+          value={
+            surface.nextLesson
+              ? formatDateTime(surface.nextLesson.startsAt, workspaceTimezone)
+              : 'Not scheduled'
+          }
           detail={
             surface.nextLesson ? `${surface.nextLesson.durationMinutes} min` : 'Add a lesson below.'
           }
@@ -377,22 +352,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
               );
             }}
           >
-            <label>
-              Timezone
-              <select
-                value={recurrenceForm.timezone}
-                onChange={(event) => {
-                  setRecurrenceForm({ ...recurrenceForm, timezone: event.target.value });
-                  setPlanForm({ ...planForm, timezone: event.target.value });
-                }}
-              >
-                {TIMEZONE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <p>Weekly plan timezone: {recurrenceForm.timezone}</p>
             <label>
               Default duration
               <input
@@ -657,6 +617,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
         <header>
           <StudentAreaSectionLabel>Lessons</StudentAreaSectionLabel>
           <p>Credits are consumed only when a completed lesson is marked chargeable.</p>
+          <p>Lesson times: {workspaceTimezone}. Change the timezone in Business settings.</p>
         </header>
         <form
           className="student-schedule-billing-form"
@@ -664,8 +625,8 @@ export const StudentScheduleBillingPage: React.FC = () => {
             event.preventDefault();
             void runAction('lesson', () =>
               createStudentLesson(studentId, {
-                startsAt: toIsoFromDateTimeLocal(lessonForm.startsAt),
-                timezone: lessonForm.timezone,
+                localStartsAt: lessonForm.startsAt,
+                timezone: workspaceTimezone,
                 durationMinutes: Number(lessonForm.durationMinutes),
                 title: lessonForm.title || null,
                 notes: lessonForm.notes || null,
@@ -677,6 +638,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
             Starts
             <input
               type="datetime-local"
+              required
               value={lessonForm.startsAt}
               onChange={(event) => setLessonForm({ ...lessonForm, startsAt: event.target.value })}
             />
@@ -690,13 +652,6 @@ export const StudentScheduleBillingPage: React.FC = () => {
               onChange={(event) =>
                 setLessonForm({ ...lessonForm, durationMinutes: event.target.value })
               }
-            />
-          </label>
-          <label>
-            Timezone
-            <input
-              value={lessonForm.timezone}
-              onChange={(event) => setLessonForm({ ...lessonForm, timezone: event.target.value })}
             />
           </label>
           <label>
@@ -725,9 +680,12 @@ export const StudentScheduleBillingPage: React.FC = () => {
             {surface.lessons.map((lesson) => (
               <article key={lesson.id} className="student-schedule-billing-list-row">
                 <span>
-                  <strong>{lesson.title || formatDateTime(lesson.startsAt)}</strong>
+                  <strong>
+                    {lesson.title || formatDateTime(lesson.startsAt, workspaceTimezone)}
+                  </strong>
                   <small>
-                    {formatDateTime(lesson.startsAt)} · {lesson.durationMinutes} min
+                    {formatDateTime(lesson.startsAt, workspaceTimezone)} · {lesson.durationMinutes}{' '}
+                    min
                   </small>
                 </span>
                 <StudentAreaStatusPill
@@ -777,9 +735,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
                       type="button"
                       disabled={saving === lesson.id}
                       onClick={() => {
-                        void runAction(lesson.id, () =>
-                          startHomeworkForLesson(lesson.id, lesson.status),
-                        );
+                        void runAction(lesson.id, () => startHomeworkForLesson(lesson.id));
                       }}
                     >
                       Add homework
@@ -852,9 +808,8 @@ export const StudentScheduleBillingPage: React.FC = () => {
                     onClick={() => {
                       setEditingLessonId(lesson.id);
                       setLessonEditForm({
-                        startsAt: toDateTimeLocal(lesson.startsAt),
+                        startsAt: dateTimeInputInTimezone(lesson.startsAt, workspaceTimezone),
                         durationMinutes: String(lesson.durationMinutes),
-                        timezone: lesson.timezone,
                         title: lesson.title ?? '',
                         notes: lesson.notes ?? '',
                         consumesCredit: lesson.consumesCredit,
@@ -871,8 +826,13 @@ export const StudentScheduleBillingPage: React.FC = () => {
                       event.preventDefault();
                       void runAction(lesson.id, () =>
                         updateStudentLesson(studentId, lesson.id, {
-                          startsAt: toIsoFromDateTimeLocal(lessonEditForm.startsAt),
-                          timezone: lessonEditForm.timezone,
+                          ...(lessonEditForm.startsAt ===
+                          dateTimeInputInTimezone(lesson.startsAt, workspaceTimezone)
+                            ? { startsAt: lesson.startsAt }
+                            : {
+                                localStartsAt: lessonEditForm.startsAt,
+                                timezone: workspaceTimezone,
+                              }),
                           durationMinutes: Number(lessonEditForm.durationMinutes),
                           title: lessonEditForm.title || null,
                           notes: lessonEditForm.notes || null,
@@ -888,6 +848,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
                       Starts
                       <input
                         type="datetime-local"
+                        required
                         value={lessonEditForm.startsAt}
                         onChange={(event) =>
                           setLessonEditForm({ ...lessonEditForm, startsAt: event.target.value })
@@ -1032,7 +993,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
                   <small>{reminder.message}</small>
                   {reminder.lessonSummary ? (
                     <small className="student-schedule-billing-reminder-detail">
-                      {formatReminderLessonDetail(reminder.lessonSummary)}
+                      {formatReminderLessonDetail(reminder.lessonSummary, workspaceTimezone)}
                     </small>
                   ) : null}
                 </span>
@@ -1075,7 +1036,11 @@ export const StudentScheduleBillingPage: React.FC = () => {
         {surface.latestHiddenReminder ? (
           <div className="student-schedule-billing-hidden-reminder">
             <span>
-              Hidden: {formatReminderLessonDetail(surface.latestHiddenReminder.lessonSummary)}
+              Hidden:{' '}
+              {formatReminderLessonDetail(
+                surface.latestHiddenReminder.lessonSummary,
+                workspaceTimezone,
+              )}
             </span>
             <button
               type="button"
@@ -1100,6 +1065,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
 
 function setRecurrenceFormFromSurface(
   surface: StudentScheduleBillingSurface,
+  workspaceTimezone: string,
   setRecurrenceForm: React.Dispatch<React.SetStateAction<RecurrenceFormState>>,
 ) {
   const firstSlot = surface.recurrenceRule?.slots[0];
@@ -1117,8 +1083,9 @@ function setRecurrenceFormFromSurface(
         },
       ];
   setRecurrenceForm({
-    timezone: surface.recurrenceRule?.timezone ?? surface.lessonPlan.timezone,
-    startsOn: surface.recurrenceRule?.startsOn ?? todayInput(),
+    timezone: surface.recurrenceRule?.timezone ?? workspaceTimezone,
+    startsOn:
+      surface.recurrenceRule?.startsOn ?? dateInputInTimezone(new Date(), workspaceTimezone),
     status: surface.recurrenceRule?.status === 'paused' ? 'paused' : 'active',
     generationHorizonDays: String(surface.recurrenceRule?.generationHorizonDays ?? 56),
     localStartTime: firstSlot?.localStartTime ?? '11:00',

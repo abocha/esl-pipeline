@@ -100,6 +100,23 @@ The first implementation must not:
 7. alter learner-profile semantics
 8. auto-publish homework for elapsed lessons
 
+## Workspace scheduling timezone
+
+Business settings (`workspace_business_settings.timezone`) owns the tutor-facing clock for manual
+lesson entry and schedule display. Student and lesson forms do not offer independent timezone
+settings. New weekly plans use this workspace timezone.
+
+Manual create/time edits send `localStartsAt` (`YYYY-MM-DDTHH:mm`) plus an explicit timezone through
+the existing lesson endpoints. PostgreSQL converts that wall time with `timestamp AT TIME ZONE`,
+the same mechanism used by recurrence. DST overlaps use the standard-time offset; gaps use the
+pre-transition offset and therefore advance into the first valid period after the gap. Existing
+offset-bearing `startsAt` requests remain supported; a request cannot supply both forms. An edit
+that leaves the wall time unchanged retains the original absolute instant.
+
+Changing the workspace timezone does not rewrite existing lesson instants or weekly plans. Existing
+weekly plans retain and display their recorded timezone, including when editing their slots. Moving
+those plans to a different timezone requires a separately defined transition for materialized lessons.
+
 ## Recurrence Architecture
 
 Student lesson planning keeps notes and defaults in `student_lesson_plans`, while executable
@@ -125,9 +142,11 @@ The first schedule-to-homework workflow is an in-app operator reminder:
 
 1. Student and business schedule surfaces expose `lesson_followup` reminders for elapsed lessons
    that still lack successful linked homework.
-2. The `Complete + homework` action calls the existing lesson update path with
-   `status: completed` and `consumesCredit: true`, then opens the assignment flow with `studentId`
-   and `lessonId` context.
+2. `Add homework` opens the assignment flow with `studentId` and `lessonId` context; navigation
+   alone does not complete the lesson or consume credit. Confirming Student or successfully
+   recovering a session with that lesson link completes an eligible elapsed scheduled lesson and
+   consumes one credit. Abandoning before linking leaves the ledger unchanged; abandoning after
+   linking does not reverse the completed lesson. Explicit `Complete` remains a separate action.
 3. The assignment flow preserves the lesson link while prompt packages, drafts, publish jobs, and
    homework-memory extraction proceed through the normal review/publish pipeline.
 4. An explicit transcript-only finish records `not_planned` with a nullable transcript-result

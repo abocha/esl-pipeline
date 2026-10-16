@@ -542,6 +542,109 @@ describeIfPg('application/student-schedule-billing', () => {
     await closePgPool();
   });
 
+  it.each([
+    ['Asia/Kolkata', '2026-05-11T09:30', '2026-05-11T04:00:00.000Z'],
+    ['Asia/Bangkok', '2026-05-11T00:30', '2026-05-10T17:30:00.000Z'],
+    ['America/New_York', '2026-11-01T01:30', '2026-11-01T06:30:00.000Z'],
+    ['America/New_York', '2026-03-08T02:30', '2026-03-08T07:30:00.000Z'],
+  ])('persists manual wall time in %s (%s) as %s', async (timezone, localStartsAt, expected) => {
+    const { studentId, userId } = await seedStudent();
+    const surface = await createStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      { localStartsAt, timezone },
+      userId,
+    );
+    expect(surface.lessons).toHaveLength(1);
+    expect(surface.lessons[0]).toMatchObject({ startsAt: expected, timezone });
+    const stored = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
+      client.query<{ starts_at: Date }>('SELECT starts_at FROM student_lessons WHERE id = $1', [
+        surface.lessons[0]!.id,
+      ]),
+    );
+    expect(stored.rows[0]?.starts_at.toISOString()).toBe(expected);
+  });
+
+  it('keeps legacy instant inputs independent of the lesson timezone and preserves time on metadata edits', async () => {
+    const { studentId, userId } = await seedStudent();
+    let surface = await createStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      { startsAt: '2026-05-11T09:30:00+02:00', timezone: 'Asia/Kolkata' },
+      userId,
+    );
+    const lessonId = surface.lessons[0]!.id;
+    expect(surface.lessons[0]?.startsAt).toBe('2026-05-11T07:30:00.000Z');
+    surface = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      lessonId,
+      { title: 'Changed title' },
+      userId,
+    );
+    expect(surface.lessons[0]).toMatchObject({
+      title: 'Changed title',
+      startsAt: '2026-05-11T07:30:00.000Z',
+      timezone: 'Asia/Kolkata',
+    });
+    surface = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      lessonId,
+      { startsAt: '2026-05-12T09:30:00+02:00' },
+      userId,
+    );
+    expect(surface.lessons[0]?.startsAt).toBe('2026-05-12T07:30:00.000Z');
+  });
+
+  it.each([
+    '2026-02-30T09:30',
+    '2026-13-01T09:30',
+    '0000-01-01T09:30',
+    '2026-05-11T24:00',
+    '2026-05-11T09:60',
+    '2026-05-11T09:30:00Z',
+  ])(
+    'rejects invalid manual wall time %s as a request error without persisting it',
+    async (localStartsAt) => {
+      const { studentId, userId } = await seedStudent();
+      await expect(
+        createStudentLesson(
+          DEFAULT_WORKSPACE_ID,
+          studentId,
+          { localStartsAt, timezone: 'Asia/Kolkata' },
+          userId,
+        ),
+      ).rejects.toMatchObject({ code: 'invalid_request', status: 400 });
+      expect(
+        (await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId))?.lessons,
+      ).toEqual([]);
+    },
+  );
+
+  it.each(['Not/A_Timezone', '+05:30', '-05:30'])(
+    'rejects local timezone %s without changing an existing lesson',
+    async (timezone) => {
+      const { studentId, userId } = await seedStudent();
+      const lessonId = await seedLessonInWorkspace(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        '2026-05-11T04:00:00Z',
+      );
+      await expect(
+        updateStudentLesson(
+          DEFAULT_WORKSPACE_ID,
+          studentId,
+          lessonId,
+          { localStartsAt: '2026-05-12T09:30', timezone },
+          userId,
+        ),
+      ).rejects.toMatchObject({ code: 'invalid_request', status: 400 });
+      const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+      expect(surface?.lessons[0]?.startsAt).toBe('2026-05-11T04:00:00.000Z');
+    },
+  );
+
   it('uses the requested tutor workspace for business settings', async () => {
     const alpha = await seedWorkspaceTutor('alpha');
     await seedWorkspaceTutor('beta');
@@ -2039,6 +2142,44 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(generated).toBeDefined();
     expect(generated?.timezone).toBe('Asia/Kolkata');
     expect(generated?.startsAt).toBe('2026-05-11T04:00:00.000Z');
+  });
+
+  it('marks a local-time edit of a generated lesson as a reschedule and preserves it during materialization', async () => {
+    const { studentId, userId } = await seedStudent();
+    const recurrence = {
+      timezone: 'Asia/Kolkata',
+      startsOn: '2026-05-04',
+      generationHorizonDays: 7,
+      slots: [{ isoWeekday: 1, localStartTime: '09:30', durationMinutes: 45 }],
+    };
+    const initial = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      recurrence,
+      userId,
+    );
+    const lessonId = initial.lessons.find((lesson) => lesson.recurrenceOrigin === 'generated')!.id;
+    const changed = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      lessonId,
+      { localStartsAt: '2026-05-11T10:30', timezone: 'Asia/Kolkata' },
+      userId,
+    );
+    expect(changed.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
+      startsAt: '2026-05-11T05:00:00.000Z',
+      recurrenceOverrideKind: 'manual_reschedule',
+    });
+    const materialized = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      recurrence,
+      userId,
+    );
+    expect(materialized.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
+      startsAt: '2026-05-11T05:00:00.000Z',
+      recurrenceOverrideKind: 'manual_reschedule',
+    });
   });
 
   it('feeds generated recurrence lessons into business schedule and stats', async () => {

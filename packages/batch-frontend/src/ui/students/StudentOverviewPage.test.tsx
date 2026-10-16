@@ -7,6 +7,7 @@ import { StudentOverviewPage } from './StudentOverviewPage';
 
 const apiMocks = vi.hoisted(() => ({
   getStudentOverviewSurface: vi.fn(),
+  getBusinessSettings: vi.fn(),
 }));
 
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
@@ -36,6 +37,7 @@ function createDeferred<T>(): Deferred<T> {
 }
 
 function seedOverviewMocks() {
+  apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'Asia/Bangkok' });
   useStudentAreaContextMock.mockReturnValue({
     student: {
       id: 'student-alex',
@@ -271,6 +273,7 @@ describe('StudentOverviewPage', () => {
     expect(screen.getByRole('region', { name: /Recent Activity/i })).toBeTruthy();
 
     const operations = screen.getByRole('region', { name: /Operations/i });
+    expect(operations.textContent).toContain('May 7, 5:00 PM · Asia/Bangkok');
     const operationLinks = Array.from(operations.querySelectorAll('a'));
     expect(operationLinks).toHaveLength(4);
     expect(operationLinks.map((link) => link.getAttribute('href'))).toEqual([
