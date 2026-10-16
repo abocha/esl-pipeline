@@ -230,6 +230,7 @@ jobs:
             echo "Release tag ${RELEASE_TAG} does not match package.json version ${package_version}"
             exit 1
           fi
+          bash scripts/release/verify-release-image-bundle.sh --refs-only
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
@@ -321,3 +322,6 @@ jobs:
           [[ "$BUILD_BACKEND" == "true" ]] || reuse_image batch-backend
           [[ "$BUILD_FRONTEND" == "true" ]] || reuse_image batch-frontend
           [[ "$BUILD_BOT" == "true" ]] || reuse_image telegram-ops-bot
+
+      - name: Verify complete release bundle and record deployment handoff
+        run: bash scripts/release/verify-release-image-bundle.sh

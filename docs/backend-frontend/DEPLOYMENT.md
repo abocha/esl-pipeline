@@ -413,6 +413,27 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
    `packages/batch-backend/prompt-assets/**` is backend runtime content and never qualifies for
    `release:none`.
 
+   Use the successful publication run's **Verified deployment image bundle** summary to obtain
+   the actual published release SHA and all three registry digests. The workflow checks the remote
+   Git tag before registry writes and verifies the complete bundle afterward. The workflow event's
+   PR head SHA is not the release SHA. Before deployment, recheck the receipt using this read-only
+   command from the repository checkout (Git remote access and Docker Buildx registry access required):
+
+   ```bash
+   RELEASE_SHA=<published-40-char-release-sha> RELEASE_TAG=<vX.Y.Z> \
+     IMAGE_PREFIX=ghcr.io/abocha/esl-pipeline \
+     bash scripts/release/verify-release-image-bundle.sh
+   ```
+
+   A tag/SHA mismatch stops verification before registry inspection. A missing image or differing
+   SHA/version digest prevents a success receipt. If Git history was rewritten after publication,
+   stop the ordinary handoff and inspect the original successful publication logs/receipt and rewrite
+   evidence. Do not substitute the new tag target, rebuild, or retag existing images automatically.
+   For pre-receipt releases, obtain the published SHA from the publication job's checked-out release
+   commit, then inspect all three explicit SHA image refs and record their digests. Deployment of an
+   original SHA despite a rewritten Git tag requires an explicit operator decision; this verifier
+   deliberately offers no mismatch bypass. A matching source tree alone is insufficient.
+
    If publication fails after the release commit and tag exist, do not deploy that release. After
    confirming which images were already published, use the manually dispatched
    `Recover Release Image Bundle` workflow to copy only the unchanged images from the last complete
