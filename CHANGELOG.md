@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.3.6] - 2026-10-16
+
+### Changed
+
+- Automated release from PR #406: test: isolate provider unit tests from ambient credentials (ESL-51) (https://github.com/abocha/esl-pipeline/pull/406)
+
 ## [21.3.5] - 2026-10-13
 
 ### Changed
