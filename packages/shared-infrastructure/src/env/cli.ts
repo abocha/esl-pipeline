@@ -45,6 +45,9 @@ function findWorkspaceRoot(startDir: string): string | undefined {
 }
 
 export function loadCliEnv(options: LoadCliEnvOptions): LoadEnvSummary {
+  if (process.env.VALIDATION_TEST_CLASS === 'pure') {
+    return { loadedFiles: [], missingFiles: [], assignedKeys: [], overriddenKeys: [] };
+  }
   const moduleDir = dirname(fileURLToPath(options.moduleUrl));
   const workspaceRoot = findWorkspaceRoot(moduleDir);
   const repoEnvPath = options.repoEnvRelativePath
@@ -75,6 +78,9 @@ export function loadCliEnv(options: LoadCliEnvOptions): LoadEnvSummary {
  * Compose and deployment scripts intentionally do not use this compatibility bridge.
  */
 export function loadApplicationEnv(options: LoadApplicationEnvOptions): LoadEnvSummary {
+  if (process.env.VALIDATION_TEST_CLASS === 'pure') {
+    return { loadedFiles: [], missingFiles: [], assignedKeys: [], overriddenKeys: [] };
+  }
   const moduleDir = dirname(fileURLToPath(options.moduleUrl));
   const workspaceRoot = findWorkspaceRoot(moduleDir);
   const cwd = resolve(options.cwd ?? workspaceRoot ?? process.cwd());

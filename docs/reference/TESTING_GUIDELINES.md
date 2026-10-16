@@ -44,6 +44,25 @@ compiled workspace entries. This keeps upload mocks shared across pnpm's injecte
 copies while exercising the real renderer and publication flow. Build the package graph before
 running these prebuilt tests; do not replace their imports with unbuilt source aliases.
 
+The root Vitest setup isolates orchestrator, storage-uploader, provider-runtime and STT/TTS
+provider unit tests before test modules initialize, including direct package, watch and prebuilt
+entrypoints. It reuses `scripts/test/pure-test-env.mjs`, disables SDK user-profile/ADC credential
+files and AWS metadata discovery, and sets `VALIDATION_TEST_CLASS=pure`. Application/CLI env
+bootstrap and mutating shared env loaders skip env files in pure mode; explicit non-mutating
+`loadEnvFiles({ assignToProcess: false })` remains available for parser fixtures.
+
+The setup blocks external fetch and TCP/TLS connections before dispatch, including unmocked SDK
+requests. Literal loopback addresses and localhost remain available to intentional mock servers.
+Integration suites (including ElevenLabs' `tests/integration.test.ts`) and backend project/service
+classification retain their existing setup. This guard covers in-process Node transports, not
+arbitrary subprocesses or native networking. Reproduce the dummy-credential/env-file regression
+after building the orchestrator test prerequisites:
+
+```bash
+pnpm --filter @esl-pipeline/orchestrator test:unit:setup
+node --test scripts/test/provider-unit-isolation.mjs scripts/test/pure-test-env.test.mjs
+```
+
 While editing, run the narrowest relevant command:
 
 - one test file or `vitest related --run` for a focused behavior change;

@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    setupFiles: [fileURLToPath(new URL('./scripts/test/provider-unit-setup.mjs', import.meta.url))],
     // Publication and orchestration must resolve the same uploader module for mocks.
     // pnpm's injected workspace copies otherwise create separate module identities.
     alias: {
