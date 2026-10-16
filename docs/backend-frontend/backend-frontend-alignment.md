@@ -99,6 +99,8 @@ revision content/history are preserved.
 ## Assignment Workflow Boundary
 
 - AssignmentV1 Slice 2 / ABO-29 uses a temporary JSON textarea for new structured assignments.
+  Create defers editor validation feedback before a draft exists and while generation is pending
+  (ESL-19); an absent draft is not valid, and clearing an editable draft remains a syntax error.
   Only parsed, schema/domain-valid AssignmentV1 can cross the durable autosave boundary. Invalid
   buffers stay local, suppress preview/confirmation/publication/correction, and disappear on reload.
   The API returns the same validated object and pinned context used by preview. Canonical sorted-key
