@@ -727,7 +727,11 @@ describeHttpServerIntegrationSuite(
         const expectedArgs = [
           deriveStudentId('Anna'),
           MIGRATED_PROFILE_REVISION_ID,
-          ...(action === '/restore' ? [{ createdBy: 'test-user-id' }] : []),
+          ...(action === '/activate'
+            ? [{ actorUserId: 'test-user-id' }]
+            : action === '/restore'
+              ? [{ createdBy: 'test-user-id' }]
+              : []),
         ];
         expect(operation).toHaveBeenCalledWith(...expectedArgs);
       },
