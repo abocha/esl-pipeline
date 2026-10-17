@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.4.1] - 2026-10-17
+
+### Changed
+
+- Automated release from PR #414: fix(business): simplify workspace and preserve payment truth (https://github.com/abocha/esl-pipeline/pull/414)
+
 ## [21.4.0] - 2026-10-17
 
 ### Changed
