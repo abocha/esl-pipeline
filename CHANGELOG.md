@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.4.0] - 2026-10-17
+
+### Changed
+
+- Automated release from PR #409: fix(schedule): use workspace time and align homework entry (https://github.com/abocha/esl-pipeline/pull/409)
+
 ## [21.3.7] - 2026-10-16
 
 ### Changed
