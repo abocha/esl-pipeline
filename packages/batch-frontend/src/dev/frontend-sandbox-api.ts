@@ -1096,6 +1096,16 @@ export function createFrontendSandboxApiAdapter(
     );
     if (businessData !== undefined) return responseFor(config, businessData);
 
+    // A reproducible Student availability preview, without mutating real data.
+    if (
+      scenario === 'student-availability' &&
+      method === 'get' &&
+      path.startsWith('/students/student-alex/') &&
+      path !== '/students/student-alex/surfaces/overview'
+    ) {
+      throw scenarioErrorFor(config, 'Student data is unavailable in this preview scenario.');
+    }
+
     if (isSlowScenarioRequest(scenario, method, path)) {
       await delaySandboxResponse();
     }
@@ -1138,7 +1148,19 @@ export function createFrontendSandboxApiAdapter(
       return responseFor(config, {
         profile: profileContent(),
         revisions: profileRevisionList(),
-        memory: memoryOverview(),
+        memory:
+          scenario === 'student-availability'
+            ? {
+                ...memoryOverview(),
+                latestReadyStudentMemorySnapshot: null,
+                availability: {
+                  state: 'repair_required',
+                  reason: 'established_history_ineligible',
+                  lessonReferenceCount: 3,
+                  homeworkReferenceCount: 1,
+                },
+              }
+            : memoryOverview(),
         pendingCandidates: emptyCandidateList(),
         recentTimeline: {
           items: [

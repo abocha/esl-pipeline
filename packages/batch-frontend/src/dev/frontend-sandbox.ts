@@ -8,6 +8,7 @@ export type FrontendSandboxScenario =
   | 'step-one-resume-error'
   | 'step-one-no-learners'
   | 'step-one-learner-error'
+  | 'student-availability'
   | 'step-one-slow';
 
 const frontendSandboxScenarios = new Set<FrontendSandboxScenario>([
@@ -17,6 +18,7 @@ const frontendSandboxScenarios = new Set<FrontendSandboxScenario>([
   'step-one-resume-error',
   'step-one-no-learners',
   'step-one-learner-error',
+  'student-availability',
   'step-one-slow',
 ]);
 

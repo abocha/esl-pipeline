@@ -89,6 +89,15 @@ Canonical behavior and current status live in:
   currency, with other currencies reported separately. Lesson/workload facts and the recent-payment
   list remain scoped to non-archived students. Business top-up drafts offer a discussion based on
   credit balance; they do not assert debt or renewal.
+- Student pages show scheduling/payment facts and review actions without profile-coverage,
+  reminder-total, recent-memory-total, or open-thread metric cards. Candidate review counts sit
+  beside the relevant controls; snapshot source counts and technical memory diagnostics remain
+  under Memory support details. Candidate confidence labels are not displayed to tutors.
+- Student availability distinguishes absent memory, repair-required history and repository failure.
+  Failed initial Learning loads show an unavailable state with Retry; they do not present an empty
+  editable profile or zero-candidate summary. History retains successful sources and previous
+  entries on retry failure, names unavailable sources, and separates genuine empty results from
+  incomplete history and filters with no matches. These states never initiate memory repair.
 - Local UI iteration can use the Vite mock-auth sandbox without a backend:
   - PowerShell:
     ` $env:VITE_BATCH_FRONTEND_SANDBOX='mock-auth'; pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
@@ -106,6 +115,8 @@ Canonical behavior and current status live in:
     - `http://localhost:5173/?sandboxScenario=step-one-no-learners`
     - `http://localhost:5173/?sandboxScenario=step-one-learner-error`
     - `http://localhost:5173/?sandboxScenario=step-one-slow`
+    - `http://localhost:5173/students/student-alex/overview?sandboxScenario=student-availability`
+      shows repair-required memory in Overview and unavailable Learning/History requests.
   - Add `jobId` or `sessionId` to any sandbox URL to inspect initial assignment hydration. For
     example, open `http://localhost:5173/?sandboxScenario=default&jobId=job-sandbox` to resume
     the seeded completed assignment with all primary stages unlocked for copy/layout review.

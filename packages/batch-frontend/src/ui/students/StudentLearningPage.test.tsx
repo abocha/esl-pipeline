@@ -461,6 +461,21 @@ describe('StudentLearningPage', () => {
     });
   });
 
+  it('keeps a failed initial load unavailable until Retry succeeds', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentLearningSurface.mockRejectedValueOnce(new Error('Learning request failed'));
+    renderLearningPage();
+    expect(await screen.findByRole('heading', { name: 'Learning unavailable' })).toBeTruthy();
+    expect(screen.queryByText('No Snapshot Yet')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Save learner profile/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /Refresh Draft From Approved Candidates/i }),
+    ).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('heading', { name: 'Foundational Profile' })).toBeTruthy();
+    expect(apiMocks.getStudentLearningSurface).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['repair_required', 'repository_unavailable'])(
     'explains %s without suggesting a fresh bootstrap',
     async (state) => {
@@ -580,6 +595,7 @@ describe('StudentLearningPage', () => {
     renderLearningPage();
 
     expect(await screen.findByText('Recent learner memory summary.')).toBeTruthy();
+    expect(screen.queryByText(/Referenced sources:/)).toBeNull();
     expect(screen.queryByText('incremental_v1_1')).toBeNull();
     expect(screen.queryByText('snapshot-hash')).toBeNull();
 
@@ -587,6 +603,7 @@ describe('StudentLearningPage', () => {
 
     expect(screen.getByText('incremental_v1_1')).toBeTruthy();
     expect(screen.getByText('snapshot-hash')).toBeTruthy();
+    expect(screen.getByText('Referenced sources: 1 lesson / 1 homework')).toBeTruthy();
     expect(screen.getByText(/Homework memory extraction failed/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /manual full rebuild/i })).toBeNull();
   });
