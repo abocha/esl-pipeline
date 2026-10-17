@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import {
   type FoundationalProfile,
+  getBusinessSettings,
   getStudentOverviewSurface,
   type ProfileContentResponse,
   type ProfileRevisionSummaryResponse,
@@ -55,11 +56,19 @@ function formatDate(value?: string | null): string {
   return DATE_FORMATTER.format(date);
 }
 
-function formatDateTime(value?: string | null): string {
+function formatDateTime(value?: string | null, timezone?: string): string {
   if (!value) return 'Not recorded yet';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Not recorded yet';
-  return DATE_TIME_FORMATTER.format(date);
+  return timezone
+    ? date.toLocaleString('en-US', {
+        timeZone: timezone,
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : DATE_TIME_FORMATTER.format(date);
 }
 
 function formatCredits(surface: StudentScheduleBillingSurface | null): string {
@@ -415,6 +424,7 @@ function StudentOverviewPendingCanvas({
 export const StudentOverviewPage: React.FC = () => {
   const { student, studentId, studentLoading, studentError } = useStudentAreaContext();
   const [overviewData, setOverviewData] = useState<OverviewData>(EMPTY_OVERVIEW_DATA);
+  const [workspaceTimezone, setWorkspaceTimezone] = useState('UTC');
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [loadedOverviewKey, setLoadedOverviewKey] = useState<string | null>(null);
@@ -446,7 +456,10 @@ export const StudentOverviewPage: React.FC = () => {
 
     const loadOverview = async () => {
       try {
-        const surface = await getStudentOverviewSurface(studentId);
+        const [surface, settings] = await Promise.all([
+          getStudentOverviewSurface(studentId),
+          getBusinessSettings(),
+        ]);
 
         if (latestOverviewRequestRef.current !== requestId) {
           return;
@@ -460,6 +473,7 @@ export const StudentOverviewPage: React.FC = () => {
           timeline: surface.recentTimeline.items,
           scheduleBilling: surface.scheduleBilling ?? null,
         });
+        setWorkspaceTimezone(settings.timezone);
         setLoadedOverviewKey(requestOverviewKey);
         setOverviewError(null);
       } catch (error: unknown) {
@@ -572,7 +586,7 @@ export const StudentOverviewPage: React.FC = () => {
                 <strong>Next lesson</strong>
                 <small>
                   {scheduleBilling?.nextLesson
-                    ? formatDateTime(scheduleBilling.nextLesson.startsAt)
+                    ? `${formatDateTime(scheduleBilling.nextLesson.startsAt, workspaceTimezone)} · ${workspaceTimezone}`
                     : 'Not scheduled yet'}
                 </small>
               </span>

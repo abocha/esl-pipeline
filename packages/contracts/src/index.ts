@@ -824,7 +824,10 @@ export interface StudentLessonDto {
 }
 
 export interface CreateStudentLessonRequest {
-  startsAt: string;
+  /** Supply exactly one time input: an offset-bearing instant or local wall time. */
+  startsAt?: string;
+  /** YYYY-MM-DDTHH:mm in the required timezone; follows PostgreSQL DST resolution. */
+  localStartsAt?: string;
   timezone?: string;
   durationMinutes?: number;
   status?: StudentLessonStatus;
@@ -835,6 +838,8 @@ export interface CreateStudentLessonRequest {
 
 export interface UpdateStudentLessonRequest {
   startsAt?: string;
+  /** Alternative to startsAt: YYYY-MM-DDTHH:mm, with an explicit timezone. */
+  localStartsAt?: string;
   timezone?: string;
   durationMinutes?: number;
   status?: StudentLessonStatus;

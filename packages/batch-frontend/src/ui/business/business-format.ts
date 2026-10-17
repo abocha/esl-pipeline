@@ -33,7 +33,7 @@ export function formatDateRange(from: string, to: string): string {
   return `${formatDate(from)} – ${formatDate(to)}`;
 }
 
-export function formatDateTime(value: string): string {
+export function formatDateTime(value: string, timezone?: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
@@ -42,6 +42,7 @@ export function formatDateTime(value: string): string {
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
+        ...(timezone ? { timeZone: timezone } : {}),
       });
 }
 
@@ -58,25 +59,4 @@ export function formatHours(minutes: number): string {
     maximumFractionDigits: 1,
     minimumFractionDigits: Number.isInteger(hours) ? 0 : 1,
   })} h`;
-}
-
-export function todayInput(): string {
-  return toLocalDateInput(new Date());
-}
-
-export function addDaysInput(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return toLocalDateInput(date);
-}
-
-export function currentMonthInput(): string {
-  return todayInput().slice(0, 7);
-}
-
-function toLocalDateInput(date: Date): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }

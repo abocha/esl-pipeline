@@ -321,3 +321,13 @@ jobs:
           [[ "$BUILD_BACKEND" == "true" ]] || reuse_image batch-backend
           [[ "$BUILD_FRONTEND" == "true" ]] || reuse_image batch-frontend
           [[ "$BUILD_BOT" == "true" ]] || reuse_image telegram-ops-bot
+
+      - name: Record published release images
+        run: |
+          {
+            printf '### Published release images\n\n'
+            printf 'Release: %s\n\nPublished release SHA: %s\n\n' "$RELEASE_TAG" "$RELEASE_SHA"
+            for image in batch-backend batch-frontend telegram-ops-bot; do
+              printf -- '- %s/%s:%s\n' "$IMAGE_PREFIX" "$image" "$RELEASE_SHA"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

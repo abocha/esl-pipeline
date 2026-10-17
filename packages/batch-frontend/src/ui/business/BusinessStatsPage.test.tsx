@@ -3,7 +3,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BusinessStatsPage } from './BusinessStatsPage';
-import { currentMonthInput } from './business-format';
 
 const apiMocks = vi.hoisted(() => ({
   getBusinessStatsSurface: vi.fn(),
@@ -108,6 +107,8 @@ describe('BusinessStatsPage', () => {
     expect(screen.queryByText('Cashflow')).toBeNull();
     expect(screen.queryByText('Likely top-ups')).toBeNull();
     expect(screen.queryByText('No urgent business risks.')).toBeNull();
+    expect(apiMocks.getBusinessStatsSurface).toHaveBeenCalledWith({});
+    expect(screen.getByLabelText(/Month/i)).toHaveProperty('value', '2026-05');
   });
 
   it('renders backend planning boundaries as date-only calendar values', async () => {
@@ -135,7 +136,7 @@ describe('BusinessStatsPage', () => {
   });
 
   it('keeps newer month results when an older stats load resolves later', async () => {
-    const initialMonth = currentMonthInput();
+    const initialMonth = makeStatsSurface().month;
     const nextMonth = nextMonthInput(initialMonth);
     let resolveInitialLoad: (value: ReturnType<typeof makeStatsSurface>) => void = () => {};
     apiMocks.getBusinessStatsSurface

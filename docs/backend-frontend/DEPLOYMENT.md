@@ -413,6 +413,16 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
    `packages/batch-backend/prompt-assets/**` is backend runtime content and never qualifies for
    `release:none`.
 
+   Use the successful publication run's **Published release images** summary for the release SHA
+   and three SHA-tagged image references. The workflow event's PR head SHA is not the release SHA.
+   For older runs without this summary, use the publication job's checked-out release commit.
+   The deploy script resolves the requested image digests through its existing preflight.
+
+   If Git history was rewritten after publication, the new tag target may have no published images.
+   Use the original publication evidence and rewrite mapping to identify the original published SHA;
+   a matching source tree alone does not establish image availability. Do not automatically rebuild,
+   retag, or repair historical releases. Such repairs require separate approval.
+
    If publication fails after the release commit and tag exist, do not deploy that release. After
    confirming which images were already published, use the manually dispatched
    `Recover Release Image Bundle` workflow to copy only the unchanged images from the last complete

@@ -494,6 +494,7 @@ export async function createStudentLesson(
   return withPgTransaction(async (client) => {
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const lessonId = randomUUID();
+    const time = await resolveManualLessonTime(client, params);
     await client.query(
       `
       INSERT INTO student_lessons (
@@ -518,8 +519,8 @@ export async function createStudentLesson(
         lessonId,
         studentId,
         context.workspaceId,
-        params.startsAt,
-        params.timezone ?? DEFAULT_TIMEZONE,
+        time.startsAt,
+        time.timezone,
         params.durationMinutes ?? DEFAULT_DURATION_MINUTES,
         params.status ?? 'scheduled',
         params.consumesCredit ?? false,
@@ -636,8 +637,13 @@ export async function updateStudentLesson(
     }
 
     const nextStatus = params.status ?? existing.status;
-    const nextStartsAt = params.startsAt ?? existing.starts_at.toISOString();
-    const nextOverrideKind = getNextOverrideKind(existing, params, nextStatus, nextStartsAt);
+    const time = await resolveManualLessonTime(client, params, existing);
+    const nextOverrideKind = getNextOverrideKind(
+      existing,
+      params.localStartsAt === undefined ? params : { ...params, startsAt: time.startsAt },
+      nextStatus,
+      time.startsAt,
+    );
     await client.query(
       `
       UPDATE student_lessons
@@ -663,8 +669,8 @@ export async function updateStudentLesson(
       [
         lessonId,
         studentId,
-        params.startsAt ?? existing.starts_at.toISOString(),
-        params.timezone ?? existing.timezone,
+        time.startsAt,
+        time.timezone,
         params.durationMinutes ?? existing.duration_minutes,
         nextStatus,
         params.consumesCredit ?? existing.consumes_credit,
@@ -1827,6 +1833,45 @@ function buildWeeklyOccurrences(
     }
   }
   return occurrences;
+}
+
+async function resolveManualLessonTime(
+  client: PoolClient,
+  params: UpdateStudentLessonRequest,
+  existing?: LessonRow,
+): Promise<{ startsAt: string; timezone: string }> {
+  if (params.localStartsAt === undefined) {
+    const startsAt = params.startsAt ?? existing?.starts_at.toISOString();
+    if (startsAt === undefined) {
+      throw new StudentScheduleBillingError('invalid_request', 400, 'A lesson time is required');
+    }
+    return { startsAt, timezone: params.timezone ?? existing?.timezone ?? DEFAULT_TIMEZONE };
+  }
+  if (params.startsAt !== undefined || params.timezone === undefined) {
+    throw new StudentScheduleBillingError(
+      'invalid_request',
+      400,
+      'localStartsAt requires timezone and cannot be combined with startsAt',
+    );
+  }
+  const localStartsAt = params.localStartsAt;
+  if (!/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/.test(localStartsAt)) {
+    throw new StudentScheduleBillingError('invalid_request', 400, 'Invalid local lesson time');
+  }
+  parseDateInput(localStartsAt.slice(0, 10), 'Invalid local lesson date');
+  if (localStartsAt.startsWith('0000-')) {
+    throw new StudentScheduleBillingError('invalid_request', 400, 'Invalid local lesson date');
+  }
+  const timezone = normalizeTimezone(params.timezone);
+  // Intl accepts numeric offsets, but PostgreSQL interprets their signs as POSIX zones.
+  if (/^[+-]/.test(timezone)) {
+    throw new StudentScheduleBillingError('invalid_request', 400, 'Invalid timezone');
+  }
+  const result = await client.query<{ starts_at: Date }>(
+    'SELECT ($1::timestamp AT TIME ZONE $2) AS starts_at',
+    [localStartsAt, timezone],
+  );
+  return { startsAt: result.rows[0]!.starts_at.toISOString(), timezone };
 }
 
 function getNextOverrideKind(

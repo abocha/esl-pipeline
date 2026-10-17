@@ -106,6 +106,17 @@ For `release:patch`, `release:minor`, or `release:major`, it then:
 The release workflow publishes images but does not deploy them. Production deployment remains a
 separate operator action using the immutable release SHA.
 
+After successful image publication/reuse, the Actions summary records the release tag, published
+release SHA and three SHA-tagged image references. Use that published SHA for deployment, not the
+workflow event's PR head SHA. Deployment resolves the requested images through its existing preflight.
+
+Git history rewrites change descendant commit identities and tag targets without changing existing
+GHCR SHA tags. ESL-44's v21.0.0 mismatch came from the later ABO-50 rewrite: publication used
+`f9f94cba5cde5db72e0c30b4c535376e0ca57ef4`, subsequently rewritten to
+`b094054b490b8d8a2d803e06bba656aa70d834cf` with the same tree. Tree equality does not make the
+rewritten SHA a published image identity. Preserve original publication evidence; historical
+retagging, rebuilding, or Git-tag repair requires explicit approval.
+
 GHA build-cache export is best-effort because it is only a build acceleration. Image pushes and
 unchanged-image reuse remain fail-closed. If publication fails after the release commit and tag
 exist, do not deploy the incomplete bundle. Use the manual recovery workflow documented in

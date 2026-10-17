@@ -1153,6 +1153,73 @@ describeHttpServerIntegrationSuite(
       expect(mockActivateTemplateRevisionForTemplate).not.toHaveBeenCalled();
     });
 
+    it('passes explicit local lesson time and timezone through create and update routes', async () => {
+      const studentId = deriveStudentId('Anna');
+      const payload = { localStartsAt: '2026-05-11T09:30', timezone: 'Asia/Kolkata' };
+      const created = await app.inject({
+        method: 'POST',
+        url: `/students/${studentId}/lessons`,
+        payload,
+      });
+      expect(created.statusCode).toBe(201);
+      expect(mockCreateStudentLesson).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        payload,
+        'test-user-id',
+      );
+      const updated = await app.inject({
+        method: 'PATCH',
+        url: `/students/${studentId}/lessons/lesson-1`,
+        payload,
+      });
+      expect(updated.statusCode).toBe(200);
+      expect(mockUpdateStudentLesson).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        'lesson-1',
+        payload,
+        'test-user-id',
+      );
+    });
+
+    it.each([
+      ['missing time', { timezone: 'UTC' }, true],
+      [
+        'both time inputs',
+        {
+          startsAt: '2026-05-11T04:00:00Z',
+          localStartsAt: '2026-05-11T09:30',
+          timezone: 'Asia/Kolkata',
+        },
+        false,
+      ],
+      ['missing timezone', { localStartsAt: '2026-05-11T09:30' }, false],
+      ['offset on local time', { localStartsAt: '2026-05-11T09:30+02:00', timezone: 'UTC' }, false],
+      ['seconds on local time', { localStartsAt: '2026-05-11T09:30:00', timezone: 'UTC' }, false],
+    ])(
+      'validates manual lesson time inputs: %s',
+      async (_label: string, payload: Record<string, string>, createOnly: boolean) => {
+        const studentId = deriveStudentId('Anna');
+        mockCreateStudentLesson.mockClear();
+        mockUpdateStudentLesson.mockClear();
+        const created = await app.inject({
+          method: 'POST',
+          url: `/students/${studentId}/lessons`,
+          payload,
+        });
+        expect(created.statusCode).toBe(400);
+        expect(mockCreateStudentLesson).not.toHaveBeenCalled();
+        const updated = await app.inject({
+          method: 'PATCH',
+          url: `/students/${studentId}/lessons/lesson-1`,
+          payload,
+        });
+        expect(updated.statusCode).toBe(createOnly ? 200 : 400);
+        expect(mockUpdateStudentLesson).toHaveBeenCalledTimes(createOnly ? 1 : 0);
+      },
+    );
+
     it('passes authenticated workspace membership through every student business route', async () => {
       const studentId = deriveStudentId('Anna');
       const lessonId = 'lesson-1';

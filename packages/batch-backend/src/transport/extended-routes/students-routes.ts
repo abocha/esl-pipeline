@@ -210,8 +210,12 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       .min(1)
       .max(14),
   });
-  const createLessonBodySchema = z.object({
-    startsAt: z.string().trim().datetime({ offset: true }),
+  const lessonBodySchema = z.object({
+    startsAt: z.string().trim().datetime({ offset: true }).optional(),
+    localStartsAt: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
+      .optional(),
     timezone: z.string().trim().min(1).max(100).optional(),
     durationMinutes: z
       .number()
@@ -224,9 +228,23 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
     title: optionalTextSchema,
     notes: optionalTextSchema,
   });
-  const updateLessonBodySchema = createLessonBodySchema
-    .partial()
-    .refine((value) => Object.keys(value).length > 0, 'At least one lesson field is required');
+  const lessonTimeBodySchema = lessonBodySchema
+    .refine(
+      (value) => value.startsAt === undefined || value.localStartsAt === undefined,
+      'Supply either startsAt or localStartsAt, not both',
+    )
+    .refine(
+      (value) => value.localStartsAt === undefined || value.timezone !== undefined,
+      'Timezone is required for localStartsAt',
+    );
+  const createLessonBodySchema = lessonTimeBodySchema.refine(
+    (value) => value.startsAt !== undefined || value.localStartsAt !== undefined,
+    'A lesson time is required',
+  );
+  const updateLessonBodySchema = lessonTimeBodySchema.refine(
+    (value) => Object.keys(value).length > 0,
+    'At least one lesson field is required',
+  );
   const packageBodySchema = z.object({
     lessons: z.number().int().positive().max(500),
     note: optionalTextSchema,

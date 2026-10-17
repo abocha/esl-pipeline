@@ -176,6 +176,53 @@ describe('BusinessSchedulePage', () => {
     expect(screen.queryByText('Week Agenda')).toBeNull();
     expect(screen.queryByText(/ready to send/i)).toBeNull();
     expect(screen.queryByText('Payment And Credit Alerts')).toBeNull();
+    expect(apiMocks.getBusinessScheduleSurface).toHaveBeenCalledWith({});
+    expect(screen.getByLabelText(/From/i)).toHaveProperty('value', '2026-05-07');
+    expect(screen.getByLabelText(/To/i)).toHaveProperty('value', '2026-05-14');
+  });
+
+  it('shows lesson and reminder datetimes in the workspace timezone across midnight', async () => {
+    apiMocks.getBusinessScheduleSurface.mockResolvedValue(
+      makeSurface({
+        settings: { ...makeSurface().settings, timezone: 'America/Los_Angeles' },
+        lessons: [{ ...makeSurface().lessons[0], startsAt: '2026-05-08T06:30:00.000Z' }],
+        reminders: [
+          {
+            studentId: 'student-alex',
+            studentName: 'Alex',
+            studentScheduleBillingPath: '/students/student-alex/schedule-billing',
+            remainingCredits: 0,
+            type: 'lesson_followup',
+            channel: 'manual',
+            actionIntent: 'complete_lesson_and_start_assignment',
+            lessonId: 'lesson-1',
+            lessonStatus: 'scheduled',
+            lessonConsumesCredit: true,
+            severity: 'attention',
+            title: 'Finish lesson follow-up',
+            message: 'The scheduled lesson time has passed and homework is not published yet.',
+            lessonSummary: {
+              lessonId: 'lesson-1',
+              startsAt: '2026-05-08T06:30:00.000Z',
+              title: 'Present perfect review',
+            },
+            copyText: 'Complete Alex lesson and start homework.',
+          },
+        ],
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Times shown in America/Los_Angeles')).toBeTruthy();
+    expect(screen.getByText('May 7, 11:30 PM · 60 min · scheduled')).toBeTruthy();
+    expect(
+      screen.getByText('May 7, 11:30 PM · Present perfect review · Lesson lesson-1'),
+    ).toBeTruthy();
   });
 
   it('keeps newer range results when an older schedule load resolves later', async () => {

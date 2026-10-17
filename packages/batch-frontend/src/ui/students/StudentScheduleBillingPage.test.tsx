@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StudentScheduleBillingPage } from './StudentScheduleBillingPage';
 
@@ -8,6 +8,7 @@ const apiMocks = vi.hoisted(() => ({
   addStudentPackage: vi.fn(),
   createStudentLesson: vi.fn(),
   getStudentScheduleBillingSurface: vi.fn(),
+  getBusinessSettings: vi.fn(),
   hideStudentLessonFollowupReminder: vi.fn(),
   recordStudentPayment: vi.fn(),
   undoLatestHiddenStudentReminder: vi.fn(),
@@ -126,8 +127,10 @@ function renderPage() {
 }
 
 describe('StudentScheduleBillingPage', () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'Asia/Bangkok' });
     useStudentAreaContextMock.mockReturnValue({
       student: {
         id: 'student-alex',
@@ -199,43 +202,71 @@ describe('StudentScheduleBillingPage', () => {
     });
   });
 
-  it('creates new lessons with today plus tutor duration and timezone defaults', async () => {
-    const today = new Date();
-    const expectedStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
-      2,
-      '0',
-    )}-${String(today.getDate()).padStart(2, '0')}T10:00`;
+  it('creates lessons using the workspace day and timezone rather than browser or student defaults', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-07T22:00:00.000Z'));
+    apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'Asia/Kolkata' });
     apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
-      makeSurface({
-        lessonPlan: {
-          ...makeSurface().lessonPlan,
-          timezone: 'Asia/Kolkata',
-          defaultDurationMinutes: 75,
-        },
-      }),
+      makeSurface({ lessonPlan: { ...makeSurface().lessonPlan, defaultDurationMinutes: 75 } }),
     );
-
     renderPage();
-
     const startsInput = (await screen.findByLabelText('Starts')) as HTMLInputElement;
-    expect(startsInput.value).toBe(expectedStart);
-    expect((screen.getAllByLabelText('Duration')[1] as HTMLInputElement).value).toBe('75');
-    expect((screen.getAllByLabelText('Timezone')[1] as HTMLInputElement).value).toBe(
-      'Asia/Kolkata',
-    );
-
+    expect(startsInput.value).toBe('2026-05-08T10:00');
+    expect(screen.queryByLabelText('Timezone')).toBeNull();
+    expect(screen.getByText(/Lesson times: Asia\/Kolkata/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add lesson' }));
-
     await waitFor(() => {
       expect(apiMocks.createStudentLesson).toHaveBeenCalledWith(
         'student-alex',
         expect.objectContaining({
-          startsAt: new Date(expectedStart).toISOString(),
+          localStartsAt: '2026-05-08T10:00',
           durationMinutes: 75,
           timezone: 'Asia/Kolkata',
         }),
       );
     });
+  });
+
+  it('displays and edits lesson wall times in the workspace timezone', async () => {
+    apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'Asia/Kolkata' });
+    renderPage();
+    expect((await screen.findAllByText(/May 7, 3:30 PM/)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const input = screen.getAllByLabelText('Starts')[1] as HTMLInputElement;
+    expect(input.value).toBe('2026-05-07T15:30');
+    fireEvent.change(input, { target: { value: '2026-05-08T00:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith(
+        'student-alex',
+        'lesson-1',
+        expect.objectContaining({ localStartsAt: '2026-05-08T00:30', timezone: 'Asia/Kolkata' }),
+      ),
+    );
+  });
+
+  it('preserves the original instant when an ambiguous wall time is saved unchanged', async () => {
+    apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'America/New_York' });
+    const surface = makeSurface();
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        lessons: [{ ...surface.lessons[0], startsAt: '2026-11-01T05:30:00.000Z' }],
+      }),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect((screen.getAllByLabelText('Starts')[1] as HTMLInputElement).value).toBe(
+      '2026-11-01T01:30',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith(
+        'student-alex',
+        'lesson-1',
+        expect.objectContaining({ startsAt: '2026-11-01T05:30:00.000Z' }),
+      ),
+    );
+    expect(apiMocks.updateStudentLesson.mock.calls[0]?.[2]).not.toHaveProperty('localStartsAt');
   });
 
   it('marks scheduled lessons complete and chargeable', async () => {
@@ -252,7 +283,7 @@ describe('StudentScheduleBillingPage', () => {
     });
   });
 
-  it('completes an elapsed lesson follow-up and opens assignment with lesson context', async () => {
+  it('opens an elapsed lesson follow-up without completing it', async () => {
     apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
       makeSurface({
         nextLesson: null,
@@ -282,12 +313,9 @@ describe('StudentScheduleBillingPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add homework from reminder' }));
 
     await waitFor(() => {
-      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
-        status: 'completed',
-        consumesCredit: true,
-      });
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
     });
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 
   it('shows lesson context, hides follow-up reminders, and offers latest undo', async () => {
@@ -465,16 +493,22 @@ describe('StudentScheduleBillingPage', () => {
         '/?studentId=student-alex&lessonId=completed-no-homework',
       );
     });
+    fireEvent.click(addButtons[1]!);
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenNthCalledWith(
+        2,
+        '/?studentId=student-alex&lessonId=elapsed-scheduled',
+      );
+    });
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
     expect(screen.getByText('future-scheduled')).toBeTruthy();
   });
 
-  it('saves structured weekly recurrence rules', async () => {
+  it('saves new weekly recurrence rules in the workspace timezone', async () => {
+    apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'Asia/Kolkata' });
     renderPage();
 
     expect(await screen.findByText('Lesson Planning')).toBeTruthy();
-    fireEvent.change(screen.getAllByLabelText('Timezone')[0] as HTMLElement, {
-      target: { value: 'Asia/Kolkata' },
-    });
     fireEvent.change(screen.getByLabelText('Starts on'), { target: { value: '2026-05-11' } });
     fireEvent.change(screen.getAllByLabelText('Time')[0] as HTMLElement, {
       target: { value: '09:30' },
@@ -497,44 +531,8 @@ describe('StudentScheduleBillingPage', () => {
     });
   });
 
-  it('offers the shared timezone picker shape used by business settings', async () => {
-    renderPage();
-
-    const picker = (await screen.findAllByLabelText('Timezone'))[0] as HTMLSelectElement;
-    const options = Array.from(picker.querySelectorAll('option')).map((option) => ({
-      label: option.textContent,
-      value: option.value,
-    }));
-
-    expect(options.map((option) => option.value)).toEqual([
-      'America/Los_Angeles',
-      'America/Denver',
-      'America/Chicago',
-      'America/New_York',
-      'UTC',
-      'Europe/London',
-      'Europe/Berlin',
-      'Europe/Moscow',
-      'Asia/Dubai',
-      'Asia/Tbilisi',
-      'Asia/Almaty',
-      'Asia/Kolkata',
-      'Asia/Bishkek',
-      'Asia/Bangkok',
-      'Asia/Singapore',
-      'Asia/Tokyo',
-      'Australia/Sydney',
-    ]);
-    expect(options).toEqual(
-      expect.arrayContaining([
-        { value: 'Asia/Kolkata', label: 'India (UTC+5:30)' },
-        { value: 'Asia/Bishkek', label: 'Bishkek (UTC+6)' },
-        { value: 'Asia/Singapore', label: 'Singapore / Shanghai (UTC+8)' },
-      ]),
-    );
-  });
-
   it('preserves distinct times and durations for existing recurrence slots', async () => {
+    apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'Asia/Kolkata' });
     apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
       makeSurface({
         recurrenceRule: {
@@ -573,12 +571,14 @@ describe('StudentScheduleBillingPage', () => {
     renderPage();
 
     expect(await screen.findByDisplayValue('15:30')).toBeTruthy();
+    expect(screen.getByText('Weekly plan timezone: Asia/Bangkok')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
 
     await waitFor(() => {
       expect(apiMocks.upsertPrimaryStudentLessonRecurrence).toHaveBeenCalledWith(
         'student-alex',
         expect.objectContaining({
+          timezone: 'Asia/Bangkok',
           slots: [
             { isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 },
             { isoWeekday: 3, localStartTime: '15:30', durationMinutes: 60 },
