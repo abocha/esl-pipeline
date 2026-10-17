@@ -1,525 +1,229 @@
-.student-history-page {
-  --history-paper: var(--student-area-paper);
-  --history-paper-deep: var(--student-area-paper-deep);
-  --history-ink: var(--student-area-ink);
-  --history-muted: var(--student-area-muted);
-  --history-blue: var(--student-area-blue);
-  --history-blue-soft: var(--student-area-blue-soft);
-  --history-sage: var(--student-area-sage);
-  --history-sage-soft: var(--student-area-sage-soft);
-  --history-amber: var(--student-area-amber);
-  --history-amber-soft: var(--student-area-amber-soft);
-  --history-rose: var(--student-area-rose);
-  --history-rose-soft: var(--student-area-rose-soft);
-  --history-line: var(--student-area-line);
-  --history-paper-panel: color-mix(in srgb, var(--history-paper) 64%, transparent);
-  --history-paper-panel-soft: color-mix(in srgb, var(--history-paper) 58%, transparent);
-  --history-paper-empty: color-mix(in srgb, var(--history-paper) 48%, transparent);
-  --history-highlight: color-mix(in srgb, var(--bg-primary) 72%, transparent);
-  --history-ink-line: color-mix(in srgb, var(--history-ink) 12%, transparent);
-  --history-ink-skeleton: color-mix(in srgb, var(--history-ink) 10%, transparent);
-  --history-blue-tint: color-mix(in srgb, var(--history-blue) 13%, transparent);
-  --history-blue-line: color-mix(in srgb, var(--history-blue) 20%, transparent);
-  --history-sage-tint: color-mix(in srgb, var(--history-sage) 16%, transparent);
-  --history-sage-line: color-mix(in srgb, var(--history-sage) 14%, transparent);
-  --history-amber-line: color-mix(in srgb, var(--history-amber) 24%, transparent);
-  color: var(--history-ink);
-}
-
-.student-history-frame {
-  position: relative;
-  display: grid;
-  gap: 1.6rem;
-  padding: 0;
-  overflow: hidden;
+.student-area-body:has(.student-activity-page) {
+  background: transparent;
   border: 0;
   border-radius: 0;
-  background: transparent;
   box-shadow: none;
+  padding: 0;
+  overflow: visible;
 }
-
-.student-history-frame::before {
+.student-area-body:has(.student-activity-page)::before {
   content: none;
 }
-
-.student-history-frame > * {
-  position: relative;
+.student-activity-page {
+  color: var(--app-ink);
+  font-size: var(--cs-text-support);
+  line-height: 1.5;
+  min-width: 0;
 }
-
-.student-history-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.student-history-back,
-.student-history-about a,
-.student-history-event-card a {
-  color: var(--history-blue);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.student-history-back:hover,
-.student-history-about a:hover,
-.student-history-event-card a:hover {
-  text-decoration: underline;
-}
-
-.student-history-hero {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(16rem, 0.48fr);
-  align-items: center;
-  gap: clamp(1.5rem, 4vw, 3rem);
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--history-line);
-}
-
-.student-history-portrait {
-  display: grid;
-  place-items: center;
-  width: clamp(8rem, 18vw, 12rem);
-  aspect-ratio: 1;
-  border: 1px solid var(--history-ink-line);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 32% 25%, var(--history-highlight), transparent 30%),
-    linear-gradient(135deg, var(--history-blue-tint), var(--history-sage-tint));
-  color: var(--history-blue);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 3.5rem;
-}
-
-.student-history-identity p,
-.student-history-section-label {
-  margin: 0;
-  color: var(--history-blue);
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-}
-
-.student-history-identity h2 {
-  margin: 0.15rem 0 0.7rem;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 3.5rem;
-  font-weight: 500;
-  letter-spacing: 0;
-  line-height: 0.95;
-}
-
-.student-history-identity span {
-  display: block;
-  max-width: 32rem;
-  color: var(--history-ink);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.2rem;
-  line-height: 1.6;
-}
-
-.student-history-about {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1.25rem;
-  border: 1px solid var(--history-line);
-  border-radius: 20px;
-  background: var(--history-paper-panel-soft);
-}
-
-.student-history-about p {
-  margin: 0;
-  color: var(--history-muted);
-  line-height: 1.6;
-}
-
-.student-history-error {
-  margin: 0;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--history-amber-line);
-  border-radius: 16px;
-  background: var(--history-amber-soft);
-  color: var(--history-amber);
-  font-weight: 700;
-}
-
-.student-history-filters,
-.student-history-pending-filters {
+.student-activity-heading {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 40px;
+  margin-bottom: 1rem;
+}
+.student-activity-heading h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  letter-spacing: -0.025em;
+}
+.student-activity-heading-actions {
+  display: flex;
+  align-items: center;
   gap: 0.75rem;
 }
-
-.student-history-filters span {
-  color: var(--history-muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+.student-activity-timezone {
+  color: var(--app-muted);
+  font-size: 0.75rem;
 }
-
-.student-history-filters button {
-  padding: 0.65rem 1rem;
-  border: 1px solid var(--history-line);
-  border-radius: 12px;
-  background: var(--history-paper-panel);
-  color: var(--history-ink);
+.student-activity-page button {
+  min-height: 36px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--app-line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-ink);
   cursor: pointer;
   font: inherit;
-  font-weight: 700;
 }
-
-.student-history-filters button.active {
-  background: var(--history-blue-soft);
-  border-color: var(--history-blue-line);
-  color: var(--history-blue);
+.student-activity-page button:hover {
+  background: var(--app-blue-soft);
 }
-
-.student-history-timeline {
-  display: grid;
-  gap: 1.7rem;
+.student-activity-page button:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
-
-.student-history-date-group {
-  display: grid;
-  grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr);
-  gap: clamp(1rem, 3vw, 2rem);
+.student-activity-heading-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-
-.student-history-date-group > h3 {
-  margin: 0.3rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.25rem;
-  font-weight: 500;
-}
-
-.student-history-date-events {
-  position: relative;
-  display: grid;
-  gap: 0.85rem;
-}
-
-.student-history-date-events::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 1.45rem;
-  width: 1px;
-  background: var(--history-line);
-}
-
-.student-history-event {
-  position: relative;
-  display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
-}
-
-.student-history-event-marker {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 2.9rem;
-  height: 2.9rem;
-  border: 1px solid var(--history-line);
-  border-radius: 999px;
-  background: var(--history-paper);
-  color: var(--history-blue);
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-}
-
-.event-green .student-history-event-marker {
-  background: var(--history-sage-soft);
-  color: var(--history-sage);
-}
-
-.event-amber .student-history-event-marker {
-  background: var(--history-amber-soft);
-  color: var(--history-amber);
-}
-
-.event-rose .student-history-event-marker {
-  background: var(--history-rose-soft);
-  color: var(--history-rose);
-}
-
-.student-history-event-card {
-  display: grid;
-  gap: 0.7rem;
-  padding: 1.05rem 1.25rem;
-  border: 1px solid var(--history-line);
-  border-radius: 18px;
-  background: var(--history-paper-panel);
-  content-visibility: auto;
-  contain-intrinsic-size: 180px;
-}
-
-.event-rich .student-history-event-card {
-  padding: 1.25rem 1.45rem;
-}
-
-.student-history-event-card header,
-.student-history-event-card footer {
+.student-activity-toolbar {
   display: flex;
-  align-items: start;
+  flex-wrap: wrap;
+  align-items: end;
   justify-content: space-between;
   gap: 1rem;
 }
-
-.student-history-event-title {
-  margin: 0 0 0.2rem;
-  color: var(--history-muted);
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.student-history-event-card h3 {
-  margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.25rem;
-  font-weight: 500;
-  line-height: 1.2;
-}
-
-.student-history-event-summary {
-  margin: 0;
-  color: var(--history-ink);
-  line-height: 1.6;
-}
-
-.student-history-event-meta {
-  display: grid;
-  justify-items: end;
-  gap: 0.35rem;
-  min-width: max-content;
-  color: var(--history-muted);
-  font-weight: 700;
-}
-
-.student-history-event-meta time {
-  color: var(--history-ink);
-  font-variant-numeric: tabular-nums;
-}
-
-.student-history-tags {
+.student-activity-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.25rem;
 }
-
-.student-history-tags span {
-  padding: 0.35rem 0.65rem;
-  border: 1px solid var(--history-sage-line);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--history-sage-soft) 76%, transparent);
-  color: var(--history-sage);
-  font-size: 0.82rem;
+.student-activity-filters button {
+  border-color: transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
 }
-
-.student-history-event-card details {
-  color: var(--history-muted);
+.student-activity-filters button[aria-pressed="true"] {
+  color: var(--app-blue);
+  border-bottom-color: var(--app-blue);
 }
-
-.student-history-event-card summary {
-  cursor: pointer;
-  color: var(--history-blue);
-  font-weight: 700;
+.student-activity-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
 }
-
-.student-history-event-card dl {
+.student-activity-dates label {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 0.35rem 0.8rem;
-  margin: 0.75rem 0 0;
-  font-size: 0.82rem;
+  gap: 0.25rem;
+  color: var(--app-muted);
+  font-size: 0.75rem;
 }
-
-.student-history-event-card dt {
-  color: var(--history-muted);
-  font-weight: 800;
+.student-activity-page .student-activity-dates input {
+  width: 8rem;
+  min-height: 36px;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--app-line);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--app-ink);
+  font: inherit;
+  font-size: 0.8rem;
 }
-
-.student-history-event-card dd {
-  margin: 0;
-  overflow-wrap: anywhere;
+.student-activity-coverage {
+  font-size: 0.8rem;
+  color: var(--app-muted);
+  margin: 1rem 0;
 }
-
-.student-history-empty {
-  padding: clamp(2rem, 6vw, 4rem);
-  border: 1px dashed var(--history-line);
-  border-radius: 22px;
-  background: var(--history-paper-empty);
-  text-align: center;
-}
-
-.student-history-empty h3 {
-  margin: 0 0 0.5rem;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.6rem;
-  font-weight: 500;
-}
-
-.student-history-empty p {
-  max-width: 34rem;
-  margin: 0 auto;
-  color: var(--history-muted);
-  line-height: 1.6;
-}
-
-.student-history-note {
-  justify-self: center;
-  margin: 0;
-  color: var(--history-blue);
-  font-family: Georgia, "Times New Roman", serif;
-  font-style: italic;
-  letter-spacing: 0.08em;
-}
-
-.student-transcript-history {
-  display: grid;
-  gap: 1rem;
-  padding: 1.25rem;
-  border: 1px solid var(--history-line);
-  border-radius: 22px;
-  background: var(--history-paper-panel);
-}
-
-.student-transcript-history h2,
-.student-transcript-history p {
-  margin: 0;
-}
-
-.student-transcript-history h2 {
-  font-family: var(--student-area-serif);
-  font-size: 1.35rem;
-  font-weight: 500;
-}
-
-.student-transcript-history ul {
+.student-activity-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  border-top: 1px solid var(--app-line);
 }
-
-.student-transcript-history li {
+.student-activity-row {
+  display: grid;
+  grid-template-columns: 145px minmax(0, 1fr);
+  gap: 1.25rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--app-line);
+}
+.student-activity-row > time {
+  font-size: 0.8rem;
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+}
+.student-activity-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.student-activity-content h3 {
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+.student-activity-content p {
+  margin: 0.35rem 0;
+  font-size: 0.85rem;
+}
+.student-activity-row-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: 0.5rem 1rem;
-  padding: 0.75rem 0;
-  border-top: 1px solid var(--history-line);
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
 }
-
-.student-transcript-history li > div {
-  display: grid;
-  gap: 0.35rem;
+.student-activity-row-actions a {
+  color: var(--app-blue);
+  text-underline-offset: 3px;
 }
-
-.student-transcript-history span,
-.student-transcript-history p {
-  color: var(--history-muted);
+.student-activity-row-actions details {
+  min-width: 0;
 }
-
-.student-transcript-history a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--history-blue);
-  font-weight: 700;
+.student-activity-row-actions details[open] {
+  flex-basis: 100%;
 }
-
-.student-transcript-history button {
-  justify-self: start;
-  min-height: 44px;
+.student-activity-row-actions summary {
+  cursor: pointer;
+  color: var(--app-muted);
+  min-height: 24px;
 }
-
-.student-history-skeleton {
-  display: block;
-  position: relative;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--history-ink-skeleton);
+.student-activity-details {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
 }
-
-.student-history-skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--history-paper) 55%, transparent),
-    transparent
-  );
-  animation: history-skeleton-breathe 1.8s ease-in-out infinite;
+.student-activity-details dt {
+  color: var(--app-muted);
+  font-weight: 400;
 }
-
-.skeleton-about {
-  width: 100%;
-  min-height: 9rem;
-  border-radius: 20px;
+.student-activity-details dd {
+  margin: 0 0 0.5rem;
+  white-space: pre-wrap;
 }
-
-.skeleton-filter {
-  width: 6rem;
-  height: 2.6rem;
-  border-radius: 12px;
+.student-activity-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0.4rem 0;
+  font-size: 0.8rem;
 }
-
-.student-history-pending-list {
-  display: grid;
-  gap: 0.8rem;
-  padding-left: clamp(4rem, 16vw, 12rem);
+.student-activity-effects > div {
+  display: flex;
+  gap: 0.5rem;
 }
-
-.skeleton-card {
-  height: 6.5rem;
-  border-radius: 18px;
+.student-activity-effects dt {
+  color: var(--app-muted);
 }
-
-@keyframes history-skeleton-breathe {
-  100% {
-    transform: translateX(100%);
-  }
+.student-activity-effects dd {
+  margin: 0;
 }
-
-@media (max-width: 900px) {
-  .student-history-hero,
-  .student-history-date-group {
+.student-activity-error {
+  margin: 1rem 0;
+  border-left: 2px solid var(--app-rose);
+  padding-left: 1rem;
+}
+.student-activity-error p {
+  margin: 0 0 0.5rem;
+}
+.student-activity-empty {
+  padding: 2rem 0;
+}
+.student-activity-empty h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+.student-activity-empty p {
+  color: var(--app-muted);
+  margin: 0;
+}
+.student-activity-load-more {
+  margin-top: 1rem;
+}
+.student-activity-page :focus-visible {
+  outline: 2px solid var(--app-blue);
+  outline-offset: 3px;
+}
+@media (max-width: 620px) {
+  .student-activity-row {
     grid-template-columns: 1fr;
+    gap: 0.4rem;
   }
-
-  .student-history-portrait {
-    width: 8rem;
-  }
-
-  .student-history-event-card header,
-  .student-history-event-card footer {
-    display: grid;
-  }
-
-  .student-history-event-meta {
-    justify-items: start;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .student-history-skeleton::after {
-    animation: none;
+  .student-activity-toolbar {
+    align-items: start;
   }
 }

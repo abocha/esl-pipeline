@@ -27,6 +27,10 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
   `get_student_teaching_context` adds required result-level `availability` alongside `context`;
   the nested `mcp_teaching_context.v1` payload/allowlist is unchanged. Existing consumers may ignore
   the additive result field; new frontend readers tolerate its absence on older API responses.
+- Student activity DTOs (`StudentActivityItem`, `StudentActivityResponse`) for the additive
+  student-authorized pageable feed, with explicit recorded/retained/legacy evidence,
+  factual details and related effects. The legacy timeline DTO remains available. API 11.4 /
+  DB 4.1 add this surface without changing billing or transcript completion semantics.
 - Shared observability shapes (`PipelineLogEvent`, `PipelineLogger`, `noopLogger`)
 - Semantic contract version registry (`CONTRACT_VERSIONS`)
 - Session homework intent, current completion kind/timestamp, immutable exact-source finish

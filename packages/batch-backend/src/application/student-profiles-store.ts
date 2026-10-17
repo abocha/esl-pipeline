@@ -263,6 +263,7 @@ async function createStudentProfileDb(
   let inserted: StudentRecord;
   try {
     inserted = await dependencies.students.insert({
+      actorUserId: options?.audit?.changedBy,
       id,
       student,
       workspaceId,
@@ -352,6 +353,7 @@ async function updateStudentProfileDb(
   };
 
   const persisted = await options.dependencies.students.upsert({
+    actorUserId: options.audit?.changedBy,
     id: merged.id,
     student: merged.student,
     workspaceId: merged.workspaceId ?? null,
@@ -488,7 +490,7 @@ export async function archiveStudentProfile(
 
 export async function restoreStudentProfile(
   id: string,
-  _input: StudentRestoreInput = {},
+  input: StudentRestoreInput = {},
   overrides?: StudentStoreOverrides,
 ): Promise<StudentProfileData | null> {
   if (!id) return null;
@@ -498,6 +500,7 @@ export async function restoreStudentProfile(
 
   const dependencies = getDependencies(overrides);
   const restored = await dependencies.students.restore(id, {
+    actorUserId: input.restoredBy,
     workspaceId: overrides?.workspaceId ?? null,
   });
   if (!restored) return null;

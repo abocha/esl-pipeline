@@ -141,6 +141,53 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.link_student_credit_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE transition_id uuid;
+BEGIN
+  IF TG_OP='UPDATE' AND NOT EXISTS (SELECT 1 FROM students WHERE id=NEW.student_id) THEN RETURN NEW; END IF;
+  IF TG_OP='UPDATE' THEN
+    IF OLD.workspace_id IS NOT NULL AND NEW.workspace_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM workspaces WHERE id=OLD.workspace_id) THEN RETURN NEW; END IF;
+    IF ((NEW.activity_id IS NULL AND OLD.activity_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM student_activity WHERE id=OLD.activity_id))
+      OR (NEW.reversal_activity_id IS NULL AND OLD.reversal_activity_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM student_activity WHERE id=OLD.reversal_activity_id)))
+      AND NEW.student_id=OLD.student_id AND NEW.workspace_id IS NOT DISTINCT FROM OLD.workspace_id
+      AND NEW.source_lesson_id IS NOT DISTINCT FROM OLD.source_lesson_id
+      THEN RETURN NEW; END IF;
+  END IF;
+
+  IF NEW.source_lesson_id IS NULL THEN
+    IF NEW.activity_id IS NULL AND NEW.reversal_activity_id IS NULL THEN RETURN NEW; END IF;
+    IF TG_OP='INSERT' THEN
+      RAISE EXCEPTION 'Credit activity requires a lesson' USING ERRCODE='23514';
+    END IF;
+    IF (OLD.source_lesson_id IS NOT NULL AND EXISTS (SELECT 1 FROM student_lessons WHERE id=OLD.source_lesson_id))
+      OR NEW.activity_id IS DISTINCT FROM OLD.activity_id
+      OR NEW.reversal_activity_id IS DISTINCT FROM OLD.reversal_activity_id THEN
+      RAISE EXCEPTION 'Credit activity source is retained' USING ERRCODE='23514';
+    END IF;
+  END IF;
+  SELECT id INTO transition_id FROM student_activity
+    WHERE student_id=NEW.student_id AND COALESCE(workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)
+      AND entity_id=NEW.source_lesson_id AND transaction_id=txid_current()
+      AND type IN ('lesson_created','lesson_changed','lesson_completed','lesson_restored','lesson_canceled','lesson_no_show')
+    ORDER BY occurred_at DESC,id DESC LIMIT 1;
+  IF TG_OP = 'INSERT' THEN NEW.activity_id := transition_id;
+  ELSIF OLD.voided_at IS NULL AND NEW.voided_at IS NOT NULL THEN NEW.reversal_activity_id := transition_id;
+  END IF;
+  IF EXISTS (SELECT 1 FROM unnest(ARRAY[NEW.activity_id,NEW.reversal_activity_id]) linked(id)
+    WHERE linked.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM student_activity a
+      WHERE a.id=linked.id AND a.student_id=NEW.student_id
+      AND COALESCE(a.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)
+      AND (NEW.source_lesson_id IS NULL OR a.entity_id=NEW.source_lesson_id) AND a.category='lessons')) THEN
+    RAISE EXCEPTION 'Credit activity ownership mismatch' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION public.lock_canonical_memory_student() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -232,6 +279,169 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.record_student_candidate_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE event_type text; owner_workspace uuid;
+BEGIN
+  IF (NEW.status,NEW.review_state,NEW.approved_fact,NEW.reviewer_note,NEW.promoted_revision_id)
+    IS NOT DISTINCT FROM (OLD.status,OLD.review_state,OLD.approved_fact,OLD.reviewer_note,OLD.promoted_revision_id)
+    THEN RETURN NEW; END IF;
+  IF NEW.status = 'superseded' OR (NEW.status='promoted' AND OLD.status='promoted'
+    AND NEW.promoted_revision_id IS NOT DISTINCT FROM OLD.promoted_revision_id) THEN RETURN NEW; END IF;
+  event_type := CASE WHEN NEW.status = 'promoted' THEN 'candidate_promoted'
+    WHEN NEW.review_state = 'approved' THEN 'candidate_approved'
+    WHEN NEW.review_state = 'rejected' THEN 'candidate_rejected'
+    WHEN NEW.review_state = 'deferred' THEN 'candidate_deferred' ELSE NULL END;
+  IF event_type IS NULL THEN RETURN NEW; END IF;
+  SELECT workspace_id INTO owner_workspace FROM students WHERE id=NEW.student_id;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.student_id,owner_workspace,event_type,'profile',NEW.id,
+    CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+    jsonb_build_object('section',NEW.target_section,'fact',COALESCE(NEW.approved_fact,NEW.fact),
+      'previousDecision',OLD.review_state,'decision',NEW.review_state,'note',NEW.reviewer_note,
+      'promotedRevisionId',NEW.promoted_revision_id));
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_homework_started_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE owner_workspace uuid;
+BEGIN
+  IF OLD.homework_intent = 'none' AND NEW.homework_intent = 'create' AND
+    NEW.homework_started_from_revision IS DISTINCT FROM OLD.homework_started_from_revision THEN
+    SELECT workspace_id INTO owner_workspace FROM students WHERE id=NEW.student_id;
+    INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+    VALUES(NEW.student_id,owner_workspace,'homework_started','lessons',NEW.id,
+      CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+      jsonb_build_object('lessonId',NEW.lesson_id,'fromRevision',NEW.homework_started_from_revision));
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_job_failure_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE owner_workspace uuid;
+BEGIN
+  IF NEW.state <> 'failed' OR (TG_OP = 'UPDATE' AND OLD.state = 'failed') OR NEW.student_id IS NULL OR NEW.publish_target IS DISTINCT FROM 'html' THEN RETURN NEW; END IF;
+  SELECT workspace_id INTO owner_workspace FROM students WHERE id=NEW.student_id;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.student_id,owner_workspace,'homework_failed','lessons',NEW.id,'system',
+    jsonb_build_object('lessonId',NEW.lesson_id,'sourceJobId',NEW.source_job_id));
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_lesson_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE event_type text; previous jsonb := NULL; current_value jsonb;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM students s WHERE s.id=NEW.student_id
+    AND COALESCE(s.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=
+      COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)) THEN RETURN NEW; END IF;
+  current_value := jsonb_build_object('startsAt',NEW.starts_at,'timezone',NEW.timezone,
+    'durationMinutes',NEW.duration_minutes,'status',NEW.status,'consumesCredit',NEW.consumes_credit,
+    'title',NEW.title);
+  IF TG_OP = 'INSERT' THEN event_type := 'lesson_created';
+  ELSE
+    previous := jsonb_build_object('startsAt',OLD.starts_at,'timezone',OLD.timezone,
+      'durationMinutes',OLD.duration_minutes,'status',OLD.status,'consumesCredit',OLD.consumes_credit,
+      'title',OLD.title);
+    IF previous = current_value THEN RETURN NEW; END IF;
+    IF (previous - 'title') = (current_value - 'title') AND
+      (OLD.title IS NULL OR btrim(OLD.title) = '' OR OLD.title = 'Untitled lesson')
+      AND current_setting('app.student_activity_origin',true)='generated_title' THEN RETURN NEW; END IF;
+    event_type := CASE WHEN OLD.status IS DISTINCT FROM NEW.status THEN
+      CASE NEW.status WHEN 'completed' THEN 'lesson_completed' WHEN 'scheduled' THEN 'lesson_restored'
+        WHEN 'canceled' THEN 'lesson_canceled' WHEN 'no_show' THEN 'lesson_no_show' END
+      ELSE 'lesson_changed' END;
+  END IF;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.student_id,COALESCE(NEW.workspace_id,(SELECT workspace_id FROM students WHERE id=NEW.student_id)),event_type,'lessons',NEW.id,
+    CASE WHEN TG_OP = 'INSERT' AND NEW.recurrence_origin = 'generated' THEN 'system'
+      WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+    jsonb_build_object('before',previous,'after',current_value,'recurrenceRuleId',NEW.recurrence_rule_id,
+      'generated',NEW.recurrence_origin = 'generated'));
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_lifecycle_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE event_type text; changes jsonb;
+BEGIN
+  IF TG_OP = 'INSERT' THEN event_type := 'student_created'; changes := jsonb_build_object('name',NEW.student);
+  ELSE
+    IF OLD.student IS DISTINCT FROM NEW.student THEN
+      INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+      VALUES(NEW.id,NEW.workspace_id,'student_renamed','lifecycle',NEW.id,
+        CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+        jsonb_build_object('beforeName',OLD.student,'name',NEW.student));
+    END IF;
+    IF OLD.archived_at IS NULL AND NEW.archived_at IS NOT NULL THEN event_type := 'student_archived';
+    ELSIF OLD.archived_at IS NOT NULL AND NEW.archived_at IS NULL THEN event_type := 'student_restored';
+    ELSE RETURN NEW; END IF;
+    changes := jsonb_build_object('name',NEW.student,'reason',NEW.archive_reason);
+  END IF;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.id,NEW.workspace_id,event_type,'lifecycle',NEW.id,
+    CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,changes);
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_profile_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE event_type text; sections jsonb; owner_workspace uuid;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    event_type := CASE WHEN NEW.restored_from_revision_id IS NOT NULL THEN 'profile_restored' ELSE 'profile_saved' END;
+    SELECT COALESCE(jsonb_agg(key ORDER BY key),'[]'::jsonb) INTO sections
+    FROM jsonb_object_keys(CASE WHEN jsonb_typeof(NEW.structured_content)='object'
+      THEN NEW.structured_content ELSE '{}'::jsonb END) key
+    WHERE key<>'schemaVersion' AND NEW.structured_content->key IS DISTINCT FROM (
+      SELECT r.structured_content->key FROM student_profile_revisions r
+      WHERE r.student_id=NEW.student_id AND r.version_number<NEW.version_number
+      ORDER BY r.version_number DESC LIMIT 1);
+  ELSIF NEW.status = 'active' AND OLD.status IS DISTINCT FROM NEW.status THEN
+    event_type := 'profile_activated'; sections := '[]'::jsonb;
+  ELSE RETURN NEW; END IF;
+  SELECT workspace_id INTO owner_workspace FROM students WHERE id=NEW.student_id;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.student_id,owner_workspace,event_type,'profile',NEW.id,
+    CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user'
+      WHEN NEW.source='lesson_population' AND TG_OP='INSERT' THEN 'system' ELSE 'unknown' END,
+    jsonb_build_object('version',NEW.version_label,'source',NEW.source,'status',NEW.status,
+      'sections',sections,'restoredFromRevisionId',NEW.restored_from_revision_id));
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_reminder_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE previous_keys text[] := ARRAY[]::text[]; hidden_key text; lesson uuid;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM students s WHERE s.id=NEW.student_id
+    AND COALESCE(s.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=
+      COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)) THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' THEN previous_keys := OLD.hidden_lesson_followup_keys; END IF;
+  FOR hidden_key IN SELECT unnest(NEW.hidden_lesson_followup_keys) EXCEPT SELECT unnest(previous_keys) LOOP
+    INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+    VALUES(NEW.student_id,COALESCE(NEW.workspace_id,(SELECT workspace_id FROM students WHERE id=NEW.student_id)),'reminder_hidden','operations',NEW.student_id,
+      CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+      jsonb_build_object('lessonId',NEW.latest_hidden_lesson_followup_lesson_id));
+  END LOOP;
+  FOR hidden_key IN SELECT unnest(previous_keys) EXCEPT SELECT unnest(NEW.hidden_lesson_followup_keys) LOOP
+    lesson := OLD.latest_hidden_lesson_followup_lesson_id;
+    INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+    VALUES(NEW.student_id,COALESCE(NEW.workspace_id,(SELECT workspace_id FROM students WHERE id=NEW.student_id)),'reminder_restored','operations',NEW.student_id,
+      CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,jsonb_build_object('lessonId',lesson));
+  END LOOP;
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION public.reject_historical_assignment_write() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -282,6 +492,25 @@ BEGIN
     RAISE EXCEPTION 'MCP profile identity is immutable' USING ERRCODE = '23514';
   END IF;
   RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.reject_student_activity_delete() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM students WHERE id=OLD.student_id)
+    OR (OLD.workspace_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM workspaces WHERE id=OLD.workspace_id)) THEN RETURN OLD; END IF;
+  RAISE EXCEPTION 'Student activity follows student retention' USING ERRCODE='23514';
+END $$;
+
+CREATE FUNCTION public.reject_student_activity_update() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.actor_user_id IS NULL AND OLD.actor_user_id IS NOT NULL
+    AND (to_jsonb(NEW) - 'actor_user_id') = (to_jsonb(OLD) - 'actor_user_id')
+    AND NOT EXISTS (SELECT 1 FROM users WHERE id=OLD.actor_user_id) THEN RETURN NEW; END IF;
+  RAISE EXCEPTION 'Student activity is append-only' USING ERRCODE = '23514';
 END $$;
 
 CREATE FUNCTION public.request_confirmed_source_audio_deletion() RETURNS trigger
@@ -486,6 +715,19 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.set_student_activity_actor() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM students s WHERE s.id=NEW.student_id
+    AND COALESCE(s.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=
+      COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)) THEN
+    RAISE EXCEPTION 'Student activity ownership mismatch' USING ERRCODE='23514';
+  END IF;
+  NEW.actor_user_id := CASE WHEN NEW.actor_kind = 'user' THEN student_activity_actor_id() ELSE NULL END;
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION public.set_student_memory_openai_batch_claims_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -575,6 +817,14 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+CREATE FUNCTION public.student_activity_actor_id() RETURNS uuid
+    LANGUAGE sql STABLE
+    AS $_$
+  SELECT CASE WHEN NULLIF(current_setting('app.activity_actor_id',true),'') ~*
+    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    THEN current_setting('app.activity_actor_id',true)::uuid ELSE app_current_user_id() END
+$_$;
 
 CREATE TABLE public.alpha_invites (
     id uuid NOT NULL,
@@ -1046,6 +1296,27 @@ CREATE TABLE public.schema_migrations (
     tool_version text NOT NULL
 );
 
+CREATE TABLE public.student_activity (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    student_id uuid NOT NULL,
+    workspace_id uuid,
+    type text NOT NULL,
+    category text NOT NULL,
+    entity_id uuid NOT NULL,
+    occurred_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    recorded_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    transaction_id bigint DEFAULT txid_current() NOT NULL,
+    actor_kind text DEFAULT 'unknown'::text NOT NULL,
+    actor_user_id uuid,
+    payload_version integer DEFAULT 1 NOT NULL,
+    payload jsonb NOT NULL,
+    CONSTRAINT student_activity_actor_kind_check CHECK ((actor_kind = ANY (ARRAY['user'::text, 'system'::text, 'unknown'::text]))),
+    CONSTRAINT student_activity_category_check CHECK ((category = ANY (ARRAY['lessons'::text, 'profile'::text, 'billing'::text, 'lifecycle'::text, 'operations'::text]))),
+    CONSTRAINT student_activity_payload_check CHECK ((jsonb_typeof(payload) = 'object'::text)),
+    CONSTRAINT student_activity_payload_version_check CHECK ((payload_version = 1)),
+    CONSTRAINT student_activity_type_check CHECK ((type = ANY (ARRAY['lesson_created'::text, 'lesson_changed'::text, 'lesson_completed'::text, 'lesson_restored'::text, 'lesson_canceled'::text, 'lesson_no_show'::text, 'recurrence_changed'::text, 'profile_saved'::text, 'profile_restored'::text, 'profile_activated'::text, 'candidate_approved'::text, 'candidate_rejected'::text, 'candidate_deferred'::text, 'candidate_promoted'::text, 'student_created'::text, 'student_renamed'::text, 'student_archived'::text, 'student_restored'::text, 'reminder_hidden'::text, 'reminder_restored'::text, 'homework_failed'::text, 'homework_started'::text])))
+);
+
 CREATE TABLE public.student_credit_events (
     id uuid NOT NULL,
     student_id uuid NOT NULL,
@@ -1059,6 +1330,8 @@ CREATE TABLE public.student_credit_events (
     voided_by uuid,
     created_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    activity_id uuid,
+    reversal_activity_id uuid,
     CONSTRAINT student_credit_events_nonzero_check CHECK ((quantity_delta <> 0)),
     CONSTRAINT student_credit_events_type_check CHECK ((event_type = ANY (ARRAY['credit_added'::text, 'credit_consumed'::text, 'credit_adjusted'::text])))
 );
@@ -1616,6 +1889,9 @@ ALTER TABLE ONLY public.recordings
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.student_activity
+    ADD CONSTRAINT student_activity_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.student_credit_events
     ADD CONSTRAINT student_credit_events_pkey PRIMARY KEY (id);
 
@@ -1871,6 +2147,10 @@ CREATE INDEX idx_recordings_workspace_sha256 ON public.recordings USING btree (w
 
 CREATE INDEX idx_schema_migrations_applied_at ON public.schema_migrations USING btree (applied_at DESC);
 
+CREATE INDEX idx_student_activity_entity_transaction ON public.student_activity USING btree (entity_id, transaction_id);
+
+CREATE INDEX idx_student_activity_page ON public.student_activity USING btree (workspace_id, student_id, occurred_at DESC, id DESC);
+
 CREATE INDEX idx_student_credit_events_student_active ON public.student_credit_events USING btree (student_id, created_at DESC, id DESC) WHERE (voided_at IS NULL);
 
 CREATE INDEX idx_student_credit_events_student_created_at ON public.student_credit_events USING btree (student_id, created_at DESC, id DESC);
@@ -2095,6 +2375,28 @@ CREATE TRIGGER set_user_settings_updated_at BEFORE UPDATE ON public.user_setting
 
 CREATE TRIGGER set_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_users_updated_at();
 
+CREATE TRIGGER student_activity_actor BEFORE INSERT ON public.student_activity FOR EACH ROW EXECUTE FUNCTION public.set_student_activity_actor();
+
+CREATE TRIGGER student_activity_immutable BEFORE UPDATE ON public.student_activity FOR EACH ROW EXECUTE FUNCTION public.reject_student_activity_update();
+
+CREATE TRIGGER student_activity_retention BEFORE DELETE ON public.student_activity FOR EACH ROW EXECUTE FUNCTION public.reject_student_activity_delete();
+
+CREATE TRIGGER student_candidate_activity AFTER UPDATE ON public.student_profile_candidates FOR EACH ROW EXECUTE FUNCTION public.record_student_candidate_activity();
+
+CREATE TRIGGER student_credit_activity BEFORE INSERT OR UPDATE ON public.student_credit_events FOR EACH ROW EXECUTE FUNCTION public.link_student_credit_activity();
+
+CREATE TRIGGER student_homework_started_activity AFTER UPDATE ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.record_student_homework_started_activity();
+
+CREATE TRIGGER student_job_failure_activity AFTER INSERT OR UPDATE ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.record_student_job_failure_activity();
+
+CREATE TRIGGER student_lesson_activity AFTER INSERT OR UPDATE ON public.student_lessons FOR EACH ROW EXECUTE FUNCTION public.record_student_lesson_activity();
+
+CREATE TRIGGER student_lifecycle_activity AFTER INSERT OR UPDATE ON public.students FOR EACH ROW EXECUTE FUNCTION public.record_student_lifecycle_activity();
+
+CREATE TRIGGER student_profile_activity AFTER INSERT OR UPDATE ON public.student_profile_revisions FOR EACH ROW EXECUTE FUNCTION public.record_student_profile_activity();
+
+CREATE TRIGGER student_reminder_activity AFTER INSERT OR UPDATE ON public.student_reminder_preferences FOR EACH ROW EXECUTE FUNCTION public.record_student_reminder_activity();
+
 CREATE TRIGGER trg_set_ops_actions_updated_at BEFORE UPDATE ON public.ops_actions FOR EACH ROW EXECUTE FUNCTION public.set_ops_actions_updated_at();
 
 ALTER TABLE ONLY public.alpha_invites
@@ -2292,8 +2594,23 @@ ALTER TABLE ONLY public.recordings
 ALTER TABLE ONLY public.recordings
     ADD CONSTRAINT recordings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
 
+ALTER TABLE ONLY public.student_activity
+    ADD CONSTRAINT student_activity_actor_user_id_fkey FOREIGN KEY (actor_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_activity
+    ADD CONSTRAINT student_activity_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_activity
+    ADD CONSTRAINT student_activity_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_activity_id_fkey FOREIGN KEY (activity_id) REFERENCES public.student_activity(id) ON DELETE SET NULL;
+
 ALTER TABLE ONLY public.student_credit_events
     ADD CONSTRAINT student_credit_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_reversal_activity_id_fkey FOREIGN KEY (reversal_activity_id) REFERENCES public.student_activity(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_credit_events
     ADD CONSTRAINT student_credit_events_source_lesson_id_fkey FOREIGN KEY (source_lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
@@ -2634,5 +2951,6 @@ VALUES
   ('0064_historical_markdown_read_only', '9a74cf33697ccc187b1674e03d06a1f5b41b79a555e19918d9465fc5f00dd292', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0065_assignment_react_renderer', '2e37a9fd1fb5f1c3efa8807e985eb254c63bc4b972de2d544e9b8372233c40dc', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0066_no_homework_lesson', '47c8dc8f633f5d2ff07282d3ff393886245c477dd3854204c5970147bdfe2104', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0067_mcp_profile_identities', '430f6083475887792ed256290751ac5f4bff9ecf4cc8a84bf7f1402d2ef50f22', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0067_mcp_profile_identities', '430f6083475887792ed256290751ac5f4bff9ecf4cc8a84bf7f1402d2ef50f22', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0068_student_activity', '004e9d9a1b05415f9ab850ec241f34fa1ef68dbe7fc5843ec4dd35c53985af05', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

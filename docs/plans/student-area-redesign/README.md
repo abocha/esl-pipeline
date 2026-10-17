@@ -66,6 +66,11 @@ page model, ownership boundaries, or profile authority rules.
 
 ## Topic Map
 
+The [Student activity contract](../../../packages/batch-backend/README.md#student-activity) and
+frontend README own the current flat History feed, recording and availability behavior. It
+supersedes the ornamental History design lock below. Other Student surfaces retain their separate
+scope; [ESL-60](https://linear.app/abocha/issue/ESL-60) tracks delivery and the manual deployment handoff.
+
 The active product map lives in this README:
 
 1. `Overview`: control-tower page for glanceability and navigation.
@@ -75,6 +80,9 @@ The active product map lives in this README:
 5. Shared student-area shell: masthead, density variants, route canvas, and visual primitives.
 
 ## Historical Trace
+
+The [2026-10 History overhaul](../../archive/plans/2026-10/student-history-overhaul.md) preserves
+its reviewed implementation contract and links to the canonical Linear decision.
 
 Archived phase and design-lock details remain available for rationale, but this README is the active
 edit surface.

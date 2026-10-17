@@ -6,6 +6,7 @@ import { parseAssignmentV1 } from '@esl-pipeline/contracts';
 import assignmentFixture from './assignment-fixture.json';
 import { createBusinessSandbox } from './business-sandbox';
 import type { FrontendSandboxScenario } from './frontend-sandbox';
+import { studentActivitySandbox } from './student-activity-sandbox';
 
 const now = '2026-07-03T00:00:00.000Z';
 const sandboxFirstProfileStudentId = 'student-cora';
@@ -1104,6 +1105,15 @@ export function createFrontendSandboxApiAdapter(
       path !== '/students/student-alex/surfaces/overview'
     ) {
       throw scenarioErrorFor(config, 'Student data is unavailable in this preview scenario.');
+    }
+
+    const activityMatch = /^\/students\/(student-alex|student-cora)\/activity$/.exec(path);
+    if (method === 'get' && activityMatch) {
+      const query = new URL(config.url ?? '/', 'http://sandbox.local').searchParams;
+      for (const [name, value] of Object.entries(config.params ?? {})) {
+        if (value !== undefined) query.set(name, String(value));
+      }
+      return responseFor(config, studentActivitySandbox(activityMatch[1]!, query));
     }
 
     if (isSlowScenarioRequest(scenario, method, path)) {

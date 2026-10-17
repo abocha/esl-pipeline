@@ -8,6 +8,10 @@ import type {
   StudentFactAuthority,
 } from './lesson-memory-model.js';
 import { buildVerifiedLessonMemoryEvidenceSqlPredicate } from './lesson-memory-repository.js';
+import {
+  setStudentActivityActor,
+  withStudentActivityTransaction,
+} from './student-activity-recording.js';
 import { buildProfileCandidateSourceSnapshotSqlPredicate } from './student-memory-snapshot-repository.js';
 import {
   isStudentProfileCandidateRepresented,
@@ -525,9 +529,11 @@ export async function updateStudentProfileCandidateReview(
 ): Promise<StudentProfileCandidateRecord | null> {
   const reviewedAt = params.reviewedAt ?? new Date();
 
-  const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query<StudentProfileCandidateRow>(
-      `
+  const row = await withStudentActivityTransaction(
+    params.reviewerId,
+    async (client: PoolClient) => {
+      const result = await client.query<StudentProfileCandidateRow>(
+        `
       UPDATE student_profile_candidates
       SET
         status = $3,
@@ -541,19 +547,20 @@ export async function updateStudentProfileCandidateReview(
         AND status IN ('pending_review', 'approved', 'rejected')
       RETURNING ${SELECT_COLUMNS}
       `,
-      [
-        params.studentId,
-        params.candidateId,
-        params.status,
-        params.reviewState,
-        params.reviewerId ?? null,
-        params.reviewerNote ?? null,
-        params.approvedFact ?? null,
-        reviewedAt,
-      ],
-    );
-    return result.rows[0];
-  });
+        [
+          params.studentId,
+          params.candidateId,
+          params.status,
+          params.reviewState,
+          params.reviewerId ?? null,
+          params.reviewerNote ?? null,
+          params.approvedFact ?? null,
+          reviewedAt,
+        ],
+      );
+      return result.rows[0];
+    },
+  );
 
   return row ? mapRow(row) : null;
 }
@@ -645,12 +652,18 @@ export async function copyStudentProfileCandidateDraftRevisionLinks(
 
 export async function markStudentProfileCandidatesPromotedByRevision(
   revisionId: string,
-  proof: { studentId: string; contentHash: string; structuredContent: unknown },
+  proof: {
+    studentId: string;
+    contentHash: string;
+    structuredContent: unknown;
+    actorUserId?: string | null;
+  },
   promotedAt?: Date,
 ): Promise<StudentProfileCandidatePromotionResult> {
   return withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
+      await setStudentActivityActor(client, proof.actorUserId);
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [proof.studentId]);
       const revision = await client.query<{ structured_content: unknown }>(
         `SELECT structured_content FROM student_profile_revisions

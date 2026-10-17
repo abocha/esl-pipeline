@@ -1199,3 +1199,4 @@ export * from './errors.js';
 // Job actions exports
 export * from './job-actions.js';
 export * from './observability.js';
+export * from './student-activity.js';

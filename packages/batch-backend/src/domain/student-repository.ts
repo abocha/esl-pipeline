@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
+import { withStudentActivityTransaction } from './student-activity-recording.js';
 import type { StudentListResult, StudentRecord } from './student-model.js';
 
 interface StudentRow {
@@ -22,6 +23,7 @@ interface StudentRow {
 }
 
 export interface InsertStudentParams {
+  actorUserId?: string | null;
   id?: string;
   student: string;
   workspaceId?: string | null;
@@ -34,6 +36,7 @@ export interface InsertStudentParams {
 }
 
 export interface UpdateStudentParams {
+  actorUserId?: string | null;
   id: string;
   workspaceId?: string | null;
   student?: string;
@@ -86,9 +89,11 @@ const STUDENT_COLUMNS = `
 
 export async function insertStudent(params: InsertStudentParams): Promise<StudentRecord> {
   const id = params.id ?? randomUUID();
-  const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+  const row = await withStudentActivityTransaction(
+    params.actorUserId,
+    async (client: PoolClient) => {
+      const result = await client.query(
+        `
       INSERT INTO students (
         id,
         student,
@@ -103,29 +108,32 @@ export async function insertStudent(params: InsertStudentParams): Promise<Studen
       VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9)
       RETURNING ${STUDENT_COLUMNS}
       `,
-      [
-        id,
-        params.student,
-        params.workspaceId ?? null,
-        params.dbId ?? null,
-        params.pageParentId ?? null,
-        params.colorPreset ?? null,
-        JSON.stringify(params.voices ?? {}),
-        params.manifestPreset ?? null,
-        params.accentPreference ?? null,
-      ],
-    );
-    return result.rows[0] as StudentRow;
-  });
+        [
+          id,
+          params.student,
+          params.workspaceId ?? null,
+          params.dbId ?? null,
+          params.pageParentId ?? null,
+          params.colorPreset ?? null,
+          JSON.stringify(params.voices ?? {}),
+          params.manifestPreset ?? null,
+          params.accentPreference ?? null,
+        ],
+      );
+      return result.rows[0] as StudentRow;
+    },
+  );
 
   return mapRow(row);
 }
 
 export async function upsertStudent(params: InsertStudentParams): Promise<StudentRecord> {
   const id = params.id ?? randomUUID();
-  const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+  const row = await withStudentActivityTransaction(
+    params.actorUserId,
+    async (client: PoolClient) => {
+      const result = await client.query(
+        `
       INSERT INTO students (
         id,
         student,
@@ -150,20 +158,21 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
         accent_preference = EXCLUDED.accent_preference
       RETURNING ${STUDENT_COLUMNS}
       `,
-      [
-        id,
-        params.student,
-        params.workspaceId ?? null,
-        params.dbId ?? null,
-        params.pageParentId ?? null,
-        params.colorPreset ?? null,
-        JSON.stringify(params.voices ?? {}),
-        params.manifestPreset ?? null,
-        params.accentPreference ?? null,
-      ],
-    );
-    return result.rows[0] as StudentRow;
-  });
+        [
+          id,
+          params.student,
+          params.workspaceId ?? null,
+          params.dbId ?? null,
+          params.pageParentId ?? null,
+          params.colorPreset ?? null,
+          JSON.stringify(params.voices ?? {}),
+          params.manifestPreset ?? null,
+          params.accentPreference ?? null,
+        ],
+      );
+      return result.rows[0] as StudentRow;
+    },
+  );
 
   return mapRow(row);
 }
@@ -251,9 +260,11 @@ export async function listStudents(params: ListStudentsParams = {}): Promise<Stu
 }
 
 export async function updateStudent(params: UpdateStudentParams): Promise<StudentRecord | null> {
-  const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+  const row = await withStudentActivityTransaction(
+    params.actorUserId,
+    async (client: PoolClient) => {
+      const result = await client.query(
+        `
       UPDATE students
       SET
         student = COALESCE($2, student),
@@ -267,20 +278,21 @@ export async function updateStudent(params: UpdateStudentParams): Promise<Studen
         AND ($9::uuid IS NULL OR workspace_id = $9::uuid)
       RETURNING ${STUDENT_COLUMNS}
       `,
-      [
-        params.id,
-        params.student ?? null,
-        params.dbId ?? null,
-        params.pageParentId ?? null,
-        params.colorPreset ?? null,
-        params.voices ? JSON.stringify(params.voices) : null,
-        params.manifestPreset ?? null,
-        params.accentPreference ?? null,
-        params.workspaceId ?? null,
-      ],
-    );
-    return result.rows[0] as StudentRow | undefined;
-  });
+        [
+          params.id,
+          params.student ?? null,
+          params.dbId ?? null,
+          params.pageParentId ?? null,
+          params.colorPreset ?? null,
+          params.voices ? JSON.stringify(params.voices) : null,
+          params.manifestPreset ?? null,
+          params.accentPreference ?? null,
+          params.workspaceId ?? null,
+        ],
+      );
+      return result.rows[0] as StudentRow | undefined;
+    },
+  );
 
   return row ? mapRow(row) : null;
 }
@@ -295,9 +307,11 @@ export async function deleteStudent(id: string): Promise<boolean> {
 }
 
 export async function archiveStudent(params: ArchiveStudentParams): Promise<StudentRecord | null> {
-  const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+  const row = await withStudentActivityTransaction(
+    params.archivedBy,
+    async (client: PoolClient) => {
+      const result = await client.query(
+        `
       UPDATE students
       SET
         archived_at = COALESCE(archived_at, NOW()),
@@ -307,26 +321,29 @@ export async function archiveStudent(params: ArchiveStudentParams): Promise<Stud
         AND ($4::uuid IS NULL OR workspace_id = $4::uuid)
       RETURNING ${STUDENT_COLUMNS}
       `,
-      [
-        params.id,
-        params.archivedBy ?? null,
-        params.archiveReason ?? null,
-        params.workspaceId ?? null,
-      ],
-    );
-    return result.rows[0] as StudentRow | undefined;
-  });
+        [
+          params.id,
+          params.archivedBy ?? null,
+          params.archiveReason ?? null,
+          params.workspaceId ?? null,
+        ],
+      );
+      return result.rows[0] as StudentRow | undefined;
+    },
+  );
 
   return row ? mapRow(row) : null;
 }
 
 export async function restoreStudent(
   id: string,
-  params: { workspaceId?: string | null } = {},
+  params: { workspaceId?: string | null; actorUserId?: string | null } = {},
 ): Promise<StudentRecord | null> {
-  const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+  const row = await withStudentActivityTransaction(
+    params.actorUserId,
+    async (client: PoolClient) => {
+      const result = await client.query(
+        `
       UPDATE students
       SET
         archived_at = NULL,
@@ -336,10 +353,11 @@ export async function restoreStudent(
         AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
       RETURNING ${STUDENT_COLUMNS}
       `,
-      [id, params.workspaceId ?? null],
-    );
-    return result.rows[0] as StudentRow | undefined;
-  });
+        [id, params.workspaceId ?? null],
+      );
+      return result.rows[0] as StudentRow | undefined;
+    },
+  );
 
   return row ? mapRow(row) : null;
 }

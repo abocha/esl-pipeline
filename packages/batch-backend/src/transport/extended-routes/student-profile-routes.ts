@@ -438,7 +438,9 @@ export function registerStudentProfileRoutes(
 
       try {
         const params = paramsSchema.parse(request.params ?? {});
-        const activated = await activateProfileRevisionForStudent(params.id, params.revisionId);
+        const activated = await activateProfileRevisionForStudent(params.id, params.revisionId, {
+          actorUserId: getAuthenticatedUser(request)?.id ?? null,
+        });
         if (!activated) {
           return errorResponse(reply, 'not_found');
         }

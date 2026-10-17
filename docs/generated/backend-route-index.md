@@ -75,6 +75,7 @@
 | DELETE | `/students/:id` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | PUT | `/students/:id` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| GET | `/students/:id/activity` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/archive` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/credits/adjustments` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/homework-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |

@@ -8,6 +8,7 @@ import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { resolveHomeworkMemorySourceFromSucceededJob } from '../src/application/homework-memory-source.js';
+import { getStudentActivity } from '../src/application/student-activity.js';
 import { recordStudentMemoryOpenAiBatchRemoteStatus } from '../src/application/student-memory-openai-batch-operations.js';
 import {
   getProfileRevisionById,
@@ -238,6 +239,91 @@ describe('integration/migrations', () => {
   afterAll(async () => {
     await closePgPool();
   });
+
+  it(
+    '0068 preserves prior evidence and records compatible old-writer transitions without invented backfill',
+    async () => {
+      const workspaceId = randomUUID(),
+        userId = randomUUID(),
+        studentId = randomUUID(),
+        lessonId = randomUUID(),
+        creditId = randomUUID();
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0067_mcp_profile_identities');
+        await pool.query("INSERT INTO users(id,email,password_hash) VALUES($1,$2,'unused')", [
+          userId,
+          `${userId}@example.test`,
+        ]);
+        await pool.query("INSERT INTO workspaces(id,name) VALUES($1,'Upgrade fixture')", [
+          workspaceId,
+        ]);
+        await pool.query(
+          "INSERT INTO students(id,student,workspace_id) VALUES($1,'Legacy learner',$2)",
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          `INSERT INTO student_lessons(id,student_id,workspace_id,starts_at,status,consumes_credit,title,updated_by)
+        VALUES($1,$2,$3,'2026-01-01T10:00:00Z','completed',true,'Legacy lesson',$4)`,
+          [lessonId, studentId, workspaceId, userId],
+        );
+        await pool.query(
+          `INSERT INTO student_credit_events(id,student_id,workspace_id,event_type,quantity_delta,source_lesson_id)
+        VALUES($1,$2,$3,'credit_consumed',-1,$4)`,
+          [creditId, studentId, workspaceId, lessonId],
+        );
+        await pool.query('UPDATE student_lessons SET credit_event_id=$2 WHERE id=$1', [
+          lessonId,
+          creditId,
+        ]);
+      });
+      await runMigrations();
+      await withAdminClient(async (pool) => {
+        expect((await pool.query('SELECT count(*) FROM student_activity')).rows[0].count).toBe('0');
+        expect(
+          (
+            await pool.query(
+              'SELECT status,title,credit_event_id FROM student_lessons WHERE id=$1',
+              [lessonId],
+            )
+          ).rows[0],
+        ).toEqual({ status: 'completed', title: 'Legacy lesson', credit_event_id: creditId });
+        // The previous writer uses its existing transaction and no new actor helper.
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(
+            "UPDATE student_lessons SET status='scheduled',consumes_credit=false WHERE id=$1",
+            [lessonId],
+          );
+          await client.query('UPDATE student_credit_events SET voided_at=NOW() WHERE id=$1', [
+            creditId,
+          ]);
+          await client.query('UPDATE student_lessons SET credit_event_id=NULL WHERE id=$1', [
+            lessonId,
+          ]);
+          await client.query('COMMIT');
+        } finally {
+          client.release();
+        }
+      });
+      const feed = (await getStudentActivity(workspaceId, studentId, userId))!;
+      expect(feed.items.filter((x) => x.evidence === 'recorded')).toHaveLength(1);
+      expect(feed.items.find((x) => x.type === 'lesson_restored')).toMatchObject({
+        actor: { kind: 'unknown' },
+        effects: [{ label: 'Credits reversed', value: '+1' }],
+      });
+      expect(feed.items.find((x) => x.type === 'lesson_created')).toMatchObject({
+        evidence: 'legacy',
+      });
+      expect(feed.items.find((x) => x.type === 'credits_consumed')).toMatchObject({
+        evidence: 'retained',
+        subject: 'Credits used · -1 credit',
+      });
+      expect(feed.items.some((x) => x.type === 'credits_reversed')).toBe(false);
+      await assertSchemaHealthy('student-activity-upgrade');
+    },
+    testTimeout,
+  );
 
   it(
     '0067 backfills distinct OAuth identities including revoked, expired and nonmember grants',
