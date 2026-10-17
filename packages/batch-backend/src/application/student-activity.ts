@@ -281,7 +281,7 @@ export async function getStudentActivity(
       coverage: {
         recordingStartedAt: null,
         notice:
-          'Recorded actions and retained outcomes are shown alongside legacy facts. Earlier changes and actors may be missing; legacy facts can reflect current state. A verified rollout recording boundary has not been set.',
+          'Earlier changes and actors may be missing. Some older entries reflect the current state.',
       },
     };
   });
