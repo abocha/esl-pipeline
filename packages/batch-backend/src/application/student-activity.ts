@@ -442,7 +442,10 @@ function mapActivity(row: ActivityRow, studentId: string, timezone: string): Stu
   } else if (row.type === 'homework_failed') {
     subject = 'Homework attempt failed';
     summary = 'The attempt failed. Open the assignment to review recovery options.';
-    links.push({ label: 'Open assignments', href: '/' });
+    links.push({
+      label: 'Open failed assignment',
+      href: `/?jobId=${encodeURIComponent(row.entity_id)}`,
+    });
   } else if (row.type === 'recurrence_changed') {
     subject = 'Weekly schedule changed';
     const describe = (value: Record<string, unknown>) =>

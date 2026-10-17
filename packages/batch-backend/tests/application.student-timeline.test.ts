@@ -1117,7 +1117,7 @@ describe('student activity owner-to-feed contract', () => {
     expect(initial[0]).toMatchObject({
       evidence: 'recorded',
       subject: 'Homework attempt failed',
-      links: [{ label: 'Open assignments', href: '/' }],
+      links: [{ label: 'Open failed assignment', href: `/?jobId=${job.id}` }],
     });
     expect(JSON.stringify(initial)).not.toContain('provider response');
     await updateJobStateAndResult({
