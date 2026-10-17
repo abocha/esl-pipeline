@@ -733,7 +733,6 @@ async function getCollectedForMonth(
     JOIN students ON students.id = student_payment_records.student_id
     WHERE ${workspacePredicate('student_payment_records.workspace_id', '$4', '$5')}
       AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
-      AND students.archived_at IS NULL
       AND student_payment_records.voided_at IS NULL
       AND student_payment_records.currency = $3
       AND student_payment_records.received_at >= $1::date
@@ -765,7 +764,6 @@ async function getExcludedCurrenciesForMonth(
     JOIN students ON students.id = student_payment_records.student_id
     WHERE ${workspacePredicate('student_payment_records.workspace_id', '$4', '$5')}
       AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
-      AND students.archived_at IS NULL
       AND student_payment_records.voided_at IS NULL
       AND student_payment_records.currency <> $3
       AND student_payment_records.received_at >= $1::date
@@ -886,10 +884,7 @@ function buildBusinessReminders(
         severity: remaining < 0 ? 'urgent' : 'attention',
         title: remaining < 0 ? 'Balance is negative' : 'Lesson credits are low',
         message: `${remaining} lesson credit${Math.abs(remaining) === 1 ? '' : 's'} remaining.`,
-        copyText:
-          remaining <= 0
-            ? `Hi ${state.student_name}, please send payment for the next lesson package when convenient.`
-            : `Hi ${state.student_name}, you have ${remaining} lesson credit${remaining === 1 ? '' : 's'} remaining. Would you like to top up?`,
+        copyText: `Hi ${state.student_name}, your lesson balance is ${remaining} credit${Math.abs(remaining) === 1 ? '' : 's'}. Would you like to discuss a top-up?`,
       });
     }
   }

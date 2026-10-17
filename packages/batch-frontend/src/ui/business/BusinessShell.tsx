@@ -1,15 +1,12 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-
 import './BusinessDashboard.css';
-
 export const BusinessShell: React.FC = () => {
   return (
     <section className="business-dashboard-page">
       <header className="business-dashboard-header">
         <div>
-          <span className="business-dashboard-kicker">Business</span>
-          <h1>Teaching command desk</h1>
+          <h1>Business</h1>
         </div>
         <nav className="business-dashboard-tabs" aria-label="Business">
           <NavLink

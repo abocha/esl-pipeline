@@ -4,6 +4,7 @@ import { AxiosError } from 'axios';
 import { parseAssignmentV1 } from '@esl-pipeline/contracts';
 
 import assignmentFixture from './assignment-fixture.json';
+import { createBusinessSandbox } from './business-sandbox';
 import type { FrontendSandboxScenario } from './frontend-sandbox';
 
 const now = '2026-07-03T00:00:00.000Z';
@@ -1080,12 +1081,20 @@ export function createFrontendSandboxApiAdapter(
   const scenario = options.scenario ?? 'default';
   sandboxFirstProfileLessonMemoryConfirmed = false;
   sandboxFirstProfileLessonMemoryHealthPolls = 0;
+  const businessSandbox = createBusinessSandbox();
   let manualTranscriptText = '';
   let manualTranscriptStudentId = 'student-alex';
   let manualTranscriptDisplayName = 'Pasted lesson transcript';
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const method = (config.method ?? 'get').toLowerCase();
     const path = normalizePath(config.url);
+    const businessData = businessSandbox(
+      method,
+      path,
+      new URL(config.url ?? '/', 'http://sandbox.local').searchParams,
+      readRequestBody(config.data),
+    );
+    if (businessData !== undefined) return responseFor(config, businessData);
 
     if (isSlowScenarioRequest(scenario, method, path)) {
       await delaySandboxResponse();

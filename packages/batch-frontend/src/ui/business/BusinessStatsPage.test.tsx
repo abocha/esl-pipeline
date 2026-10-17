@@ -7,9 +7,7 @@ import { BusinessStatsPage } from './BusinessStatsPage';
 const apiMocks = vi.hoisted(() => ({
   getBusinessStatsSurface: vi.fn(),
 }));
-
 vi.mock('../../utils/api', () => apiMocks);
-
 function nextMonthInput(month: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(month);
   if (!match) throw new Error(`Expected YYYY-MM month input, received "${month}".`);
@@ -18,7 +16,6 @@ function nextMonthInput(month: string): string {
   const nextMonth = new Date(year, monthNumber, 1);
   return `${nextMonth.getFullYear()}-${`${nextMonth.getMonth() + 1}`.padStart(2, '0')}`;
 }
-
 function makeStatsSurface(overrides: Record<string, unknown> = {}) {
   return {
     workspaceId: 'workspace-1',
@@ -65,41 +62,31 @@ function makeStatsSurface(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
-
 describe('BusinessStatsPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     apiMocks.getBusinessStatsSurface.mockResolvedValue(makeStatsSurface());
   });
-
   it('renders factual stats labels, scoped values, credit watch, and excluded-currency warnings', async () => {
     render(
       <MemoryRouter>
         <BusinessStatsPage />
       </MemoryRouter>,
     );
-
     expect(await screen.findByText('Recorded payments')).toBeTruthy();
-    expect(screen.getByText('Completed lesson value')).toBeTruthy();
-    expect(screen.getByText('Scheduled lesson value')).toBeTruthy();
-    expect(screen.getAllByText('USD 120.00').length).toBeGreaterThan(0);
-    expect(screen.getByText('USD 40.00')).toBeTruthy();
-    expect(screen.getByText('USD 80.00')).toBeTruthy();
-    expect(
-      screen.getByText('future scheduled chargeable · May 7 – Jun 21 · workspace default rate'),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(
-        /not payment records, per-student\/package pricing, or revenue projections/i,
-      ),
-    ).toBeTruthy();
-    expect(screen.getByText(/selected month · USD/i)).toBeTruthy();
-    expect(screen.getByText(/Planning horizon: May 7 – Jun 21/i)).toBeTruthy();
+    expect(screen.queryByText('Completed lesson value')).toBeNull();
+    expect(screen.queryByText('Scheduled lesson value')).toBeNull();
+    expect(screen.getByText('USD 120.00')).toBeTruthy();
+    expect(screen.queryByText('USD 40.00')).toBeNull();
+    expect(screen.queryByText('USD 80.00')).toBeNull();
+    expect(screen.getByText('Lessons taught')).toBeTruthy();
+    expect(screen.getByText(/Includes archived students/i)).toBeTruthy();
+    expect(screen.getByText(/May 7 – Jun 21/i)).toBeTruthy();
     expect(screen.getAllByText('2 h').length).toBeGreaterThan(0);
     expect(screen.getByText(/Excluded currencies/i)).toBeTruthy();
     expect(screen.getByText(/EUR 50.00/i)).toBeTruthy();
-    expect(screen.getByText('Credit watch')).toBeTruthy();
-    expect(screen.getByText('Students nearing their credit threshold')).toBeTruthy();
+    fireEvent.click(screen.getByText('Credit watch'));
+    expect(screen.getByText(/Credits are not amounts owed/)).toBeTruthy();
     expect(screen.getByText('Bea')).toBeTruthy();
     expect(screen.queryByText('Forecast')).toBeNull();
     expect(screen.queryByText('Risk correction')).toBeNull();
@@ -108,33 +95,66 @@ describe('BusinessStatsPage', () => {
     expect(screen.queryByText('Likely top-ups')).toBeNull();
     expect(screen.queryByText('No urgent business risks.')).toBeNull();
     expect(apiMocks.getBusinessStatsSurface).toHaveBeenCalledWith({});
-    expect(screen.getByLabelText(/Month/i)).toHaveProperty('value', '2026-05');
+    expect(screen.getByLabelText(/^Month$/i)).toHaveProperty('value', '2026-05');
   });
-
   it('renders backend planning boundaries as date-only calendar values', async () => {
     vi.stubEnv('TZ', 'America/Los_Angeles');
     try {
       apiMocks.getBusinessStatsSurface.mockResolvedValue(
         makeStatsSurface({ forecastFrom: '2026-01-01', forecastTo: '2026-01-02' }),
       );
-
       render(
         <MemoryRouter>
           <BusinessStatsPage />
         </MemoryRouter>,
       );
-
-      expect(
-        await screen.findByText(
-          'future scheduled chargeable · Jan 1 – Jan 2 · workspace default rate',
-        ),
-      ).toBeTruthy();
-      expect(screen.getByText(/Planning horizon: Jan 1 – Jan 2/i)).toBeTruthy();
+      await screen.findByText('Coming up');
+      expect(screen.getByText(/Jan 1 – Jan 2/i)).toBeTruthy();
     } finally {
       vi.unstubAllEnvs();
     }
   });
-
+  it('keeps unavailable stats distinct from zero payments and workload', async () => {
+    apiMocks.getBusinessStatsSurface.mockRejectedValue(new Error('Stats unavailable'));
+    render(
+      <MemoryRouter>
+        <BusinessStatsPage />
+      </MemoryRouter>,
+    );
+    expect((await screen.findByRole('alert')).textContent).toContain('Stats unavailable');
+    expect(screen.queryByText('Recorded payments')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+  it('identifies retained stats while another month loads or fails, then clears the notice on recovery', async () => {
+    let rejectLoad: (error: Error) => void = () => {};
+    apiMocks.getBusinessStatsSurface
+      .mockResolvedValueOnce(makeStatsSurface())
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectLoad = reject;
+          }),
+      )
+      .mockResolvedValueOnce(makeStatsSurface({ month: '2026-06', collectedMinor: 25000 }));
+    render(
+      <MemoryRouter>
+        <BusinessStatsPage />
+      </MemoryRouter>,
+    );
+    await screen.findByText('USD 120.00');
+    fireEvent.change(screen.getByLabelText(/^Month$/i), { target: { value: '2026-06' } });
+    expect((await screen.findByRole('status')).textContent).toContain(
+      'Showing stats for May 2026.',
+    );
+    expect(screen.getByText('USD 120.00')).toBeTruthy();
+    rejectLoad(new Error('June request failed'));
+    expect((await screen.findByRole('alert')).textContent).toContain('Showing stats for May 2026.');
+    expect(screen.getByLabelText(/^Month$/i)).toHaveProperty('value', '2026-06');
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('USD 250.00')).toBeTruthy();
+    expect(screen.queryByText(/Showing stats for May/)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
   it('keeps newer month results when an older stats load resolves later', async () => {
     const initialMonth = makeStatsSurface().month;
     const nextMonth = nextMonthInput(initialMonth);
@@ -165,21 +185,18 @@ describe('BusinessStatsPage', () => {
           excludedCurrencies: [],
         }),
       );
-
     render(
       <MemoryRouter>
         <BusinessStatsPage />
       </MemoryRouter>,
     );
-
     await screen.findByText('Bea');
     fireEvent.click(screen.getByRole('button', { name: /Refresh/i }));
-    fireEvent.change(screen.getByLabelText(/Month/i), { target: { value: nextMonth } });
+    fireEvent.change(screen.getByLabelText(/^Month$/i), { target: { value: nextMonth } });
     await waitFor(() => {
       expect(apiMocks.getBusinessStatsSurface).toHaveBeenCalledTimes(3);
     });
     expect(await screen.findByText('Newer Month Student')).toBeTruthy();
-
     resolveInitialLoad(
       makeStatsSurface({
         month: initialMonth,
@@ -195,7 +212,6 @@ describe('BusinessStatsPage', () => {
         ],
       }),
     );
-
     await waitFor(() => {
       expect(screen.getByText('Newer Month Student')).toBeTruthy();
     });

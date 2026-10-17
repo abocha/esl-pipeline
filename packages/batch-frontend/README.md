@@ -37,6 +37,10 @@ Canonical behavior and current status live in:
 
 ## Runtime Notes
 
+- Browser startup configures Zod in `jitless` mode before application schemas load, avoiding
+  eval probes under CSP. HTML keeps the resource policy; Vite and frontend nginx supply
+  `frame-ancestors 'none'` and `X-Frame-Options: DENY` as response headers. nginx also sends
+  `X-Content-Type-Options: nosniff` on the SPA entry response, including fallback routes.
 - API traffic goes through `src/utils/api.ts` and `@esl-pipeline/contracts`.
 - Base URL resolution uses runtime override first, then Vite env, then `/api`.
 - The app assumes the extended backend API is enabled.
@@ -77,15 +81,23 @@ Canonical behavior and current status live in:
   `sourceJobId` relationship proves the lineage, while every exact version remains selectable.
   Older lineages are revealed progressively through the existing job and assignment-session APIs;
   this is a short recovery/reference surface, not a searchable assignment archive.
-- This visual overhaul currently covers the authenticated shell and assignment workflow. Student,
-  Business routes remain operational on their existing content designs.
+- The Business area uses flat day-grouped lesson rows and bounded unfinished follow-up, with
+  booking/credit suggestions and recent payments behind disclosures. Stats focuses on recorded
+  payments and taught lessons/hours; default-rate monetary estimates are not displayed. Student
+  routes retain their existing content designs.
+- Monthly recorded payments include archived students' non-voided history in the selected
+  currency, with other currencies reported separately. Lesson/workload facts and the recent-payment
+  list remain scoped to non-archived students. Business top-up drafts offer a discussion based on
+  credit balance; they do not assert debt or renewal.
 - Local UI iteration can use the Vite mock-auth sandbox without a backend:
   - PowerShell:
     ` $env:VITE_BATCH_FRONTEND_SANDBOX='mock-auth'; pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
   - POSIX:
     `VITE_BATCH_FRONTEND_SANDBOX=mock-auth pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
   - The sandbox is dev-only, marks the UI with `Mock data`, bypasses frontend auth only, and uses
-    seeded mock API responses for the assignment builder.
+    seeded mock API responses for the assignment builder and Business routes.
+  - Open `http://localhost:5173/business/schedule` for a fictional, in-memory Business preview;
+    status changes and reminder hide/undo affect only that sandbox instance.
   - Sandbox scenarios are allow-listed through `sandboxScenario`; unknown values use the default:
     - `http://localhost:5173/?sandboxScenario=default`
     - `http://localhost:5173/?sandboxScenario=step-one-no-recent`
