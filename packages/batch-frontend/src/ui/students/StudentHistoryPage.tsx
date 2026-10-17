@@ -605,10 +605,14 @@ export const StudentHistoryPage: React.FC = () => {
   const [historyData, setHistoryData] = useState<HistoryData>(EMPTY_HISTORY_DATA);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [unavailableSources, setUnavailableSources] = useState<string[]>([]);
+  const [historyRetryCount, setHistoryRetryCount] = useState(0);
   const [loadedStudentId, setLoadedStudentId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<HistoryFilter>('all');
   const latestHistoryRequestRef = useRef(0);
+  const lastLoadedHistoryRef = useRef<{ studentId: string; data: HistoryData } | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Retry deliberately reloads the same learner.
   useEffect(() => {
     const requestId = latestHistoryRequestRef.current + 1;
     latestHistoryRequestRef.current = requestId;
@@ -631,69 +635,70 @@ export const StudentHistoryPage: React.FC = () => {
     setHistoryError(null);
 
     const loadHistory = async () => {
-      try {
-        const [surface, candidates] = await Promise.all([
-          getStudentHistorySurface(studentId),
-          listStudentProfileCandidates(studentId, { limit: 100, offset: 0, order: 'desc' }),
+      const [surfaceResult, candidatesResult] = await Promise.allSettled([
+        getStudentHistorySurface(studentId),
+        listStudentProfileCandidates(studentId, { limit: 100, offset: 0, order: 'desc' }),
+      ]);
+      if (latestHistoryRequestRef.current !== requestId) return;
+      const failedSources: string[] = [];
+      const candidates =
+        candidatesResult.status === 'fulfilled' ? candidatesResult.value.items : [];
+      if (candidatesResult.status === 'rejected') failedSources.push('Profile updates');
+      let nextData: HistoryData;
+      if (surfaceResult.status === 'fulfilled') {
+        nextData = {
+          timeline: surfaceResult.value.timeline.items,
+          lessons: surfaceResult.value.lessonMemory.items,
+          homework: surfaceResult.value.homeworkMemory.items,
+          candidates,
+        };
+      } else {
+        const [timelineResult, lessonResult, homeworkResult] = await Promise.allSettled([
+          getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
+          listStudentLessonMemoryEntries(studentId, {
+            status: 'ready',
+            limit: 60,
+            offset: 0,
+            order: 'desc',
+          }),
+          listStudentHomeworkMemoryEntries(studentId, {
+            status: 'ready',
+            limit: 60,
+            offset: 0,
+            order: 'desc',
+          }),
         ]);
-
-        if (latestHistoryRequestRef.current !== requestId) {
-          return;
-        }
-
-        setHistoryData({
-          timeline: surface.timeline.items,
-          lessons: surface.lessonMemory.items,
-          homework: surface.homeworkMemory.items,
-          candidates: candidates.items,
-        });
-        setLoadedStudentId(studentId);
-        setHistoryError(null);
-      } catch (error: unknown) {
-        if (latestHistoryRequestRef.current !== requestId) {
-          return;
-        }
-        const [timelineResult, lessonResult, homeworkResult, candidatesResult] =
-          await Promise.allSettled([
-            getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
-            listStudentLessonMemoryEntries(studentId, {
-              status: 'ready',
-              limit: 60,
-              offset: 0,
-              order: 'desc',
-            }),
-            listStudentHomeworkMemoryEntries(studentId, {
-              status: 'ready',
-              limit: 60,
-              offset: 0,
-              order: 'desc',
-            }),
-            listStudentProfileCandidates(studentId, { limit: 100, offset: 0, order: 'desc' }),
-          ]);
-        if (latestHistoryRequestRef.current !== requestId) {
-          return;
-        }
-        setHistoryData({
+        if (latestHistoryRequestRef.current !== requestId) return;
+        if (timelineResult.status === 'rejected') failedSources.push('Timeline');
+        if (lessonResult.status === 'rejected') failedSources.push('Lesson memory');
+        if (homeworkResult.status === 'rejected') failedSources.push('Homework memory');
+        nextData = {
           timeline: timelineResult.status === 'fulfilled' ? timelineResult.value.items : [],
           lessons: lessonResult.status === 'fulfilled' ? lessonResult.value.items : [],
           homework: homeworkResult.status === 'fulfilled' ? homeworkResult.value.items : [],
-          candidates: candidatesResult.status === 'fulfilled' ? candidatesResult.value.items : [],
-        });
-        setLoadedStudentId(studentId);
-        setHistoryError(
-          [timelineResult, lessonResult, homeworkResult, candidatesResult].some(
-            (result) => result.status === 'rejected',
-          )
-            ? 'Some history context could not be loaded.'
-            : error instanceof Error
-              ? error.message
-              : 'Some history context could not be loaded.',
-        );
-      } finally {
-        if (latestHistoryRequestRef.current === requestId) {
-          setHistoryLoading(false);
-        }
+          candidates,
+        };
       }
+      // A failed source is unknown. Retain any previously loaded entries for this
+      // learner during Retry, with the unavailable-source warning still visible.
+      const previous = lastLoadedHistoryRef.current;
+      if (previous?.studentId === studentId) {
+        if (failedSources.includes('Timeline')) nextData.timeline = previous.data.timeline;
+        if (failedSources.includes('Lesson memory')) nextData.lessons = previous.data.lessons;
+        if (failedSources.includes('Homework memory')) nextData.homework = previous.data.homework;
+        if (failedSources.includes('Profile updates'))
+          nextData.candidates = previous.data.candidates;
+      }
+      lastLoadedHistoryRef.current = { studentId, data: nextData };
+      setHistoryData(nextData);
+      setUnavailableSources(failedSources);
+      setLoadedStudentId(studentId);
+      setHistoryError(
+        failedSources.length
+          ? `Could not load: ${failedSources.join(', ')}. Previously loaded entries, if any, are retained.`
+          : null,
+      );
+      setHistoryLoading(false);
     };
 
     void loadHistory();
@@ -701,23 +706,20 @@ export const StudentHistoryPage: React.FC = () => {
     return () => {
       latestHistoryRequestRef.current += 1;
     };
-  }, [studentId, studentLoading]);
+  }, [studentId, studentLoading, historyRetryCount]);
 
-  const historyReady = loadedStudentId === studentId && !historyLoading;
+  const historyReady = loadedStudentId === studentId;
   const events = useMemo(() => buildHistoryEvents(historyData), [historyData]);
   const filteredEvents =
     activeFilter === 'all' ? events : events.filter((event) => event.category === activeFilter);
   const groupedEvents = groupEvents(filteredEvents);
 
-  if (!historyReady) {
-    return <StudentHistoryPendingCanvas errorMessage={studentError} />;
+  if (!historyReady || studentLoading || studentError) {
+    return <StudentHistoryPendingCanvas errorMessage={studentError ?? historyError} />;
   }
 
   return (
-    <section
-      className="student-history-page student-area-theme"
-      aria-busy={studentLoading || !historyReady}
-    >
+    <section className="student-history-page student-area-theme" aria-busy={historyLoading}>
       <div className="student-area-frame student-history-frame">
         <article className="student-area-panel student-history-about">
           <p className="student-history-section-label">About this history</p>
@@ -728,10 +730,19 @@ export const StudentHistoryPage: React.FC = () => {
         </article>
 
         {studentError || historyError ? (
-          <p className="student-history-error" role="alert">
-            {studentError ?? historyError}
-          </p>
+          <div className="student-history-error">
+            <p role="alert">{studentError ?? historyError}</p>
+            <button
+              type="button"
+              onClick={() => setHistoryRetryCount((count) => count + 1)}
+              disabled={historyLoading}
+            >
+              Retry history
+            </button>
+          </div>
         ) : null}
+
+        {historyLoading ? <p role="status">Refreshing history…</p> : null}
 
         {studentId ? <StudentTranscriptHistory key={studentId} studentId={studentId} /> : null}
 
@@ -765,11 +776,29 @@ export const StudentHistoryPage: React.FC = () => {
           </div>
         ) : (
           <article className="student-area-empty-state student-history-empty">
-            <h3>History will collect here</h3>
+            <h3>
+              {unavailableSources.length === 4
+                ? 'History unavailable'
+                : unavailableSources.length
+                  ? 'History incomplete'
+                  : activeFilter !== 'all'
+                    ? 'No matching history'
+                    : 'No recent history'}
+            </h3>
             <p>
-              Lesson, homework, profile, material, billing, business, and operations events will
-              appear as this student works through the new flow.
+              {unavailableSources.length === 4
+                ? 'History could not be retrieved. Existing records are unknown.'
+                : unavailableSources.length
+                  ? 'Some history could not be retrieved. No matching entries are available from the sources that loaded.'
+                  : activeFilter !== 'all'
+                    ? 'No entries match this filter in the loaded history.'
+                    : 'No recent entries were returned by the history sources.'}
             </p>
+            {activeFilter !== 'all' ? (
+              <button type="button" onClick={() => setActiveFilter('all')}>
+                Show all history
+              </button>
+            ) : null}
           </article>
         )}
 

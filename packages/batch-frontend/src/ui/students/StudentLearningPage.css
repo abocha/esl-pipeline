@@ -116,7 +116,6 @@
 }
 
 .student-learning-status-grid,
-.student-learning-memory-summary,
 .student-learning-rail-summary {
   display: grid;
   gap: 0.85rem;

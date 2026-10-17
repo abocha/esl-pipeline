@@ -77,11 +77,6 @@ function formatCredits(surface: StudentScheduleBillingSurface | null): string {
   return `${remaining} lesson credit${Math.abs(remaining) === 1 ? '' : 's'}`;
 }
 
-function formatReminderSummary(surface: StudentScheduleBillingSurface | null): string {
-  if (!surface || surface.reminders.length === 0) return 'No reminders ready';
-  return `${surface.reminders.length} reminder${surface.reminders.length === 1 ? '' : 's'} ready`;
-}
-
 function formatLatestPayment(surface: StudentScheduleBillingSurface | null): string {
   const payment = surface?.payments[0];
   if (!payment) return 'Not tracked yet';
@@ -212,12 +207,38 @@ function getProfileStatus(args: {
   };
 }
 
+function getMemoryUnavailableNotice(memory: StudentMemoryOverviewResponse | null) {
+  if (memory?.availability?.state === 'repair_required') {
+    return {
+      title: 'Memory repair required',
+      detail:
+        'Stored memory history requires explicit repair. New lessons do not restore it automatically.',
+    };
+  }
+  if (memory?.availability?.state === 'repository_unavailable') {
+    return {
+      title: 'Memory unavailable',
+      detail: 'Memory could not be retrieved. Existing history is unknown.',
+    };
+  }
+  return null;
+}
+
 function getSuggestedFocus(memory: StudentMemoryOverviewResponse | null): {
   title: string;
   detail: string;
   badge: string;
   generatedAt: string | null;
 } {
+  const unavailable = getMemoryUnavailableNotice(memory);
+  if (unavailable) {
+    return {
+      title: 'Suggested focus unavailable',
+      detail: unavailable.detail,
+      badge: unavailable.title,
+      generatedAt: null,
+    };
+  }
   const snapshot = memory?.latestReadyStudentMemorySnapshot;
   const assignmentDirection = snapshot?.recommendedAssignmentDirections[0];
   if (assignmentDirection) {
@@ -261,7 +282,7 @@ function getSuggestedFocus(memory: StudentMemoryOverviewResponse | null): {
   return {
     title: 'No suggested focus yet',
     detail: 'A suggested focus will appear after a ready memory snapshot is available.',
-    badge: 'Waiting for memory',
+    badge: 'No memory snapshot',
     generatedAt: null,
   };
 }
@@ -302,10 +323,12 @@ function getAttentionItem(args: {
     };
   }
 
-  if (!args.memory?.latestReadyStudentMemorySnapshot) {
+  const unavailable = getMemoryUnavailableNotice(args.memory);
+  if (unavailable || !args.memory?.latestReadyStudentMemorySnapshot) {
     return {
-      label: 'Memory snapshot pending',
-      detail: 'Recent lesson memory will make this overview more useful after the next rollup.',
+      label: unavailable?.title ?? 'No memory snapshot yet',
+      detail:
+        unavailable?.detail ?? 'No established memory snapshot is available for this learner.',
       target: 'learning',
     };
   }
@@ -599,16 +622,6 @@ export const StudentOverviewPage: React.FC = () => {
               <span>
                 <strong>Lesson credits</strong>
                 <small>{formatCredits(scheduleBilling)}</small>
-              </span>
-            </Link>
-            <Link
-              to={studentAreaPath('schedule-billing')}
-              className="student-overview-operation-row"
-            >
-              <span className="student-overview-operation-icon">Msg</span>
-              <span>
-                <strong>Reminders</strong>
-                <small>{formatReminderSummary(scheduleBilling)}</small>
               </span>
             </Link>
             <Link

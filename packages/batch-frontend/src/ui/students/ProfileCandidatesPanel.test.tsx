@@ -55,6 +55,7 @@ function profileCandidate(
 
 function renderProfileCandidatesPanel(options: {
   candidates?: StudentProfileCandidate[];
+  error?: string;
   filter?: ProfileCandidateFilter;
   selectedCandidateIds?: string[];
   onPromoteProfileCandidates?: () => void | Promise<void>;
@@ -90,7 +91,7 @@ function renderProfileCandidatesPanel(options: {
           ]
         }
         profileCandidatesLoading={false}
-        profileCandidatesError={null}
+        profileCandidatesError={options.error ?? null}
         profileCandidateFilter={profileCandidateFilter}
         setProfileCandidateFilter={setProfileCandidateFilter}
         profileCandidateAction={null}
@@ -123,6 +124,17 @@ function renderProfileCandidatesPanel(options: {
 }
 
 describe('ProfileCandidatesPanel', () => {
+  it('does not claim an empty review or promotion queue when candidates could not load', () => {
+    renderProfileCandidatesPanel({
+      candidates: [],
+      filter: 'approved',
+      error: 'Candidates unavailable',
+    });
+    expect(screen.getByText('Candidates unavailable')).toBeTruthy();
+    expect(screen.queryByText(/No approved profile candidates/)).toBeNull();
+    expect(screen.queryByText(/0 approved candidate/)).toBeNull();
+    expect(screen.queryByText(/0 awaiting review/)).toBeNull();
+  });
   it('labels extraction time explicitly when the lesson occurrence date is unknown', async () => {
     const user = userEvent.setup();
     renderProfileCandidatesPanel({
@@ -139,6 +151,7 @@ describe('ProfileCandidatesPanel', () => {
     });
     await user.click(screen.getByRole('button', { name: 'Details' }));
     expect(screen.getByText('Extraction date (lesson date unknown):')).toBeTruthy();
+    expect(screen.queryByText('Confidence:')).toBeNull();
   });
   it('filters approved candidates without showing promoted candidates in the approved queue', async () => {
     const user = userEvent.setup();

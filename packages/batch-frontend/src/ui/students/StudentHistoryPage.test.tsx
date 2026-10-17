@@ -524,7 +524,7 @@ describe('StudentHistoryPage', () => {
     renderHistory();
 
     expect(await screen.findByText('Lesson memory created')).toBeTruthy();
-    expect(screen.getByText('Some history context could not be loaded.')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Timeline');
     expect(screen.queryByText('Profile revision activated')).toBeNull();
   });
 
@@ -563,11 +563,94 @@ describe('StudentHistoryPage', () => {
 
     renderHistory();
 
-    expect(await screen.findByText('History will collect here')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Lesson, homework, profile, material, billing, business, and operations events will appear as this student works through the new flow.',
-      ),
-    ).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'No recent history' })).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('retains the successful aggregate history when candidate retrieval fails', async () => {
+    apiMocks.getStudentHistorySurface.mockResolvedValue({
+      timeline: {
+        items: [
+          {
+            id: 'event-aggregate',
+            type: 'profile_revision_activated',
+            createdAt: PROFILE_TIME,
+            displayName: 'Aggregate history retained',
+            details: {},
+          },
+        ],
+      },
+      lessonMemory: { items: [] },
+      homeworkMemory: { items: [] },
+    });
+    apiMocks.listStudentProfileCandidates.mockRejectedValue(new Error('Candidates unavailable'));
+    apiMocks.getStudentTimeline.mockRejectedValue(new Error('Fallback unavailable'));
+    renderHistory();
+    expect(await screen.findByText('Aggregate history retained')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Profile updates');
+    expect(apiMocks.getStudentTimeline).not.toHaveBeenCalled();
+    expect(screen.queryByText('No recent history')).toBeNull();
+  });
+
+  it('reports unavailable history without an empty claim and recovers with Retry', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentHistorySurface.mockRejectedValueOnce(new Error('Aggregate unavailable'));
+    apiMocks.getStudentTimeline.mockRejectedValueOnce(new Error('Timeline unavailable'));
+    apiMocks.listStudentLessonMemoryEntries.mockRejectedValueOnce(new Error('Lessons unavailable'));
+    apiMocks.listStudentHomeworkMemoryEntries.mockRejectedValueOnce(
+      new Error('Homework unavailable'),
+    );
+    apiMocks.listStudentProfileCandidates.mockRejectedValueOnce(
+      new Error('Candidates unavailable'),
+    );
+    renderHistory();
+    expect(await screen.findByRole('heading', { name: 'History unavailable' })).toBeTruthy();
+    expect(screen.queryByText('No recent history')).toBeNull();
+    expect(screen.queryByText('History will collect here')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Retry history' }));
+    expect(await screen.findByText('Lesson memory created')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('retains previously loaded entries when a source fails during Retry', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentTimeline.mockRejectedValue(new Error('Timeline unavailable'));
+    renderHistory();
+    expect(await screen.findByText('Lesson memory created')).toBeTruthy();
+    apiMocks.listStudentLessonMemoryEntries.mockRejectedValue(new Error('Lessons unavailable'));
+    await user.click(screen.getByRole('button', { name: 'Retry history' }));
+    expect(await screen.findByText(/Could not load:.*Lesson memory/)).toBeTruthy();
+    expect(screen.getByText('Lesson memory created')).toBeTruthy();
+    expect(screen.queryByText('No recent history')).toBeNull();
+  });
+
+  it('reports incomplete rather than empty history when a source is unknown', async () => {
+    apiMocks.getStudentHistorySurface.mockResolvedValue({
+      timeline: { items: [] },
+      lessonMemory: { items: [] },
+      homeworkMemory: { items: [] },
+    });
+    apiMocks.listStudentProfileCandidates.mockRejectedValue(new Error('Candidates unavailable'));
+    renderHistory();
+    expect(await screen.findByRole('heading', { name: 'History incomplete' })).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Profile updates');
+    expect(screen.queryByText('No recent history')).toBeNull();
+  });
+
+  it('distinguishes a filter with no matching entries from empty history', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentTimeline.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 100,
+      offset: 0,
+      order: 'desc',
+    });
+    renderHistory();
+    await screen.findByText('Lesson memory created');
+    await user.click(screen.getByRole('button', { name: /^Business$/ }));
+    expect(screen.getByRole('heading', { name: 'No matching history' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Show all history' }));
+    expect(screen.getByText('Lesson memory created')).toBeTruthy();
   });
 });

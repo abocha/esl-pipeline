@@ -299,12 +299,6 @@ export const StudentScheduleBillingPage: React.FC = () => {
           tone={creditTone}
         />
         <StudentAreaMetricCard
-          eyebrow="Reminders"
-          value={surface.reminders.length === 0 ? 'Clear' : `${surface.reminders.length} ready`}
-          detail="Manual follow-ups; some include actions."
-          tone={surface.reminders.length === 0 ? 'success' : 'attention'}
-        />
-        <StudentAreaMetricCard
           eyebrow="Latest payment"
           value={
             surface.payments[0]

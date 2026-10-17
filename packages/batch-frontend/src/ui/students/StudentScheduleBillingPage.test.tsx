@@ -170,7 +170,7 @@ describe('StudentScheduleBillingPage', () => {
     expect(screen.getAllByText('USD 120.00')).toHaveLength(2);
     expect(screen.getByText('Package And Payment')).toBeTruthy();
     expect(screen.getByText('Payment History')).toBeTruthy();
-    expect(screen.getAllByText('Manual follow-ups; some include actions.')).toHaveLength(2);
+    expect(screen.getByText('Manual follow-ups; some include actions.')).toBeTruthy();
     expect(screen.queryByText('Copyable text only for now.')).toBeNull();
     expect(screen.getByText(/Bank transfer/)).toBeTruthy();
     expect(
