@@ -34,6 +34,7 @@ import {
   finishTranscriptAssignmentSessionPersistence,
   startHomeworkAssignmentSessionPersistence,
 } from '../src/domain/assignment-session-repository.js';
+import { archiveStudent, restoreStudent } from '../src/domain/student-repository.js';
 import { closePgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
@@ -407,6 +408,8 @@ async function insertBusinessPayment(params: {
   amountMinor: number;
   currency: string;
   receivedAt: string;
+  workspaceId?: string;
+  voidedAt?: string;
 }) {
   await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query(
@@ -417,17 +420,19 @@ async function insertBusinessPayment(params: {
         workspace_id,
         amount_minor,
         currency,
-        received_at
+        received_at,
+        voided_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       `,
       [
         randomUUID(),
         params.studentId,
-        DEFAULT_WORKSPACE_ID,
+        params.workspaceId ?? DEFAULT_WORKSPACE_ID,
         params.amountMinor,
         params.currency,
         params.receivedAt,
+        params.voidedAt ?? null,
       ],
     );
   });
@@ -2632,6 +2637,65 @@ describeIfPg('application/student-schedule-billing', () => {
       { currency: 'EUR', amountMinor: 5000, paymentCount: 1 },
     ]);
   });
+
+  it('keeps monthly payment history through archive and restore without mixing currencies or workspaces', async () => {
+    const { studentId } = await seedStudent();
+    const foreign = await seedWorkspaceTutor('foreign');
+    const foreignStudentId = await seedStudentInWorkspace(foreign.workspaceId, 'Foreign');
+    await updateBusinessSettings(DEFAULT_WORKSPACE_ID, { defaultCurrency: 'USD' });
+    for (const payment of [
+      { amountMinor: 12000, currency: 'USD', receivedAt: '2026-05-01' },
+      { amountMinor: 5000, currency: 'EUR', receivedAt: '2026-05-31' },
+      { amountMinor: 900, currency: 'USD', receivedAt: '2026-04-30' },
+      { amountMinor: 900, currency: 'EUR', receivedAt: '2026-06-01' },
+      { amountMinor: 900, currency: 'USD', receivedAt: '2026-05-02', voidedAt: '2026-05-03' },
+      { amountMinor: 900, currency: 'EUR', receivedAt: '2026-05-02', voidedAt: '2026-05-03' },
+    ]) {
+      await insertBusinessPayment({ studentId, ...payment });
+    }
+    for (const currency of ['USD', 'EUR']) {
+      await insertBusinessPayment({
+        studentId: foreignStudentId,
+        workspaceId: foreign.workspaceId,
+        amountMinor: 77700,
+        currency,
+        receivedAt: '2026-05-02',
+      });
+    }
+    const expectPaymentHistory = async () => {
+      const stats = await getBusinessStatsSurface(DEFAULT_WORKSPACE_ID, { month: '2026-05' });
+      expect(stats.collectedMinor).toBe(12000);
+      expect(stats.excludedCurrencies).toEqual([
+        { currency: 'EUR', amountMinor: 5000, paymentCount: 1 },
+      ]);
+    };
+    await expectPaymentHistory();
+    expect(
+      await archiveStudent({ id: studentId, workspaceId: DEFAULT_WORKSPACE_ID }),
+    ).not.toBeNull();
+    await expectPaymentHistory();
+    const schedule = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID);
+    expect(schedule.reminders.some((reminder) => reminder.studentId === studentId)).toBe(false);
+    expect(await restoreStudent(studentId, { workspaceId: DEFAULT_WORKSPACE_ID })).not.toBeNull();
+    await expectPaymentHistory();
+  });
+
+  it.each([-1, 0, 1])(
+    'offers an optional top-up discussion for a balance of %i without demanding payment',
+    async (remaining) => {
+      const { studentId } = await seedStudent();
+      if (remaining !== 0) await insertBusinessCreditEvent(studentId, remaining);
+      const surface = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID);
+      const reminder = surface.reminders.find(
+        (item) =>
+          item.studentId === studentId && ['payment_followup', 'low_balance'].includes(item.type),
+      );
+      expect(reminder).toMatchObject({
+        remainingCredits: remaining,
+        copyText: `Hi Alex, your lesson balance is ${remaining} credit${Math.abs(remaining) === 1 ? '' : 's'}. Would you like to discuss a top-up?`,
+      });
+    },
+  );
 
   it('uses the configured business timezone for monthly lesson stats', async () => {
     const { studentId } = await seedStudent();

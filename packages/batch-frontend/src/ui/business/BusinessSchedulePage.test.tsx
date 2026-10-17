@@ -11,9 +11,7 @@ const apiMocks = vi.hoisted(() => ({
   updateStudentLesson: vi.fn(),
 }));
 const navigateMock = vi.hoisted(() => vi.fn());
-
 vi.mock('../../utils/api', () => apiMocks);
-
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>();
   return {
@@ -21,7 +19,6 @@ vi.mock('react-router-dom', async (importOriginal) => {
     useNavigate: () => navigateMock,
   };
 });
-
 function makeHomework(overrides: Record<string, unknown> = {}) {
   return {
     status: 'not_started',
@@ -36,7 +33,6 @@ function makeHomework(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
-
 function makeSurface(overrides: Record<string, unknown> = {}) {
   return {
     workspaceId: 'workspace-1',
@@ -122,14 +118,12 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
-
 describe('BusinessSchedulePage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     apiMocks.getBusinessScheduleSurface.mockResolvedValue(makeSurface());
     apiMocks.updateStudentLesson.mockResolvedValue({});
   });
-
   it('opens completed transcript-only lessons without a homework or billing mutation', async () => {
     const original = makeSurface();
     apiMocks.getBusinessScheduleSurface.mockResolvedValue(
@@ -158,29 +152,27 @@ describe('BusinessSchedulePage', () => {
     expect(screen.queryByRole('button', { name: 'Add homework' })).toBeNull();
     expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
-
-  it('renders aggregate agenda, reminders, alerts, and recent payments', async () => {
+  it('shows the agenda and keeps credit suggestions and payments in disclosures', async () => {
     render(
       <MemoryRouter>
         <BusinessSchedulePage />
       </MemoryRouter>,
     );
-
-    expect((await screen.findAllByText('Agenda')).length).toBeGreaterThan(1);
+    expect(await screen.findByRole('region', { name: 'Lesson agenda' })).toBeTruthy();
+    fireEvent.click(screen.getByText(/Credits & bookings/));
+    fireEvent.click(screen.getByText(/Recent payments/));
     expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
-    expect(screen.getByText('Balance is negative')).toBeTruthy();
+    expect(screen.getByText('-1 lesson credits remaining')).toBeTruthy();
     expect(screen.getByText('USD 120.00')).toBeTruthy();
-    expect(screen.getByText(/-1 credits/i)).toBeTruthy();
-    expect(screen.getByText('open follow-ups')).toBeTruthy();
-    expect(screen.getAllByText('Credit alerts').length).toBeGreaterThan(1);
+    expect(screen.getByText('Unfinished lesson follow-up')).toBeTruthy();
+    expect(screen.queryByText('Credit alerts')).toBeNull();
     expect(screen.queryByText('Week Agenda')).toBeNull();
     expect(screen.queryByText(/ready to send/i)).toBeNull();
     expect(screen.queryByText('Payment And Credit Alerts')).toBeNull();
     expect(apiMocks.getBusinessScheduleSurface).toHaveBeenCalledWith({});
     expect(screen.getByLabelText(/From/i)).toHaveProperty('value', '2026-05-07');
-    expect(screen.getByLabelText(/To/i)).toHaveProperty('value', '2026-05-14');
+    expect(screen.getByLabelText(/^To$/i)).toHaveProperty('value', '2026-05-14');
   });
-
   it('shows lesson and reminder datetimes in the workspace timezone across midnight', async () => {
     apiMocks.getBusinessScheduleSurface.mockResolvedValue(
       makeSurface({
@@ -211,20 +203,50 @@ describe('BusinessSchedulePage', () => {
         ],
       }),
     );
-
     render(
       <MemoryRouter>
         <BusinessSchedulePage />
       </MemoryRouter>,
     );
-
-    expect(await screen.findByText('Times shown in America/Los_Angeles')).toBeTruthy();
-    expect(screen.getByText('May 7, 11:30 PM · 60 min · scheduled')).toBeTruthy();
     expect(
-      screen.getByText('May 7, 11:30 PM · Present perfect review · Lesson lesson-1'),
+      await screen.findByRole('link', {
+        name: 'Timezone: America/Los_Angeles. Change in Business settings.',
+      }),
     ).toBeTruthy();
+    expect(screen.getByRole('article', { name: 'Alex, May 7, 11:30 PM' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Thursday, May 7' })).toBeTruthy();
+    expect(screen.getByText('11:30 PM')).toBeTruthy();
+    expect(screen.getByText('May 7, 11:30 PM · Present perfect review')).toBeTruthy();
   });
-
+  it('identifies retained lessons while another range loads or fails, then clears the notice on recovery', async () => {
+    let rejectLoad: (error: Error) => void = () => {};
+    apiMocks.getBusinessScheduleSurface
+      .mockResolvedValueOnce(makeSurface())
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectLoad = reject;
+          }),
+      )
+      .mockResolvedValueOnce(makeSurface({ to: '2026-05-21', lessons: [] }));
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+    await screen.findByRole('article', { name: /Alex,/ });
+    fireEvent.change(screen.getByLabelText(/^To$/i), { target: { value: '2026-05-21' } });
+    const loadedPeriod = 'Showing lessons for 2026-05-07 – 2026-05-14.';
+    expect((await screen.findByRole('status')).textContent).toContain(loadedPeriod);
+    expect(screen.getByRole('article', { name: /Alex,/ })).toBeTruthy();
+    rejectLoad(new Error('Range request failed'));
+    expect((await screen.findByRole('alert')).textContent).toContain(loadedPeriod);
+    expect(screen.getByLabelText(/^To$/i)).toHaveProperty('value', '2026-05-21');
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('No lessons in this range.')).toBeTruthy();
+    expect(screen.queryByText(/Showing lessons for/)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
   it('keeps newer range results when an older schedule load resolves later', async () => {
     let resolveInitialLoad: (value: ReturnType<typeof makeSurface>) => void = () => {};
     apiMocks.getBusinessScheduleSurface
@@ -251,18 +273,15 @@ describe('BusinessSchedulePage', () => {
           recentPayments: [],
         }),
       );
-
     render(
       <MemoryRouter>
         <BusinessSchedulePage />
       </MemoryRouter>,
     );
-
     await screen.findAllByText('Alex');
     fireEvent.click(screen.getByRole('button', { name: /Refresh/i }));
     fireEvent.change(screen.getByLabelText(/From/i), { target: { value: '2026-05-20' } });
     expect(await screen.findByText('Newer Range Student')).toBeTruthy();
-
     resolveInitialLoad(
       makeSurface({
         lessons: [
@@ -277,11 +296,38 @@ describe('BusinessSchedulePage', () => {
         recentPayments: [],
       }),
     );
-
     await waitFor(() => {
       expect(screen.getByText('Newer Range Student')).toBeTruthy();
     });
     expect(screen.queryByText('Older Range Student')).toBeNull();
+  });
+  it('dismisses lesson actions on an outside pointer, Escape, or focus leaving the menu', async () => {
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+    const toggle = await screen.findByText('Actions');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const info = screen.getByRole('button', { name: 'About completing a lesson' });
+    fireEvent.focus(info);
+    fireEvent.click(info);
+    const creditHint = screen.getByText('Completing uses 1 lesson credit.');
+    fireEvent.pointerDown(creditHint);
+    fireEvent.click(creditHint);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
+    fireEvent.pointerDown(screen.getByRole('heading', { name: 'Schedule' }));
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(toggle);
+    fireEvent.click(toggle);
+    fireEvent.blur(toggle, { relatedTarget: screen.getByRole('button', { name: 'Refresh' }) });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 
   it('marks scheduled lessons completed and chargeable from the agenda', async () => {
@@ -290,10 +336,9 @@ describe('BusinessSchedulePage', () => {
         <BusinessSchedulePage />
       </MemoryRouter>,
     );
-
-    await screen.findByRole('button', { name: 'Complete' });
+    await screen.findByText('Actions');
+    fireEvent.click(screen.getByText('Actions'));
     fireEvent.click(screen.getByRole('button', { name: 'Complete' }));
-
     await waitFor(() => {
       expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
         status: 'completed',
@@ -301,8 +346,7 @@ describe('BusinessSchedulePage', () => {
       });
     });
   });
-
-  it('completes lesson follow-up reminders and opens assignment with lesson context', async () => {
+  it('opens assignment with lesson context without a billing mutation', async () => {
     apiMocks.getBusinessScheduleSurface.mockResolvedValue(
       makeSurface({
         reminders: [
@@ -330,21 +374,17 @@ describe('BusinessSchedulePage', () => {
         ],
       }),
     );
-
     render(
       <MemoryRouter>
         <BusinessSchedulePage />
       </MemoryRouter>,
     );
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Add homework from reminder' }));
-
+    fireEvent.click(await screen.findByRole('button', { name: 'Open lesson for Alex' }));
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
     });
     expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
-
   it('shows lesson context, hides business reminders, and undoes the latest hidden reminder', async () => {
     apiMocks.getBusinessScheduleSurface
       .mockResolvedValueOnce(
@@ -393,16 +433,13 @@ describe('BusinessSchedulePage', () => {
       .mockResolvedValueOnce(makeSurface());
     apiMocks.hideStudentLessonFollowupReminder.mockResolvedValue({});
     apiMocks.undoLatestHiddenStudentReminder.mockResolvedValue({});
-
     render(
       <MemoryRouter>
         <BusinessSchedulePage />
       </MemoryRouter>,
     );
-
     expect(await screen.findByText(/Present perfect review/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
-
     await waitFor(() => {
       expect(apiMocks.hideStudentLessonFollowupReminder).toHaveBeenCalledWith(
         'student-alex',
@@ -410,12 +447,10 @@ describe('BusinessSchedulePage', () => {
       );
     });
     fireEvent.click(await screen.findByRole('button', { name: 'Undo hide' }));
-
     await waitFor(() => {
       expect(apiMocks.undoLatestHiddenStudentReminder).toHaveBeenCalledWith('student-alex');
     });
   });
-
   it('opens homework without re-billing completed non-credit business follow-ups', async () => {
     apiMocks.getBusinessScheduleSurface.mockResolvedValue(
       makeSurface({
@@ -439,21 +474,68 @@ describe('BusinessSchedulePage', () => {
         ],
       }),
     );
-
     render(
       <MemoryRouter>
         <BusinessSchedulePage />
       </MemoryRouter>,
     );
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Add homework from reminder' }));
-
+    fireEvent.click(await screen.findByRole('button', { name: 'Open lesson for Alex' }));
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
     });
     expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
+  it('reveals older follow-ups without showing internal lesson IDs or invented titles', async () => {
+    apiMocks.getBusinessScheduleSurface.mockResolvedValue(
+      makeSurface({
+        reminders: Array.from({ length: 6 }, (_, index) => ({
+          studentId: `student-${index}`,
+          studentName: `Follow-up ${index}`,
+          studentScheduleBillingPath: `/students/student-${index}/schedule-billing`,
+          remainingCredits: 0,
+          type: 'lesson_followup',
+          channel: 'manual',
+          actionIntent: 'complete_lesson_and_start_assignment',
+          severity: 'attention',
+          lessonId: `internal-lesson-${index}`,
+          title: 'Finish lesson follow-up',
+          lessonSummary: {
+            lessonId: `internal-lesson-${index}`,
+            startsAt: '2026-05-06T10:00:00Z',
+            title: null,
+          },
+          message: '',
+          copyText: '',
+        })),
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Follow-up 0');
+    expect(screen.queryByText('Follow-up 4')).toBeNull();
+    expect(screen.queryByText(/internal-lesson/)).toBeNull();
+    expect(screen.queryByText(/Untitled lesson/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 older follow-ups' }));
+    expect(screen.getByText('Follow-up 5')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }));
+    expect(screen.queryByText('Follow-up 4')).toBeNull();
+  });
 
+  it('does not report an empty agenda when the first request fails', async () => {
+    apiMocks.getBusinessScheduleSurface.mockRejectedValue(new Error('Schedule unavailable'));
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+    expect((await screen.findByRole('alert')).textContent).toContain('Schedule unavailable');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+    expect(screen.queryByText('No lessons in this range.')).toBeNull();
+    expect(screen.queryByText('No unfinished lesson follow-up.')).toBeNull();
+  });
   it('restores completed lessons from the agenda', async () => {
     apiMocks.getBusinessScheduleSurface.mockResolvedValue(
       makeSurface({
@@ -467,16 +549,14 @@ describe('BusinessSchedulePage', () => {
         ],
       }),
     );
-
     render(
       <MemoryRouter>
         <BusinessSchedulePage />
       </MemoryRouter>,
     );
-
-    await screen.findByRole('button', { name: 'Restore' });
+    await screen.findByText('Actions');
+    fireEvent.click(screen.getByText('Actions'));
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-
     await waitFor(() => {
       expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
         status: 'scheduled',

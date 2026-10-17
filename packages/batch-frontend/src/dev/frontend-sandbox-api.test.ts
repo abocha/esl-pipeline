@@ -24,6 +24,46 @@ function requestConfig(
 }
 
 describe('frontend sandbox API adapter', () => {
+  it('serves the Business preview and persists hide/undo and status changes within one sandbox', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+    const initial = await adapter(requestConfig('get', '/api/business/schedule'));
+    const lesson = initial.data.lessons[0];
+    await adapter(
+      requestConfig('patch', `/api/students/${lesson.studentId}/lessons/${lesson.id}`, {
+        status: 'completed',
+        consumesCredit: true,
+      }),
+    );
+    const reminder = initial.data.reminders[0];
+    await adapter(
+      requestConfig(
+        'put',
+        `/api/students/${reminder.studentId}/operations/reminders/lesson-followup/${reminder.lessonId}/hide`,
+      ),
+    );
+    const hidden = await adapter(requestConfig('get', '/api/business/schedule'));
+    expect(hidden.data.lessons[0].status).toBe('completed');
+    expect(
+      hidden.data.reminders.some(
+        (item: { lessonId?: string }) => item.lessonId === reminder.lessonId,
+      ),
+    ).toBe(false);
+    expect(hidden.data.latestHiddenReminder.lessonId).toBe(reminder.lessonId);
+    await adapter(
+      requestConfig(
+        'put',
+        `/api/students/${reminder.studentId}/operations/reminders/latest-hidden/undo`,
+      ),
+    );
+    const restored = await adapter(requestConfig('get', '/api/business/schedule'));
+    expect(
+      restored.data.reminders.some(
+        (item: { lessonId?: string }) => item.lessonId === reminder.lessonId,
+      ),
+    ).toBe(true);
+    expect(restored.data.latestHiddenReminder).toBeNull();
+  });
+
   it('creates and serves a manual transcript source', async () => {
     const adapter = createFrontendSandboxApiAdapter();
 

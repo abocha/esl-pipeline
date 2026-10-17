@@ -1,43 +1,46 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ESL Pipeline</title>
+    <meta
+      name="description"
+      content="Upload lessons, submit jobs, and monitor progress in real time with the ESL Pipeline batch processing system."
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<head>
-  <meta charset="UTF-8" />
-  <title>ESL Pipeline</title>
-  <meta name="description"
-    content="Upload lessons, submit jobs, and monitor progress in real time with the ESL Pipeline batch processing system." />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Google Fonts - Newsreader + Sarabun + IBM Plex Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
 
-  <!-- Google Fonts - Newsreader + Sarabun + IBM Plex Mono -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    rel="preload"
-    as="style"
-    href="https://fonts.googleapis.com/css2?family=Newsreader:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Newsreader:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-    rel="stylesheet" />
+    <!-- Security Headers -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
 
-  <!-- Security Headers -->
-  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-  <meta http-equiv="X-Frame-Options" content="DENY" />
-  <meta name="referrer" content="strict-origin-when-cross-origin" />
-
-  <!-- Content Security Policy -->
-  <meta http-equiv="Content-Security-Policy" content="
+    <!-- Content Security Policy -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
       default-src 'self';
       script-src 'self' 'unsafe-inline';
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       img-src 'self' data: https:;
       font-src 'self' https://fonts.gstatic.com;
       connect-src 'self' http://localhost:8080 http://batch-backend:8080;
-      frame-ancestors 'none';
       base-uri 'self';
       form-action 'self';
-    " />
+    "
+    />
 
-  <!--
+    <!--
       Minimal host page for the batch-frontend with security enhancements.
 
       Security Features:
@@ -53,11 +56,10 @@
       - You can serve this bundle behind the same origin as batch-backend
         or set window.__BATCH_BACKEND_URL__ / VITE_BATCH_BACKEND_URL.
     -->
-</head>
+  </head>
 
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
-</body>
-
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

@@ -6,12 +6,12 @@ import {
   updateBusinessSettings,
 } from '../../utils/api';
 import { TIMEZONE_OPTIONS } from '../../utils/timezones';
+import { BusinessInfoHint } from './BusinessInfoHint';
 
 export const BusinessSettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
   const [form, setForm] = useState({
     defaultCurrency: 'USD',
-    defaultLessonRateMajor: '0',
     timezone: 'UTC',
     forecastHorizonDays: '45',
     topUpThreshold: '2',
@@ -20,9 +20,7 @@ export const BusinessSettingsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
   const mounted = useRef(true);
-
   const loadSettings = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -39,7 +37,6 @@ export const BusinessSettingsPage: React.FC = () => {
       if (mounted.current) setLoading(false);
     }
   }, []);
-
   useEffect(() => {
     mounted.current = true;
     void loadSettings();
@@ -47,24 +44,33 @@ export const BusinessSettingsPage: React.FC = () => {
       mounted.current = false;
     };
   }, [loadSettings]);
-
   if (loading) {
-    return <section className="business-empty">Loading business settings...</section>;
-  }
-
-  if (!settings) {
     return (
-      <section className="business-empty">
-        <p className="business-dashboard-error" role="alert">
-          {error ?? 'Business settings failed.'}
-        </p>
-        <button type="button" onClick={() => void loadSettings()}>
-          Retry
-        </button>
+      <section className="business-dashboard-surface">
+        <header className="business-agenda-heading">
+          <h2>Settings</h2>
+        </header>
+        <p className="business-empty">Loading business settings...</p>
       </section>
     );
   }
-
+  if (!settings) {
+    return (
+      <section className="business-dashboard-surface">
+        <header className="business-agenda-heading">
+          <h2>Settings</h2>
+        </header>
+        <div className="business-empty">
+          <p className="business-dashboard-error" role="alert">
+            {error ?? 'Business settings failed.'}
+          </p>
+          <button type="button" onClick={() => void loadSettings()}>
+            Retry
+          </button>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="business-dashboard-surface">
       {error ? (
@@ -72,12 +78,9 @@ export const BusinessSettingsPage: React.FC = () => {
           {error}
         </p>
       ) : null}
-      {success ? <p className="business-dashboard-success">{success}</p> : null}
-
       <article className="business-panel business-panel-wide">
-        <header>
-          <span className="business-dashboard-kicker">Business Settings</span>
-          <h2>Business defaults</h2>
+        <header className="business-agenda-heading">
+          <h2>Settings</h2>
         </header>
         <form
           className="business-settings-form"
@@ -88,7 +91,6 @@ export const BusinessSettingsPage: React.FC = () => {
             setSuccess(null);
             void updateBusinessSettings({
               defaultCurrency: form.defaultCurrency.toUpperCase(),
-              defaultLessonRateMinor: Math.round(Number(form.defaultLessonRateMajor) * 100),
               timezone: form.timezone,
               forecastHorizonDays: Number(form.forecastHorizonDays),
               topUpThreshold: Number(form.topUpThreshold),
@@ -106,29 +108,35 @@ export const BusinessSettingsPage: React.FC = () => {
               .finally(() => setSaving(false));
           }}
         >
-          <label>
-            Default currency
+          <div className="business-setting">
+            <div className="business-setting-label">
+              <label htmlFor="business-currency">Default currency</label>
+              <BusinessInfoHint id="business-currency-hint" label="default currency">
+                Selects the payments included in monthly stats. Other currencies are listed
+                separately.
+              </BusinessInfoHint>
+            </div>
             <input
+              id="business-currency"
+              aria-describedby="business-currency-hint"
               maxLength={3}
               value={form.defaultCurrency}
               onChange={(event) =>
                 setForm({ ...form, defaultCurrency: event.target.value.toUpperCase() })
               }
             />
-          </label>
-          <label>
-            Default lesson rate
-            <input
-              min="0"
-              step="0.01"
-              type="number"
-              value={form.defaultLessonRateMajor}
-              onChange={(event) => setForm({ ...form, defaultLessonRateMajor: event.target.value })}
-            />
-          </label>
-          <label>
-            Timezone
+          </div>
+          <div className="business-setting">
+            <div className="business-setting-label">
+              <label htmlFor="business-timezone">Timezone</label>
+              <BusinessInfoHint id="business-timezone-hint" label="timezone">
+                Controls manual lesson entry and schedule display. Existing weekly plans keep their
+                saved timezone.
+              </BusinessInfoHint>
+            </div>
             <select
+              id="business-timezone"
+              aria-describedby="business-timezone-hint"
               value={form.timezone}
               onChange={(event) => setForm({ ...form, timezone: event.target.value })}
             >
@@ -138,46 +146,59 @@ export const BusinessSettingsPage: React.FC = () => {
                 </option>
               ))}
             </select>
-          </label>
-          <label>
-            Planning horizon
+          </div>
+          <div className="business-setting">
+            <div className="business-setting-label">
+              <label htmlFor="business-horizon">Planning horizon (days)</label>
+              <BusinessInfoHint id="business-horizon-hint" label="planning horizon">
+                How far ahead Stats looks for scheduled workload and credit watch, starting today.
+              </BusinessInfoHint>
+            </div>
             <input
+              id="business-horizon"
+              aria-describedby="business-horizon-hint"
               min="7"
               max="180"
               type="number"
               value={form.forecastHorizonDays}
               onChange={(event) => setForm({ ...form, forecastHorizonDays: event.target.value })}
             />
-          </label>
-          <label>
-            Top-up threshold
+          </div>
+          <div className="business-setting">
+            <div className="business-setting-label">
+              <label htmlFor="business-threshold">Top-up threshold (credits)</label>
+              <BusinessInfoHint id="business-threshold-hint" label="top-up threshold">
+                Flags lesson balances at or below this number. Low credits do not establish that a
+                payment is due.
+              </BusinessInfoHint>
+            </div>
             <input
+              id="business-threshold"
+              aria-describedby="business-threshold-hint"
               min="0"
               type="number"
               value={form.topUpThreshold}
               onChange={(event) => setForm({ ...form, topUpThreshold: event.target.value })}
             />
-          </label>
-          <button type="submit" disabled={saving}>
-            {saving ? 'Saving...' : 'Save settings'}
-          </button>
+          </div>
+          <div className="business-settings-actions">
+            <button type="submit" className="business-primary-button" disabled={saving}>
+              {saving ? 'Saving...' : 'Save settings'}
+            </button>
+            <p className="business-dashboard-success" role="status">
+              {success}
+            </p>
+          </div>
         </form>
-        {settings?.defaultLessonRateMinor === 0 ? (
-          <p className="business-muted">
-            Set a default lesson rate to show completed and scheduled lesson values.
-          </p>
-        ) : null}
       </article>
     </section>
   );
 };
-
 function setFormFromSettings(
   settings: BusinessSettings,
   setForm: React.Dispatch<
     React.SetStateAction<{
       defaultCurrency: string;
-      defaultLessonRateMajor: string;
       timezone: string;
       forecastHorizonDays: string;
       topUpThreshold: string;
@@ -186,7 +207,6 @@ function setFormFromSettings(
 ) {
   setForm({
     defaultCurrency: settings.defaultCurrency,
-    defaultLessonRateMajor: String(settings.defaultLessonRateMinor / 100),
     timezone: settings.timezone,
     forecastHorizonDays: String(settings.forecastHorizonDays),
     topUpThreshold: String(settings.topUpThreshold),
