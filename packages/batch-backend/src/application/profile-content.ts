@@ -252,7 +252,9 @@ async function saveProfileRevision(
   }
 
   if (status === 'active' && existingRevision) {
-    revision = (await dependencies.revisions.activate(studentId, revision.id)) ?? revision;
+    revision =
+      (await dependencies.revisions.activate(studentId, revision.id, options.createdBy)) ??
+      revision;
   }
 
   return {
@@ -368,17 +370,22 @@ export async function restoreProfileRevision(
 export async function activateProfileRevisionForStudent(
   studentId: string,
   revisionId: string,
-  overrides?: Partial<ProfileContentDependencies>,
+  overrides?: Partial<ProfileContentDependencies> & { actorUserId?: string | null },
 ): Promise<ProfileRevisionDetailResponse | null> {
   const dependencies = getDependencies(overrides);
 
-  const activated = await dependencies.revisions.activate(studentId, revisionId);
+  const activated = await dependencies.revisions.activate(
+    studentId,
+    revisionId,
+    overrides?.actorUserId,
+  );
   if (!activated) return null;
 
   const candidatePromotion = await dependencies.candidates.markPromotedByRevision(activated.id, {
     studentId: activated.studentId,
     contentHash: activated.contentHash,
     structuredContent: resolveStructuredContent(activated.structuredContent, activated.content),
+    actorUserId: overrides?.actorUserId,
   });
 
   return {

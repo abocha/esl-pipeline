@@ -24,6 +24,45 @@ function requestConfig(
 }
 
 describe('frontend sandbox API adapter', () => {
+  it('serves a populated student activity preview with filters and older parent pages', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+    const first = await adapter(
+      requestConfig('get', '/api/students/student-alex/activity', undefined, { limit: 30 }),
+    );
+    expect(first.data.items).toHaveLength(30);
+    expect(first.data.items[0].subject).toBe('Homework published · Travel plans');
+    const older = await adapter(
+      requestConfig('get', '/api/students/student-alex/activity', undefined, {
+        limit: 30,
+        cursor: first.data.nextCursor,
+      }),
+    );
+    expect(older.data.items.length).toBeGreaterThan(0);
+    expect(older.data.nextCursor).toBeNull();
+    const firstIds = new Set(first.data.items.map((item: { id: string }) => item.id));
+    expect(older.data.items.some((item: { id: string }) => firstIds.has(item.id))).toBe(false);
+    const billing = await adapter(
+      requestConfig('get', '/api/students/student-alex/activity', undefined, {
+        category: 'billing',
+        from: '2026-10-15',
+        to: '2026-10-15',
+      }),
+    );
+    expect(billing.data.items.map((item: { subject: string }) => item.subject)).toEqual([
+      'Payment recorded · USD 120.00',
+      'Lesson credits added',
+    ]);
+    const other = await adapter(requestConfig('get', '/api/students/student-cora/activity'));
+    expect(other.data.items).toEqual([]);
+  });
+
+  it('keeps the activity availability preview unavailable rather than falling through to seeded facts', async () => {
+    const adapter = createFrontendSandboxApiAdapter({ scenario: 'student-availability' });
+    await expect(
+      adapter(requestConfig('get', '/api/students/student-alex/activity')),
+    ).rejects.toThrow('Student data is unavailable');
+  });
+
   it('serves the Business preview and persists hide/undo and status changes within one sandbox', async () => {
     const adapter = createFrontendSandboxApiAdapter();
     const initial = await adapter(requestConfig('get', '/api/business/schedule'));

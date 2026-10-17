@@ -43,6 +43,7 @@ import {
   resetFailedAssignmentCorrectionJob,
 } from './job-repository.js';
 import { reconcileInitialEnrichmentIntent } from './profile-initial-enrichment-repository.js';
+import { setStudentActivityActor } from './student-activity-recording.js';
 import { getTranscriptByIdForUpdateForUser } from './transcript-repository.js';
 
 export const ACTIVE_ASSIGNMENT_SESSION_SQL = `confirmed_step <> 'share' AND transcript_completed_at IS NULL`;
@@ -457,6 +458,7 @@ export async function startHomeworkAssignmentSessionPersistence(params: {
   return withPgClient(async (client) => {
     await client.query('BEGIN');
     try {
+      await setStudentActivityActor(client, params.userId);
       const locked = await client.query<AssignmentSessionRow>(
         `SELECT ${RETURNING_COLUMNS} FROM assignment_sessions WHERE id = $1 AND user_id = $2 FOR UPDATE`,
         [params.id, params.userId],

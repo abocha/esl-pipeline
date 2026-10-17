@@ -33,6 +33,7 @@ const REQUIRED_TABLES = [
   'student_lesson_recurrence_rules',
   'student_lesson_recurrence_slots',
   'student_lessons',
+  'student_activity',
   'student_credit_events',
   'student_payment_records',
   'student_reminder_preferences',
@@ -84,6 +85,11 @@ const REQUIRED_CONSTRAINTS = [
   'mcp_profile_identities_user_id_fkey',
   'mcp_profile_identities_workspace_id_fkey',
   'students_workspace_id_fkey',
+  'student_activity_student_id_fkey',
+  'student_activity_workspace_id_fkey',
+  'student_activity_actor_user_id_fkey',
+  'student_credit_events_activity_id_fkey',
+  'student_credit_events_reversal_activity_id_fkey',
   'student_lesson_plans_student_id_fkey',
   'student_lesson_plans_workspace_id_fkey',
   'student_lesson_recurrence_rules_frequency_check',
@@ -122,6 +128,8 @@ const REQUIRED_INDEXES = [
   'idx_user_settings_user_id',
   'idx_uploaded_files_user_id',
   'idx_students_workspace_id',
+  'idx_student_activity_page',
+  'idx_student_activity_entity_transaction',
   'idx_workspace_memberships_user_id',
   'idx_student_lessons_student_starts_at',
   'idx_student_lesson_recurrence_rules_student',
@@ -145,6 +153,9 @@ const REQUIRED_COLUMNS: { table: string; column: string }[] = [
   { table: 'student_profile_revisions', column: 'structured_content' },
   { table: 'student_profile_revisions', column: 'student_id' },
   { table: 'students', column: 'workspace_id' },
+  { table: 'student_activity', column: 'actor_user_id' },
+  { table: 'student_credit_events', column: 'activity_id' },
+  { table: 'student_credit_events', column: 'reversal_activity_id' },
 ];
 
 async function verifyTables(client: PoolClient, errors: string[]): Promise<void> {

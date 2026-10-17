@@ -972,12 +972,6 @@ export interface StudentLearningSurfaceResponse {
   candidates: StudentProfileCandidateListResponse;
 }
 
-export interface StudentHistorySurfaceResponse {
-  timeline: StudentTimelineResponse;
-  lessonMemory: StudentLessonMemoryListResponse;
-  homeworkMemory: StudentHomeworkMemoryListResponse;
-}
-
 export type StudentScheduleBillingSurface = StudentScheduleBillingSurfaceResponse;
 export type StudentLessonPlanUpdate = UpdateStudentLessonPlanRequest;
 export type StudentLessonRecurrenceUpsert = UpsertStudentLessonRecurrenceRequest;
@@ -2644,12 +2638,20 @@ export async function getStudentLearningSurface(
   }
 }
 
-export async function getStudentHistorySurface(
+export async function getStudentActivity(
   studentId: string,
-): Promise<StudentHistorySurfaceResponse> {
+  params: {
+    category?: 'all' | 'lessons' | 'profile' | 'billing';
+    from?: string;
+    to?: string;
+    limit?: number;
+    cursor?: string;
+  } = {},
+): Promise<import('@esl-pipeline/contracts').StudentActivityResponse> {
   try {
     const response = await apiClient.get(
-      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/surfaces/history`),
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/activity`),
+      { params },
     );
     return response.data;
   } catch (error: unknown) {

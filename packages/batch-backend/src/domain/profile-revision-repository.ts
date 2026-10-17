@@ -9,6 +9,7 @@ import type {
   ProfileRevisionSource,
   RevisionStatus,
 } from './profile-revision-model.js';
+import { setStudentActivityActor } from './student-activity-recording.js';
 
 interface ProfileRevisionRow {
   id: string;
@@ -76,6 +77,7 @@ export async function insertProfileRevision(
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
+      await setStudentActivityActor(client, params.createdBy);
       // Serialize revision versioning/activation per student to avoid write races.
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
 
@@ -302,10 +304,12 @@ export async function listStudentIdsWithActiveProfileRevision(
 export async function activateProfileRevision(
   studentId: string,
   revisionId: string,
+  actorUserId?: string | null,
 ): Promise<ProfileRevisionRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
+      await setStudentActivityActor(client, actorUserId);
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [studentId]);
       const existsResult = await client.query(
         'SELECT 1 FROM student_profile_revisions WHERE student_id = $1 AND id = $2',

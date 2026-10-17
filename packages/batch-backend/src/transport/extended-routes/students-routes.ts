@@ -20,6 +20,10 @@ import {
 } from '../../application/profile-draft-refresh.js';
 import { ProfileRevisionDraftingError } from '../../application/profile-revision-drafting.js';
 import {
+  getStudentActivity,
+  StudentActivityQueryError,
+} from '../../application/student-activity.js';
+import {
   getStudentMemoryHealth,
   getStudentMemoryOverview,
   listStudentHomeworkMemory,
@@ -2322,6 +2326,43 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           error: 'internal_error',
         });
 
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/activity',
+    { preHandler: [authenticate, authorizeStudent] },
+    async (request, reply) => {
+      try {
+        const params = z.object({ id: z.string().uuid() }).parse(request.params);
+        const query = z
+          .object({
+            category: z.enum(['all', 'lessons', 'profile', 'billing']).optional(),
+            from: z.string().optional(),
+            to: z.string().optional(),
+            limit: z.coerce.number().int().min(1).max(100).optional(),
+            cursor: z.string().max(4096).optional(),
+          })
+          .parse(request.query ?? {});
+        const user = getAuthenticatedUser(request);
+        if (!user) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
+        const activity = await getStudentActivity(workspaceId, params.id, user.id, query);
+        if (!activity) return errorResponse(reply, 'not_found');
+        return reply.send(activity);
+      } catch (error) {
+        if (error instanceof z.ZodError || error instanceof StudentActivityQueryError)
+          return reply
+            .code(400)
+            .send({ error: 'validation_failed', message: 'Invalid activity filters or cursor' });
+        if (workspaceContextErrorResponse(reply, error)) return;
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: 'GET /students/:id/activity',
+          statusCode: 500,
+        });
         return errorResponse(reply, 'internal_error');
       }
     },

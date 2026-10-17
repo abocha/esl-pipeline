@@ -749,3 +749,70 @@ or refund job is required. Profile refresh/promotion quota refusals return 429 b
 See [generation policy](../../docs/reference/GENERATION_PROVIDER_POLICY.md#openai-model-group-daily-budgets-esl-45)
 for explicit membership, counter semantics, the bounded caps audit, and required writer quiescence
 on separately authorized deployment/rollback.
+
+## Student activity
+
+`GET /students/:id/activity` is a student-authorized, server-paged feed alongside
+(the unchanged) legacy `/timeline` and aggregate surface APIs. It accepts `category`
+(`all`, `lessons`, `profile`, `billing`), inclusive workspace-local `from`/`to` dates,
+`limit` (1–100, default 30) and an opaque continuation cursor. Required sources are
+one PostgreSQL query: any failure returns unavailable rather than advancing beyond
+missing data. The cursor binds student, workspace, requesting user, timezone and
+filters. It bounds chronological traversal with a timestamp and immutable ID;
+it is not a cross-request database snapshot. Refresh discovers later commits.
+The first page includes committed facts even when an application action clock is
+slightly ahead of the database clock.
+
+Migration `0068_student_activity` adds a finite append-only activity record for
+otherwise-lost lesson, profile/review, lifecycle, reminder hide/undo, homework-start
+and terminal-failure transitions. Table-specific triggers compare allowlisted
+OLD/NEW fields in the domain writer's statement transaction; required recording
+failure rolls back that mutation. They ignore no-op updates, timestamp maintenance,
+credit pointer housekeeping, profile deprecation side effects and automatic title
+enrichment. Weekly rules plus their slots are one explicit operation at the existing
+recurrence transaction owner, locked before comparison. This limited recorder avoids
+an event bus, outbox, queue observer or event-sourcing rewrite. Reconsider that ceiling
+only when an actual independent consumer or measured read/write pressure needs it.
+
+Known current action IDs are carried in a transaction-local audit-only setting;
+existing authenticated PostgreSQL session context is also accepted. The setting
+never grants database access. Stale `updated_by`, `created_by` or reviewer fields are
+never treated as the current actor. Unknown actors stay unknown. Actor references
+follow user deletion through `ON DELETE SET NULL`; this is the only permitted record
+update. Activity deletion follows student/workspace retention. Legacy NULL workspace
+ownership remains confined to the canonical default workspace, matching existing
+schedule/billing semantics.
+
+Payments, immutable credit entries/reversals, frozen publications and exact-source
+transcript finish history remain authoritative and are adapted on read. A transcript
+finish remains visible after homework starts or its source changes; its historical
+source ID/hash/version are distinct from current workspace intent. Transcript sessions and private failure/recovery attempts retain requesting-user
+ownership. Successful public HTML outcomes preserve the previous timeline’s
+student/workspace visibility, including legacy recording/prompt/draft ownership
+inference; they do not expose transcript contents, storage paths or private errors. Completion/debit and restore/reversal
+are related by persisted activity IDs established from the same transaction and lesson,
+with student/workspace validation. Parent rows are paged before effects attach;
+package payment/credit effects use their existing source-payment identity.
+
+Recording guarantees one event per committed effective transition, not HTTP request
+replay safety. A delayed retry after an intervening action retains existing command
+semantics. Read-time legacy facts do not invent old transitions or actors. No historical
+backfill runs; the API labels `recorded`, `retained` and `legacy` evidence and does not
+claim a verified rollout start date. Record the final writer-activation boundary and
+any rollback interruption in deployment evidence. `0068` is runtime-compatible:
+older writers retain their domain behavior and table triggers still record applicable
+transitions; old recurrence writers do not emit the new correlated rule event. Keep
+that limitation explicit if a prior image is restored. API 11.4 / DB 4.1 are additive.
+
+Focused evidence belongs to the existing PostgreSQL timeline, schedule/billing,
+student-area authorization, profile candidate and no-homework owner suites. The
+activity assertions exercise actual owner actions and query results; legacy timeline
+coverage is retained for its remaining callers. Regenerate and verify `schema.sql`
+with the existing `db:generate-baseline` / `db:verify-baseline` tools when migration SQL
+changes. This feature introduces no new test-project classification.
+
+A disposable PostgreSQL 18.6 probe with 10,001 parent facts and 1,000 linked credits
+measured approximately 24 ms for All and 22 ms for Payments & credits after resolving
+billing-bearing parent IDs once in SQL. A correlated lookup per parent measured about
+1.5 seconds and was removed. These are local query-plan observations, not a production
+latency promise; measure again before adding indexes, caches or another pagination layer.

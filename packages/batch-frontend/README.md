@@ -93,6 +93,13 @@ Canonical behavior and current status live in:
   reminder-total, recent-memory-total, or open-thread metric cards. Candidate review counts sit
   beside the relevant controls; snapshot source counts and technical memory diagnostics remain
   under Memory support details. Candidate confidence labels are not displayed to tutors.
+- History uses one student-authorized activity feed with server-side category/date filters and
+  older-page loading. Recorded transitions, retained outcomes and incomplete earlier records are
+  distinguished; practical facts and owner links lead, with technical evidence under Details.
+  Workspace timezone controls activity date display; calendar-only payment dates stay unchanged. The URL
+  preserves category/date filters, while failed refreshes retain the last loaded page. A learner
+  switch cannot retain another learner's data. Recording coverage is not inferred from schema
+  installation, and historical transcript finishes do not imply current no-homework completion.
 - Student availability distinguishes absent memory, repair-required history and repository failure.
   Failed initial Learning loads show an unavailable state with Retry; they do not present an empty
   editable profile or zero-candidate summary. History retains successful sources and previous
@@ -104,7 +111,10 @@ Canonical behavior and current status live in:
   - POSIX:
     `VITE_BATCH_FRONTEND_SANDBOX=mock-auth pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
   - The sandbox is dev-only, marks the UI with `Mock data`, bypasses frontend auth only, and uses
-    seeded mock API responses for the assignment builder and Business routes.
+    seeded mock API responses for the assignment builder, Business routes and Student History.
+  - Open `http://localhost:5173/students/student-alex/history` for fictional recorded transitions,
+    transcript/homework outcomes, reversals and older-page loading. These are preview examples,
+    not evidence of production action recording or authorization.
   - Open `http://localhost:5173/business/schedule` for a fictional, in-memory Business preview;
     status changes and reminder hide/undo affect only that sandbox instance.
   - Sandbox scenarios are allow-listed through `sandboxScenario`; unknown values use the default:

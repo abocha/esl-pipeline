@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
+import { getStudentActivity } from '../src/application/student-activity.js';
 import * as sessions from '../src/domain/assignment-session-repository.js';
 import { insertPromptPackage } from '../src/domain/prompt-package-repository.js';
 import { updateTranscriptWorkingContent } from '../src/domain/transcript-repository.js';
@@ -209,6 +210,28 @@ describe('no-homework durable session', () => {
       });
       expect(promoted.homeworkIntent).toBe('create');
       expect(promoted.transcriptCompletedAt).toBeNull();
+      const history = await getStudentActivity(f.workspaceId, f.studentId, f.userId);
+      const saved = history!.items.find((item) => item.type === 'transcript_saved')!;
+      expect(saved).toMatchObject({
+        evidence: 'retained',
+        links: [{ label: 'Open lesson workspace', href: `/?sessionId=${f.session.id}` }],
+      });
+      expect(saved.details).toContainEqual({
+        label: 'Reviewed transcript hash',
+        value: f.tuple.transcriptHash,
+      });
+      expect(saved.details).toContainEqual({
+        label: 'Current lesson intent',
+        value: 'Homework started',
+      });
+      expect(history!.items.filter((item) => item.type === 'transcript_saved')).toHaveLength(1);
+      expect(history!.items.some((item) => item.type === 'homework_started')).toBe(true);
+      expect(
+        (await getStudentActivity(f.workspaceId, f.studentId, randomUUID()))!.items.some(
+          (item) => item.type === 'transcript_saved' || item.type === 'homework_started',
+        ),
+      ).toBe(false);
+
       expect(
         (
           await sessions.startHomeworkAssignmentSessionPersistence({

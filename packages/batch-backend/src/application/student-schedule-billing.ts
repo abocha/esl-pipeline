@@ -25,6 +25,7 @@ import type {
 } from '@esl-pipeline/contracts';
 
 import { ACTIVE_ASSIGNMENT_SESSION_SQL } from '../domain/assignment-session-repository.js';
+import { setStudentActivityActor } from '../domain/student-activity-recording.js';
 import { withPgClient } from '../infrastructure/db.js';
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
@@ -268,6 +269,7 @@ export async function hideStudentLessonFollowupReminder(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const lesson = await getLessonRow(client, context, lessonId);
     if (!lesson) {
@@ -288,6 +290,7 @@ export async function undoLatestHiddenStudentReminder(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const prefs = await getReminderPreferences(client, context);
     if (!prefs.latestHiddenLessonFollowupKey) {
@@ -324,6 +327,7 @@ export async function updateStudentLessonPlan(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const result = await client.query(
       `
@@ -378,7 +382,9 @@ export async function upsertPrimaryStudentLessonRecurrence(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
+    await client.query('SELECT id FROM students WHERE id=$1 FOR UPDATE', [studentId]);
     const timezone = normalizeTimezone(params.timezone);
     const startsOn = parseDateInput(params.startsOn, 'Invalid recurrence start date');
     const endsOn =
@@ -454,6 +460,35 @@ export async function upsertPrimaryStudentLessonRecurrence(
     );
 
     const currentSlots = await replaceRecurrenceSlots(client, ruleId, slots, existingSlots);
+    const beforeSchedule = existing
+      ? {
+          timezone: existing.timezone,
+          startsOn: existing.starts_on,
+          endsOn: existing.ends_on,
+          status: existing.status,
+          slots: existingSlots.map(recurrenceSlotIdentityFromRow).sort(),
+        }
+      : null;
+    const afterSchedule = {
+      timezone,
+      startsOn,
+      endsOn,
+      status,
+      slots: slots.map(recurrenceSlotIdentity).sort(),
+    };
+    if (JSON.stringify(beforeSchedule) !== JSON.stringify(afterSchedule)) {
+      await client.query(
+        `INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+        VALUES($1,$2,'recurrence_changed','lessons',$3,CASE WHEN student_activity_actor_id() IS NULL THEN 'unknown' ELSE 'user' END,$4::jsonb)`,
+        [
+          studentId,
+          context.workspaceId,
+          ruleId,
+          JSON.stringify({ before: beforeSchedule, after: afterSchedule }),
+        ],
+      );
+    }
+
     const desiredOccurrenceKeys = buildDesiredOccurrenceKeys({
       timezone,
       startsOn,
@@ -492,6 +527,7 @@ export async function createStudentLesson(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const lessonId = randomUUID();
     const time = await resolveManualLessonTime(client, params);
@@ -542,6 +578,7 @@ export async function completeElapsedScheduledLessonForHomework(
   actorUserId?: string | null,
 ): Promise<boolean> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     // Read status only after taking the shared lesson lock: a competing completion or
     // cancellation must not be overwritten using the pre-lock scheduled state.
@@ -596,6 +633,7 @@ export async function applyGeneratedLessonTitleIfPlaceholder(params: {
   }
 
   return withPgTransaction(async (client) => {
+    await client.query("SELECT set_config('app.student_activity_origin', 'generated_title', true)");
     const context = await requireTrustedStudentContextById(client, params.studentId);
     const result = await client.query(
       `
@@ -626,6 +664,7 @@ export async function updateStudentLesson(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     await client.query(
       'SELECT id FROM student_lessons WHERE id = $1 AND student_id = $2 FOR UPDATE',
@@ -692,6 +731,7 @@ export async function addStudentPackage(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     let paymentId: string | null = null;
     if (params.payment) {
@@ -718,6 +758,7 @@ export async function adjustStudentCredits(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     await insertCreditEvent(client, {
       context,
@@ -739,6 +780,7 @@ export async function recordStudentPayment(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     await insertPayment(client, context, randomUUID(), params, actorUserId ?? null);
     return getSurfaceForContext(client, context);
