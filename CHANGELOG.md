@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.5.0] - 2026-10-17
+
+### Changed
+
+- Automated release from PR #416: feat(students): record and browse learner activity (https://github.com/abocha/esl-pipeline/pull/416)
+
 ## [21.4.2] - 2026-10-17
 
 ### Changed
