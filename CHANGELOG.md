@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.4.2] - 2026-10-17
+
+### Changed
+
+- Automated release from PR #415: fix(students): remove misleading metrics and show unavailable data (https://github.com/abocha/esl-pipeline/pull/415)
+
 ## [21.4.1] - 2026-10-17
 
 ### Changed
