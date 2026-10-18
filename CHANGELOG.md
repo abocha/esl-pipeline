@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [21.5.1] - 2026-10-18
+
+### Changed
+
+- Automated release from PR #418: fix(prompts): open effective default and hide retired entry (https://github.com/abocha/esl-pipeline/pull/418)
+
 ## [21.5.0] - 2026-10-17
 
 ### Changed
