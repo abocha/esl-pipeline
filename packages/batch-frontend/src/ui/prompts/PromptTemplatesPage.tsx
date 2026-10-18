@@ -22,6 +22,8 @@ import { TemplateContentComparison, TemplateControlPlane } from './TemplateContr
 import './PromptTemplatesPage.css';
 
 const REVISION_LIMIT = 25;
+// Exact persisted legacy ID (spaces, not underscores). Keep its revisions in the DB.
+const RETIRED_MARKDOWN_TEMPLATE_ID = 'hw prompt markdown block.md';
 const CLEAN_TEMPLATE_STARTER_CONTENT = String.raw`## **System Prompt: ESL Homework Generator**
 
 **Role & Scope**
@@ -183,18 +185,27 @@ export const PromptTemplatesPage: React.FC = () => {
       setError(null);
       try {
         const response = await listTemplateControlPlane();
-        const nextTemplates = response.items.map((item) => ({
-          id: item.templateId,
-          label: item.label,
-        }));
+        const nextTemplates = response.items
+          .filter(
+            (item) =>
+              item.templateId !== RETIRED_MARKDOWN_TEMPLATE_ID ||
+              item.templateId === response.defaultTemplateId ||
+              item.active !== null ||
+              item.shipped !== null,
+          )
+          .map((item) => ({
+            id: item.templateId,
+            label: item.label,
+          }));
         setDefaultTemplateId(response.defaultTemplateId ?? null);
         setTemplates(nextTemplates);
 
         const nextSelected =
-          preferredTemplateId &&
-          nextTemplates.some((template) => template.id === preferredTemplateId)
-            ? preferredTemplateId
-            : (nextTemplates[0]?.id ?? preferredTemplateId ?? '');
+          [preferredTemplateId, response.defaultTemplateId].find(
+            (id) => id && nextTemplates.some((template) => template.id === id),
+          ) ??
+          nextTemplates[0]?.id ??
+          '';
 
         if (nextSelected && options.loadSelectedTemplate !== false) {
           await loadTemplate(nextSelected, {

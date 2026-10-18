@@ -261,6 +261,13 @@ Admins use Administration > Prompts at `/admin/prompts`; `/prompts` redirects th
 Users and viewers see only Workspace navigation and are redirected away from either prompt route.
 Backend admin authorization protects all template management APIs independently of frontend gating.
 
+On entry, the page selects the effective default returned by the API (including the configured
+fallback), then the first visible template if that default is unavailable. Catalog refreshes after
+operator actions prefer the explicitly selected template. The retired DB-only, inactive
+`hw prompt markdown block.md` entry is hidden only on this page; its stored revisions and API access
+are preserved. It remains visible if active, shipped, or selected as the effective default. Other
+historical templates remain available.
+
 The page shows the active DB revision beside the deployed template asset, matched by exact content
 hash rather than the newest DB revision. It highlights updates awaiting explicit activation and
 unimported shipped content. DB-only and archived templates remain inspectable without inventing a

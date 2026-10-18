@@ -65,6 +65,10 @@ manual replay. See [the replay runbook](../operations/student-memory-replay-back
 ### Admin prompts
 
 Administration > Prompts (`/admin/prompts`, with `/prompts` compatibility redirect) is admin-only.
+Initial selection follows the API's effective default, falling back to the first visible entry;
+refreshes preserve an explicit selection when available. Only the retired, inactive, DB-only
+`hw prompt markdown block.md` entry is hidden from this page (unless it is the effective default).
+Its revisions/API access and all other historical templates are preserved.
 Backend role checks independently protect management reads and mutations. The read-only
 `/templates/control-plane` projection compares the running release's template asset hash/content
 with active DB content and matching revisions. It shows shipped drafts awaiting activation,

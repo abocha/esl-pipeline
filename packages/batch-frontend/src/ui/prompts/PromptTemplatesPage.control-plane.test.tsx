@@ -75,6 +75,88 @@ beforeEach(() => {
 });
 
 describe('prompt control plane workflow', () => {
+  it('opens the effective default, hides only the retired entry, and keeps other history selectable', async () => {
+    const user = userEvent.setup();
+    const retired = {
+      templateId: 'hw prompt markdown block.md',
+      label: 'Retired Markdown block',
+      databasePresent: true,
+      active: null,
+      shipped: null,
+      drift: 'not_shipped' as const,
+    };
+    const historical = {
+      ...retired,
+      templateId: 'hw_prompt_markdown_block2.md',
+      label: 'Other history',
+    };
+    api.listTemplateControlPlane.mockResolvedValue({
+      items: [retired, historical, state],
+      defaultTemplateId: state.templateId,
+    });
+    api.listTemplateRevisions.mockImplementation(async (id: string) => {
+      if (id === retired.templateId) throw new Error('404 not found');
+      return { items: [], total: 0 };
+    });
+
+    render(<PromptTemplatesPage />);
+    await screen.findByText('Update available');
+    const select = screen.getByRole('combobox', { name: /Template/i }) as HTMLSelectElement;
+    expect(select.value).toBe(state.templateId);
+    expect(Array.from(select.options, (option) => option.value)).toEqual([
+      historical.templateId,
+      state.templateId,
+    ]);
+    expect(api.listTemplateRevisions).toHaveBeenCalledExactlyOnceWith(state.templateId, {
+      limit: 25,
+      offset: 0,
+      order: 'desc',
+    });
+
+    await user.selectOptions(select, historical.templateId);
+    await screen.findByText('No shipped asset');
+    expect(select.value).toBe(historical.templateId);
+    expect(api.listTemplateRevisions).toHaveBeenLastCalledWith(historical.templateId, {
+      limit: 25,
+      offset: 0,
+      order: 'desc',
+    });
+    expect(api.deleteTemplateContent).not.toHaveBeenCalled();
+    expect(api.activateTemplateRevision).not.toHaveBeenCalled();
+  });
+
+  it.each([null, 'missing.md'])(
+    'falls back to the first visible template when default is %s',
+    async (defaultTemplateId) => {
+      api.listTemplateControlPlane.mockResolvedValue({ items: [state], defaultTemplateId });
+      render(<PromptTemplatesPage />);
+      await screen.findByText('Update available');
+      expect((screen.getByRole('combobox', { name: /Template/i }) as HTMLSelectElement).value).toBe(
+        state.templateId,
+      );
+    },
+  );
+
+  it.each(['active', 'shipped', 'default'] as const)(
+    'keeps the retired ID visible if it becomes %s',
+    async (condition) => {
+      const retired = {
+        ...state,
+        templateId: 'hw prompt markdown block.md',
+        active: condition === 'active' ? state.active : null,
+        shipped: condition === 'shipped' ? state.shipped : null,
+      };
+      api.listTemplateControlPlane.mockResolvedValue({
+        items: [state, retired],
+        defaultTemplateId: condition === 'default' ? retired.templateId : state.templateId,
+      });
+      render(<PromptTemplatesPage />);
+      await waitFor(() => expect(api.listTemplateRevisions).toHaveBeenCalled());
+      const select = screen.getByRole('combobox', { name: /Template/i }) as HTMLSelectElement;
+      expect(Array.from(select.options, (option) => option.value)).toContain(retired.templateId);
+    },
+  );
+
   it('shows release drift and a readable ordered diff, then refreshes after explicit activation', async () => {
     const user = userEvent.setup();
     const { container } = render(<PromptTemplatesPage />);
