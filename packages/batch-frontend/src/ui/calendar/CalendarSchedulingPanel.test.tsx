@@ -118,7 +118,7 @@ describe('Google Calendar scheduling panel', () => {
         ],
       }),
     ]);
-    await screen.findByText(/Lesson row 2: needs review/);
+    await screen.findByText(/Lesson row 2: Needs review/);
     expect(screen.getByRole('link', { name: 'Open in Google' }).getAttribute('href')).toContain(
       'calendar.google.com',
     );
@@ -138,15 +138,56 @@ describe('Google Calendar scheduling panel', () => {
     }) as HTMLInputElement;
     expect(invitation.checked).toBe(false);
     expect(invitation.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Invitation title'), {
+      target: { value: 'Captured Tuesday lesson' },
+    });
+    fireEvent.change(screen.getByLabelText('Weekday'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Local time'), { target: { value: '14:30' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create in Google' }));
     await screen.findByText('Response lost');
     const submitted = api.createCalendarSetup.mock.calls[0];
     first.unmount();
-    render(<CalendarSchedulingPanel {...props} email="later@example.test" />);
+    render(
+      <CalendarSchedulingPanel
+        {...props}
+        timezone="Europe/London"
+        defaultDurationMinutes={90}
+        email="later@example.test"
+      />,
+    );
     await screen.findByText('Synced');
+    expect(screen.getByText('Captured Tuesday lesson')).toBeTruthy();
+    expect(screen.getByText('Tuesday · 14:30')).toBeTruthy();
+    expect(screen.getByText(/50 min · From/)).toBeTruthy();
+    expect(screen.getByText('Asia/Bangkok · No invitation requested')).toBeTruthy();
+    expect(screen.queryByLabelText('Invitation title')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create in Google' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry submitted setup' }));
     await waitFor(() => expect(api.createCalendarSetup).toHaveBeenCalledTimes(2));
     expect(api.createCalendarSetup.mock.calls[1]).toEqual(submitted);
+  });
+  it('keeps attention visible and connection management behind a keyboard accessible disclosure', async () => {
+    api.getCalendarSchedulingStatus.mockResolvedValue({
+      state: 'needs_attention',
+      connectionId: 'connection-1',
+      calendarName: 'Lessons',
+      googleEmail: 'tutor@example.test',
+      lastSyncedAt: null,
+      errorCode: 'lesson_attention_required',
+      operations: [],
+    });
+    render(<CalendarSchedulingPanel {...props} />);
+    await screen.findByText('Needs attention');
+    expect(screen.getByText(/Some Google changes need review/)).toBeTruthy();
+    expect(screen.queryByText('lesson_attention_required')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Sync now' })).toBeTruthy();
+    const summary = screen.getByText('Connection settings');
+    const details = summary.closest('details')!;
+    expect(details.open).toBe(false);
+    fireEvent.click(summary);
+    expect(details.open).toBe(true);
+    expect(screen.getByRole('button', { name: 'Disconnect Google' })).toBeTruthy();
+    expect(api.disconnectLessonCalendar).not.toHaveBeenCalled();
   });
   it('requires review of captured recipient and time before explicit operation adoption', async () => {
     api.reviewCalendarOperation.mockResolvedValue({

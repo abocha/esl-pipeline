@@ -134,7 +134,9 @@ Canonical behavior and current status live in:
 - Scheduling requires a connected selected Google Calendar; teaching, history, homework and billing
   remain available without it. Set schedule creates one-offs or several independent weekly series
   in the displayed timezone, with optional Google invitations and per-series outcomes. Later timing
-  edits open Google. Existing lesson rows stay visible during connection/sync failures. See the
+  edits open Google. The shared Calendar panel owns its styles on both Business and Student routes;
+  connection management is expandable, and submitted setups show their captured choices for recovery.
+  Existing lesson rows stay visible during connection/sync failures. See the
   [Calendar cutover runbook](../../docs/operations/google-calendar-cutover.md) for remaining provider
   identity and operator activation gates.
 - The Learning page can read `/students/:id/memory/health` for collapsed operator support details;

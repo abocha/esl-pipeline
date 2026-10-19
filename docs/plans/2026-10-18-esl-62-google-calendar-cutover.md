@@ -72,3 +72,17 @@ these real-provider blockers.
 Keep this plan active while provider identity or operator acceptance remains outstanding. The PR and
 handoff own exact commands/results and hosted state; local or hosted success is not provider or
 production delivery.
+
+## Calendar presentation follow-up
+
+[ESL-63](https://linear.app/abocha/issue/ESL-63) records the maintainer's local visual rejection and
+the bounded UI repair plan, implemented in the same draft PR. The shared Calendar panel now owns its
+styles, keeps source/status and the common action visible, groups connection management in a
+keyboard-accessible disclosure, and uses responsive labeled lesson rows. Recovery displays the
+captured submitted request rather than disabled controls populated from new defaults.
+
+Local desktop and mobile browser checks covered Business status, connection disclosure, and
+multi-row student setup without submitting another provider write or invitation. Six focused
+Calendar component tests and frontend typecheck passed, including immutable-request reload/retry,
+invitation opt-out, exact-event association, and explicit operation adoption. The two provider
+identity blockers above remain open; presentation changes do not resolve them.
