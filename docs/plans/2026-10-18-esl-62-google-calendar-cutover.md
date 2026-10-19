@@ -3,9 +3,9 @@
 ## Meta
 
 - Status: `active`.
-- Last Verified Against: 2026-10-18, clean source `944d6679e5b3e8cfc952d94bc7dd90e27f768a01`.
+- Last Verified Against: 2026-10-19, ESL-64 local provider reprojection and focused regression evidence.
 - Exit Trigger: archive after the implementation PR merges, retaining operator/provider gates in the owning runbook.
-- Current Focus: draft PR #420; real local Google acceptance found this-and-following and whole-series identity blockers requiring a continuity decision before merge.
+- Current Focus: draft PR #420; ESL-64 implements the maintainer-approved visible continuity boundary; local provider reprojection matches 13 current Google occurrences without duplicates. Hosted and remaining operator/provider gates remain separate.
 - Owner: ESL-62 implementation primary.
 
 ## Authority
@@ -61,13 +61,27 @@ an upload-limiter bug in connection status polling; the authenticated local stat
 that action budget, while explicit provider actions retain it. The focused regression failed before
 and passed after the fix; all 17 OAuth/PostgreSQL tests and backend typecheck passed.
 
-Provider acceptance is blocked: a this-and-following edit creates a new master with copied markers
+Initial provider acceptance found that a this-and-following edit creates a new master with copied markers
 and no authoritative predecessor mapping, while an all-events time edit changes instance identities
 under the same master and currently cancels/recreates future ESL lesson rows. See the
 [owning runbook's findings](../operations/google-calendar-cutover.md#local-provider-acceptance-findings-2026-10-19).
-Preserving lesson continuity requires an approved reconciliation design or explicit revised product
-boundary. Do not infer that the earlier green hosted checks or passing single-instance move close
-these real-provider blockers.
+The maintainer subsequently clarified that unused future projections may change IDs if the visible
+schedule remains equivalent without missing or duplicate lessons. ESL-64 applies complete creation
+families atomically, associates successor masters using exact registered creation provenance,
+and hides obsolete unused projections without losing their audit rows. Protected history remains
+unchanged and conflicting replacements pause with attention. New downstream references cannot attach
+to a superseded row after a stale browser request. The revised design records this in section 22.
+
+Real local re-observation of the retained split and retime cases matched all 13 current Google
+occurrences exactly by provider ID, time and duration, with zero visible canceled rows or duplicate
+IDs; nine obsolete projections remain retained/hidden. This is local provider evidence, not hosted
+CI or production delivery. Other provider/operator proof gates remain as recorded in the runbook.
+
+The repair passed 28 Calendar/PostgreSQL tests and 57 billing/timeline tests, backend typecheck,
+schema baseline and contract verification. Exceptional-risk review found and closed stale-reference
+admission, retained master-deletion evidence and lease-renewal gaps; focused regressions include
+both source-link ordering boundaries and protected multi-master retry. Migration 0072 adds only
+the reference guard and is compatible with the preceding Calendar runtime.
 
 Keep this plan active while provider identity or operator acceptance remains outstanding. The PR and
 handoff own exact commands/results and hosted state; local or hosted success is not provider or

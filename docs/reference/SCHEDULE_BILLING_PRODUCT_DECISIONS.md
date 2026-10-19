@@ -60,7 +60,9 @@ smuggled into the pedagogical learner profile.
     operations remain usable without a connection.
 14. One selected writable lesson calendar owns timing and recurrence after creation. A student may
     have several independent weekly series, each with its own durable creation/recovery operation.
-15. ESL owns stable lesson identity, completion/no-show, charge decisions, credits and lineage.
+15. ESL owns lesson identity, completion/no-show, charge decisions, credits and lineage. Unused future
+    projections may be recreated when Google changes identities, provided visible lessons do not
+    disappear or duplicate; protected teaching and billing history keeps its identity and links.
     Provider changes never erase those facts. Later timing edits happen in Google.
 16. Retired local rules/slots remain nonexecuting historical evidence. Reviewed cleanup hides unused
     placeholders; protected lesson rows and immutable activity remain attached. Schedule reads do
@@ -114,8 +116,13 @@ instants or retime existing Google series.
 recurrence. Calendar schedule bindings are one-to-many per student; occurrence mappings preserve
 internal lesson IDs independently of moved actual start times. The bounded upcoming projection uses
 Google instances, with durable dirty intents and cursor checkpoints. A 410 rebaseline keeps the ESL
-ledger and billing history. Unknown split/copy identity is attention requiring authoritative evidence;
-titles, emails, time proximity and a copied marker never establish occurrence continuity.
+ledger and billing history. The maintainer's 2026-10-19 clarification makes visible schedule
+equivalence authoritative for unused future projections: Google may replace IDs without forcing a
+manual relink flow. Exact registered association and durable create-request provenance can associate
+new masters with the same student, while each master/occurrence remains distinct. Complete family
+projection replaces unused obsolete rows atomically and hides implementation noise from normal
+surfaces. Protected history conflicts stay visible as attention, with no replacement duplicate.
+Titles, emails, time proximity and copied markers never establish old-to-new occurrence continuity.
 
 Student email is optional operational contact. Invitation defaults on when present, with opt-out;
 the chosen recipient is frozen into each new operation. Email edits affect future creates. Recovery

@@ -141,7 +141,7 @@ ESL lesson ID and original-start binding while changing actual timing and durati
 restoring the no-email one-off through Google's Trash retained its ESL lesson ID; no credits were
 consumed. Reconnect retained all existing binding and lesson IDs.
 
-Two provider identity cases remain **merge blockers** for the approved continuity contract:
+Two provider identity cases initially blocked the original stable-ID acceptance contract:
 
 - Google's **This and following events** time edit truncated the original master and created a new
   master and iCalUID, carrying the same private ESL association/request markers. The new event did not
@@ -154,9 +154,23 @@ Two provider identity cases remain **merge blockers** for the approved continuit
   continuity. The separate single-occurrence move passed and must not be treated as evidence for this
   whole-series case.
 
-Keep the PR in draft until an approved reconciliation design is implemented and re-exercised, or the
-maintainer explicitly approves a revised product boundary. Do not repair these cases by matching
-titles, recipients, nearby times, a copied marker or iCalUID. These observations do not establish
+The maintainer revised that boundary on 2026-10-19: internal IDs may change for unused future
+projections if ESL shows the same resulting schedule without missing/duplicate lessons. Protected
+completion, billing, elapsed and downstream history retains its identity and links. ESL-64 implements
+this boundary with exact registered association plus durable create-request provenance for student
+ownership, distinct master/occurrence identities, staged complete family projection and retained,
+hidden obsolete rows. It never guesses an old-to-new occurrence from titles, recipients, nearby
+times or iCalUID. Incomplete pages publish no partial replacement; protected conflicts pause with
+attention. Migration 0072 fences new references to hidden projections under the lesson row lock;
+old schema/data remain compatible with the previous Calendar runtime (scheduler retirement itself
+still carries its original incompatible boundary).
+
+Local re-observation of the retained real split/retime state matched **13 provider occurrences to 13
+visible ESL lessons** by exact provider identity, actual start and duration, with zero duplicates or
+visible canceled replacements. Nine obsolete rows remain retained/hidden. Deterministic regressions
+cover retime-back, protected history, page failure, stale reference races, lease renewal and deletion
+evidence surviving a completed refresh. The PR remains draft for hosted and remaining acceptance
+gates. These observations do not establish
 interrupted-insert invitation recovery, every copy/metadata variant, or production ingress/cutover
 readiness; those gates remain separate. Raw test-calendar responses and recipient details stay in
 private local evidence, outside Git.

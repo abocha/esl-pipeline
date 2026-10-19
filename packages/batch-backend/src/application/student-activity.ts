@@ -43,6 +43,9 @@ WITH authorized_student AS (
   FROM student_activity a JOIN authorized_student s ON s.id=a.student_id AND COALESCE(a.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=$2
   WHERE (a.type<>'homework_started' OR EXISTS (SELECT 1 FROM assignment_sessions own WHERE own.id=a.entity_id AND own.user_id=$3 AND own.student_id=s.id))
     AND (a.type<>'homework_failed' OR EXISTS (SELECT 1 FROM jobs own WHERE own.id=a.entity_id AND own.user_id=$3 AND own.student_id=s.id))
+    AND NOT(a.actor_kind='system' AND a.type IN ('lesson_created','lesson_changed','lesson_canceled','lesson_restored')
+      AND EXISTS(SELECT 1 FROM student_lessons hidden WHERE hidden.id=a.entity_id AND hidden.student_id=s.id
+        AND hidden.workspace_id=$2 AND hidden.schedule_hidden_reason='calendar_projection_replaced' AND hidden.schedule_hidden_at IS NOT NULL))
 
   UNION ALL
   SELECT 'student:'||s.id,'student_created','lifecycle',s.created_at,s.id,

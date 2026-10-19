@@ -71,6 +71,7 @@
     "0068_student_activity": "compatible",
     "0069_google_calendar_connection": "compatible",
     "0070_calendar_scheduling": "compatible",
-    "0071_scheduler_retirement": "incompatible"
+    "0071_scheduler_retirement": "incompatible",
+    "0072_calendar_projection_reference_guard": "compatible"
   }
 }

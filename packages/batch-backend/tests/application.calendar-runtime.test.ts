@@ -25,6 +25,9 @@ import {
   processCalendarSync,
   projectCalendarObservation,
 } from '../src/application/calendar-sync.js';
+import { getStudentActivity } from '../src/application/student-activity.js';
+import { updateStudentLesson } from '../src/application/student-schedule-billing.js';
+import { confirmStudentAssignmentSession } from '../src/domain/assignment-session-repository.js';
 import {
   type CalendarOperation,
   calendarTransaction,
@@ -190,9 +193,10 @@ async function project(
   binding: Awaited<ReturnType<typeof bindingFixture>>,
   event: GoogleCalendarEvent,
 ) {
-  return calendarTransaction((client) =>
-    projectCalendarObservation(client, binding, event, new Date('2029-01-01T00:00:00Z')),
-  );
+  return calendarTransaction(async (client) => {
+    await client.query("SELECT set_config('app.calendar_sync','on',true)");
+    await projectCalendarObservation(client, binding, event, new Date('2029-01-01T00:00:00Z'));
+  });
 }
 
 describePg('Calendar durable runtime with PostgreSQL and a controlled provider', () => {
@@ -616,6 +620,356 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
       (await q('SELECT status FROM student_lessons WHERE student_id=$1', [student])).rows[0].status,
     ).toBe('scheduled');
   });
+  it('replaces unused future series projections without canceled duplicates or activity noise', async () => {
+    const f = providerFixture();
+    const binding = await bindingFixture();
+    await project(binding, occurrence());
+    const old = (await q('SELECT id FROM student_lessons WHERE student_id=$1', [student])).rows[0]
+      .id;
+    f.events.set('master', confirmed({ id: 'master', recurrence: ['RRULE:FREQ=WEEKLY'] }));
+    f.events.set('instance', { id: 'instance', status: 'cancelled' });
+    const replacement = occurrence('replacement', {
+      originalStartTime: { dateTime: '2030-01-07T03:00:00Z' },
+      start: { dateTime: '2030-01-07T03:00:00Z', timeZone: 'Asia/Bangkok' },
+      end: { dateTime: '2030-01-07T03:50:00Z', timeZone: 'Asia/Bangkok' },
+    });
+    f.instances.mockResolvedValue({ items: [replacement] });
+    const op = await operationFixture('refresh', { bindingId: binding.id });
+    await processCalendarRefresh(op, f.provider);
+    const visible = (
+      await q(
+        'SELECT id,starts_at FROM student_lessons WHERE student_id=$1 AND schedule_hidden_at IS NULL',
+        [student],
+      )
+    ).rows;
+    expect(visible).toHaveLength(1);
+    expect(visible[0].id).not.toBe(old);
+    expect(visible[0].starts_at.toISOString()).toBe('2030-01-07T03:00:00.000Z');
+    expect(
+      (await q('SELECT schedule_hidden_reason FROM student_lessons WHERE id=$1', [old])).rows[0]
+        .schedule_hidden_reason,
+    ).toBe('calendar_projection_replaced');
+    const activity = await getStudentActivity(workspace, student, owner, { category: 'lessons' });
+    expect(activity!.items.map((item) => item.type)).toEqual(['lesson_created']);
+    await expect(
+      updateStudentLesson(
+        workspace,
+        student,
+        old,
+        { status: 'completed', consumesCredit: true },
+        owner,
+      ),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    await expect(
+      confirmStudentAssignmentSession({
+        userId: owner,
+        studentId: student,
+        lessonId: old,
+        requestId: randomUUID(),
+      }),
+    ).rejects.toMatchObject({ code: '23514', constraint: 'calendar_projection_reference_visible' });
+    await processCalendarRefresh(op, f.provider);
+    expect(
+      (
+        await q(
+          'SELECT id FROM student_lessons WHERE student_id=$1 AND schedule_hidden_at IS NULL',
+          [student],
+        )
+      ).rowCount,
+    ).toBe(1);
+    expect(
+      (await q('SELECT id FROM student_credit_events WHERE student_id=$1', [student])).rowCount,
+    ).toBe(0);
+    f.instances.mockResolvedValue({
+      items: [occurrence('instance', { etag: 'restored-v3', updated: '2029-01-03T00:00:00Z' })],
+    });
+    f.events.set(
+      'instance',
+      occurrence('instance', { etag: 'restored-v3', updated: '2029-01-03T00:00:00Z' }),
+    );
+    f.events.set('replacement', { id: 'replacement', status: 'cancelled' });
+    await processCalendarRefresh(op, f.provider);
+    expect(
+      (
+        await q(
+          'SELECT id FROM student_lessons WHERE student_id=$1 AND schedule_hidden_at IS NULL',
+          [student],
+        )
+      ).rows,
+    ).toEqual([{ id: old }]);
+    expect(
+      (await getStudentActivity(workspace, student, owner, { category: 'lessons' }))!.items.map(
+        (item) => item.type,
+      ),
+    ).toEqual(['lesson_created']);
+  });
+  it('does not publish replacement occurrences before all provider pages succeed', async () => {
+    const f = providerFixture();
+    const binding = await bindingFixture();
+    await project(binding, occurrence());
+    f.events.set('master', confirmed({ id: 'master', recurrence: ['RRULE:FREQ=WEEKLY'] }));
+    f.instances
+      .mockResolvedValueOnce({
+        items: [
+          occurrence('replacement', { originalStartTime: { dateTime: '2030-01-07T03:00:00Z' } }),
+        ],
+        nextPageToken: 'later',
+      })
+      .mockRejectedValueOnce(new GoogleCalendarError('provider_unavailable', true));
+    await expect(
+      processCalendarRefresh(
+        await operationFixture('refresh', { bindingId: binding.id }),
+        f.provider,
+      ),
+    ).rejects.toMatchObject({ code: 'provider_unavailable' });
+    expect(
+      (
+        await q('SELECT status,schedule_hidden_at FROM student_lessons WHERE student_id=$1', [
+          student,
+        ])
+      ).rows,
+    ).toEqual([{ status: 'scheduled', schedule_hidden_at: null }]);
+  });
+  it('renews the lease between slow provider reads without publishing a partial projection', async () => {
+    const f = providerFixture(),
+      binding = await bindingFixture();
+    await project(binding, occurrence());
+    const op = await operationFixture('refresh', { bindingId: binding.id });
+    const master = confirmed({ id: 'master', recurrence: ['RRULE:FREQ=WEEKLY'] });
+    let paged = false;
+    const renewals: boolean[] = [];
+    f.get.mockImplementation(async (_c, _g, id) => {
+      if (paged) {
+        const lease = (
+          await q(
+            "SELECT lease_expires_at>now()+interval '40 seconds' AS renewed FROM calendar_operations WHERE id=$1",
+            [op.id],
+          )
+        ).rows[0];
+        renewals.push(lease.renewed);
+      }
+      return id === 'master' ? master : null;
+    });
+    f.instances.mockImplementation(async () => {
+      await q(
+        "UPDATE calendar_operations SET lease_expires_at=now()+interval '5 seconds' WHERE id=$1",
+        [op.id],
+      );
+      paged = true;
+      return { items: [occurrence()] };
+    });
+    await processCalendarRefresh(op, f.provider);
+    expect(renewals).toEqual([true]);
+    expect(
+      (await q('SELECT id FROM student_lessons WHERE student_id=$1', [student])).rowCount,
+    ).toBe(1);
+  });
+  it('automatically projects a split successor with exact creation provenance, keeping one visible lesson per Google occurrence', async () => {
+    const f = providerFixture();
+    const setup = await createCalendarSetup(workspace, student, owner, 'split-source', {
+      ...request,
+      sendInvitation: false,
+      slots: request.slots.slice(0, 1),
+    });
+    await processCalendarCreate(await claim(setup.operations[0]!.id), f.provider);
+    const source = (
+      await q('SELECT * FROM calendar_schedule_bindings WHERE connection_id=$1', [connection])
+    ).rows[0];
+    const before = occurrence('before-split', { recurringEventId: source.provider_event_id });
+    const after = occurrence('after-split-old', {
+      recurringEventId: source.provider_event_id,
+      originalStartTime: { dateTime: '2030-01-14T04:00:00Z' },
+      start: { dateTime: '2030-01-14T04:00:00Z' },
+      end: { dateTime: '2030-01-14T05:00:00Z' },
+    });
+    await project(source, before);
+    await project(source, after);
+    const original = f.events.get(source.provider_event_id)!;
+    const successor = { ...original, id: 'successor', etag: 'split-v2' };
+    f.events.set('successor', successor);
+    f.events.set(after.id, { id: after.id, status: 'cancelled' });
+    f.changes.mockResolvedValueOnce({
+      items: [successor, { ...original, etag: 'split-v2' }],
+      nextSyncToken: 'split-complete',
+    });
+    await processCalendarSync(await operationFixture('sync'), f.provider);
+    expect(
+      (await q('SELECT id FROM calendar_schedule_bindings WHERE connection_id=$1', [connection]))
+        .rowCount,
+    ).toBe(2);
+    const next = occurrence('after-split-new', {
+      recurringEventId: 'successor',
+      originalStartTime: { dateTime: '2030-01-14T06:00:00Z' },
+      start: { dateTime: '2030-01-14T06:00:00Z' },
+      end: { dateTime: '2030-01-14T07:00:00Z' },
+    });
+    f.instances.mockImplementation(async (...args: unknown[]) => ({
+      items: args[2] === 'successor' ? [next] : [before],
+    }));
+    await processCalendarRefresh(
+      await operationFixture('refresh', { bindingId: source.id }),
+      f.provider,
+    );
+    const visible = (
+      await q(
+        'SELECT l.starts_at,l.status FROM student_lessons l WHERE student_id=$1 AND schedule_hidden_at IS NULL ORDER BY starts_at',
+        [student],
+      )
+    ).rows;
+    expect(visible.map((row) => [row.starts_at.toISOString(), row.status])).toEqual([
+      ['2030-01-07T04:00:00.000Z', 'scheduled'],
+      ['2030-01-14T06:00:00.000Z', 'scheduled'],
+    ]);
+    expect(f.insert).toHaveBeenCalledOnce();
+    expect(
+      (await q('SELECT id FROM student_credit_events WHERE student_id=$1', [student])).rowCount,
+    ).toBe(0);
+  });
+  it('keeps protected history visible and does not add an ambiguous replacement duplicate', async () => {
+    const f = providerFixture(),
+      binding = await bindingFixture();
+    await project(binding, occurrence());
+    const old = (await q('SELECT id FROM student_lessons WHERE student_id=$1', [student])).rows[0]
+      .id;
+    await q("UPDATE student_lessons SET status='completed',completed_by=$2 WHERE id=$1", [
+      old,
+      owner,
+    ]);
+    f.events.set('master', confirmed({ id: 'master', recurrence: ['RRULE:FREQ=WEEKLY'] }));
+    f.events.set('instance', { id: 'instance', status: 'cancelled' });
+    f.instances.mockResolvedValue({
+      items: [
+        occurrence('replacement', { originalStartTime: { dateTime: '2030-01-07T03:00:00Z' } }),
+      ],
+    });
+    await processCalendarRefresh(
+      await operationFixture('refresh', { bindingId: binding.id }),
+      f.provider,
+    );
+    expect(
+      (
+        await q('SELECT id,status,schedule_hidden_at FROM student_lessons WHERE student_id=$1', [
+          student,
+        ])
+      ).rows,
+    ).toEqual([{ id: old, status: 'completed', schedule_hidden_at: null }]);
+    expect((await getCalendarSchedulingStatus(workspace, owner)).state).toBe('needs_attention');
+  });
+  it('rejects a new reference that waited behind the projection row lock', async () => {
+    const binding = await bindingFixture();
+    await project(binding, occurrence());
+    const lesson = (await q('SELECT id FROM student_lessons WHERE student_id=$1', [student]))
+      .rows[0].id;
+    let attempted!: Promise<unknown>;
+    await withPgClient(async (projection) => {
+      await projection.query('BEGIN');
+      try {
+        const ownerPid = (await projection.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+        await projection.query('SELECT id FROM student_lessons WHERE id=$1 FOR UPDATE', [lesson]);
+        let reportPid!: (pid: number) => void;
+        const waitingPid = new Promise<number>((resolve) => {
+          reportPid = resolve;
+        });
+        attempted = withPgClient(async (writer) => {
+          reportPid((await writer.query('SELECT pg_backend_pid() AS pid')).rows[0].pid);
+          return writer.query(
+            "INSERT INTO assignment_sessions(id,user_id,student_id,lesson_id,revision,confirmed_step,confirmed_snapshot,creation_request_id) VALUES($1,$2,$3,$4,1,'student',$5,$6)",
+            [
+              randomUUID(),
+              owner,
+              student,
+              lesson,
+              JSON.stringify({
+                student: { studentId: student },
+                source: null,
+                context: null,
+                create: null,
+              }),
+              randomUUID(),
+            ],
+          );
+        }).then(
+          () => null,
+          (error) => error,
+        );
+        const pid = await waitingPid;
+        await vi.waitFor(async () => {
+          expect(
+            (await q('SELECT $2::int=ANY(pg_blocking_pids($1::int)) AS waiting', [pid, ownerPid]))
+              .rows[0].waiting,
+          ).toBe(true);
+        });
+        await projection.query(
+          "UPDATE student_lessons SET schedule_hidden_at=now(),schedule_hidden_reason='calendar_projection_replaced' WHERE id=$1",
+          [lesson],
+        );
+        await projection.query('COMMIT');
+      } catch (error) {
+        await projection.query('ROLLBACK');
+        throw error;
+      }
+    });
+    expect(await attempted!).toMatchObject({
+      code: '23514',
+      constraint: 'calendar_projection_reference_visible',
+    });
+    expect(
+      (await q('SELECT id FROM assignment_sessions WHERE lesson_id=$1', [lesson])).rowCount,
+    ).toBe(0);
+  });
+  it('retains deleted-master evidence when protected history pauses a multi-master family', async () => {
+    const f = providerFixture(),
+      binding = await bindingFixture();
+    const anchor = await operationFixture('refresh', { bindingId: binding.id });
+    await q('UPDATE calendar_schedule_bindings SET setup_operation_id=$2 WHERE id=$1', [
+      binding.id,
+      anchor.id,
+    ]);
+    await project(binding, occurrence());
+    await q("UPDATE student_lessons SET status='completed',completed_by=$2 WHERE student_id=$1", [
+      student,
+      owner,
+    ]);
+    await q(
+      "INSERT INTO calendar_schedule_bindings(id,workspace_id,student_id,connection_id,provider_event_id,kind,association_marker,setup_operation_id) VALUES($1,$2,$3,$4,'successor','series',$5,$6)",
+      [randomUUID(), workspace, student, connection, randomUUID(), anchor.id],
+    );
+    f.events.set('successor', confirmed({ id: 'successor', recurrence: ['RRULE:FREQ=WEEKLY'] }));
+    f.changes.mockResolvedValueOnce({
+      items: [{ id: 'master', status: 'cancelled', etag: 'deleted' }],
+      nextSyncToken: 'deleted',
+    });
+    await processCalendarSync(await operationFixture('sync'), f.provider);
+    f.instances.mockResolvedValue({
+      items: [occurrence('next', { recurringEventId: 'successor' })],
+    });
+    await processCalendarRefresh(anchor, f.provider);
+    expect(
+      (
+        await q(
+          "SELECT next_projection_at='infinity'::timestamptz AS deleted FROM calendar_schedule_bindings WHERE id=$1",
+          [binding.id],
+        )
+      ).rows[0].deleted,
+    ).toBe(true);
+    await q(
+      "UPDATE calendar_operations SET state='succeeded',lease_token=NULL,lease_expires_at=NULL WHERE connection_id=$1 AND kind='refresh'",
+      [connection],
+    );
+    await expect(
+      processCalendarRefresh(
+        await operationFixture('refresh', { bindingId: binding.id }),
+        f.provider,
+      ),
+    ).resolves.toBeUndefined();
+    expect(
+      (
+        await q('SELECT status,schedule_hidden_at FROM student_lessons WHERE student_id=$1', [
+          student,
+        ])
+      ).rows,
+    ).toEqual([{ status: 'completed', schedule_hidden_at: null }]);
+  });
   it('rejects stale operation leases and copied association markers without reassigning a student', async () => {
     const f = providerFixture();
     const binding = await bindingFixture();
@@ -640,7 +994,7 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
     expect(
       (await q('SELECT attention_code FROM calendar_schedule_bindings WHERE id=$1', [binding.id]))
         .rows[0].attention_code,
-    ).toBe('association_required');
+    ).toBe('association_provenance_conflict');
     expect(
       (await q('SELECT id FROM student_lessons WHERE student_id=$1', [student])).rowCount,
     ).toBe(1);
@@ -703,10 +1057,17 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
     });
     await processCalendarSync(await operationFixture('sync'), f.provider);
     expect(
+      (await q('SELECT status FROM student_lessons WHERE id=$1', [lessonId])).rows[0].status,
+    ).toBe('scheduled');
+    f.events.set('master', confirmed({ id: 'master', recurrence: ['RRULE:FREQ=WEEKLY'] }));
+    await processCalendarRefresh(
+      await operationFixture('refresh', { bindingId: binding.id }),
+      f.provider,
+    );
+    expect(
       (await q('SELECT status,consumes_credit FROM student_lessons WHERE id=$1', [lessonId]))
         .rows[0],
     ).toEqual({ status: 'canceled', consumes_credit: false });
-    expect(f.get).not.toHaveBeenCalled();
     await project(
       binding,
       occurrence('instance', { updated: '2029-01-03T00:00:00Z', etag: 'restored-v3' }),
@@ -851,6 +1212,10 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
       nextSyncToken: 'master-deleted',
     });
     await processCalendarSync(await operationFixture('sync'), f.provider);
+    await processCalendarRefresh(
+      await operationFixture('refresh', { bindingId: binding.id }),
+      f.provider,
+    );
     const rows = (
       await q(
         'SELECT b.provider_event_id,l.status,l.consumes_credit,b.attention_code FROM calendar_lesson_bindings b JOIN student_lessons l ON l.id=b.lesson_id WHERE b.schedule_binding_id=$1',
@@ -866,7 +1231,17 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
       consumes_credit: true,
       attention_code: 'protected_lesson_deleted',
     });
-    expect(f.get).not.toHaveBeenCalled();
+    expect(f.instances).not.toHaveBeenCalled();
+    await q(
+      "UPDATE calendar_operations SET state='succeeded',lease_token=NULL,lease_expires_at=NULL WHERE connection_id=$1 AND kind='refresh'",
+      [connection],
+    );
+    await expect(
+      processCalendarRefresh(
+        await operationFixture('refresh', { bindingId: binding.id }),
+        f.provider,
+      ),
+    ).resolves.toBeUndefined();
   });
   it('rejects cyclic provider pagination and stops work at shutdown without absence-based cancellation', async () => {
     const f = providerFixture();

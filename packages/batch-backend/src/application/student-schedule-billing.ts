@@ -863,6 +863,7 @@ async function getLessonRow(
     ${LESSON_HOMEWORK_JOINS}
     WHERE student_lessons.id = $1
       AND student_lessons.student_id = $2
+      AND student_lessons.schedule_hidden_at IS NULL
       AND ${workspacePredicate('student_lessons.workspace_id', '$3', '$4')}
     `,
     [lessonId, context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],

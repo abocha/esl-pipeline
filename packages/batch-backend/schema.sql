@@ -67,6 +67,25 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.guard_calendar_projection_reference() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE lesson uuid; hidden boolean;
+BEGIN
+  lesson := (to_jsonb(NEW)->>TG_ARGV[0])::uuid;
+  IF lesson IS NULL THEN RETURN NEW; END IF;
+  IF TG_OP='UPDATE' AND to_jsonb(OLD)->>TG_ARGV[0] IS NOT DISTINCT FROM lesson::text THEN
+    RETURN NEW;
+  END IF;
+  PERFORM id FROM student_lessons WHERE id=lesson FOR KEY SHARE;
+  SELECT schedule_hidden_at IS NOT NULL INTO hidden FROM student_lessons WHERE id=lesson;
+  IF hidden THEN
+    RAISE EXCEPTION 'Lesson schedule changed; refresh before continuing'
+      USING ERRCODE='23514', CONSTRAINT='calendar_projection_reference_visible';
+  END IF;
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION public.guard_completed_transcript_source() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -2434,11 +2453,15 @@ CREATE UNIQUE INDEX workspace_calendar_connections_remote_active ON public.works
 
 CREATE UNIQUE INDEX workspace_calendar_connections_workspace_active ON public.workspace_calendar_connections USING btree (workspace_id) WHERE (status <> 'disconnected'::text);
 
+CREATE TRIGGER assignment_sessions_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
+
 CREATE TRIGGER assignment_sessions_confirmed_source_audio_deletion AFTER INSERT OR UPDATE OF confirmed_snapshot, recording_id, student_id ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.request_confirmed_source_audio_deletion();
 
 CREATE TRIGGER calendar_membership_authority_loss AFTER DELETE OR UPDATE OF role ON public.workspace_memberships FOR EACH ROW EXECUTE FUNCTION public.fence_calendar_authority_loss();
 
 CREATE TRIGGER calendar_user_authority_loss AFTER UPDATE OF is_active ON public.users FOR EACH ROW EXECUTE FUNCTION public.fence_calendar_authority_loss();
+
+CREATE TRIGGER drafts_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
 
 CREATE TRIGGER freeze_legacy_profile_bindings BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_student_profile_bindings FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
 
@@ -2468,6 +2491,10 @@ CREATE TRIGGER historical_sessions_read_only BEFORE INSERT OR UPDATE ON public.a
 
 CREATE TRIGGER homework_memory_canonical_student_lock BEFORE INSERT OR DELETE OR UPDATE ON public.homework_memory_entries FOR EACH ROW EXECUTE FUNCTION public.lock_canonical_memory_student();
 
+CREATE TRIGGER homework_memory_entries_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.homework_memory_entries FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
+
+CREATE TRIGGER jobs_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
+
 CREATE TRIGGER lesson_memory_canonical_student_lock BEFORE INSERT OR DELETE OR UPDATE ON public.lesson_memory_entries FOR EACH ROW EXECUTE FUNCTION public.lock_canonical_memory_student();
 
 CREATE TRIGGER mcp_profile_identity_immutable BEFORE UPDATE ON public.mcp_profile_identities FOR EACH ROW EXECUTE FUNCTION public.reject_mcp_profile_identity_update();
@@ -2485,6 +2512,8 @@ CREATE TRIGGER preserve_assignment_artifact_identity BEFORE UPDATE ON public.job
 CREATE TRIGGER preserve_assignment_draft_format BEFORE UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.preserve_assignment_draft_format();
 
 CREATE TRIGGER preserve_transcript_completion_history BEFORE UPDATE ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.preserve_transcript_completion_history();
+
+CREATE TRIGGER prompt_packages_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.prompt_packages FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
 
 CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
 
@@ -2534,6 +2563,8 @@ CREATE TRIGGER student_candidate_activity AFTER UPDATE ON public.student_profile
 
 CREATE TRIGGER student_credit_activity BEFORE INSERT OR UPDATE ON public.student_credit_events FOR EACH ROW EXECUTE FUNCTION public.link_student_credit_activity();
 
+CREATE TRIGGER student_credit_events_calendar_projection_guard BEFORE INSERT OR UPDATE OF source_lesson_id ON public.student_credit_events FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('source_lesson_id');
+
 CREATE TRIGGER student_homework_started_activity AFTER UPDATE ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.record_student_homework_started_activity();
 
 CREATE TRIGGER student_job_failure_activity AFTER INSERT OR UPDATE ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.record_student_job_failure_activity();
@@ -2543,6 +2574,8 @@ CREATE TRIGGER student_lesson_activity AFTER INSERT OR UPDATE ON public.student_
 CREATE TRIGGER student_lifecycle_activity AFTER INSERT OR UPDATE ON public.students FOR EACH ROW EXECUTE FUNCTION public.record_student_lifecycle_activity();
 
 CREATE TRIGGER student_profile_activity AFTER INSERT OR UPDATE ON public.student_profile_revisions FOR EACH ROW EXECUTE FUNCTION public.record_student_profile_activity();
+
+CREATE TRIGGER student_profile_candidates_calendar_projection_guard BEFORE INSERT OR UPDATE OF source_lesson_id ON public.student_profile_candidates FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('source_lesson_id');
 
 CREATE TRIGGER student_reminder_activity AFTER INSERT OR UPDATE ON public.student_reminder_preferences FOR EACH ROW EXECUTE FUNCTION public.record_student_reminder_activity();
 
@@ -3143,5 +3176,6 @@ VALUES
   ('0068_student_activity', '004e9d9a1b05415f9ab850ec241f34fa1ef68dbe7fc5843ec4dd35c53985af05', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0069_google_calendar_connection', 'e588c33b65438b42d6df0919cd4763221df195cdb35fd26c906906da3a009f3a', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0070_calendar_scheduling', 'c30cbc331b6f884ff7a732fe28d582b74e2bf1ef54bb0588dca063ddfeb2c759', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0071_scheduler_retirement', '45ee490d0893537325b299c0e6ee161ec72f139fe2c260aa95d3a5a4abf1eb7c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0071_scheduler_retirement', '45ee490d0893537325b299c0e6ee161ec72f139fe2c260aa95d3a5a4abf1eb7c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0072_calendar_projection_reference_guard', '50cf12476c3fd513fa328777a12ca2260d2c6a1b99b15b4b8c623a9093b3ef06', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

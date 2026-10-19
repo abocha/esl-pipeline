@@ -24,6 +24,9 @@ interface ScheduleBinding {
   kind: 'one_off' | 'series';
   association_marker: string;
   source_version: string | null;
+  setup_operation_id: string | null;
+  attention_code: string | null;
+  provider_deleted?: boolean;
 }
 interface LessonBinding {
   lesson_id: string;
@@ -210,6 +213,7 @@ export async function projectCalendarObservation(
     lesson.duration_minutes !== timing.duration ||
     lesson.timezone !== timing.timezone ||
     lesson.title !== (event.summary ?? null) ||
+    Boolean(lesson.schedule_hidden_at) ||
     lesson.status !== 'scheduled';
   const protectedLesson =
     lesson.status === 'completed' ||
@@ -225,7 +229,7 @@ export async function projectCalendarObservation(
     lesson.has_homework ||
     lesson.has_candidate ||
     new Date(lesson.starts_at) < now ||
-    lesson.schedule_hidden_at;
+    (lesson.schedule_hidden_at && lesson.schedule_hidden_reason !== 'calendar_projection_replaced');
   if (
     changed &&
     (protectedLesson || (lesson.status === 'canceled' && !link.canceled_by_calendar))
@@ -235,7 +239,7 @@ export async function projectCalendarObservation(
   }
   if (changed)
     await client.query(
-      `UPDATE student_lessons SET starts_at=$2,timezone=$3,duration_minutes=$4,status='scheduled',title=$5,updated_by=NULL,updated_at=now() WHERE id=$1`,
+      `UPDATE student_lessons SET starts_at=$2,timezone=$3,duration_minutes=$4,status='scheduled',title=$5,updated_by=NULL,updated_at=now(),schedule_hidden_at=NULL,schedule_hidden_reason=NULL,schedule_hidden_by=NULL WHERE id=$1`,
       [link.lesson_id, timing.startsAt, timing.timezone, timing.duration, event.summary ?? null],
     );
   await client.query(
@@ -372,19 +376,22 @@ export async function processCalendarSync(
             [id],
           )
         ).rows[0]!;
+        if (binding.kind === 'series') {
+          // Keep feed-only tombstones durable with the refresh intent. Applying them before
+          // all pages/related masters arrive exposes canceled/recreated implementation rows.
+          await enqueueCalendarRefresh(client, current, id);
+          await client.query(
+            `UPDATE calendar_operations SET request_payload=jsonb_set(request_payload,'{observations}',
+              COALESCE(request_payload->'observations','{}'::jsonb) || jsonb_build_object($3::text,$4::jsonb))
+             WHERE connection_id=$1 AND kind='refresh' AND request_payload->>'bindingId'=$2 AND state IN ('pending','retry_wait')`,
+            [current.id, id, event.id, JSON.stringify(event)],
+          );
+          continue;
+        }
         // Tombstones may no longer be readable through events.get. Apply their authoritative
         // evidence in the same commit as the page checkpoint, then retain refresh work.
         if (event.status === 'cancelled') {
-          if (event.id === binding.provider_event_id && binding.kind === 'series') {
-            const links = (
-              await client.query<LessonBinding>(
-                'SELECT * FROM calendar_lesson_bindings WHERE schedule_binding_id=$1 ORDER BY lesson_id',
-                [id],
-              )
-            ).rows;
-            for (const link of links)
-              await cancelCalendarLesson(client, binding, link, event, new Date());
-          } else await projectCalendarObservation(client, binding, event);
+          await projectCalendarObservation(client, binding, event);
           if (event.id === binding.provider_event_id) {
             await client.query(
               "UPDATE calendar_schedule_bindings SET next_projection_at='infinity',source_version=$2 WHERE id=$1",
@@ -397,11 +404,45 @@ export async function processCalendarSync(
         await enqueueCalendarRefresh(client, current, id);
       }
       const marker = event.extendedProperties?.private?.eslAssociation;
-      if (!ids.length && marker)
-        await client.query(
-          "UPDATE calendar_schedule_bindings SET attention_code='association_required' WHERE connection_id=$1 AND association_marker=$2",
-          [current.id, marker],
-        );
+      if (!ids.length && marker) {
+        // A registered marker + durable request hash establishes student ownership only.
+        // A split or a copy remains a distinct provider series; never merge occurrences.
+        const source = (
+          await client.query<ScheduleBinding>(
+            `SELECT b.* FROM calendar_schedule_bindings b JOIN calendar_operations o ON o.id=b.setup_operation_id
+           WHERE b.connection_id=$1 AND b.association_marker=$2 AND b.kind='series'
+             AND o.kind='create' AND o.state='succeeded' AND o.request_hash=$3
+             AND o.student_id=b.student_id AND o.workspace_id=b.workspace_id`,
+            [current.id, marker, event.extendedProperties?.private?.eslRequest ?? null],
+          )
+        ).rows[0];
+        if (
+          source &&
+          event.status !== 'cancelled' &&
+          !event.recurringEventId &&
+          event.recurrence?.length &&
+          calendarEventTiming(event)
+        ) {
+          await client.query(
+            `INSERT INTO calendar_schedule_bindings(id,workspace_id,student_id,connection_id,provider_event_id,kind,association_marker,setup_operation_id)
+             VALUES($1,$2,$3,$4,$5,'series',$6,$7) ON CONFLICT(connection_id,provider_event_id) DO NOTHING`,
+            [
+              randomUUID(),
+              source.workspace_id,
+              source.student_id,
+              current.id,
+              event.id,
+              randomUUID(),
+              source.setup_operation_id,
+            ],
+          );
+          await enqueueCalendarRefresh(client, current, source.id);
+        } else
+          await client.query(
+            "UPDATE calendar_schedule_bindings SET attention_code='association_provenance_conflict' WHERE connection_id=$1 AND association_marker=$2",
+            [current.id, marker],
+          );
+      }
     }
     if (page.nextPageToken) {
       await client.query(
@@ -450,6 +491,10 @@ export async function processCalendarRefresh(
     ).rows[0];
   });
   if (!binding) throw new CalendarError('binding_not_found');
+  if (binding.kind === 'series') {
+    await projectCalendarSeriesFamily(op, binding, provider, signal);
+    return;
+  }
   const master = await provider.get(
     op.connection_id,
     op.connection_generation,
@@ -480,73 +525,277 @@ export async function processCalendarRefresh(
     await fencedProjection(op, (client) => projectCalendarObservation(client, binding, master));
     return;
   }
-  const timeMin = new Date().toISOString(),
-    timeMax = new Date(Date.now() + 120 * 86400000).toISOString();
-  const seen = new Set<string>();
-  const pageTokens = new Set<string>();
-  let token: string | undefined;
-  do {
-    if (signal?.aborted) throw new CalendarError('calendar_shutdown');
-    const page = await provider.instances(
-      op.connection_id,
-      op.connection_generation,
-      binding.provider_event_id,
-      { timeMin, timeMax, ...(token ? { pageToken: token } : {}) },
-    );
-    await fencedProjection(op, async (client) => {
-      for (const event of page.items) {
-        seen.add(event.id);
-        await projectCalendarObservation(client, binding, event);
-      }
-    });
-    token = page.nextPageToken;
-    if (token) {
-      if (pageTokens.has(token)) throw new CalendarError('provider_pagination_cycle');
-      pageTokens.add(token);
-      if (pageTokens.size >= 32) throw new CalendarError('provider_projection_limit');
-    }
-  } while (token);
-  // Only after complete pagination: targeted checks cover moved/out-of-range/removed known occurrences.
-  const known = await calendarTransaction(async (client) => {
-    await lockCalendarOperation(client, op);
-    return (
-      await client.query<LessonBinding>(
-        `SELECT b.* FROM calendar_lesson_bindings b JOIN student_lessons l ON l.id=b.lesson_id WHERE b.schedule_binding_id=$1 AND l.starts_at>=now() AND l.status IN ('scheduled','canceled') AND NOT(b.provider_event_id=ANY($2::text[])) ORDER BY b.lesson_id LIMIT 65`,
-        [binding.id, [...seen]],
+}
+
+/** A family shares exact durable creation provenance, never inferred occurrence identity. */
+async function projectCalendarSeriesFamily(
+  op: CalendarOperation,
+  binding: ScheduleBinding,
+  provider: CalendarProvider,
+  signal?: AbortSignal,
+): Promise<void> {
+  const snapshot = await calendarTransaction(async (client) => {
+    const current = await lockCalendarOperation(client, op);
+    if (current.sync_page_token) throw new GoogleCalendarError('provider_unavailable', true);
+    const family = (
+      await client.query<ScheduleBinding>(
+        `SELECT *,next_projection_at='infinity'::timestamptz AS provider_deleted FROM calendar_schedule_bindings WHERE connection_id=$1 AND kind='series'
+       AND (id=$2 OR ($3::uuid IS NOT NULL AND setup_operation_id=$3 AND student_id=$4)) ORDER BY id LIMIT 33`,
+        [binding.connection_id, binding.id, binding.setup_operation_id, binding.student_id],
       )
     ).rows;
+    if (family.length > 32) throw new CalendarError('provider_projection_limit');
+    const ids = family.map((item) => item.id);
+    const known = (
+      await client.query<LessonBinding & { schedule_binding_id: string }>(
+        `SELECT b.* FROM calendar_lesson_bindings b JOIN student_lessons l ON l.id=b.lesson_id
+       WHERE b.schedule_binding_id=ANY($1::uuid[]) AND l.starts_at>=now() ORDER BY b.lesson_id LIMIT 1001`,
+        [ids],
+      )
+    ).rows;
+    if (known.length > 1000) throw new CalendarError('provider_projection_limit');
+    const pending = (
+      await client.query<{ request_payload: Record<string, unknown> }>(
+        `SELECT request_payload FROM calendar_operations WHERE connection_id=$1 AND connection_generation=$2
+       AND kind='refresh' AND state IN ('pending','retry_wait','running') AND request_payload->>'bindingId'=ANY($3::text[]) ORDER BY created_at`,
+        [op.connection_id, op.connection_generation, ids],
+      )
+    ).rows;
+    const observations = new Map<string, GoogleCalendarEvent>();
+    for (const row of pending)
+      for (const event of Object.values(row.request_payload.observations ?? {})) {
+        const value = event as GoogleCalendarEvent;
+        if (value?.id) observations.set(value.id, value);
+      }
+    return { family, known, observations };
   });
-  if (known.length > 64) throw new CalendarError('provider_projection_limit');
-  for (const link of known) {
+  const now = new Date(),
+    timeMin = now.toISOString(),
+    timeMax = new Date(now.getTime() + 120 * 86400000).toISOString();
+  const collections: {
+    binding: ScheduleBinding;
+    master: GoogleCalendarEvent;
+    events: Map<string, GoogleCalendarEvent>;
+    missing: Set<string>;
+  }[] = [];
+  const renewLease = () => fencedProjection(op, async () => {});
+  for (const item of snapshot.family) {
     if (signal?.aborted) throw new CalendarError('calendar_shutdown');
-    if (seen.has(link.provider_event_id)) continue;
-    const event = await provider.get(
+    const master =
+      (await provider.get(op.connection_id, op.connection_generation, item.provider_event_id)) ??
+      snapshot.observations.get(item.provider_event_id) ??
+      (item.provider_deleted
+        ? {
+            id: item.provider_event_id,
+            status: 'cancelled',
+            etag: item.source_version ?? undefined,
+          }
+        : undefined);
+    await renewLease();
+    if (!master || master.id !== item.provider_event_id)
+      throw new GoogleCalendarError('provider_unavailable', true);
+    const events = new Map<string, GoogleCalendarEvent>(),
+      missing = new Set<string>(),
+      tokens = new Set<string>();
+    let token: string | undefined;
+    if (master.status !== 'cancelled')
+      do {
+        if (signal?.aborted) throw new CalendarError('calendar_shutdown');
+        const page = await provider.instances(
+          op.connection_id,
+          op.connection_generation,
+          item.provider_event_id,
+          { timeMin, timeMax, ...(token ? { pageToken: token } : {}) },
+        );
+        await renewLease();
+        for (const event of page.items) {
+          if (event.recurringEventId !== item.provider_event_id || !occurrenceIdentity(event))
+            throw new CalendarError('provider_identity_conflict');
+          events.set(event.id, event);
+        }
+        if (events.size > 8000) throw new CalendarError('provider_projection_limit');
+        token = page.nextPageToken;
+        if (token) {
+          if (tokens.has(token)) throw new CalendarError('provider_pagination_cycle');
+          tokens.add(token);
+          if (tokens.size >= 32) throw new CalendarError('provider_projection_limit');
+        }
+      } while (token);
+    for (const link of snapshot.known.filter((link) => link.schedule_binding_id === item.id)) {
+      if (events.has(link.provider_event_id)) continue;
+      if (master.status === 'cancelled') {
+        missing.add(link.lesson_id);
+        continue;
+      }
+      const event =
+        (await provider.get(op.connection_id, op.connection_generation, link.provider_event_id)) ??
+        snapshot.observations.get(link.provider_event_id);
+      await renewLease();
+      if (event && event.id !== link.provider_event_id)
+        throw new CalendarError('provider_identity_conflict');
+      if (event) events.set(event.id, event);
+      else {
+        const original = link.original_start_time ? new Date(link.original_start_time) : null;
+        if (original && original >= now && original < new Date(timeMax))
+          missing.add(link.lesson_id);
+        else throw new GoogleCalendarError('provider_unavailable', true);
+      }
+    }
+    // Retry the whole observation if Google changed a master during pagination.
+    const latest = await provider.get(
       op.connection_id,
       op.connection_generation,
-      link.provider_event_id,
+      item.provider_event_id,
     );
-    await fencedProjection(op, async (client) => {
-      if (event) await projectCalendarObservation(client, binding, event);
-      else {
-        // A completed provider-expanded range plus a targeted missing identity is absence
-        // evidence only within that original range, while the master remains readable.
-        const original = link.original_start_time ? new Date(link.original_start_time) : null;
-        if (original && original >= new Date(timeMin) && original < new Date(timeMax))
+    await renewLease();
+    if ((!latest && master.status !== 'cancelled') || (latest && latest.etag !== master.etag))
+      throw new GoogleCalendarError('provider_unavailable', true);
+    collections.push({ binding: item, master, events, missing });
+  }
+  await fencedProjection(op, async (client, current) => {
+    if (current.sync_page_token) throw new GoogleCalendarError('provider_unavailable', true);
+    const latestFamily = (
+      await client.query<{ id: string }>(
+        `SELECT id FROM calendar_schedule_bindings WHERE connection_id=$1 AND kind='series'
+       AND (id=$2 OR ($3::uuid IS NOT NULL AND setup_operation_id=$3 AND student_id=$4)) ORDER BY id`,
+        [binding.connection_id, binding.id, binding.setup_operation_id, binding.student_id],
+      )
+    ).rows;
+    if (
+      latestFamily.map((item) => item.id).join(':') !==
+      snapshot.family.map((item) => item.id).join(':')
+    )
+      throw new GoogleCalendarError('provider_unavailable', true);
+    // Keep authoritative deletion evidence even when protected history pauses this batch.
+    // Later refreshes must not depend on an unfinished operation retaining its feed payload.
+    for (const collection of collections)
+      if (collection.master.status === 'cancelled')
+        await client.query(
+          "UPDATE calendar_schedule_bindings SET next_projection_at='infinity',source_version=$2 WHERE id=$1",
+          [collection.binding.id, collection.master.etag ?? null],
+        );
+    const lost = snapshot.known.filter((link) => {
+      const collection = collections.find((item) => item.binding.id === link.schedule_binding_id)!;
+      const event = collection.events.get(link.provider_event_id);
+      return collection.missing.has(link.lesson_id) || event?.status === 'cancelled';
+    });
+    const added = collections.some((collection) =>
+      [...collection.events.values()].some(
+        (event) =>
+          event.status !== 'cancelled' &&
+          !snapshot.known.some(
+            (link) =>
+              link.provider_event_id === event.id ||
+              (link.schedule_binding_id === collection.binding.id &&
+                link.original_start_time === occurrenceIdentity(event)),
+          ),
+      ),
+    );
+    // A successor can appear before/after the old master's feed item. Its exact creation
+    // family is sufficient to replace unused projections, not to remap protected history.
+    const replacing =
+      added ||
+      snapshot.family.length > 1 ||
+      collections.some((collection) =>
+        [...collection.events.values()].some((event) => event.status !== 'cancelled'),
+      );
+    if (replacing && lost.length) {
+      const eligible = [];
+      for (const link of lost) {
+        if (await canReplaceCalendarProjection(client, link, now)) eligible.push(link);
+        else {
+          for (const item of snapshot.family)
+            await attention(client, item.id, null, 'protected_series_changed');
+          await attention(
+            client,
+            link.schedule_binding_id,
+            link.lesson_id,
+            'protected_series_changed',
+          );
+          return;
+        }
+      }
+      for (const link of eligible) {
+        await client.query(
+          `UPDATE student_lessons SET schedule_hidden_at=now(),schedule_hidden_reason='calendar_projection_replaced',updated_by=NULL,updated_at=now() WHERE id=$1`,
+          [link.lesson_id],
+        );
+        await client.query(
+          "UPDATE calendar_lesson_bindings SET provider_status='cancelled',canceled_by_calendar=true,source_version=NULL,attention_code=NULL WHERE lesson_id=$1",
+          [link.lesson_id],
+        );
+      }
+    }
+    for (const collection of collections) {
+      const item = collection.binding;
+      for (const event of collection.events.values()) {
+        if (
+          replacing &&
+          lost.some(
+            (link) => link.schedule_binding_id === item.id && link.provider_event_id === event.id,
+          )
+        )
+          continue;
+        await projectCalendarObservation(client, item, event, now);
+      }
+      if (!replacing)
+        for (const link of snapshot.known.filter((link) => collection.missing.has(link.lesson_id)))
           await cancelCalendarLesson(
             client,
-            binding,
+            item,
             link,
-            { id: link.provider_event_id, status: 'cancelled', updated: master.updated },
-            new Date(),
+            { id: link.provider_event_id, status: 'cancelled', updated: collection.master.updated },
+            now,
           );
-        else await attention(client, binding.id, link.lesson_id, 'provider_occurrence_missing');
-      }
-    });
-  }
-  await fencedProjection(op, async (client) => {
-    await client.query(
-      "UPDATE calendar_schedule_bindings SET projected_until=$2,next_projection_at=now()+interval '1 day',source_version=$3 WHERE id=$1",
-      [binding.id, timeMax, master.etag ?? null],
-    );
+      await client.query(
+        `UPDATE calendar_schedule_bindings SET projected_until=$2,next_projection_at=CASE WHEN $4 THEN 'infinity'::timestamptz ELSE now()+interval '1 day' END,source_version=$3,
+         attention_code=CASE WHEN attention_code IN ('association_required','protected_series_changed') THEN NULL ELSE attention_code END WHERE id=$1`,
+        [
+          item.id,
+          timeMax,
+          collection.master.etag ?? null,
+          collection.master.status === 'cancelled',
+        ],
+      );
+    }
   });
+}
+
+async function canReplaceCalendarProjection(
+  client: PoolClient,
+  link: LessonBinding,
+  now: Date,
+): Promise<boolean> {
+  await client.query('SELECT id FROM student_lessons WHERE id=$1 FOR UPDATE', [link.lesson_id]);
+  // Read after the row lock: an FK/source writer may have committed while we waited.
+  const row = (
+    await client.query(
+      `SELECT l.*,
+      EXISTS(SELECT 1 FROM student_credit_events c WHERE c.source_lesson_id=l.id OR c.id=l.credit_event_id) OR
+      EXISTS(SELECT 1 FROM assignment_sessions a WHERE a.lesson_id=l.id OR (a.student_id=l.student_id AND jsonb_path_exists(to_jsonb(a),'$.** ? (@ == $lesson)',jsonb_build_object('lesson',l.id::text)))) OR
+      EXISTS(SELECT 1 FROM prompt_packages p WHERE p.lesson_id=l.id) OR
+      EXISTS(SELECT 1 FROM drafts d WHERE d.lesson_id=l.id) OR
+      EXISTS(SELECT 1 FROM jobs j WHERE j.lesson_id=l.id) OR
+      EXISTS(SELECT 1 FROM homework_memory_entries h WHERE h.lesson_id=l.id) OR
+      EXISTS(SELECT 1 FROM student_profile_candidates p WHERE p.source_lesson_id=l.id) OR
+      EXISTS(SELECT 1 FROM student_reminder_preferences r WHERE r.workspace_id=l.workspace_id AND
+        (r.latest_hidden_lesson_followup_lesson_id=l.id OR r.latest_hidden_lesson_followup_key LIKE '%'||l.id::text||'%'
+         OR EXISTS(SELECT 1 FROM unnest(r.hidden_lesson_followup_keys) k WHERE k LIKE '%'||l.id::text||'%'))) OR
+      EXISTS(SELECT 1 FROM student_activity a WHERE a.workspace_id=l.workspace_id
+        AND (a.entity_id=l.id OR jsonb_path_exists(a.payload,'$.** ? (@ == $lesson)',jsonb_build_object('lesson',l.id::text)))
+        AND NOT(a.entity_id=l.id AND a.actor_kind='system' AND a.type IN ('lesson_created','lesson_changed','lesson_canceled','lesson_restored')))
+      AS protected FROM student_lessons l WHERE l.id=$1`,
+      [link.lesson_id],
+    )
+  ).rows[0];
+  return Boolean(
+    row &&
+      !row.protected &&
+      !row.consumes_credit &&
+      !row.credit_event_id &&
+      !row.completed_by &&
+      new Date(row.starts_at) >= now &&
+      (row.status === 'scheduled' || (row.status === 'canceled' && link.canceled_by_calendar)) &&
+      (!row.schedule_hidden_at || row.schedule_hidden_reason === 'calendar_projection_replaced'),
+  );
 }

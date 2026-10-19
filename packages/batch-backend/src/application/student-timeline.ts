@@ -547,7 +547,7 @@ const timelineQuery = `
         'recurrenceOverrideKind', sl.schedule_origin_history->>'overrideKind'
       ) AS details_json
     FROM student_lessons sl
-    WHERE sl.student_id = $1
+    WHERE sl.student_id = $1 AND sl.schedule_hidden_at IS NULL
 
     UNION ALL
 
@@ -596,7 +596,7 @@ const timelineQuery = `
         'recurrenceOverrideKind', sl.schedule_origin_history->>'overrideKind'
       ) AS details_json
     FROM student_lessons sl
-    WHERE sl.student_id = $1
+    WHERE sl.student_id = $1 AND sl.schedule_hidden_at IS NULL
       AND sl.updated_at > sl.created_at
 
     UNION ALL
