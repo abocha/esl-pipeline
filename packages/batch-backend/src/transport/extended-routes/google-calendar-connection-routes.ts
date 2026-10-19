@@ -43,7 +43,10 @@ export function registerGoogleCalendarConnectionRoutes(
     app.route({
       method,
       url: `${prefix}/${suffix}`,
-      preHandler: [authenticate, uploadRateLimitMiddleware],
+      // Status is a local authenticated read polled by every scheduling panel.
+      // Keep the provider-action budget for explicit connection/provider actions.
+      preHandler:
+        suffix === 'connection' ? [authenticate] : [authenticate, uploadRateLimitMiddleware],
       handler: async (request, reply) => {
         reply.header('Cache-Control', 'no-store');
         try {

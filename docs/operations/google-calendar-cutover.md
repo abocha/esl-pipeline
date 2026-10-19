@@ -131,6 +131,36 @@ retain history and report association required. Return the precise automatic-han
 maintainer approval before claiming the approved product contract is satisfied. Mock fixtures cannot
 close this gate.
 
+### Local provider acceptance findings, 2026-10-19
+
+An authorized disposable Google calendar and isolated local application established real OAuth
+consent/callback, encrypted offline credentials, token refresh, writable-calendar selection,
+independent Monday/Friday creation, no-email one-off creation, invitation receipt confirmed by the
+maintainer, and same-calendar disconnect/reconnect. A renamed/moved single occurrence retained its
+ESL lesson ID and original-start binding while changing actual timing and duration. Deleting and
+restoring the no-email one-off through Google's Trash retained its ESL lesson ID; no credits were
+consumed. Reconnect retained all existing binding and lesson IDs.
+
+Two provider identity cases remain **merge blockers** for the approved continuity contract:
+
+- Google's **This and following events** time edit truncated the original master and created a new
+  master and iCalUID, carrying the same private ESL association/request markers. The new event did not
+  expose an authoritative predecessor mapping. ESL reports attention and leaves the new master
+  unlinked; the truncated future occurrences become canceled. The current association path rejects a
+  reused marker as requiring continuity review and does not provide the required reconciliation.
+- Google's **All events** time/duration edit retained the master ID but changed the generated
+  instances' IDs and `originalStartTime`. Existing future lesson rows became canceled and new lesson
+  rows were created for the changed instance identities. This does not preserve the promised lesson
+  continuity. The separate single-occurrence move passed and must not be treated as evidence for this
+  whole-series case.
+
+Keep the PR in draft until an approved reconciliation design is implemented and re-exercised, or the
+maintainer explicitly approves a revised product boundary. Do not repair these cases by matching
+titles, recipients, nearby times, a copied marker or iCalUID. These observations do not establish
+interrupted-insert invitation recovery, every copy/metadata variant, or production ingress/cutover
+readiness; those gates remain separate. Raw test-calendar responses and recipient details stay in
+private local evidence, outside Git.
+
 ## Production release and recovery
 
 Follow the existing [deployment guide](../backend-frontend/DEPLOYMENT.md) and immutable release-image

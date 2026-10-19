@@ -5,7 +5,7 @@
 - Status: `active`.
 - Last Verified Against: 2026-10-18, clean source `944d6679e5b3e8cfc952d94bc7dd90e27f768a01`.
 - Exit Trigger: archive after the implementation PR merges, retaining operator/provider gates in the owning runbook.
-- Current Focus: implementation and independent review complete locally; prepare draft PR and obtain hosted evidence, retaining external provider/operator gates.
+- Current Focus: draft PR #420; real local Google acceptance found this-and-following and whole-series identity blockers requiring a continuity decision before merge.
 - Owner: ESL-62 implementation primary.
 
 ## Authority
@@ -38,9 +38,10 @@ both initiator and grant-authorizer authority. Sync pagination/dirty intents sur
 lesson locks. Reads cannot regenerate retired schedules.
 
 No production access, environment mutation, cleanup, deployment, merge or release is authorized.
-Real Google authorization/writes/invitations require explicit suitable test authorization. Real UI
-this-and-following identity, production offline OAuth readiness, live cleanup counts and recovery
-remain separate acceptance gates. Mock tests do not establish those facts.
+Real Google authorization/writes/invitations require explicit suitable test authorization. The
+maintainer authorized the 2026-10-19 disposable-calendar/local-app exercise and its controlled
+invitation. Production offline OAuth readiness, live cleanup counts and recovery remain separate
+acceptance gates. Mock tests do not establish those facts.
 
 ## Evidence ledger
 
@@ -53,6 +54,20 @@ sentinel harness passed 13 outcomes with no secrets in logs or redirects.
 Independent exceptional-risk review closed three findings: review-state reconnect generation,
 lineage committed while waiting on a lesson lock, and unbounded SDK requests. The lineage regression
 failed before the fix and passed after it. The final cursor trust-boundary review had no blockers.
+
+Real Google acceptance passed connection/offline refresh, selected-calendar creation, single-instance
+move, invitation receipt, no-email cancellation/restoration and same-calendar reconnect. It exposed
+an upload-limiter bug in connection status polling; the authenticated local status read now avoids
+that action budget, while explicit provider actions retain it. The focused regression failed before
+and passed after the fix; all 17 OAuth/PostgreSQL tests and backend typecheck passed.
+
+Provider acceptance is blocked: a this-and-following edit creates a new master with copied markers
+and no authoritative predecessor mapping, while an all-events time edit changes instance identities
+under the same master and currently cancels/recreates future ESL lesson rows. See the
+[owning runbook's findings](../operations/google-calendar-cutover.md#local-provider-acceptance-findings-2026-10-19).
+Preserving lesson continuity requires an approved reconciliation design or explicit revised product
+boundary. Do not infer that the earlier green hosted checks or passing single-instance move close
+these real-provider blockers.
 
 Keep this plan active while provider identity or operator acceptance remains outstanding. The PR and
 handoff own exact commands/results and hosted state; local or hosted success is not provider or

@@ -20,7 +20,10 @@ import { authenticate, configureAuthMiddleware } from '../src/transport/auth-mid
 import { CALENDAR_ATTEMPT_COOKIE } from '../src/transport/calendar-attempt-cookie.js';
 import { registerErrorHandler } from '../src/transport/error-handler.js';
 import { registerAuthUserRoutes } from '../src/transport/extended-routes/auth-user-routes.js';
-import type { ExtendedRoutesContext } from '../src/transport/extended-routes/context.js';
+import type {
+  AsyncPreHandler,
+  ExtendedRoutesContext,
+} from '../src/transport/extended-routes/context.js';
 import { registerGoogleCalendarConnectionRoutes } from '../src/transport/extended-routes/google-calendar-connection-routes.js';
 import { registerSecurityHeaders } from '../src/transport/security-headers.js';
 import { requirePgTestEnv } from './support/test-env.js';
@@ -120,7 +123,7 @@ async function connect(user: User) {
   expect(response.statusCode).toBe(200);
   return response.json().connection as { id: string; generation: number };
 }
-const noRate = async () => {};
+const noRate = vi.fn<AsyncPreHandler>(async () => {});
 
 describe('Calendar OAuth browser/session, authority and refresh fences', () => {
   beforeAll(async () => {
@@ -128,6 +131,7 @@ describe('Calendar OAuth browser/session, authority and refresh fences', () => {
   });
   beforeEach(async () => {
     vi.restoreAllMocks();
+    noRate.mockReset();
     Object.assign(process.env, {
       GOOGLE_CALENDAR_ENABLED: 'true',
       GOOGLE_CALENDAR_CLIENT_ID: 'test-client',
@@ -183,6 +187,34 @@ describe('Calendar OAuth browser/session, authority and refresh fences', () => {
     await closePgPool();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('keeps authenticated connection polling available when the provider-action budget is exhausted', async () => {
+    const user = await seed();
+    noRate.mockImplementation(async (_request, reply) => {
+      reply.code(429).send({ error: 'rate_limit_exceeded' });
+    });
+    const url = `/workspaces/${user.workspaceId}/calendar`;
+    for (let poll = 0; poll < 15; poll++) {
+      const response = await app.inject({
+        method: 'GET',
+        url: `${url}/connection`,
+        headers: { authorization: `Bearer ${user.accessToken}` },
+      });
+      expect(response.statusCode).toBe(200);
+    }
+    expect((await app.inject({ method: 'GET', url: `${url}/connection` })).statusCode).toBe(401);
+    for (const [method, suffix] of [
+      ['POST', 'connect'],
+      ['GET', 'calendars'],
+    ] as const) {
+      const response = await app.inject({
+        method,
+        url: `${url}/${suffix}`,
+        headers: { authorization: `Bearer ${user.accessToken}` },
+      });
+      expect(response.statusCode).toBe(429);
+    }
   });
 
   it('requires the current same-user refresh cookie at connect start without issuing an ESL session', async () => {
