@@ -241,6 +241,122 @@ describe('integration/migrations', () => {
   });
 
   it(
+    '0071 retains retired recurrence evidence and activity while removing executable scheduling',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0070_calendar_scheduling');
+        const workspace = randomUUID(),
+          student = randomUUID(),
+          withoutLessons = randomUUID(),
+          rule = randomUUID(),
+          emptyRule = randomUUID(),
+          slot = randomUUID(),
+          emptySlot = randomUUID(),
+          lesson = randomUUID();
+        await pool.query("INSERT INTO workspaces(id,name) VALUES($1,'Retirement fixture')", [
+          workspace,
+        ]);
+        await pool.query(
+          "INSERT INTO students(id,student,workspace_id) VALUES($1,'History learner',$3),($2,'No lessons learner',$3)",
+          [student, withoutLessons, workspace],
+        );
+        await pool.query(
+          "INSERT INTO student_lesson_plans(student_id,workspace_id,timezone,default_duration_minutes,cadence,preferred_times,scheduling_notes) VALUES($1,$2,'Asia/Bangkok',50,'twice weekly','morning','Retain operational note')",
+          [student, workspace],
+        );
+        await pool.query(
+          "INSERT INTO student_lesson_recurrence_rules(id,student_id,workspace_id,timezone,frequency,starts_on,status,generation_horizon_days) VALUES($1,$3,$5,'Asia/Bangkok','weekly','2026-10-01','active',56),($2,$4,$5,'UTC','weekly','2026-10-01','paused',56)",
+          [rule, emptyRule, student, withoutLessons, workspace],
+        );
+        await pool.query(
+          "INSERT INTO student_lesson_recurrence_slots(id,rule_id,iso_weekday,local_start_time,duration_minutes,sort_order) VALUES($1,$3,1,'11:00',50,0),($2,$4,5,'09:00',60,0)",
+          [slot, emptySlot, rule, emptyRule],
+        );
+        await pool.query(
+          "INSERT INTO student_lessons(id,student_id,workspace_id,starts_at,timezone,duration_minutes,status,consumes_credit,recurrence_rule_id,recurrence_slot_id,recurrence_origin,recurrence_occurrence_key) VALUES($1,$2,$3,'2026-10-05T04:00Z','Asia/Bangkok',50,'scheduled',true,$4,$5,'generated','historical-occurrence')",
+          [lesson, student, workspace, rule, slot],
+        );
+        const before = (
+          await pool.query(
+            'SELECT id,payload,actor_kind,occurred_at,recorded_at FROM student_activity WHERE student_id=$1 ORDER BY id',
+            [student],
+          )
+        ).rows;
+        await pool.query(
+          await fs.readFile(path.join(migrationsPath, '0071_scheduler_retirement.sql'), 'utf8'),
+        );
+        const plans = (
+          await pool.query(
+            'SELECT student_id,default_duration_minutes,scheduling_notes,retired_schedule_preferences FROM student_lesson_plans ORDER BY student_id',
+          )
+        ).rows;
+        const original = plans.find((row) => row.student_id === student);
+        expect(original).toMatchObject({
+          default_duration_minutes: 50,
+          scheduling_notes: 'Retain operational note',
+          retired_schedule_preferences: {
+            cadence: 'twice weekly',
+            preferredTimes: 'morning',
+            rules: [{ id: rule, slots: [{ id: slot, local_start_time: '11:00:00' }] }],
+          },
+        });
+        expect(
+          plans.find((row) => row.student_id === withoutLessons).retired_schedule_preferences.rules,
+        ).toMatchObject([{ id: emptyRule, slots: [{ id: emptySlot }] }]);
+        expect(
+          (
+            await pool.query(
+              'SELECT id,schedule_origin_history,schedule_hidden_at FROM student_lessons WHERE id=$1',
+              [lesson],
+            )
+          ).rows[0],
+        ).toMatchObject({
+          id: lesson,
+          schedule_hidden_at: null,
+          schedule_origin_history: {
+            ruleId: rule,
+            slotId: slot,
+            occurrenceKey: 'historical-occurrence',
+            origin: 'generated',
+            rule: { id: rule },
+            slot: { id: slot },
+          },
+        });
+        expect(
+          (
+            await pool.query(
+              'SELECT id,payload,actor_kind,occurred_at,recorded_at FROM student_activity WHERE student_id=$1 ORDER BY id',
+              [student],
+            )
+          ).rows,
+        ).toEqual(before);
+        expect(
+          (
+            await pool.query(
+              "SELECT to_regclass('student_lesson_recurrence_rules') AS rules,to_regclass('student_lesson_recurrence_slots') AS slots",
+            )
+          ).rows[0],
+        ).toEqual({ rules: null, slots: null });
+        await pool.query('BEGIN');
+        await pool.query("SELECT set_config('app.calendar_sync','on',true)");
+        await pool.query("UPDATE student_lessons SET starts_at='2026-10-05T05:00Z' WHERE id=$1", [
+          lesson,
+        ]);
+        await pool.query('COMMIT');
+        expect(
+          (
+            await pool.query(
+              "SELECT actor_kind FROM student_activity WHERE entity_id=$1 AND type='lesson_changed'",
+              [lesson],
+            )
+          ).rows,
+        ).toEqual([{ actor_kind: 'system' }]);
+      });
+    },
+    testTimeout,
+  );
+
+  it(
     '0068 preserves prior evidence and records compatible old-writer transitions without invented backfill',
     async () => {
       const workspaceId = randomUUID(),

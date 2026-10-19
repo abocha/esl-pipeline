@@ -105,6 +105,7 @@ services:
       PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
+    # Calendar API/worker OAuth and dedicated keyring configuration comes from this env file.
     env_file:
       - .env
     ports:
@@ -161,6 +162,7 @@ services:
       PNPM_CONFIG_INJECT_WORKSPACE_PACKAGES: 'false'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
+    # Calendar API/worker OAuth and dedicated keyring configuration comes from this env file.
     env_file:
       - .env
     command: >

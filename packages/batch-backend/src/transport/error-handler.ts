@@ -10,6 +10,7 @@ import { FileSanitizationError } from '../infrastructure/file-sanitization-servi
 import { FileValidationError } from '../infrastructure/file-validation-service.js';
 import { logger } from '../infrastructure/logger.js';
 import { AuthenticationError, AuthorizationError } from './auth-middleware.js';
+import { isGoogleCalendarCallbackUrl } from './calendar-callback-logging.js';
 import { RateLimitError } from './rate-limit-middleware.js';
 
 export interface ErrorResponse {
@@ -245,6 +246,17 @@ function redactSensitiveData(context: Record<string, unknown>): Record<string, u
  * Log error with appropriate level and context
  */
 function logError(error: unknown, request: FastifyRequest, errorType: ErrorType): void {
+  if (isGoogleCalendarCallbackUrl(request.url)) {
+    logger.warn('Google Calendar callback request failed', {
+      event: 'google_calendar_callback',
+      route: 'google_calendar_callback',
+      method: request.method,
+      statusCode: getHttpStatus(errorType, error),
+      requestId: request.id,
+      classification: errorType,
+    });
+    return;
+  }
   const logContext = {
     event: 'http_error',
     errorType,
@@ -286,18 +298,32 @@ export function errorHandler(error: unknown, request: FastifyRequest, reply: Fas
     logError(error, request, errorType);
 
     // Create standardized response
-    const errorResponse = createErrorResponse(error, request, errorType);
+    const errorResponse = isGoogleCalendarCallbackUrl(request.url)
+      ? {
+          error: 'calendar_callback_rejected',
+          message: 'Calendar connection could not be completed',
+          requestId: request.id,
+        }
+      : createErrorResponse(error, request, errorType);
+    if (isGoogleCalendarCallbackUrl(request.url))
+      reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer');
 
     // Send response
     reply.code(statusCode).send(errorResponse);
   } catch (handlerError) {
     // If error handling itself fails, log and send generic response
     logger.error('Error handler failed', {
-      originalError: String(error),
-      handlerError: handlerError instanceof Error ? handlerError.message : String(handlerError),
+      originalError: isGoogleCalendarCallbackUrl(request.url)
+        ? 'calendar_callback_rejected'
+        : String(error),
+      handlerError: isGoogleCalendarCallbackUrl(request.url)
+        ? 'calendar_callback_rejected'
+        : handlerError instanceof Error
+          ? handlerError.message
+          : String(handlerError),
       requestId: (request as { id?: string }).id,
       method: request.method,
-      url: request.url,
+      url: isGoogleCalendarCallbackUrl(request.url) ? 'google_calendar_callback' : request.url,
     });
 
     reply.code(500).send({
@@ -314,6 +340,28 @@ export function errorHandler(error: unknown, request: FastifyRequest, reply: Fas
  */
 export function registerErrorHandler(app: import('fastify').FastifyInstance): void {
   app.setErrorHandler(errorHandler);
+  app.setNotFoundHandler((request, reply) => {
+    if (isGoogleCalendarCallbackUrl(request.url)) {
+      logger.warn('Google Calendar callback route not found', {
+        event: 'google_calendar_callback',
+        route: 'google_calendar_callback',
+        method: request.method,
+        statusCode: 404,
+        requestId: request.id,
+        classification: 'not_found',
+      });
+      return reply
+        .header('Cache-Control', 'no-store')
+        .header('Referrer-Policy', 'no-referrer')
+        .code(404)
+        .send({ error: 'not_found', message: 'Route not found' });
+    }
+    return reply.code(404).send({
+      message: `Route ${request.method}:${request.url} not found`,
+      error: 'Not Found',
+      statusCode: 404,
+    });
+  });
 
   // Add request ID generation
   app.addHook('onRequest', (request, _reply, done) => {

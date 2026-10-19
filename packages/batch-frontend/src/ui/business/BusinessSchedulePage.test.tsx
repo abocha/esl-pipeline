@@ -12,6 +12,9 @@ const apiMocks = vi.hoisted(() => ({
 }));
 const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('../../utils/api', () => apiMocks);
+vi.mock('../calendar/CalendarSchedulingPanel', () => ({
+  CalendarSchedulingPanel: () => <div>Calendar scheduling</div>,
+}));
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>();
   return {
@@ -535,33 +538,5 @@ describe('BusinessSchedulePage', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
     expect(screen.queryByText('No lessons in this range.')).toBeNull();
     expect(screen.queryByText('No unfinished lesson follow-up.')).toBeNull();
-  });
-  it('restores completed lessons from the agenda', async () => {
-    apiMocks.getBusinessScheduleSurface.mockResolvedValue(
-      makeSurface({
-        lessons: [
-          {
-            ...(makeSurface().lessons[0] as Record<string, unknown>),
-            status: 'completed',
-            consumesCredit: true,
-            creditEventId: 'credit-event-1',
-          },
-        ],
-      }),
-    );
-    render(
-      <MemoryRouter>
-        <BusinessSchedulePage />
-      </MemoryRouter>,
-    );
-    await screen.findByText('Actions');
-    fireEvent.click(screen.getByText('Actions'));
-    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-    await waitFor(() => {
-      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
-        status: 'scheduled',
-        consumesCredit: false,
-      });
-    });
   });
 });

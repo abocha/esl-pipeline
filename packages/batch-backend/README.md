@@ -92,10 +92,12 @@ Core surfaces:
   [ABO-12 reconciliation](../../docs/operations/student-profile-revision-cutover.md) explains
   the frozen legacy archive and exact historical IDs retained for assignments and prompt packages.
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
-- Lesson create/update accepts either the existing offset-bearing `startsAt` or `localStartsAt`
-  (`YYYY-MM-DDTHH:mm`) with an explicit IANA timezone. Local wall times use PostgreSQL's
-  `timestamp AT TIME ZONE` conversion, matching recurrence's DST policy; supplying both time forms
-  is rejected. The UI preserves the original instant when a lesson time is unchanged.
+- ESL-62 replaces local lesson creation/time editing with the selected Google Calendar workflow.
+  Google owns recurrence and later timing edits; the backend retains lesson identity, completion,
+  credits and source links. Optional student email is operational contact, never an identity key.
+  Several weekly slots create independent series with separate durable recovery outcomes. See the
+  [Calendar runbook](../../docs/operations/google-calendar-cutover.md) for configuration, retirement,
+  callback security and provider/production acceptance gates.
 - tutor business dashboard and student schedule/billing routes resolve the active workspace from the
   authenticated tutor's membership before application reads or writes. Foreign students, lessons,
   and mismatched child rows use non-enumerating not-found responses and are never mutated; legacy
@@ -769,8 +771,9 @@ and terminal-failure transitions. Table-specific triggers compare allowlisted
 OLD/NEW fields in the domain writer's statement transaction; required recording
 failure rolls back that mutation. They ignore no-op updates, timestamp maintenance,
 credit pointer housekeeping, profile deprecation side effects and automatic title
-enrichment. Weekly rules plus their slots are one explicit operation at the existing
-recurrence transaction owner, locked before comparison. This limited recorder avoids
+enrichment. Historical weekly-rule activity remains readable after ESL-62 retires executable rules
+and captures their snapshots. The replacement lesson trigger preserves actor attribution and ledger
+history without obsolete recurrence-column references. This limited recorder avoids
 an event bus, outbox, queue observer or event-sourcing rewrite. Reconsider that ceiling
 only when an actual independent consumer or measured read/write pressure needs it.
 

@@ -261,6 +261,18 @@ Read next:
 
 ## Exhaustive Lookup
 
+### Google Calendar scheduling
+
+`GOOGLE_CALENDAR_ENABLED` defaults off. Calendar uses `GOOGLE_CALENDAR_CLIENT_ID`,
+`GOOGLE_CALENDAR_CLIENT_SECRET`, the exact `GOOGLE_CALENDAR_REDIRECT_URI`,
+`INTEGRATION_CREDENTIAL_ACTIVE_KEY_ID` and the versioned `INTEGRATION_CREDENTIAL_KEYS` JSON keyring.
+Configure API and batch-worker consistently. These credentials confer Calendar access, never ESL
+login/signup. Invalid partial configuration makes Calendar unavailable; unrelated teaching workflows
+remain available. Never reuse JWT/settings encryption keys or log the keyring.
+
+See the [Calendar cutover runbook](../operations/google-calendar-cutover.md) for callback-cookie,
+scope/offline, ingress logging, rotation and separately authorized provider/operator evidence.
+
 For full key-by-key lookup, ownership, and next-hop docs, use:
 
 - [`docs/generated/env-surface-index.md`](../generated/env-surface-index.md)

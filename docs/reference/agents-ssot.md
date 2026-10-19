@@ -101,6 +101,16 @@ For deep system maps, prefer the linked docs rather than growing this file again
 
 ### Schema and persistence
 
+- ESL-62 scheduling uses one selected Google Calendar per workspace. Google owns event timing and
+  recurrence; ESL owns stable lesson identity, completion/no-show/charge decisions, credits and
+  homework/history lineage. Google is required only for scheduling. Optional student operational
+  email is not an identity key. Durable per-series operations retain event identity across retries;
+  recovery cannot resend invitations. Sync and completion use the same lesson locks. Retire local
+  recurrence generation and materializing reads, preserve historical snapshots and use reviewed
+  hide-only cleanup for unused placeholders. See the
+  [Calendar cutover runbook](../operations/google-calendar-cutover.md), including external provider
+  continuity and separately authorized production acceptance gates.
+
 - Student is the sole foundational learner-profile ownership root. Profile revisions belong to
   `student_profile_revisions.student_id`; active status plus the partial unique index is canonical.
   Authenticate, resolve workspace, authorize student, then read or mutate its revision. Direct

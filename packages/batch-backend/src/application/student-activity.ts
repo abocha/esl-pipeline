@@ -54,9 +54,9 @@ WITH authorized_student AS (
   SELECT 'lesson:'||l.id,'lesson_created','lessons',l.created_at,l.id,
     jsonb_build_object('after',jsonb_build_object('startsAt',l.starts_at,'timezone',l.timezone,
       'durationMinutes',l.duration_minutes,'title',l.title,'status',l.status),
-      'generated',l.recurrence_origin='generated'),'legacy','unknown',NULL::uuid
+      'generated',l.schedule_origin_history->>'origin'='generated'),'legacy','unknown',NULL::uuid
   FROM student_lessons l JOIN authorized_student s ON s.id=l.student_id
-  WHERE (l.workspace_id=$2 OR (l.workspace_id IS NULL AND $2='00000000-0000-4000-8000-000000000001'::uuid)) AND l.recurrence_obsolete_at IS NULL
+  WHERE (l.workspace_id=$2 OR (l.workspace_id IS NULL AND $2='00000000-0000-4000-8000-000000000001'::uuid)) AND l.schedule_hidden_at IS NULL
     AND NOT EXISTS (SELECT 1 FROM student_activity a WHERE a.student_id=s.id AND a.entity_id=l.id AND a.type='lesson_created')
 
   UNION ALL

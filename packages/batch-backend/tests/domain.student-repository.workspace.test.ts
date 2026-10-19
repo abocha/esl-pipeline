@@ -9,6 +9,7 @@ import {
   insertStudent,
   listStudents,
   restoreStudent,
+  updateStudent,
 } from '../src/domain/student-repository.js';
 import { closePgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
@@ -58,6 +59,37 @@ describe('domain/student-repository workspace scoping', () => {
     expect(second.items).toHaveLength(1);
     expect(first.items[0]?.workspaceId).toBe(workspaceA);
     expect(second.items[0]?.workspaceId).toBe(workspaceB);
+  });
+
+  it('stores optional nonunique operational email and supports clearing it without changing identity', async () => {
+    const workspaceId = randomUUID();
+    await seedWorkspace(workspaceId);
+    const first = await insertStudent({
+      student: 'Alex',
+      workspaceId,
+      email: 'shared@example.test',
+    });
+    const second = await insertStudent({
+      student: 'Bea',
+      workspaceId,
+      email: 'shared@example.test',
+    });
+    const third = await insertStudent({ student: 'Cora', workspaceId });
+    expect(first.email).toBe('shared@example.test');
+    expect(second.email).toBe(first.email);
+    expect(third.email).toBeNull();
+    const omitted = await updateStudent({ id: first.id, workspaceId, student: 'Alex renamed' });
+    expect(omitted).toMatchObject({ id: first.id, email: 'shared@example.test' });
+    const cleared = await updateStudent({ id: first.id, workspaceId, email: null });
+    expect(cleared).toMatchObject({ id: first.id, student: 'Alex renamed', email: null });
+    expect(
+      await updateStudent({
+        id: second.id,
+        workspaceId: randomUUID(),
+        email: 'foreign@example.test',
+      }),
+    ).toBeNull();
+    expect((await getStudentById(second.id, { workspaceId }))?.email).toBe('shared@example.test');
   });
 
   it('does not read or mutate students outside the requested workspace', async () => {

@@ -1,6 +1,5 @@
 import { promptPackageFixture } from './assignment-v1.test-harness.js';
 import './support/bootstrap-pg-test-env.js';
-
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,14 +13,12 @@ import {
   adjustStudentCredits,
   applyGeneratedLessonTitleIfPlaceholder,
   completeElapsedScheduledLessonForHomework,
-  createStudentLesson,
   getStudentScheduleBillingSurface,
   hideStudentLessonFollowupReminder,
   recordStudentPayment,
   undoLatestHiddenStudentReminder,
   updateStudentLesson,
   updateStudentLessonPlan,
-  upsertPrimaryStudentLessonRecurrence,
 } from '../src/application/student-schedule-billing.js';
 import {
   getBusinessScheduleSurface,
@@ -36,6 +33,7 @@ import {
 } from '../src/domain/assignment-session-repository.js';
 import { archiveStudent, restoreStudent } from '../src/domain/student-repository.js';
 import { closePgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
+import { seedUnmanagedLesson } from './support/seed-unmanaged-lesson.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 const hasPgTestEnv = Boolean(process.env.BATCH_BACKEND_TEST_PG?.trim());
@@ -59,8 +57,6 @@ async function resetScheduleBillingTables() {
         recordings,
         assignment_sessions,
         workspace_business_settings,
-        student_lesson_recurrence_slots,
-        student_lesson_recurrence_rules,
         student_reminder_preferences,
         student_payment_records,
         student_credit_events,
@@ -172,17 +168,6 @@ async function readStudentBusinessMutationSnapshot(studentId: string) {
           SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.student_id)
           FROM student_lesson_plans row_value
           WHERE row_value.student_id = $1
-        ), '[]'::jsonb),
-        'recurrenceRules', COALESCE((
-          SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
-          FROM student_lesson_recurrence_rules row_value
-          WHERE row_value.student_id = $1
-        ), '[]'::jsonb),
-        'recurrenceSlots', COALESCE((
-          SELECT jsonb_agg(to_jsonb(slot_value) ORDER BY slot_value.id)
-          FROM student_lesson_recurrence_slots slot_value
-          JOIN student_lesson_recurrence_rules rule_value ON rule_value.id = slot_value.rule_id
-          WHERE rule_value.student_id = $1
         ), '[]'::jsonb),
         'lessons', COALESCE((
           SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
@@ -438,27 +423,6 @@ async function insertBusinessPayment(params: {
   });
 }
 
-async function countObsoleteGeneratedLessons(ruleId: string): Promise<number> {
-  return withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-    const result = await client.query<{ count: string }>(
-      `
-      SELECT COUNT(*)::text AS count
-      FROM student_lessons
-      WHERE recurrence_rule_id = $1
-        AND recurrence_origin = 'generated'
-        AND recurrence_obsolete_at IS NOT NULL
-      `,
-      [ruleId],
-    );
-    return Number(result.rows[0]?.count ?? 0);
-  });
-}
-
-function addDays(days: number): string {
-  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-  return date.toISOString();
-}
-
 async function prepareTranscriptOnlyLesson(
   userId: string,
   studentId: string,
@@ -547,109 +511,6 @@ describeIfPg('application/student-schedule-billing', () => {
     await closePgPool();
   });
 
-  it.each([
-    ['Asia/Kolkata', '2026-05-11T09:30', '2026-05-11T04:00:00.000Z'],
-    ['Asia/Bangkok', '2026-05-11T00:30', '2026-05-10T17:30:00.000Z'],
-    ['America/New_York', '2026-11-01T01:30', '2026-11-01T06:30:00.000Z'],
-    ['America/New_York', '2026-03-08T02:30', '2026-03-08T07:30:00.000Z'],
-  ])('persists manual wall time in %s (%s) as %s', async (timezone, localStartsAt, expected) => {
-    const { studentId, userId } = await seedStudent();
-    const surface = await createStudentLesson(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      { localStartsAt, timezone },
-      userId,
-    );
-    expect(surface.lessons).toHaveLength(1);
-    expect(surface.lessons[0]).toMatchObject({ startsAt: expected, timezone });
-    const stored = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
-      client.query<{ starts_at: Date }>('SELECT starts_at FROM student_lessons WHERE id = $1', [
-        surface.lessons[0]!.id,
-      ]),
-    );
-    expect(stored.rows[0]?.starts_at.toISOString()).toBe(expected);
-  });
-
-  it('keeps legacy instant inputs independent of the lesson timezone and preserves time on metadata edits', async () => {
-    const { studentId, userId } = await seedStudent();
-    let surface = await createStudentLesson(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      { startsAt: '2026-05-11T09:30:00+02:00', timezone: 'Asia/Kolkata' },
-      userId,
-    );
-    const lessonId = surface.lessons[0]!.id;
-    expect(surface.lessons[0]?.startsAt).toBe('2026-05-11T07:30:00.000Z');
-    surface = await updateStudentLesson(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      lessonId,
-      { title: 'Changed title' },
-      userId,
-    );
-    expect(surface.lessons[0]).toMatchObject({
-      title: 'Changed title',
-      startsAt: '2026-05-11T07:30:00.000Z',
-      timezone: 'Asia/Kolkata',
-    });
-    surface = await updateStudentLesson(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      lessonId,
-      { startsAt: '2026-05-12T09:30:00+02:00' },
-      userId,
-    );
-    expect(surface.lessons[0]?.startsAt).toBe('2026-05-12T07:30:00.000Z');
-  });
-
-  it.each([
-    '2026-02-30T09:30',
-    '2026-13-01T09:30',
-    '0000-01-01T09:30',
-    '2026-05-11T24:00',
-    '2026-05-11T09:60',
-    '2026-05-11T09:30:00Z',
-  ])(
-    'rejects invalid manual wall time %s as a request error without persisting it',
-    async (localStartsAt) => {
-      const { studentId, userId } = await seedStudent();
-      await expect(
-        createStudentLesson(
-          DEFAULT_WORKSPACE_ID,
-          studentId,
-          { localStartsAt, timezone: 'Asia/Kolkata' },
-          userId,
-        ),
-      ).rejects.toMatchObject({ code: 'invalid_request', status: 400 });
-      expect(
-        (await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId))?.lessons,
-      ).toEqual([]);
-    },
-  );
-
-  it.each(['Not/A_Timezone', '+05:30', '-05:30'])(
-    'rejects local timezone %s without changing an existing lesson',
-    async (timezone) => {
-      const { studentId, userId } = await seedStudent();
-      const lessonId = await seedLessonInWorkspace(
-        DEFAULT_WORKSPACE_ID,
-        studentId,
-        '2026-05-11T04:00:00Z',
-      );
-      await expect(
-        updateStudentLesson(
-          DEFAULT_WORKSPACE_ID,
-          studentId,
-          lessonId,
-          { localStartsAt: '2026-05-12T09:30', timezone },
-          userId,
-        ),
-      ).rejects.toMatchObject({ code: 'invalid_request', status: 400 });
-      const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
-      expect(surface?.lessons[0]?.startsAt).toBe('2026-05-11T04:00:00.000Z');
-    },
-  );
-
   it('uses the requested tutor workspace for business settings', async () => {
     const alpha = await seedWorkspaceTutor('alpha');
     await seedWorkspaceTutor('beta');
@@ -701,12 +562,6 @@ describeIfPg('application/student-schedule-billing', () => {
       betaStudentId,
       '2026-05-08T10:00:00.000Z',
     );
-    const recurrence = {
-      timezone: 'UTC',
-      startsOn: '2026-05-04',
-      generationHorizonDays: 14,
-      slots: [{ isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 }],
-    };
     const attempts = [
       () =>
         updateStudentLessonPlan(
@@ -716,25 +571,11 @@ describeIfPg('application/student-schedule-billing', () => {
           alpha.userId,
         ),
       () =>
-        upsertPrimaryStudentLessonRecurrence(
-          alpha.workspaceId,
-          betaStudentId,
-          recurrence,
-          alpha.userId,
-        ),
-      () =>
-        createStudentLesson(
-          alpha.workspaceId,
-          betaStudentId,
-          { startsAt: '2026-05-09T10:00:00.000Z' },
-          alpha.userId,
-        ),
-      () =>
         updateStudentLesson(
           alpha.workspaceId,
           betaStudentId,
           betaLessonId,
-          { title: 'Blocked update' },
+          { notes: 'Blocked update' },
           alpha.userId,
         ),
       () =>
@@ -782,7 +623,7 @@ describeIfPg('application/student-schedule-billing', () => {
         alpha.workspaceId,
         alphaStudentId,
         betaLessonId,
-        { title: 'Blocked nested update' },
+        { notes: 'Blocked nested update' },
         alpha.userId,
       ),
     ).rejects.toMatchObject({ code: 'not_found', status: 404 });
@@ -799,7 +640,7 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(await readStudentBusinessMutationSnapshot(betaStudentId)).toEqual(beforeBeta);
   });
 
-  it('isolates dashboard reads, settings writes, and recurrence materialization by workspace', async () => {
+  it('isolates dashboard reads, settings writes, without writes across workspaces', async () => {
     const alpha = await seedWorkspaceTutor('alpha');
     const beta = await seedWorkspaceTutor('beta');
     const alphaStudentId = await seedStudentInWorkspace(alpha.workspaceId, 'Alpha student');
@@ -822,7 +663,7 @@ describeIfPg('application/student-schedule-billing', () => {
       },
       beta.userId,
     );
-    await createStudentLesson(
+    await seedUnmanagedLesson(
       alpha.workspaceId,
       alphaStudentId,
       {
@@ -832,46 +673,13 @@ describeIfPg('application/student-schedule-billing', () => {
       },
       alpha.userId,
     );
-    await createStudentLesson(
+    await seedUnmanagedLesson(
       beta.workspaceId,
       betaStudentId,
       { startsAt: '2026-05-08T12:00:00.000Z', status: 'scheduled' },
       beta.userId,
     );
     await seedLessonInWorkspace(alpha.workspaceId, betaStudentId, '2026-05-08T14:00:00.000Z');
-    const betaRuleId = randomUUID();
-    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      await client.query(
-        `
-        INSERT INTO student_lesson_recurrence_rules (
-          id,
-          student_id,
-          workspace_id,
-          timezone,
-          frequency,
-          starts_on,
-          status,
-          generation_horizon_days
-        )
-        VALUES ($1, $2, $3, 'UTC', 'weekly', '2026-05-04', 'active', 14)
-        `,
-        [betaRuleId, betaStudentId, beta.workspaceId],
-      );
-      await client.query(
-        `
-        INSERT INTO student_lesson_recurrence_slots (
-          id,
-          rule_id,
-          iso_weekday,
-          local_start_time,
-          duration_minutes,
-          sort_order
-        )
-        VALUES ($1, $2, 3, '11:00', 50, 0)
-        `,
-        [randomUUID(), betaRuleId],
-      );
-    });
 
     await updateBusinessSettings(alpha.workspaceId, { topUpThreshold: 1 }, alpha.userId);
     const schedule = await getBusinessScheduleSurface(alpha.workspaceId, {
@@ -893,20 +701,12 @@ describeIfPg('application/student-schedule-billing', () => {
       defaultCurrency: 'CAD',
       topUpThreshold: 2,
     });
-    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      const rule = await client.query<{ materialized_through: string | null }>(
-        'SELECT materialized_through::text FROM student_lesson_recurrence_rules WHERE id = $1',
-        [betaRuleId],
-      );
-      expect(rule.rows[0]?.materialized_through).toBeNull();
-    });
   });
 
   it('confines legacy null-workspace business rows to the default workspace', async () => {
     const { studentId } = await seedStudentWithoutWorkspace();
     const alpha = await seedWorkspaceTutor('alpha');
     const lessonId = randomUUID();
-    const ruleId = randomUUID();
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `
@@ -914,36 +714,6 @@ describeIfPg('application/student-schedule-billing', () => {
         VALUES ($1, NULL, 'Asia/Bangkok')
         `,
         [studentId],
-      );
-      await client.query(
-        `
-        INSERT INTO student_lesson_recurrence_rules (
-          id,
-          student_id,
-          workspace_id,
-          timezone,
-          frequency,
-          starts_on,
-          status,
-          generation_horizon_days
-        )
-        VALUES ($1, $2, NULL, 'UTC', 'weekly', '2026-05-04', 'paused', 14)
-        `,
-        [ruleId, studentId],
-      );
-      await client.query(
-        `
-        INSERT INTO student_lesson_recurrence_slots (
-          id,
-          rule_id,
-          iso_weekday,
-          local_start_time,
-          duration_minutes,
-          sort_order
-        )
-        VALUES ($1, $2, 3, '11:00', 50, 0)
-        `,
-        [randomUUID(), ruleId],
       );
       await client.query(
         `
@@ -1011,7 +781,6 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(defaultSurface).toMatchObject({
       workspaceId: DEFAULT_WORKSPACE_ID,
       lessonPlan: { workspaceId: DEFAULT_WORKSPACE_ID, timezone: 'Asia/Bangkok' },
-      recurrenceRule: { id: ruleId, status: 'paused' },
       creditSummary: { remaining: 3 },
     });
     expect(defaultSurface?.lessons.map((lesson) => lesson.id)).toContain(lessonId);
@@ -1049,7 +818,6 @@ describeIfPg('application/student-schedule-billing', () => {
       alphaStudentId,
       '2026-05-09T10:00:00.000Z',
     );
-    const mismatchedRuleId = randomUUID();
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `
@@ -1057,36 +825,6 @@ describeIfPg('application/student-schedule-billing', () => {
         VALUES ($1, $2, 'Asia/Tokyo')
         `,
         [alphaStudentId, beta.workspaceId],
-      );
-      await client.query(
-        `
-        INSERT INTO student_lesson_recurrence_rules (
-          id,
-          student_id,
-          workspace_id,
-          timezone,
-          frequency,
-          starts_on,
-          status,
-          generation_horizon_days
-        )
-        VALUES ($1, $2, $3, 'UTC', 'weekly', '2026-05-04', 'active', 14)
-        `,
-        [mismatchedRuleId, alphaStudentId, beta.workspaceId],
-      );
-      await client.query(
-        `
-        INSERT INTO student_lesson_recurrence_slots (
-          id,
-          rule_id,
-          iso_weekday,
-          local_start_time,
-          duration_minutes,
-          sort_order
-        )
-        VALUES ($1, $2, 3, '11:00', 50, 0)
-        `,
-        [randomUUID(), mismatchedRuleId],
       );
       await client.query(
         `
@@ -1128,7 +866,6 @@ describeIfPg('application/student-schedule-billing', () => {
 
     expect(surface).toMatchObject({
       lessonPlan: { timezone: 'UTC', workspaceId: alpha.workspaceId },
-      recurrenceRule: null,
       creditSummary: { remaining: 0 },
       creditEvents: [],
       payments: [],
@@ -1145,19 +882,6 @@ describeIfPg('application/student-schedule-billing', () => {
       ),
     ).rejects.toMatchObject({ code: 'not_found', status: 404 });
     await expect(
-      upsertPrimaryStudentLessonRecurrence(
-        alpha.workspaceId,
-        alphaStudentId,
-        {
-          timezone: 'UTC',
-          startsOn: '2026-05-04',
-          generationHorizonDays: 14,
-          slots: [{ isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 }],
-        },
-        alpha.userId,
-      ),
-    ).rejects.toMatchObject({ code: 'not_found', status: 404 });
-    await expect(
       hideStudentLessonFollowupReminder(
         alpha.workspaceId,
         alphaStudentId,
@@ -1170,7 +894,7 @@ describeIfPg('application/student-schedule-billing', () => {
         alpha.workspaceId,
         alphaStudentId,
         mismatchedLessonId,
-        { title: 'Blocked mismatched update' },
+        { notes: 'Blocked mismatched update' },
         alpha.userId,
       ),
     ).rejects.toMatchObject({ code: 'not_found', status: 404 });
@@ -1226,7 +950,7 @@ describeIfPg('application/student-schedule-billing', () => {
     const { studentId, userId } = await seedStudent();
     await addStudentPackage(DEFAULT_WORKSPACE_ID, studentId, { lessons: 1 }, userId);
 
-    let surface = await createStudentLesson(
+    let surface = await seedUnmanagedLesson(
       DEFAULT_WORKSPACE_ID,
       studentId,
       {
@@ -1265,14 +989,14 @@ describeIfPg('application/student-schedule-billing', () => {
       studentId,
       lessonId,
       {
-        status: 'scheduled',
+        status: 'completed',
         consumesCredit: false,
       },
       userId,
     );
     expect(surface.creditSummary.remaining).toBe(1);
     expect(surface.lessons.find((candidate) => candidate.id === lessonId)).toMatchObject({
-      status: 'scheduled',
+      status: 'completed',
       consumesCredit: false,
       creditEventId: null,
     });
@@ -1281,7 +1005,7 @@ describeIfPg('application/student-schedule-billing', () => {
         'SELECT completed_by FROM student_lessons WHERE id = $1',
         [lessonId],
       );
-      expect(result.rows[0]?.completed_by).toBeNull();
+      expect(result.rows[0]?.completed_by).toBe(userId);
     });
     expect(
       surface.creditEvents.filter((event) => event.eventType === 'credit_consumed'),
@@ -1301,6 +1025,57 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(
       surface.creditEvents.filter((event) => event.eventType === 'credit_consumed'),
     ).toHaveLength(0);
+  });
+
+  it('never generates lessons from retained recurrence history while serving schedule and stats reads', async () => {
+    const { studentId } = await seedStudent();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        'INSERT INTO student_lesson_plans(student_id,workspace_id,retired_schedule_preferences) VALUES($1,$2,$3::jsonb)',
+        [
+          studentId,
+          DEFAULT_WORKSPACE_ID,
+          JSON.stringify({
+            rules: [
+              {
+                id: randomUUID(),
+                status: 'active',
+                timezone: 'UTC',
+                starts_on: '2026-01-01',
+                frequency: 'weekly',
+                generation_horizon_days: 366,
+                slots: [
+                  {
+                    id: randomUUID(),
+                    iso_weekday: 1,
+                    local_start_time: '11:00',
+                    duration_minutes: 60,
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      );
+    });
+    const before = await readStudentBusinessMutationSnapshot(studentId);
+    for (let pass = 0; pass < 2; pass++) {
+      const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+      expect(surface?.lessons).toEqual([]);
+      expect(
+        (
+          await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
+            from: '2026-05-01',
+            to: '2026-05-31',
+          })
+        ).lessons,
+      ).toEqual([]);
+      expect(
+        (await getBusinessStatsSurface(DEFAULT_WORKSPACE_ID, { month: '2026-05' }))
+          .completedLessons,
+      ).toBe(0);
+    }
+    expect(await readStudentBusinessMutationSnapshot(studentId)).toEqual(before);
   });
 
   it('returns honest empty-state reminders for students without lessons or credits', async () => {
@@ -1990,339 +1765,6 @@ describeIfPg('application/student-schedule-billing', () => {
     ).toBe(false);
   });
 
-  it('materializes weekly recurrence rules idempotently into normal lessons', async () => {
-    const { studentId, userId } = await seedStudent();
-
-    const surface = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      {
-        timezone: 'Asia/Bangkok',
-        startsOn: '2026-05-04',
-        generationHorizonDays: 14,
-        slots: [
-          { isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 },
-          { isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 },
-        ],
-      },
-      userId,
-    );
-    const generatedLessonIds = surface.lessons
-      .filter((lesson) => lesson.recurrenceOrigin === 'generated')
-      .map((lesson) => lesson.id)
-      .sort();
-
-    expect(surface.recurrenceRule).toMatchObject({
-      timezone: 'Asia/Bangkok',
-      status: 'active',
-      generationHorizonDays: 14,
-    });
-    expect(surface.recurrenceRule?.slots).toHaveLength(2);
-    expect(generatedLessonIds.length).toBeGreaterThan(0);
-    expect(
-      surface.lessons.every((lesson) =>
-        lesson.recurrenceOrigin === 'manual' ? true : Boolean(lesson.recurrenceOccurrenceKey),
-      ),
-    ).toBe(true);
-
-    const reloaded = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
-    expect(
-      reloaded?.lessons
-        .filter((lesson) => lesson.recurrenceOrigin === 'generated')
-        .map((lesson) => lesson.id)
-        .sort(),
-    ).toEqual(generatedLessonIds);
-  });
-
-  it('keeps recurrence IDs and active generated lessons stable across no-op saves', async () => {
-    const { studentId, userId } = await seedStudent();
-    const recurrence = {
-      timezone: 'Asia/Bangkok',
-      startsOn: '2026-05-04',
-      generationHorizonDays: 14,
-      slots: [
-        { isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 },
-        { isoWeekday: 3, localStartTime: '15:30', durationMinutes: 60 },
-      ],
-    };
-
-    const first = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      recurrence,
-      userId,
-    );
-    const firstRuleId = first.recurrenceRule?.id ?? '';
-    const firstSlots = first.recurrenceRule?.slots.map((slot) => ({
-      id: slot.id,
-      isoWeekday: slot.isoWeekday,
-      localStartTime: slot.localStartTime,
-      durationMinutes: slot.durationMinutes,
-    }));
-    const firstGenerated = first.lessons
-      .filter((lesson) => lesson.recurrenceOrigin === 'generated')
-      .map((lesson) => ({
-        id: lesson.id,
-        recurrenceOccurrenceKey: lesson.recurrenceOccurrenceKey,
-        recurrenceSlotId: lesson.recurrenceSlotId,
-      }))
-      .sort((left, right) => left.id.localeCompare(right.id));
-
-    const second = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      recurrence,
-      userId,
-    );
-    const secondGenerated = second.lessons
-      .filter((lesson) => lesson.recurrenceOrigin === 'generated')
-      .map((lesson) => ({
-        id: lesson.id,
-        recurrenceOccurrenceKey: lesson.recurrenceOccurrenceKey,
-        recurrenceSlotId: lesson.recurrenceSlotId,
-      }))
-      .sort((left, right) => left.id.localeCompare(right.id));
-
-    expect(second.recurrenceRule?.id).toBe(firstRuleId);
-    expect(
-      second.recurrenceRule?.slots.map((slot) => ({
-        id: slot.id,
-        isoWeekday: slot.isoWeekday,
-        localStartTime: slot.localStartTime,
-        durationMinutes: slot.durationMinutes,
-      })),
-    ).toEqual(firstSlots);
-    expect(secondGenerated).toEqual(firstGenerated);
-    await expect(countObsoleteGeneratedLessons(firstRuleId)).resolves.toBe(0);
-  });
-
-  it('reports the actual generated horizon when a recurrence rule shrinks', async () => {
-    const { studentId, userId } = await seedStudent();
-    const first = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      {
-        timezone: 'Asia/Bangkok',
-        startsOn: '2026-05-04',
-        generationHorizonDays: 56,
-        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
-      },
-      userId,
-    );
-    const initialThrough = first.recurrenceRule?.materializedThrough;
-
-    const shrunk = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      {
-        timezone: 'Asia/Bangkok',
-        startsOn: '2026-05-04',
-        generationHorizonDays: 14,
-        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
-      },
-      userId,
-    );
-
-    expect(initialThrough).toBeDefined();
-    expect(shrunk.recurrenceRule?.materializedThrough).toBeDefined();
-    expect(shrunk.recurrenceRule?.materializedThrough).not.toBe(initialThrough);
-    expect((shrunk.recurrenceRule?.materializedThrough ?? '') < (initialThrough ?? '')).toBe(true);
-  });
-
-  it('uses IANA timezone conversion for half-hour recurrence zones', async () => {
-    const { studentId, userId } = await seedStudent();
-    const surface = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      {
-        timezone: 'Asia/Kolkata',
-        startsOn: '2026-05-04',
-        generationHorizonDays: 7,
-        slots: [{ isoWeekday: 1, localStartTime: '09:30', durationMinutes: 45 }],
-      },
-      userId,
-    );
-
-    const generated = surface.lessons.find((lesson) => lesson.recurrenceOrigin === 'generated');
-    expect(generated).toBeDefined();
-    expect(generated?.timezone).toBe('Asia/Kolkata');
-    expect(generated?.startsAt).toBe('2026-05-11T04:00:00.000Z');
-  });
-
-  it('marks a local-time edit of a generated lesson as a reschedule and preserves it during materialization', async () => {
-    const { studentId, userId } = await seedStudent();
-    const recurrence = {
-      timezone: 'Asia/Kolkata',
-      startsOn: '2026-05-04',
-      generationHorizonDays: 7,
-      slots: [{ isoWeekday: 1, localStartTime: '09:30', durationMinutes: 45 }],
-    };
-    const initial = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      recurrence,
-      userId,
-    );
-    const lessonId = initial.lessons.find((lesson) => lesson.recurrenceOrigin === 'generated')!.id;
-    const changed = await updateStudentLesson(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      lessonId,
-      { localStartsAt: '2026-05-11T10:30', timezone: 'Asia/Kolkata' },
-      userId,
-    );
-    expect(changed.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
-      startsAt: '2026-05-11T05:00:00.000Z',
-      recurrenceOverrideKind: 'manual_reschedule',
-    });
-    const materialized = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      recurrence,
-      userId,
-    );
-    expect(materialized.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
-      startsAt: '2026-05-11T05:00:00.000Z',
-      recurrenceOverrideKind: 'manual_reschedule',
-    });
-  });
-
-  it('feeds generated recurrence lessons into business schedule and stats', async () => {
-    const { studentId, userId } = await seedStudent();
-    await updateBusinessSettings(DEFAULT_WORKSPACE_ID, {
-      defaultCurrency: 'USD',
-      defaultLessonRateMinor: 4000,
-      noShowRateBasisPoints: 0,
-      cancellationRateBasisPoints: 0,
-      forecastHorizonDays: 45,
-    });
-
-    await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      {
-        timezone: 'Asia/Bangkok',
-        startsOn: '2026-05-11',
-        generationHorizonDays: 21,
-        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
-      },
-      userId,
-    );
-
-    const schedule = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
-      from: '2026-05-11',
-      to: '2026-05-11',
-    });
-    expect(schedule.lessons).toHaveLength(1);
-    expect(schedule.lessons[0]).toMatchObject({
-      studentId,
-      recurrenceOrigin: 'generated',
-      durationMinutes: 50,
-    });
-
-    const stats = await getBusinessStatsSurface(DEFAULT_WORKSPACE_ID, { month: '2026-05' });
-    expect(stats.scheduledLessons).toBeGreaterThan(0);
-    expect(stats.forecastMinor).toBe(stats.scheduledLessons * 4000);
-  });
-
-  it('keeps manual generated-lesson changes while obsolete placeholders are replaced', async () => {
-    const { studentId, userId } = await seedStudent();
-    let surface = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      {
-        timezone: 'Asia/Bangkok',
-        startsOn: '2026-05-04',
-        generationHorizonDays: 14,
-        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
-      },
-      userId,
-    );
-    const generated = surface.lessons.find((lesson) => lesson.recurrenceOrigin === 'generated');
-    expect(generated).toBeDefined();
-
-    surface = await updateStudentLesson(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      generated?.id ?? '',
-      { status: 'canceled', consumesCredit: false },
-      userId,
-    );
-    expect(surface.lessons.find((lesson) => lesson.id === generated?.id)).toMatchObject({
-      recurrenceOverrideKind: 'manual_cancel',
-      status: 'canceled',
-    });
-
-    surface = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      {
-        timezone: 'Asia/Bangkok',
-        startsOn: '2026-05-04',
-        generationHorizonDays: 14,
-        slots: [{ isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 }],
-      },
-      userId,
-    );
-
-    expect(surface.lessons.find((lesson) => lesson.id === generated?.id)).toMatchObject({
-      recurrenceOverrideKind: 'manual_cancel',
-      status: 'canceled',
-    });
-    expect(
-      surface.lessons.some(
-        (lesson) => lesson.recurrenceOrigin === 'generated' && lesson.recurrenceSlotId !== null,
-      ),
-    ).toBe(true);
-  });
-
-  it('preserves chargeable-state edits on generated lesson occurrences', async () => {
-    const { studentId, userId } = await seedStudent();
-    let surface = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      {
-        timezone: 'Asia/Bangkok',
-        startsOn: '2026-05-04',
-        generationHorizonDays: 14,
-        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
-      },
-      userId,
-    );
-    const generated = surface.lessons.find((lesson) => lesson.recurrenceOrigin === 'generated');
-    expect(generated).toBeDefined();
-
-    surface = await updateStudentLesson(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      generated?.id ?? '',
-      { status: 'scheduled', consumesCredit: false },
-      userId,
-    );
-    expect(surface.lessons.find((lesson) => lesson.id === generated?.id)).toMatchObject({
-      consumesCredit: false,
-      recurrenceOverrideKind: 'manual_edit',
-      status: 'scheduled',
-    });
-
-    surface = await upsertPrimaryStudentLessonRecurrence(
-      DEFAULT_WORKSPACE_ID,
-      studentId,
-      {
-        timezone: 'Asia/Bangkok',
-        startsOn: '2026-05-04',
-        generationHorizonDays: 14,
-        slots: [{ isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 }],
-      },
-      userId,
-    );
-    expect(surface.lessons.find((lesson) => lesson.id === generated?.id)).toMatchObject({
-      consumesCredit: false,
-      recurrenceOverrideKind: 'manual_edit',
-      status: 'scheduled',
-    });
-  });
-
   it('self-heals workspace business settings and updates forecast defaults', async () => {
     const settings = await getBusinessSettings(DEFAULT_WORKSPACE_ID);
 
@@ -2731,3 +2173,7 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(stats.forecastTo).toBe('2026-06-22');
   });
 });
+
+function addDays(days: number): string {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}

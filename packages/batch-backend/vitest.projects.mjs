@@ -13,6 +13,9 @@ const deterministicHttpFiles = discoveredFiles.filter((file) =>
 const postgresMigrationsFiles = ['integration.migrations.test.ts'];
 
 const postgresFiles = [
+  'application.calendar-cutover.test.ts',
+  'application.calendar-runtime.test.ts',
+  'transport.google-calendar-connection.postgres.test.ts',
   'domain.no-homework-assignment-session.test.ts',
   'integration.student-area-authorization.test.ts',
   'transport.mcp-oauth.postgres.test.ts',

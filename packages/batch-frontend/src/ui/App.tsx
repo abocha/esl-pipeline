@@ -217,6 +217,10 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, log
   return (
     <Routes>
       <Route
+        path="/calendar/connection-result"
+        element={<Navigate to="/business/schedule" replace />}
+      />
+      <Route
         element={
           <CalmStudioShell
             user={user}

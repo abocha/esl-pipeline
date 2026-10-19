@@ -53,6 +53,7 @@ import {
 } from '../../domain/user-repository.js';
 import { logger } from '../../infrastructure/logger.js';
 import { getAuthenticatedUser, requireRole } from '../auth-middleware.js';
+import { invalidateCalendarAttemptCookie } from '../calendar-attempt-cookie.js';
 import { resolveRoutePath } from '../route-helpers.js';
 import type { ExtendedRoutesContext } from './context.js';
 
@@ -118,6 +119,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         });
 
         const tokens = authService.generateTokens(user.id, user.email, user.role);
+        await invalidateCalendarAttemptCookie(request, reply, config);
         setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
 
         const sanitizedUser = sanitizeUser(user);
@@ -194,6 +196,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         role: user.role,
       });
 
+      await invalidateCalendarAttemptCookie(request, reply, config);
       setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
 
       return reply.code(200).send({
@@ -305,7 +308,8 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     }
   });
 
-  app.post('/auth/logout', { preHandler: [uploadRateLimitMiddleware] }, async (_request, reply) => {
+  app.post('/auth/logout', { preHandler: [uploadRateLimitMiddleware] }, async (request, reply) => {
+    await invalidateCalendarAttemptCookie(request, reply, config);
     clearRefreshCookie(reply, config);
     return reply.code(200).send({ message: 'Logout successful' });
   });

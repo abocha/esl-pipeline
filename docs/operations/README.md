@@ -12,6 +12,9 @@
 
 ## Current Procedures
 
+For Google Calendar scheduling, callback/security readiness, provider identity proof and reviewed
+retirement of unused internal schedules, use [google-calendar-cutover.md](google-calendar-cutover.md).
+
 Use a current runbook for instructions. Start with the relevant entry in
 [`docs/reference/DOCS_IA_MAP.md`](../reference/DOCS_IA_MAP.md), or with the deployment,
 backup/restore, health, Telegram, prompt-gallery, or replay runbook named there.

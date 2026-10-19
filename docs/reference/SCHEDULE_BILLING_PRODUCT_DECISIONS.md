@@ -12,7 +12,9 @@
 
 ## Purpose
 
-This document is the durable reference for the first real `Schedule & Billing` implementation.
+This document records the lesson-ledger and billing decisions. ESL-62 supersedes the original
+independent scheduling MVP with the approved Google Calendar workflow. See the
+[Calendar cutover runbook](../operations/google-calendar-cutover.md) for activation and proof gates.
 
 It exists so scheduling, lesson-credit accounting, payments, reminders, and future account ownership
 do not get rediscovered from chat history or temporary plans.
@@ -54,17 +56,15 @@ smuggled into the pedagogical learner profile.
 11. Reminder delivery is Telegram-first in product direction, but the first slice stores and shows
     reminder recommendations and copyable text only.
 12. Email reminders remain future-compatible and should not become a parallel reminder architecture.
-13. Calendar design must stay sync-ready, but Google Calendar or other bidirectional sync is outside
-    the MVP.
-14. Recurring lesson planning is first-class in the MVP. A student can have a primary weekly
-    recurrence rule with one or more local-time slots; the system materializes those slots into
-    normal lesson rows through a bounded horizon.
-15. Generated recurrence lessons are real operational lessons. Completing, canceling, marking
-    no-show, editing, or rescheduling one generated lesson is an occurrence-level exception and must
-    not rewrite the recurrence rule.
-16. When a recurrence rule changes, future unmodified generated placeholders are soft-voided rather
-    than represented as cancellations. Completed, no-show, canceled, or manually edited occurrences
-    remain factual history.
+13. Google Calendar is required for scheduling. Other teaching, history, homework and billing
+    operations remain usable without a connection.
+14. One selected writable lesson calendar owns timing and recurrence after creation. A student may
+    have several independent weekly series, each with its own durable creation/recovery operation.
+15. ESL owns stable lesson identity, completion/no-show, charge decisions, credits and lineage.
+    Provider changes never erase those facts. Later timing edits happen in Google.
+16. Retired local rules/slots remain nonexecuting historical evidence. Reviewed cleanup hides unused
+    placeholders; protected lesson rows and immutable activity remain attached. Schedule reads do
+    not generate lessons.
 17. Elapsed lesson reminders are teacher-confirmed actions. The system may surface a
     `lesson_followup` when a lesson's scheduled end time has passed, but it must not mark the
     lesson completed or consume credit merely by reading the reminder. Explicit lesson completion
@@ -94,47 +94,32 @@ The first implementation must not:
 1. generate invoices
 2. collect payment
 3. store card or bank data
-4. send Telegram or email messages
-5. sync with external calendars
-6. enforce the final multi-teacher account permission model
+4. send custom reminder emails or Telegram messages (Google Calendar invitations are supported)
+5. support providers other than Google Calendar
+6. implement multi-tutor routing or private student self-booking
 7. alter learner-profile semantics
 8. auto-publish homework for elapsed lessons
 
 ## Workspace scheduling timezone
 
-Business settings (`workspace_business_settings.timezone`) owns the tutor-facing clock for manual
-lesson entry and schedule display. Student and lesson forms do not offer independent timezone
-settings. New weekly plans use this workspace timezone.
-
-Manual create/time edits send `localStartsAt` (`YYYY-MM-DDTHH:mm`) plus an explicit timezone through
-the existing lesson endpoints. PostgreSQL converts that wall time with `timestamp AT TIME ZONE`,
-the same mechanism used by recurrence. DST overlaps use the standard-time offset; gaps use the
-pre-transition offset and therefore advance into the first valid period after the gap. Existing
-offset-bearing `startsAt` requests remain supported; a request cannot supply both forms. An edit
-that leaves the wall time unchanged retains the original absolute instant.
-
-Changing the workspace timezone does not rewrite existing lesson instants or weekly plans. Existing
-weekly plans retain and display their recorded timezone, including when editing their slots. Moving
-those plans to a different timezone requires a separately defined transition for materialized lessons.
+Business settings (`workspace_business_settings.timezone`) owns the tutor-facing clock for schedule
+display and the default creation timezone. Calendar creation requires explicit valid local timing;
+ambiguous/nonexistent wall times are rejected instead of silently adjusted. Google expands recurring
+instances in the recorded IANA timezone. Changing workspace settings does not rewrite historical
+instants or retime existing Google series.
 
 ## Recurrence Architecture
 
-Student lesson planning keeps notes and defaults in `student_lesson_plans`, while executable
-calendar intent lives in structured recurrence records.
+`student_lesson_plans` retains useful duration defaults and operational notes. Google owns executable
+recurrence. Calendar schedule bindings are one-to-many per student; occurrence mappings preserve
+internal lesson IDs independently of moved actual start times. The bounded upcoming projection uses
+Google instances, with durable dirty intents and cursor checkpoints. A 410 rebaseline keeps the ESL
+ledger and billing history. Unknown split/copy identity is attention requiring authoritative evidence;
+titles, emails, time proximity and a copied marker never establish occurrence continuity.
 
-The MVP recurrence model is intentionally small:
-
-1. `student_lesson_recurrence_rules` stores the student/workspace-owned rule, IANA timezone,
-   weekly frequency, active/paused status, start/end dates, and generation horizon.
-2. `student_lesson_recurrence_slots` stores one or more ISO weekdays, local start times, and
-   duration values for a rule.
-3. `student_lessons` stores generated occurrences as normal lessons with stable rule ID, slot ID,
-   occurrence key, origin, override kind, and soft-void metadata.
-
-Teacher-wide schedule, stats, reminders, and future sync surfaces should read from materialized
-`student_lessons` rather than reimplementing recurrence math. Future Google Calendar or Telegram
-automation can attach to stable rule IDs, lesson IDs, and occurrence keys without reshaping the
-current tables.
+Student email is optional operational contact. Invitation defaults on when present, with opt-out;
+the chosen recipient is frozen into each new operation. Email edits affect future creates. Recovery
+reads never resend invitations. No Meet integration is included.
 
 ## Schedule-To-Homework Follow-Ups
 

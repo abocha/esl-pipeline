@@ -736,59 +736,11 @@ export interface StudentLessonHomeworkDto {
   htmlUrl: string | null;
   updatedAt: string | null;
 }
-export type StudentLessonRecurrenceStatus = 'active' | 'paused' | 'archived';
-export type StudentLessonRecurrenceFrequency = 'weekly';
-export type StudentLessonRecurrenceOrigin = 'manual' | 'generated';
-export type StudentLessonRecurrenceOverrideKind =
-  | 'manual_edit'
-  | 'manual_reschedule'
-  | 'manual_cancel';
-
-export interface StudentLessonRecurrenceSlotDto {
-  id: string;
-  ruleId: string;
-  isoWeekday: number;
-  localStartTime: string;
-  durationMinutes: number;
-  sortOrder: number;
-}
-
-export interface StudentLessonRecurrenceRuleDto {
-  id: string;
-  studentId: string;
-  workspaceId: string | null;
-  timezone: string;
-  frequency: StudentLessonRecurrenceFrequency;
-  startsOn: string;
-  endsOn: string | null;
-  status: StudentLessonRecurrenceStatus;
-  generationHorizonDays: number;
-  materializedThrough: string | null;
-  slots: StudentLessonRecurrenceSlotDto[];
-  updatedAt: string;
-}
-
-export interface UpsertStudentLessonRecurrenceRequest {
-  timezone: string;
-  frequency?: StudentLessonRecurrenceFrequency;
-  startsOn: string;
-  endsOn?: string | null;
-  status?: Exclude<StudentLessonRecurrenceStatus, 'archived'>;
-  generationHorizonDays?: number;
-  slots: {
-    isoWeekday: number;
-    localStartTime: string;
-    durationMinutes: number;
-  }[];
-}
-
 export interface StudentLessonPlanDto {
   studentId: string;
   workspaceId: string | null;
   timezone: string;
   defaultDurationMinutes: number;
-  cadence: string | null;
-  preferredTimes: string | null;
   schedulingNotes: string | null;
   updatedAt: string | null;
 }
@@ -796,8 +748,6 @@ export interface StudentLessonPlanDto {
 export interface UpdateStudentLessonPlanRequest {
   timezone?: string;
   defaultDurationMinutes?: number;
-  cadence?: string | null;
-  preferredTimes?: string | null;
   schedulingNotes?: string | null;
 }
 
@@ -813,38 +763,17 @@ export interface StudentLessonDto {
   title: string | null;
   notes: string | null;
   creditEventId: string | null;
-  recurrenceRuleId: string | null;
-  recurrenceSlotId: string | null;
-  recurrenceOccurrenceKey: string | null;
-  recurrenceOrigin: StudentLessonRecurrenceOrigin;
-  recurrenceOverrideKind: StudentLessonRecurrenceOverrideKind | null;
+  historicalScheduleOrigin: Record<string, unknown>;
+  schedulingSource: 'calendar' | 'unmanaged';
+  calendarEventUrl: string | null;
   homework: StudentLessonHomeworkDto;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface CreateStudentLessonRequest {
-  /** Supply exactly one time input: an offset-bearing instant or local wall time. */
-  startsAt?: string;
-  /** YYYY-MM-DDTHH:mm in the required timezone; follows PostgreSQL DST resolution. */
-  localStartsAt?: string;
-  timezone?: string;
-  durationMinutes?: number;
-  status?: StudentLessonStatus;
-  consumesCredit?: boolean;
-  title?: string | null;
-  notes?: string | null;
-}
-
 export interface UpdateStudentLessonRequest {
-  startsAt?: string;
-  /** Alternative to startsAt: YYYY-MM-DDTHH:mm, with an explicit timezone. */
-  localStartsAt?: string;
-  timezone?: string;
-  durationMinutes?: number;
-  status?: StudentLessonStatus;
+  status?: 'completed' | 'no_show';
   consumesCredit?: boolean;
-  title?: string | null;
   notes?: string | null;
 }
 
@@ -944,7 +873,6 @@ export interface StudentScheduleBillingSurfaceResponse {
   studentId: string;
   workspaceId: string | null;
   lessonPlan: StudentLessonPlanDto;
-  recurrenceRule: StudentLessonRecurrenceRuleDto | null;
   nextLesson: StudentLessonDto | null;
   lessons: StudentLessonDto[];
   creditSummary: StudentCreditSummaryDto;
@@ -1194,6 +1122,8 @@ export * from './assignment-domain.js';
 export * from './assignment-inline.js';
 export * from './assignment-projection.js';
 export * from './assignment-v1.js';
+export * from './calendar.js';
+export * from './calendar-connection.js';
 export * from './contract-versions.js';
 export * from './errors.js';
 // Job actions exports

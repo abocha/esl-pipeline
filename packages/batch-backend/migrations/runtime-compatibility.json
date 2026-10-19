@@ -68,6 +68,9 @@
     "0065_assignment_react_renderer": "incompatible",
     "0066_no_homework_lesson": "incompatible",
     "0067_mcp_profile_identities": "incompatible",
-    "0068_student_activity": "compatible"
+    "0068_student_activity": "compatible",
+    "0069_google_calendar_connection": "compatible",
+    "0070_calendar_scheduling": "compatible",
+    "0071_scheduler_retirement": "incompatible"
   }
 }

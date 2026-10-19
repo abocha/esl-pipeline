@@ -4,7 +4,9 @@ import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { registerAuthUserRoutes } from './extended-routes/auth-user-routes.js';
 import { registerBusinessRoutes } from './extended-routes/business-routes.js';
+import { registerCalendarSchedulingRoutes } from './extended-routes/calendar-routes.js';
 import { registerConfigRoutes } from './extended-routes/config-routes.js';
+import { registerGoogleCalendarConnectionRoutes } from './extended-routes/google-calendar-connection-routes.js';
 import { registerOpsRoutes } from './extended-routes/ops-routes.js';
 import { registerRecordingRoutes } from './extended-routes/recordings-routes.js';
 import { registerStudentRoutes } from './extended-routes/students-routes.js';
@@ -26,10 +28,12 @@ export function registerExtendedRoutes(
   };
 
   registerConfigRoutes(app, context);
+  registerCalendarSchedulingRoutes(app, context);
   registerStudentRoutes(app, context);
   registerBusinessRoutes(app, context);
   registerTemplateRoutes(app, context);
   registerRecordingRoutes(app, context);
   registerAuthUserRoutes(app, context);
+  registerGoogleCalendarConnectionRoutes(app, context);
   registerOpsRoutes(app, context);
 }

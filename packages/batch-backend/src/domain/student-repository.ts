@@ -8,6 +8,7 @@ import type { StudentListResult, StudentRecord } from './student-model.js';
 interface StudentRow {
   id: string;
   student: string;
+  email?: string | null;
   workspace_id: string | null;
   db_id: string | null;
   page_parent_id: string | null;
@@ -26,6 +27,7 @@ export interface InsertStudentParams {
   actorUserId?: string | null;
   id?: string;
   student: string;
+  email?: string | null;
   workspaceId?: string | null;
   dbId?: string | null;
   pageParentId?: string | null;
@@ -40,6 +42,7 @@ export interface UpdateStudentParams {
   id: string;
   workspaceId?: string | null;
   student?: string;
+  email?: string | null;
   dbId?: string | null;
   pageParentId?: string | null;
   colorPreset?: string | null;
@@ -73,6 +76,7 @@ const MAX_PAGE_LIMIT = 500;
 const STUDENT_COLUMNS = `
   id,
   student,
+  email,
   workspace_id,
   db_id,
   page_parent_id,
@@ -103,9 +107,10 @@ export async function insertStudent(params: InsertStudentParams): Promise<Studen
         color_preset,
         voices,
         manifest_preset,
-        accent_preference
+        accent_preference,
+        email
       )
-      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9)
+      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9, $10)
       RETURNING ${STUDENT_COLUMNS}
       `,
         [
@@ -118,6 +123,7 @@ export async function insertStudent(params: InsertStudentParams): Promise<Studen
           JSON.stringify(params.voices ?? {}),
           params.manifestPreset ?? null,
           params.accentPreference ?? null,
+          params.email ?? null,
         ],
       );
       return result.rows[0] as StudentRow;
@@ -143,9 +149,10 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
         color_preset,
         voices,
         manifest_preset,
-        accent_preference
+        accent_preference,
+        email
       )
-      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9)
+      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9, $10)
       ON CONFLICT (id) DO UPDATE
       SET
         student = EXCLUDED.student,
@@ -155,7 +162,8 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
         color_preset = EXCLUDED.color_preset,
         voices = EXCLUDED.voices,
         manifest_preset = EXCLUDED.manifest_preset,
-        accent_preference = EXCLUDED.accent_preference
+        accent_preference = EXCLUDED.accent_preference,
+        email = EXCLUDED.email
       RETURNING ${STUDENT_COLUMNS}
       `,
         [
@@ -168,6 +176,7 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
           JSON.stringify(params.voices ?? {}),
           params.manifestPreset ?? null,
           params.accentPreference ?? null,
+          params.email ?? null,
         ],
       );
       return result.rows[0] as StudentRow;
@@ -273,7 +282,8 @@ export async function updateStudent(params: UpdateStudentParams): Promise<Studen
         color_preset = COALESCE($5, color_preset),
         voices = COALESCE($6::jsonb, voices),
         manifest_preset = COALESCE($7, manifest_preset),
-        accent_preference = COALESCE($8, accent_preference)
+        accent_preference = COALESCE($8, accent_preference),
+        email = CASE WHEN $10::boolean THEN $11 ELSE email END
       WHERE id = $1
         AND ($9::uuid IS NULL OR workspace_id = $9::uuid)
       RETURNING ${STUDENT_COLUMNS}
@@ -288,6 +298,8 @@ export async function updateStudent(params: UpdateStudentParams): Promise<Studen
           params.manifestPreset ?? null,
           params.accentPreference ?? null,
           params.workspaceId ?? null,
+          params.email !== undefined,
+          params.email ?? null,
         ],
       );
       return result.rows[0] as StudentRow | undefined;
@@ -366,6 +378,7 @@ function mapRow(row: StudentRow): StudentRecord {
   return {
     id: row.id,
     student: row.student,
+    email: row.email ?? null,
     workspaceId: row.workspace_id ?? null,
     dbId: row.db_id ?? null,
     pageParentId: row.page_parent_id ?? null,
