@@ -3142,6 +3142,6 @@ VALUES
   ('0067_mcp_profile_identities', '430f6083475887792ed256290751ac5f4bff9ecf4cc8a84bf7f1402d2ef50f22', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0068_student_activity', '004e9d9a1b05415f9ab850ec241f34fa1ef68dbe7fc5843ec4dd35c53985af05', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0069_google_calendar_connection', 'e588c33b65438b42d6df0919cd4763221df195cdb35fd26c906906da3a009f3a', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0070_calendar_scheduling', 'cb401d903e074e5daab24b4526dd8c4cefdc1077f4d5a6e23bf291aa3910b3cf', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0071_scheduler_retirement', 'b1365ffbdd9c05bd41bfd18be6cf1a95ebb3ba8423befd13c36842f41ea28156', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0070_calendar_scheduling', 'c30cbc331b6f884ff7a732fe28d582b74e2bf1ef54bb0588dca063ddfeb2c759', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0071_scheduler_retirement', '45ee490d0893537325b299c0e6ee161ec72f139fe2c260aa95d3a5a4abf1eb7c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

@@ -82,7 +82,7 @@ replacement for current issue/PR state.
 
 ### Standalone active plans
 
-0. [ESL-62 Google Calendar cutover](2026-10-18-esl-62-google-calendar-cutover.md)
+0. `docs/plans/2026-10-18-esl-62-google-calendar-cutover.md`
 1. `docs/plans/2026-09-22-issue-266-lifetime-canonical-assignment.md`
 2. `docs/plans/stt-multi-provider-refactor/2026-09-01-normal-user-audio-ingest-readiness.md`
 3. `docs/plans/2026-08-14-post-share-assignment-correction.md`
