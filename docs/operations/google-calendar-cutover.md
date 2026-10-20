@@ -125,11 +125,13 @@ timing, version, opaque marker and explicit cancellation evidence for:
 4. Copy carrying a marker, missing/changed metadata and an interrupted split.
 5. Accepted insert followed by local interruption: same event and lesson IDs, no second invitation.
 
-Compare against the stable ESL lesson and billing/source IDs. Do not interpret a shared marker as
-unique predecessor continuity. If Google returns a new master without authoritative continuation,
-retain history and report association required. Return the precise automatic-handling limitation for
-maintainer approval before claiming the approved product contract is satisfied. Mock fixtures cannot
-close this gate.
+Compare exact provider identities, actual timing/duration and the visible ESL schedule. Exact
+identities retain lesson IDs. The maintainer-approved continuity boundary permits unused future
+projections to change IDs when the resulting schedule has no missing/duplicate appointments or
+canceled replacement noise. Completed, charged, elapsed and linked history remains protected.
+Registered association plus exact durable create provenance establishes student ownership for a
+distinct successor/copy; it never proves a unique predecessor occurrence. Missing or mismatched
+provenance stays unlinked. Mock fixtures cannot close the real-provider gate.
 
 ### Local provider acceptance findings, 2026-10-19
 
@@ -145,14 +147,13 @@ Two provider identity cases initially blocked the original stable-ID acceptance 
 
 - Google's **This and following events** time edit truncated the original master and created a new
   master and iCalUID, carrying the same private ESL association/request markers. The new event did not
-  expose an authoritative predecessor mapping. ESL reports attention and leaves the new master
-  unlinked; the truncated future occurrences become canceled. The current association path rejects a
-  reused marker as requiring continuity review and does not provide the required reconciliation.
+  expose an authoritative predecessor mapping. Before the repair, ESL reported attention and left
+  the new master unlinked; the truncated future occurrences became canceled.
 - Google's **All events** time/duration edit retained the master ID but changed the generated
   instances' IDs and `originalStartTime`. Existing future lesson rows became canceled and new lesson
-  rows were created for the changed instance identities. This does not preserve the promised lesson
-  continuity. The separate single-occurrence move passed and must not be treated as evidence for this
-  whole-series case.
+  rows were created for the changed instance identities. This failed the original continuity
+  requirement. The separate single-occurrence move passed and was not evidence for this whole-series
+  case.
 
 The maintainer revised that boundary on 2026-10-19: internal IDs may change for unused future
 projections if ESL shows the same resulting schedule without missing/duplicate lessons. Protected
@@ -169,11 +170,35 @@ Local re-observation of the retained real split/retime state matched **13 provid
 visible ESL lessons** by exact provider identity, actual start and duration, with zero duplicates or
 visible canceled replacements. Nine obsolete rows remain retained/hidden. Deterministic regressions
 cover retime-back, protected history, page failure, stale reference races, lease renewal and deletion
-evidence surviving a completed refresh. The PR remains draft for hosted and remaining acceptance
-gates. These observations do not establish
-interrupted-insert invitation recovery, every copy/metadata variant, or production ingress/cutover
-readiness; those gates remain separate. Raw test-calendar responses and recipient details stay in
-private local evidence, outside Git.
+evidence surviving a completed refresh.
+
+The subsequent disposable-provider acceptance completed before the merge handoff also established:
+
+- Fresh Google UI whole-series retiming and a this-and-following split while the local dispatcher
+  was stopped. After restart, all 14 then-associated occurrences matched the visible ESL schedule.
+- Deleting the successor series hid its three unused projections; Google Trash restoration restored
+  the same three lesson IDs as visible scheduled lessons, without consumed credits.
+- Google UI Duplicate omitted the private provenance and remained unlinked. Separate no-attendee
+  API copies with exact provenance produced six distinct occurrences/lessons across two masters for
+  one synthetic student. Missing association, missing request hash and mismatched hash stayed
+  unlinked without merging/reassigning existing lessons. Removing/changing metadata on an already
+  bound exact master preserved its binding and lesson IDs. Deliberate provenance conflicts correctly
+  surfaced attention.
+- A saved operational email with explicit invitation opt-out produced `sendUpdates=none`, no
+  attendees and one uncharged lesson.
+- One real no-email insert was accepted, then its transport response was deliberately lost before
+  local association. Normal durable retry recovered by GET: exactly one POST, the same predetermined
+  event and one visible lesson. Separately, replaying the existing invitation-bearing intent in an
+  attempted/unknown local state recovered with zero Calendar writes and unchanged event etag,
+  attendees, binding and lesson. No additional invitation was sent. These are injected response loss
+  and read-only invitation recovery replay, not an OS crash or a fresh invitation delivery test.
+
+The final associated-provider comparison matched **21 occurrences to 21 visible ESL lessons**, with
+zero duplicates or visible canceled replacements; 14 obsolete projections remain retained/hidden.
+Focused exceptional-risk re-review closed the protected-family deletion checkpoint and actual
+waiting-reference-writer regressions. Hosted final-head CI remains a separate merge gate; production
+OAuth, deployed ingress, cleanup and recovery remain operator gates. Raw provider responses and
+recipient details stay in ignored private evidence, outside Git.
 
 ## Production release and recovery
 
@@ -191,7 +216,7 @@ as cleanup. Explain that original appointments there may remain visible alongsid
 ## Related
 
 - [Scheduling and billing decisions](../reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md)
-- [Execution plan](../plans/2026-10-18-esl-62-google-calendar-cutover.md)
+- [Implementation history](../archive/plans/2026-10-18-esl-62-google-calendar-cutover.md)
 - [Testing guide](../reference/TESTING_GUIDELINES.md)
 
 ## OAuth configuration and callback observability

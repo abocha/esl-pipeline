@@ -2,10 +2,10 @@
 
 ## Meta
 
-- Status: `active`.
+- Status: `archived`.
 - Last Verified Against: 2026-10-19, ESL-64 local provider reprojection and focused regression evidence.
-- Exit Trigger: archive after the implementation PR merges, retaining operator/provider gates in the owning runbook.
-- Current Focus: draft PR #420; ESL-64 implements the maintainer-approved visible continuity boundary; local provider reprojection matches 13 current Google occurrences without duplicates. Hosted and remaining operator/provider gates remain separate.
+- Exit Trigger: implementation and provider acceptance complete; archive in the merging PR and retain operator gates in the owning runbook.
+- Current Focus: implementation history for PR #420; final-head CI is the merge gate. Production activation and recovery remain separate operator work.
 - Owner: ESL-62 implementation primary.
 
 ## Authority
@@ -37,11 +37,11 @@ both initiator and grant-authorizer authority. Sync pagination/dirty intents sur
 410 resets provider state without deleting the ledger. Completion and provider projection share
 lesson locks. Reads cannot regenerate retired schedules.
 
-No production access, environment mutation, cleanup, deployment, merge or release is authorized.
-Real Google authorization/writes/invitations require explicit suitable test authorization. The
-maintainer authorized the 2026-10-19 disposable-calendar/local-app exercise and its controlled
-invitation. Production offline OAuth readiness, live cleanup counts and recovery remain separate
-acceptance gates. Mock tests do not establish those facts.
+The maintainer authorized the disposable-calendar/local-app exercise and controlled invitation,
+then authorized completing acceptance and merging PR #420, plus read-only VPS readiness assessment.
+Production environment mutation, cleanup and deployment remain unauthorized. Production offline
+OAuth readiness, reviewed cleanup counts and recovery remain separate operator gates. Mock tests
+do not establish those facts.
 
 ## Evidence ledger
 
@@ -64,7 +64,7 @@ and passed after the fix; all 17 OAuth/PostgreSQL tests and backend typecheck pa
 Initial provider acceptance found that a this-and-following edit creates a new master with copied markers
 and no authoritative predecessor mapping, while an all-events time edit changes instance identities
 under the same master and currently cancels/recreates future ESL lesson rows. See the
-[owning runbook's findings](../operations/google-calendar-cutover.md#local-provider-acceptance-findings-2026-10-19).
+[owning runbook's findings](../../operations/google-calendar-cutover.md#local-provider-acceptance-findings-2026-10-19).
 The maintainer subsequently clarified that unused future projections may change IDs if the visible
 schedule remains equivalent without missing or duplicate lessons. ESL-64 applies complete creation
 families atomically, associates successor masters using exact registered creation provenance,
@@ -83,9 +83,13 @@ admission, retained master-deletion evidence and lease-renewal gaps; focused reg
 both source-link ordering boundaries and protected multi-master retry. Migration 0072 adds only
 the reference guard and is compatible with the preceding Calendar runtime.
 
-Keep this plan active while provider identity or operator acceptance remains outstanding. The PR and
-handoff own exact commands/results and hosted state; local or hosted success is not provider or
-production delivery.
+The remaining disposable-provider acceptance subsequently passed fresh retime/split, series
+delete/restore, copy/provenance variants, saved-email opt-out and accepted-insert response-loss
+recovery. The existing invitation intent recovered through read-only replay with unchanged
+attendees and no resend; no fresh invitation crash test was performed. Final comparison matched
+21 associated Google occurrences to 21 visible lessons with zero duplicates or canceled replacement
+noise. The runbook owns current evidence details and production gates. The PR owns final-head hosted
+state; neither local nor hosted success establishes production delivery.
 
 ## Calendar presentation follow-up
 
@@ -99,4 +103,5 @@ Local desktop and mobile browser checks covered Business status, connection disc
 multi-row student setup without submitting another provider write or invitation. Six focused
 Calendar component tests and frontend typecheck passed, including immutable-request reload/retry,
 invitation opt-out, exact-event association, and explicit operation adoption. The two provider
-identity blockers above remain open; presentation changes do not resolve them.
+identity blockers were subsequently closed by ESL-64 and its separate provider acceptance; the
+presentation changes alone did not resolve them.
