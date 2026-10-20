@@ -30,6 +30,13 @@ import type {
   BusinessScheduleSurfaceResponse,
   BusinessSettingsDto,
   BusinessStatsSurfaceResponse,
+  CalendarConnectionStatusDto,
+  CalendarOperationReviewDto,
+  CalendarSchedulingStatusDto,
+  CalendarSelectionDto,
+  CalendarSetupDto,
+  CalendarSetupRequestDto,
+  CalendarUnlinkedEventsPageDto,
   ArtifactWorkingContentDto as ContractArtifactWorkingContentDto,
   AssignmentLearnerContextDto as ContractAssignmentLearnerContextDto,
   AssignmentSessionDto as ContractAssignmentSessionDto,
@@ -72,7 +79,6 @@ import type {
   TtsStrategy as ContractTtsStrategy,
   UpdateAssignmentSessionRecoveryRequest as ContractUpdateAssignmentSessionRecoveryRequest,
   VoiceOption as ContractVoiceOption,
-  CreateStudentLessonRequest,
   GenerationErrorCategory,
   JobActionRequest,
   JobStatusDto,
@@ -86,7 +92,6 @@ import type {
   UpdateBusinessSettingsRequest,
   UpdateStudentLessonPlanRequest,
   UpdateStudentLessonRequest,
-  UpsertStudentLessonRecurrenceRequest,
 } from '@esl-pipeline/contracts';
 import { DEFAULT_RECORDING_UPLOAD_MAX_BYTES, JobActionType } from '@esl-pipeline/contracts';
 
@@ -225,6 +230,7 @@ export interface StudentOptionsResponse {
 }
 
 export interface StudentProfile {
+  email?: string | null;
   id: string;
   student: string;
   dbId?: string | null;
@@ -251,6 +257,7 @@ export interface StarterProfileInput {
 }
 
 export interface StudentProfileInput {
+  email?: string | null;
   student: string;
   dbId?: string | null;
   pageParentId?: string | null;
@@ -974,8 +981,6 @@ export interface StudentLearningSurfaceResponse {
 
 export type StudentScheduleBillingSurface = StudentScheduleBillingSurfaceResponse;
 export type StudentLessonPlanUpdate = UpdateStudentLessonPlanRequest;
-export type StudentLessonRecurrenceUpsert = UpsertStudentLessonRecurrenceRequest;
-export type StudentLessonCreate = CreateStudentLessonRequest;
 export type StudentLessonUpdate = UpdateStudentLessonRequest;
 export type StudentPackageCreate = AddStudentPackageRequest;
 export type StudentCreditAdjustmentCreate = AdjustStudentCreditsRequest;
@@ -2696,40 +2701,6 @@ export async function updateStudentLessonPlan(
   }
 }
 
-export async function upsertPrimaryStudentLessonRecurrence(
-  studentId: string,
-  body: StudentLessonRecurrenceUpsert,
-): Promise<StudentScheduleBillingSurface> {
-  try {
-    const response = await apiClient.put(
-      buildApiProxyPath(
-        `/students/${encodeURIComponent(studentId)}/operations/primary-lesson-recurrence`,
-      ),
-      body,
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function createStudentLesson(
-  studentId: string,
-  body: StudentLessonCreate,
-): Promise<StudentScheduleBillingSurface> {
-  try {
-    const response = await apiClient.post(
-      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/lessons`),
-      body,
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
 export async function updateStudentLesson(
   studentId: string,
   lessonId: string,
@@ -3776,4 +3747,110 @@ export async function updateDraft(
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
+}
+
+// Calendar operations use shared versioned DTOs. Request keys persist across retries.
+const calendarPath = (workspaceId: string, suffix: string) =>
+  buildApiProxyPath(`/workspaces/${encodeURIComponent(workspaceId)}/calendar/${suffix}`);
+export async function getCalendarSchedulingStatus(
+  workspaceId: string,
+): Promise<CalendarSchedulingStatusDto> {
+  return (await apiClient.get(calendarPath(workspaceId, 'scheduling-status'))).data;
+}
+export async function createCalendarSetup(
+  workspaceId: string,
+  studentId: string,
+  body: CalendarSetupRequestDto,
+  key: string,
+): Promise<CalendarSetupDto> {
+  return (
+    await apiClient.post(
+      buildApiProxyPath(
+        `/workspaces/${encodeURIComponent(workspaceId)}/students/${encodeURIComponent(studentId)}/calendar/setups`,
+      ),
+      body,
+      { headers: { 'Idempotency-Key': key } },
+    )
+  ).data;
+}
+export async function getCalendarSetup(
+  workspaceId: string,
+  setupId: string,
+): Promise<CalendarSetupDto> {
+  return (await apiClient.get(calendarPath(workspaceId, `setups/${encodeURIComponent(setupId)}`)))
+    .data;
+}
+export async function retryCalendarOperation(
+  workspaceId: string,
+  operationId: string,
+): Promise<void> {
+  await apiClient.post(
+    calendarPath(workspaceId, `operations/${encodeURIComponent(operationId)}/retry`),
+  );
+}
+export async function requestCalendarSync(workspaceId: string): Promise<void> {
+  await apiClient.post(calendarPath(workspaceId, 'sync'));
+}
+export async function getCalendarUnlinkedEvents(
+  workspaceId: string,
+  pageToken?: string,
+): Promise<CalendarUnlinkedEventsPageDto> {
+  return (
+    await apiClient.get(calendarPath(workspaceId, 'unlinked-events'), {
+      params: pageToken ? { pageToken } : undefined,
+    })
+  ).data;
+}
+export async function bindCalendarEvent(
+  workspaceId: string,
+  studentId: string,
+  eventId: string,
+): Promise<void> {
+  await apiClient.post(calendarPath(workspaceId, 'bindings'), { studentId, eventId });
+}
+export async function beginCalendarConnect(
+  workspaceId: string,
+): Promise<{ authorizationUrl: string }> {
+  return (await apiClient.post(calendarPath(workspaceId, 'connect'))).data;
+}
+export async function selectLessonCalendar(
+  workspaceId: string,
+  calendarId: string,
+  confirmReplacement: boolean,
+): Promise<void> {
+  await apiClient.post(calendarPath(workspaceId, 'select'), { calendarId, confirmReplacement });
+}
+export async function disconnectLessonCalendar(workspaceId: string): Promise<void> {
+  await apiClient.post(calendarPath(workspaceId, 'disconnect'));
+}
+
+export async function getCalendarConnection(
+  workspaceId: string,
+): Promise<CalendarConnectionStatusDto> {
+  return (await apiClient.get(calendarPath(workspaceId, 'connection'))).data;
+}
+export async function getLessonCalendars(
+  workspaceId: string,
+): Promise<{ calendars: CalendarSelectionDto[] }> {
+  return (await apiClient.get(calendarPath(workspaceId, 'calendars'))).data;
+}
+export async function reviewCalendarOperation(
+  workspaceId: string,
+  operationId: string,
+): Promise<CalendarOperationReviewDto> {
+  return (
+    await apiClient.get(
+      calendarPath(workspaceId, `operations/${encodeURIComponent(operationId)}/review`),
+    )
+  ).data;
+}
+export async function adoptCalendarOperation(
+  workspaceId: string,
+  operationId: string,
+  reviewedRequestHash: string,
+): Promise<void> {
+  await apiClient.post(
+    calendarPath(workspaceId, `operations/${encodeURIComponent(operationId)}/adopt`),
+    { reviewedRequestHash },
+  );
 }

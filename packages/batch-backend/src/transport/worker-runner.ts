@@ -9,6 +9,7 @@
 // - Logs lifecycle events and shuts down gracefully on SIGINT/SIGTERM.
 import { fileURLToPath } from 'node:url';
 
+import { startCalendarDispatcher } from '../application/calendar-dispatcher.js';
 import { processQueueJob } from '../application/process-queue-job.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
@@ -49,9 +50,12 @@ export async function startWorker(): Promise<void> {
     });
   });
 
+  const calendarDispatcher = startCalendarDispatcher();
+
   const shutdown = async (signal: string) => {
     logger.info(`Shutting down worker (${signal})`, { component: 'worker' });
     try {
+      await calendarDispatcher.close();
       await worker.close();
       logger.info('Worker closed cleanly', { component: 'worker' });
       process.exit(0);

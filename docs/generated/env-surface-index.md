@@ -155,6 +155,10 @@
 | `GEN_STUDENT_MEMORY_SNAPSHOT_MODEL` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_STUDENT_MEMORY_SNAPSHOT_PROVIDER` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | `.env.example` | misc | `docs/reference/env.md` |
+| `GOOGLE_CALENDAR_CLIENT_ID` | `.env.example` | misc | `docs/reference/env.md` |
+| `GOOGLE_CALENDAR_CLIENT_SECRET` | `.env.example` | misc | `docs/reference/env.md` |
+| `GOOGLE_CALENDAR_ENABLED` | `.env.example` | misc | `docs/reference/env.md` |
+| `GOOGLE_CALENDAR_REDIRECT_URI` | `.env.example` | misc | `docs/reference/env.md` |
 | `GOOGLE_STT_GCS_STAGING_BUCKET` | `.env.example` | misc | `docs/reference/env.md` |
 | `GOOGLE_STT_GCS_STAGING_PREFIX` | `.env.example` | misc | `docs/reference/env.md` |
 | `GOOGLE_STT_LANGUAGE_CODES` | `.env.example` | misc | `docs/reference/env.md` |
@@ -163,6 +167,8 @@
 | `GOOGLE_STT_PROJECT_ID` | `.env.example` | misc | `docs/reference/env.md` |
 | `GOOGLE_STT_RECOGNIZER` | `.env.example` | misc | `docs/reference/env.md` |
 | `HSTS_MAX_AGE` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
+| `INTEGRATION_CREDENTIAL_ACTIVE_KEY_ID` | `.env.example` | misc | `docs/reference/env.md` |
+| `INTEGRATION_CREDENTIAL_KEYS` | `.env.example` | misc | `docs/reference/env.md` |
 | `INWORLD_API_KEY` | `.env.example` | misc | `docs/reference/env.md` |
 | `JOB_SUBMISSION_RATE_LIMIT` | `.env.example` | misc | `docs/reference/env.md` |
 | `JWT_EXPIRES_IN` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |

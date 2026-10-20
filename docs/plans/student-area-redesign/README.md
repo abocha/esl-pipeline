@@ -61,8 +61,9 @@ page model, ownership boundaries, or profile authority rules.
 8. Scheduling and accounting are future first-class surfaces, not sidebar appendices.
 9. Future reminder delivery is Telegram-first because the bot ecosystem already exists, but the
    domain model should remain able to add email later.
-10. Calendar planning is designed for hybrid bidirectional sync; the app should not assume calendar
-    data is export-only forever.
+10. [ESL-62 Calendar scheduling](../../operations/google-calendar-cutover.md) supersedes independent
+    scheduling: ESL creates linked events, Google owns later timing/recurrence, and background sync
+    preserves the ESL lesson ledger. Provider and production acceptance remain separately evidenced.
 
 ## Topic Map
 

@@ -6,6 +6,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { loadConfig } from '../config/env.js';
 import { logger } from '../infrastructure/logger.js';
+import { isGoogleCalendarCallbackUrl, safeHttpLogUrl } from './calendar-callback-logging.js';
 
 export interface SecurityHeadersConfig {
   enabled: boolean;
@@ -68,7 +69,7 @@ function getDefaultSecurityConfig(): SecurityHeadersConfig {
       origin: config.security.corsOrigin,
       credentials: config.security.corsCredentials,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Idempotency-Key'],
     },
   };
 }
@@ -193,7 +194,7 @@ export function securityHeadersMiddleware(
     logger.debug('Security headers applied', {
       requestId: request.id,
       method: request.method,
-      url: request.url,
+      url: safeHttpLogUrl(request.url),
       corsEnabled: config.cors.enabled,
       hstsEnabled: !!config.helmet.hsts,
     });
@@ -201,10 +202,14 @@ export function securityHeadersMiddleware(
     done();
   } catch (error) {
     logger.error('Security headers middleware error', {
-      error: error instanceof Error ? error.message : String(error),
+      error: isGoogleCalendarCallbackUrl(request.url)
+        ? 'calendar_callback_rejected'
+        : error instanceof Error
+          ? error.message
+          : String(error),
       requestId: request.id,
       method: request.method,
-      url: request.url,
+      url: safeHttpLogUrl(request.url),
     });
 
     // Continue processing even if headers fail

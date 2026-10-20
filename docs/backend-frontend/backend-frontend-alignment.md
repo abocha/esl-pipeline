@@ -85,6 +85,12 @@ revision content/history are preserved.
 
 ## Current Focus
 
+- ESL-62 replaces independent scheduling with a selected Google Calendar, per-series durable
+  creation/recovery and optional student invitations. Student/Business keep ledger and billing
+  workflows during Calendar outages; timing edits open Google. Read paths no longer generate local
+  recurrence. OAuth callback/session/logging, retired schedule inventory and provider UI identity
+  gates are owned by the [Calendar runbook](../operations/google-calendar-cutover.md). Local/hosted
+  evidence does not imply live Google or production delivery.
 - The read-only ChatGPT MCP resource is implemented behind disabled-by-default `MCP_OAUTH_ENABLED`.
   It exposes learner name lookup, canonical teaching context, and the authenticated connection's
   read-only profile. Production OAuth diagnostics are active. New credentials follow their explicit

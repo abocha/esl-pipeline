@@ -49,7 +49,6 @@ import {
 import {
   addStudentPackage,
   adjustStudentCredits,
-  createStudentLesson,
   getStudentScheduleBillingSurface,
   hideStudentLessonFollowupReminder,
   recordStudentPayment,
@@ -57,7 +56,6 @@ import {
   undoLatestHiddenStudentReminder,
   updateStudentLesson,
   updateStudentLessonPlan,
-  upsertPrimaryStudentLessonRecurrence,
 } from '../../application/student-schedule-billing.js';
 import { getStudentSummaryWithDefaults } from '../../application/student-summary.js';
 import {
@@ -151,7 +149,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
     longRunningChallenges: z.string().nullable().optional(),
     studyPreferencesOrConstraints: z.string().nullable().optional(),
   });
-  const lessonStatusSchema = z.enum(['scheduled', 'completed', 'canceled', 'no_show']);
+  const lessonStatusSchema = z.enum(['completed', 'no_show']);
   const optionalTextSchema = z.string().trim().max(2000).nullable().optional();
   const currencySchema = z
     .string()
@@ -177,78 +175,16 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       .positive()
       .max(24 * 60)
       .optional(),
-    cadence: optionalTextSchema,
-    preferredTimes: optionalTextSchema,
     schedulingNotes: optionalTextSchema,
   });
-  const recurrenceBodySchema = z.object({
-    timezone: z.string().trim().min(1).max(100),
-    frequency: z.literal('weekly').optional(),
-    startsOn: z
-      .string()
-      .trim()
-      .regex(/^\d{4}-\d{2}-\d{2}$/),
-    endsOn: z
-      .string()
-      .trim()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
-      .nullable()
-      .optional(),
-    status: z.enum(['active', 'paused']).optional(),
-    generationHorizonDays: z.number().int().min(7).max(366).optional(),
-    slots: z
-      .array(
-        z.object({
-          isoWeekday: z.number().int().min(1).max(7),
-          localStartTime: z
-            .string()
-            .trim()
-            .regex(/^\d{2}:\d{2}$/),
-          durationMinutes: z
-            .number()
-            .int()
-            .positive()
-            .max(24 * 60),
-        }),
-      )
-      .min(1)
-      .max(14),
-  });
-  const lessonBodySchema = z.object({
-    startsAt: z.string().trim().datetime({ offset: true }).optional(),
-    localStartsAt: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
-      .optional(),
-    timezone: z.string().trim().min(1).max(100).optional(),
-    durationMinutes: z
-      .number()
-      .int()
-      .positive()
-      .max(24 * 60)
-      .optional(),
-    status: lessonStatusSchema.optional(),
-    consumesCredit: z.boolean().optional(),
-    title: optionalTextSchema,
-    notes: optionalTextSchema,
-  });
-  const lessonTimeBodySchema = lessonBodySchema
-    .refine(
-      (value) => value.startsAt === undefined || value.localStartsAt === undefined,
-      'Supply either startsAt or localStartsAt, not both',
-    )
-    .refine(
-      (value) => value.localStartsAt === undefined || value.timezone !== undefined,
-      'Timezone is required for localStartsAt',
-    );
-  const createLessonBodySchema = lessonTimeBodySchema.refine(
-    (value) => value.startsAt !== undefined || value.localStartsAt !== undefined,
-    'A lesson time is required',
-  );
-  const updateLessonBodySchema = lessonTimeBodySchema.refine(
-    (value) => Object.keys(value).length > 0,
-    'At least one lesson field is required',
-  );
+  const updateLessonBodySchema = z
+    .object({
+      status: lessonStatusSchema.optional(),
+      consumesCredit: z.boolean().optional(),
+      notes: optionalTextSchema,
+    })
+    .strict()
+    .refine((value) => Object.keys(value).length > 0, 'At least one lesson field is required');
   const packageBodySchema = z.object({
     lessons: z.number().int().positive().max(500),
     note: optionalTextSchema,
@@ -618,70 +554,6 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             authenticatedUser?.id ?? null,
           ),
         );
-      } catch (error: unknown) {
-        if (error instanceof HistoricalAssignmentReadOnlyError)
-          return reply
-            .code(410)
-            .send({ error: error.code, code: error.code, message: error.message });
-        return handleScheduleBillingRouteError(reply, routePath, error);
-      }
-    },
-  );
-
-  app.put(
-    '/students/:id/operations/primary-lesson-recurrence',
-    {
-      preHandler: [authenticate],
-    },
-    async (request, reply) => {
-      const routePath = resolveRoutePath(
-        request,
-        'PUT /students/:id/operations/primary-lesson-recurrence',
-      );
-      const paramsSchema = z.object({ id: z.string().min(1) });
-
-      try {
-        const params = paramsSchema.parse(request.params ?? {});
-        const body = recurrenceBodySchema.parse(request.body ?? {});
-        const authenticatedUser = getAuthenticatedUser(request);
-        const workspaceId = await resolveWorkspaceIdForRequest(request);
-        return reply.send(
-          await upsertPrimaryStudentLessonRecurrence(
-            workspaceId,
-            params.id,
-            body,
-            authenticatedUser?.id ?? null,
-          ),
-        );
-      } catch (error: unknown) {
-        if (error instanceof HistoricalAssignmentReadOnlyError)
-          return reply
-            .code(410)
-            .send({ error: error.code, code: error.code, message: error.message });
-        return handleScheduleBillingRouteError(reply, routePath, error);
-      }
-    },
-  );
-
-  app.post(
-    '/students/:id/lessons',
-    {
-      preHandler: [authenticate],
-    },
-    async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /students/:id/lessons');
-      const paramsSchema = z.object({ id: z.string().min(1) });
-
-      try {
-        const params = paramsSchema.parse(request.params ?? {});
-        const body = createLessonBodySchema.parse(request.body ?? {});
-        const authenticatedUser = getAuthenticatedUser(request);
-        const workspaceId = await resolveWorkspaceIdForRequest(request);
-        return reply
-          .code(201)
-          .send(
-            await createStudentLesson(workspaceId, params.id, body, authenticatedUser?.id ?? null),
-          );
       } catch (error: unknown) {
         if (error instanceof HistoricalAssignmentReadOnlyError)
           return reply
@@ -1978,6 +1850,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       const routePath = resolveRoutePath(request, 'POST /students');
       const schema = z.object({
         student: z.string().min(1),
+        email: z.string().trim().email().max(320).nullable().optional(),
         dbId: z.string().nullable().optional(),
         pageParentId: z.string().nullable().optional(),
         voices: z.record(z.string(), z.string()).optional(),
@@ -2052,6 +1925,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       const schema = z
         .object({
           student: z.string().min(1).optional(),
+          email: z.string().trim().email().max(320).nullable().optional(),
           dbId: z.string().nullable().optional(),
           pageParentId: z.string().nullable().optional(),
           voices: z.record(z.string(), z.string()).optional(),

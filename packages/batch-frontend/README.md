@@ -131,10 +131,14 @@ Canonical behavior and current status live in:
     example, open `http://localhost:5173/?sandboxScenario=default&jobId=job-sandbox` to resume
     the seeded completed assignment with all primary stages unlocked for copy/layout review.
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
-- Manual lesson entry and schedule display use the workspace timezone from Business settings.
-  Create/time edits send `localStartsAt` with that timezone for PostgreSQL conversion; an unchanged
-  edit retains the original `startsAt` instant, including during a DST overlap. New weekly plans use
-  the workspace timezone; existing weekly plans retain and display their saved timezone.
+- Scheduling requires a connected selected Google Calendar; teaching, history, homework and billing
+  remain available without it. Set schedule creates one-offs or several independent weekly series
+  in the displayed timezone, with optional Google invitations and per-series outcomes. Later timing
+  edits open Google. The shared Calendar panel owns its styles on both Business and Student routes;
+  connection management is expandable, and submitted setups show their captured choices for recovery.
+  Existing lesson rows stay visible during connection/sync failures. See the
+  [Calendar cutover runbook](../../docs/operations/google-calendar-cutover.md) for remaining provider
+  identity and operator activation gates.
 - The Learning page can read `/students/:id/memory/health` for collapsed operator support details;
   manual full snapshot rebuild remains outside the frontend and CLI-only for v1.1.
 - Student IDs are the sole runtime profile root. Profile content and revision actions use

@@ -21,12 +21,10 @@ describeHttpServerIntegrationSuite(
     mockResolvePrimaryWorkspaceIdForUser,
     mockUndoLatestHiddenStudentReminder,
     mockUpdateStudentLessonPlan,
-    mockCreateStudentLesson,
     mockUpdateStudentLesson,
     mockAddStudentPackage,
     mockAdjustStudentCredits,
     mockRecordStudentPayment,
-    mockUpsertPrimaryStudentLessonRecurrence,
     mockUpsertProfileContent,
     mockGetProfileContent,
     mockGetProfileRevisionForStudent,
@@ -1157,72 +1155,33 @@ describeHttpServerIntegrationSuite(
       expect(mockActivateTemplateRevisionForTemplate).not.toHaveBeenCalled();
     });
 
-    it('passes explicit local lesson time and timezone through create and update routes', async () => {
+    it('retires local scheduling endpoints and rejects timing/cancellation bypasses', async () => {
       const studentId = deriveStudentId('Anna');
-      const payload = { localStartsAt: '2026-05-11T09:30', timezone: 'Asia/Kolkata' };
-      const created = await app.inject({
-        method: 'POST',
-        url: `/students/${studentId}/lessons`,
-        payload,
-      });
-      expect(created.statusCode).toBe(201);
-      expect(mockCreateStudentLesson).toHaveBeenCalledWith(
-        DEFAULT_WORKSPACE_ID,
-        studentId,
-        payload,
-        'test-user-id',
-      );
-      const updated = await app.inject({
-        method: 'PATCH',
-        url: `/students/${studentId}/lessons/lesson-1`,
-        payload,
-      });
-      expect(updated.statusCode).toBe(200);
-      expect(mockUpdateStudentLesson).toHaveBeenCalledWith(
-        DEFAULT_WORKSPACE_ID,
-        studentId,
-        'lesson-1',
-        payload,
-        'test-user-id',
-      );
-    });
-
-    it.each([
-      ['missing time', { timezone: 'UTC' }, true],
-      [
-        'both time inputs',
-        {
-          startsAt: '2026-05-11T04:00:00Z',
-          localStartsAt: '2026-05-11T09:30',
-          timezone: 'Asia/Kolkata',
-        },
-        false,
-      ],
-      ['missing timezone', { localStartsAt: '2026-05-11T09:30' }, false],
-      ['offset on local time', { localStartsAt: '2026-05-11T09:30+02:00', timezone: 'UTC' }, false],
-      ['seconds on local time', { localStartsAt: '2026-05-11T09:30:00', timezone: 'UTC' }, false],
-    ])(
-      'validates manual lesson time inputs: %s',
-      async (_label: string, payload: Record<string, string>, createOnly: boolean) => {
-        const studentId = deriveStudentId('Anna');
-        mockCreateStudentLesson.mockClear();
-        mockUpdateStudentLesson.mockClear();
-        const created = await app.inject({
-          method: 'POST',
-          url: `/students/${studentId}/lessons`,
-          payload,
+      for (const [method, path] of [
+        ['POST', 'lessons'],
+        ['PUT', 'operations/primary-lesson-recurrence'],
+      ] as const) {
+        const response = await app.inject({
+          method,
+          url: `/students/${studentId}/${path}`,
+          payload: {},
         });
-        expect(created.statusCode).toBe(400);
-        expect(mockCreateStudentLesson).not.toHaveBeenCalled();
-        const updated = await app.inject({
+        expect(response.statusCode).toBe(404);
+      }
+      for (const payload of [
+        { startsAt: '2026-05-11T04:00:00Z' },
+        { localStartsAt: '2026-05-11T09:30', timezone: 'UTC' },
+        { status: 'canceled' },
+        { status: 'scheduled' },
+      ]) {
+        const response = await app.inject({
           method: 'PATCH',
           url: `/students/${studentId}/lessons/lesson-1`,
           payload,
         });
-        expect(updated.statusCode).toBe(createOnly ? 200 : 400);
-        expect(mockUpdateStudentLesson).toHaveBeenCalledTimes(createOnly ? 1 : 0);
-      },
-    );
+        expect(response.statusCode).toBe(400);
+      }
+    });
 
     it('passes authenticated workspace membership through every student business route', async () => {
       const studentId = deriveStudentId('Anna');
@@ -1261,25 +1220,9 @@ describeHttpServerIntegrationSuite(
       expect(
         (
           await app.inject({
-            method: 'POST',
-            url: `/students/${studentId}/lessons`,
-            payload: { startsAt: '2026-05-08T10:00:00.000Z' },
-          })
-        ).statusCode,
-      ).toBe(201);
-      expect(mockCreateStudentLesson).toHaveBeenCalledWith(
-        DEFAULT_WORKSPACE_ID,
-        studentId,
-        { startsAt: '2026-05-08T10:00:00.000Z' },
-        'test-user-id',
-      );
-
-      expect(
-        (
-          await app.inject({
             method: 'PATCH',
             url: `/students/${studentId}/lessons/${lessonId}`,
-            payload: { title: 'Updated lesson' },
+            payload: { notes: 'Updated lesson' },
           })
         ).statusCode,
       ).toBe(200);
@@ -1287,7 +1230,7 @@ describeHttpServerIntegrationSuite(
         DEFAULT_WORKSPACE_ID,
         studentId,
         lessonId,
-        { title: 'Updated lesson' },
+        { notes: 'Updated lesson' },
         'test-user-id',
       );
 
@@ -1389,53 +1332,6 @@ describeHttpServerIntegrationSuite(
       });
       expect(mutationResponse.statusCode).toBe(403);
       expect(mutationResponse.json()).toMatchObject({ error: 'workspace_required' });
-    });
-
-    it('PUT /students/:id/operations/primary-lesson-recurrence validates and saves recurrence rules', async () => {
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/students/${deriveStudentId('Anna')}/operations/primary-lesson-recurrence`,
-        payload: {
-          timezone: 'Asia/Bangkok',
-          startsOn: '2026-05-11',
-          generationHorizonDays: 56,
-          slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(mockUpsertPrimaryStudentLessonRecurrence).toHaveBeenCalledWith(
-        DEFAULT_WORKSPACE_ID,
-        deriveStudentId('Anna'),
-        {
-          timezone: 'Asia/Bangkok',
-          startsOn: '2026-05-11',
-          generationHorizonDays: 56,
-          slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
-        },
-        'test-user-id',
-      );
-      expect(response.json()).toMatchObject({
-        recurrenceRule: {
-          timezone: 'Asia/Bangkok',
-          slots: [{ isoWeekday: 1, localStartTime: '11:00' }],
-        },
-      });
-    });
-
-    it('PUT /students/:id/operations/primary-lesson-recurrence rejects invalid recurrence rules', async () => {
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/students/${deriveStudentId('Anna')}/operations/primary-lesson-recurrence`,
-        payload: {
-          timezone: 'Asia/Bangkok',
-          startsOn: '2026-05-11',
-          slots: [{ isoWeekday: 8, localStartTime: '11:00', durationMinutes: 50 }],
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toMatchObject({ error: 'validation_failed' });
     });
   },
 );

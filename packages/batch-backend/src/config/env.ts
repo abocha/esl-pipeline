@@ -26,7 +26,18 @@ export type GenerationSafetyMode = 'off' | 'warn' | 'hard_stop';
 
 export type NodeEnv = 'development' | 'test' | 'production';
 
+export interface GoogleCalendarConfig {
+  enabled: boolean;
+  configurationError?: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  activeKeyId: string;
+  encryptionKeys: Record<string, string>;
+}
+
 export interface BatchBackendConfig {
+  googleCalendar?: GoogleCalendarConfig;
   nodeEnv: NodeEnv;
   httpPort: number;
   pg: {
@@ -623,6 +634,73 @@ export function loadConfig(): BatchBackendConfig {
 
   const refreshCookieSameSite = normalizeSameSite(refreshCookieSameSiteRaw);
 
+  const googleCalendarEnabled = readBool('GOOGLE_CALENDAR_ENABLED', false);
+  const googleCalendar: GoogleCalendarConfig = {
+    enabled: googleCalendarEnabled,
+    clientId: readString('GOOGLE_CALENDAR_CLIENT_ID', '')!,
+    clientSecret: readString('GOOGLE_CALENDAR_CLIENT_SECRET', '')!,
+    redirectUri: readString('GOOGLE_CALENDAR_REDIRECT_URI', '')!,
+    activeKeyId: readString('INTEGRATION_CREDENTIAL_ACTIVE_KEY_ID', '')!,
+    encryptionKeys: {},
+  };
+  if (googleCalendarEnabled) {
+    try {
+      try {
+        googleCalendar.encryptionKeys = JSON.parse(
+          readString('INTEGRATION_CREDENTIAL_KEYS', '{}')!,
+        );
+      } catch {
+        throw new Error('Invalid integration credential key configuration');
+      }
+      const { clientId, clientSecret, redirectUri, activeKeyId, encryptionKeys } = googleCalendar;
+      let callback: URL;
+      try {
+        callback = new URL(redirectUri);
+      } catch {
+        throw new Error('Invalid Google Calendar callback configuration');
+      }
+      if (
+        !clientId ||
+        !clientSecret ||
+        callback.pathname !== '/api/google/calendar/callback' ||
+        callback.search ||
+        callback.hash ||
+        callback.username ||
+        callback.password ||
+        (callback.protocol !== 'https:' &&
+          !(nodeEnv !== 'production' && ['localhost', '127.0.0.1'].includes(callback.hostname)))
+      )
+        throw new Error('Invalid Google Calendar callback configuration');
+      if (
+        !activeKeyId ||
+        !encryptionKeys ||
+        typeof encryptionKeys !== 'object' ||
+        Array.isArray(encryptionKeys) ||
+        !encryptionKeys[activeKeyId] ||
+        Object.entries(encryptionKeys).some(
+          ([id, key]) =>
+            !/^[a-zA-Z0-9_-]{1,64}$/.test(id) ||
+            typeof key !== 'string' ||
+            Buffer.from(key, 'base64').length !== 32 ||
+            Buffer.from(key, 'base64').toString('base64') !== key,
+        )
+      )
+        throw new Error('Invalid integration credential key configuration');
+      if (
+        nodeEnv === 'production' &&
+        (!refreshCookieSecure ||
+          refreshCookieSameSite === 'strict' ||
+          !(
+            refreshCookiePath === '/' ||
+            '/api/google/calendar/callback'.startsWith(`${refreshCookiePath}/`)
+          ))
+      )
+        throw new Error('Google Calendar requires a callback-compatible refresh cookie');
+    } catch {
+      googleCalendar.configurationError = 'google_calendar_configuration_invalid';
+    }
+  }
+
   // Security configuration
   const maxFileSize = readInt('MAX_FILE_SIZE', 10 * 1024 * 1024); // 10MB default
   const allowedMimeTypesEnv =
@@ -871,6 +949,7 @@ export function loadConfig(): BatchBackendConfig {
       configConditionalRequests,
       configDir,
     },
+    googleCalendar,
     auth: {
       jwtSecret,
       jwtExpiresIn,

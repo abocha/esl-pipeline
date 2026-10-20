@@ -40,6 +40,7 @@
 | POST | `/drafts/:draftId/materialize` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | PUT | `/drafts/:id` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | POST | `/generation/drafts` | `packages/batch-backend/src/transport/extended-routes/config-routes.ts` |
+| GET | `/google/calendar/callback` | `packages/batch-backend/src/transport/extended-routes/google-calendar-connection-routes.ts` |
 | GET | `/health` | `packages/batch-backend/src/transport/core-routes.ts` |
 | POST | `/jobs` | `packages/batch-backend/src/transport/core-routes.ts` |
 | GET | `/jobs/:jobId` | `packages/batch-backend/src/transport/core-routes.ts` |
@@ -80,13 +81,11 @@
 | POST | `/students/:id/credits/adjustments` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/homework-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/lesson-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
-| POST | `/students/:id/lessons` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | PATCH | `/students/:id/lessons/:lessonId` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/memory-snapshots` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/memory/health` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | PUT | `/students/:id/operations/lesson-plan` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
-| PUT | `/students/:id/operations/primary-lesson-recurrence` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | PUT | `/students/:id/operations/reminders/latest-hidden/undo` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | PUT | `/students/:id/operations/reminders/lesson-followup/:lessonId/hide` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/packages` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |

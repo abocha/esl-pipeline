@@ -43,6 +43,9 @@ WITH authorized_student AS (
   FROM student_activity a JOIN authorized_student s ON s.id=a.student_id AND COALESCE(a.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=$2
   WHERE (a.type<>'homework_started' OR EXISTS (SELECT 1 FROM assignment_sessions own WHERE own.id=a.entity_id AND own.user_id=$3 AND own.student_id=s.id))
     AND (a.type<>'homework_failed' OR EXISTS (SELECT 1 FROM jobs own WHERE own.id=a.entity_id AND own.user_id=$3 AND own.student_id=s.id))
+    AND NOT(a.actor_kind='system' AND a.type IN ('lesson_created','lesson_changed','lesson_canceled','lesson_restored')
+      AND EXISTS(SELECT 1 FROM student_lessons hidden WHERE hidden.id=a.entity_id AND hidden.student_id=s.id
+        AND hidden.workspace_id=$2 AND hidden.schedule_hidden_reason='calendar_projection_replaced' AND hidden.schedule_hidden_at IS NOT NULL))
 
   UNION ALL
   SELECT 'student:'||s.id,'student_created','lifecycle',s.created_at,s.id,
@@ -54,9 +57,9 @@ WITH authorized_student AS (
   SELECT 'lesson:'||l.id,'lesson_created','lessons',l.created_at,l.id,
     jsonb_build_object('after',jsonb_build_object('startsAt',l.starts_at,'timezone',l.timezone,
       'durationMinutes',l.duration_minutes,'title',l.title,'status',l.status),
-      'generated',l.recurrence_origin='generated'),'legacy','unknown',NULL::uuid
+      'generated',l.schedule_origin_history->>'origin'='generated'),'legacy','unknown',NULL::uuid
   FROM student_lessons l JOIN authorized_student s ON s.id=l.student_id
-  WHERE (l.workspace_id=$2 OR (l.workspace_id IS NULL AND $2='00000000-0000-4000-8000-000000000001'::uuid)) AND l.recurrence_obsolete_at IS NULL
+  WHERE (l.workspace_id=$2 OR (l.workspace_id IS NULL AND $2='00000000-0000-4000-8000-000000000001'::uuid)) AND l.schedule_hidden_at IS NULL
     AND NOT EXISTS (SELECT 1 FROM student_activity a WHERE a.student_id=s.id AND a.entity_id=l.id AND a.type='lesson_created')
 
   UNION ALL

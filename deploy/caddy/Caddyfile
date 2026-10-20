@@ -1,5 +1,9 @@
 {
 	email {$CADDY_ACME_EMAIL}
+	# Upstream error diagnostics contain the raw request URI/headers. nginx emits sanitized outcomes.
+	log default {
+		exclude http.log.error
+	}
 }
 
 (application) {
@@ -15,7 +19,7 @@
 
 (transition-serve) {
 	{$CADDY_TRANSITION_HOSTNAME} {
-		@oauth path /api/oauth /api/oauth/* /api/mcp /api/mcp/* /.well-known/* /api/.well-known/*
+		@oauth path /api/google/calendar /api/google/calendar/* /api/oauth /api/oauth/* /api/mcp /api/mcp/* /.well-known/* /api/.well-known/*
 		header @oauth Cache-Control no-store
 		respond @oauth "Use the canonical MCP endpoint" 410
 		import application

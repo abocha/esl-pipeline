@@ -30,6 +30,7 @@ services:
       PG_APPLICATION_NAME: esl-pipeline-api
       PG_POOL_MAX: '8'
       BATCH_BACKEND_ENABLE_OPS_CONTROL: ${BATCH_BACKEND_ENABLE_OPS_CONTROL:-false}
+    # Calendar API/worker OAuth and dedicated keyring configuration comes from this env file.
     env_file:
       - ${ESL_PRODUCTION_ENV_FILE:-/etc/esl-pipeline/production.env}
     ports:
@@ -81,6 +82,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /app/secrets/google-service-account.json
       PG_APPLICATION_NAME: esl-pipeline-batch-worker
       PG_POOL_MAX: '6'
+    # Calendar API/worker OAuth and dedicated keyring configuration comes from this env file.
     env_file:
       - ${ESL_PRODUCTION_ENV_FILE:-/etc/esl-pipeline/production.env}
     command: ['node', 'dist/transport/worker-runner.js']

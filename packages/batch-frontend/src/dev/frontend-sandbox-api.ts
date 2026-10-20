@@ -848,12 +848,9 @@ function scheduleBillingSurface() {
       workspaceId: 'workspace-sandbox',
       timezone: 'Asia/Saigon',
       defaultDurationMinutes: 60,
-      cadence: null,
-      preferredTimes: null,
       schedulingNotes: 'Sandbox lesson data for local UI testing.',
       updatedAt: now,
     },
-    recurrenceRule: null,
     nextLesson: {
       id: 'lesson-sandbox-next',
       studentId: 'student-alex',
@@ -866,11 +863,9 @@ function scheduleBillingSurface() {
       title: 'Workplace update practice',
       notes: null,
       creditEventId: null,
-      recurrenceRuleId: null,
-      recurrenceSlotId: null,
-      recurrenceOccurrenceKey: null,
-      recurrenceOrigin: 'manual',
-      recurrenceOverrideKind: null,
+      historicalScheduleOrigin: {},
+      schedulingSource: 'unmanaged',
+      calendarEventUrl: null,
       homework: {
         status: 'not_started',
         assignmentSessionId: null,
@@ -1089,6 +1084,25 @@ export function createFrontendSandboxApiAdapter(
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const method = (config.method ?? 'get').toLowerCase();
     const path = normalizePath(config.url);
+    if (method === 'get' && /^\/workspaces\/[^/]+\/calendar\/connection$/.test(path))
+      return responseFor(config, {
+        enabled: false,
+        canManage: true,
+        canSchedule: true,
+        unavailableReason: 'google_calendar_disabled',
+        connection: null,
+        grant: null,
+      });
+    if (method === 'get' && /^\/workspaces\/[^/]+\/calendar\/scheduling-status$/.test(path))
+      return responseFor(config, {
+        state: 'disconnected',
+        connectionId: null,
+        calendarName: null,
+        googleEmail: null,
+        lastSyncedAt: null,
+        errorCode: null,
+        operations: [],
+      });
     const businessData = businessSandbox(
       method,
       path,

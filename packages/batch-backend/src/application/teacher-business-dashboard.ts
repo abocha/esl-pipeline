@@ -20,7 +20,6 @@ import type {
 
 import { ACTIVE_ASSIGNMENT_SESSION_SQL } from '../domain/assignment-session-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
-import { materializeWorkspaceLessonRecurrencesWithClient } from './student-schedule-billing.js';
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 const DEFAULT_CURRENCY = 'USD';
@@ -61,11 +60,9 @@ interface BusinessLessonRow {
   title: string | null;
   notes: string | null;
   credit_event_id: string | null;
-  recurrence_rule_id: string | null;
-  recurrence_slot_id: string | null;
-  recurrence_occurrence_key: string | null;
-  recurrence_origin: 'manual' | 'generated';
-  recurrence_override_kind: 'manual_edit' | 'manual_reschedule' | 'manual_cancel' | null;
+  schedule_origin_history: Record<string, unknown>;
+  calendar_lesson_id: string | null;
+  calendar_event_url: string | null;
   created_at: Date;
   updated_at: Date;
   homework_status: StudentLessonHomeworkStatus;
@@ -127,6 +124,8 @@ export class TeacherBusinessDashboardError extends Error {
 
 const BUSINESS_LESSON_HOMEWORK_SELECT = `
   student_lessons.*,
+  calendar_lesson_link.lesson_id AS calendar_lesson_id,
+  calendar_lesson_link.event_url AS calendar_event_url,
   CASE
     WHEN lesson_homework_memory.id IS NOT NULL THEN 'memory_ready'
     WHEN lesson_published_job.id IS NOT NULL THEN 'published'
@@ -166,6 +165,7 @@ const BUSINESS_LESSON_HOMEWORK_SELECT = `
 `;
 
 const BUSINESS_LESSON_HOMEWORK_JOINS = `
+  LEFT JOIN calendar_lesson_bindings calendar_lesson_link ON calendar_lesson_link.lesson_id = student_lessons.id
   LEFT JOIN LATERAL (
     SELECT id, prompt_package_id, draft_id, updated_at
     FROM assignment_sessions
@@ -285,7 +285,6 @@ export async function getBusinessScheduleSurface(
   params: { from?: string; to?: string } = {},
 ): Promise<BusinessScheduleSurfaceResponse> {
   return withPgClient(async (client) => {
-    await materializeWorkspaceLessonRecurrencesWithClient(client, workspaceId);
     const settings = await getBusinessSettingsForWorkspace(client, workspaceId);
     const from = params.from ?? toDateInputInTimeZone(new Date(), settings.timezone);
     const to = params.to ?? addDaysToDateInput(from, 7);
@@ -340,7 +339,6 @@ export async function getBusinessStatsSurface(
   params: { month?: string } = {},
 ): Promise<BusinessStatsSurfaceResponse> {
   return withPgClient(async (client) => {
-    await materializeWorkspaceLessonRecurrencesWithClient(client, workspaceId);
     const settings = await getBusinessSettingsForWorkspace(client, workspaceId);
     const month = params.month ?? toDateInputInTimeZone(new Date(), settings.timezone).slice(0, 7);
     const monthRange = parseMonth(month);
@@ -474,7 +472,7 @@ async function listBusinessLessons(
     WHERE ${workspacePredicate('student_lessons.workspace_id', '$4', '$5')}
       AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
       AND students.archived_at IS NULL
-      AND student_lessons.recurrence_obsolete_at IS NULL
+      AND student_lessons.schedule_hidden_at IS NULL
       AND (student_lessons.starts_at AT TIME ZONE $3)::date >= $1::date
       AND (student_lessons.starts_at AT TIME ZONE $3)::date <= $2::date
     ORDER BY student_lessons.starts_at ASC, student_lessons.id ASC
@@ -504,7 +502,7 @@ async function listPlanningLessons(
     WHERE ${workspacePredicate('student_lessons.workspace_id', '$3', '$4')}
       AND ${workspacePredicate('students.workspace_id', '$3', '$4')}
       AND students.archived_at IS NULL
-      AND student_lessons.recurrence_obsolete_at IS NULL
+      AND student_lessons.schedule_hidden_at IS NULL
       AND student_lessons.status = 'scheduled'
       AND student_lessons.starts_at >= $1
       AND student_lessons.starts_at < $2
@@ -530,7 +528,7 @@ async function listOverdueBusinessLessonFollowups(
     WHERE ${workspacePredicate('student_lessons.workspace_id', '$1', '$2')}
       AND ${workspacePredicate('students.workspace_id', '$1', '$2')}
       AND students.archived_at IS NULL
-      AND student_lessons.recurrence_obsolete_at IS NULL
+      AND student_lessons.schedule_hidden_at IS NULL
       AND student_lessons.status IN ('scheduled', 'completed')
       AND student_lessons.starts_at + (student_lessons.duration_minutes * INTERVAL '1 minute') <= NOW()
       AND lesson_homework_memory.id IS NULL
@@ -579,7 +577,7 @@ async function listStudentCreditStates(
       WHERE ${workspacePredicate('student_lessons.workspace_id', '$3', '$5')}
         AND ${workspacePredicate('lesson_students.workspace_id', '$3', '$5')}
         AND lesson_students.archived_at IS NULL
-        AND student_lessons.recurrence_obsolete_at IS NULL
+        AND student_lessons.schedule_hidden_at IS NULL
       GROUP BY student_lessons.student_id
     )
     SELECT
@@ -814,7 +812,7 @@ async function getLessonStatsForMonth(
     WHERE ${workspacePredicate('student_lessons.workspace_id', '$4', '$5')}
       AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
       AND students.archived_at IS NULL
-      AND student_lessons.recurrence_obsolete_at IS NULL
+      AND student_lessons.schedule_hidden_at IS NULL
       AND (student_lessons.starts_at AT TIME ZONE $3)::date >= $1::date
       AND (student_lessons.starts_at AT TIME ZONE $3)::date < $2::date
     `,
@@ -951,11 +949,9 @@ function mapBusinessLesson(row: BusinessLessonRow): BusinessLessonDto {
     title: row.title ?? null,
     notes: row.notes ?? null,
     creditEventId: row.credit_event_id ?? null,
-    recurrenceRuleId: row.recurrence_rule_id ?? null,
-    recurrenceSlotId: row.recurrence_slot_id ?? null,
-    recurrenceOccurrenceKey: row.recurrence_occurrence_key ?? null,
-    recurrenceOrigin: row.recurrence_origin ?? 'manual',
-    recurrenceOverrideKind: row.recurrence_override_kind ?? null,
+    historicalScheduleOrigin: row.schedule_origin_history ?? {},
+    schedulingSource: row.calendar_lesson_id ? 'calendar' : 'unmanaged',
+    calendarEventUrl: row.calendar_event_url ?? null,
     homework: mapBusinessLessonHomework(row),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),

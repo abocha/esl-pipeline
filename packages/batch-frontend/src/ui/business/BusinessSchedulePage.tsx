@@ -9,6 +9,7 @@ import {
   undoLatestHiddenStudentReminder,
   updateStudentLesson,
 } from '../../utils/api';
+import { CalendarSchedulingPanel } from '../calendar/CalendarSchedulingPanel';
 import { BusinessInfoHint } from './BusinessInfoHint';
 import { formatDate, formatDateTime, formatMoney } from './business-format';
 
@@ -88,7 +89,7 @@ export const BusinessSchedulePage: React.FC = () => {
   }, [load]);
   const runLessonStatus = async (
     lesson: NonNullable<BusinessScheduleSurface['lessons'][number]>,
-    status: 'scheduled' | 'completed' | 'no_show' | 'canceled',
+    status: 'completed' | 'no_show',
   ) => {
     surfaceRef.current
       ?.querySelector<HTMLElement>('.business-status-actions > button[aria-expanded="true"]')
@@ -210,6 +211,11 @@ export const BusinessSchedulePage: React.FC = () => {
   const retainedPeriodNotice = `Showing lessons for ${surface.from} – ${surface.to}.`;
   return (
     <section ref={surfaceRef} className="business-dashboard-surface" aria-busy={loading}>
+      <CalendarSchedulingPanel
+        workspaceId={surface.workspaceId}
+        timezone={timezone}
+        onLedgerRefresh={load}
+      />
       <div className="business-agenda-heading">
         <div className="business-schedule-title">
           <h2>Schedule</h2>
@@ -406,27 +412,14 @@ export const BusinessSchedulePage: React.FC = () => {
                               >
                                 No-show
                               </button>
-                              <button
-                                type="button"
-                                disabled={savingLessonId !== null}
-                                onClick={() => void runLessonStatus(lesson, 'canceled')}
-                              >
-                                Cancel
-                              </button>
                             </>
+                          ) : null}
+                          {lesson.calendarEventUrl ? (
+                            <a href={lesson.calendarEventUrl} target="_blank" rel="noreferrer">
+                              Open in Google
+                            </a>
                           ) : (
-                            <>
-                              <button
-                                type="button"
-                                disabled={savingLessonId !== null}
-                                onClick={() => void runLessonStatus(lesson, 'scheduled')}
-                              >
-                                Restore
-                              </button>
-                              {lesson.creditEventId ? (
-                                <small>Restoring returns the consumed credit.</small>
-                              ) : null}
-                            </>
+                            <small>Historical / unmanaged</small>
                           )}
                         </div>
                       ) : null}

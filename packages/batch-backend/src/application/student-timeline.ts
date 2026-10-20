@@ -543,11 +543,11 @@ const timelineQuery = `
         'title', sl.title,
         'status', sl.status,
         'consumesCredit', sl.consumes_credit,
-        'recurrenceOrigin', sl.recurrence_origin,
-        'recurrenceOverrideKind', sl.recurrence_override_kind
+        'recurrenceOrigin', sl.schedule_origin_history->>'origin',
+        'recurrenceOverrideKind', sl.schedule_origin_history->>'overrideKind'
       ) AS details_json
     FROM student_lessons sl
-    WHERE sl.student_id = $1
+    WHERE sl.student_id = $1 AND sl.schedule_hidden_at IS NULL
 
     UNION ALL
 
@@ -592,11 +592,11 @@ const timelineQuery = `
         'title', sl.title,
         'status', sl.status,
         'consumesCredit', sl.consumes_credit,
-        'recurrenceOrigin', sl.recurrence_origin,
-        'recurrenceOverrideKind', sl.recurrence_override_kind
+        'recurrenceOrigin', sl.schedule_origin_history->>'origin',
+        'recurrenceOverrideKind', sl.schedule_origin_history->>'overrideKind'
       ) AS details_json
     FROM student_lessons sl
-    WHERE sl.student_id = $1
+    WHERE sl.student_id = $1 AND sl.schedule_hidden_at IS NULL
       AND sl.updated_at > sl.created_at
 
     UNION ALL
@@ -632,8 +632,8 @@ const timelineQuery = `
         'workspaceId', slp.workspace_id,
         'timezone', slp.timezone,
         'defaultDurationMinutes', slp.default_duration_minutes,
-        'cadence', slp.cadence,
-        'preferredTimes', slp.preferred_times,
+        'cadence', slp.retired_schedule_preferences->>'cadence',
+        'preferredTimes', slp.retired_schedule_preferences->>'preferredTimes',
         'schedulingNotes', slp.scheduling_notes
       ) AS details_json
     FROM student_lesson_plans slp
@@ -679,7 +679,11 @@ const timelineQuery = `
         'generationHorizonDays', slrr.generation_horizon_days,
         'materializedThrough', slrr.materialized_through
       ) AS details_json
-    FROM student_lesson_recurrence_rules slrr
+    FROM student_lesson_plans retired_plan
+    CROSS JOIN LATERAL jsonb_to_recordset(COALESCE(retired_plan.retired_schedule_preferences->'rules','[]'::jsonb))
+      AS slrr(id uuid,student_id uuid,workspace_id uuid,timezone text,frequency text,
+        starts_on date,ends_on date,status text,generation_horizon_days integer,
+        materialized_through date,updated_at timestamptz)
     WHERE slrr.student_id = $1
 
     UNION ALL

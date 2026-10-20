@@ -1,6 +1,5 @@
 import { assignmentArtifactFixture } from './assignment-v1.test-harness.js';
 import './support/bootstrap-pg-test-env.js';
-
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -12,11 +11,9 @@ import {
 import {
   addStudentPackage,
   applyGeneratedLessonTitleIfPlaceholder,
-  createStudentLesson,
   hideStudentLessonFollowupReminder,
   undoLatestHiddenStudentReminder,
   updateStudentLesson,
-  upsertPrimaryStudentLessonRecurrence,
 } from '../src/application/student-schedule-billing.js';
 import {
   getStudentTimeline,
@@ -42,6 +39,7 @@ import {
 } from '../src/domain/student-repository.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 import { withPgClient } from '../src/infrastructure/db.js';
+import { seedUnmanagedLesson } from './support/seed-unmanaged-lesson.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 requirePgTestEnv();
@@ -60,8 +58,6 @@ async function truncateTimelineTables() {
         student_payment_records,
         student_credit_events,
         student_reminder_preferences,
-        student_lesson_recurrence_slots,
-        student_lesson_recurrence_rules,
         student_lesson_plans,
         student_lessons,
         workspace_business_settings,
@@ -359,7 +355,6 @@ describe('student-timeline', () => {
     const studentId = deriveStudentId('Rina');
     const workspaceId = randomUUID();
     const lessonId = randomUUID();
-    const recurrenceRuleId = randomUUID();
     const creditEventId = randomUUID();
     const paymentId = randomUUID();
     const times = {
@@ -409,33 +404,13 @@ describe('student-timeline', () => {
           workspace_id,
           timezone,
           default_duration_minutes,
-          cadence,
-          preferred_times,
           scheduling_notes,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, 'UTC', 60, 'weekly', 'Mondays', 'Keep mornings', $3, $3)
+        VALUES ($1, $2, 'UTC', 60, 'Keep mornings', $3, $3)
         `,
         [studentId, workspaceId, times.lessonCreated],
-      );
-      await client.query(
-        `
-        INSERT INTO student_lesson_recurrence_rules (
-          id,
-          student_id,
-          workspace_id,
-          timezone,
-          frequency,
-          starts_on,
-          status,
-          generation_horizon_days,
-          created_at,
-          updated_at
-        )
-        VALUES ($1, $2, $3, 'UTC', 'weekly', '2024-03-01', 'active', 56, $4, $4)
-        `,
-        [recurrenceRuleId, studentId, workspaceId, times.lessonCreated],
       );
       await client.query(
         `
@@ -449,20 +424,12 @@ describe('student-timeline', () => {
           status,
           consumes_credit,
           title,
-          recurrence_rule_id,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, '2024-03-02T09:00:00.000Z', 'UTC', 60, 'completed', true, 'Pitch practice', $4, $5, $6)
+        VALUES ($1, $2, $3, '2024-03-02T09:00:00.000Z', 'UTC', 60, 'completed', true, 'Pitch practice', $4, $5)
         `,
-        [
-          lessonId,
-          studentId,
-          workspaceId,
-          recurrenceRuleId,
-          times.lessonCreated,
-          times.lessonUpdated,
-        ],
+        [lessonId, studentId, workspaceId, times.lessonCreated, times.lessonUpdated],
       );
       await client.query(
         `
@@ -520,7 +487,6 @@ describe('student-timeline', () => {
         'lesson_created',
         'lesson_completed',
         'lesson_plan_updated',
-        'lesson_recurrence_updated',
         'credit_event_recorded',
         'payment_recorded',
         'reminder_hidden',
@@ -533,7 +499,6 @@ describe('student-timeline', () => {
       'business_settings_updated',
       'lesson_created',
       'lesson_plan_updated',
-      'lesson_recurrence_updated',
       'lesson_completed',
       'credit_event_recorded',
       'payment_recorded',
@@ -592,7 +557,7 @@ describe('student activity owner-to-feed contract', () => {
 
   it('preserves complete → restore → complete and time changes, with causal credit effects on their parent pages', async () => {
     const f = await fixture();
-    const surface = await createStudentLesson(
+    const surface = await seedUnmanagedLesson(
       f.workspaceId,
       f.studentId,
       {
@@ -624,7 +589,7 @@ describe('student activity owner-to-feed contract', () => {
       f.workspaceId,
       f.studentId,
       lessonId,
-      { status: 'scheduled', consumesCredit: false },
+      { status: 'no_show', consumesCredit: false },
       f.userId,
     );
     await updateStudentLesson(
@@ -634,26 +599,28 @@ describe('student activity owner-to-feed contract', () => {
       { status: 'completed', consumesCredit: true },
       f.userId,
     );
-    await updateStudentLesson(
-      f.workspaceId,
-      f.studentId,
-      lessonId,
-      { startsAt: '2026-10-18T08:00:00Z', durationMinutes: 75 },
-      f.userId,
-    );
+    await withPgClient(async (client) => {
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.calendar_sync','on',true)");
+      await client.query(
+        "UPDATE student_lessons SET starts_at='2026-10-18T08:00:00Z',duration_minutes=75 WHERE id=$1",
+        [lessonId],
+      );
+      await client.query('COMMIT');
+    });
     const full = await f.read();
     const lessons = full!.items.filter((x) => x.category === 'lessons');
     expect(lessons.map((x) => x.type)).toEqual([
       'lesson_changed',
       'lesson_completed',
-      'lesson_restored',
+      'lesson_no_show',
       'lesson_completed',
       'lesson_created',
     ]);
     expect(lessons[0]).toMatchObject({
       subject: 'Lesson moved · Travel plans',
       evidence: 'recorded',
-      actor: { kind: 'user', label: 'Tutor' },
+      actor: { kind: 'system' },
       effectiveAt: '2026-10-18T08:00:00+00:00',
     });
     expect(lessons[0]!.details).toEqual(
@@ -666,7 +633,7 @@ describe('student activity owner-to-feed contract', () => {
       [{ label: 'Credits', value: '-1' }],
       [{ label: 'Credits', value: '-1' }],
     ]);
-    expect(lessons.find((x) => x.type === 'lesson_restored')!.effects).toEqual([
+    expect(lessons.find((x) => x.type === 'lesson_no_show')!.effects).toEqual([
       { label: 'Credits reversed', value: '+1' },
     ]);
     expect(full!.items.some((x) => x.type.startsWith('credits_'))).toBe(false);
@@ -681,7 +648,7 @@ describe('student activity owner-to-feed contract', () => {
       cursor: billing.nextCursor!,
     }))!;
     expect(reversal.items[0]).toMatchObject({
-      type: 'lesson_restored',
+      type: 'lesson_no_show',
       effects: [{ label: 'Credits reversed', value: '+1' }],
     });
 
@@ -700,7 +667,7 @@ describe('student activity owner-to-feed contract', () => {
     ).toBe(true);
     expect(await getStudentActivity(randomUUID(), f.studentId, f.userId)).toBeNull();
     await expect(
-      updateStudentLesson(randomUUID(), f.studentId, lessonId, { status: 'canceled' }, f.userId),
+      updateStudentLesson(randomUUID(), f.studentId, lessonId, { status: 'no_show' }, f.userId),
     ).rejects.toThrow();
     expect((await f.read())?.items.map((x) => x.id)).toEqual(full!.items.map((x) => x.id));
   });
@@ -708,7 +675,7 @@ describe('student activity owner-to-feed contract', () => {
   it('rolls back domain mutation and ledger effects when required recording fails', async () => {
     const f = await fixture();
     const lessonId = (
-      await createStudentLesson(
+      await seedUnmanagedLesson(
         f.workspaceId,
         f.studentId,
         { startsAt: '2026-10-17T07:00:00Z', title: 'Rollback lesson' },
@@ -913,10 +880,10 @@ describe('student activity owner-to-feed contract', () => {
     expect(rows.find((x) => x.type === 'candidate_promoted')!.evidence).toBe('recorded');
   });
 
-  it('records reminder hide and undo once and one weekly-schedule change rather than maintenance writes', async () => {
+  it('records reminder hide and undo once without schedule writes', async () => {
     const f = await fixture();
     const lessonId = (
-      await createStudentLesson(
+      await seedUnmanagedLesson(
         f.workspaceId,
         f.studentId,
         { startsAt: '2026-10-01T07:00:00Z', title: 'Follow up' },
@@ -927,24 +894,10 @@ describe('student activity owner-to-feed contract', () => {
     await hideStudentLessonFollowupReminder(f.workspaceId, f.studentId, lessonId, f.userId);
     await undoLatestHiddenStudentReminder(f.workspaceId, f.studentId, f.userId);
     await undoLatestHiddenStudentReminder(f.workspaceId, f.studentId, f.userId);
-    const schedule = {
-      timezone: 'Asia/Bangkok',
-      startsOn: '2026-01-01',
-      status: 'paused' as const,
-      slots: [{ isoWeekday: 2, localStartTime: '15:00', durationMinutes: 50 }],
-    };
-    await upsertPrimaryStudentLessonRecurrence(f.workspaceId, f.studentId, schedule, f.userId);
-    await upsertPrimaryStudentLessonRecurrence(f.workspaceId, f.studentId, schedule, f.userId);
-    await upsertPrimaryStudentLessonRecurrence(
-      f.workspaceId,
-      f.studentId,
-      { ...schedule, generationHorizonDays: 90 },
-      f.userId,
-    );
     const items = (await f.read())!.items;
     expect(items.filter((x) => x.type === 'reminder_hidden')).toHaveLength(1);
     expect(items.filter((x) => x.type === 'reminder_restored')).toHaveLength(1);
-    expect(items.filter((x) => x.type === 'recurrence_changed')).toHaveLength(1);
+    expect(items.filter((x) => x.type === 'recurrence_changed')).toHaveLength(0);
   });
 
   it('keeps package payments and credits together and filters action dates in the workspace timezone', async () => {
@@ -1139,7 +1092,7 @@ describe('student activity owner-to-feed contract', () => {
   it('suppresses generated placeholder-title enrichment while retaining explicit title edits', async () => {
     const f = await fixture();
     const lessonId = (
-      await createStudentLesson(
+      await seedUnmanagedLesson(
         f.workspaceId,
         f.studentId,
         { startsAt: '2026-10-17T07:00:00Z', title: 'Untitled lesson' },
@@ -1154,15 +1107,16 @@ describe('student activity owner-to-feed contract', () => {
       }),
     ).toBe(true);
     expect((await f.read())!.items.filter((x) => x.type.startsWith('lesson_'))).toHaveLength(1);
-    await updateStudentLesson(
-      f.workspaceId,
-      f.studentId,
-      lessonId,
-      { title: 'Teacher chosen topic' },
-      f.userId,
-    );
+    await withPgClient(async (client) => {
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.calendar_sync','on',true)");
+      await client.query("UPDATE student_lessons SET title='Teacher title' WHERE id=$1", [
+        lessonId,
+      ]);
+      await client.query('COMMIT');
+    });
     expect((await f.read())!.items.find((x) => x.type === 'lesson_changed')!.subject).toBe(
-      'Lesson changed · Teacher chosen topic',
+      'Lesson changed \u00b7 Teacher title',
     );
   });
 
@@ -1174,7 +1128,7 @@ describe('student activity owner-to-feed contract', () => {
       actorUserId: f.userId,
     });
     const lessonId = (
-      await createStudentLesson(
+      await seedUnmanagedLesson(
         f.workspaceId,
         f.studentId,
         { startsAt: '2026-10-17T07:00:00Z' },
@@ -1257,7 +1211,7 @@ describe('student activity owner-to-feed contract', () => {
   it('preserves the existing workspace SET NULL retention path without blocking linked ledger cleanup', async () => {
     const f = await fixture();
     const lessonId = (
-      await createStudentLesson(
+      await seedUnmanagedLesson(
         f.workspaceId,
         f.studentId,
         { startsAt: '2026-10-17T07:00:00Z' },
@@ -1275,7 +1229,7 @@ describe('student activity owner-to-feed contract', () => {
       f.workspaceId,
       f.studentId,
       lessonId,
-      { status: 'scheduled', consumesCredit: false },
+      { status: 'no_show', consumesCredit: false },
       f.userId,
     );
     await withPgClient(async (client) => {
