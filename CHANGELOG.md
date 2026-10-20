@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.0.0] - 2026-10-20
+
+### Changed
+
+- Automated release from PR #420: feat(calendar)!: Google Calendar scheduling and scheduler retirement (ESL-62) (https://github.com/abocha/esl-pipeline/pull/420)
+
 ## [21.5.1] - 2026-10-18
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "name": "esl-pipeline",
-  "version": "21.5.1",
+  "version": "22.0.0",
   "private": true,
   "description": "ESL assignment pipeline tooling (validation, HTML publishing, TTS, S3 upload).",
   "keywords": [
