@@ -26,9 +26,9 @@ Provider/model detail stays in
 
 ## Capability Matrix
 
-Public English Privacy Policy and Terms drafts are hosted as static landing pages, with links from
-unauthenticated and authenticated UI and an in-context Calendar disclosure. No API or OAuth scope
-contract changes. Legal approval and production publication remain pending; see
+Public English Privacy Policy and Terms are approved for the alpha, effective 20 October 2026,
+with static landing pages, app links and contextual Calendar/AI-processing disclosure. No API or
+OAuth scope contract changes. Deployment and Google Auth Platform publication remain operator-owned; see
 [OAuth/legal readiness](../operations/google-oauth-legal-readiness.md).
 
 | Surface                                | Status                        | Current boundary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |

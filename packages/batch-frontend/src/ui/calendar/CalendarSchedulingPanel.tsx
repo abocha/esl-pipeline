@@ -277,7 +277,10 @@ export function CalendarSchedulingPanel({
         Connecting shares your Google account identity and writable calendar list with ESL Pipeline.
         The selected calendar's event details are stored to sync lessons; invitations share event
         details with recipients when you choose to send them. Access can continue in the background.
-        Disconnecting stops sync but keeps stored data and Google authorization. Read the{' '}
+        OpenAI API processes selected teaching context; memory rebuilds and profile refreshes can
+        also send Calendar-derived lesson start times and internal lesson associations. Separately
+        authorized ChatGPT connections receive selected learner context. Disconnecting stops sync
+        but keeps stored data and Google authorization. Read the{' '}
         <a
           href="https://eslpipeline.com/privacy/#google-calendar"
           target="_blank"

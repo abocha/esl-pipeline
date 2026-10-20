@@ -31,7 +31,7 @@ No command in this runbook itself grants production or provider authorization.
 Production Google OAuth also depends on approved and publicly deployed legal pages, consent
 branding, exact scope registration, and an audience/verification decision. See
 [legal/OAuth readiness](google-oauth-legal-readiness.md), owned by ABO-58; ABO-56 retains the
-separate production cutover boundary. Local draft pages alone do not satisfy this dependency.
+separate production cutover boundary. Approved repository pages alone do not establish deployed public reachability or completed Google publication.
 
 ## Scheduling and recovery contracts
 

@@ -6,10 +6,10 @@ MCP OAuth issuer/resource remain exclusively on `https://app.eslpipeline.com`. T
 
 ## Implementation
 
-Public English legal drafts are served at `/privacy/` and `/terms/` from directory index files,
+Approved English legal pages (effective 20 October 2026) are served at `/privacy/` and `/terms/` from directory index files,
 with shared `legal.css`. They are linked from the landing footer and app. See
 [legal/OAuth readiness](google-oauth-legal-readiness.md) for approval decisions and exact consent
-URLs. The existing bind mount serves these files; draft copy is not production legal approval.
+URLs. The existing bind mount serves these files; production deployment remains separately authorized.
 
 - The approved, dependency-free HTML/CSS/JavaScript lives in `deploy/landing/index.html`.
   It includes illustrative data rather than real learner records. The ChatGPT integration is
