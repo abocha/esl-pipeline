@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '../../context/AuthContext';
+import { LegalLinks } from '../LegalLinks';
 
 import './AuthDialog.css';
 
@@ -405,6 +406,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
             {mode === 'login' ? 'Sign up' : 'Sign in'}
           </button>
         </div>
+        <LegalLinks />
       </div>
     </div>
   );

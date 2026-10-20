@@ -285,6 +285,12 @@ remains available for explicit activation if only the import completed.
 
 ## Validation
 
+Public legal disclosures live on the unauthenticated landing host at
+`https://eslpipeline.com/privacy/` and `https://eslpipeline.com/terms/`. The sign-in screen,
+authentication dialog, workspace rail and Calendar connection screen link to them. Legal links
+open a separate tab so assignment recovery/navigation state remains intact. The current text is
+draft pending maintainer approval; see [OAuth/legal readiness](../../docs/operations/google-oauth-legal-readiness.md).
+
 ```bash
 pnpm --filter @esl-pipeline/batch-frontend build
 pnpm --filter @esl-pipeline/batch-frontend test

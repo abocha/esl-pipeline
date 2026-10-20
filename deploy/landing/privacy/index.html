@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta
+      name="description"
+      content="How ESL Pipeline handles teaching records, Google Calendar data, and connected services. Draft for review."
+    />
+    <title>Privacy Policy | ESL Pipeline</title>
+    <link rel="canonical" href="https://eslpipeline.com/privacy/" />
+    <link rel="stylesheet" href="/legal.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">ESL Pipeline</a><a href="/terms/">Terms of Service</a
+      ><a href="https://app.eslpipeline.com">Open app</a>
+    </header>
+    <main>
+      <h1>Privacy Policy</h1>
+      <p class="meta">Draft dated 20 October 2026 · No effective date has been set.</p>
+      <p class="draft">
+        <strong>Draft for review.</strong> This document describes the implemented service and
+        proposed data-use commitments. It has not been approved as an effective policy. Operator
+        identity, privacy responsibilities, retention, and applicable legal requirements must be
+        settled before publication for production OAuth.
+      </p>
+      <h2>About this service and contact</h2>
+      <p>
+        ESL Pipeline is an invite-only teaching workspace for tutors. It organizes student records,
+        lesson sources, homework, scheduling, and recorded payments. For privacy questions or
+        requests, email <a href="mailto:hello@eslpipeline.com">hello@eslpipeline.com</a>. The legal
+        name of the service operator remains to be confirmed.
+      </p>
+      <h2>Information handled by the service</h2>
+      <ul>
+        <li>
+          <strong>Accounts and workspaces:</strong> account email, password authentication records,
+          workspace membership and permissions, and session and integration authorization records.
+        </li>
+        <li>
+          <strong>Teaching records:</strong> student names and contact details supplied by tutors,
+          learning preferences, tutor notes, lesson history, recordings, transcripts and speaker
+          labels, learner profiles and learning observations, homework drafts, generated materials,
+          and published handouts and audio.
+        </li>
+        <li>
+          <strong>Scheduling and billing records:</strong> lesson times and status, student
+          associations, rates, credits, and payment amounts, currencies, dates and notes entered by
+          tutors. Recording a payment in ESL Pipeline does not itself process a bank or card
+          transaction.
+        </li>
+        <li>
+          <strong>Technical records:</strong> requests, errors, job and integration status, usage
+          and operational logs. Cookies support sessions and authorization; browser storage holds
+          preferences and workflow recovery information, including Calendar setup drafts. The
+          reviewed app and landing do not include advertising or analytics trackers.
+        </li>
+      </ul>
+      <h2 id="google-calendar">Google Calendar access, use, storage, and sharing</h2>
+      <p>
+        Connecting Google Calendar is separate from signing in to ESL Pipeline. A workspace owner or
+        administrator authorizes a Google account, then selects an existing writable lesson
+        calendar. Google supplies the account identifier and verified email to identify that
+        connection. ESL Pipeline lists writable subscribed calendars, including their names and time
+        zones, so you can choose one.
+      </p>
+      <p>
+        The requested permissions are <code>openid</code>, <code>email</code>,
+        <code>calendar.calendarlist.readonly</code>, and <code>calendar.events</code> (the Calendar
+        scopes use the <code>https://www.googleapis.com/auth/</code> prefix). Google's event
+        permission covers events across your calendars. ESL Pipeline's integration operates on the
+        selected calendar; use a dedicated lesson calendar without unrelated personal events.
+      </p>
+      <p>
+        The integration reads event identifiers, titles, times, time zones, recurrence and
+        occurrence information, status, event links, attendee emails and responses, and private
+        association metadata. Synchronization can read events on the selected calendar even when
+        they have not been associated with a student. Associated events become lesson scheduling
+        records. ESL Pipeline creates lesson events and recurring series when requested; timing and
+        recurrence changes are managed in Google Calendar and synchronized back to ESL Pipeline.
+      </p>
+      <p>
+        When you choose to send an invitation, ESL Pipeline sends the event and the selected
+        student's email to Google. Google distributes invitations and updates according to Calendar
+        behavior. Event information may be visible to invitees and people who can access that
+        calendar. Check recipients and calendar sharing before sending.
+      </p>
+      <p>
+        ESL Pipeline stores Google account and calendar identifiers, the connected email, granted
+        scopes, encrypted access and refresh credentials, synchronization cursors, event and lesson
+        associations, scheduling fields, and operation records, which can include event observations
+        and invitation recipients. Refresh credentials allow background synchronization when you are
+        not actively using the app. Workspace permissions control access to related teaching and
+        scheduling information.
+      </p>
+      <p>
+        <strong>Proposed Limited Use commitment:</strong> ESL Pipeline's use and transfer of
+        information received from Google APIs will adhere to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy"
+          >Google API Services User Data Policy</a
+        >, including its Limited Use requirements. Google data will be used for the visible
+        scheduling and related lesson-history features. It will not be sold or used for advertising,
+        credit decisions, or training generalized AI models. Transfers and human access will be
+        limited to those permitted by that policy, including providing the authorized features,
+        security needs, and legal obligations. These commitments require operator approval before
+        this draft becomes effective.
+      </p>
+      <h2>Connected providers and published materials</h2>
+      <p>
+        Teaching workflows send relevant content to configured external services. The implementation
+        supports OpenAI for assignment and learner-context generation, ElevenLabs for recording
+        transcription, and Inworld, ElevenLabs, or Google for speech generation. Depending on the
+        task, submitted data can include lesson audio, transcripts, tutor instructions, learner
+        context, and text to be spoken. These providers are distinct from Google Calendar
+        authorization.
+      </p>
+      <p>
+        Database, file or object storage, hosting, and backup systems hold service data. Which
+        providers, regions, contractual safeguards, and international transfers apply to production
+        still require confirmation; this draft makes no claim about their retention or training
+        policies.
+      </p>
+      <p>
+        Publishing creates shareable handout and audio URLs. People who receive those URLs may
+        access or forward them. Separately, authorizing a connected assistant allows it to read the
+        supported learner teaching context; that disclosure is controlled through a separate
+        authorization flow. Review materials and permissions before sharing.
+      </p>
+      <h2>Retention, disconnecting, and deletion requests</h2>
+      <p>
+        The service retains teaching records, transcripts, generated materials, scheduling history,
+        and operational records. No uniform retention period or automatic account-erasure process
+        has been established. Archiving a student or disconnecting an integration is not deletion.
+      </p>
+      <p>
+        Recording audio becomes unavailable through the ordinary playback workflow after source
+        confirmation. Physical cleanup is separately configured and is disabled by default; the
+        configurable recovery period is not a promise that all recordings are erased after a fixed
+        number of days. Transcripts and downstream teaching records have a separate lifecycle.
+        Backups, published copies, and provider-held data may outlast changes in the app.
+      </p>
+      <p>
+        Disconnect Google in Calendar connection settings to stop ESL Pipeline scheduling and sync.
+        This keeps stored credentials and historical records; it does not revoke the grant at Google
+        or delete Google events. To revoke Google's permission, visit
+        <a href="https://myaccount.google.com/connections">your Google Account connections</a>.
+        Revocation does not erase information already stored in ESL Pipeline.
+      </p>
+      <p>
+        For access, correction, or deletion requests, email
+        <a href="mailto:hello@eslpipeline.com">hello@eslpipeline.com</a> with enough information to
+        identify the account or relevant tutor. Do not send passwords or tokens. Identity checks,
+        the applicable rights process, retention exceptions, and backup handling remain to be
+        approved; no deletion deadline is promised by this draft.
+      </p>
+      <h2>Student data and recordings</h2>
+      <p>
+        Tutors supply student information and lesson sources. They need appropriate authority to
+        share that information, record participants, and use connected processing services. The
+        allocation of privacy responsibilities between tutors and the operator, including handling
+        data about minors, remains unresolved. This draft does not assert that student or guardian
+        consent has already been obtained.
+      </p>
+      <h2>Protection and changes</h2>
+      <p>
+        The implementation uses authentication, workspace access checks, and encryption for stored
+        Google credentials. This is not a guarantee that every category of data is encrypted at rest
+        or that the service is risk-free. Production security controls and legal obligations need
+        separate confirmation.
+      </p>
+      <p>
+        An approved policy will need an effective date and a process for notifying users of material
+        changes. New uses of Google data require updated disclosures and consent where required
+        before that use begins.
+      </p>
+    </main>
+    <footer>
+      <a href="/">Home</a><a href="/terms/">Terms of Service</a
+      ><a href="mailto:hello@eslpipeline.com">Contact</a>
+    </footer>
+  </body>
+</html>

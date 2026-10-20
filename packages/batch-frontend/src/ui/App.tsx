@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isFrontendSandboxEnabled } from '../dev/frontend-sandbox';
 import type { AuthMode } from './auth/AuthDialog';
+import { LegalLinks } from './LegalLinks';
 import { CalmStudioShell } from './shell/CalmStudioShell';
 
 import './AppShell.css';
@@ -414,6 +415,7 @@ const UnauthenticatedNotice: React.FC<{
           {hasInvite ? 'Create invited account' : 'Create account with invite'}
         </button>
       </div>
+      <LegalLinks />
     </div>
   </section>
 );

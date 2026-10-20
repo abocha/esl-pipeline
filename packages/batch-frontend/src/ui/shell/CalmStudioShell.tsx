@@ -18,6 +18,7 @@ import {
 } from 'react-router-dom';
 
 import type { User } from '../../context/AuthContext';
+import { LegalLinks } from '../LegalLinks';
 import {
   AssignmentNavigationGuardContext,
   type NavigationGuard,
@@ -198,6 +199,7 @@ export function CalmStudioShell({
             </nav>
           ) : null}
           <div className="calm-shell__rail-footer">
+            <LegalLinks />
             {sandboxMode ? (
               <span className="calm-shell__sandbox" aria-label="Frontend sandbox mode">
                 Mock data

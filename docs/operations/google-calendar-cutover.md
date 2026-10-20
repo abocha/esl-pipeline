@@ -28,6 +28,11 @@ activation. Keep these gates distinct in every handoff:
 
 No command in this runbook itself grants production or provider authorization.
 
+Production Google OAuth also depends on approved and publicly deployed legal pages, consent
+branding, exact scope registration, and an audience/verification decision. See
+[legal/OAuth readiness](google-oauth-legal-readiness.md), owned by ABO-58; ABO-56 retains the
+separate production cutover boundary. Local draft pages alone do not satisfy this dependency.
+
 ## Scheduling and recovery contracts
 
 An owner/admin connects an external Google account and selects a writable calendar by provider ID.
