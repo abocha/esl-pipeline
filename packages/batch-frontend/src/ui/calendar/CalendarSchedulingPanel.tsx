@@ -273,6 +273,23 @@ export function CalendarSchedulingPanel({
           ) : null}
         </div>
       </header>
+      <p className="calendar-notice">
+        Connecting shares your Google account identity and writable calendar list with ESL Pipeline.
+        The selected calendar's event details are stored to sync lessons; invitations share event
+        details with recipients when you choose to send them. Access can continue in the background.
+        OpenAI API processes selected teaching context; memory rebuilds and profile refreshes can
+        also send Calendar-derived lesson start times and internal lesson associations. Separately
+        authorized ChatGPT connections receive selected learner context. Disconnecting stops sync
+        but keeps stored data and Google authorization. Read the{' '}
+        <a
+          href="https://eslpipeline.com/privacy/#google-calendar"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Privacy Policy (opens in a new tab)
+        </a>{' '}
+        for details and how to revoke access or request deletion.
+      </p>
       {error ? (
         <p className="calendar-notice calendar-notice-error" role="alert">
           {error}
