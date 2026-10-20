@@ -71,15 +71,15 @@ boundary.
 
 ## Lifecycle and Maintenance
 
-| Task                                            | Read first                                  | Then read                                                                    |
-| ----------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------- |
-| Docs gardening or lifecycle work                | `docs/reference/DOCS_GARDENING_PLAYBOOK.md` | `.agents/skills/esl-pipeline-docs-gardening/SKILL.md`; Governance for policy |
-| Package README or generated inventory           | `docs/generated/README.md`                  | `docs/reference/DOCS_GOVERNANCE.md`                                          |
-| Named-task artifact lifecycle                   | `docs/superpowers/README.md`                | `docs/plans/README.md`                                                       |
-| Draft disposition                               | `docs/drafts/README.md`                     | `docs/archive/drafts/README.md` when retained history matters                |
-| Historical rationale                            | `docs/archive/README.md`                    | the relevant archive-domain README                                           |
-| `AGENTS.md`, doc shape, or agent-harness upkeep | `docs/reference/DOCS_GOVERNANCE.md`         | `docs/reference/DOCS_GARDENING_PLAYBOOK.md`                                  |
-| PR workflow, release label, or versioning       | `docs/reference/VERSIONING_MODEL.md`        | `docs/operations/pr-style-release-notes.md`                                  |
+| Task                                            | Read first                                  | Then read                                                     |
+| ----------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------- |
+| Docs gardening or lifecycle work                | `docs/reference/DOCS_GARDENING_PLAYBOOK.md` | `codex-workflow:docs-gardening`; Governance for policy        |
+| Package README or generated inventory           | `docs/generated/README.md`                  | `docs/reference/DOCS_GOVERNANCE.md`                           |
+| Named-task artifact lifecycle                   | `docs/superpowers/README.md`                | `docs/plans/README.md`                                        |
+| Draft disposition                               | `docs/drafts/README.md`                     | `docs/archive/drafts/README.md` when retained history matters |
+| Historical rationale                            | `docs/archive/README.md`                    | the relevant archive-domain README                            |
+| `AGENTS.md`, doc shape, or agent-harness upkeep | `docs/reference/DOCS_GOVERNANCE.md`         | `docs/reference/DOCS_GARDENING_PLAYBOOK.md`                   |
+| PR workflow, release label, or versioning       | `docs/reference/VERSIONING_MODEL.md`        | `docs/operations/pr-style-release-notes.md`                   |
 
 ## Routing Rules
 
