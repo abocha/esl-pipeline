@@ -33,10 +33,9 @@ Validate according to current repository policy and the affected deployment surf
 
 ## Live evidence and closure
 
-Apply the portable workflow's evidence-reuse and stopping principles to the authorized rollout:
-
-- Reuse still-valid evidence when relevant inputs and semantics have not changed. Before a new probe, name the concrete unresolved rollout/rollback decision, failed invariant, or required completion criterion it can resolve; additional confidence alone is insufficient.
-- Corroborate an explained benign runtime delta with bounded evidence. Reconstruct it exhaustively only when a plausible alternative could materially change go/no-go, rollback, scope, or a protected invariant.
-- Once authorized rollout completion criteria pass, switch to closure: preserve/report evidence, restore required operational state, release locks, and finalize tracking. Open another investigative branch only for a newly failed invariant or missing required criterion.
+Use the shared workflow's evidence/closure method with the applicable ESL runbook's authorized
+rollout/rollback criteria. Root `AGENTS.md` keeps the mandatory evidence and stopping rules in
+force without skill activation. Preserve required operational state, release locks and finalize
+tracking according to the runbook once its completion criteria pass.
 
 Report the deployment topology or contract changed or preserved, evidence actually obtained, live actions intentionally not performed, and any required operator follow-up.

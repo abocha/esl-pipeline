@@ -19,13 +19,13 @@ for a successful `CI gate`.
 Start from the changed behavior and the plausible regression, then follow the applicable route.
 These are entrypoints, not a checklist to read in full for every task.
 
-| Task                                     | Next owner                                                                                                                                                                      | Evidence decision                                                                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ordinary application change              | Owning package README and existing tests; [backend recipe](../../packages/batch-backend/README.md#validation)                                                                   | Use an existing owner-boundary check or a focused regression test. Add package build, typecheck or lint evidence when the changed surface needs it. |
-| Docs or instruction change               | [Docs-only recipe](#docs-only-changes)                                                                                                                                          | Synchronize affected generated references, check formatting and run the appropriate docs mode.                                                      |
-| Hosted failure                           | [Selected job reproduction](#hosted-pr-ci-job-reproduction)                                                                                                                     | Inspect retained job logs/artifacts, then reproduce the first relevant failure's command and prerequisites if needed.                               |
-| Validation-system change                 | [Infrastructure skill](../../.agents/skills/esl-pipeline-validation-evidence/SKILL.md) and [SSOT contracts](agents-ssot.md#runtime-and-verification-baseline)                   | Follow the changed mechanism to existing contract cases; use services only when the actual service boundary needs evidence.                         |
-| Test authoring, audit or fixture failure | [Test-value policy](#test-design-and-value), [fixture classification](#fixture-and-snapshot-drift), applicable [test-audit procedure](../../.agents/skills/test-audit/SKILL.md) | Identify the independent contract and defect-catching value before adding, deleting or updating expectations.                                       |
+| Task                                     | Next owner                                                                                                                                                    | Evidence decision                                                                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ordinary application change              | Owning package README and existing tests; [backend recipe](../../packages/batch-backend/README.md#validation)                                                 | Use an existing owner-boundary check or a focused regression test. Add package build, typecheck or lint evidence when the changed surface needs it. |
+| Docs or instruction change               | [Docs-only recipe](#docs-only-changes)                                                                                                                        | Synchronize affected generated references, check formatting and run the appropriate docs mode.                                                      |
+| Hosted failure                           | [Selected job reproduction](#hosted-pr-ci-job-reproduction)                                                                                                   | Inspect retained job logs/artifacts, then reproduce the first relevant failure's command and prerequisites if needed.                               |
+| Validation-system change                 | [Infrastructure skill](../../.agents/skills/esl-pipeline-validation-evidence/SKILL.md) and [SSOT contracts](agents-ssot.md#runtime-and-verification-baseline) | Follow the changed mechanism to existing contract cases; use services only when the actual service boundary needs evidence.                         |
+| Test authoring, audit or fixture failure | [Test-value policy](#test-design-and-value), [fixture classification](#fixture-and-snapshot-drift), shared `codex-workflow:test-audit` procedure              | Identify the independent contract and defect-catching value before adding, deleting or updating expectations.                                       |
 
 Package READMEs own execution recipes; manifests, test configuration and workflows own exact commands,
 membership and prerequisites. This guide owns evidence selection; the SSOT owns validation invariants.
@@ -35,7 +35,8 @@ Before running checks, inspect [existing evidence](#evidence-and-merge-boundary)
 Broader local or service-backed evidence requires a concrete plausible wider failure, local environment
 behavior under test, an unavailable hosted equivalent or a specific hosted failure to diagnose. Diff
 breadth alone does not justify a broad run. Finish when the applicable completion criteria are met,
-following the [decision-bounded closure rule](../../.codex/ORCHESTRATION.md#decision-bounded-evidence-and-closure).
+following the mandatory evidence/closure rules in [AGENTS.md](../../AGENTS.md#evidence-and-validation).
+The plugin's workflow reference owns the fuller shared method.
 
 ## Local feedback ladder
 
@@ -161,68 +162,35 @@ generalized local orchestrator.
 
 ## Test design and value
 
-A passing suite is useful evidence only when its assertions protect meaningful behavior. Neither
-the number of tests nor line coverage establishes that agent-authored tests can catch regressions.
-Do not automatically add a test for every code change or ban test creation categorically.
+A passing suite is useful only when it protects meaningful behavior with an independent oracle
+and a plausible defect it can catch. Do not require a new test for every code change or ban tests
+categorically. Existing owner-boundary evidence should be reused; additional layers need distinct
+transport, persistence, concurrency or lifecycle risks. Do not create test-only production exports,
+flags or wrappers without a real need. Test count and line coverage alone do not establish value.
 
-Before adding or materially rewriting a test, identify the observable behavior, invariant, or
-independently owned contract; the credible regression it should detect; and why an existing
-owner-boundary test does not already cover that risk. Prefer one strong check at the behavior's
-primary owner, with additional tests at other layers only for distinct transport, persistence,
-concurrency, or lifecycle risks. Prefer compact, table-driven cases over repeated setup or copies.
+Use the shared `codex-workflow:test-audit` skill for the authoring gate, scoped audit and authorized
+pruning procedure. This guide owns ESL testing policy and commands; the shared method cannot
+change test membership, compatibility baselines, CI gates or authorization.
 
-Expected outcomes must come from an independent requirement, historical regression, or stable
-contract example, not by calling the same production helper to calculate the expected value.
-Mocks may isolate a dependency, but should not manufacture the result being asserted. Tests of
-implementation details are justified when those details themselves form a durable, observable
-contract; do not create production-only-for-tests exports, flags, or wrappers without a real need.
-
-For a bug fix, demonstrate that its regression test fails on the buggy behavior for the intended
-reason and passes with the repair when this is practical. Do not turn this into a universal
-requirement to reconstruct old code or run an extra full suite.
-
-Use the optional [`test-audit` skill](../../.agents/skills/test-audit/SKILL.md) for the detailed
-authoring gate, scoped audits, and evidence-based pruning. This document owns repository testing
-policy and the current test/CI commands; the skill must not override those rules.
+Especially preserve independently useful coverage for worker leases/retries/idempotency; upload
+identity and persisted publication/recovery; schema/history lineage and workspace authorization;
+provider compatibility, speaker/channel provenance and user-visible transcript/assignment output.
 
 ## Fixture and snapshot drift
 
-**A test failing on an outdated fixture is a diagnosis task, not permission to update the
-fixture until CI is green.** A fixture is either current representative test input, a deliberate
-negative/edge case, a generated preview artifact, or a pinned historical/golden contract
-baseline. Identify which kind and which independent authority it represents first.
+A fixture failure requires diagnosis before expectations change. Use the shared test-audit fixture
+method to distinguish current representative input, deliberate negative cases, generated previews
+and historical/golden contracts. Current output alone cannot authorize a new expected value.
 
-When a fixture, golden expectation, snapshot, or mock breaks:
+Preserve ESL's pinned historical, compatibility and provenance baselines unless the protected
+requirement is deliberately changed and approved. For an intended contract change, repair the
+smallest canonical fixture/factory and affected expectations. Regenerate previews from their
+canonical source and inspect the diff. Narrow incidental assertions only after establishing that
+meaningful defect coverage survives; never bulk-update snapshots merely to turn CI green.
 
-1. Inspect the _first relevant failure_ and the production/contract change. Identify the
-   fixture's owner and whether the failure is a schema/input mismatch, changed observed behavior,
-   irrelevant presentation drift, or a true regression. Do not bulk-update all failures.
-2. **Bug or unintended behavior change:** repair the implementation; preserve the independent
-   expected result. A failing assertion is not stale merely because code now produces something
-   different.
-3. **Intentional contract change:** update the _smallest canonical_ fixture/source factory and
-   affected expectations as part of that change, with an explicit reason and the authoritative
-   new contract. Preserve versioned/historical fixtures and backward-compatibility checks unless
-   the compatibility requirement is itself deliberately changed and approved.
-4. **Incidental fixture churn:** if the behavior is unchanged but an oversized sample or exact
-   snapshot breaks on unrelated fields, narrow the asserted semantic slice, replace duplicated
-   static copies with one small typed test fixture/builder where suitable, or delete truly
-   redundant assertions after proving equivalent surviving coverage. Do not loosen a meaningful
-   invariant just to reduce maintenance.
-5. **Unclear cause:** inspect the owner and callers before editing expectations. Never use
-   wholesale snapshot regeneration, broad find/replace, or current production output as the
-   sole oracle for the new expected value.
-
-Keep variable timestamps, random IDs, ordering not guaranteed by contract, and unrelated optional
-fields out of golden expectations when possible; use deterministic inputs or deliberate
-normalization _only for non-contractual fields_. A full-byte, hash-pinned, or historical fixture
-can be the contract itself and must not be regenerated casually. Generated previews should be
-regenerated from their canonical source with the resulting diff inspected, not hand-edited.
-
-For a fixture-changing PR, report which contract changed (or did not), the specific fixture
-source/expected values changed, why the previous value was obsolete, and which focused test
-confirmed the desired behavior. Avoid growing fixtures or cascading unrelated updates merely to
-make unrelated tests pass.
+For a fixture-changing PR, report the changed contract or unchanged behavior, fixture source and
+expected values changed, why the old value was obsolete, and the focused evidence establishing
+the desired result. Do not grow fixtures or cascade unrelated updates to make checks pass.
 
 ## Test portfolio maintenance
 

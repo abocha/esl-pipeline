@@ -27,15 +27,16 @@ Use the smallest current route that answers the task.
   repository work.
 - Use `docs/reference/DOCS_IA_MAP.md` only when the documentation route is unclear.
 - For documentation audits, consolidation, or cutovers that invalidate scattered guidance, use
-  `.agents/skills/esl-pipeline-docs-gardening/SKILL.md` and the gardening playbook's scoped route.
+  `codex-workflow:docs-gardening` with `docs/reference/DOCS_GARDENING_PLAYBOOK.md` for ESL policy
+  and tooling routes.
 - For local validation, start with the
   [evidence decision route](docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route), then the
   owning package's execution recipe. Load validation-system or test-audit skills only for their triggers.
 - Read `docs/reference/agents-ssot.md` when work touches contracts, invariants, persistence,
   security/auth, validation policy, production, or repository administration.
-- For delegated execution, approved plans/Goal Contracts, role routing, context reuse, or review
-  mechanics, use `.codex/WORKFLOW_MODES.md`, `.codex/ORCHESTRATION.md`, and `.codex/PROJECT.md` as
-  applicable.
+- For uncertain workflow selection, substantial planning/handoffs, authorized delegation, context
+  or review mechanics, use the installed `codex-workflow:codex-workflow` skill.
+  `.codex/PROJECT.md` maps shared methods to ESL authorities and specialized procedures.
 - Invoke project skills only when their narrow trigger applies. Do not load adjacent skills merely
   because they exist.
 - Explicit current task instructions take precedence over optional skill guidance unless a
@@ -60,8 +61,10 @@ Put deterministic requirements in code, scripts, hooks, or CI rather than relyin
 
 ## Workflow and authorization
 
-Choose the lightest workflow that fits current ambiguity and risk. Detailed workflow/model routing
-belongs in `.codex/WORKFLOW_MODES.md` and `.codex/ORCHESTRATION.md`.
+Choose the lightest workflow that fits current ambiguity and risk. Shared methods and revisable
+model defaults belong to the Codex Workflow plugin, maintained in `abocha/codex-workflow`.
+Before substantial implementation, check for materially missing requirements, primary evidence,
+a suitable method and an independently observable success criterion without expanding scope.
 
 Do not manufacture planning, delegation, review, or Goal Contracts for bounded work. Material
 architecture, contract, security/privacy, persistence, concurrency, migration, or production design
@@ -86,7 +89,7 @@ Let a capable worker own its local inspect/edit/test loop. Treat worker completi
 automatic acceptance, but do not shadow or repeat its investigation without a concrete unresolved
 risk.
 
-Use the project complexity discipline only when structural-complexity judgment is genuinely
+Use `codex-workflow:complexity-discipline` only when structural-complexity judgment is genuinely
 non-trivial. Straightforward pattern-following work does not need a complexity ritual.
 
 ## Evidence and validation
@@ -94,6 +97,11 @@ non-trivial. Straightforward pattern-following work does not need a complexity r
 Focused local evidence is the default; hosted PR CI is the comprehensive merge gate. Prefer the
 lowest-cost reliable evidence and stop when it answers the decision. All required hosted checks
 must pass before merge.
+
+Before another investigation or validation step, identify the unresolved decision, acceptance
+criterion, failed invariant or material anomaly it can resolve. Reuse evidence while its relevant
+inputs and semantics remain valid. Once the requested outcome and applicable requirements are
+satisfied, finalize and report; reopen investigation only for a material new gap.
 
 The [testing guide](docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route) owns evidence
 selection, broader-check conditions, hosted diagnosis, reuse and completion. Package READMEs own
@@ -105,9 +113,25 @@ Invoke `esl-pipeline-validation-evidence` only when changing or diagnosing the v
 
 Review follows residual semantic risk, not diff existence, file count, delegation, or ceremony.
 
-Use the current review routing in `.codex/ORCHESTRATION.md`. Once an invariant has been convincingly
-closed, later review should focus on the new fix and direct regressions unless evidence reopens it.
+Use the shared workflow's review routing and ESL risk map in `.codex/PROJECT.md`. Once an invariant
+has been convincingly closed, later review should focus on the new fix and direct regressions unless evidence reopens it.
 Do not stack reviewers or whole-branch review without a concrete remaining cross-boundary risk.
+
+## Shared capabilities and local procedures
+
+Select the Codex Workflow plugin when shared methods are needed. Use `codex-workflow:pr-ci` for
+PR metadata, hosted failure diagnosis and requested monitoring; `codex-workflow:test-audit` for
+test value, scoped audits/pruning and fixture diagnosis; and `codex-workflow:docs-gardening` for
+consequential docs drift and lifecycle work. Routine local validation follows the testing guide.
+The explicitly invoked `codex-workflow-setup` skill handles integration or reconciliation.
+
+ESL keeps `esl-pipeline-validation-evidence` for changes to or failures of the validation system,
+and `esl-pipeline-deployment-change-checklist` for production deployment surfaces. Their narrow
+triggers do not make every feature change a validation-system or deployment task.
+
+Read only relevant skills/references. If the plugin is unavailable, the mandatory rules here and
+ESL authorities remain effective; report a materially missing capability and follow local sources.
+Do not recreate a private edition of shared methods or claim an unavailable tool/registered role ran.
 
 ## Planning, GitHub, and repository administration
 
@@ -131,8 +155,9 @@ Every PR to `main` must have exactly one release label allowed by current versio
 validation text must list evidence actually obtained. Follow the current PR/versioning docs rather
 than copying their mutable details here.
 
-For PR metadata, hosted-CI follow-up, validation-system changes, or deployment work, use the matching
-project skill when its trigger applies.
+For PR metadata and hosted-CI follow-up, use `codex-workflow:pr-ci` with the current PR template,
+versioning policy and testing guide. Validation-system and deployment work use the matching ESL
+skill only when its trigger applies.
 
 ## Definition of done
 
