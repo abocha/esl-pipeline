@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.0.1] - 2026-10-20
+
+### Changed
+
+- Automated release from PR #424: fix(legal): publish alpha policies and Google OAuth disclosures (ESL-65) (https://github.com/abocha/esl-pipeline/pull/424)
+
 ## [22.0.0] - 2026-10-20
 
 ### Changed
