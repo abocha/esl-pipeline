@@ -33,18 +33,18 @@ export interface QueueJobPayload {
     studyTextVoiceAccent?: string;
     studyTextVoiceId?: string;
     studyTextTtsStrategy?: 'auto' | 'dialogue' | 'tts';
-    studyTextTtsProvider?: 'elevenlabs' | 'google' | 'inworld';
+    studyTextTtsProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
     studyTextTtsModel?: TtsModelId;
     studyTextDialogueLanguage?: string;
     studyTextDialogueStability?: number;
     studyTextDialogueSeed?: number;
     pronunciationMainVoiceAccent?: string;
     pronunciationMainVoiceId?: string;
-    pronunciationMainTtsProvider?: 'elevenlabs' | 'google' | 'inworld';
+    pronunciationMainTtsProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
     pronunciationMainTtsModel?: TtsModelId;
     pronunciationChunkVoiceAccent?: string;
     pronunciationChunkVoiceId?: string;
-    pronunciationChunkTtsProvider?: 'elevenlabs' | 'google' | 'inworld';
+    pronunciationChunkTtsProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
     pronunciationChunkTtsModel?: TtsModelId;
   };
 }

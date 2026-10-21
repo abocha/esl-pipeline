@@ -19,9 +19,11 @@ import {
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
 import {
   buildStudyTextMp3,
+  getTtsProviderDescriptor,
   hashStudyText,
   isTtsModelForProvider,
   parseTtsModelId,
+  parseTtsProviderId,
   prepareStudyTextSynthesis,
   type SpeechPerformancePlan,
   type TtsModelId,
@@ -148,23 +150,34 @@ function normalizeCancellationReason(reason: unknown): string | undefined {
 
 function normalizePronunciationProviderFromManifest(
   provider?: string | null,
-): 'elevenlabs' | 'google' | 'inworld' | undefined {
+): 'elevenlabs' | 'google' | 'inworld' | 'gemini' | undefined {
   if (!provider) return undefined;
-  if (provider === 'elevenlabs' || provider === 'google' || provider === 'inworld') return provider;
+  if (
+    provider === 'elevenlabs' ||
+    provider === 'google' ||
+    provider === 'inworld' ||
+    provider === 'gemini'
+  )
+    return provider;
   return undefined;
 }
 
 function normalizePrimaryPronunciationProviderFromManifest(
   provider?: string | null,
-): 'elevenlabs' | 'google' | 'inworld' | undefined {
-  if (provider === 'elevenlabs' || provider === 'google' || provider === 'inworld') {
+): 'elevenlabs' | 'google' | 'inworld' | 'gemini' | undefined {
+  if (
+    provider === 'elevenlabs' ||
+    provider === 'google' ||
+    provider === 'inworld' ||
+    provider === 'gemini'
+  ) {
     return provider;
   }
   return undefined;
 }
 
 function resolvePronunciationTtsModelFromManifest(args: {
-  provider?: 'elevenlabs' | 'google' | 'inworld';
+  provider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   modelId?: string | null;
 }): TtsModelId | undefined {
   if (!args.provider || !args.modelId || !isTtsModelForProvider(args.provider, args.modelId)) {
@@ -175,9 +188,9 @@ function resolvePronunciationTtsModelFromManifest(args: {
 
 function resolveProviderCompatibleVoiceId(args: {
   explicitVoiceId?: string;
-  effectiveProvider?: 'elevenlabs' | 'google' | 'inworld';
+  effectiveProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   previousVoiceId?: string;
-  previousProvider?: 'elevenlabs' | 'google' | 'inworld';
+  previousProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   fallbackCandidates?: Array<{
     voiceId?: string;
     provider?: string | null;
@@ -199,9 +212,14 @@ function resolveProviderCompatibleVoiceId(args: {
     return args.fallbackCandidates?.find((candidate) => candidate.voiceId)?.voiceId;
   }
 
-  return args.fallbackCandidates?.find(
-    (candidate) => candidate.voiceId && candidate.provider === args.effectiveProvider,
-  )?.voiceId;
+  return (
+    args.fallbackCandidates?.find(
+      (candidate) => candidate.voiceId && candidate.provider === args.effectiveProvider,
+    )?.voiceId ??
+    (args.effectiveProvider === 'gemini'
+      ? getTtsProviderDescriptor('gemini')?.defaultVoiceId
+      : undefined)
+  );
 }
 
 interface RerunTtsWarning {
@@ -371,7 +389,8 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
     provider:
       flags.pronunciationChunkTtsProvider === 'elevenlabs' ||
       flags.pronunciationChunkTtsProvider === 'google' ||
-      flags.pronunciationChunkTtsProvider === 'inworld'
+      flags.pronunciationChunkTtsProvider === 'inworld' ||
+      flags.pronunciationChunkTtsProvider === 'gemini'
         ? flags.pronunciationChunkTtsProvider
         : undefined,
   };
@@ -380,8 +399,11 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
   flags.pronunciationChunkVoiceAccent = pronunciationChunkPreferences.accentPreference;
 }
 
-function resolveDefaultChunkProvider(_mode?: string | null): 'elevenlabs' | 'google' {
-  return 'google';
+function resolveDefaultChunkProvider(
+  _mode?: string | null,
+  studyProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini',
+): 'google' | 'gemini' {
+  return studyProvider === 'gemini' ? 'gemini' : 'google';
 }
 
 export {
@@ -771,7 +793,13 @@ export async function newAssignment(
         const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
         const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
         const detectedPronunciationFocus = assignmentPronunciation(assignment);
-        const defaultChunkProvider = resolveDefaultChunkProvider(detectedPronunciationFocus?.mode);
+        const synthesizedProvider =
+          parseTtsProviderId(ttsResult.provider) ?? prepared.selection.provider;
+        const synthesizedModel = parseTtsModelId(ttsResult.modelId) ?? prepared.selection.model;
+        const defaultChunkProvider = resolveDefaultChunkProvider(
+          detectedPronunciationFocus?.mode,
+          synthesizedProvider,
+        );
         audioArtifacts.pronunciation = await synthesizePronunciationAudio({
           ...executionInput,
           mdPath: flags.md,
@@ -779,12 +807,17 @@ export async function newAssignment(
           title: assignment.metadata.title,
           preview: flags.dryRun,
           force: flags.force || flags.redoTts,
-          primaryTtsProvider: flags.ttsProvider,
-          primaryTtsModel: flags.ttsModel,
+          primaryTtsProvider: synthesizedProvider,
+          primaryTtsModel: synthesizedProvider === 'gemini' ? synthesizedModel : flags.ttsModel,
           logger,
           primaryVoiceId: fallbackVoiceId,
           chunkTtsProvider: defaultChunkProvider,
-          chunkTtsModel: defaultChunkProvider === flags.ttsProvider ? flags.ttsModel : undefined,
+          chunkTtsModel:
+            defaultChunkProvider === 'gemini'
+              ? synthesizedModel
+              : defaultChunkProvider === flags.ttsProvider
+                ? flags.ttsModel
+                : undefined,
           signal,
           deadlineAtMs: dependencies.deadlineAtMs,
         });
@@ -1400,7 +1433,7 @@ export async function rerunAssignment(
         const effectiveChunkProvider =
           flags.pronunciationChunkTtsProvider ??
           previousChunkProvider ??
-          resolveDefaultChunkProvider(detectedPronunciationMode);
+          resolveDefaultChunkProvider(detectedPronunciationMode, effectivePrimaryProvider);
         const rerunTtsWarnings: RerunTtsWarning[] = [];
         const resolvedPrimaryVoiceId = resolveProviderCompatibleVoiceId({
           explicitVoiceId: flags.pronunciationMainVoiceId,
@@ -1414,7 +1447,10 @@ export async function rerunAssignment(
           effectiveProvider: effectiveChunkProvider,
           previousVoiceId: previousChunkClip?.voiceId,
           previousProvider:
-            previousChunkProvider === 'elevenlabs' || previousChunkProvider === 'google'
+            previousChunkProvider === 'elevenlabs' ||
+            previousChunkProvider === 'google' ||
+            previousChunkProvider === 'inworld' ||
+            previousChunkProvider === 'gemini'
               ? previousChunkProvider
               : undefined,
           fallbackCandidates: fallbackVoiceCandidates,
@@ -1489,7 +1525,7 @@ export async function rerunAssignment(
           primaryTtsModel:
             flags.pronunciationMainTtsModel ??
             resolvePronunciationTtsModelFromManifest({
-              provider: previousPrimaryProvider,
+              provider: effectivePrimaryProvider,
               modelId: previousPrimaryModelId,
             }),
           primaryVoiceId: resolvedPrimaryVoiceId,
@@ -1497,12 +1533,7 @@ export async function rerunAssignment(
           chunkTtsModel:
             flags.pronunciationChunkTtsModel ??
             resolvePronunciationTtsModelFromManifest({
-              provider:
-                previousChunkProvider === 'elevenlabs' ||
-                previousChunkProvider === 'google' ||
-                previousChunkProvider === 'inworld'
-                  ? previousChunkProvider
-                  : undefined,
+              provider: effectiveChunkProvider,
               modelId: previousChunkModelId,
             }),
           chunkVoiceId: resolvedChunkVoiceId,

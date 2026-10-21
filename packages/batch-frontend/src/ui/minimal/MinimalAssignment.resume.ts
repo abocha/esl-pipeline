@@ -113,7 +113,7 @@ function normalizePresetSelection(
 }
 
 function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
-  return value === 'elevenlabs' || value === 'google' || value === 'inworld';
+  return value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini';
 }
 
 function isUiPublishTtsStrategy(value: string | null | undefined): value is UiPublishTtsStrategy {

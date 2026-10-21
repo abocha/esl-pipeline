@@ -62,6 +62,15 @@ Primary groups:
   - `AWS_*`, `S3_*`, `STORAGE_*`, `ESL_PIPELINE_MANIFEST_*`
 - Speech runtime:
   - `ESL_TTS_*`, `ESL_STT_*`, `VOICE_ALIGNMENT_V2_*`
+  - Opt-in `gemini` TTS uses Google Cloud ADC plus explicit
+    `ESL_TTS_PROVIDER_GEMINI_PROJECT_ID`. `ESL_TTS_PROVIDER_GEMINI_MODEL` defaults to
+    `gemini-3.8-flash-lite-tts`; `gemini-3.8-flash-tts` is selectable.
+    `ESL_TTS_PROVIDER_GEMINI_TIMEOUT_MS` defaults to 180000 (1000–300000). This lane uses the
+    fixed global Cloud endpoint, deterministic prebuilt voices and identity speech planning, with
+    no external planner/ranker calls or AI Studio key. Existing global defaults remain unchanged.
+    Configure ADC for the selected Cloud project before selecting it; `gcloud auth login` alone
+    is separate from Application Default Credentials. See the
+    [Gemini adapter](../../packages/tts-provider-gemini/README.md) for limits and cache behavior.
   - Inworld TTS uses `INWORLD_API_KEY` or `ESL_TTS_PROVIDER_INWORLD_API_KEY`, plus optional `ESL_TTS_PROVIDER_INWORLD_*` model/voice/runtime overrides.
   - `ESL_TTS_PROVIDER_INWORLD_TIMEOUT_MS` bounds each in-flight SDK request. The SDK client is lazy
     and reusable, and its internal `maxRetries` is always `0`.

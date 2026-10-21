@@ -10,6 +10,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { resolveHomeworkMemorySourceFromSucceededJob } from '../src/application/homework-memory-source.js';
 import { getStudentActivity } from '../src/application/student-activity.js';
 import { recordStudentMemoryOpenAiBatchRemoteStatus } from '../src/application/student-memory-openai-batch-operations.js';
+import { getJobById } from '../src/domain/job-repository.js';
 import {
   getProfileRevisionById,
   getRecordedProfileRevision,
@@ -239,6 +240,117 @@ describe('integration/migrations', () => {
   afterAll(async () => {
     await closePgPool();
   });
+
+  it(
+    'admits Gemini after upgrade without rewriting existing TTS choices',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0072_calendar_projection_reference_guard');
+        const userId = randomUUID();
+        const studentId = randomUUID();
+        const sessionId = randomUUID();
+        const jobId = randomUUID();
+        const artifact = {
+          format: 'assignment_v1',
+          schemaVersion: 1,
+          serializationVersion: 1,
+          workingVersion: 1,
+          contentHash: 'a'.repeat(64),
+          storageUri: `local://drafts/content/${'a'.repeat(64)}.json`,
+        };
+        await pool.query(
+          `INSERT INTO users(id,email,password_hash) VALUES($1,'gemini-test@example.test','test-only')`,
+          [userId],
+        );
+        await pool.query(`INSERT INTO students(id,student) VALUES($1,'Gemini migration fixture')`, [
+          studentId,
+        ]);
+        await pool.query(`INSERT INTO user_settings(user_id,tts_provider) VALUES($1,'google')`, [
+          userId,
+        ]);
+        await pool.query(
+          `INSERT INTO jobs(id,state,assignment_artifact,assignment_renderer_version,tts_provider,tts_model,prompt_package_id,draft_id) VALUES($1,'queued',$2,3,'google','studio',$3,$4)`,
+          [jobId, artifact, randomUUID(), randomUUID()],
+        );
+        await pool.query(
+          `INSERT INTO assignment_sessions(id,user_id,student_id,confirmed_step,confirmed_snapshot,selected_tts_provider,selected_tts_model) VALUES($1,$2,$3,'student',$4,'google','studio')`,
+          [
+            sessionId,
+            userId,
+            studentId,
+            { student: { studentId }, source: null, context: null, create: null },
+          ],
+        );
+        await expect(
+          pool.query(`UPDATE user_settings SET tts_provider='gemini' WHERE user_id=$1`, [userId]),
+        ).rejects.toMatchObject({ constraint: 'user_settings_tts_provider_check' });
+        await runMigrations();
+        expect(
+          (await pool.query(`SELECT tts_provider,tts_model FROM jobs WHERE id=$1`, [jobId]))
+            .rows[0],
+        ).toEqual({ tts_provider: 'google', tts_model: 'studio' });
+        expect(
+          (
+            await pool.query(
+              `SELECT selected_tts_provider,selected_tts_model FROM assignment_sessions WHERE id=$1`,
+              [sessionId],
+            )
+          ).rows[0],
+        ).toEqual({ selected_tts_provider: 'google', selected_tts_model: 'studio' });
+        expect(
+          (await pool.query(`SELECT tts_provider FROM user_settings WHERE user_id=$1`, [userId]))
+            .rows[0].tts_provider,
+        ).toBe('google');
+
+        for (const model of ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts']) {
+          await pool.query(`UPDATE jobs SET tts_provider='gemini',tts_model=$2 WHERE id=$1`, [
+            jobId,
+            model,
+          ]);
+          expect(await getJobById(jobId)).toMatchObject({ ttsProvider: 'gemini', ttsModel: model });
+        }
+        await pool.query(`UPDATE user_settings SET tts_provider='gemini' WHERE user_id=$1`, [
+          userId,
+        ]);
+        await pool.query(
+          `UPDATE assignment_sessions SET selected_tts_provider='gemini',selected_tts_model='gemini-3.8-flash-lite-tts' WHERE id=$1`,
+          [sessionId],
+        );
+        expect(
+          (await pool.query(`SELECT tts_provider FROM user_settings WHERE user_id=$1`, [userId]))
+            .rows[0].tts_provider,
+        ).toBe('gemini');
+        expect(
+          (
+            await pool.query(`SELECT selected_tts_provider FROM assignment_sessions WHERE id=$1`, [
+              sessionId,
+            ])
+          ).rows[0].selected_tts_provider,
+        ).toBe('gemini');
+        await expect(
+          pool.query(`UPDATE jobs SET tts_model='chirp3_hd' WHERE id=$1`, [jobId]),
+        ).rejects.toMatchObject({ constraint: 'jobs_tts_model_check' });
+        await expect(
+          pool.query(
+            `UPDATE jobs SET tts_provider='google',tts_model='gemini-3.8-flash-tts' WHERE id=$1`,
+            [jobId],
+          ),
+        ).rejects.toMatchObject({ constraint: 'jobs_tts_model_check' });
+        await expect(
+          pool.query(`UPDATE jobs SET tts_provider='unknown',tts_model=NULL WHERE id=$1`, [jobId]),
+        ).rejects.toMatchObject({ constraint: 'jobs_tts_provider_check' });
+        await expect(
+          pool.query(`UPDATE user_settings SET tts_provider='unknown' WHERE user_id=$1`, [userId]),
+        ).rejects.toMatchObject({ constraint: 'user_settings_tts_provider_check' });
+        await expect(
+          pool.query(`UPDATE assignment_sessions SET selected_tts_provider='unknown' WHERE id=$1`, [
+            sessionId,
+          ]),
+        ).rejects.toMatchObject({ constraint: 'assignment_sessions_tts_provider_check' });
+      });
+    },
+    testTimeout,
+  );
 
   it(
     '0071 retains retired recurrence evidence and activity while removing executable scheduling',

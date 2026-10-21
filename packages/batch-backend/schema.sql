@@ -160,7 +160,7 @@ CREATE TABLE public.assignment_sessions (
     CONSTRAINT assignment_sessions_selected_profile_revision_hash_check CHECK (((selected_profile_revision_hash IS NULL) OR (selected_profile_revision_hash ~ '^[0-9a-f]{64}$'::text))),
     CONSTRAINT assignment_sessions_transcript_completion CHECK (((transcript_completed_at IS NULL) OR COALESCE(((homework_intent = 'none'::text) AND (confirmed_step = 'source'::text) AND ((confirmed_snapshot -> 'source'::text) <> 'null'::jsonb) AND (jsonb_array_length(transcript_completion_history) > 0) AND (((transcript_completion_history -> '-1'::integer) -> 'source'::text) = (confirmed_snapshot -> 'source'::text)) AND ((((transcript_completion_history -> '-1'::integer) ->> 'resultingRevision'::text))::integer = revision) AND ((((transcript_completion_history -> '-1'::integer) ->> 'completedAt'::text))::timestamp with time zone = transcript_completed_at) AND (((transcript_completion_history -> '-1'::integer) ->> 'studentId'::text) = (student_id)::text) AND (COALESCE(to_jsonb(lesson_id), 'null'::jsonb) = (confirmed_snapshot #> '{source,lessonId}'::text[])) AND ((recording_id)::text = (confirmed_snapshot #>> '{source,recordingId}'::text[])) AND ((transcript_id)::text = (confirmed_snapshot #>> '{source,transcriptId}'::text[]))), false))),
     CONSTRAINT assignment_sessions_transcript_history_array CHECK ((jsonb_typeof(transcript_completion_history) = 'array'::text)),
-    CONSTRAINT assignment_sessions_tts_provider_check CHECK (((selected_tts_provider IS NULL) OR (selected_tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text])))),
+    CONSTRAINT assignment_sessions_tts_provider_check CHECK (((selected_tts_provider IS NULL) OR (selected_tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text, 'gemini'::text])))),
     CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
 );
 
@@ -1153,8 +1153,8 @@ CREATE TABLE public.jobs (
     CONSTRAINT jobs_assignment_artifact_identity CHECK ((((assignment_artifact IS NULL) AND (assignment_renderer_version IS NULL)) OR (((assignment_artifact IS NOT NULL) AND (assignment_renderer_version = ANY (ARRAY[1, 2, 3])) AND (prompt_package_id IS NOT NULL) AND (draft_id IS NOT NULL) AND ((assignment_artifact ->> 'format'::text) = 'assignment_v1'::text) AND ((assignment_artifact ->> 'schemaVersion'::text) = '1'::text) AND ((assignment_artifact ->> 'serializationVersion'::text) = '1'::text) AND ((assignment_artifact ->> 'workingVersion'::text) ~ '^[1-9][0-9]*$'::text) AND ((assignment_artifact ->> 'contentHash'::text) ~ '^[0-9a-f]{64}$'::text) AND ((assignment_artifact ->> 'storageUri'::text) ~~ (('%/content/'::text || (assignment_artifact ->> 'contentHash'::text)) || '.json'::text)) AND (jsonb_typeof((assignment_artifact -> 'schemaVersion'::text)) = 'number'::text) AND (jsonb_typeof((assignment_artifact -> 'serializationVersion'::text)) = 'number'::text) AND (jsonb_typeof((assignment_artifact -> 'workingVersion'::text)) = 'number'::text) AND (assignment_artifact ?& ARRAY['format'::text, 'schemaVersion'::text, 'serializationVersion'::text, 'workingVersion'::text, 'contentHash'::text, 'storageUri'::text])) IS TRUE))),
     CONSTRAINT jobs_mode_check CHECK (((mode IS NULL) OR (mode = ANY (ARRAY['auto'::text, 'dialogue'::text, 'monologue'::text, 'tts'::text])))),
     CONSTRAINT jobs_state_check CHECK ((state = ANY (ARRAY['queued'::text, 'running'::text, 'awaiting_approval'::text, 'succeeded'::text, 'failed'::text]))),
-    CONSTRAINT jobs_tts_model_check CHECK (((tts_model IS NULL) OR ((tts_provider = 'elevenlabs'::text) AND (tts_model = ANY (ARRAY['eleven_v3'::text, 'eleven_multilingual_v2'::text, 'eleven_flash_v2_5'::text, 'eleven_flash_v2'::text]))) OR ((tts_provider = 'google'::text) AND (tts_model = ANY (ARRAY['chirp3_hd'::text, 'studio'::text, 'neural2'::text, 'wavenet'::text]))) OR ((tts_provider = 'inworld'::text) AND (tts_model = ANY (ARRAY['inworld-tts-2'::text, 'inworld-tts-1.5-max'::text, 'inworld-tts-1.5-mini'::text]))))),
-    CONSTRAINT jobs_tts_provider_check CHECK (((tts_provider IS NULL) OR (tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text]))))
+    CONSTRAINT jobs_tts_model_check CHECK (((tts_model IS NULL) OR ((tts_provider = 'elevenlabs'::text) AND (tts_model = ANY (ARRAY['eleven_v3'::text, 'eleven_multilingual_v2'::text, 'eleven_flash_v2_5'::text, 'eleven_flash_v2'::text]))) OR ((tts_provider = 'google'::text) AND (tts_model = ANY (ARRAY['chirp3_hd'::text, 'studio'::text, 'neural2'::text, 'wavenet'::text]))) OR ((tts_provider = 'inworld'::text) AND (tts_model = ANY (ARRAY['inworld-tts-2'::text, 'inworld-tts-1.5-max'::text, 'inworld-tts-1.5-mini'::text]))) OR ((tts_provider = 'gemini'::text) AND (tts_model = ANY (ARRAY['gemini-3.8-flash-lite-tts'::text, 'gemini-3.8-flash-tts'::text]))))),
+    CONSTRAINT jobs_tts_provider_check CHECK (((tts_provider IS NULL) OR (tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text, 'gemini'::text]))))
 );
 
 CREATE TABLE public.legacy_profile_revisions (
@@ -1859,7 +1859,7 @@ CREATE TABLE public.user_settings (
     enable_notifications boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT user_settings_tts_provider_check CHECK ((tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text]))),
+    CONSTRAINT user_settings_tts_provider_check CHECK ((tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text, 'gemini'::text]))),
     CONSTRAINT user_settings_tts_strategy_check CHECK ((default_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text])))
 );
 
@@ -3177,5 +3177,6 @@ VALUES
   ('0069_google_calendar_connection', 'e588c33b65438b42d6df0919cd4763221df195cdb35fd26c906906da3a009f3a', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0070_calendar_scheduling', 'c30cbc331b6f884ff7a732fe28d582b74e2bf1ef54bb0588dca063ddfeb2c759', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0071_scheduler_retirement', '45ee490d0893537325b299c0e6ee161ec72f139fe2c260aa95d3a5a4abf1eb7c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0072_calendar_projection_reference_guard', '50cf12476c3fd513fa328777a12ca2260d2c6a1b99b15b4b8c623a9093b3ef06', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0072_calendar_projection_reference_guard', '50cf12476c3fd513fa328777a12ca2260d2c6a1b99b15b4b8c623a9093b3ef06', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0073_gemini_tts_provider', 'cdaee92f0b9f19241844d93ed34db298c4cf0f6d852de4c21bca555dcd33a169', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

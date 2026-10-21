@@ -1,5 +1,6 @@
 import type {
   ElevenLabsTtsModelId,
+  GeminiTtsModelId,
   GoogleTtsModel,
   InworldTtsModel,
   TtsModelId,
@@ -28,6 +29,21 @@ export const INWORLD_TTS_MODELS = [
   'inworld-tts-1.5-max',
   'inworld-tts-1.5-mini',
 ] as const satisfies readonly InworldTtsModel[];
+
+export const GEMINI_TTS_MODELS = [
+  'gemini-3.8-flash-lite-tts',
+  'gemini-3.8-flash-tts',
+] as const satisfies readonly GeminiTtsModelId[];
+
+export const GEMINI_TTS_DESCRIPTOR = {
+  id: 'gemini',
+  label: 'Gemini Cloud TTS',
+  models: GEMINI_TTS_MODELS,
+  defaultModel: 'gemini-3.8-flash-lite-tts',
+  envModelKey: 'ESL_TTS_PROVIDER_GEMINI_MODEL',
+  defaultVoiceId: 'Kore',
+  capabilitySnapshotMode: 'static',
+} as const satisfies TtsProviderDescriptor<'gemini', GeminiTtsModelId>;
 
 export const ELEVENLABS_TTS_DESCRIPTOR = {
   id: 'elevenlabs',
@@ -61,6 +77,7 @@ export const TTS_PROVIDER_DESCRIPTORS = [
   ELEVENLABS_TTS_DESCRIPTOR,
   GOOGLE_TTS_DESCRIPTOR,
   INWORLD_TTS_DESCRIPTOR,
+  GEMINI_TTS_DESCRIPTOR,
 ] as const satisfies readonly TtsProviderDescriptor[];
 
 const DESCRIPTORS_BY_PROVIDER = new Map<TtsProviderId, TtsProviderDescriptor>(
@@ -70,6 +87,8 @@ const DESCRIPTORS_BY_PROVIDER = new Map<TtsProviderId, TtsProviderDescriptor>(
 const IDENTITY_CAPABILITIES = { planningMode: 'identity' } as const satisfies TtsModelCapabilities;
 
 const MODEL_CAPABILITIES: Record<TtsModelId, TtsModelCapabilities> = {
+  'gemini-3.8-flash-lite-tts': IDENTITY_CAPABILITIES,
+  'gemini-3.8-flash-tts': IDENTITY_CAPABILITIES,
   eleven_v3: IDENTITY_CAPABILITIES,
   eleven_multilingual_v2: IDENTITY_CAPABILITIES,
   eleven_flash_v2_5: IDENTITY_CAPABILITIES,
@@ -121,7 +140,12 @@ export function getTtsModelCapabilities(
 export function parseTtsProviderId(value: unknown): TtsProviderId | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'elevenlabs' || normalized === 'google' || normalized === 'inworld') {
+  if (
+    normalized === 'elevenlabs' ||
+    normalized === 'google' ||
+    normalized === 'inworld' ||
+    normalized === 'gemini'
+  ) {
     return normalized;
   }
   return null;

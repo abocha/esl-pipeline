@@ -35,11 +35,7 @@ const ciScopeCases = [
     records('M', 'docs/reference/TESTING_GUIDELINES.md'),
     [false, false, false, false, true],
   ],
-  [
-    'root README documentation only',
-    records('M', 'README.md'),
-    [false, false, false, false, true],
-  ],
+  ['root README documentation only', records('M', 'README.md'), [false, false, false, false, true]],
   [
     'root README with docs',
     [...records('M', 'README.md'), ...records('M', 'docs/QUICK_START.md')],
@@ -518,6 +514,12 @@ for (const [name, files, selected, packaging] of [
     'STT provider',
     ['packages/stt-provider-elevenlabs/src/index.ts'],
     ['build_unit', 'media'],
+    true,
+  ],
+  [
+    'Gemini TTS provider',
+    ['packages/tts-provider-gemini/src/index.ts'],
+    ['build_unit', 'integration'],
     true,
   ],
   [

@@ -12,7 +12,9 @@ vi.mock('@esl-pipeline/tts-core', () => ({
   getRegisteredTtsProvider: vi.fn(),
   registerTtsProvider: vi.fn(),
   parseTtsProviderId: (value: unknown) =>
-    value === 'elevenlabs' || value === 'google' || value === 'inworld' ? value : undefined,
+    value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini'
+      ? value
+      : undefined,
   resolveTtsSelection: ({ provider, model }: { provider?: TtsProviderId; model?: string }) => ({
     provider: provider ?? 'elevenlabs',
     model:
@@ -28,6 +30,7 @@ vi.mock('@esl-pipeline/tts-core', () => ({
       elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
       google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
       inworld: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
+      gemini: ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'],
     };
     return Object.fromEntries(providers.map((provider) => [provider, all[provider]]));
   },
@@ -36,6 +39,7 @@ vi.mock('@esl-pipeline/tts-core', () => ({
       elevenlabs: 'eleven_multilingual_v2',
       google: process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL || 'chirp3_hd',
       inworld: 'inworld-tts-2',
+      gemini: 'gemini-3.8-flash-lite-tts',
     };
     return Object.fromEntries(providers.map((provider) => [provider, all[provider]]));
   },

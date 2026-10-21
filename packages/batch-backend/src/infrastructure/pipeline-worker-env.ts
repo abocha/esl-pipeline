@@ -1,6 +1,6 @@
 export interface WorkerUserSettingsOverride {
   elevenLabsApiKey?: string | null;
-  ttsProvider?: 'elevenlabs' | 'google' | 'inworld' | null;
+  ttsProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini' | null;
 }
 
 export function resolveEffectiveElevenLabsApiKey(input: {
@@ -34,5 +34,7 @@ export function applyUserSettingsToEnv(
     process.env.ESL_TTS_DEFAULT_PROVIDER = 'elevenlabs';
   } else if (settings.ttsProvider === 'inworld') {
     process.env.ESL_TTS_DEFAULT_PROVIDER = 'inworld';
+  } else if (settings.ttsProvider === 'gemini') {
+    process.env.ESL_TTS_DEFAULT_PROVIDER = 'gemini';
   }
 }

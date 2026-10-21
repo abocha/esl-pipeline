@@ -42,6 +42,21 @@ listening results support candidate selection, not reliability claims or product
 
 ## Reproduce the provider calls
 
+For the integrated AssignmentV1 path (real Cloud ADC and FFmpeg, canonical orchestrator/renderer/
+manifest, publication to a loopback-only S3 test sink), build the orchestrator prerequisites, then:
+
+```powershell
+node scripts/tts-listening-trial/pipeline-smoke.mjs --project=esl-pipeline-production --serve
+```
+
+This makes small billable calls. It exercises configured provider/model defaults, a native dialogue,
+its pronunciation sentence/words, an identical cached run with no new calls, and a monologue. Open
+<http://127.0.0.1:8795> for the integrated dialogue handout and
+<http://127.0.0.1:8795/monologue.html> for the monologue. It uses dummy AWS credentials and the standard
+AWS SDK loopback endpoint override; no normal production uploads occur. Artifacts and safe evidence
+are preserved under Git-ignored `tmp/gemini-pipeline-smoke/`. ADC must be configured separately from
+CLI login (`gcloud auth application-default login`); production uses its separately provisioned ADC.
+
 These commands make billable calls. Requirements: Node 24+, `gcloud` authenticated to the intended
 account, the existing Inworld workspace dependency, and `ffmpeg`/`ffprobe` on `PATH`. Inworld reads
 only the API key from the repository-root `.env` using Node's parser; it does not apply that file

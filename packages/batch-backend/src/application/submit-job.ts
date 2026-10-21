@@ -3,7 +3,7 @@ import { HistoricalAssignmentReadOnlyError } from './historical-assignment.js';
 
 export type UploadTarget = 'auto' | 's3' | 'none';
 export type TtsStrategy = DomainTtsStrategy;
-export type TtsProvider = 'elevenlabs' | 'google' | 'inworld';
+export type TtsProvider = 'elevenlabs' | 'google' | 'inworld' | 'gemini';
 
 export interface SubmitJobRequest {
   md: string;

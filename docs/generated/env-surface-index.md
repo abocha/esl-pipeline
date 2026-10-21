@@ -100,6 +100,9 @@
 | `ESL_TTS_PROVIDER_ELEVENLABS_SILENCE_TAIL_SECONDS` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH` | `.env.example` | speech_runtime | `docs/reference/env.md` |
+| `ESL_TTS_PROVIDER_GEMINI_MODEL` | `.env.example` | speech_runtime | `docs/reference/env.md` |
+| `ESL_TTS_PROVIDER_GEMINI_PROJECT_ID` | `.env.example` | speech_runtime | `docs/reference/env.md` |
+| `ESL_TTS_PROVIDER_GEMINI_TIMEOUT_MS` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_GOOGLE_API_ENDPOINT` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_GOOGLE_LOCATION` | `.env.example` | speech_runtime | `docs/reference/env.md` |

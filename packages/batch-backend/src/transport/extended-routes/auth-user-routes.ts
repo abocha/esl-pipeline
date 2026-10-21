@@ -674,7 +674,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       if (body.ttsProvider !== undefined && !isValidTtsProvider(body.ttsProvider)) {
         return reply.code(400).send({
           error: 'validation_failed',
-          message: 'Invalid TTS provider. Must be one of: elevenlabs, google, inworld',
+          message: 'Invalid TTS provider. Must be one of: elevenlabs, google, inworld, gemini',
           code: 'invalid_tts_provider',
         });
       }

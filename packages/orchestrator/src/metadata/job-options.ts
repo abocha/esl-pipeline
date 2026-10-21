@@ -65,7 +65,7 @@ export async function resolveJobOptions(
 }
 
 function resolveRegisteredTtsProviders(): TtsProviderId[] {
-  const ordered: TtsProviderId[] = ['elevenlabs', 'google', 'inworld'];
+  const ordered: TtsProviderId[] = ['elevenlabs', 'google', 'inworld', 'gemini'];
   return ordered.filter((providerId) => Boolean(getRegisteredTtsProvider(providerId)));
 }
 

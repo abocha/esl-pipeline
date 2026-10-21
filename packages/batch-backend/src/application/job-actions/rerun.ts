@@ -22,7 +22,7 @@ const rerunSchema = z
     regenerateStudyTextAudio: z.boolean().optional(),
     regeneratePronunciationMainAudio: z.boolean().optional(),
     regeneratePronunciationChunkAudio: z.boolean().optional(),
-    studyTextTtsProvider: z.enum(['elevenlabs', 'google', 'inworld']).optional(),
+    studyTextTtsProvider: z.enum(['elevenlabs', 'google', 'inworld', 'gemini']).optional(),
     studyTextTtsModel: publishTtsModelSchema.optional(),
     studyTextVoiceId: z.string().min(1).optional(),
     studyTextVoiceAccent: z.string().min(1).optional(),
@@ -30,11 +30,11 @@ const rerunSchema = z
     studyTextDialogueLanguage: z.string().min(1).optional(),
     studyTextDialogueStability: z.number().min(0).max(1).optional(),
     studyTextDialogueSeed: z.number().int().optional(),
-    pronunciationMainTtsProvider: z.enum(['elevenlabs', 'google', 'inworld']).optional(),
+    pronunciationMainTtsProvider: z.enum(['elevenlabs', 'google', 'inworld', 'gemini']).optional(),
     pronunciationMainTtsModel: publishTtsModelSchema.optional(),
     pronunciationMainVoiceId: z.string().min(1).optional(),
     pronunciationMainVoiceAccent: z.string().min(1).optional(),
-    pronunciationChunkTtsProvider: z.enum(['elevenlabs', 'google', 'inworld']).optional(),
+    pronunciationChunkTtsProvider: z.enum(['elevenlabs', 'google', 'inworld', 'gemini']).optional(),
     pronunciationChunkTtsModel: publishTtsModelSchema.optional(),
     pronunciationChunkVoiceId: z.string().min(1).optional(),
     pronunciationChunkVoiceAccent: z.string().min(1).optional(),
@@ -185,7 +185,7 @@ function resolveInheritedTtsModelForProviderChange(args: {
 
 function resolveInheritedVoiceIdForProviderChange(args: {
   explicitVoiceId?: string;
-  explicitProvider?: 'elevenlabs' | 'google' | 'inworld';
+  explicitProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   persistedProvider?: string | null;
   persistedVoiceId?: string | null;
 }): string | undefined {

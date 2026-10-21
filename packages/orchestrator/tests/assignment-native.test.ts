@@ -433,6 +433,115 @@ describe('native typed execution', () => {
     expect(calls.some(([path]) => String(path).includes('study'))).toBe(false);
     expect(persisted?.ttsStrategy).toBeUndefined();
   });
+
+  it('uses the resolved default Gemini provider and model for every fresh pronunciation family', async () => {
+    vi.stubEnv('ESL_TTS_DEFAULT_PROVIDER', 'gemini');
+    vi.stubEnv('ESL_TTS_PROVIDER_GEMINI_MODEL', 'gemini-3.8-flash-tts');
+    const assignment = assignmentFixture();
+    assignment.pronunciation = modes[0]!;
+    const core = await import('@esl-pipeline/tts-core');
+    vi.mocked(core.buildStudyTextMp3).mockResolvedValueOnce({
+      path: audioFiles.study,
+      hash: 'gemini-study',
+      provider: 'gemini',
+      modelId: 'gemini-3.8-flash-tts',
+      voices: [{ speaker: 'Alex', voiceId: 'Kore', source: 'auto' }],
+      voiceAssignments: { Alex: 'Kore' },
+    });
+    await newAssignment(
+      { md: '/virtual/default-gemini', assignment, withTts: true },
+      {},
+      { manifestStore: store },
+    );
+    expect(core.buildPronunciationShadowSentenceMp3).toHaveBeenCalledWith(
+      expect.objectContaining({ voiceId: 'Kore' }),
+      expect.objectContaining({ ttsProvider: 'gemini', ttsModel: 'gemini-3.8-flash-tts' }),
+    );
+    for (const call of vi.mocked(core.buildPronunciationTextMp3).mock.calls) {
+      expect(call[1]).toMatchObject({ ttsProvider: 'gemini', ttsModel: 'gemini-3.8-flash-tts' });
+    }
+    expect(core.buildPronunciationTextMp3).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['main', 'items'] as const)(
+    'switches only the selected pronunciation %s family to Gemini with compatible defaults',
+    async (family) => {
+      const assignment = assignmentFixture();
+      assignment.pronunciation = modes[0]!;
+      await newAssignment(
+        {
+          md: '/virtual/provider-switch',
+          assignment,
+          withTts: true,
+          voiceId: 'main',
+          ttsProvider: 'elevenlabs',
+          upload: 's3',
+        },
+        {},
+        { manifestStore: store },
+      );
+      const study = structuredClone(persisted!.audioArtifacts!.studyText);
+      const previous = structuredClone(persisted!.audioArtifacts!.pronunciation);
+      const core = await import('@esl-pipeline/tts-core');
+      const actual = await vi.importActual<typeof core>('@esl-pipeline/tts-core');
+      vi.mocked(core.buildStudyTextMp3).mockClear();
+      vi.mocked(core.buildPronunciationShadowSentenceMp3).mockImplementation(
+        async (input, options) => {
+          const selection = actual.validateTtsSelection({
+            provider: options.ttsProvider!,
+            model: options.ttsModel,
+          });
+          return {
+            path: '/unused/gemini-shadow.mp3',
+            hash: 'gemini-shadow',
+            voiceId: input.voiceId,
+            provider: selection.provider,
+            modelId: selection.model,
+          };
+        },
+      );
+      vi.mocked(core.buildPronunciationTextMp3).mockImplementation(async (input, options) => {
+        const selection = actual.validateTtsSelection({
+          provider: options.ttsProvider!,
+          model: options.ttsModel,
+        });
+        return {
+          path: `/unused/${options.fileStem}.mp3`,
+          hash: `gemini-${input.text}`,
+          voiceId: input.voiceId,
+          provider: selection.provider,
+          modelId: selection.model,
+        };
+      });
+      await rerunAssignment(
+        {
+          md: '/virtual/provider-switch',
+          assignment,
+          regeneratePronunciationMainAudio: family === 'main',
+          regeneratePronunciationChunkAudio: family === 'items',
+          ...(family === 'main'
+            ? { pronunciationMainTtsProvider: 'gemini' as const }
+            : { pronunciationChunkTtsProvider: 'gemini' as const }),
+          upload: 's3',
+        },
+        { manifestStore: store },
+      );
+      expect(core.buildStudyTextMp3).not.toHaveBeenCalled();
+      expect(persisted?.audioArtifacts?.studyText).toEqual(study);
+      const next = persisted?.audioArtifacts?.pronunciation;
+      const changed = family === 'main' ? [next?.primaryClip] : next?.itemClips;
+      expect(changed?.length).toBeGreaterThan(0);
+      for (const clip of changed ?? []) {
+        expect(clip).toMatchObject({
+          voiceId: 'Kore',
+          tts: { provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts' },
+        });
+      }
+      expect(family === 'main' ? next?.itemClips : next?.primaryClip).toEqual(
+        family === 'main' ? previous?.itemClips : previous?.primaryClip,
+      );
+    },
+  );
 });
 
 function assignmentFixture(): FixtureAssignmentV1 {

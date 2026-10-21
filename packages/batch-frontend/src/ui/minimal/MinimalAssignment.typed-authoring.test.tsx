@@ -103,7 +103,7 @@ const params = {
   presetOptionIds: [],
   generationOptions: null,
   ttsProviders: [],
-  ttsModelOptionsByProvider: { elevenlabs: [], google: [], inworld: [] },
+  ttsModelOptionsByProvider: { elevenlabs: [], google: [], inworld: [], gemini: [] },
   elevenlabsModelOptions: [],
   elevenlabsStandardModelOptions: [],
   defaultTtsProvider: null,
@@ -153,6 +153,26 @@ afterEach(() => {
 });
 
 describe('AssignmentV1 authoring and historical access', () => {
+  it('keeps the global default while selecting and retaining Gemini models under auto strategy', () => {
+    const { result } = renderHook(() =>
+      useMinimalAssignmentAuthoringController({
+        ...params,
+        ttsProviders: ['inworld', 'gemini'],
+        ttsModelOptionsByProvider: {
+          ...params.ttsModelOptionsByProvider,
+          gemini: ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'],
+        },
+        defaultTtsModelByProvider: { gemini: 'gemini-3.8-flash-lite-tts' },
+      }),
+    );
+    expect(result.current.selectedTtsProvider).toBe('inworld');
+    act(() => result.current.setSelectedTtsProvider('gemini'));
+    expect(result.current.selectedTtsStrategy).toBe('auto');
+    expect(result.current.selectedTtsModel).toBe('gemini-3.8-flash-lite-tts');
+    act(() => result.current.setSelectedTtsModel('gemini-3.8-flash-tts'));
+    expect(result.current.selectedTtsModel).toBe('gemini-3.8-flash-tts');
+  });
+
   it('does not report validation errors before a draft exists or admit empty content', async () => {
     const { result } = renderHook(() => useMinimalAssignmentAuthoringController(params));
     expect(result.current.assignmentValidationError).toBeNull();

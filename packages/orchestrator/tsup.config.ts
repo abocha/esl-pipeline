@@ -19,7 +19,7 @@ export default defineConfig(() => ({
   shims: false,
   outDir: 'dist',
   dts: false,
-  external: ['@google-cloud/text-to-speech', '@esl-pipeline/html-publisher'],
+  external: ['@google-cloud/text-to-speech', 'google-auth-library', '@esl-pipeline/html-publisher'],
   noExternal: INTERNAL_BUNDLE,
   tsconfig: 'tsconfig.json',
 }));

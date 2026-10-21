@@ -67,7 +67,7 @@ export interface UserSettingsOutput {
 /**
  * Valid TTS providers
  */
-export const VALID_TTS_PROVIDERS: TtsProvider[] = ['elevenlabs', 'google', 'inworld'];
+export const VALID_TTS_PROVIDERS: TtsProvider[] = ['elevenlabs', 'google', 'inworld', 'gemini'];
 
 /**
  * Valid TTS strategies

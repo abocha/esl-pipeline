@@ -17,6 +17,7 @@ describe('domain/settings-model', () => {
       expect(isValidTtsProvider('elevenlabs')).toBe(true);
       expect(isValidTtsProvider('google')).toBe(true);
       expect(isValidTtsProvider('inworld')).toBe(true);
+      expect(isValidTtsProvider('gemini')).toBe(true);
     });
 
     it('returns false for invalid providers', () => {
@@ -114,7 +115,8 @@ describe('domain/settings-model', () => {
       expect(VALID_TTS_PROVIDERS).toContain('elevenlabs');
       expect(VALID_TTS_PROVIDERS).toContain('google');
       expect(VALID_TTS_PROVIDERS).toContain('inworld');
-      expect(VALID_TTS_PROVIDERS).toHaveLength(3);
+      expect(VALID_TTS_PROVIDERS).toContain('gemini');
+      expect(VALID_TTS_PROVIDERS).toHaveLength(4);
     });
   });
 

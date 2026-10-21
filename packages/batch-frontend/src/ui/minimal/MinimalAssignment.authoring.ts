@@ -39,7 +39,7 @@ import {
 } from './MinimalAssignment.logic';
 import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-window';
 
-type UiTtsProvider = 'elevenlabs' | 'google' | 'inworld';
+type UiTtsProvider = 'elevenlabs' | 'google' | 'inworld' | 'gemini';
 type UiPublishTtsStrategy = 'auto' | 'dialogue' | 'tts';
 type TranscriptUiStatus = 'idle' | 'loading' | 'processing' | 'ready' | 'failed';
 type PronunciationMode =
@@ -519,6 +519,7 @@ interface UseMinimalAssignmentAuthoringControllerParams {
     elevenlabs: readonly string[];
     google: readonly string[];
     inworld: readonly string[];
+    gemini?: readonly string[];
   };
   elevenlabsModelOptions: readonly string[];
   elevenlabsStandardModelOptions: readonly string[];
@@ -1578,14 +1579,14 @@ export function useMinimalAssignmentAuthoringController({
 
   useEffect(() => {
     const modelOptions = ttsModelOptionsByProvider[state.selectedTtsProvider] ?? [];
-    if (state.selectedTtsProvider === 'inworld') {
+    if (state.selectedTtsProvider === 'inworld' || state.selectedTtsProvider === 'gemini') {
       if (modelOptions.length === 0) {
         if (state.selectedTtsModel) {
           dispatch({ type: 'publish_config_updated', payload: { selectedTtsModel: '' } });
         }
         return;
       }
-      const configuredDefault = defaultTtsModelByProvider?.inworld;
+      const configuredDefault = defaultTtsModelByProvider?.[state.selectedTtsProvider];
       const preferredModel =
         configuredDefault && modelOptions.includes(configuredDefault)
           ? configuredDefault
