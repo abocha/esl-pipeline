@@ -302,7 +302,7 @@ describe('application/get-job-options', () => {
       inworld: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
       gemini: ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'],
     });
-    expect(result.defaultTtsProvider).toEqual('elevenlabs');
+    expect(result.defaultTtsProvider).toEqual('gemini');
     expect(result.defaultTtsModelByProvider).toEqual({
       elevenlabs: 'eleven_multilingual_v2',
       google: 'chirp3_hd',

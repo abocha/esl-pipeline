@@ -1,6 +1,7 @@
 // packages/batch-backend/src/domain/settings-model.ts
 // Domain model for user settings (API keys and preferences).
 import type { TtsProviderId, TtsStrategy } from '@esl-pipeline/contracts';
+import { resolveDefaultTtsProvider } from '@esl-pipeline/tts-core';
 
 /**
  * TTS provider type - aligned with currently supported runtime adapters.
@@ -113,7 +114,7 @@ export function getDefaultSettings(): Omit<
 > {
   return {
     elevenLabsKeyEncrypted: null,
-    ttsProvider: 'elevenlabs',
+    ttsProvider: resolveDefaultTtsProvider(),
     defaultPreset: 'b1-default',
     defaultVoiceAccent: 'american',
     defaultTtsStrategy: 'auto',

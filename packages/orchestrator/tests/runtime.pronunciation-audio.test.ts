@@ -39,7 +39,7 @@ describe('runtime/pronunciation-audio', () => {
     vi.clearAllMocks();
   });
 
-  it('keeps Gemini pronunciation items on the selected lane instead of defaulting to Chirp', async () => {
+  it('keeps pronunciation items on Chirp when the primary provider is Gemini', async () => {
     vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'minimal_pair',
       pairs: [
@@ -69,13 +69,13 @@ describe('runtime/pronunciation-audio', () => {
     });
     expect(buildPronunciationTextMp3).toHaveBeenCalledTimes(2);
     for (const call of vi.mocked(buildPronunciationTextMp3).mock.calls) {
-      expect(call[0].voiceId).toBe('Kore');
+      expect(call[0].voiceId).toBe('en-US-Chirp3-HD-Charon');
       expect(call[1]).toMatchObject({
-        ttsProvider: 'gemini',
-        ttsModel: 'gemini-3.8-flash-lite-tts',
+        ttsProvider: 'google',
+        ttsModel: 'chirp3_hd',
       });
     }
-    expect(result?.itemClips?.map((clip) => clip.tts?.provider)).toEqual(['gemini', 'gemini']);
+    expect(result?.itemClips?.map((clip) => clip.tts?.provider)).toEqual(['google', 'google']);
   });
 
   it('propagates one request control to shadow primary and item synthesis', async () => {

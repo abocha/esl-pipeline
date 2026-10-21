@@ -434,7 +434,7 @@ describe('native typed execution', () => {
     expect(persisted?.ttsStrategy).toBeUndefined();
   });
 
-  it('uses the resolved default Gemini provider and model for every fresh pronunciation family', async () => {
+  it('uses resolved Gemini defaults for the full sentence while keeping fresh chunks on Chirp', async () => {
     vi.stubEnv('ESL_TTS_DEFAULT_PROVIDER', 'gemini');
     vi.stubEnv('ESL_TTS_PROVIDER_GEMINI_MODEL', 'gemini-3.8-flash-tts');
     const assignment = assignmentFixture();
@@ -458,7 +458,8 @@ describe('native typed execution', () => {
       expect.objectContaining({ ttsProvider: 'gemini', ttsModel: 'gemini-3.8-flash-tts' }),
     );
     for (const call of vi.mocked(core.buildPronunciationTextMp3).mock.calls) {
-      expect(call[1]).toMatchObject({ ttsProvider: 'gemini', ttsModel: 'gemini-3.8-flash-tts' });
+      expect(call[1]).toMatchObject({ ttsProvider: 'google', ttsModel: 'chirp3_hd' });
+      expect(call[0].voiceId).toBe('en-US-Chirp3-HD-Charon');
     }
     expect(core.buildPronunciationTextMp3).toHaveBeenCalledTimes(2);
   });

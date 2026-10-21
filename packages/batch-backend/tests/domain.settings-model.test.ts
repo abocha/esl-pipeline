@@ -1,5 +1,5 @@
 // packages/batch-backend/tests/domain.settings-model.test.ts
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   getDefaultSettings,
@@ -10,6 +10,8 @@ import {
   VALID_TTS_PROVIDERS,
   VALID_TTS_STRATEGIES,
 } from '../src/domain/settings-model.js';
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe('domain/settings-model', () => {
   describe('isValidTtsProvider', () => {
@@ -43,14 +45,19 @@ describe('domain/settings-model', () => {
 
   describe('getDefaultSettings', () => {
     it('returns expected default values', () => {
+      vi.stubEnv('ESL_TTS_DEFAULT_PROVIDER', '');
       const defaults = getDefaultSettings();
 
       expect(defaults.elevenLabsKeyEncrypted).toBeNull();
-      expect(defaults.ttsProvider).toBe('elevenlabs');
+      expect(defaults.ttsProvider).toBe('gemini');
       expect(defaults.defaultPreset).toBe('b1-default');
       expect(defaults.defaultVoiceAccent).toBe('american');
       expect(defaults.defaultTtsStrategy).toBe('auto');
       expect(defaults.enableNotifications).toBe(true);
+    });
+    it('uses the configured provider for new settings', () => {
+      vi.stubEnv('ESL_TTS_DEFAULT_PROVIDER', 'inworld');
+      expect(getDefaultSettings().ttsProvider).toBe('inworld');
     });
   });
 

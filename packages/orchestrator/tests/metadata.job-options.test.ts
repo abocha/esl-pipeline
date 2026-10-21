@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TtsProviderAdapter, TtsProviderId } from '@esl-pipeline/tts-core';
 import { getRegisteredTtsProvider, loadVoicesCatalog } from '@esl-pipeline/tts-core';
@@ -7,42 +7,11 @@ import type { ConfigProvider } from '../src/config.js';
 import { resolveJobOptions } from '../src/metadata/job-options.js';
 import type { ResolvedConfigPaths } from '../src/pipeline.js';
 
-vi.mock('@esl-pipeline/tts-core', () => ({
+vi.mock('@esl-pipeline/tts-core', async () => ({
+  ...(await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core')),
   loadVoicesCatalog: vi.fn(),
   getRegisteredTtsProvider: vi.fn(),
   registerTtsProvider: vi.fn(),
-  parseTtsProviderId: (value: unknown) =>
-    value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini'
-      ? value
-      : undefined,
-  resolveTtsSelection: ({ provider, model }: { provider?: TtsProviderId; model?: string }) => ({
-    provider: provider ?? 'elevenlabs',
-    model:
-      model ??
-      (provider === 'google'
-        ? 'chirp3_hd'
-        : provider === 'inworld'
-          ? 'inworld-tts-2'
-          : 'eleven_multilingual_v2'),
-  }),
-  buildTtsModelOptionsByProvider: (providers: TtsProviderId[]) => {
-    const all = {
-      elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
-      google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
-      inworld: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
-      gemini: ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'],
-    };
-    return Object.fromEntries(providers.map((provider) => [provider, all[provider]]));
-  },
-  buildDefaultTtsModelByProvider: (providers: TtsProviderId[]) => {
-    const all = {
-      elevenlabs: 'eleven_multilingual_v2',
-      google: process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL || 'chirp3_hd',
-      inworld: 'inworld-tts-2',
-      gemini: 'gemini-3.8-flash-lite-tts',
-    };
-    return Object.fromEntries(providers.map((provider) => [provider, all[provider]]));
-  },
 }));
 
 const configPaths: ResolvedConfigPaths = {
@@ -92,8 +61,10 @@ function createProviderMock(id: TtsProviderId, modelFamily: string): TtsProvider
 }
 
 describe('metadata/job-options', () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.stubEnv('ESL_TTS_DEFAULT_PROVIDER', '');
     vi.mocked(getRegisteredTtsProvider).mockImplementation((providerId) => {
       if (providerId === 'elevenlabs') {
         return createProviderMock('elevenlabs', 'eleven_multilingual_v2');
@@ -103,6 +74,23 @@ describe('metadata/job-options', () => {
       }
     });
   });
+
+  it.each(['', 'inworld'])(
+    'publishes the configured provider default (%s), with Gemini when unset',
+    async (configured) => {
+      vi.stubEnv('ESL_TTS_DEFAULT_PROVIDER', configured);
+      vi.mocked(getRegisteredTtsProvider).mockImplementation((id) =>
+        createProviderMock(id, id === 'gemini' ? 'gemini-3.8-flash-lite-tts' : 'inworld-tts-2'),
+      );
+      vi.mocked(loadVoicesCatalog).mockResolvedValue({ voices: [] });
+      const result = await resolveJobOptions({
+        configProvider: createConfigProvider(),
+        configPaths,
+      });
+      expect(result.defaultTtsProvider).toBe(configured || 'gemini');
+      expect(result.defaultTtsModelByProvider?.gemini).toBe('gemini-3.8-flash-lite-tts');
+    },
+  );
 
   it('returns orchestrator-backed presets and voices without retired notion metadata', async () => {
     const configProvider = createConfigProvider({

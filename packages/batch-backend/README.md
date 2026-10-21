@@ -625,10 +625,12 @@ Student-memory operator workflows:
 
 ### Gemini Cloud TTS admission (ESL-67)
 
-`gemini` is an opt-in TTS provider distinct from the existing `google` Cloud Text-to-Speech/Chirp
+`gemini` is the default TTS provider when `ESL_TTS_DEFAULT_PROVIDER` is unset, distinct from `google` Cloud Text-to-Speech/Chirp
 identity. Operator publish and rerun selections persist `gemini-3.8-flash-lite-tts` or
-`gemini-3.8-flash-tts`; the Gemini lane defaults to Flash-Lite. Existing provider defaults and saved
-choices remain unchanged. The [Gemini provider README](../tts-provider-gemini/README.md) owns Cloud
+`gemini-3.8-flash-tts`; the Gemini lane defaults to Flash-Lite. Fresh authoring honors the backend's
+configured default; saved choices remain unchanged. Full pronunciation sentences follow the study
+provider/model; short item clips default to Google Chirp 3 HD. New user settings inherit the runtime
+default without rewriting existing settings. The [Gemini provider README](../tts-provider-gemini/README.md) owns Cloud
 authentication and synthesis configuration.
 
 Migration `0073_gemini_tts_provider` expands provider/model checks without rewriting existing rows.

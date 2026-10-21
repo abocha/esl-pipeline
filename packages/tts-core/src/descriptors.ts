@@ -206,7 +206,7 @@ export function resolveTtsSelection(input: {
 }
 
 export function resolveDefaultTtsProvider(): TtsProviderId {
-  return parseTtsProviderId(process.env.ESL_TTS_DEFAULT_PROVIDER) ?? 'elevenlabs';
+  return parseTtsProviderId(process.env.ESL_TTS_DEFAULT_PROVIDER) ?? 'gemini';
 }
 
 export function resolveTtsProviderOrder(): TtsProviderId[] {

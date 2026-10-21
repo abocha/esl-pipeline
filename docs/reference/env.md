@@ -62,12 +62,18 @@ Primary groups:
   - `AWS_*`, `S3_*`, `STORAGE_*`, `ESL_PIPELINE_MANIFEST_*`
 - Speech runtime:
   - `ESL_TTS_*`, `ESL_STT_*`, `VOICE_ALIGNMENT_V2_*`
-  - Opt-in `gemini` TTS uses Google Cloud ADC plus explicit
+  - `ESL_TTS_DEFAULT_PROVIDER` selects the provider for fresh study-text generation; when unset,
+    it defaults to `gemini`. The authoring UI uses this backend default without adding selectors.
+    Explicit selections and saved job/session choices take precedence. New user settings inherit
+    the configured default; existing user settings are not rewritten.
+  - `gemini` TTS uses Google Cloud ADC plus explicit
     `ESL_TTS_PROVIDER_GEMINI_PROJECT_ID`. `ESL_TTS_PROVIDER_GEMINI_MODEL` defaults to
     `gemini-3.8-flash-lite-tts`; `gemini-3.8-flash-tts` is selectable.
     `ESL_TTS_PROVIDER_GEMINI_TIMEOUT_MS` defaults to 180000 (1000–300000). This lane uses the
     fixed global Cloud endpoint, deterministic prebuilt voices and identity speech planning, with
-    no external planner/ranker calls or AI Studio key. Existing global defaults remain unchanged.
+    no external planner/ranker calls or AI Studio key. The full pronunciation sentence follows the
+    study-text provider/model; short pronunciation item clips default to Google `chirp3_hd`.
+    Technical reruns can override each family independently.
     Configure ADC for the selected Cloud project before selecting it; `gcloud auth login` alone
     is separate from Application Default Credentials. See the
     [Gemini adapter](../../packages/tts-provider-gemini/README.md) for limits and cache behavior.

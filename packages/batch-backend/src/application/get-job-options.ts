@@ -17,6 +17,7 @@ import {
   buildDefaultTtsModelByProvider,
   buildTtsModelOptionsByProvider,
   parseTtsProviderId,
+  resolveDefaultTtsProvider,
 } from '@esl-pipeline/tts-core';
 import { loadVoicesCatalog as loadElevenLabsVoicesCatalog } from '@esl-pipeline/tts-provider-elevenlabs';
 
@@ -294,8 +295,7 @@ function resolveTtsMetadata(
     }
   }
 
-  const normalizedDefaultProvider =
-    input.defaultTtsProvider ?? parseTtsProviderId(process.env.ESL_TTS_DEFAULT_PROVIDER);
+  const normalizedDefaultProvider = input.defaultTtsProvider ?? resolveDefaultTtsProvider();
   const defaultProvider =
     normalizedDefaultProvider && uniqueProviders.includes(normalizedDefaultProvider)
       ? normalizedDefaultProvider

@@ -27,7 +27,7 @@ function GeminiRerunControls() {
     ttsProviders: ['google', 'elevenlabs', 'gemini'],
     ttsModelOptionsByProvider: modelOptions,
     elevenlabsStandardModelOptions: ['eleven_flash_v2_5'],
-    defaultPronunciationChunkProvider: 'gemini',
+    defaultPronunciationChunkProvider: 'google',
     applyJobStatusTransition: vi.fn(),
     refreshResumeJobs: vi.fn(),
   });
@@ -60,12 +60,18 @@ describe('Gemini TTS operator selection', () => {
     }
     const providers = screen.getAllByRole('combobox', { name: 'Provider' });
     expect(providers).toHaveLength(3);
+    expect(providers.map((select) => (select as HTMLSelectElement).value)).toEqual([
+      'gemini',
+      'gemini',
+      'google',
+    ]);
     for (const select of providers) {
-      expect((select as HTMLSelectElement).value).toBe('gemini');
       expect(
         within(select).getByRole('option', { name: 'Gemini Cloud TTS' }).getAttribute('value'),
       ).toBe('gemini');
     }
+    // A deliberate chunk override remains available independently of its Chirp default.
+    fireEvent.change(providers[2]!, { target: { value: 'gemini' } });
     const modelSelectors = screen.getAllByRole('combobox', { name: 'Model' });
     expect(modelSelectors).toHaveLength(3);
     for (const select of modelSelectors) {

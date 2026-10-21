@@ -5,8 +5,9 @@ Chirp/Cloud Text-to-Speech adapter and of the retired Google AI Studio LLM lane.
 
 ## Configuration
 
-- Select provider `gemini` through the existing TTS selection surface. This package does not change
-  the repository-wide default provider.
+- The runtime defaults to provider `gemini` when `ESL_TTS_DEFAULT_PROVIDER` is unset. Set that
+  environment variable to another provider to override fresh generation. Explicit saved selections
+  take precedence.
 - Set `ESL_TTS_PROVIDER_GEMINI_PROJECT_ID` to the Cloud project receiving the requests and charges.
 - Authentication uses Google Application Default Credentials: `GOOGLE_APPLICATION_CREDENTIALS`,
   workload identity, or local ADC configured with `gcloud auth application-default login`. The
@@ -46,7 +47,10 @@ Maya: Kore
 ```
 
 Pronunciation text and shadow sentences use the same plain single-speaker transport and explicit
-selected voice. Gemini is English-focused in this initial Pipeline integration; the adapter does not
+selected voice when routed to this adapter. The assignment pipeline sends the full pronunciation
+sentence to the study-text provider/model, while short item clips default to Google Chirp 3 HD.
+An explicit technical rerun can select Gemini for item clips too.
+Gemini is English-focused in this initial Pipeline integration; the adapter does not
 promise that a fixed prebuilt voice matches an authored regional-accent preference.
 
 ## Integrity, cache and failures

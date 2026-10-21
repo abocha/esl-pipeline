@@ -15,15 +15,17 @@ and was close on pronunciation. Evidence and verbatim feedback live in
 [`scripts/tts-listening-trial`](../../../scripts/tts-listening-trial/README.md).
 
 Use plan-backed execution. Existing SSOT, evidence route and mutation boundaries apply. No durable
-runtime Goal is needed. No production deployment/default switch or merge is authorized here.
+runtime Goal is needed. In a follow-up before merge, the maintainer requested Gemini as the
+no-env code default, env-controlled fresh authoring, and retention of Chirp for short chunks.
+No production configuration edit, deployment or merge is authorized here.
 
 ## Simplest adequate design
 
 - Add provider `gemini`; preserve `google` as Cloud Text-to-Speech/Chirp. Reusing that durable ID
   would change saved job meaning. Additive provider/model unions and database checks are necessary
   enablers, not a historical-data migration.
-- Default the Gemini lane to `gemini-3.8-flash-lite-tts`; allow `gemini-3.8-flash-tts`. Preserve
-  existing global defaults and explicit selections. No content-based model router.
+- Default fresh study text to Gemini `gemini-3.8-flash-lite-tts`; allow `gemini-3.8-flash-tts` and
+  env provider/model overrides. Preserve explicit saved selections. No content-based model router.
 - Google Cloud global `aiplatform.googleapis.com` unary `generateContent`, using ADC and an explicit
   namespaced project ID. Reuse installed `google-auth-library`, standard fetch and existing media
   tools rather than adding a second generative SDK or shelling out to gcloud at runtime.
@@ -34,9 +36,9 @@ runtime Goal is needed. No production deployment/default switch or merge is auth
 - Convert complete WAV to the existing MP3 artifact contract. Cache identity includes provider,
   model, project, voices, source/strategy and policy; honor force/cancellation. Preserve durable
   rerun family ownership and persisted provider/model attribution.
-- Include canonical study-text, shadow sentence and pronunciation text flows. Existing legacy
-  defaults for other providers remain intact. Gemini item-clip selection must not accidentally
-  fall through to Chirp.
+- Include canonical study-text, shadow sentence and pronunciation text flows. Full pronunciation
+  sentences follow the study-text provider/model; short item clips default to Google Chirp 3 HD.
+  Explicit per-family rerun overrides remain available.
 - Keep normal HTTP timeout/error classification bounded and secret-safe. Emit actual usage tokens
   by modality; do not mislabel token pricing as per-character pricing.
 
@@ -76,7 +78,8 @@ invariants are closed.
 ## Implementation evidence
 
 - Added the `gemini` adapter, additive contracts/selection/queue/event/UI support and migration
-  `0073_gemini_tts_provider`. Existing provider IDs, rows and global defaults are preserved.
+  `0073_gemini_tts_provider`. Existing provider IDs and rows are preserved. Follow-up code defaults
+  use Gemini while fresh authoring honors env metadata; item clips retain the Chirp split.
 - Migration is runtime-incompatible for old workers because they cannot parse new provider rows;
   application and schema rollout must be coordinated. The backend README owns that guidance.
 - Provider build/typecheck and 15 focused tests passed, including authored form versus conflicting
@@ -88,4 +91,4 @@ invariants are closed.
   word clips: five synthesis calls, then zero additional calls on an identical cached pipeline run.
   A final configured-default/monologue run and browser checks are recorded in local smoke evidence.
 - Hosted CI and final maintainer listening are distinct from this local evidence. No production
-  application settings, queue/data or provider defaults were changed; no deployment or merge ran.
+  application settings, queue/data or environment values were changed; no deployment or merge ran.

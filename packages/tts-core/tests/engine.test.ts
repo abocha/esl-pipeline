@@ -57,17 +57,21 @@ function createProvider(
 }
 
 describe('DefaultTtsEngine provider selection', () => {
-  it('prefers elevenlabs by default when registered', async () => {
+  it('prefers Gemini by default even when another provider is registered first', async () => {
     delete process.env.ESL_TTS_DEFAULT_PROVIDER;
     delete process.env.ESL_TTS_PROVIDER_ORDER;
 
-    const engine = createTtsEngine([createProvider('elevenlabs'), createProvider('google')]);
+    const engine = createTtsEngine([
+      createProvider('elevenlabs'),
+      createProvider('google'),
+      createProvider('gemini'),
+    ]);
     const result = await engine.buildStudyTextMp3(
       { assignment: {} as never },
       { voiceMapPath: 'voices.yml', outPath: '/tmp' },
     );
 
-    expect(result.provider).toBe('elevenlabs');
+    expect(result.provider).toBe('gemini');
   });
 
   it('falls back to registered provider order when default is unavailable', async () => {

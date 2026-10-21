@@ -59,10 +59,12 @@ operator intentionally changes it.
 
 ## Speech Plan Manifest Contract
 
-The opt-in `gemini` provider uses Google Cloud Gemini TTS, separately from the existing `google`
+The default `gemini` provider uses Google Cloud Gemini TTS, separately from the existing `google`
 Chirp provider. Its lane defaults to Flash-Lite with Flash selectable. Deterministic prebuilt voice
 assignment and identity speech plans retain the canonical stages without external ranker/planner
-calls. New Gemini jobs also use Gemini pronunciation item clips; saved rerun family selections
+calls. `ESL_TTS_DEFAULT_PROVIDER` can override the default provider. Full pronunciation sentences
+follow the study-text provider/model; short pronunciation item clips default to Google `chirp3_hd`.
+Saved rerun family selections
 remain authoritative. No global default or historical job is retargeted. See the
 [adapter README](../tts-provider-gemini/README.md) for ADC, project, limits and cache behavior.
 

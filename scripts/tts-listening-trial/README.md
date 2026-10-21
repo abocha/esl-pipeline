@@ -50,7 +50,9 @@ node scripts/tts-listening-trial/pipeline-smoke.mjs --project=esl-pipeline-produ
 ```
 
 This makes small billable calls. It exercises configured provider/model defaults, a native dialogue,
-its pronunciation sentence/words, an identical cached run with no new calls, and a monologue. Open
+its full pronunciation sentence through Gemini and short word clips through Google Chirp 3 HD,
+an identical cached run with no new Gemini calls, and a monologue. The project needs both
+`aiplatform.googleapis.com` and `texttospeech.googleapis.com` enabled for this integrated split. Open
 <http://127.0.0.1:8795> for the integrated dialogue handout and
 <http://127.0.0.1:8795/monologue.html> for the monologue. It uses dummy AWS credentials and the standard
 AWS SDK loopback endpoint override; no normal production uploads occur. Artifacts and safe evidence

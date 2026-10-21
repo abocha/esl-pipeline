@@ -492,11 +492,8 @@ export const MinimalAssignment: React.FC = () => {
     [elevenlabsModelOptions],
   );
   const defaultPronunciationChunkProvider = useMemo<UiPronunciationChunkTtsProvider>(
-    () =>
-      jobStatus?.ttsProvider === 'gemini'
-        ? 'gemini'
-        : getDefaultPronunciationChunkProviderForMode(rerunTargetPronunciationMode),
-    [jobStatus?.ttsProvider, rerunTargetPronunciationMode],
+    () => getDefaultPronunciationChunkProviderForMode(rerunTargetPronunciationMode),
+    [rerunTargetPronunciationMode],
   );
 
   const presetOptions = useMemo(() => buildSelectablePresetOptions(jobOptions), [jobOptions]);

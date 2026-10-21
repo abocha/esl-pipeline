@@ -4,7 +4,6 @@ import { access, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import {
-  assignmentPronunciation,
   FfmpegNotFoundError,
   InfrastructureError,
   ManifestError,
@@ -399,13 +398,6 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
   flags.pronunciationChunkVoiceAccent = pronunciationChunkPreferences.accentPreference;
 }
 
-function resolveDefaultChunkProvider(
-  _mode?: string | null,
-  studyProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini',
-): 'google' | 'gemini' {
-  return studyProvider === 'gemini' ? 'gemini' : 'google';
-}
-
 export {
   RemoteConfigProvider,
   type RemoteConfigProviderOptions,
@@ -792,14 +784,10 @@ export async function newAssignment(
 
         const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
         const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
-        const detectedPronunciationFocus = assignmentPronunciation(assignment);
         const synthesizedProvider =
           parseTtsProviderId(ttsResult.provider) ?? prepared.selection.provider;
         const synthesizedModel = parseTtsModelId(ttsResult.modelId) ?? prepared.selection.model;
-        const defaultChunkProvider = resolveDefaultChunkProvider(
-          detectedPronunciationFocus?.mode,
-          synthesizedProvider,
-        );
+        const defaultChunkProvider = 'google';
         audioArtifacts.pronunciation = await synthesizePronunciationAudio({
           ...executionInput,
           mdPath: flags.md,
@@ -812,12 +800,7 @@ export async function newAssignment(
           logger,
           primaryVoiceId: fallbackVoiceId,
           chunkTtsProvider: defaultChunkProvider,
-          chunkTtsModel:
-            defaultChunkProvider === 'gemini'
-              ? synthesizedModel
-              : defaultChunkProvider === flags.ttsProvider
-                ? flags.ttsModel
-                : undefined,
+          chunkTtsModel: defaultChunkProvider === flags.ttsProvider ? flags.ttsModel : undefined,
           signal,
           deadlineAtMs: dependencies.deadlineAtMs,
         });
@@ -1431,9 +1414,7 @@ export async function rerunAssignment(
         const effectivePrimaryProvider =
           flags.pronunciationMainTtsProvider ?? previousPrimaryProvider;
         const effectiveChunkProvider =
-          flags.pronunciationChunkTtsProvider ??
-          previousChunkProvider ??
-          resolveDefaultChunkProvider(detectedPronunciationMode, effectivePrimaryProvider);
+          flags.pronunciationChunkTtsProvider ?? previousChunkProvider ?? 'google';
         const rerunTtsWarnings: RerunTtsWarning[] = [];
         const resolvedPrimaryVoiceId = resolveProviderCompatibleVoiceId({
           explicitVoiceId: flags.pronunciationMainVoiceId,

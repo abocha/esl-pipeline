@@ -46,8 +46,8 @@ function createDefaultCustomRerunInput(
         : '',
     rerunPronunciationMainVoiceId: '',
     rerunPronunciationMainVoiceAccent: '',
-    rerunPronunciationChunkProvider: selectedTtsProvider === 'gemini' ? 'gemini' : 'google',
-    rerunPronunciationChunkModel: selectedTtsProvider === 'gemini' ? persistedStudyTextModel : '',
+    rerunPronunciationChunkProvider: 'google',
+    rerunPronunciationChunkModel: '',
     rerunPronunciationChunkVoiceId: '',
     rerunPronunciationChunkVoiceAccent: '',
   };

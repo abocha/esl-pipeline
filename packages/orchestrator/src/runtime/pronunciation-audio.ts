@@ -417,10 +417,7 @@ export async function synthesizePronunciationAudio(
     (options.primaryTtsProvider
       ? resolveDefaultPronunciationModel(options.primaryTtsProvider)
       : undefined);
-  const chunkProvider = resolveChunkProvider(
-    focus,
-    options.chunkTtsProvider ?? (options.primaryTtsProvider === 'gemini' ? 'gemini' : undefined),
-  );
+  const chunkProvider = resolveChunkProvider(focus, options.chunkTtsProvider);
   const fallbackChunkProvider = chunkProvider ?? options.primaryTtsProvider;
   const resolvedChunkModel =
     options.chunkTtsModel ??
