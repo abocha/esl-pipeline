@@ -66,7 +66,9 @@ describe('Gemini TTS operator selection', () => {
         within(select).getByRole('option', { name: 'Gemini Cloud TTS' }).getAttribute('value'),
       ).toBe('gemini');
     }
-    for (const select of screen.getAllByRole('combobox', { name: 'Model' })) {
+    const modelSelectors = screen.getAllByRole('combobox', { name: 'Model' });
+    expect(modelSelectors).toHaveLength(3);
+    for (const select of modelSelectors) {
       expect((select as HTMLSelectElement).value).toBe(models[0]);
       expect(
         within(select)

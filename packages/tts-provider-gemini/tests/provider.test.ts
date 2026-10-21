@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { inspect } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AssignmentV1 } from '@esl-pipeline/contracts';
@@ -311,19 +312,23 @@ describe('Gemini provider boundary', () => {
 
   it('sanitizes auth/provider errors and does not retry deterministic failures', async () => {
     mocks.accessToken.mockRejectedValueOnce(new Error('secret-token private file details'));
-    await expect(
-      provider().synthesizePronunciationText({ text: 'Hello.', voiceId: 'Kore' }, options()),
-    ).rejects.toThrow('Application Default Credentials');
+    const authFailure = await provider()
+      .synthesizePronunciationText({ text: 'Hello.', voiceId: 'Kore' }, options())
+      .catch((error: unknown) => error);
+    expect(authFailure).toBeInstanceOf(Error);
+    expect(String(authFailure)).toContain('Application Default Credentials');
+    expect(inspect(authFailure)).not.toMatch(/secret-token|private file details/);
     expect(mocks.fetch).not.toHaveBeenCalled();
     mocks.fetch.mockResolvedValueOnce(new Response('secret provider response', { status: 403 }));
-    const failed = provider().synthesizePronunciationText(
-      { text: 'Hello.', voiceId: 'Kore' },
-      options(),
-    );
-    await expect(failed).rejects.toMatchObject({
+    const providerFailure = await provider()
+      .synthesizePronunciationText({ text: 'Hello.', voiceId: 'Kore' }, options())
+      .catch((error: unknown) => error);
+    expect(providerFailure).toBeInstanceOf(GeminiTtsError);
+    expect(providerFailure).toMatchObject({
       category: 'provider_contract_error',
       status: 403,
     });
+    expect(inspect(providerFailure)).not.toContain('secret provider response');
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
     expect(encodeGeminiMp3).not.toHaveBeenCalled();
   });

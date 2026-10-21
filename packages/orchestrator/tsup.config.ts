@@ -19,6 +19,8 @@ export default defineConfig(() => ({
   shims: false,
   outDir: 'dist',
   dts: false,
+  // The bundled Gemini adapter imports this CJS auth package at runtime. Keep it external
+  // and declared here, with the matching package-scoped Knip exception for indirect imports.
   external: ['@google-cloud/text-to-speech', 'google-auth-library', '@esl-pipeline/html-publisher'],
   noExternal: INTERNAL_BUNDLE,
   tsconfig: 'tsconfig.json',
