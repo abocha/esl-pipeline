@@ -533,6 +533,34 @@ checksum drift or applied migrations missing from the requested image also block
 including image downgrade attempts. `PG_MIGRATIONS_DIR` overrides are unsupported in this path:
 the preflight and migrator must both use the image-packaged SQL.
 
+The terminal output groups work into named phases, reports each step as `WAIT` then `OK`, and
+prints one final action plan after schema compatibility and live-bot recovery decisions. That plan
+lists image/configuration changes, pending migrations, writer downtime, service recreation reasons,
+verification work, and previous-runtime rollback restrictions. `PLAN COMPLETE` means the preflight
+passed; review any `WARN` lines before applying. Plan and apply share the incompatible-current-state
+guard and require the AWS CLI when backup/migration processing is planned. Preflight success does
+not guarantee later backup, migration, provider, or runtime operations will succeed.
+
+Routine command output is retained in a unique `run-<short-sha>-<random>` directory under
+`/var/lib/esl-pipeline/deploy` (directory mode `0700`, log files `0600`). Each step log names its
+operation. Warnings from captured commands remain visible in the terminal. On failure, the script
+reports the phase, operation, original exit code, runtime mutation state, and up to 40 lines of
+the failing step's diagnostics, followed by the applicable recovery guidance. Earlier failures
+before log initialization report directly to the terminal. Logs can contain operational details;
+inspect and redact them before sharing. They are retained until an operator removes them.
+
+To print captured command details after each step, add `--verbose` to either mode:
+
+```bash
+bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha> --plan --verbose
+```
+
+Health probes suppress intermediate startup errors in the concise view and report elapsed time
+and attempts on success. Every request has a 3-second connection timeout and a 5-second total
+timeout. Exhausted retries fail deployment with the probe diagnostics. Planning also creates
+detailed logs and runs disposable validation containers; it does not stop/recreate application
+services, invoke migrations, or create a backup.
+
 Before incompatible schema work, the script stops the live API, all three workers, frontend, and
 bot containers belonging to its Compose project, including a live bot whose profile was omitted.
 It leaves PostgreSQL, Redis, and Caddy running, rejects unknown live project services, and verifies
