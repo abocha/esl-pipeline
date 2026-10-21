@@ -5,7 +5,7 @@
 - Status: active
 - Last Verified Against: 2026-10-22 implementation branch from clean `main` at `becb4012ee1a6d170d8cd74ddcb4990d65f7aaa5` and approved ESL-68â€“77 descriptions.
 - Exit Trigger: archive after implementation merges; local delivery alone does not close execution issues.
-- Current Focus: all three batches implemented and reviewed locally; publication and hosted validation await separate authorization.
+- Current Focus: all three batches implemented and reviewed locally; hosted validation and merge remain pending.
 
 ## Scope and order
 
@@ -34,8 +34,9 @@ below at local completion. Hosted CI, publication and production verification re
 
 ## Authorization boundary
 
-Local changes, tests, commits and Linear evidence updates are authorized. No push, PR publication,
-merge, deployment, live VPS/data/restore/replay/provider operations, notifications or automations.
+Local changes, tests, commits and Linear evidence updates are authorized. Subsequent PR submission
+authorization covers branch push and PR publication. Merge, deployment, live VPS/data/restore/replay/
+provider operations, notifications and automations remain outside scope.
 
 ## Delivery evidence
 
@@ -77,7 +78,7 @@ bash -lc 'shellcheck scripts/docker/run-postgres-artifact-integrity-check.sh scr
 Changed-file Biome and Markdown Prettier checks passed (the existing bootstrap `isWithinRoot`
 unused warning remains). Independent exceptional-risk review found no actionable issues in
 export privacy, backup EXIT/cleanup, replay/bootstrap semantics and S3 cleanup/redaction.
-Independent reporting review found one late-transport trace privacy gap; the fix and sentinel regression were reviewed and resolved. No remaining actionable findings. Final committed documentation check results and commit location are recorded on ESL-68–77 and ABO-61–66.
+Independent reporting review found one late-transport trace privacy gap; the fix and sentinel regression were reviewed and resolved. No remaining actionable findings. Final committed documentation check results and commit location are recorded on ESL-68â€“77 and ABO-61â€“66.
 
 Residual limits: failed requests can have unconfirmed effects; confirmed replay requests do not
 prove worker completion. Filesystem failure can prevent attempt evidence persistence and remains
