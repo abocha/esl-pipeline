@@ -49,7 +49,7 @@
     "docker:db:restore-drill": "bash scripts/docker/run-postgres-restore-drill.sh",
     "docker:db:upload:s3": "bash scripts/docker/postgres-backup-s3.sh upload-latest",
     "docker:db:verify-backup": "bash scripts/docker/postgres-backup-restore.sh verify",
-    "docker:dev:clean-deps": "pnpm docker:dev:down && node scripts/docker/clean-dev-dependency-volumes.mjs",
+    "docker:dev:clean-deps": "pnpm docker:dev:down && node scripts/docker/clean-dev-dependency-volumes.mjs --project-name esl-pipeline",
     "docker:dev:down": "docker compose -p esl-pipeline -f docker-compose.yml down --remove-orphans",
     "docker:dev:ps": "docker compose -p esl-pipeline -f docker-compose.yml ps",
     "docker:dev:recover": "pnpm docker:prepare && bash scripts/docker/recover-dev-stack.sh",

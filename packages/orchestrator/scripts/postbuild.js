@@ -5,11 +5,7 @@ import { resolve } from 'node:path';
 async function copySharedConfigs() {
   const source = resolve(import.meta.dirname, '../configs');
   const target = resolve(import.meta.dirname, '../dist/configs');
-  try {
-    await cp(source, target, { recursive: true, force: true });
-  } catch (error) {
-    console.warn(`[postbuild] warning: unable to copy ${source} -> ${target}`, error);
-  }
+  await cp(source, target, { recursive: true, force: true });
 }
 
 async function stripSourcemapComment(file) {

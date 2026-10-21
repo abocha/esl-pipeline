@@ -78,6 +78,13 @@ prevent repeat charges on a rerun; use a new output directory for a fresh experi
 runs are not resumed turn by turn and can incur repeat charges if explicitly rerun. The runner has
 no automatic retry loop. Keep the fixed synthetic sample set small; this is not a load test.
 
+Caught attempt failures write `<sample>-<model>.failure.json` with a failed/incomplete status,
+the failure stage, confirmed successful provider-request count, and a sanitized diagnostic.
+An unknown request outcome can still have incurred a charge; it does not mean the provider did
+nothing. The report shows these attempts separately from outputs that were never generated;
+`results.json` continues to contain completed results only. Partial audio files remain for local
+inspection, and explicit reruns still start that sample again rather than resuming its turns.
+
 Google uses the global `aiplatform.googleapis.com` `generateContent` endpoint with one request per
 passage. Dialogues pass speaker metadata and fixed Puck/Kore voices. No style instructions are sent.
 The native unary WAV is preserved. Inworld uses its installed official SDK with `inworld-tts-2`,

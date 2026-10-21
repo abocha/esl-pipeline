@@ -45,6 +45,11 @@ For a single deployed template whose shipped hash has not been imported, an admi
 explicitly activates it, preserving previous revisions. If activation fails after import, refresh
 the persisted state and use **Activate shipped** to retry; the imported revision remains in history.
 
+On an apply failure, the CLI exits nonzero and reports confirmed import, activation and retirement
+counts plus the failed stage. The failing operation may already have persisted changes, so these
+counts are a lower bound on durable effects, not a rollback claim. Read persisted template/revision
+state and rerun the same bootstrap; use the supported activation recovery above when needed.
+
 ## Startup warning mode
 
 If backend startup logs prompt catalog readiness/config warnings:

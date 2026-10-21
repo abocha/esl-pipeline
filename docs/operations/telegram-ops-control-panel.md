@@ -175,6 +175,12 @@ Artifacts:
 - `tmp/telegram-ops-go-live/preflight.json`
 - `tmp/telegram-ops-go-live/verify.json`
 
+Verification transport, timeout and response-read failures write a failed version-1 report and
+exit nonzero. Inspect its failed request check, repair backend reachability, then rerun. A report
+write failure also exits nonzero; an older artifact is not evidence for that invocation.
+Transport-failure reports omit accumulated response bodies while retaining checks and HTTP status;
+authentication response bodies are always omitted.
+
 ## Troubleshooting
 
 ### Startup replay protection

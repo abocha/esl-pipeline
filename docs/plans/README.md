@@ -92,6 +92,7 @@ replacement for current issue/PR state.
 8. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
 9. `docs/plans/slice-2-invite-workspace-first-student.md`
 10. `docs/plans/2026-06-23-alpha-readiness.md`
+11. `docs/plans/2026-10-22-script-safety.md`
 
 ## Historical and Generated Aids
 

@@ -33,8 +33,8 @@ require current, separately authorized, record-bound evidence before a mutating 
 1. Repair generated student-memory artifacts by replaying from source truth.
 2. Do not hand-edit lesson-memory, homework-memory, or snapshot rows in place.
 3. Use `--dry-run` first when scoping a wider replay or backfill.
-4. Use provider/model overrides only when intentionally re-running extraction on a different
-   structured-output-capable model path.
+4. Ordinary lesson, homework and snapshot replay accept only `--provider openai`. Use `--model`
+   overrides only when intentionally re-running extraction on a supported OpenAI model path.
 5. Assignment-level provenance inspection remains on `GET /prompt-packages/:id`.
 6. Compose-managed production must run `student-memory-worker`; `batch-worker` does not consume
    lesson-memory, homework-memory, or snapshot jobs.
@@ -293,6 +293,13 @@ Inspect the original intent UUID and its `superseded_by_id` together with the li
 after reviewing why the original attempt became obsolete. No new provider work is needed to
 recover downstream delivery of an already current canonical result.
 
+If a replay CLI stops on a later target, its nonzero failure summary reports confirmed request
+responses and requested counts. The failing target may already have persisted intent or queued work;
+the counts do not establish asynchronous worker completion. Inspect persisted intents and worker
+outcomes before resuming. Reuse the same replay key for the same homework/snapshot intent, including
+an uncertain response. Lesson replay uses its existing confirmed-source intent rather than a replay
+key; resume that same source intent with the existing lesson replay command.
+
 Homework memory is canonical only after publish succeeds, so replay operates from succeeded publish
 jobs and the frozen native AssignmentV1 artifact. Historical Markdown jobs remain available for
 inspection and export but cannot be replayed or regenerated.
@@ -320,7 +327,7 @@ Supported options:
 - `--job-id <job-id>`
 - `--replay-key <key>` (required unless dry-run or cancellation)
 - `--cancel-intent <pending-intent-uuid>` with `--student-id` and `--reason`
-- `--provider openai|google_ai_studio|openrouter`
+- `--provider openai`
 - `--model <model-id>`
 
 Operator notes:
@@ -369,7 +376,7 @@ Supported options:
 - `--candidate-refresh` (explicitly request downstream profile-candidate refresh)
 - `--replay-key <key>` (required unless dry-run or cancellation)
 - `--cancel-intent <pending-intent-uuid>` with `--student-id` and `--reason`
-- `--provider openai|google_ai_studio|openrouter`
+- `--provider openai`
 - `--model <model-id>`
 
 Operator notes:
@@ -463,6 +470,9 @@ Operator notes:
 2. The export defaults to canonical ready lesson-memory and homework-memory artifacts only.
 3. Homework memory that cannot be tied back to a transcript or recording is placed under an
    `unmatched-homework-memory/` folder in the zip instead of being dropped silently.
+4. On staging or zip failure, the command exits nonzero and reports the retained staging directory
+   and intended output path without printing learner contents. Staged private artifacts remain for
+   operator-controlled recovery or cleanup; inspect and handle them as private exports.
 
 ## Sampled Rollout Verification
 

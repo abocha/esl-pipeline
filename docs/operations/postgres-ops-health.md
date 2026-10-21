@@ -158,6 +158,14 @@ project's `postgres18_data` volume.
 Reports contain object keys, version/verification metadata, count-only probes, and cleanup status.
 They do not contain table rows, credentials, URLs with credentials, or application payloads.
 
+Both evidence runners exit nonzero if report publication fails, even when verification succeeded.
+They publish `latest` by an atomic rename only after the new report is complete; publication failure
+preserves the prior latest report, which is not evidence for the failed run. Inspect the runner's
+log for the operation outcome and expected report path, repair host-state write access, and rerun
+the intended check. The restore drill also checks for its exact invocation-owned container after a
+failed start, attempts disposable cleanup, and reports any cleanup failure separately from the
+original operation failure. A failed cleanup requires operator inspection of the named resources.
+
 ## Recommended Production Cadence
 
 - Daily: `scripts/docker/run-postgres-backup-s3.sh`

@@ -322,209 +322,234 @@ export async function runVerification(args = {}) {
     };
   }
 
-  const loginResult = await login({
-    backendUrl,
-    email,
-    password,
-    timeoutMs,
-    fetchFn,
-  });
-  traces.login = {
-    status: loginResult.status,
-    body: loginResult.json
-      ? truncateText(JSON.stringify(loginResult.json))
-      : truncateText(loginResult.text),
-  };
-  const accessToken =
-    loginResult.status === 200 &&
-    loginResult.json &&
-    typeof loginResult.json === 'object' &&
-    typeof loginResult.json.accessToken === 'string'
-      ? loginResult.json.accessToken
-      : '';
-
-  checks.push(
-    createCheck({
-      id: 'auth_login_success',
-      passed: accessToken.length > 0,
-      message: 'POST /auth/login must succeed and return accessToken.',
-      details: {
-        status: loginResult.status,
-      },
-    }),
-  );
-
-  if (accessToken) {
-    const authHeaders = {
-      authorization: `Bearer ${accessToken}`,
-    };
-
-    const statusResult = await requestJson({
-      fetchFn,
+  let activeRequest = 'auth_login';
+  try {
+    const loginResult = await login({
+      backendUrl,
+      email,
+      password,
       timeoutMs,
-      method: 'GET',
-      url: `${backendUrl}/ops/status`,
-      headers: withOpsSecretHeader(authHeaders, sharedSecret),
+      fetchFn,
     });
-    traces.opsStatus = {
-      status: statusResult.status,
-      body: statusResult.json
-        ? truncateText(JSON.stringify(statusResult.json))
-        : truncateText(statusResult.text),
+    traces.login = {
+      status: loginResult.status,
+      body: '(authentication response body omitted)',
     };
+    const accessToken =
+      loginResult.status === 200 &&
+      loginResult.json &&
+      typeof loginResult.json === 'object' &&
+      typeof loginResult.json.accessToken === 'string'
+        ? loginResult.json.accessToken
+        : '';
+
     checks.push(
       createCheck({
-        id: 'ops_status_success_shape',
-        passed: statusResult.status === 200 && statusShapeValid(statusResult.json),
-        message: 'GET /ops/status must return 200 with expected payload shape.',
+        id: 'auth_login_success',
+        passed: accessToken.length > 0,
+        message: 'POST /auth/login must succeed and return accessToken.',
         details: {
-          status: statusResult.status,
+          status: loginResult.status,
         },
       }),
     );
 
-    if (sharedSecret) {
-      const missingSecretResult = await requestJson({
+    if (accessToken) {
+      const authHeaders = {
+        authorization: `Bearer ${accessToken}`,
+      };
+
+      activeRequest = 'ops_status';
+      const statusResult = await requestJson({
         fetchFn,
         timeoutMs,
         method: 'GET',
         url: `${backendUrl}/ops/status`,
-        headers: authHeaders,
-      });
-      traces.opsStatusMissingSecret = {
-        status: missingSecretResult.status,
-        body: missingSecretResult.json
-          ? truncateText(JSON.stringify(missingSecretResult.json))
-          : truncateText(missingSecretResult.text),
-      };
-      checks.push(
-        createCheck({
-          id: 'ops_secret_enforcement_missing_header',
-          passed:
-            missingSecretResult.status === 403 &&
-            missingSecretResult.json &&
-            missingSecretResult.json.code === 'ops_bot_secret_invalid',
-          message:
-            'When shared secret is configured, /ops/status without x-ops-bot-secret must return 403 ops_bot_secret_invalid.',
-          details: {
-            status: missingSecretResult.status,
-          },
-        }),
-      );
-
-      const wrongSecretResult = await requestJson({
-        fetchFn,
-        timeoutMs,
-        method: 'GET',
-        url: `${backendUrl}/ops/status`,
-        headers: {
-          ...authHeaders,
-          'x-ops-bot-secret': `${sharedSecret}-wrong`,
-        },
-      });
-      traces.opsStatusWrongSecret = {
-        status: wrongSecretResult.status,
-        body: wrongSecretResult.json
-          ? truncateText(JSON.stringify(wrongSecretResult.json))
-          : truncateText(wrongSecretResult.text),
-      };
-      checks.push(
-        createCheck({
-          id: 'ops_secret_enforcement_wrong_header',
-          passed:
-            wrongSecretResult.status === 403 &&
-            wrongSecretResult.json &&
-            wrongSecretResult.json.code === 'ops_bot_secret_invalid',
-          message:
-            'When shared secret is configured, /ops/status with wrong x-ops-bot-secret must return 403 ops_bot_secret_invalid.',
-          details: {
-            status: wrongSecretResult.status,
-          },
-        }),
-      );
-    } else {
-      checks.push(
-        createCheck({
-          id: 'ops_secret_enforcement_skipped',
-          passed: false,
-          severity: 'warning',
-          message: 'Shared secret not configured; secret-enforcement checks skipped.',
-        }),
-      );
-    }
-
-    const unknownOperationId = `verify-missing-${Date.now()}`;
-    const missingActionResult = await requestJson({
-      fetchFn,
-      timeoutMs,
-      method: 'GET',
-      url: `${backendUrl}/ops/actions/${unknownOperationId}`,
-      headers: withOpsSecretHeader(authHeaders, sharedSecret),
-    });
-    traces.unknownOperation = {
-      operationId: unknownOperationId,
-      status: missingActionResult.status,
-      body: missingActionResult.json
-        ? truncateText(JSON.stringify(missingActionResult.json))
-        : truncateText(missingActionResult.text),
-    };
-    checks.push(
-      createCheck({
-        id: 'ops_action_not_found_semantics',
-        passed:
-          missingActionResult.status === 404 &&
-          missingActionResult.json &&
-          missingActionResult.json.error === 'not_found' &&
-          missingActionResult.json.code === 'ops_action_not_found',
-        message:
-          'GET /ops/actions/:operationId for unknown id must return 404 not_found with code ops_action_not_found.',
-        details: {
-          status: missingActionResult.status,
-        },
-      }),
-    );
-
-    if (operationId) {
-      const operationLookupResult = await requestJson({
-        fetchFn,
-        timeoutMs,
-        method: 'GET',
-        url: `${backendUrl}/ops/actions/${operationId}`,
         headers: withOpsSecretHeader(authHeaders, sharedSecret),
       });
-      traces.operationLookup = {
-        operationId,
-        status: operationLookupResult.status,
-        body: operationLookupResult.json
-          ? truncateText(JSON.stringify(operationLookupResult.json))
-          : truncateText(operationLookupResult.text),
+      traces.opsStatus = {
+        status: statusResult.status,
+        body: statusResult.json
+          ? truncateText(JSON.stringify(statusResult.json))
+          : truncateText(statusResult.text),
       };
       checks.push(
         createCheck({
-          id: 'operation_id_lookup_available',
-          passed:
-            operationLookupResult.status === 200 &&
-            operationLookupResult.json &&
-            operationLookupResult.json.operationId === operationId,
-          message:
-            'GET /ops/actions/<operationId> must return 200 and the same operationId for provided continuity check id.',
+          id: 'ops_status_success_shape',
+          passed: statusResult.status === 200 && statusShapeValid(statusResult.json),
+          message: 'GET /ops/status must return 200 with expected payload shape.',
           details: {
-            status: operationLookupResult.status,
-            operationId,
+            status: statusResult.status,
           },
         }),
       );
-    } else {
+
+      if (sharedSecret) {
+        activeRequest = 'ops_status_missing_secret';
+        const missingSecretResult = await requestJson({
+          fetchFn,
+          timeoutMs,
+          method: 'GET',
+          url: `${backendUrl}/ops/status`,
+          headers: authHeaders,
+        });
+        traces.opsStatusMissingSecret = {
+          status: missingSecretResult.status,
+          body: missingSecretResult.json
+            ? truncateText(JSON.stringify(missingSecretResult.json))
+            : truncateText(missingSecretResult.text),
+        };
+        checks.push(
+          createCheck({
+            id: 'ops_secret_enforcement_missing_header',
+            passed:
+              missingSecretResult.status === 403 &&
+              missingSecretResult.json &&
+              missingSecretResult.json.code === 'ops_bot_secret_invalid',
+            message:
+              'When shared secret is configured, /ops/status without x-ops-bot-secret must return 403 ops_bot_secret_invalid.',
+            details: {
+              status: missingSecretResult.status,
+            },
+          }),
+        );
+
+        activeRequest = 'ops_status_wrong_secret';
+        const wrongSecretResult = await requestJson({
+          fetchFn,
+          timeoutMs,
+          method: 'GET',
+          url: `${backendUrl}/ops/status`,
+          headers: {
+            ...authHeaders,
+            'x-ops-bot-secret': `${sharedSecret}-wrong`,
+          },
+        });
+        traces.opsStatusWrongSecret = {
+          status: wrongSecretResult.status,
+          body: wrongSecretResult.json
+            ? truncateText(JSON.stringify(wrongSecretResult.json))
+            : truncateText(wrongSecretResult.text),
+        };
+        checks.push(
+          createCheck({
+            id: 'ops_secret_enforcement_wrong_header',
+            passed:
+              wrongSecretResult.status === 403 &&
+              wrongSecretResult.json &&
+              wrongSecretResult.json.code === 'ops_bot_secret_invalid',
+            message:
+              'When shared secret is configured, /ops/status with wrong x-ops-bot-secret must return 403 ops_bot_secret_invalid.',
+            details: {
+              status: wrongSecretResult.status,
+            },
+          }),
+        );
+      } else {
+        checks.push(
+          createCheck({
+            id: 'ops_secret_enforcement_skipped',
+            passed: false,
+            severity: 'warning',
+            message: 'Shared secret not configured; secret-enforcement checks skipped.',
+          }),
+        );
+      }
+
+      const unknownOperationId = `verify-missing-${Date.now()}`;
+      activeRequest = 'unknown_operation';
+      const missingActionResult = await requestJson({
+        fetchFn,
+        timeoutMs,
+        method: 'GET',
+        url: `${backendUrl}/ops/actions/${unknownOperationId}`,
+        headers: withOpsSecretHeader(authHeaders, sharedSecret),
+      });
+      traces.unknownOperation = {
+        operationId: unknownOperationId,
+        status: missingActionResult.status,
+        body: missingActionResult.json
+          ? truncateText(JSON.stringify(missingActionResult.json))
+          : truncateText(missingActionResult.text),
+      };
       checks.push(
         createCheck({
-          id: 'operation_id_lookup_skipped',
-          passed: false,
-          severity: 'warning',
+          id: 'ops_action_not_found_semantics',
+          passed:
+            missingActionResult.status === 404 &&
+            missingActionResult.json &&
+            missingActionResult.json.error === 'not_found' &&
+            missingActionResult.json.code === 'ops_action_not_found',
           message:
-            'No --operation-id provided; restart continuity lookup check skipped for this run.',
+            'GET /ops/actions/:operationId for unknown id must return 404 not_found with code ops_action_not_found.',
+          details: {
+            status: missingActionResult.status,
+          },
         }),
       );
+
+      if (operationId) {
+        activeRequest = 'operation_lookup';
+        const operationLookupResult = await requestJson({
+          fetchFn,
+          timeoutMs,
+          method: 'GET',
+          url: `${backendUrl}/ops/actions/${operationId}`,
+          headers: withOpsSecretHeader(authHeaders, sharedSecret),
+        });
+        traces.operationLookup = {
+          operationId,
+          status: operationLookupResult.status,
+          body: operationLookupResult.json
+            ? truncateText(JSON.stringify(operationLookupResult.json))
+            : truncateText(operationLookupResult.text),
+        };
+        checks.push(
+          createCheck({
+            id: 'operation_id_lookup_available',
+            passed:
+              operationLookupResult.status === 200 &&
+              operationLookupResult.json &&
+              operationLookupResult.json.operationId === operationId,
+            message:
+              'GET /ops/actions/<operationId> must return 200 and the same operationId for provided continuity check id.',
+            details: {
+              status: operationLookupResult.status,
+              operationId,
+            },
+          }),
+        );
+      } else {
+        checks.push(
+          createCheck({
+            id: 'operation_id_lookup_skipped',
+            passed: false,
+            severity: 'warning',
+            message:
+              'No --operation-id provided; restart continuity lookup check skipped for this run.',
+          }),
+        );
+      }
     }
+  } catch (error) {
+    // A later transport failure can follow responses containing sensitive diagnostic bodies.
+    // Retain request/status evidence without copying those bodies into the new failed report.
+    for (const trace of Object.values(traces)) {
+      if (Object.hasOwn(trace, 'body'))
+        trace.body = '(response body omitted after transport failure)';
+    }
+    const timedOut = error?.name === 'AbortError' || error?.name === 'TimeoutError';
+    checks.push(
+      createCheck({
+        id: 'request_transport_success',
+        passed: false,
+        message: `${activeRequest}: ${timedOut ? 'request timed out or was aborted' : 'request or response read failed'}. Check backend reachability and transport before rerunning verification.`,
+        details: {
+          request: activeRequest,
+          diagnosis: timedOut ? 'timeout_or_abort' : 'request_or_response_read_failure',
+        },
+      }),
+    );
   }
 
   const summary = summarizeChecks(checks);

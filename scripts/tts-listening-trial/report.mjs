@@ -27,7 +27,17 @@ const sections = samples
     const cards = models
       .map((model) => {
         const path = join(out, `${sample.id}-${model}.json`);
-        if (!existsSync(path)) return '';
+        if (!existsSync(path)) {
+          const failurePath = join(out, `${sample.id}-${model}.failure.json`);
+          if (!existsSync(failurePath))
+            return `<article><h3>${escapeHtml(model)}</h3><p>Not generated yet.</p></article>`;
+          const failure = JSON.parse(readFileSync(failurePath, 'utf8'));
+          if (failure.inputSha256 && failure.inputSha256 !== inputSha256)
+            throw new Error(
+              `Input changed: ${sample.id}/${model}. Refusing mismatched attempt evidence.`,
+            );
+          return `<article><h3>${escapeHtml(model)}</h3><p><strong>${failure.status === 'incomplete' ? 'Incomplete attempt' : 'Failed attempt'}</strong> · ${escapeHtml(failure.completedRequestCount ?? 'unknown')} confirmed successful provider requests</p><p>Stage: ${escapeHtml(failure.stage ?? 'provider_response')} · request outcome: ${escapeHtml(failure.requestOutcome ?? 'unknown')}</p><p>${escapeHtml(failure.errorSummary ?? 'Historical failed attempt; confirmed request progress unavailable.')}</p><p>Explicit reruns can repeat charges; no automatic retry or turn-level resume.</p></article>`;
+        }
         const result = JSON.parse(readFileSync(path, 'utf8'));
         if (result.inputSha256 !== inputSha256)
           throw new Error(
