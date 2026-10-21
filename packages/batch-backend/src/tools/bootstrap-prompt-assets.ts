@@ -126,20 +126,20 @@ export async function importTemplates(
     const byHash = await getLatestTemplateRevisionByHash(asset.id, asset.hash);
     let revisionId = byHash?.id ?? null;
 
+    if (!dryRun) revisionId = (await importTemplateAsset(asset)).id;
+
     if (byHash) {
       stats.reusedRevisions += 1;
     } else {
       stats.createdRevisions += 1;
     }
 
-    if (!dryRun) revisionId = (await importTemplateAsset(asset)).id;
-
     if (!existing?.activeRevisionId && revisionId) {
-      stats.activatedRevisions += 1;
       if (!dryRun) {
         await activateTemplateRevision(asset.id, revisionId);
         await setTemplateActiveRevision(asset.id, revisionId);
       }
+      stats.activatedRevisions += 1;
     }
   }
 }
@@ -167,11 +167,11 @@ async function retireMissingTemplateAssets(
       if (!template.activeRevisionId) continue;
       if (allowlist.has(template.id)) continue;
 
-      stats.retiredTemplates += 1;
       if (!dryRun) {
         await deprecateActiveTemplateRevision(template.id);
         await setTemplateActiveRevision(template.id, null);
       }
+      stats.retiredTemplates += 1;
     }
 
     offset += listed.items.length;
@@ -239,38 +239,51 @@ async function run(): Promise<void> {
     throw new Error(`Configured defaults were not discovered (template=${defaultTemplateId}).`);
   }
 
-  await importTemplates(scanned.templates, options.dryRun, stats);
-  await retireMissingTemplateAssets(
-    scanned.templates.map((item) => item.id),
-    options.dryRun,
-    stats,
-  );
+  let stage = 'import-or-activation';
+  try {
+    await importTemplates(scanned.templates, options.dryRun, stats);
+    stage = 'retirement';
+    await retireMissingTemplateAssets(
+      scanned.templates.map((item) => item.id),
+      options.dryRun,
+      stats,
+    );
 
-  printSummary({
-    mode: options.dryRun ? 'dry-run' : 'apply',
-    stats,
-    templateRoot,
-    defaultTemplateId,
-  });
+    printSummary({
+      mode: options.dryRun ? 'dry-run' : 'apply',
+      stats,
+      templateRoot,
+      defaultTemplateId,
+    });
 
-  if (options.dryRun) {
-    const dryDefaultTemplate = stats.templatesDiscovered > 0 ? defaultTemplateId : null;
+    if (options.dryRun) {
+      const dryDefaultTemplate = stats.templatesDiscovered > 0 ? defaultTemplateId : null;
+      console.log(
+        `[prompt-assets-bootstrap] projectedReadiness templateDefault=${dryDefaultTemplate}`,
+      );
+      return;
+    }
+
+    stage = 'readiness';
+    const promptOptions = await getPromptOptions({ config });
+    if (!promptOptions.defaults.templateId) {
+      throw new Error(
+        'Bootstrap finished but defaults are not active in DB. Verify prompt files and rerun bootstrap.',
+      );
+    }
+
     console.log(
-      `[prompt-assets-bootstrap] projectedReadiness templateDefault=${dryDefaultTemplate}`,
+      `[prompt-assets-bootstrap] readiness=ok templateDefault=${promptOptions.defaults.templateId}`,
     );
-    return;
-  }
-
-  const promptOptions = await getPromptOptions({ config });
-  if (!promptOptions.defaults.templateId) {
+  } catch (error) {
+    if (options.dryRun) throw error;
     throw new Error(
-      'Bootstrap finished but defaults are not active in DB. Verify prompt files and rerun bootstrap.',
+      `operation_failed: stage=${stage} confirmed createdRevisions=${stats.createdRevisions} reusedRevisions=${stats.reusedRevisions} activatedRevisions=${stats.activatedRevisions} retiredTemplates=${stats.retiredTemplates}. ` +
+        'The failing operation outcome is unknown and may include persisted changes. ' +
+        'Read persisted template/revision state and rerun the same bootstrap; imported revisions remain available for supported activation recovery.',
+      { cause: error },
     );
   }
-
-  console.log(
-    `[prompt-assets-bootstrap] readiness=ok templateDefault=${promptOptions.defaults.templateId}`,
-  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

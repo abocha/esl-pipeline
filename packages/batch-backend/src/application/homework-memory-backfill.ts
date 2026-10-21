@@ -54,19 +54,32 @@ export async function requestHomeworkMemoryBackfill(args: {
   requested: number;
 }> {
   let requested = 0;
+  let confirmedTargets = 0;
 
   for (const target of args.targets) {
-    const result = await requestHomeworkMemoryGeneration({
-      config: args.config,
-      params: {
-        jobId: target.jobId,
-        studentId: target.studentId,
-        providerOverride: args.providerOverride,
-        modelOverride: args.modelOverride,
-        forceRegenerate: args.forceRegenerate ?? false,
-        replayKey: args.replayKey,
-      },
-    });
+    let result: Awaited<ReturnType<typeof requestHomeworkMemoryGeneration>>;
+    try {
+      result = await requestHomeworkMemoryGeneration({
+        config: args.config,
+        params: {
+          jobId: target.jobId,
+          studentId: target.studentId,
+          providerOverride: args.providerOverride,
+          modelOverride: args.modelOverride,
+          forceRegenerate: args.forceRegenerate ?? false,
+          replayKey: args.replayKey,
+        },
+      });
+    } catch (error) {
+      throw new Error(
+        `request_failed: confirmedTargets=${confirmedTargets}/${args.targets.length} confirmedRequested=${requested}. ` +
+          'The failing target outcome is unknown and may include persisted intent or queued work. ' +
+          'Confirmed request responses do not establish asynchronous worker completion. ' +
+          'Inspect persisted intent and worker outcomes; reuse the same replay key for the same intent when resuming.',
+        { cause: error },
+      );
+    }
+    confirmedTargets += 1;
     if (result) {
       requested += 1;
     }

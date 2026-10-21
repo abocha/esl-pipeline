@@ -237,9 +237,9 @@ export class S3StorageAdapter {
       logger.error('Failed to delete file from S3', {
         bucket: this.config.bucket,
         key: this.getFullKey(key),
-        error: String(error),
+        error: 's3_delete_failed',
       });
-      throw new Error(`S3 delete failed: ${error}`);
+      throw new Error('S3 delete failed.', { cause: error });
     }
   }
 

@@ -2,7 +2,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -87,6 +87,10 @@ for (const sample of chosen) {
   const inputSha256 = sha256(JSON.stringify(sample.turns));
   let usage;
   let requestCount = 0;
+  let completedRequestCount = 0;
+  let stage = 'prepare_request';
+  let requestOutcome = 'not_dispatched';
+  let httpStatus;
   const voices =
     provider === 'google' ? { Alex: 'Puck', Maya: 'Kore' } : { Alex: 'Dennis', Maya: 'Ashley' };
   try {
@@ -118,6 +122,8 @@ for (const sample of chosen) {
         },
       };
       writeFileSync(join(out, `${prefix}.request.json`), JSON.stringify(request, null, 2));
+      stage = 'provider_request';
+      requestOutcome = 'unknown';
       const response = await fetch(
         `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${model}:generateContent`,
         {
@@ -128,19 +134,17 @@ for (const sample of chosen) {
         },
       );
       requestCount++;
+      httpStatus = response.status;
+      requestOutcome = response.ok ? 'unknown' : 'confirmed_failure';
+      stage = 'provider_response';
       const body = await response.json();
       if (!response.ok) {
-        // Do not expose raw provider errors or credential-bearing request headers.
-        const safe = {
-          status: response.status,
-          code: body.error?.status,
-          message: String(body.error?.message ?? '')
-            .replaceAll(token, '[REDACTED]')
-            .slice(0, 1600),
-        };
-        writeFileSync(join(out, `${prefix}.failure.json`), JSON.stringify(safe, null, 2));
-        throw new Error(`Google HTTP ${response.status}: ${safe.code}; see local failure record.`);
+        requestOutcome = 'confirmed_failure';
+        throw new Error('Google request was rejected.');
       }
+      requestOutcome = 'confirmed_success';
+      completedRequestCount++;
+      stage = 'validate_audio';
       const parts = body.candidates?.[0]?.content?.parts ?? [];
       const audioParts = parts.filter((part) => part.inlineData?.data);
       if (audioParts.length !== 1)
@@ -148,6 +152,7 @@ for (const sample of chosen) {
       const audio = Buffer.from(audioParts[0].inlineData.data, 'base64');
       if (audio.subarray(0, 4).toString() !== 'RIFF' || audio.subarray(8, 12).toString() !== 'WAVE')
         throw new Error('Expected complete WAV output.');
+      stage = 'write_audio';
       writeFileSync(join(out, `${prefix}.wav`), audio);
       usage = body.usageMetadata;
       writeFileSync(
@@ -167,6 +172,8 @@ for (const sample of chosen) {
     } else {
       const parts = [];
       for (const [i, turn] of sample.turns.entries()) {
+        stage = 'provider_request';
+        requestOutcome = 'unknown';
         const audio = await inworld.generate({
           text: turn.text,
           voice: voices[turn.speaker],
@@ -177,9 +184,13 @@ for (const sample of chosen) {
           language: 'en-US',
         });
         requestCount++;
+        completedRequestCount++;
+        requestOutcome = 'confirmed_success';
+        stage = 'write_turn_audio';
         const mp3 = join(out, `${prefix}-turn-${i}.mp3`);
         const wav = join(out, `${prefix}-turn-${i}.wav`);
         writeFileSync(mp3, audio);
+        stage = 'convert_turn_audio';
         command('ffmpeg', [
           '-nostdin',
           '-v',
@@ -197,6 +208,7 @@ for (const sample of chosen) {
         if (i < sample.turns.length - 1) {
           const gap = sample.turns[i + 1].speaker === turn.speaker ? '0.180' : '0.320';
           const silence = join(out, `${prefix}-gap-${i}.wav`);
+          stage = 'write_gap_audio';
           command('ffmpeg', [
             '-nostdin',
             '-v',
@@ -213,6 +225,7 @@ for (const sample of chosen) {
           parts.push(silence);
         }
       }
+      stage = 'assemble_audio';
       const concatPath = join(out, `${prefix}.concat.txt`);
       writeFileSync(
         concatPath,
@@ -240,6 +253,7 @@ for (const sample of chosen) {
     const wavPath = join(out, `${prefix}.wav`);
     // Same loudness target for the listening copies; retain original WAVs for inspection.
     const mp3Path = join(out, `${prefix}.mp3`);
+    stage = 'prepare_listening_audio';
     command('ffmpeg', [
       '-nostdin',
       '-v',
@@ -257,6 +271,7 @@ for (const sample of chosen) {
       '128k',
       mp3Path,
     ]);
+    stage = 'probe_audio';
     const media = probe(wavPath);
     const durationSeconds = Number(media.format.duration);
     const characters = sample.turns.reduce((sum, turn) => sum + turn.text.length, 0);
@@ -295,14 +310,45 @@ for (const sample of chosen) {
       baseline:
         'Fixed voices, plain text, no planner or ranker. Inworld is per-turn with 320ms switch gaps; Google is one native request.',
     };
-    writeFileSync(metadataPath, JSON.stringify(result, null, 2));
+    stage = 'write_result';
+    const pendingMetadataPath = `${metadataPath}.tmp.${process.pid}`;
+    writeFileSync(pendingMetadataPath, JSON.stringify(result, null, 2));
+    renameSync(pendingMetadataPath, metadataPath);
     console.log(
       `${prefix}: ${durationSeconds.toFixed(1)}s audio, ${generationMs}ms generation, ${requestCount} requests, estimated $${estimatedUsd2026.toFixed(5)}`,
     );
-  } catch (error) {
-    console.error(
-      `${prefix}: ${provider === 'google' ? error.message : `Inworld failed (${error.name}); raw error suppressed.`}`,
-    );
+  } catch {
+    // Provider and media exceptions can contain credentials, response bodies or request text.
+    // Persist only locally selected stages/outcomes and numeric HTTP status, never raw errors.
+    const errorSummary =
+      httpStatus !== undefined && (httpStatus < 200 || httpStatus >= 300)
+        ? `Google HTTP ${httpStatus}; provider error details suppressed.`
+        : `${stage} failed; raw error suppressed.`;
+    const failure = {
+      sample: sample.id,
+      provider,
+      model: label,
+      startedAt,
+      failedAt: new Date().toISOString(),
+      inputSha256,
+      status: completedRequestCount > 0 ? 'incomplete' : 'failed',
+      completedRequestCount,
+      stage,
+      requestOutcome,
+      httpStatus,
+      errorSummary,
+    };
+    const failurePath = join(out, `${prefix}.failure.json`);
+    try {
+      const pendingFailurePath = `${failurePath}.tmp.${process.pid}`;
+      writeFileSync(pendingFailurePath, JSON.stringify(failure, null, 2));
+      renameSync(pendingFailurePath, failurePath);
+      console.error(`${prefix}: ${errorSummary} See ${failurePath}.`);
+    } catch {
+      console.error(
+        `${prefix}: ${errorSummary} Could not persist attempt evidence at ${failurePath}.`,
+      );
+    }
     process.exitCode = 1;
     break;
   }

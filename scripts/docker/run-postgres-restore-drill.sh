@@ -51,6 +51,7 @@ checksum_verified="false"
 restore_verified="false"
 cleanup_status="not_started"
 container_created="false"
+container_run_attempted="false"
 volume_created="false"
 
 json_escape() {
@@ -73,7 +74,8 @@ json_number_or_null() {
 
 write_report() {
   local tmp_report="${report_file}.tmp.$$"
-  cat >"$tmp_report" <<EOF
+  local tmp_latest="${latest_report_file}.tmp.$$"
+  cat >"$tmp_report" <<EOF || return 1
 {
   "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "status": "$(json_escape "$status")",
@@ -101,19 +103,37 @@ write_report() {
   "cleanup_status": "$(json_escape "$cleanup_status")"
 }
 EOF
-  mv "$tmp_report" "$report_file"
-  cp "$report_file" "$latest_report_file"
+  mv "$tmp_report" "$report_file" || return 1
+  cp "$report_file" "$tmp_latest" || return 1
+  mv -T "$tmp_latest" "$latest_report_file" || return 1
 }
 
 cleanup() {
   local cleanup_rc=0
+  local owned_container=""
+  if [[ "$container_run_attempted" == "true" && "$container_created" != "true" ]]; then
+    # A failed run may already have created the container. Match both this invocation's exact
+    # name and label; a name collision must never authorize removal of someone else's resource.
+    if owned_container="$(docker container ls --all --filter "name=^/${container_name}$" --filter "label=esl-pipeline.restore-drill-run=${resource_suffix}" --format '{{.Names}}')"; then
+      if [[ "$owned_container" == "$container_name" ]]; then container_created="true"; fi
+    else
+      echo "ERROR: could not determine failed-start container cleanup state: ${container_name}" | tee -a "$log_file" >&2
+      cleanup_rc=1
+    fi
+  fi
   if [[ "$container_created" == "true" ]]; then
-    docker rm -f "$container_name" >/dev/null 2>&1 || cleanup_rc=1
+    if ! docker rm -f "$container_name" >/dev/null 2>&1; then
+      echo "ERROR: could not remove disposable container: ${container_name}" | tee -a "$log_file" >&2
+      cleanup_rc=1
+    fi
   fi
   if [[ "$volume_created" == "true" ]]; then
-    docker volume rm "$volume_name" >/dev/null 2>&1 || cleanup_rc=1
+    if ! docker volume rm "$volume_name" >/dev/null 2>&1; then
+      echo "ERROR: could not remove disposable volume: ${volume_name}" | tee -a "$log_file" >&2
+      cleanup_rc=1
+    fi
   fi
-  rm -f "$integrity_result_file"
+  if ! rm -f "$integrity_result_file"; then cleanup_rc=1; fi
   if [[ "$cleanup_rc" -eq 0 ]]; then
     cleanup_status="removed"
   else
@@ -124,16 +144,22 @@ cleanup() {
 
 on_exit() {
   local rc="$1"
+  local operation_rc="$1" operation_result="$result"
   trap - EXIT
   set +e
   if ! cleanup; then
+    echo "ERROR: disposable cleanup failed (operation exit=${operation_rc}, result=${operation_result}); inspect the named resources above." | tee -a "$log_file" >&2
     if [[ "$rc" -eq 0 ]]; then
       rc=1
       status="error"
       result="disposable_cleanup_failed"
     fi
   fi
-  write_report
+  if ! write_report; then
+    echo "ERROR: evidence publication failed (operation exit=${operation_rc}, result=${operation_result}, status=${status}, cleanup=${cleanup_status}). Expected report: ${report_file}; latest report was not replaced and must not be treated as this run: ${latest_report_file}" | tee -a "$log_file" >&2
+    rm -f "${report_file}.tmp.$$" "${latest_report_file}.tmp.$$"
+    if [[ "$rc" -eq 0 ]]; then rc=1; fi
+  fi
   exit "$rc"
 }
 trap 'on_exit "$?"' EXIT
@@ -186,10 +212,12 @@ docker volume create --label esl-pipeline.role=postgres-restore-drill "$volume_n
 volume_created="true"
 
 result="start_disposable_postgres"
+container_run_attempted="true"
 docker run -d \
   --name "$container_name" \
   --network none \
   --label esl-pipeline.role=postgres-restore-drill \
+  --label "esl-pipeline.restore-drill-run=${resource_suffix}" \
   --mount "type=volume,source=${volume_name},target=/var/lib/postgresql" \
   -e "POSTGRES_DB=${DRILL_DB}" \
   -e "POSTGRES_USER=${DRILL_USER}" \

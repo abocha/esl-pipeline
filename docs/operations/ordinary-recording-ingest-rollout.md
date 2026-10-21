@@ -217,6 +217,12 @@ pnpm --filter @esl-pipeline/batch-backend test -- \
 pnpm --filter @esl-pipeline/batch-backend storage:s3:smoke
 ```
 
+`--keep` intentionally retains the object and reports `deleted: false`. A failed default cleanup
+fails the command and reports the bucket and full object key for authorized operator recovery;
+if validation also failed, that original failure remains the primary error. Cleanup diagnostics
+omit raw provider errors and signed URLs. Inspect the reported object before manual cleanup;
+a default rerun creates another object and does not clean a prior retained object.
+
 Then, in a disposable staging workspace, upload synthetic non-user audio, confirm Source, verify the
 API immediately reports audio unavailable while the object still exists, enable cleanup only for the
 rehearsal worker, and observe `recording_audio_cleanup_transition`. Verify the recording reaches

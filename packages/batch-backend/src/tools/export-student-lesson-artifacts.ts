@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -296,13 +296,11 @@ async function run(): Promise<void> {
 
     await rm(stagingDir, { recursive: true, force: true });
   } catch (error) {
-    const indexPath = path.join(stagingDir, 'LESSON_INDEX.txt');
-    if (await pathExists(indexPath)) {
-      const indexPreview = await readFile(indexPath, 'utf8');
-      console.error('[student-artifacts-export] staged index preview follows:');
-      console.error(indexPreview.trim());
-    }
     console.error(`[student-artifacts-export] stagingDir=${stagingDir}`);
+    console.error(`[student-artifacts-export] output=${zipPath}`);
+    console.error(
+      '[student-artifacts-export] staged private learner artifacts remain for operator-controlled recovery or cleanup.',
+    );
     throw error;
   }
 }

@@ -155,4 +155,8 @@ pnpm docker:up
 ```
 
 The cleanup command removes only the dev dependency volumes for the `esl-pipeline` Compose
-project. It does not remove Postgres, Redis, uploads, env files, or host-side `node_modules`.
+project. Both stopping the stack and selecting dependency volumes use that fixed project, even if
+`COMPOSE_PROJECT_NAME` names another project in the shell. Calling
+`scripts/docker/clean-dev-dependency-volumes.mjs` directly still honors its `--project-name` and
+`COMPOSE_PROJECT_NAME` overrides. The cleanup does not remove Postgres, Redis, uploads, env files,
+or host-side `node_modules`.
