@@ -1,0 +1,14 @@
+{
+  "recordedOn": "2026-10-21",
+  "evaluator": "maintainer",
+  "evidenceType": "Subjective human listening feedback on the first nine clips; not a blind or repeated evaluation.",
+  "notesVerbatim": {
+    "dialogue": "flash-tts is the best here, but has some shorter than ideal pauses. inworld is \"robotic\" but very clear and well intonated - as if it's a \"bad actor\" emotionally but has immaculate pronunciation. flash-line-tts is on par with the full flash-tts, maybe even better because it's a little less dramatic (maybe just natural variation, but still) while still keeping the emotion appropriate and clear",
+    "monologue": "gemini is the clear winner, although very \"american\" - dramatic emotionally. inworld is very workbook-like and a little robotic, less emotive, this specific audio is slightly more stiff than usual (in my experience).",
+    "pronunciation": "both are very clear, crisp. gemini is more emotional, translates emotional intent perfectly in this scenario. inworld sometimes unnatural intonation. inworld is disjointed, while gemini somehow made this assortment of sentences somehow feel connected.",
+    "long-dialogue": "gemini has some issues with pauses between some phrases: in this 1:42 piece only two slight jumps in sound, so not a disaster even as is. emotionally 100% natural if a little dramatic. could dial down drama 5% overall, but every emotion is appropriate. inworld is neutral and clear, rather stiff emotionally, zero glitches, very stable. inworld doesn't catch the proper intonation in \"And yes, before you ask, I've already changed the bulb.\" while gemini nails this type of intonation in every similar case."
+  },
+  "terminologyNote": "The dialogue note's flash-line-tts refers to the tested gemini-3.8-flash-lite-tts; original wording retained.",
+  "assessment": "Maintainer prefers Gemini across the tested passages. Flash-Lite is competitive on the short dialogue. Gemini pause transitions and slightly excessive dramatic delivery remain tuning targets; Inworld remains the observed stability control.",
+  "nextExperiment": "Complete plain Flash-Lite samples with identical inputs and fixed voices before adding style or pause direction. Preserve all baseline audio. No production provider or planner/ranker decision has been implemented."
+}

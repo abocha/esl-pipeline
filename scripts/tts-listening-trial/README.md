@@ -20,6 +20,19 @@ Generated files live in Git-ignored `tmp/tts-listening-trial/`. Keep that direct
 audio; regenerating the page does not call providers. `results.json` contains the report's costs,
 recalculated using the audio-specific token count rather than the combined candidate token count.
 
+## First listening result — 2026-10-21
+
+The maintainer preferred Gemini across the four passages, especially its meaning-driven intonation
+and emotional appropriateness. Inworld was clear and stable but comparatively stiff. The short
+Flash-Lite dialogue was competitive with Flash, possibly less dramatic; a single sample cannot
+separate model behavior from natural variation. Verbatim feedback is preserved in
+[`listening-feedback.json`](listening-feedback.json).
+
+The follow-up adds plain Flash-Lite versions of narration, pronunciation and the longer dialogue.
+All initial audio is preserved. Remaining tuning targets are slightly longer natural pauses,
+occasional abrupt transitions and slightly less dramatic delivery. First compare the complete plain
+Flash-Lite set; sparse delivery direction can then be tested against these retained baselines.
+
 ## Reproduce the provider calls
 
 These commands make billable calls. Requirements: Node 24+, `gcloud` authenticated to the intended
