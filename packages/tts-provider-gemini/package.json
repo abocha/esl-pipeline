@@ -1,0 +1,44 @@
+{
+  "name": "@esl-pipeline/tts-provider-gemini",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Google Cloud Gemini TTS provider for ESL Pipeline.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
+    "test": "pnpm run test:unit",
+    "test:unit": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir .",
+    "test:unit:prebuilt": "vitest run --config ../../vitest.config.ts --dir .",
+    "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/tts-core build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
+    "@esl-pipeline/tts-core": "workspace:*",
+    "google-auth-library": "^11.3.1",
+    "js-yaml": "^5.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=24.15.0"
+  }
+}

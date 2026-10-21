@@ -38,8 +38,8 @@ import { requestHomeworkMemoryGeneration } from './request-homework-memory-gener
 
 function resolveInheritedVoiceIdForProviderChange(args: {
   explicitVoiceId?: string;
-  explicitProvider?: 'elevenlabs' | 'google' | 'inworld';
-  persistedProvider?: 'elevenlabs' | 'google' | 'inworld';
+  explicitProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
+  persistedProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   persistedVoiceId?: string | null;
 }): string | undefined {
   if (args.explicitVoiceId !== undefined) {
@@ -191,7 +191,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     let userSettings:
       | {
           elevenLabsApiKey?: string | null;
-          ttsProvider?: 'elevenlabs' | 'google' | 'inworld' | null;
+          ttsProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini' | null;
         }
       | undefined;
     if (running.userId) {
@@ -217,13 +217,15 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     const userSettingsTtsProvider =
       userSettings?.ttsProvider === 'elevenlabs' ||
       userSettings?.ttsProvider === 'google' ||
-      userSettings?.ttsProvider === 'inworld'
+      userSettings?.ttsProvider === 'inworld' ||
+      userSettings?.ttsProvider === 'gemini'
         ? userSettings.ttsProvider
         : undefined;
     const persistedStudyTextProvider =
       running.ttsProvider === 'elevenlabs' ||
       running.ttsProvider === 'google' ||
-      running.ttsProvider === 'inworld'
+      running.ttsProvider === 'inworld' ||
+      running.ttsProvider === 'gemini'
         ? running.ttsProvider
         : userSettingsTtsProvider;
 

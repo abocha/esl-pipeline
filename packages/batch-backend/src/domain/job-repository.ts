@@ -1713,7 +1713,8 @@ function normalizeTtsStrategy(value: unknown, ctx: { jobId: string }): TtsStrate
 
 function normalizeTtsProvider(value: unknown, ctx: { jobId: string }): TtsProviderId | null {
   if (value == null) return null;
-  if (value === 'elevenlabs' || value === 'google' || value === 'inworld') return value;
+  if (value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini')
+    return value;
   if (typeof value === 'string') {
     throw new TypeError(
       `Unsupported jobs.tts_provider value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,

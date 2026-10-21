@@ -9,7 +9,7 @@ export type MinimalPublishTarget = 'html';
 
 export interface PublishJobOverridesInput {
   publishTarget: MinimalPublishTarget;
-  selectedTtsProvider: 'elevenlabs' | 'google' | 'inworld';
+  selectedTtsProvider: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   selectedTtsStrategy: 'auto' | 'dialogue' | 'tts';
   selectedTtsModel: string;
   selectedPreset: string;
@@ -44,7 +44,7 @@ export interface CustomRerunInput {
   rerunStudyTextAudio: boolean;
   rerunPronunciationMainAudio: boolean;
   rerunPronunciationChunkAudio: boolean;
-  rerunStudyTextProvider: 'elevenlabs' | 'google' | 'inworld';
+  rerunStudyTextProvider: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   rerunStudyTextModel: string;
   rerunStudyTextVoiceId: string;
   rerunStudyTextVoiceAccent: string;
@@ -52,11 +52,11 @@ export interface CustomRerunInput {
   rerunStudyTextDialogueLanguage: string;
   rerunStudyTextDialogueStability: string;
   rerunStudyTextDialogueSeed: string;
-  rerunPronunciationMainProvider: 'elevenlabs' | 'google' | 'inworld';
+  rerunPronunciationMainProvider: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   rerunPronunciationMainModel: string;
   rerunPronunciationMainVoiceId: string;
   rerunPronunciationMainVoiceAccent: string;
-  rerunPronunciationChunkProvider: 'elevenlabs' | 'google' | 'inworld';
+  rerunPronunciationChunkProvider: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   rerunPronunciationChunkModel: string;
   rerunPronunciationChunkVoiceId: string;
   rerunPronunciationChunkVoiceAccent: string;

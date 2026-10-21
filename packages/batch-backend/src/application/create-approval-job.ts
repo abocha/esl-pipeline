@@ -93,7 +93,9 @@ export async function resolveApprovalJobConfig(
   }
   const withTts =
     jobOverrides.withTts ??
-    (jobOverrides.ttsProvider === 'google' || jobOverrides.ttsProvider === 'inworld'
+    (jobOverrides.ttsProvider === 'google' ||
+    jobOverrides.ttsProvider === 'inworld' ||
+    jobOverrides.ttsProvider === 'gemini'
       ? true
       : hasTtsKey);
   const learningPresetId =

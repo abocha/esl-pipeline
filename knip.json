@@ -40,6 +40,7 @@
       "ignoreDependencies": [
         "@elevenlabs/elevenlabs-js",
         "@google-cloud/text-to-speech",
+        "google-auth-library",
         "js-yaml",
         "zod"
       ]

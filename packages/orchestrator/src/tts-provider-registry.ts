@@ -1,5 +1,6 @@
 import { getRegisteredTtsProvider, registerTtsProvider } from '@esl-pipeline/tts-core';
 import { createElevenLabsTtsProvider } from '@esl-pipeline/tts-provider-elevenlabs';
+import { createGeminiTtsProvider } from '@esl-pipeline/tts-provider-gemini';
 import { createGoogleTtsProvider } from '@esl-pipeline/tts-provider-google';
 import { createInworldTtsProvider } from '@esl-pipeline/tts-provider-inworld';
 
@@ -15,6 +16,9 @@ export function ensureTtsProvidersRegistered(): void {
   }
   if (!getRegisteredTtsProvider('inworld')) {
     registerTtsProvider(createInworldTtsProvider());
+  }
+  if (!getRegisteredTtsProvider('gemini')) {
+    registerTtsProvider(createGeminiTtsProvider());
   }
   ttsProvidersRegistered = true;
 }

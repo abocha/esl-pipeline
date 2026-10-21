@@ -147,9 +147,15 @@ const FOCUSED_STEP_ORDER: AssignmentStepId[] = [
   'assignment',
   'review',
 ];
-const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google', 'inworld'] as const;
+const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google', 'inworld', 'gemini'] as const;
 type TeacherNotesCommitResult = 'unchanged' | 'committed' | 'invalidated' | null;
-const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['google', 'elevenlabs', 'inworld'] as const;
+const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = [
+  'google',
+  'elevenlabs',
+  'inworld',
+  'gemini',
+] as const;
+const FALLBACK_GEMINI_TTS_MODELS = ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const FALLBACK_INWORLD_TTS_MODELS = [
   'inworld-tts-2',
@@ -178,7 +184,7 @@ type PronunciationMode =
   | 'minimal_pair';
 
 function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
-  return value === 'elevenlabs' || value === 'google' || value === 'inworld';
+  return value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini';
 }
 
 function isSttProvider(value: string | null | undefined): value is SttProvider {
@@ -451,6 +457,7 @@ export const MinimalAssignment: React.FC = () => {
     const elevenlabsConfigured = jobOptions?.ttsModelOptionsByProvider?.elevenlabs ?? [];
     const googleConfigured = jobOptions?.ttsModelOptionsByProvider?.google ?? [];
     const inworldConfigured = jobOptions?.ttsModelOptionsByProvider?.inworld ?? [];
+    const geminiConfigured = jobOptions?.ttsModelOptionsByProvider?.gemini ?? [];
     const elevenlabsDefault =
       (jobOptions?.defaultTtsModelByProvider?.elevenlabs ?? '').trim() || FALLBACK_ELEVENLABS_MODEL;
     const elevenlabsOptions = [
@@ -469,6 +476,7 @@ export const MinimalAssignment: React.FC = () => {
       elevenlabs: elevenlabsOptions.length > 0 ? elevenlabsOptions : [FALLBACK_ELEVENLABS_MODEL],
       google: googleOptions.length > 0 ? googleOptions : [...FALLBACK_GOOGLE_TTS_MODELS],
       inworld: inworldOptions.length > 0 ? inworldOptions : [...FALLBACK_INWORLD_TTS_MODELS],
+      gemini: geminiConfigured.length > 0 ? geminiConfigured : [...FALLBACK_GEMINI_TTS_MODELS],
     };
   }, [jobOptions?.defaultTtsModelByProvider, jobOptions?.ttsModelOptionsByProvider]);
   const elevenlabsModelOptions = useMemo(

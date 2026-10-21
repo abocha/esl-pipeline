@@ -1,6 +1,7 @@
 import type {
   AssignmentV1,
   ElevenLabsTtsModelId,
+  GeminiTtsModelId,
   GoogleTtsModel,
   InworldTtsModel,
   PipelineLogger,
@@ -14,7 +15,14 @@ import type {
 import type { TtsRequestControl } from './errors.js';
 
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
-export type { ElevenLabsTtsModelId, GoogleTtsModel, InworldTtsModel, TtsModelId, TtsProviderId };
+export type {
+  ElevenLabsTtsModelId,
+  GeminiTtsModelId,
+  GoogleTtsModel,
+  InworldTtsModel,
+  TtsModelId,
+  TtsProviderId,
+};
 
 export type TtsCapabilitySnapshotMode = 'static' | 'credentialed' | 'none';
 export type TtsSpeechPlanningMode = 'identity' | 'prompted';

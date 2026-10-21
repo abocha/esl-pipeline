@@ -344,6 +344,9 @@ importers:
       '@google-cloud/text-to-speech':
         specifier: ^7.1.1
         version: 7.1.1
+      google-auth-library:
+        specifier: ^11.3.1
+        version: 11.3.1
       js-yaml:
         specifier: ^5.4.3
         version: 5.4.3
@@ -366,6 +369,9 @@ importers:
       '@esl-pipeline/tts-provider-elevenlabs':
         specifier: workspace:*
         version: link:../tts-provider-elevenlabs
+      '@esl-pipeline/tts-provider-gemini':
+        specifier: workspace:*
+        version: link:../tts-provider-gemini
       '@esl-pipeline/tts-provider-google':
         specifier: workspace:*
         version: link:../tts-provider-google
@@ -587,6 +593,31 @@ importers:
       '@esl-pipeline/tts-core':
         specifier: workspace:*
         version: link:../tts-core
+      js-yaml:
+        specifier: ^5.4.3
+        version: 5.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(@vitest/coverage-v8@5.0.3)(jsdom@30.1.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/tts-provider-gemini:
+    dependencies:
+      '@esl-pipeline/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@esl-pipeline/tts-core':
+        specifier: workspace:*
+        version: link:../tts-core
+      google-auth-library:
+        specifier: ^11.3.1
+        version: 11.3.1
       js-yaml:
         specifier: ^5.4.3
         version: 5.4.3

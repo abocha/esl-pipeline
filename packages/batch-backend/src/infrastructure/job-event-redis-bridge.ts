@@ -359,7 +359,8 @@ function normalizeTtsStrategy(value: string | null | undefined): JobRecord['ttsS
 }
 
 function normalizeTtsProvider(value: string | null | undefined): JobRecord['ttsProvider'] {
-  if (value === 'elevenlabs' || value === 'google' || value === 'inworld') return value;
+  if (value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini')
+    return value;
   return null;
 }
 

@@ -412,36 +412,39 @@ describe('application/job-actions/rerun', () => {
     );
   });
 
-  it('does not inherit study-text voice ids across provider changes', async () => {
-    const result = await rerun('job-1', {
-      type: JobActionType.RERUN,
-      requestedAt,
-      payload: {
-        regenerateStudyTextAudio: true,
-        studyTextTtsProvider: 'google',
-      },
-    });
-
-    expect(result.success).toBe(true);
-    expect(vi.mocked(insertJob)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        voiceId: undefined,
-        voiceAccent: 'american',
-        ttsProvider: 'google',
-        ttsModel: undefined,
-      }),
-    );
-
-    const enqueueSpy = vi.mocked(createJobQueue).mock.results[0]?.value.enqueue;
-    expect(enqueueSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        rerun: expect.objectContaining({
+  it.each(['google', 'gemini'] as const)(
+    'does not inherit foreign voice ids when switching to %s',
+    async (provider) => {
+      const result = await rerun('job-1', {
+        type: JobActionType.RERUN,
+        requestedAt,
+        payload: {
           regenerateStudyTextAudio: true,
-          studyTextTtsProvider: 'google',
-          studyTextVoiceAccent: 'american',
-          studyTextVoiceId: undefined,
+          studyTextTtsProvider: provider,
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(vi.mocked(insertJob)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          voiceId: undefined,
+          voiceAccent: 'american',
+          ttsProvider: provider,
+          ttsModel: undefined,
         }),
-      }),
-    );
-  });
+      );
+
+      const enqueueSpy = vi.mocked(createJobQueue).mock.results[0]?.value.enqueue;
+      expect(enqueueSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rerun: expect.objectContaining({
+            regenerateStudyTextAudio: true,
+            studyTextTtsProvider: provider,
+            studyTextVoiceAccent: 'american',
+            studyTextVoiceId: undefined,
+          }),
+        }),
+      );
+    },
+  );
 });

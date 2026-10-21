@@ -10,7 +10,7 @@ import {
   buildTtsModelOptionsByProvider,
   getRegisteredTtsProvider,
   loadVoicesCatalog,
-  parseTtsProviderId,
+  resolveDefaultTtsProvider as resolveRuntimeDefaultTtsProvider,
 } from '@esl-pipeline/tts-core';
 
 import type { ConfigProvider } from '../config.js';
@@ -65,13 +65,13 @@ export async function resolveJobOptions(
 }
 
 function resolveRegisteredTtsProviders(): TtsProviderId[] {
-  const ordered: TtsProviderId[] = ['elevenlabs', 'google', 'inworld'];
+  const ordered: TtsProviderId[] = ['elevenlabs', 'google', 'inworld', 'gemini'];
   return ordered.filter((providerId) => Boolean(getRegisteredTtsProvider(providerId)));
 }
 
 function resolveDefaultTtsProvider(availableProviders: TtsProviderId[]): TtsProviderId | undefined {
   if (availableProviders.length === 0) return undefined;
-  const envProvider = parseTtsProviderId(process.env.ESL_TTS_DEFAULT_PROVIDER);
+  const envProvider = resolveRuntimeDefaultTtsProvider();
   if (envProvider && availableProviders.includes(envProvider)) {
     return envProvider;
   }

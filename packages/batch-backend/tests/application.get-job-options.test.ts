@@ -71,6 +71,37 @@ describe('application/get-job-options', () => {
     delete process.env[RETIRED_ELEVENLABS_VOICES_ENV];
   });
 
+  it('preserves Gemini admission and fills its model defaults without changing the selected provider', {
+    timeout: GET_JOB_OPTIONS_TEST_TIMEOUT_MS,
+  }, async () => {
+    const { getJobOptions } = await import('../src/application/get-job-options.js');
+    const { getJobOptionsFromOrchestrator } = await import(
+      '../src/infrastructure/orchestrator-service.js'
+    );
+    vi.mocked(getJobOptionsFromOrchestrator).mockResolvedValue({
+      presets: [],
+      cefrLevels: ['B1'],
+      cefrDefault: 'B1',
+      generation: buildGenerationOptions(),
+      voiceAccents: [],
+      voices: [{ id: 'known', name: 'Known' }],
+      uploadOptions: ['auto'],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
+      ttsProviders: ['google', 'gemini'],
+      ttsModelOptionsByProvider: { google: ['studio'] },
+      defaultTtsProvider: 'google',
+      defaultTtsModelByProvider: { google: 'studio' },
+    } as any);
+    const result = await getJobOptions();
+    expect(result.ttsProviders).toEqual(['google', 'gemini']);
+    expect(result.defaultTtsProvider).toBe('google');
+    expect(result.ttsModelOptionsByProvider?.gemini).toEqual([
+      'gemini-3.8-flash-lite-tts',
+      'gemini-3.8-flash-tts',
+    ]);
+    expect(result.defaultTtsModelByProvider?.gemini).toBe('gemini-3.8-flash-lite-tts');
+  });
+
   it('returns orchestrator metadata when helper succeeds', {
     timeout: GET_JOB_OPTIONS_TEST_TIMEOUT_MS,
   }, async () => {
@@ -264,17 +295,19 @@ describe('application/get-job-options', () => {
     ]);
     expect(result.uploadOptions).toEqual(['auto', 's3', 'none']);
     expect(result.ttsStrategies).toEqual(['auto']);
-    expect(result.ttsProviders).toEqual(['elevenlabs', 'google', 'inworld']);
+    expect(result.ttsProviders).toEqual(['elevenlabs', 'google', 'inworld', 'gemini']);
     expect(result.ttsModelOptionsByProvider).toEqual({
       elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
       google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
       inworld: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
+      gemini: ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'],
     });
-    expect(result.defaultTtsProvider).toEqual('elevenlabs');
+    expect(result.defaultTtsProvider).toEqual('gemini');
     expect(result.defaultTtsModelByProvider).toEqual({
       elevenlabs: 'eleven_multilingual_v2',
       google: 'chirp3_hd',
       inworld: 'inworld-tts-2',
+      gemini: 'gemini-3.8-flash-lite-tts',
     });
     expect(result.learningPresets).toEqual([
       {

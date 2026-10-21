@@ -20,6 +20,8 @@ function toProviderEnvToken(provider: string): string {
 
 function resolveTtsCostPer1kCharsUsd(provider: string): number | undefined {
   const normalized = provider.trim().toLowerCase();
+  // Gemini is billed by text/audio tokens. A global character rate would fabricate spend.
+  if (normalized === 'gemini') return undefined;
   const providerToken = toProviderEnvToken(normalized);
   const canonicalProviderScoped = providerToken
     ? readUsdNumberFromEnv(`ESL_TTS_PROVIDER_${providerToken}_COST_PER_1K_CHARS_USD`)

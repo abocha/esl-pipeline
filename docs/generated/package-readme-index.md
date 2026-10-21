@@ -27,5 +27,6 @@
 | `@esl-pipeline/telegram-ops-bot` | @esl-pipeline/telegram-ops-bot | yes | `packages/telegram-ops-bot/README.md` |
 | `@esl-pipeline/tts-core` | @esl-pipeline/tts-core | no | `packages/tts-core/README.md` |
 | `@esl-pipeline/tts-provider-elevenlabs` | @esl-pipeline/tts-provider-elevenlabs | no | `packages/tts-provider-elevenlabs/README.md` |
+| `@esl-pipeline/tts-provider-gemini` | @esl-pipeline/tts-provider-gemini | no | `packages/tts-provider-gemini/README.md` |
 | `@esl-pipeline/tts-provider-google` | @esl-pipeline/tts-provider-google | no | `packages/tts-provider-google/README.md` |
 | `@esl-pipeline/tts-provider-inworld` | @esl-pipeline/tts-provider-inworld | no | `packages/tts-provider-inworld/README.md` |

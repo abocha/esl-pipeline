@@ -16,11 +16,13 @@ vi.mock('@esl-pipeline/tts-core', async () => ({
           )
         : ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'].includes(model),
   resolveDefaultTtsModel: (provider: string) =>
-    provider === 'google'
-      ? 'chirp3_hd'
-      : provider === 'inworld'
-        ? 'inworld-tts-2'
-        : 'eleven_multilingual_v2',
+    provider === 'gemini'
+      ? 'gemini-3.8-flash-lite-tts'
+      : provider === 'google'
+        ? 'chirp3_hd'
+        : provider === 'inworld'
+          ? 'inworld-tts-2'
+          : 'eleven_multilingual_v2',
 }));
 
 import {
@@ -35,6 +37,45 @@ import { synthesizePronunciationAudio } from '../src/runtime/pronunciation-audio
 describe('runtime/pronunciation-audio', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('keeps pronunciation items on Chirp when the primary provider is Gemini', async () => {
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
+      mode: 'minimal_pair',
+      pairs: [
+        {
+          line: 1,
+          left: { text: 'ship', transcription: '/ʃɪp/', line: 1 },
+          right: { text: 'sheep', transcription: '/ʃiːp/', line: 1 },
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async (input, options) => ({
+      path: '/tmp/gemini-item.mp3',
+      hash: input.text,
+      voiceId: input.voiceId,
+      provider: options.ttsProvider,
+      modelId: options.ttsModel,
+    }));
+    const result = await synthesizePronunciationAudio({
+      assignment: assignmentFixture(),
+      mdPath: '/tmp/typed.json',
+      outPath: '/tmp',
+      regeneratePrimary: false,
+      primaryTtsProvider: 'gemini',
+      primaryVoiceId: 'Kore',
+    });
+    expect(buildPronunciationTextMp3).toHaveBeenCalledTimes(2);
+    for (const call of vi.mocked(buildPronunciationTextMp3).mock.calls) {
+      expect(call[0].voiceId).toBe('en-US-Chirp3-HD-Charon');
+      expect(call[1]).toMatchObject({
+        ttsProvider: 'google',
+        ttsModel: 'chirp3_hd',
+      });
+    }
+    expect(result?.itemClips?.map((clip) => clip.tts?.provider)).toEqual(['google', 'google']);
   });
 
   it('propagates one request control to shadow primary and item synthesis', async () => {

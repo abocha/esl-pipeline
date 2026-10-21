@@ -623,6 +623,23 @@ Student-memory operator workflows:
 
 ## Validation
 
+### Gemini Cloud TTS admission (ESL-67)
+
+`gemini` is the default TTS provider when `ESL_TTS_DEFAULT_PROVIDER` is unset, distinct from `google` Cloud Text-to-Speech/Chirp
+identity. Operator publish and rerun selections persist `gemini-3.8-flash-lite-tts` or
+`gemini-3.8-flash-tts`; the Gemini lane defaults to Flash-Lite. Fresh authoring honors the backend's
+configured default; saved choices remain unchanged. Full pronunciation sentences follow the study
+provider/model; short item clips default to Google Chirp 3 HD. New user settings inherit the runtime
+default without rewriting existing settings. The [Gemini provider README](../tts-provider-gemini/README.md) owns Cloud
+authentication and synthesis configuration.
+
+Migration `0073_gemini_tts_provider` expands provider/model checks without rewriting existing rows.
+It is runtime-incompatible because older binaries cannot interpret newly persisted Gemini choices:
+quiesce old API/worker writers using the normal migration deployment protocol. After the first Gemini
+job or setting is saved, restoring an old image alone is not a valid rollback. Preserve the paired
+pre-migration backup or use a forward-compatible correction; do not silently relabel persisted jobs
+as a different provider. No production migration is implied by local migration tests.
+
 Choose evidence using the [repo decision route](../../docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route).
 The commands below run from repo root. The [package scripts](package.json) own command spelling;
 [`vitest.projects.mjs`](vitest.projects.mjs) owns test membership and project options.

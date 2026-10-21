@@ -103,7 +103,7 @@ const params = {
   presetOptionIds: [],
   generationOptions: null,
   ttsProviders: [],
-  ttsModelOptionsByProvider: { elevenlabs: [], google: [], inworld: [] },
+  ttsModelOptionsByProvider: { elevenlabs: [], google: [], inworld: [], gemini: [] },
   elevenlabsModelOptions: [],
   elevenlabsStandardModelOptions: [],
   defaultTtsProvider: null,
@@ -153,6 +153,87 @@ afterEach(() => {
 });
 
 describe('AssignmentV1 authoring and historical access', () => {
+  it('defaults to Gemini Flash-Lite while retaining deliberate model selection under auto strategy', () => {
+    const { result } = renderHook(() =>
+      useMinimalAssignmentAuthoringController({
+        ...params,
+        ttsProviders: ['inworld', 'gemini'] as const,
+        ttsModelOptionsByProvider: {
+          ...params.ttsModelOptionsByProvider,
+          gemini: ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'],
+        },
+        defaultTtsModelByProvider: { gemini: 'gemini-3.8-flash-lite-tts' },
+      }),
+    );
+    expect(result.current.selectedTtsProvider).toBe('gemini');
+    expect(result.current.selectedTtsStrategy).toBe('auto');
+    expect(result.current.selectedTtsModel).toBe('gemini-3.8-flash-lite-tts');
+    act(() => result.current.setSelectedTtsModel('gemini-3.8-flash-tts'));
+    expect(result.current.selectedTtsModel).toBe('gemini-3.8-flash-tts');
+  });
+
+  it.each(['gemini', 'inworld'] as const)(
+    'applies asynchronously loaded %s defaults to fresh publishing',
+    (configuredProvider) => {
+      const available = {
+        ...params,
+        ttsProviders: ['inworld', 'gemini'] as const,
+        ttsModelOptionsByProvider: {
+          ...params.ttsModelOptionsByProvider,
+          inworld: ['inworld-tts-2'],
+          gemini: ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'],
+        },
+      };
+      const { result, rerender } = renderHook(
+        ({ configured }: { configured: 'gemini' | 'inworld' | null }) =>
+          useMinimalAssignmentAuthoringController({
+            ...available,
+            defaultTtsProvider: configured,
+            defaultTtsModelByProvider: configured
+              ? { gemini: 'gemini-3.8-flash-tts', inworld: 'inworld-tts-2' }
+              : null,
+          }),
+        { initialProps: { configured: null as 'gemini' | 'inworld' | null } },
+      );
+      expect(result.current.selectedTtsProvider).toBe('gemini');
+      expect(result.current.selectedTtsModel).toBe('gemini-3.8-flash-lite-tts');
+      rerender({ configured: configuredProvider });
+      expect(result.current.selectedTtsProvider).toBe(configuredProvider);
+      expect(result.current.selectedTtsModel).toBe(
+        configuredProvider === 'gemini' ? 'gemini-3.8-flash-tts' : 'inworld-tts-2',
+      );
+    },
+  );
+
+  it('preserves restored or deliberate choices until starting a fresh assignment', () => {
+    const { result } = renderHook(() =>
+      useMinimalAssignmentAuthoringController({
+        ...params,
+        ttsProviders: ['gemini', 'inworld'],
+        defaultTtsProvider: 'gemini',
+        ttsModelOptionsByProvider: {
+          ...params.ttsModelOptionsByProvider,
+          gemini: ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'],
+          inworld: ['inworld-tts-2'],
+        },
+      }),
+    );
+    act(() =>
+      result.current.applyHydrationSnapshot({
+        ...result.current,
+        selectedTtsProvider: 'inworld',
+        selectedTtsModel: 'inworld-tts-2',
+      }),
+    );
+    expect(result.current.selectedTtsProvider).toBe('inworld');
+    act(() => result.current.setSelectedTtsProvider('gemini'));
+    act(() => result.current.setSelectedTtsModel('gemini-3.8-flash-tts'));
+    expect(result.current.selectedTtsModel).toBe('gemini-3.8-flash-tts');
+    act(() => result.current.resetAuthoring());
+    expect(result.current.selectedTtsProvider).toBe('gemini');
+    expect(result.current.selectedTtsModel).toBe('gemini-3.8-flash-lite-tts');
+  });
+
   it('does not report validation errors before a draft exists or admit empty content', async () => {
     const { result } = renderHook(() => useMinimalAssignmentAuthoringController(params));
     expect(result.current.assignmentValidationError).toBeNull();
