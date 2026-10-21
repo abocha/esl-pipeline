@@ -28,10 +28,17 @@ Flash-Lite dialogue was competitive with Flash, possibly less dramatic; a single
 separate model behavior from natural variation. Verbatim feedback is preserved in
 [`listening-feedback.json`](listening-feedback.json).
 
-The follow-up adds plain Flash-Lite versions of narration, pronunciation and the longer dialogue.
-All initial audio is preserved. Remaining tuning targets are slightly longer natural pauses,
-occasional abrupt transitions and slightly less dramatic delivery. First compare the complete plain
-Flash-Lite set; sparse delivery direction can then be tested against these retained baselines.
+The completed follow-up adds plain Flash-Lite versions of narration, pronunciation and the longer
+dialogue. The maintainer reported no preference between Flash and Flash-Lite on narration, a slight
+Flash advantage in pronunciation coherence, and a preference for Flash-Lite on the longer dialogue
+because it was less dramatic and had no observed glitches. All initial audio is preserved.
+
+**Recommendation for the next integration proposal:** start with plain Flash-Lite and fixed voices.
+Keep Flash selectable for comparison; the small pronunciation preference does not yet justify an
+automatic model router. Do not add external planning/ranking or general delivery instructions merely
+to reproduce the current architecture. Pause timing remains a possible focused tuning experiment,
+especially for Flash, rather than a proven defect in every Flash-Lite passage. These single-run
+listening results support candidate selection, not reliability claims or production adoption.
 
 ## Reproduce the provider calls
 

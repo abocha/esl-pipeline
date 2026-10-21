@@ -1,7 +1,7 @@
 {
   "recordedOn": "2026-10-21",
   "evaluator": "maintainer",
-  "evidenceType": "Subjective human listening feedback on the first nine clips; not a blind or repeated evaluation.",
+  "evidenceType": "Subjective human listening feedback across twelve clips in two rounds; not a blind or repeated evaluation.",
   "notesVerbatim": {
     "dialogue": "flash-tts is the best here, but has some shorter than ideal pauses. inworld is \"robotic\" but very clear and well intonated - as if it's a \"bad actor\" emotionally but has immaculate pronunciation. flash-line-tts is on par with the full flash-tts, maybe even better because it's a little less dramatic (maybe just natural variation, but still) while still keeping the emotion appropriate and clear",
     "monologue": "gemini is the clear winner, although very \"american\" - dramatic emotionally. inworld is very workbook-like and a little robotic, less emotive, this specific audio is slightly more stiff than usual (in my experience).",
@@ -9,6 +9,11 @@
     "long-dialogue": "gemini has some issues with pauses between some phrases: in this 1:42 piece only two slight jumps in sound, so not a disaster even as is. emotionally 100% natural if a little dramatic. could dial down drama 5% overall, but every emotion is appropriate. inworld is neutral and clear, rather stiff emotionally, zero glitches, very stable. inworld doesn't catch the proper intonation in \"And yes, before you ask, I've already changed the bulb.\" while gemini nails this type of intonation in every similar case."
   },
   "terminologyNote": "The dialogue note's flash-line-tts refers to the tested gemini-3.8-flash-lite-tts; original wording retained.",
-  "assessment": "Maintainer prefers Gemini across the tested passages. Flash-Lite is competitive on the short dialogue. Gemini pause transitions and slightly excessive dramatic delivery remain tuning targets; Inworld remains the observed stability control.",
-  "nextExperiment": "Complete plain Flash-Lite samples with identical inputs and fixed voices before adding style or pause direction. Preserve all baseline audio. No production provider or planner/ranker decision has been implemented."
+  "flashLiteFollowUpVerbatim": {
+    "monologue": "02: no preference, both flash-tts and flash-lite-tts are natural and emotional. slightly difference emhasis in flash-lite-tts, not better and not worse",
+    "pronunciation": "03: I prefer flash-tts, but flash-lite is very close, still much better than inworld. flash-tts slightly better at \"overall coherence\" despite the text being just unrelated sentences. flash-lite-tts shows reasonable coherence.",
+    "long-dialogue": "04: I do prefer flash-lite here because it's less dramatic. no glitches too."
+  },
+  "assessment": "Maintainer prefers Gemini over Inworld. Flash and Flash-Lite tie on narration; Flash has a slight coherence advantage on pronunciation; Flash-Lite is preferred on the longer dialogue for less dramatic delivery and no observed glitches. Flash-Lite is the leading general-purpose integration candidate. These single-run observations do not establish reliability rates or justify automatic model routing by content type.",
+  "nextExperiment": "Prepare a bounded Gemini Cloud TTS integration proposal using plain Flash-Lite and fixed voices as the initial candidate. Keep Flash selectable for comparison and any later evidenced pronunciation need. Do not add a planner, ranker, content-based model router or delivery tweaks without a demonstrated requirement. Pause tuning is a remaining optional experiment, not an established requirement for every Flash-Lite passage. No production provider or planner/ranker decision has been implemented."
 }
