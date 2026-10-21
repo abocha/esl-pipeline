@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -28,7 +37,24 @@ function deploy(scenario = {}) {
       join(directory, 'scripts/docker/validate-edge-env.mjs'),
     );
     cpSync(new URL('fixtures/docker.mjs', import.meta.url), join(directory, 'bin/docker'));
-    writeFileSync(join(directory, 'bin/curl'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    writeFileSync(
+      join(directory, 'bin/curl'),
+      `#!/usr/bin/env node
+import { appendFileSync, readFileSync } from 'node:fs';
+const directory = process.env.DEPLOY_TEST_DIR;
+const scenario = JSON.parse(readFileSync(directory + '/scenario.json', 'utf8'));
+appendFileSync(directory + '/events.jsonl', JSON.stringify(['curl', ...process.argv.slice(2)]) + '\\n');
+const attempts = readFileSync(directory + '/events.jsonl', 'utf8').split('"curl"').length - 1;
+if (scenario.healthFail || (scenario.healthRetry && attempts === 1)) {
+  console.error('curl: (56) fixture connection reset');
+  process.exit(56);
+}
+`,
+      { mode: 0o755 },
+    );
+    // Failed-probe scenarios exercise every attempt without spending time sleeping.
+    if (scenario.healthFail || scenario.healthRetry)
+      writeFileSync(join(directory, 'bin/sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     writeFileSync(join(directory, 'bin/aws'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     // cpSync preserves the executable fixture's mode.
     const applicationEnv = scenario.edge
@@ -62,7 +88,11 @@ function deploy(scenario = {}) {
     writeFileSync(join(directory, 'scenario.json'), JSON.stringify({ ...scenario, previousImage }));
     writeFileSync(
       join(directory, 'previous.json'),
-      JSON.stringify({ migrations: scenario.aliasOnly ? [old, boundary] : [old], metadata: null }),
+      JSON.stringify({
+        migrations:
+          scenario.aliasOnly && !scenario.stalePreviousInventory ? [old, boundary] : [old],
+        metadata: null,
+      }),
     );
     writeFileSync(
       join(directory, 'requested.json'),
@@ -121,6 +151,7 @@ echo schema > "\${prefix}_schema.sql"
         join(directory, 'scripts/deploy/deploy-prod-images.sh'),
         sha,
         ...(scenario.plan ? ['--plan'] : []),
+        ...(scenario.verbose ? ['--verbose'] : []),
       ],
       {
         encoding: 'utf8',
@@ -155,7 +186,20 @@ echo schema > "\${prefix}_schema.sql"
       );
     } catch {}
     const state = readFileSync(join(directory, 'state/current-images.env'), 'utf8');
-    return { ...result, events, record, state, output: result.stdout + result.stderr };
+    const logDirectories = readdirSync(join(directory, 'state')).filter((name) =>
+      name.startsWith('run-'),
+    );
+    const logs = logDirectories
+      .flatMap((name) => {
+        const path = join(directory, 'state', name);
+        assert.equal(statSync(path).mode & 0o777, 0o700);
+        return readdirSync(path).map((file) => {
+          assert.equal(statSync(join(path, file)).mode & 0o777, 0o600);
+          return readFileSync(join(path, file), 'utf8');
+        });
+      })
+      .join('\n');
+    return { ...result, events, record, state, logs, output: result.stdout + result.stderr };
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -193,11 +237,12 @@ test('alias-only deploy performs compatibility and existing verification without
   assert.equal(result.status, 0, result.output);
   assert.match(
     result.output,
-    /pending=none boundaries=none quiesce=false image_rollback_safe=true/,
+    /Pending migrations: none[\s\S]*Incompatible schema boundaries: none[\s\S]*Previous runtime is schema-compatible/,
   );
   for (const predicate of [migration, recreate, (e) => e[0] === 'stop', (e) => e[0] === 'backup'])
     assert.equal(index(result, predicate), -1);
-  assert.match(result.output, /deployment_workers_ready/);
+  assert.match(result.output, /OK\s+Verify readiness of all three workers/);
+  assert.match(result.logs, /deployment_workers_ready/);
 });
 
 test('environment-only domain cutover with unchanged images recreates runtime and persists config state', () => {
@@ -274,8 +319,9 @@ test('matching edge and application environment digests do not restart unchanged
 test('incompatible deploy plans before stopping every writer, backup, and migrate; restarts unchanged live bot', () => {
   const result = deploy({ bot: true });
   assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /boundaries=0060_boundary quiesce=true image_rollback_safe=false/);
-  assert.ok(result.output.indexOf('Schema compatibility:') < result.output.indexOf('Quiescing'));
+  assert.match(result.output, /Incompatible schema boundaries: 0060_boundary/);
+  assert.ok(result.output.indexOf('Deployment actions') < result.output.indexOf('Quiescing'));
+  assert.match(result.output, /Recreate telegram-ops-bot: restore stopped writer/);
   assert.ok(index(result, (e) => e[0] === 'stop') < index(result, (e) => e[0] === 'backup'));
   assert.ok(index(result, (e) => e[0] === 'backup-verify') < index(result, migration));
   const stop = result.events.find((e) => e[0] === 'stop');
@@ -289,7 +335,7 @@ test('incompatible deploy plans before stopping every writer, backup, and migrat
   ])
     assert.ok(stop.includes(service));
   assert.ok(result.events.find(recreate).includes('telegram-ops-bot'));
-  assert.match(result.output, /deployment_workers_ready/);
+  assert.match(result.output, /OK\s+Verify readiness of all three workers/);
   assert.match(result.output, /Image-only rollback.*BLOCKED/);
   assert.doesNotMatch(result.output, /Application rollback instructions:/);
   assert.equal(result.record.imageRollbackSafe, false);
@@ -303,6 +349,7 @@ test('backup failures while quiesced never run migrations or restart services', 
     assert.equal(index(result, migration), -1);
     assert.equal(index(result, recreate), -1);
     assert.match(result.output, /migrations were not invoked/);
+    assert.equal(result.output.split('\nFAILED ').length - 1, 1);
   }
 });
 
@@ -352,6 +399,7 @@ test('resolved migration directory override fails before stop, backup, or migrat
   const result = deploy({ migrationsDir: '/app/uploads/unreviewed' });
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /PG_MIGRATIONS_DIR overrides are unsupported/);
+  assert.equal(result.output.split('\nFAILED ').length - 1, 1);
   assert.equal(
     index(result, (e) => e[0] === 'stop'),
     -1,
@@ -362,7 +410,7 @@ test('resolved migration directory override fails before stop, backup, or migrat
 test('plan-only exposes boundary and rollback decision without service or schema mutations', () => {
   const result = deploy({ plan: true });
   assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /boundaries=0060_boundary/);
+  assert.match(result.output, /Incompatible schema boundaries: 0060_boundary/);
   assert.match(result.output, /Plan only/);
   for (const predicate of [migration, recreate, (e) => e[0] === 'stop', (e) => e[0] === 'backup'])
     assert.equal(index(result, predicate), -1);
@@ -371,9 +419,83 @@ test('plan-only exposes boundary and rollback decision without service or schema
 test('retry after incompatible commit still blocks old rollback and quiesces old writers', () => {
   const result = deploy({ applied: [old, boundary], verifyFail: true });
   assert.equal(result.status, 1, result.output);
-  assert.match(result.output, /pending=none boundaries=none quiesce=true/);
+  assert.match(
+    result.output,
+    /Pending migrations: none[\s\S]*Incompatible schema boundaries: none/,
+  );
+  assert.match(result.output, /Stop application writers before schema work/);
   assert.ok(index(result, (e) => e[0] === 'stop') < index(result, migration));
   assert.match(result.output, /Image-only rollback.*BLOCKED/);
   assert.match(result.output, /backup from BEFORE the blocked boundary/);
   assert.match(result.output, /later deploy retry may already contain/);
+});
+
+test('plan and apply both reject incompatible current state before changing runtime or recovery state', () => {
+  for (const plan of [true, false]) {
+    const result = deploy({ plan, aliasOnly: true, stalePreviousInventory: true });
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /current image state is incompatible with the database/);
+    assert.doesNotMatch(result.output, /line unknown|PLAN COMPLETE|DEPLOYMENT COMPLETE/);
+    assert.equal(result.record, undefined);
+    for (const predicate of [migration, recreate, (e) => e[0] === 'stop', (e) => e[0] === 'backup'])
+      assert.equal(index(result, predicate), -1);
+  }
+});
+
+test('final plan includes the unchanged bot that schema quiescence will stop', () => {
+  const result = deploy({ plan: true, bot: true });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.output.split('Deployment actions').length - 1, 1);
+  assert.match(result.output, /Recreate telegram-ops-bot: restore stopped writer/);
+  assert.match(result.output, /WARN\s+Image-only rollback[\s\S]*PLAN COMPLETE/);
+  assert.equal(
+    index(result, (e) => e[0] === 'stop'),
+    -1,
+  );
+});
+
+test('concise output retains warnings and diagnostics, while verbose output exposes routine details', () => {
+  for (const verbose of [false, true]) {
+    const result = deploy({ plan: true, edge: true, caddyWarning: true, verbose });
+    assert.equal(result.status, 0, result.output);
+    assert.match(result.output, /WARN caddyfile fixture nonfatal warning/);
+    assert.match(result.output, /PLAN COMPLETE - preflight passed \(2 warnings\)/);
+    assert.match(result.logs, /fixture layer: Pull complete/);
+    assert.match(result.logs, /fixture Caddy routine lifecycle chatter/);
+    assert.equal(result.output.includes('fixture layer: Pull complete'), verbose);
+    assert.equal(result.output.includes('fixture Caddy routine lifecycle chatter'), verbose);
+  }
+});
+
+test('failed step preserves exit code, shows diagnostics and phase, and never reports completion', () => {
+  const result = deploy({ plan: true, pullFail: true });
+  assert.equal(result.status, 17, result.output);
+  assert.match(result.output, /FAILED\s+Release images \/ Pull batch-backend image/);
+  assert.match(result.output, /fixture registry unavailable/);
+  assert.match(
+    result.output,
+    /writer_stop_attempted=false migrations_invoked=false services_update_attempted=false/,
+  );
+  assert.doesNotMatch(result.output, /PLAN COMPLETE|DEPLOYMENT COMPLETE|line unknown/);
+  assert.equal(index(result, migration), -1);
+});
+
+test('health checks hide recoverable failures and bound each request; exhaustion reports the final error', () => {
+  const recovered = deploy({ aliasOnly: true, healthRetry: true });
+  assert.equal(recovered.status, 0, recovered.output);
+  assert.match(recovered.output, /attempt 2\/30/);
+  assert.doesNotMatch(recovered.output, /fixture connection reset/);
+  assert.match(recovered.logs, /fixture connection reset/);
+
+  const failed = deploy({ aliasOnly: true, healthFail: true });
+  assert.equal(failed.status, 1, failed.output);
+  assert.match(failed.output, /FAILED\s+Verification \/ Wait for http/);
+  assert.match(failed.output, /Health check exhausted 30 attempts/);
+  assert.match(failed.output, /fixture connection reset/);
+  assert.doesNotMatch(failed.output, /DEPLOYMENT COMPLETE/);
+  const requests = failed.events.filter((event) => event[0] === 'curl');
+  assert.equal(requests.length, 30);
+  for (const request of requests) {
+    assert.deepEqual(request.slice(1, 5), ['--connect-timeout', '3', '--max-time', '5']);
+  }
 });

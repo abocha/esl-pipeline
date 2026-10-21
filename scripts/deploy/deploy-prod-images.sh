@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# Keep operator output available even while a step captures child-process diagnostics.
+exec 3>&1 4>&2
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${APP_DIR}/scripts/deploy/deploy-prod-images-plan.sh"
@@ -26,15 +28,19 @@ MIGRATION_STARTED=false
 IMAGE_ROLLBACK_SAFE=false
 COMPATIBILITY_PLAN="${DEPLOY_STATE_DIR}/rollback-compatibility.json"
 PLAN_ONLY=false
-[[ "${2:-}" == "--plan" ]] && PLAN_ONLY=true
+VERBOSE=false
+PHASE=Arguments
+OPERATION="Validate arguments"
+RUN_LOG_DIR=""
+STEP_LOG=""
+WARNING_COUNT=0
 
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/deploy/deploy-prod-images.sh <40-character-git-sha> [--plan]
+  scripts/deploy/deploy-prod-images.sh <40-character-git-sha> [--plan] [--verbose]
 
 Environment:
-  APP_DIR                 Defaults to repository root resolved from this script.
   COMPOSE_FILE            Defaults to $APP_DIR/docker-compose.prod.yml.
   DEPLOY_STATE_DIR        Defaults to /var/lib/esl-pipeline/deploy.
   ESL_IMAGE_PREFIX        Defaults to ghcr.io/abocha/esl-pipeline.
@@ -46,16 +52,60 @@ The script deploys a complete CI-published GHCR release bundle tagged with the s
 Unchanged image digests are aliased locally; database and restart work follows the computed plan.
 Application rollback and database restore are separate operations.
 --plan resolves images and reads schema state, but does not back up, migrate, or stop/recreate services.
+It may pull/alias images, run disposable validation containers, and write pending state and logs.
+--verbose prints captured command output after each step. Detailed logs are retained under DEPLOY_STATE_DIR.
 USAGE
 }
 
 die() {
+  FAILURE_LINE="${BASH_LINENO[0]}"
   echo "ERROR: $*" >&2
   exit 1
 }
 
 info() {
-  echo "INFO: $*"
+  printf '  %s\n' "$*" >&3
+}
+
+warn() {
+  WARNING_COUNT=$((WARNING_COUNT + 1))
+  printf 'WARN  %s\n' "$*" >&3
+}
+
+phase() {
+  PHASE="$1"
+  OPERATION="$1"
+  STEP_LOG=""
+  printf '\n%s\n' "$PHASE" >&3
+}
+
+start_run_logs() {
+  RUN_LOG_DIR="$(mktemp -d "${DEPLOY_STATE_DIR}/run-${SHORT_SHA}-XXXXXXXX")"
+  info "Detailed logs: ${RUN_LOG_DIR} (directory 0700; files 0600)"
+}
+
+# Do not put this invocation in an if/! or || list: Bash would disable errexit
+# inside compound steps and could continue after a failed safety check.
+run_step() {
+  OPERATION="$1"
+  shift
+  local started=$SECONDS warnings
+  STEP_LOG="$(mktemp "${RUN_LOG_DIR}/step-XXXXXXXX.log")"
+  printf '# %s\n' "$OPERATION" >"$STEP_LOG"
+  printf '  WAIT  %s\n' "$OPERATION" >&3
+  "$@" >>"$STEP_LOG" 2>&1
+  if [[ "$VERBOSE" == "true" ]]; then
+    cat "$STEP_LOG" >&3
+  fi
+  warnings="$(grep -Ei '(^|[[:space:]])warn(ing)?([[:space:]:]|$)|"level"[[:space:]]*:[[:space:]]*(40|50|60)' "$STEP_LOG" || true)"
+  if [[ -n "$warnings" ]]; then
+    warn "${OPERATION}: command reported warnings; see ${STEP_LOG}"
+    if [[ "$VERBOSE" != "true" ]]; then
+      printf '%s\n' "$warnings" >&3
+    fi
+  fi
+  printf '  OK    %s (%ss)\n' "$OPERATION" "$((SECONDS - started))" >&3
+  STEP_LOG=""
 }
 
 bool_is_true() {
@@ -153,12 +203,21 @@ validate_edge_configuration() {
     return 0
   fi
 
-  node "${APP_DIR}/scripts/docker/validate-edge-env.mjs" || die "invalid Caddy edge configuration"
+  run_step "Validate edge environment" node "${APP_DIR}/scripts/docker/validate-edge-env.mjs"
 }
 
 handle_failure() {
-  local line="$1"
-  echo "ERROR: deployment failed near line ${line}." >&2
+  local status="$1"
+  printf '\nFAILED  %s / %s (exit %s; line %s)\n' "$PHASE" "$OPERATION" "$status" "${FAILURE_LINE:-unknown}" >&2
+  printf '  Runtime state: writer_stop_attempted=%s migrations_invoked=%s services_update_attempted=%s\n' \
+    "$QUIESCED" "$MIGRATION_STARTED" "$UPDATED_SERVICES" >&2
+  if [[ -n "$STEP_LOG" && -s "$STEP_LOG" ]]; then
+    echo '  Last command diagnostics (up to 40 lines):' >&2
+    tail -n 40 "$STEP_LOG" >&2
+  fi
+  if [[ -n "$RUN_LOG_DIR" ]]; then
+    printf '  Detailed logs: %s\n' "$RUN_LOG_DIR" >&2
+  fi
   if [[ "$MIGRATION_STARTED" == "true" && "$IMAGE_ROLLBACK_SAFE" != "true" ]]; then
     cat >&2 <<EOF
 
@@ -194,9 +253,9 @@ EOF
   fi
 }
 
-FAILURE_LINE=unknown
-trap 'FAILURE_LINE=$LINENO' ERR
-trap 'status=$?; if (( status != 0 )); then handle_failure "$FAILURE_LINE"; fi' EXIT
+FAILURE_LINE=""
+trap 'FAILURE_LINE=${FAILURE_LINE:-$LINENO}' ERR
+trap 'status=$?; if (( status != 0 )); then handle_failure "$status" >&4 2>&4; fi' EXIT
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
@@ -294,7 +353,8 @@ prepare_image() {
   local requested_image="$1"
   local current_image="$2"
   local current_digest="$3"
-  local requested_digest
+  local requested_digest image_name="${requested_image%:*}"
+  image_name="${image_name##*/}"
 
   requested_digest="$(remote_image_digest "$requested_image" || true)"
   if [[ -n "$requested_digest" \
@@ -302,17 +362,18 @@ prepare_image() {
     && -n "$current_image" ]] \
     && docker image inspect "$current_image" >/dev/null 2>&1; then
     if [[ "$current_image" != "$requested_image" ]]; then
-      info "Aliasing unchanged image ${current_image} as ${requested_image}"
-      docker image tag "$current_image" "$requested_image"
+      run_step "Reuse unchanged ${image_name} image (${SHORT_SHA})" docker image tag "$current_image" "$requested_image"
     else
-      info "Requested image is already available locally: ${requested_image}"
+      info "OK    ${image_name} image already available (${SHORT_SHA})"
     fi
     PREPARED_IMAGE_DIGEST="$requested_digest"
     return 0
   fi
 
-  info "Pulling ${requested_image}"
-  docker pull "$requested_image"
+  if [[ -z "$requested_digest" ]]; then
+    info "Registry digest lookup unavailable for ${image_name}; verifying through Docker pull"
+  fi
+  run_step "Pull ${image_name} image (${SHORT_SHA})" docker pull "$requested_image"
   PREPARED_IMAGE_DIGEST="${requested_digest:-$(image_digest "$requested_image")}"
 }
 
@@ -408,12 +469,16 @@ verify_backup_artifacts() {
   [[ -s "$schema_sql" ]] || die "backup schema artifact is missing or empty: ${schema_sql}"
   [[ -s "$checksum_file" ]] || die "backup checksum artifact is missing or empty: ${checksum_file}"
 
-  (cd "$(dirname "$checksum_file")" && sha256sum -c "$(basename "$checksum_file")")
+  run_step "Verify backup checksums" verify_backup_checksums "$checksum_file"
 
   PG_COMPOSE_PROJECT="$PROJECT_NAME" \
     PG_COMPOSE_FILE="$COMPOSE_FILE" \
     PG_BACKUP_DIR="${DEPLOY_STATE_DIR}/backups/postgres" \
-    bash "${APP_DIR}/scripts/docker/postgres-backup-restore.sh" verify "$dump_file" >/dev/null
+    run_step "Verify PostgreSQL backup archive" bash "${APP_DIR}/scripts/docker/postgres-backup-restore.sh" verify "$dump_file"
+}
+
+verify_backup_checksums() {
+  (cd "$(dirname "$1")" && sha256sum -c "$(basename "$1")")
 }
 
 create_pre_migration_backup() {
@@ -423,7 +488,7 @@ create_pre_migration_backup() {
   PG_COMPOSE_PROJECT="$PROJECT_NAME" \
     PG_COMPOSE_FILE="$COMPOSE_FILE" \
     PG_BACKUP_DIR="${DEPLOY_STATE_DIR}/backups/postgres" \
-    bash "${APP_DIR}/scripts/docker/postgres-prod-backup-s3.sh" backup-upload "pre_deploy_${SHORT_SHA}"
+    run_step "Create and upload PostgreSQL backup" bash "${APP_DIR}/scripts/docker/postgres-prod-backup-s3.sh" backup-upload "pre_deploy_${SHORT_SHA}"
   dump_file="$(latest_dump_after "$backup_start")"
   verify_backup_artifacts "$dump_file"
   info "Verified pre-migration backup: ${dump_file}"
@@ -485,7 +550,7 @@ quiesce_application() {
   if [[ -n "$ids" ]]; then
     local -a containers
     mapfile -t containers <<<"$ids"
-    docker stop --time 30 "${containers[@]}"
+    run_step "Stop application writers" docker stop --timeout 30 "${containers[@]}"
   fi
   remaining="$(running_application_containers)"
   [[ -z "$remaining" ]] || die "application containers remain running; refusing incompatible migration"
@@ -493,7 +558,7 @@ quiesce_application() {
 
 run_migrations_once() {
   info "Running database migrations once with requested backend image"
-  compose_with_env "$PENDING_ENV" run --rm --no-deps batch-backend node dist/tools/migrate-db.js migrate
+  run_step "Apply database migrations" compose_with_env "$PENDING_ENV" run --rm --no-deps batch-backend node dist/tools/migrate-db.js migrate
 }
 
 run_in_backend() {
@@ -504,14 +569,21 @@ retry_curl() {
   local url="$1"
   local attempts="${2:-30}"
   local delay_seconds="${3:-2}"
-  local index
+  local index started=$SECONDS
+  OPERATION="Wait for ${url}"
+  STEP_LOG="$(mktemp "${RUN_LOG_DIR}/health-XXXXXXXX.log")"
+  printf '# %s\n' "$OPERATION" >"$STEP_LOG"
+  printf '  WAIT  %s\n' "$OPERATION" >&3
   for ((index = 1; index <= attempts; index += 1)); do
-    if curl -fsS "$url" >/dev/null; then
+    if curl --connect-timeout 3 --max-time 5 -fsS "$url" >/dev/null 2>>"$STEP_LOG"; then
+      if [[ "$VERBOSE" == "true" ]]; then cat "$STEP_LOG" >&3; fi
+      printf '  OK    %s (%ss; attempt %s/%s)\n' "$OPERATION" "$((SECONDS - started))" "$index" "$attempts" >&3
+      STEP_LOG=""
       return 0
     fi
-    sleep "$delay_seconds"
+    if (( index < attempts )); then sleep "$delay_seconds"; fi
   done
-  curl -fsS "$url" >/dev/null
+  die "Health check exhausted ${attempts} attempts for ${url} after $((SECONDS - started))s"
 }
 
 assert_service_command() {
@@ -543,7 +615,7 @@ recreate_edge_service() {
   fi
 
   info "Force-recreating caddy-edge to refresh mounted edge configuration"
-  compose_with_env "$PENDING_ENV" up -d --no-build --force-recreate caddy-edge
+  run_step "Recreate Caddy edge" compose_with_env "$PENDING_ENV" up -d --no-build --force-recreate caddy-edge
 }
 
 assert_caddy_upstream_config() {
@@ -573,8 +645,8 @@ run_smoke_checks() {
   fi
 
   if [[ "$DATABASE_WORK_REQUIRED" == "true" ]]; then
-    run_in_backend node dist/tools/migrate-db.js verify
-    run_in_backend node dist/tools/smoke-s3-storage.js
+    run_step "Verify database migrations" run_in_backend node dist/tools/migrate-db.js verify
+    run_step "Verify storage upload, metadata, presigning and deletion" run_in_backend node dist/tools/smoke-s3-storage.js
   fi
 
   assert_service_command batch-worker 'dist/transport/worker-runner.js'
@@ -583,15 +655,74 @@ run_smoke_checks() {
   local -a worker_ids
   mapfile -t worker_ids < <(compose_with_env "$PENDING_ENV" ps -q batch-worker transcribe-worker student-memory-worker)
   [[ "${#worker_ids[@]}" -eq 3 ]] || die "Expected three current worker instances"
-  node "${APP_DIR}/scripts/deploy/verify-workers-ready.mjs" "${worker_ids[@]}" || die "Worker readiness verification failed"
+  run_step "Verify readiness of all three workers" node "${APP_DIR}/scripts/deploy/verify-workers-ready.mjs" "${worker_ids[@]}"
   assert_recent_logs_clean batch-worker
   assert_recent_logs_clean transcribe-worker
   assert_recent_logs_clean student-memory-worker
 }
 
 print_deployment_plan() {
-  info "Deployment plan: backend_changed=${BACKEND_CHANGED} frontend_changed=${FRONTEND_CHANGED} bot_changed=${BOT_CHANGED} caddy_changed=${CADDY_CONFIG_CHANGED} application_config_changed=${APPLICATION_CONFIG_CHANGED}"
-  info "Deployment plan: initial=${INITIAL_DEPLOY} database_work=${DATABASE_WORK_REQUIRED} edge_restart=${EDGE_RESTART_REQUIRED} services=${DEPLOYMENT_SERVICES[*]:-none}"
+  phase "Deployment actions"
+  local label value service reason
+  for label in BACKEND FRONTEND BOT CADDY_CONFIG APPLICATION_CONFIG; do
+    value="${label}_CHANGED"
+    if [[ "${!value}" == "true" ]]; then value=changed; else value=unchanged; fi
+    if [[ "$label" == BOT ]] && ! ops_bot_enabled; then value=disabled; fi
+    if [[ "$label" == CADDY_CONFIG ]] && ! edge_enabled; then value=disabled; fi
+    case "$label" in
+      BACKEND) label="Backend image" ;;
+      FRONTEND) label="Frontend image" ;;
+      BOT) label="Ops bot image" ;;
+      CADDY_CONFIG) label="Edge configuration" ;;
+      APPLICATION_CONFIG) label="Application config" ;;
+    esac
+    printf '  %-24s %s\n' "$label" "$value" >&3
+  done
+  if [[ "$SCHEMA_QUIESCE_REQUIRED" == "true" ]]; then
+    info "Stop application writers before schema work"
+  fi
+  if [[ "$DATABASE_WORK_REQUIRED" == "true" ]]; then
+    info "Create and verify PostgreSQL backup; run migration processing"
+  else
+    info "No backup or migration processing required"
+  fi
+  node -e '
+    const p = JSON.parse(require("fs").readFileSync(process.argv[1]));
+    console.log("  Pending migrations: " + (p.pending.join(", ") || "none"));
+    console.log("  Incompatible schema boundaries: " + (p.boundaries.join(", ") || "none"));
+    console.log("  Previous-runtime rollback blockers: " + (p.rollbackBlockers.join(", ") || "none"));
+  ' "${DEPLOY_STATE_DIR}/pending-compatibility.json" >&3
+  for service in "${DEPLOYMENT_SERVICES[@]}"; do
+    reason="image changed"
+    if [[ "$service" == telegram-ops-bot && "$SCHEMA_QUIESCE_REQUIRED" == "true" ]]; then
+      reason="restore stopped writer after schema work"
+    elif [[ "$APPLICATION_CONFIG_CHANGED" == "true" ]]; then
+      reason="application configuration changed"
+    elif [[ "$BACKEND_CHANGED" == "true" ]]; then
+      reason="backend image changed; refresh runtime and frontend upstream"
+    fi
+    info "Recreate ${service}: ${reason}"
+  done
+  if [[ "$EDGE_RESTART_REQUIRED" == "true" ]]; then
+    info "Recreate caddy-edge: refresh configuration or frontend upstream"
+  fi
+  if [[ "${#DEPLOYMENT_SERVICES[@]}" -eq 0 && "$EDGE_RESTART_REQUIRED" != "true" ]]; then
+    info "No application or edge recreation required"
+  fi
+  if [[ "$INITIAL_DEPLOY" == "true" ]]; then info "Initial deployment: start complete enabled runtime"; fi
+  info "Verify health and readiness of all three workers"
+  if [[ "$DATABASE_WORK_REQUIRED" == "true" ]]; then info "Verify schema and storage access"; fi
+  if [[ "$IMAGE_ROLLBACK_SAFE" != "true" ]]; then
+    warn "Image-only rollback to the previous runtime is BLOCKED."
+    info "Recover with a schema-compatible image or a verified backup from BEFORE the blocked boundary."
+  else
+    info "Previous runtime is schema-compatible for image rollback (database restore is separate)."
+  fi
+}
+
+validate_compose() {
+  compose_with_env "$PENDING_ENV" config --quiet
+  compose_with_env "$PENDING_ENV" config --format json | node "${APP_DIR}/scripts/deploy/schema-compatibility.mjs" check-compose
 }
 
 append_deploy_log() {
@@ -645,9 +776,19 @@ main() {
     return 0
   fi
 
-  [[ "$#" -eq 1 || ( "$#" -eq 2 && "${2:-}" == "--plan" ) ]] || die "expected a Git SHA and optional --plan"
+  [[ "$#" -ge 1 ]] || die "expected a Git SHA and optional --plan / --verbose"
+  shift
+  for option in "$@"; do
+    case "$option" in
+      --plan) PLAN_ONLY=true ;;
+      --verbose) VERBOSE=true ;;
+      *) die "unknown option: ${option}" ;;
+    esac
+  done
 
   validate_sha
+  if [[ "$PLAN_ONLY" == "true" ]]; then printf 'PLAN  %s\n' "$SHORT_SHA"; else printf 'DEPLOY  %s\n' "$SHORT_SHA"; fi
+  phase "Preflight"
   require_command docker
   require_command curl
   require_command awk
@@ -655,13 +796,13 @@ main() {
   require_command find
   require_command flock
   require_command node
+  require_command mktemp
 
   [[ -f "$COMPOSE_FILE" ]] || die "compose file not found: ${COMPOSE_FILE}"
   [[ -f "${ESL_PRODUCTION_ENV_FILE}" ]] || die "missing required env file: ${ESL_PRODUCTION_ENV_FILE}"
   node "${APP_DIR}/scripts/deploy/production-paths.mjs" deploy "$APP_DIR" "$DEPLOY_STATE_DIR" "$ESL_PRODUCTION_ENV_FILE" || die "unsafe production paths or checkout"
   export PG_BACKUP_ENV_FILE="$ESL_PRODUCTION_ENV_FILE"
   load_edge_env_from_application_env_file
-  validate_edge_configuration
 
   ensure_state_dir
   validate_state_file "$CURRENT_ENV"
@@ -672,7 +813,9 @@ main() {
   chmod 0640 "$LOCK_FILE"
   flock -n 9 || die "another deployment is already running"
 
-  docker info >/dev/null
+  start_run_logs
+  validate_edge_configuration
+  run_step "Check Docker daemon" docker info
   # Remember a live bot even when its profile was omitted; quiescence must cover it.
   local live_bot
   live_bot="$(docker ps -q --filter "label=com.docker.compose.project=${PROJECT_NAME}" --filter 'label=com.docker.compose.service=telegram-ops-bot')"
@@ -697,6 +840,7 @@ main() {
   current_caddy_digest="$(state_value CADDY_CONFIG_DIGEST)"
   current_application_digest="$(state_value APPLICATION_CONFIG_DIGEST)"
 
+  phase "Release images"
   prepare_image "$backend_image" "$current_backend_image" "$current_backend_digest"
   backend_digest="$PREPARED_IMAGE_DIGEST"
   prepare_image "$frontend_image" "$current_frontend_image" "$current_frontend_digest"
@@ -719,13 +863,11 @@ main() {
     "$current_backend_digest" "$current_frontend_digest" "$current_bot_digest" "$current_caddy_digest" \
     "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest" \
     "$include_bot" "$include_edge" "$current_application_digest" "$application_digest"
-  print_deployment_plan
-
-  compose_with_env "$PENDING_ENV" config --quiet
-  compose_with_env "$PENDING_ENV" config --format json | node "${APP_DIR}/scripts/deploy/schema-compatibility.mjs" check-compose
+  phase "Configuration and schema checks"
+  run_step "Validate Compose configuration and migration paths" validate_compose
 
   if edge_enabled; then
-    compose_with_env "$PENDING_ENV" run --rm --no-deps \
+    run_step "Validate Caddy configuration" compose_with_env "$PENDING_ENV" run --rm --no-deps \
       caddy-edge caddy validate --config /etc/caddy/Caddyfile
   fi
 
@@ -735,13 +877,13 @@ main() {
   if edge_enabled; then
     validation_edge_args=(-e "CADDY_PUBLIC_HOSTNAME=${CADDY_PUBLIC_HOSTNAME}")
   fi
-  compose_with_env "$PENDING_ENV" run --rm --no-deps \
+  run_step "Validate production environment in requested backend" compose_with_env "$PENDING_ENV" run --rm --no-deps \
     "${validation_edge_args[@]}" \
     batch-backend node dist/tools/validate-env.js --runtime --profile production
 
   # Always check schema compatibility, including image downgrade and alias-only attempts.
-  require_postgres_healthy
-  read_schema_compatibility_plan
+  run_step "Check PostgreSQL health" require_postgres_healthy
+  run_step "Check schema compatibility" read_schema_compatibility_plan
   if [[ "$SCHEMA_QUIESCE_REQUIRED" == "true" && -n "$live_bot" ]] && ! ops_bot_enabled; then
     # Enable recovery of a bot that will be stopped, without widening ordinary deploys.
     DEPLOY_INCLUDE_OPS_BOT=true
@@ -753,12 +895,24 @@ main() {
       "$current_backend_digest" "$current_frontend_digest" "$current_bot_digest" "$current_caddy_digest" \
       "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest" \
       "$include_bot" "$include_edge" "$current_application_digest" "$application_digest"
-    print_deployment_plan
-    compose_with_env "$PENDING_ENV" config --quiet
-    compose_with_env "$PENDING_ENV" config --format json | node "${APP_DIR}/scripts/deploy/schema-compatibility.mjs" check-compose
+    run_step "Validate Compose with live bot recovery enabled" validate_compose
   fi
+  OPERATION="Check deployment prerequisites"
+  if [[ "$SCHEMA_QUIESCE_REQUIRED" == "true" && "$DATABASE_WORK_REQUIRED" != "true" ]]; then
+    die "current image state is incompatible with the database; deploy a schema-compatible backend image"
+  fi
+  if [[ "$DATABASE_WORK_REQUIRED" == "true" ]]; then
+    require_command aws
+    if [[ "$SCHEMA_QUIESCE_REQUIRED" == "true" ]] && ops_bot_enabled && [[ "$BOT_CHANGED" != "true" ]]; then
+      DEPLOYMENT_SERVICES+=(telegram-ops-bot)
+    fi
+  fi
+  print_deployment_plan
   if [[ "$PLAN_ONLY" == "true" ]]; then
-    info "Plan only: no database or service mutation performed"
+    printf '\nPLAN COMPLETE - preflight passed (%s warnings).\n' "$WARNING_COUNT"
+    info "Plan only: no application services stopped/recreated; no backup or migrations invoked."
+    info "Images, disposable validation containers, pending state and detailed logs were prepared."
+    info "Detailed logs: ${RUN_LOG_DIR}"
     return 0
   fi
 
@@ -769,41 +923,40 @@ main() {
   chmod 0640 "${COMPATIBILITY_PLAN}.tmp"
   mv "${COMPATIBILITY_PLAN}.tmp" "$COMPATIBILITY_PLAN"
 
+  phase "Database preparation"
   if [[ "$DATABASE_WORK_REQUIRED" == "true" ]]; then
-    require_command aws
     if [[ "$SCHEMA_QUIESCE_REQUIRED" == "true" ]]; then
       quiesce_application
-      if ops_bot_enabled && [[ "$BOT_CHANGED" != "true" ]]; then
-        DEPLOYMENT_SERVICES+=(telegram-ops-bot)
-      fi
     fi
     create_pre_migration_backup
     MIGRATION_STARTED=true
     run_migrations_once
-  elif [[ "$SCHEMA_QUIESCE_REQUIRED" == "true" ]]; then
-    die "current image state is incompatible with the database; deploy a schema-compatible backend image"
   fi
 
+  phase "Application services"
   if [[ "${#DEPLOYMENT_SERVICES[@]}" -gt 0 ]]; then
     UPDATED_SERVICES=true
     if [[ "$INITIAL_DEPLOY" == "true" ]]; then
-      compose_with_env "$PENDING_ENV" up -d --no-build
+      run_step "Start complete enabled runtime" compose_with_env "$PENDING_ENV" up -d --no-build
     else
-      compose_with_env "$PENDING_ENV" up -d --no-build --no-deps --force-recreate "${DEPLOYMENT_SERVICES[@]}"
+      run_step "Recreate planned application services" compose_with_env "$PENDING_ENV" up -d --no-build --no-deps --force-recreate "${DEPLOYMENT_SERVICES[@]}"
     fi
   fi
   if [[ "$EDGE_RESTART_REQUIRED" == "true" ]]; then
     UPDATED_SERVICES=true
   fi
   recreate_edge_service
+  phase "Verification"
   run_smoke_checks
 
+  phase "Record deployment and clean up"
   copy_state_file "$PENDING_ENV" "$CURRENT_ENV"
   append_deploy_log success
   remove_old_custom_images
-  info "Deployment completed for ${SHA}"
+  printf '\nDEPLOYMENT COMPLETE - %s (%s warnings).\n' "$SHORT_SHA" "$WARNING_COUNT"
+  info "Detailed logs: ${RUN_LOG_DIR}"
   if [[ "$IMAGE_ROLLBACK_SAFE" != "true" ]]; then
-    info "Image-only rollback to the previous runtime is BLOCKED; recover with a schema-compatible image or deliberately restore a verified backup from BEFORE the blocked boundary that supports the previous runtime."
+    printf 'WARN  Image-only rollback to the previous runtime is BLOCKED; use the recovery guidance above.\n'
   fi
 }
 
