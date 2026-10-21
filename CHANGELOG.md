@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.1.2] - 2026-10-21
+
+### Changed
+
+- Automated release from PR #440: fix(scripts): preserve truthful failure and recovery evidence (https://github.com/abocha/esl-pipeline/pull/440)
+
 ## [22.1.1] - 2026-10-21
 
 ### Changed
