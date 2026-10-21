@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.1.0] - 2026-10-21
+
+### Changed
+
+- Automated release from PR #428: feat(tts): adopt Gemini Flash-Lite with Chirp pronunciation chunks (ESL-67) (https://github.com/abocha/esl-pipeline/pull/428)
+
 ## [22.0.1] - 2026-10-20
 
 ### Changed
