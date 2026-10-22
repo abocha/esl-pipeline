@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.1.4] - 2026-10-22
+
+### Changed
+
+- Automated release from PR #444: fix(edge): temporarily restrict public Caddy to HTTP/1.1 (https://github.com/abocha/esl-pipeline/pull/444)
+
 ## [22.1.3] - 2026-10-22
 
 ### Changed
