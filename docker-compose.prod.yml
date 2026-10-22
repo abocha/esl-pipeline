@@ -89,7 +89,7 @@ services:
     restart: unless-stopped
 
   caddy-edge:
-    image: caddy:2.11-alpine
+    image: caddy:2.11.7-alpine
     depends_on:
       - batch-frontend
     volumes:
