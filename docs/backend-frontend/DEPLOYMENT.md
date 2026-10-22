@@ -315,8 +315,26 @@ Go 1.26.8 and `golang.org/x/net` 0.59.0. Its refreshed Alpine CA bundle addresse
 trust-store issue, but does not replace its compiled HTTP/2 implementation. October Go HTTP/2
 fixes require Go 1.26.9+ and the corresponding fixed `x/net` release; for example,
 [CVE-2026-78669](https://pkg.go.dev/vuln/GO-2026-6611). This upgrade does not claim to fix that
-remaining dependency gap. Recheck upstream builds before future rollout; a custom edge image or
-protocol restriction requires a separate reviewed design rather than a server-local workaround.
+remaining dependency gap.
+
+The public Caddy servers temporarily allow only `h1` (HTTP/1.1 over HTTPS), disabling HTTP/2,
+cleartext HTTP/2 and HTTP/3 while retaining certificates, redirects, compression and proxy routes.
+This mitigates the reachable HTTP/2 paths without changing the compiled binary. Browser SSE
+connections now share HTTP/1.1 connection limits across tabs; keep concurrent streaming tabs modest.
+Before rollout, validate all transition modes and exercise TLS ALPN, upload, SSE and MCP-style POST
+traffic locally. After rollout, confirm both public hosts negotiate `http/1.1` when offered
+`h2,http/1.1`, and recheck public routes and worker readiness.
+
+Restore HTTP/2 only after inspecting the official image digest and actual `caddy build-info`:
+the embedded Go toolchain and `golang.org/x/net` must address the relevant advisories at that time.
+The known CVE-2026-78669 floors are Go 1.26.9 and `x/net` 0.60.0, but these are not a substitute for
+checking newer advisories and actual binary vulnerability evidence. Refreshing Alpine packages or
+changing the Caddy version string alone is insufficient. Remove the `servers { protocols h1 }`
+restriction through a reviewed PR and the normal release/deployment flow, then verify ALPN and
+upload/SSE/MCP compatibility. Until then, retain HTTP/1.1-only operation; a custom edge image needs
+its own reviewed design. Roll back this mitigation by reverting its Caddyfile change and deploying
+through the same guarded flow. The normal planner should recreate only the edge when image and
+application configuration digests match; review the actual plan before apply.
 
 **Refreshing the Caddy image.**
 
