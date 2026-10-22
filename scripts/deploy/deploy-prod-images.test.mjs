@@ -36,7 +36,7 @@ test('production deploy force-recreates caddy-edge only when the plan requires i
   assert.match(deployScript, /EDGE_RESTART_REQUIRED/);
   assert.match(
     deployScript,
-    /compose_with_env "\$PENDING_ENV" up -d --no-build --force-recreate caddy-edge/,
+    /compose_with_env "\$PENDING_ENV" up -d --no-build --no-deps --force-recreate caddy-edge/,
   );
 });
 

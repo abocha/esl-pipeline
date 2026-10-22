@@ -615,7 +615,7 @@ recreate_edge_service() {
   fi
 
   info "Force-recreating caddy-edge to refresh mounted edge configuration"
-  run_step "Recreate Caddy edge" compose_with_env "$PENDING_ENV" up -d --no-build --force-recreate caddy-edge
+  run_step "Recreate Caddy edge" compose_with_env "$PENDING_ENV" up -d --no-build --no-deps --force-recreate caddy-edge
 }
 
 assert_caddy_upstream_config() {

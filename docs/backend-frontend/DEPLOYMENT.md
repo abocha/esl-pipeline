@@ -335,6 +335,9 @@ upload/SSE/MCP compatibility. Until then, retain HTTP/1.1-only operation; a cust
 its own reviewed design. Roll back this mitigation by reverting its Caddyfile change and deploying
 through the same guarded flow. The normal planner should recreate only the edge when image and
 application configuration digests match; review the actual plan before apply.
+The edge recreation command uses `--no-deps`: Compose must not follow the frontend/backend
+dependency graph when new release-SHA aliases point to unchanged images. Planned application
+recreation and initial startup remain owned by their existing deployment steps.
 
 **Refreshing the Caddy image.**
 
