@@ -1,5 +1,9 @@
 {
 	email {$CADDY_ACME_EMAIL}
+	# Temporary HTTP/2 mitigation; restore only after verifying the upstream Go/x/net fixes.
+	servers {
+		protocols h1
+	}
 	# Upstream error diagnostics contain the raw request URI/headers. nginx emits sanitized outcomes.
 	log default {
 		exclude http.log.error
