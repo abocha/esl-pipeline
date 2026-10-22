@@ -17,7 +17,7 @@ export function buildCaddyValidateArgs({ repoRoot = process.cwd() } = {}) {
     'CADDY_TRANSITION_MODE',
     '-e',
     'CADDY_ACME_EMAIL',
-    'caddy:2.11-alpine',
+    'caddy:2.11.7-alpine',
     'caddy',
     'validate',
     '--config',

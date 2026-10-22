@@ -301,6 +301,51 @@ Alpine-slim line; Caddy, PostgreSQL, and Redis remain on controlled official Alp
 the three production Dockerfiles and [`docker-compose.prod.yml`](../../docker-compose.prod.yml) for
 the current lines.
 
+The frontend runtime is pinned to `nginx:1.31.8-alpine3.24-slim`; the edge uses
+`caddy:2.11.7-alpine`. These patch versions include the upstream Nginx fixes through 1.31.7
+and Caddy's 2.11.6 security fixes plus 2.11.7 proxy regression fixes. See the
+[Nginx advisories](https://nginx.org/en/security_advisories.html) and
+[Caddy release notes](https://github.com/caddyserver/caddy/releases/tag/v2.11.7).
+The current Nginx configuration terminates no TLS/HTTP/3 and enables no AIO, alias, slice or SSI;
+version-based CVE matches alone do not establish exploitability. Keep patch selection current
+without treating this dated selection as a permanent security guarantee.
+
+Residual upstream limitation verified on 2026-10-22: the official Caddy 2.11.7 image contains
+Go 1.26.8 and `golang.org/x/net` 0.59.0. Its refreshed Alpine CA bundle addresses the eMudhra
+trust-store issue, but does not replace its compiled HTTP/2 implementation. October Go HTTP/2
+fixes require Go 1.26.9+ and the corresponding fixed `x/net` release; for example,
+[CVE-2026-78669](https://pkg.go.dev/vuln/GO-2026-6611). This upgrade does not claim to fix that
+remaining dependency gap. Recheck upstream builds before future rollout; a custom edge image or
+protocol restriction requires a separate reviewed design rather than a server-local workaround.
+
+**Refreshing the Caddy image.**
+
+Caddy is an upstream image outside the three SHA-tagged application images. Before deploying a
+release that upgrades its reference, record the running edge image ID and repository digest in
+protected operator evidence, retain that image locally, and explicitly acquire the reviewed image:
+
+```bash
+docker inspect --format '{{.Image}}' esl-pipeline-prod-caddy-edge-1
+docker image inspect caddy:2.11-alpine --format '{{json .RepoDigests}}'
+docker pull caddy:2.11.7-alpine
+docker run --rm --network none caddy:2.11.7-alpine caddy version
+```
+
+The old floating tag above describes the pre-upgrade baseline; on later upgrades inspect the
+actual running image reference. Never infer freshness from that tag or its build date. The exact
+new patch reference prevents reusing the old 2.11.4 image behind `caddy:2.11-alpine`. Follow the
+normal deployment plan/apply flow below: the Compose change selects runtime/edge recreation.
+Afterward verify `nginx -v` in the published frontend container and `caddy version` in the edge,
+then check HTTPS landing/app, SPA/assets, API health and OAuth/MCP discovery/auth routing.
+
+`previous-images.env` records application images, not the old Caddy image. For edge rollback,
+use the recorded old repository digest in a protected Compose override for `caddy-edge`, with
+the intended checkout, production environment and application image state, and recreate only
+that service with `--no-deps --no-build --force-recreate`. Recheck routes and the deployed
+Caddyfile. Preserve Caddy data/config volumes and previous application images; do not prune them
+until verification is complete. Application rollback still follows the compatibility-gated
+procedure below; do not patch a running container or rebuild production images on the VPS.
+
 All three production builders copy `pnpm-workspace.yaml`, root `package.json`, `pnpm-lock.yaml`,
 `tsconfig.base.json`, and the `packages` tree filtered by `.dockerignore`. The root files own pnpm
 resolution/install policy and shared TypeScript compilation; filtered workspace builds select each

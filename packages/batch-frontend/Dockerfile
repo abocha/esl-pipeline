@@ -20,7 +20,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
     pnpm --filter @esl-pipeline/batch-frontend... install --offline --frozen-lockfile
 RUN pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/batch-frontend... run build
 
-FROM nginx:1.31-alpine3.23-slim AS runtime
+FROM nginx:1.31.8-alpine3.24-slim AS runtime
 
 RUN mkdir -p /tmp/nginx \
     && chown -R nginx:nginx /tmp/nginx /var/cache/nginx /usr/share/nginx/html
