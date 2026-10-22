@@ -310,6 +310,14 @@ The current Nginx configuration terminates no TLS/HTTP/3 and enables no AIO, ali
 version-based CVE matches alone do not establish exploitability. Keep patch selection current
 without treating this dated selection as a permanent security guarantee.
 
+Residual upstream limitation verified on 2026-10-22: the official Caddy 2.11.7 image contains
+Go 1.26.8 and `golang.org/x/net` 0.59.0. Its refreshed Alpine CA bundle addresses the eMudhra
+trust-store issue, but does not replace its compiled HTTP/2 implementation. October Go HTTP/2
+fixes require Go 1.26.9+ and the corresponding fixed `x/net` release; for example,
+[CVE-2026-78669](https://pkg.go.dev/vuln/GO-2026-6611). This upgrade does not claim to fix that
+remaining dependency gap. Recheck upstream builds before future rollout; a custom edge image or
+protocol restriction requires a separate reviewed design rather than a server-local workaround.
+
 **Refreshing the Caddy image.**
 
 Caddy is an upstream image outside the three SHA-tagged application images. Before deploying a
