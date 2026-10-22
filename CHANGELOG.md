@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.1.5] - 2026-10-22
+
+### Changed
+
+- Automated release from PR #446: fix(deploy): keep Caddy recreation within its planned scope (https://github.com/abocha/esl-pipeline/pull/446)
+
 ## [22.1.4] - 2026-10-22
 
 ### Changed
