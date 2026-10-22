@@ -278,6 +278,8 @@ test('Caddy environment-only change recreates edge even when image and applicati
   assert.equal(result.status, 0, result.output);
   assert.equal(result.events.filter(recreate).length, 1);
   assert.ok(result.events.find(recreate).includes('caddy-edge'));
+  // Release-SHA aliases can change Compose's dependency config despite equal image digests.
+  assert.ok(result.events.find(recreate).includes('--no-deps'));
   assert.equal(index(result, migration), -1);
 });
 
