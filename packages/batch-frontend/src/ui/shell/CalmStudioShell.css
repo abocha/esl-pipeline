@@ -257,6 +257,8 @@
 .calm-shell__rail-toggle {
   width: 34px;
   height: 34px;
+  padding: 0;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -367,4 +369,12 @@
     justify-content: flex-start;
     gap: 12px;
   }
+}
+
+.calm-shell__rail-toggle svg,
+.calm-shell__menu-button svg {
+  flex-shrink: 0;
+}
+.calm-shell__menu-button {
+  padding: 0;
 }
