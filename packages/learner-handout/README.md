@@ -53,6 +53,12 @@ visible Pattern label; their cues/alternative rows align with headings and examp
 forms retain their Form label and render directly
 without inferred blocks or data mutation.
 
+Practice uses section 4 → titled groups (h3) → numbered items, with pronunciation under its own
+heading. The answer key retains matching group/item numbers (h4 within the key). Existing mixed
+activities are presented without classification or rewriting. `batch-frontend` reuses the default
+`LearnerHandout` for its valid current-content Learner view; editor fields, history and selection
+stay in that frontend package. The shared renderer has no authoring mode or editor-state payload.
+
 ## Public seam
 
 ```tsx

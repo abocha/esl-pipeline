@@ -2,6 +2,7 @@ export const FRONTEND_SANDBOX_MODE = 'mock-auth';
 export const FRONTEND_SANDBOX_ACCESS_TOKEN = 'sandbox-access-token';
 
 export type FrontendSandboxScenario =
+  | 'assignment-editor'
   | 'default'
   | 'step-one-no-recent'
   | 'step-one-resume-states'
@@ -12,6 +13,7 @@ export type FrontendSandboxScenario =
   | 'step-one-slow';
 
 const frontendSandboxScenarios = new Set<FrontendSandboxScenario>([
+  'assignment-editor',
   'default',
   'step-one-no-recent',
   'step-one-resume-states',

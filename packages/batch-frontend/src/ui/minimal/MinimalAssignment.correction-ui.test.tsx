@@ -134,11 +134,11 @@ describe('MinimalAssignment post-share correction UI', () => {
     });
     expect(screen.queryByRole('button', { name: /Confirm and continue/i })).toBeNull();
     await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
-    const referenceDraft = screen.getByRole('textbox', { name: /Assignment JSON/i });
-    expect((referenceDraft as HTMLTextAreaElement).disabled).toBe(true);
+    expect(screen.queryByRole('textbox', { name: /^Assignment title$/i })).toBeNull();
+    expect(screen.getAllByText('Published draft').length).toBeGreaterThan(0);
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
     await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
-    const correctionDraft = screen.getByRole('textbox', { name: /Assignment JSON/i });
+    const correctionDraft = screen.getByRole('textbox', { name: /^Assignment title$/i });
     expect((correctionDraft as HTMLTextAreaElement).disabled).toBe(false);
     expect(screen.queryByRole('button', { name: /Generate assignment/i })).toBeNull();
   });
@@ -326,8 +326,8 @@ describe('MinimalAssignment post-share correction UI', () => {
     );
     await screen.findByRole('heading', { name: /Review and share/i });
     await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /Assignment JSON/i }), {
-      target: { value: makeAssignmentText('# Corrected draft') },
+    fireEvent.change(screen.getByRole('textbox', { name: /^Assignment title$/i }), {
+      target: { value: 'Corrected draft' },
     });
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
     await screen.findByRole('heading', { name: /Review and share/i });
@@ -338,9 +338,9 @@ describe('MinimalAssignment post-share correction UI', () => {
     await user.click(screen.getByRole('button', { name: /Publish corrected version/i }));
     await screen.findByText(/Network Error/i);
     await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
-    expect(screen.getByRole('textbox', { name: /Assignment JSON/i })).toHaveProperty(
+    expect(screen.getByRole('textbox', { name: /^Assignment title$/i })).toHaveProperty(
       'value',
-      makeAssignmentText('# Corrected draft'),
+      'Corrected draft',
     );
     const firstRequest = vi.mocked(api.publishAssignmentCorrection).mock.calls[0]?.[1];
     expect(firstRequest).toMatchObject({
@@ -409,8 +409,8 @@ describe('MinimalAssignment post-share correction UI', () => {
     );
     await screen.findByRole('heading', { name: /Review and share/i });
     await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /Assignment JSON/i }), {
-      target: { value: makeAssignmentText('# Corrected draft') },
+    fireEvent.change(screen.getByRole('textbox', { name: /^Assignment title$/i }), {
+      target: { value: 'Corrected draft' },
     });
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
     await waitFor(() => {
@@ -423,9 +423,9 @@ describe('MinimalAssignment post-share correction UI', () => {
     await screen.findByText(/assignment_correction_draft_conflict/i);
     await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
 
-    expect(screen.getByRole('textbox', { name: /Assignment JSON/i })).toHaveProperty(
+    expect(screen.getByRole('textbox', { name: /^Assignment title$/i })).toHaveProperty(
       'value',
-      makeAssignmentText('# Corrected draft'),
+      'Corrected draft',
     );
     expect(screen.getByText(/Newer saved draft work was found/i)).toBeTruthy();
     expect(api.fetchDraft).toHaveBeenCalledWith('draft-1');

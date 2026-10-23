@@ -112,6 +112,10 @@ Canonical behavior and current status live in:
     `VITE_BATCH_FRONTEND_SANDBOX=mock-auth pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
   - The sandbox is dev-only, marks the UI with `Mock data`, bypasses frontend auth only, and uses
     seeded mock API responses for the assignment builder, Business routes and Student History.
+  - `http://localhost:5173/?sandboxScenario=assignment-editor&sessionId=session-editor` opens a
+    focused current-format editor with fictional material and the real authoring hooks. Saves stay
+    in that sandbox instance's memory; reload resets the fixture. This is editor walkthrough
+    evidence, not backend persistence, provider or publication evidence.
   - Open `http://localhost:5173/students/student-alex/history` for fictional recorded transitions,
     transcript/homework outcomes, reversals and older-page loading. These are preview examples,
     not evidence of production action recording or authorization.
@@ -185,20 +189,29 @@ Canonical behavior and current status live in:
   Confirmation flushes the latest safe pending write before advancing. Routine Save, Refresh, and
   Reload controls are absent; bounded transient retries run automatically and contextual Retry is
   reserved for exhausted or ambiguous outcomes.
-- New structured assignments use a temporary whole-document JSON textarea. It loads pretty-printed
-  validated AssignmentV1 and displays syntax, schema-path and domain errors while the tutor edits.
-  Before an editable draft exists and while generation is pending, editor validation feedback is
-  deferred. Empty content remains ineligible for save, preview, confirmation and publication;
-  clearing an existing draft still reports a syntax error.
-  Invalid text remains browser-local: autosave, Preview, Continue, Share and correction cannot admit
-  it. Reload resumes the latest valid saved JSON; invalid buffers have no durable storage. Valid
-  saves retain working-version CAS and conflicts preserve the local buffer. Canonical object
-  comparison makes whitespace/key formatting irrelevant to dirty state and Preview identity.
-  Save/flush responses can admit confirmation or correction only while the current typed buffer
-  canonically matches the saved object; a newer edit remains local until saved and reviewed.
-  Preview submits the validated object with its pinned prompt ID. Historical `markdown` drafts use
-  the retained legacy editor/validation path. The JSON textarea is migration scaffolding, with no
-  form, block, or schema-generated authoring UI.
+- ESL-83 replaces normal JSON editing with a current-format workbook in step 4.
+  `AssignmentEditor` edits the same AssignmentV1 object through the authoring controller.
+  Prompts remain on the page; one contextual panel holds answers/explanations and supporting
+  source, speaker, metadata or sample-response fields. Assignment teaching notes are separate from
+  step-3 generation guidance and absent from Learner view, including hidden DOM.
+  The editor covers current grammar/mission/rationale shapes and all six pronunciation modes;
+  it does not provide older-format forms, conversions, new speaker sets, new groups or mode pickers.
+  It supports bounded list operations, paired-backtick Highlight, and session-local Undo/Redo.
+  Autosave acknowledgements retain history; a new assignment, hydration or regeneration starts a
+  new edit session. Regeneration explicitly asks before replacing the workbook.
+- Incomplete fields stay visible with errors and remain browser-local. Only valid objects may
+  autosave, preview, confirm, correct or share. Reload restores the latest valid saved assignment;
+  there is no crash-recovery promise. Save status describes the current acknowledged canonical
+  object. Autosave, explicit save and reconciliation share one in-flight write, preserve newer
+  typing/Undo and retain working-version CAS. A conflict stays latched through further typing;
+  inspect the saved version and explicitly choose local or saved content against a fresh version
+  check. Failed saves preserve edits and offer Retry. Source identity, supplied URLs and lineage
+  remain constrained by the pinned validation context.
+- Step-4 Learner view uses `learner-handout` for current valid content. It does not confirm Create
+  or satisfy step 5's authoritative preview/share gates. Completed current assignments remain
+  read-only until the existing correction entry. Text edits do not imply regenerated audio.
+  Preview still submits the validated canonical object with its pinned prompt ID; canonical key
+  formatting remains irrelevant to identity. Historical formats retain read-only access.
 - Resume loads the newest durable working values, opens the earliest dirty Source, Context, or
   Create boundary, then falls back to the destination derived from `confirmedStep`. Completed
   post-cutover jobs use their retained assignment-session link to reopen every confirmed step for

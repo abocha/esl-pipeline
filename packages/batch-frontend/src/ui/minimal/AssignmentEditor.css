@@ -1,0 +1,269 @@
+.assignment-editor {
+  --editor-blue: #2563a5;
+  color: #25354c;
+  width: 100%;
+  min-width: 0;
+}
+.assignment-editor * {
+  box-sizing: border-box;
+}
+.assignment-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0;
+  border-block: 1px solid #dae3ef;
+  margin-bottom: 20px;
+}
+.assignment-editor-toolbar strong {
+  margin-right: auto;
+}
+.assignment-editor-toolbar span[role="status"] {
+  font-size: 13px;
+  color: #52647c;
+}
+.assignment-editor button,
+.assignment-editor select {
+  font: inherit;
+  font-size: 13px;
+  color: #25527f;
+  background: #f5f9fe;
+  border: 1px solid #c9d7e8;
+  border-radius: 7px;
+  padding: 8px 10px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.assignment-editor button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.assignment-editor :is(button, select, textarea):focus-visible {
+  outline: 2px solid #2878c7;
+  outline-offset: 2px;
+}
+.assignment-editor-workbook {
+  padding: 12px 310px 24px 12px;
+  max-width: 1160px;
+  margin: auto;
+}
+.assignment-editor section {
+  scroll-margin-top: 140px;
+  margin-block: 24px 40px;
+}
+.assignment-editor h2 {
+  color: #244d79;
+  font-size: 21px;
+  margin-bottom: 18px;
+}
+.assignment-editor h3 {
+  font-size: 18px;
+}
+.assignment-editor h5 {
+  font-size: 14px;
+  margin: 10px 0;
+}
+.assignment-editor-field {
+  margin-block: 10px;
+  min-width: 0;
+}
+.assignment-editor-field label,
+.assignment-editor-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #62748a;
+  margin-bottom: 4px;
+}
+.assignment-editor .assignment-editor-field textarea {
+  scroll-margin-block: 140px;
+  font: inherit;
+  line-height: 1.65;
+  color: #23344b;
+  resize: vertical;
+  width: 100%;
+  max-width: 100%;
+  min-height: 46px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  padding: 7px 8px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.assignment-editor .assignment-editor-field textarea:hover {
+  border-color: #cbdbee;
+}
+.assignment-editor .assignment-editor-field textarea:focus {
+  background: #fff;
+  border-color: #6e9cd0;
+  outline: 2px solid #dceafb;
+}
+.assignment-editor .assignment-editor-field textarea[aria-invalid="true"] {
+  border-color: #bd493f;
+  background: #fff9f8;
+}
+.assignment-editor-field.is-compact textarea {
+  font-weight: 600;
+}
+.assignment-editor-optional,
+.assignment-editor-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: #63758b;
+  line-height: 1.6;
+}
+.assignment-editor-entity {
+  position: relative;
+  border-radius: 7px;
+  padding: 8px;
+  margin-block: 8px;
+}
+.assignment-editor-entity.is-selected {
+  background: #f0f6ff;
+  box-shadow: inset 3px 0 #4c88ca;
+}
+.assignment-editor-related {
+  margin-top: 5px;
+}
+.assignment-editor-context {
+  position: absolute;
+  left: calc(100% + 18px);
+  top: 0;
+  width: 270px;
+  padding: 15px;
+  background: #f7faff;
+  border: 1px solid #c9d9ec;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px #2548730a;
+  z-index: 1;
+}
+.assignment-editor-context-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.assignment-editor-context-heading h4 {
+  margin: 0;
+}
+.assignment-editor .assignment-editor-context .assignment-editor-field textarea {
+  background: #fff;
+  border-color: #d4dfec;
+}
+.assignment-editor-context p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.assignment-editor-group {
+  border-block-start: 1px solid #d9e3ef;
+  margin-top: 20px;
+  padding-top: 12px;
+}
+.assignment-editor-subgroup {
+  border-left: 2px solid #d7e5f4;
+  padding-left: 14px;
+  margin-block: 15px;
+}
+.assignment-editor-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+}
+.assignment-editor-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 5px 0 12px;
+}
+.assignment-editor-entity > div > .assignment-editor-item-actions {
+  display: inline-flex;
+  margin-right: 10px;
+}
+.assignment-editor-item-actions button {
+  padding: 5px 8px;
+}
+.assignment-editor-item-actions small {
+  font-size: 11px;
+  color: #66788c;
+}
+.assignment-editor-questions {
+  padding-left: 24px;
+}
+.assignment-editor-questions > li::marker {
+  color: #385b82;
+  font-weight: 600;
+}
+.assignment-editor-add {
+  margin: 8px 0;
+}
+.assignment-editor-errors {
+  border-left: 3px solid #b84b3f;
+  background: #fff6f4;
+  color: #8b352b;
+  padding: 12px 16px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.assignment-editor-notes {
+  padding: 18px;
+  background: #fff9e9;
+  border: 1px solid #e9d9b2;
+  border-radius: 10px;
+}
+.assignment-editor-highlight-preview {
+  padding: 4px 8px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.assignment-editor mark {
+  background: #e1edff;
+  color: inherit;
+  font-weight: 600;
+  border-radius: 3px;
+  padding-inline: 2px;
+}
+.assignment-editor-read-text {
+  white-space: pre-wrap;
+  line-height: 1.65;
+  padding: 8px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1250px) {
+  .assignment-editor-workbook {
+    padding-right: 12px;
+    max-width: 760px;
+  }
+  .assignment-editor-context {
+    position: static;
+    width: 100%;
+    margin-top: 14px;
+  }
+}
+@media (max-width: 600px) {
+  .assignment-editor-workbook {
+    padding-inline: 0;
+  }
+  .assignment-editor-pair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .assignment-editor-toolbar {
+    gap: 6px;
+  }
+  .assignment-editor-toolbar strong {
+    width: 100%;
+  }
+  .assignment-editor button,
+  .assignment-editor select {
+    min-height: 44px;
+  }
+  .assignment-editor .assignment-editor-field textarea {
+    font-size: 16px;
+  }
+  .assignment-editor-entity {
+    padding: 6px;
+  }
+}

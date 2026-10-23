@@ -1,6 +1,6 @@
 import { type AssignmentV1, serializeAssignmentV1 } from '@esl-pipeline/contracts';
 
-import fixture from '../../../../contracts/tests/assignment-fixture.json';
+import { editorFixture } from '../../dev/assignment-editor-fixture';
 
 export const assignmentContext = {
   studentName: 'Alex',
@@ -9,7 +9,7 @@ export const assignmentContext = {
 };
 export const requestEnvelope = { promptVersion: 'assignment_v1', assignmentContext };
 export function makeAssignmentText(title: string): string {
-  const assignment = structuredClone(fixture) as AssignmentV1;
+  const assignment: AssignmentV1 = editorFixture();
   assignment.metadata.title = title.replace(/^#\s+/, '').trim();
   assignment.metadata.student = 'Alex';
   return serializeAssignmentV1(assignment);

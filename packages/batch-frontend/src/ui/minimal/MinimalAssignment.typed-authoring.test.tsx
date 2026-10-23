@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { act, renderHook } from '@testing-library/react';
+
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type AssignmentV1, serializeAssignmentV1 } from '@esl-pipeline/contracts';
 
+import { editorFixture } from '../../dev/assignment-editor-fixture';
 import * as api from '../../utils/api';
+import { AssignmentEditor } from './AssignmentEditor';
 import {
   type AuthoringHydrationSnapshot,
   useMinimalAssignmentAuthoringController,
@@ -112,36 +116,40 @@ const params = {
   onDraftPronunciationModeDetected: vi.fn(),
   onTeacherNotesResolved: vi.fn(),
 };
+function hydration(
+  saved = draft(),
+  overrides: Partial<AuthoringHydrationSnapshot> = {},
+): AuthoringHydrationSnapshot {
+  return {
+    publishTarget: 'html',
+    selectedTtsProvider: 'inworld',
+    selectedTtsStrategy: 'auto',
+    selectedTtsModel: '',
+    selectedPreset: '',
+    selectedGenerationProvider: '',
+    selectedGenerationModel: '',
+    promptPackage: {
+      id: 'prompt-1',
+      text: 'Prompt',
+      requestEnvelope: { promptVersion: 'assignment_v1', assignmentContext: context },
+    },
+    promptText: 'Prompt',
+    promptError: null,
+    draft: saved,
+    draftText: saved.text,
+    draftError: null,
+    publishError: null,
+    previewHtml: null,
+    previewError: null,
+    lastPreviewedDraftHash: null,
+    validation: null,
+    validationError: null,
+    ...overrides,
+  } as unknown as AuthoringHydrationSnapshot;
+}
 function setup(saved = draft(), overrides: Partial<AuthoringHydrationSnapshot> = {}) {
   const hook = renderHook(() => useMinimalAssignmentAuthoringController(params));
-  act(() =>
-    hook.result.current.applyHydrationSnapshot({
-      publishTarget: 'html',
-      selectedTtsProvider: 'inworld',
-      selectedTtsStrategy: 'auto',
-      selectedTtsModel: '',
-      selectedPreset: '',
-      selectedGenerationProvider: '',
-      selectedGenerationModel: '',
-      promptPackage: {
-        id: 'prompt-1',
-        text: 'Prompt',
-        requestEnvelope: { promptVersion: 'assignment_v1', assignmentContext: context },
-      },
-      promptText: 'Prompt',
-      promptError: null,
-      draft: saved,
-      draftText: saved.text,
-      draftError: null,
-      publishError: null,
-      previewHtml: null,
-      previewError: null,
-      lastPreviewedDraftHash: null,
-      validation: null,
-      validationError: null,
-      ...overrides,
-    } as unknown as AuthoringHydrationSnapshot),
-  );
+  act(() => hook.result.current.applyHydrationSnapshot(hydration(saved, overrides)));
   return hook;
 }
 beforeEach(() => {
@@ -153,6 +161,289 @@ afterEach(() => {
 });
 
 describe('AssignmentV1 authoring and historical access', () => {
+  it('keeps visual Undo during a delayed save, saves the restored object with the new CAS base, and retains Redo', async () => {
+    const initial = editorFixture();
+    let controller!: ReturnType<typeof useMinimalAssignmentAuthoringController>;
+    function LiveEditor() {
+      controller = useMinimalAssignmentAuthoringController(params);
+      const hydrate = controller.applyHydrationSnapshot;
+      useEffect(() => hydrate(hydration(draft(initial))), []);
+      return (
+        <AssignmentEditor
+          key={controller.editorSessionKey}
+          text={controller.draftText}
+          onChange={controller.setDraftText}
+          validationContext={controller.editorValidationContext}
+          saveStatus={controller.draftDirty ? 'Changes not saved yet' : 'All changes saved'}
+        />
+      );
+    }
+    let finish!: (value: api.DraftResponse) => void;
+    vi.mocked(api.updateDraft).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<LiveEditor />);
+    const prompt = screen.getByRole('textbox', { name: 'Group 1 · Prompt 1' });
+    fireEvent.focus(prompt);
+    fireEvent.change(prompt, { target: { value: 'We ___ visit the park.' } });
+    const edited = JSON.parse(controller.draftText);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(controller.savingDraft).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(controller.isCurrentDraftSaved(controller.draft)).toBe(true);
+    await act(async () => {
+      finish(draft(edited, 2));
+    });
+    expect(controller.draftText).toBe(JSON.stringify(initial, null, 2));
+    expect(controller.isCurrentDraftSaved(controller.draft)).toBe(false);
+    expect(controller.draftDirty).toBe(true);
+    vi.mocked(api.updateDraft).mockResolvedValueOnce(draft(initial, 3));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(api.updateDraft).toHaveBeenLastCalledWith(
+      'draft-1',
+      JSON.stringify(initial, null, 2),
+      2,
+    );
+    expect(controller.isCurrentDraftSaved(controller.draft)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Redo' })).toHaveProperty('disabled', false);
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
+    expect(JSON.parse(controller.draftText)).toEqual(edited);
+    expect(controller.isCurrentDraftSaved(controller.draft)).toBe(false);
+    expect(api.renderHtmlPreview).not.toHaveBeenCalled();
+  });
+
+  it('latches a conflict through more typing and reconciles only against a freshly inspected server version', async () => {
+    const { result } = setup();
+    const local = { ...assignment, metadata: { ...assignment.metadata, title: 'Local' } };
+    const remote = { ...assignment, metadata: { ...assignment.metadata, title: 'Remote' } };
+    vi.mocked(api.updateDraft).mockRejectedValueOnce(
+      new api.ArtifactWorkingConflictApiError({ workingVersion: 2, contentHash: '2'.repeat(64) }),
+    );
+    vi.mocked(api.fetchDraft).mockResolvedValue(draft(remote, 2));
+    act(() => result.current.setDraftText(JSON.stringify(local)));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    local.metadata.title = 'More local typing';
+    act(() => result.current.setDraftText(JSON.stringify(local)));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(result.current.draftRecoveryConflict).toBe(true);
+    expect(api.updateDraft).toHaveBeenCalledTimes(1);
+    vi.mocked(api.fetchDraft).mockResolvedValue(draft(remote, 3));
+    await act(async () => {
+      await result.current.reconcileDraft('local');
+    });
+    expect(api.updateDraft).toHaveBeenCalledTimes(1);
+    expect(result.current.draftRecoveryConflict).toBe(true);
+    expect(result.current.draft?.workingVersion).toBe(3);
+    expect(JSON.parse(result.current.draftText)).toEqual(local);
+    vi.mocked(api.updateDraft).mockResolvedValueOnce(draft(local, 4));
+    await act(async () => {
+      await result.current.reconcileDraft('local');
+    });
+    expect(api.updateDraft).toHaveBeenLastCalledWith('draft-1', JSON.stringify(local), 3);
+    expect(result.current.draftRecoveryConflict).toBe(false);
+    expect(result.current.isCurrentDraftSaved(result.current.draft)).toBe(true);
+  });
+
+  it('does not silently adopt a competing passive refresh as the CAS base for a reconciliation choice', async () => {
+    const { result } = setup();
+    const local = { ...assignment, metadata: { ...assignment.metadata, title: 'Local' } };
+    const remote = { ...assignment, metadata: { ...assignment.metadata, title: 'Remote' } };
+    const conflict = (version: number) =>
+      new api.ArtifactWorkingConflictApiError({
+        workingVersion: version,
+        contentHash: String(version).repeat(64),
+      });
+    vi.mocked(api.updateDraft).mockRejectedValueOnce(conflict(2));
+    vi.mocked(api.fetchDraft).mockResolvedValue(draft(remote, 2));
+    act(() => result.current.setDraftText(JSON.stringify(local)));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    let finishRefresh!: (value: api.DraftResponse) => void;
+    let finishReconcile!: (value: api.DraftResponse) => void;
+    vi.mocked(api.fetchDraft)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishRefresh = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishReconcile = resolve;
+          }),
+      )
+      .mockResolvedValue(draft(remote, 3));
+    vi.mocked(api.updateDraft).mockRejectedValueOnce(conflict(3));
+    let refresh!: Promise<void>;
+    let reconcile!: Promise<void>;
+    act(() => {
+      refresh = result.current.refreshDraftPreservingLocal();
+    });
+    act(() => {
+      reconcile = result.current.reconcileDraft('local');
+    });
+    await act(async () => {
+      finishRefresh(draft(remote, 3));
+      await refresh;
+    });
+    expect(result.current.draft?.workingVersion).toBe(2);
+    await act(async () => {
+      finishReconcile(draft(remote, 2));
+      await reconcile;
+    });
+    expect(api.updateDraft).toHaveBeenLastCalledWith('draft-1', JSON.stringify(local), 2);
+    expect(result.current.draft?.workingVersion).toBe(3);
+    expect(result.current.draftRecoveryConflict).toBe(true);
+    expect(JSON.parse(result.current.draftText)).toEqual(local);
+  });
+
+  it('preserves newer typing during a delayed remote refresh', async () => {
+    const { result } = setup();
+    let finish!: (value: api.DraftResponse) => void;
+    vi.mocked(api.fetchDraft).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = result.current.refreshDraftPreservingLocal();
+    });
+    const local = { ...assignment, metadata: { ...assignment.metadata, title: 'New typing' } };
+    act(() => result.current.setDraftText(JSON.stringify(local)));
+    await act(async () => {
+      finish(draft(assignment, 2));
+      await refresh;
+    });
+    expect(JSON.parse(result.current.draftText)).toEqual(local);
+    expect(result.current.draftRecoveryConflict).toBe(true);
+  });
+
+  it('keeps Undo back to the starting text when a delayed refresh returns the intervening saved edit', async () => {
+    const { result } = setup();
+    let finish!: (value: api.DraftResponse) => void;
+    vi.mocked(api.fetchDraft).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = result.current.refreshDraftPreservingLocal();
+    });
+    const next = {
+      ...assignment,
+      metadata: { ...assignment.metadata, title: 'Saved intervening edit' },
+    };
+    vi.mocked(api.updateDraft).mockResolvedValueOnce(draft(next, 2));
+    act(() => result.current.setDraftText(JSON.stringify(next)));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    act(() => result.current.setDraftText(draft().text));
+    await act(async () => {
+      finish(draft(next, 2));
+      await refresh;
+    });
+    expect(result.current.draftText).toBe(draft().text);
+    expect(result.current.draftDirty).toBe(true);
+    expect(result.current.draftRecoveryConflict).toBe(false);
+    vi.mocked(api.updateDraft).mockResolvedValueOnce(draft(assignment, 3));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(api.updateDraft).toHaveBeenLastCalledWith('draft-1', draft().text, 2);
+    expect(result.current.isCurrentDraftSaved(result.current.draft)).toBe(true);
+  });
+
+  it('ignores a delayed refresh older than the acknowledged save', async () => {
+    const { result } = setup();
+    let finish!: (value: api.DraftResponse) => void;
+    vi.mocked(api.fetchDraft).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = result.current.refreshDraftPreservingLocal();
+    });
+    const next = {
+      ...assignment,
+      metadata: { ...assignment.metadata, title: 'Latest acknowledged' },
+    };
+    vi.mocked(api.updateDraft).mockResolvedValueOnce(draft(next, 2));
+    act(() => result.current.setDraftText(JSON.stringify(next)));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+      finish(draft());
+      await refresh;
+    });
+    expect(result.current.draft?.workingVersion).toBe(2);
+    expect(result.current.draft?.assignment).toEqual(next);
+    expect(result.current.draftRecoveryConflict).toBe(false);
+  });
+
+  it('does not clear a latched conflict through a passive refresh or discard typing during use-saved reconciliation', async () => {
+    const { result } = setup();
+    const local = { ...assignment, metadata: { ...assignment.metadata, title: 'Local' } };
+    const remote = { ...assignment, metadata: { ...assignment.metadata, title: 'Remote' } };
+    vi.mocked(api.updateDraft).mockRejectedValueOnce(
+      new api.ArtifactWorkingConflictApiError({ workingVersion: 2, contentHash: '2'.repeat(64) }),
+    );
+    vi.mocked(api.fetchDraft).mockResolvedValue(draft(remote, 2));
+    act(() => result.current.setDraftText(JSON.stringify(local)));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+      await result.current.refreshDraftPreservingLocal();
+    });
+    expect(result.current.draftRecoveryConflict).toBe(true);
+    let finish!: (value: api.DraftResponse) => void;
+    vi.mocked(api.fetchDraft).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    let reconcile!: Promise<void>;
+    act(() => {
+      reconcile = result.current.reconcileDraft('saved');
+    });
+    local.metadata.title = 'More typing after choosing saved';
+    act(() => result.current.setDraftText(JSON.stringify(local)));
+    await act(async () => {
+      finish(draft(remote, 2));
+      await reconcile;
+    });
+    expect(result.current.draftRecoveryConflict).toBe(true);
+    expect(JSON.parse(result.current.draftText)).toEqual(local);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(api.updateDraft).toHaveBeenCalledTimes(1);
+    vi.mocked(api.fetchDraft).mockResolvedValue(draft(remote, 2));
+    await act(async () => {
+      await result.current.reconcileDraft('saved');
+    });
+    expect(result.current.draftRecoveryConflict).toBe(false);
+    expect(result.current.isCurrentDraftSaved(result.current.draft)).toBe(true);
+  });
   it('defaults to Gemini Flash-Lite while retaining deliberate model selection under auto strategy', () => {
     const { result } = renderHook(() =>
       useMinimalAssignmentAuthoringController({

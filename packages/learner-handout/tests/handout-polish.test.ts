@@ -124,12 +124,9 @@ describe('ESL-32 shared learner surface', () => {
     expect(hero.textContent).toBe('🌦️');
     expect(hero.getAttribute('aria-hidden')).toBe('true');
     expect(hero.querySelector('svg')).toBeNull();
-    expect([...doc.querySelectorAll('.practice-part h4')].map((h) => h.textContent)).toEqual([
-      'Part 1: Исправь форму',
-      'Part 2',
-      'Part 1: Исправь форму',
-      'Part 2',
-    ]);
+    expect(
+      [...doc.querySelectorAll('.practice-part h3, .practice-part h4')].map((h) => h.textContent),
+    ).toEqual(['Part 1: Исправь форму', 'Part 2', 'Part 1: Исправь форму', 'Part 2']);
     const prompt = doc.querySelector('.practice-part li')!;
     expect(prompt.textContent).toBe(
       'После will нет -s. (windy) <img src=x onerror=evil()> `open 🌦️',
