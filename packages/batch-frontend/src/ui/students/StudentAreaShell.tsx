@@ -301,6 +301,9 @@ export const StudentAreaShell: React.FC = () => {
                     type="button"
                     role="menuitem"
                     onClick={async () => {
+                      menuRef.current
+                        ?.querySelector<HTMLButtonElement>('.overflow-button')
+                        ?.focus();
                       setMenuOpen(false);
                       if (await confirmLeave()) {
                         setArchiveError(null);

@@ -1092,7 +1092,10 @@ export const StudentLearningPage: React.FC = () => {
     }) || profileCandidatePromotionNote.trim() !== '';
   useStudentPageEdits({
     dirty: profileDirty || reviewDirty,
-    busy: profileBusy !== null || profileCandidateAction !== null || profileCandidatePromotionBusy,
+    busy:
+      (profileBusy !== null && profileBusy !== 'loading') ||
+      profileCandidateAction !== null ||
+      profileCandidatePromotionBusy,
     save:
       profileDirty && !reviewDirty && profileBusy === null
         ? async () =>
