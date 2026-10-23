@@ -1151,12 +1151,30 @@ export function createFrontendSandboxApiAdapter(
     }
 
     if (method === 'get' && path === '/students') {
+      const params = new URL(config.url ?? '/', 'http://sandbox.local').searchParams;
+      for (const [key, value] of Object.entries(config.params ?? {})) {
+        if (value !== undefined) params.set(key, String(value));
+      }
+      const query = (params.get('q') ?? '').trim().toLowerCase();
+      const limit = Number(params.get('limit') ?? 200);
+      const offset = Number(params.get('offset') ?? 0);
+      const order = params.get('order') === 'desc' ? 'desc' : 'asc';
+      const items =
+        params.get('status') === 'archived'
+          ? []
+          : [studentProfile(), firstProfileStudentProfile()]
+              .filter((student) => student.student.toLowerCase().includes(query))
+              .sort((a, b) =>
+                order === 'asc'
+                  ? a.student.localeCompare(b.student)
+                  : b.student.localeCompare(a.student),
+              );
       return responseFor(config, {
-        items: [studentProfile(), firstProfileStudentProfile()],
-        total: 2,
-        limit: 200,
-        offset: 0,
-        order: 'asc',
+        items: items.slice(offset, offset + limit),
+        total: items.length,
+        limit,
+        offset,
+        order,
       });
     }
 

@@ -42,6 +42,7 @@ import {
   type ProfileCandidateFilter,
   type ProfileDraftDiffItem,
 } from './StudentProfileUi.logic';
+import { useStudentPageEdits } from './StudentWorkspaceContext';
 import { formatStudentShortId } from './studentIdentity';
 import './StudentLearningPage.css';
 
@@ -1048,9 +1049,11 @@ export const StudentLearningPage: React.FC = () => {
       });
       setProfileRevisions(revisions.items ?? []);
       setProfileSuccess('Profile draft saved.');
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save profile draft.';
       setProfileError(message);
+      return false;
     } finally {
       setProfileBusy(null);
     }
@@ -1069,12 +1072,40 @@ export const StudentLearningPage: React.FC = () => {
       );
       await reloadCurrentLearningSurface();
       setProfileSuccess('Learner profile saved.');
+      return true;
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : 'Unable to save learner profile.');
+      return false;
     } finally {
       setProfileBusy(null);
     }
   };
+
+  const reviewDirty =
+    Object.entries(profileCandidateDrafts).some(([id, draft]) => {
+      const candidate = profileCandidates.find((item) => item.id === id);
+      return (
+        draft.reviewerNote !== (candidate?.reviewerNote ?? '') ||
+        (draft.approvedFactText.trim() !== '' &&
+          draft.approvedFactText !== (candidate?.approvedFactText ?? candidate?.proposedFact))
+      );
+    }) || profileCandidatePromotionNote.trim() !== '';
+  useStudentPageEdits({
+    dirty: profileDirty || reviewDirty,
+    busy: profileBusy !== null || profileCandidateAction !== null || profileCandidatePromotionBusy,
+    save:
+      profileDirty && !reviewDirty && profileBusy === null
+        ? async () =>
+            Boolean(
+              await (currentRevision?.status === 'draft' ? handleSaveDraft() : handleSaveProfile()),
+            )
+        : undefined,
+    discard: () => {
+      setProfileForm(loadedProfileForm);
+      setProfileCandidateDrafts({});
+      setProfileCandidatePromotionNote('');
+    },
+  });
 
   const handleStartEmptyProfile = async () => {
     setProfileBusy('saving');
