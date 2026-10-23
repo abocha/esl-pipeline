@@ -1,54 +1,103 @@
-import type { Dispatch, SetStateAction } from 'react';
+import { Plus } from 'lucide-react';
+import { type Dispatch, type SetStateAction, useEffect, useId, useRef } from 'react';
 
+import { StudentDialog } from './StudentDialog';
 import { type CreateStudentFormState } from './StudentProfileUi.logic';
 
 export interface CreateStudentDialogProps {
   isOpen: boolean;
+
   isBusy: boolean;
+
   error: string | null;
+
   success: string | null;
+
   createStudentForm: CreateStudentFormState;
+
   onToggleOpen: () => void;
+
   onCancel: () => void;
+
   onSubmit: () => void;
+
   setCreateStudentForm: Dispatch<SetStateAction<CreateStudentFormState>>;
 }
 
 export function CreateStudentDialog({
   isOpen,
+
   isBusy,
+
   error,
+
   success,
+
   createStudentForm,
+
   onToggleOpen,
+
   onCancel,
+
   onSubmit,
+
   setCreateStudentForm,
 }: CreateStudentDialogProps) {
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  const wasOpen = useRef(false);
+
+  const errorId = useId();
+
+  useEffect(() => {
+    if (isOpen) nameInputRef.current?.focus();
+    else if (wasOpen.current) toggleRef.current?.focus();
+
+    wasOpen.current = isOpen;
+  }, [isOpen]);
+
   return (
     <>
-      <header>
-        <div className="workspace-inline workspace-header-row">
-          <h2>Create student</h2>
-          <button type="button" className="workspace-secondary-btn" onClick={onToggleOpen}>
-            {isOpen ? 'Close Create Form' : 'Create Student'}
-          </button>
-        </div>
-        <p>Start with a name. Add profile notes only if they are useful today.</p>
-      </header>
+      <button
+        ref={toggleRef}
+        type="button"
+        className="roster-add"
+        aria-label="Add student"
+        title="Add student"
+        disabled={isBusy}
+        onClick={onToggleOpen}
+      >
+        <Plus size={19} aria-hidden="true" />
+      </button>
+      {success && (
+        <span role="status" className="student-workspace-sr-only">
+          {success}
+        </span>
+      )}
+      <StudentDialog open={isOpen} titleId="create-student-title" onCancel={onCancel}>
+        <h2 id="create-student-title">Add student</h2>
+        <form
+          className="student-workspace-create"
+          onSubmit={(event) => {
+            event.preventDefault();
 
-      {success ? <p className="workspace-success">{success}</p> : null}
-
-      {isOpen ? (
-        <div className="workspace-create-panel">
+            if (!isBusy) onSubmit();
+          }}
+        >
           <label className="workspace-field">
             Student Name
             <input
+              ref={nameInputRef}
               aria-label="Student Name"
+              aria-invalid={Boolean(error && !createStudentForm.student.trim())}
+              aria-describedby={error ? errorId : undefined}
               value={createStudentForm.student}
               onChange={(event) =>
                 setCreateStudentForm((current) => ({
                   ...current,
+
                   student: event.target.value,
                 }))
               }
@@ -77,6 +126,7 @@ export function CreateStudentDialog({
                     onChange={(event) =>
                       setCreateStudentForm((current) => ({
                         ...current,
+
                         overallLevel: event.target.value,
                       }))
                     }
@@ -92,6 +142,7 @@ export function CreateStudentDialog({
                     onChange={(event) =>
                       setCreateStudentForm((current) => ({
                         ...current,
+
                         primaryGoals: event.target.value,
                       }))
                     }
@@ -111,6 +162,7 @@ export function CreateStudentDialog({
                     onChange={(event) =>
                       setCreateStudentForm((current) => ({
                         ...current,
+
                         communicationContexts: event.target.value,
                       }))
                     }
@@ -127,6 +179,7 @@ export function CreateStudentDialog({
                     onChange={(event) =>
                       setCreateStudentForm((current) => ({
                         ...current,
+
                         interestsAndUsefulThemes: event.target.value,
                       }))
                     }
@@ -146,6 +199,7 @@ export function CreateStudentDialog({
                     onChange={(event) =>
                       setCreateStudentForm((current) => ({
                         ...current,
+
                         stableStrengths: event.target.value,
                       }))
                     }
@@ -162,6 +216,7 @@ export function CreateStudentDialog({
                     onChange={(event) =>
                       setCreateStudentForm((current) => ({
                         ...current,
+
                         persistentChallenges: event.target.value,
                       }))
                     }
@@ -178,6 +233,7 @@ export function CreateStudentDialog({
                     onChange={(event) =>
                       setCreateStudentForm((current) => ({
                         ...current,
+
                         studyPreferences: event.target.value,
                       }))
                     }
@@ -194,6 +250,7 @@ export function CreateStudentDialog({
                     onChange={(event) =>
                       setCreateStudentForm((current) => ({
                         ...current,
+
                         durableConstraints: event.target.value,
                       }))
                     }
@@ -210,6 +267,7 @@ export function CreateStudentDialog({
                     onChange={(event) =>
                       setCreateStudentForm((current) => ({
                         ...current,
+
                         teacherNotes: event.target.value,
                       }))
                     }
@@ -222,13 +280,8 @@ export function CreateStudentDialog({
           </details>
 
           <div className="workspace-create-actions">
-            <button
-              type="button"
-              className="workspace-primary-btn"
-              onClick={onSubmit}
-              disabled={isBusy}
-            >
-              {isBusy ? 'Creating...' : 'Create Student'}
+            <button type="submit" className="workspace-primary-btn" disabled={isBusy}>
+              {isBusy ? 'Adding…' : 'Add student'}
             </button>
             <button
               type="button"
@@ -240,9 +293,13 @@ export function CreateStudentDialog({
             </button>
           </div>
 
-          {error ? <p className="workspace-error">{error}</p> : null}
-        </div>
-      ) : null}
+          {error ? (
+            <p id={errorId} className="workspace-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </form>
+      </StudentDialog>
     </>
   );
 }

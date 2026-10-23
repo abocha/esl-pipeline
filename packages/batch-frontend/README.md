@@ -131,6 +131,20 @@ Canonical behavior and current status live in:
     example, open `http://localhost:5173/?sandboxScenario=default&jobId=job-sandbox` to resume
     the seeded completed assignment with all primary stages unlocked for copy/layout review.
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
+- Students uses a persistent alphabetical roster next to Overview, Learning, History, and
+  Schedule & Billing. Learner switches retain the section and roster search; the student page
+  remounts before loading the next learner. URLs and browser history remain navigable.
+- The main navigation rail can collapse independently of student focus view, with Logout
+  available in the compact rail. On phones, list/detail navigation coexists with the workspace
+  menu. Student creation retains optional starter notes inside a centered modal.
+- Directory name search and 200-record paging use existing server contracts. Status, query and
+  page changes scope rows/actions to their own results; stale responses cannot replace them.
+  Archive/restore failures remain actionable, and selected-student archive requires confirmation.
+- Learning registers its actual editor state and save operation with the shared navigation guard.
+  Student/section changes, workspace navigation, creation/archive and logout protect unsaved
+  edits. Cancel and failed saves retain the editor; draft saves remain drafts. Candidate-review
+  text requires explicit discard or completion in Learning. In-flight writes must finish before
+  leaving. This does not redesign student-page content or change backend ownership.
 - Scheduling requires a connected selected Google Calendar; teaching, history, homework and billing
   remain available without it. Set schedule creates one-offs or several independent weekly series
   in the displayed timezone, with optional Google invitations and per-series outcomes. Later timing

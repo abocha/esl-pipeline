@@ -171,34 +171,6 @@
   display: none;
 }
 
-@media (max-width: 980px) and (min-width: 721px) {
-  .calm-shell {
-    grid-template-columns: 64px minmax(0, 1fr);
-  }
-  .calm-shell__rail {
-    width: 64px;
-  }
-  .calm-shell__brand {
-    padding: 0 13px;
-  }
-  .calm-shell__brand > span:last-child,
-  .calm-shell__nav-label,
-  .calm-shell__nav-link span,
-  .calm-shell__rail-email,
-  .calm-shell__sandbox,
-  .calm-shell__logout span {
-    display: none;
-  }
-  .calm-shell__nav {
-    padding-inline: 0.55rem;
-  }
-  .calm-shell__nav-link,
-  .calm-shell__logout {
-    justify-content: center;
-    padding-inline: 0;
-  }
-}
-
 @media (max-width: 720px) {
   .calm-shell {
     display: block;
@@ -265,4 +237,144 @@
   .calm-shell__rail {
     transition: none;
   }
+}
+
+/* Navigation density is user controlled; mobile retains the existing workspace menu. */
+.calm-shell {
+  --rail-width: 208px;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+}
+.calm-shell__rail {
+  width: var(--rail-width);
+  overflow: auto;
+}
+.calm-shell__brand {
+  min-height: 56px;
+  padding: 0 14px;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.calm-shell__rail-toggle {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cs-action);
+  cursor: pointer;
+}
+.calm-shell__rail-toggle:hover {
+  background: var(--cs-selection);
+}
+.calm-shell__nav-link svg {
+  width: 21px;
+  height: 21px;
+}
+.calm-shell--collapsed {
+  --rail-width: 60px;
+}
+.calm-shell--collapsed .calm-shell__brand {
+  padding: 0;
+  justify-content: center;
+}
+.calm-shell--collapsed .calm-shell__brand strong,
+.calm-shell--collapsed .calm-shell__nav-label,
+.calm-shell--collapsed .calm-shell__nav-link span,
+.calm-shell--collapsed .calm-shell__rail-footer .legal-links,
+.calm-shell--collapsed .calm-shell__rail-email,
+.calm-shell--collapsed .calm-shell__sandbox,
+.calm-shell--collapsed .calm-shell__logout span {
+  display: none;
+}
+.calm-shell--collapsed .calm-shell__nav {
+  padding: 12px 6px;
+}
+.calm-shell--collapsed .calm-shell__nav-link {
+  padding: 12px;
+  justify-content: center;
+}
+.calm-shell--collapsed .calm-shell__rail-footer {
+  padding: 12px 6px;
+}
+.calm-shell--collapsed .calm-shell__logout {
+  width: 44px;
+  height: 44px;
+  justify-content: center;
+  padding: 0;
+}
+.calm-shell--students {
+  height: 100dvh;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+.calm-shell--students .calm-shell__main {
+  grid-row: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.calm-shell--students .calm-shell__main > .student-workspace-layout {
+  flex: 1;
+}
+@media (max-width: 720px) {
+  .calm-shell--students {
+    display: flex;
+    flex-direction: column;
+    padding-top: 44px;
+  }
+  .calm-shell--students .calm-shell__topbar {
+    height: 44px;
+  }
+  .calm-shell--students .calm-shell__main {
+    height: auto;
+    flex: 1;
+  }
+  .calm-shell--menu-open .calm-shell__rail {
+    width: 208px;
+  }
+  .calm-shell--menu-open .calm-shell__brand strong,
+  .calm-shell--menu-open .calm-shell__nav-link span,
+  .calm-shell--menu-open .calm-shell__rail-email,
+  .calm-shell--menu-open .calm-shell__sandbox,
+  .calm-shell--menu-open .calm-shell__logout span {
+    display: initial;
+  }
+  .calm-shell--menu-open .calm-shell__nav-link {
+    justify-content: flex-start;
+    gap: 12px;
+  }
+  .calm-shell--menu-open .calm-shell__brand {
+    justify-content: space-between;
+    padding: 0 14px;
+  }
+  .calm-shell--students .calm-shell__scrim {
+    inset: 44px 0 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .calm-shell--menu-open .calm-shell__rail-footer .legal-links {
+    display: flex;
+  }
+  .calm-shell--menu-open .calm-shell__logout {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+}
+
+.calm-shell__rail-toggle svg,
+.calm-shell__menu-button svg {
+  flex-shrink: 0;
+}
+.calm-shell__menu-button {
+  padding: 0;
 }

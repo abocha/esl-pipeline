@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect } from 'react';
 
-export type NavigationGuard = () => Promise<boolean>;
+export type NavigationGuard = (nextPathname?: string) => Promise<boolean>;
 export type NavigationGuardRegistration = (guard: NavigationGuard | null) => void;
 
 export const AssignmentNavigationGuardContext = createContext<NavigationGuardRegistration | null>(

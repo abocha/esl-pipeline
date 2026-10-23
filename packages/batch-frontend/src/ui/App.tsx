@@ -19,9 +19,14 @@ const MinimalAssignment = lazy(async () => {
   return { default: module.MinimalAssignment };
 });
 
-const StudentDirectoryPage = lazy(async () => {
-  const module = await import('./students/StudentDirectoryPage');
-  return { default: module.StudentDirectoryPage };
+const StudentWorkspace = lazy(async () => {
+  const module = await import('./students/StudentWorkspace');
+  return { default: module.StudentWorkspace };
+});
+
+const StudentWorkspaceEmpty = lazy(async () => {
+  const module = await import('./students/StudentWorkspace');
+  return { default: module.StudentWorkspaceEmpty };
 });
 
 const StudentAreaShell = lazy(async () => {
@@ -293,51 +298,60 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, log
           path="/students"
           element={
             <Suspense fallback={<RouteLoadingFallback />}>
-              <StudentDirectoryPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/students/:studentId"
-          element={
-            <Suspense fallback={<RouteLoadingFallback />}>
-              <StudentAreaShell />
+              <StudentWorkspace />
             </Suspense>
           }
         >
-          <Route index element={<Navigate to="overview" replace />} />
           <Route
-            path="overview"
+            index
             element={
               <Suspense fallback={<RouteLoadingFallback />}>
-                <StudentOverviewPage />
+                <StudentWorkspaceEmpty />
               </Suspense>
             }
           />
           <Route
-            path="learning"
+            path=":studentId"
             element={
               <Suspense fallback={<RouteLoadingFallback />}>
-                <StudentLearningPage />
+                <StudentAreaShell />
               </Suspense>
             }
-          />
-          <Route
-            path="history"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <StudentHistoryPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="schedule-billing"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <StudentScheduleBillingPage />
-              </Suspense>
-            }
-          />
+          >
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route
+              path="overview"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <StudentOverviewPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="learning"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <StudentLearningPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="history"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <StudentHistoryPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="schedule-billing"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <StudentScheduleBillingPage />
+                </Suspense>
+              }
+            />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

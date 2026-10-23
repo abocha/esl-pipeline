@@ -20,7 +20,7 @@ function GuardedAssignment({ allow }: { allow: boolean }) {
 }
 
 describe('CalmStudioShell', () => {
-  it('renders the ESL mark and admin workspace navigation', () => {
+  it('renders the compact brand and admin workspace navigation', () => {
     const { container } = render(
       <MemoryRouter>
         <CalmStudioShell
@@ -33,7 +33,7 @@ describe('CalmStudioShell', () => {
     );
 
     expect(screen.getByRole('navigation', { name: 'Administration' })).toBeTruthy();
-    expect(screen.getByText('ESL')).toBeTruthy();
+    expect(container.querySelector('.calm-shell__brand')?.textContent).toBe('ESL Pipeline');
     expect(screen.getByRole('navigation', { name: 'Workspace' })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Assignments/i }).getAttribute('href')).toBe('/');
     expect(screen.getByRole('link', { name: /Students/i }).getAttribute('href')).toBe('/students');

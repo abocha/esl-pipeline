@@ -24,6 +24,25 @@ function requestConfig(
 }
 
 describe('frontend sandbox API adapter', () => {
+  it('keeps directory previews scoped to the requested status, name and page', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+    const matched = await adapter(
+      requestConfig('get', '/api/students', undefined, { q: 'Cora', limit: 1, offset: 0 }),
+    );
+    expect(matched.data.total).toBe(1);
+    expect(matched.data.items[0].id).toBe('student-cora');
+    const next = await adapter(
+      requestConfig('get', '/api/students', undefined, { limit: 1, offset: 1 }),
+    );
+    expect(next.data.total).toBe(2);
+    expect(next.data.items).toHaveLength(1);
+    expect(next.data.items[0].id).toBe('student-cora');
+    const archived = await adapter(
+      requestConfig('get', '/api/students', undefined, { status: 'archived' }),
+    );
+    expect(archived.data.items).toEqual([]);
+    expect(archived.data.total).toBe(0);
+  });
   it('serves a populated student activity preview with filters and older parent pages', async () => {
     const adapter = createFrontendSandboxApiAdapter();
     const first = await adapter(
