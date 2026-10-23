@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.2.0] - 2026-10-23
+
+### Changed
+
+- Automated release from PR #449: feat(students): keep student pages in a persistent directory workspace (ESL-82) (https://github.com/abocha/esl-pipeline/pull/449)
+
 ## [22.1.5] - 2026-10-22
 
 ### Changed
