@@ -226,6 +226,11 @@ describe('current AssignmentV1 workbook editor', () => {
       'value',
       'A different sentence',
     );
+    const field = screen.getByRole('textbox', { name: 'Drill 1 chunk 1' });
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(field.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Chunks must reconstruct this drill text.',
+    );
   });
 
   it('round-trips linguistic Highlight and removal, plain paste and multilingual IME without HTML interpretation', async () => {

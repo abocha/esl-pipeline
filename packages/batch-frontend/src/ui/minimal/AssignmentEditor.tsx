@@ -62,16 +62,18 @@ function TextField({
   label,
   optional = false,
   compact = false,
+  domainProblem,
 }: {
   path: EditorPath;
   label: string;
   optional?: boolean;
   compact?: boolean;
+  domainProblem?: string;
 }) {
   const e = useEditor();
   const key = fieldKey(path);
   const value = String(editorValue(e.assignment, path) ?? '');
-  const problem = textProblem(value, path, optional);
+  const problem = textProblem(value, path, optional) ?? domainProblem;
   const id = `assignment-field-${key}`;
   const [focused, setFocused] = useState(false);
   const remember = (field: HTMLTextAreaElement) => {
@@ -341,10 +343,12 @@ function TextList({
   path,
   label,
   minimum = 0,
+  domainProblem,
 }: {
   path: EditorPath;
   label: string;
   minimum?: number;
+  domainProblem?: string;
 }) {
   const e = useEditor();
   const items = editorValue(e.assignment, path) as string[];
@@ -353,7 +357,11 @@ function TextList({
       <h5>{label}</h5>
       {items.map((_, i) => (
         <div key={i}>
-          <TextField path={[...path, i]} label={`${label} ${i + 1}`} />
+          <TextField
+            path={[...path, i]}
+            label={`${label} ${i + 1}`}
+            domainProblem={domainProblem}
+          />
           <ItemActions path={path} index={i} minimum={minimum} label={`${label} ${i + 1}`} />
         </div>
       ))}
@@ -946,6 +954,29 @@ function Toolkit() {
 function PronunciationEditor() {
   const e = useEditor();
   const p = e.assignment.pronunciation;
+  // Use contract validation to associate cross-field drill problems; saving has one authority.
+  const drillProblems = useMemo(() => {
+    if (!p || !('drills' in p)) return [];
+    return p.drills.map((drill) => {
+      try {
+        validateAssignmentV1(
+          { ...e.assignment, pronunciation: { ...p, drills: [drill] } },
+          { suppliedUrls: e.suppliedUrls },
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        return {
+          chunks: /chunks must reconstruct|requires chunks/.test(message)
+            ? 'Chunks must reconstruct this drill text.'
+            : undefined,
+          stress: /stressedWords must occur|requires stressedWords/.test(message)
+            ? 'Choose stressed words that occur in this drill text.'
+            : undefined,
+        };
+      }
+      return {};
+    });
+  }, [e.assignment, e.suppliedUrls, p]);
   if (!p) return null;
   const payload =
     p.mode === 'shadow_sentence'
@@ -957,9 +988,9 @@ function PronunciationEditor() {
           : 'drills';
   const path = ['pronunciation', payload];
   const items = editorValue(e.assignment, path) as unknown[];
-  const word = (prefix: EditorPath, label: string) => (
+  const word = (prefix: EditorPath, label: string, domainProblem?: string) => (
     <>
-      <TextField path={[...prefix, 'text']} label={label} />
+      <TextField path={[...prefix, 'text']} label={label} domainProblem={domainProblem} />
       <TextField path={[...prefix, 'transcription']} label={`${label} transcription`} optional />
     </>
   );
@@ -1020,15 +1051,21 @@ function PronunciationEditor() {
             </>
           ) : (
             <>
-              {word([...path, i], `Drill ${i + 1}`)}
+              {word(
+                [...path, i],
+                `Drill ${i + 1}`,
+                drillProblems[i]?.chunks ?? drillProblems[i]?.stress,
+              )}
               <TextList
                 path={[...path, i, 'chunks']}
                 label={`Drill ${i + 1} chunk`}
+                domainProblem={drillProblems[i]?.chunks}
                 minimum={p.mode === 'rhythm_chunking' ? 1 : 0}
               />
               <TextList
                 path={[...path, i, 'stressedWords']}
                 label={`Drill ${i + 1} stressed word`}
+                domainProblem={drillProblems[i]?.stress}
                 minimum={p.mode === 'sentence_stress' ? 1 : 0}
               />
               <p className="assignment-editor-hint">

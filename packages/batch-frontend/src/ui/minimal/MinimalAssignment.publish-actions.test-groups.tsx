@@ -243,10 +243,10 @@ export function registerJobActionTests() {
         });
         const previewCalls = vi.mocked(api.renderHtmlPreview).mock.calls.length;
         const confirmationCalls = vi.mocked(api.confirmAssignmentSessionStep).mock.calls.length;
-        await user.click(screen.getByRole('button', { name: 'Learner view', exact: true }));
+        await user.click(screen.getByRole('button', { name: 'Learner view' }));
         expect(api.renderHtmlPreview).toHaveBeenCalledTimes(previewCalls);
         expect(api.confirmAssignmentSessionStep).toHaveBeenCalledTimes(confirmationCalls);
-        await user.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+        await user.click(screen.getByRole('button', { name: 'Edit' }));
         await user.click(screen.getByRole('button', { name: /Review & share/i }));
         expect(screen.getByRole('heading', { name: /Create assignment/i })).toBeTruthy();
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
