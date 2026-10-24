@@ -287,14 +287,32 @@ and the decided [ABO-29](https://linear.app/abocha/issue/ABO-29) bridge now make
 AssignmentV1 the durable editable authority. Generation/draft DTOs return `format: assignment_v1`,
 `assignment`, pinned `validationContext`, and pretty-printed JSON in `text`. The shared
 `assignment-artifact.ts` contract defines canonical serialization version 1: sorted object keys,
-preserved arrays and exact string content. SHA-256 hashes canonical UTF-8 bytes; textarea whitespace
+preserved arrays and exact string content. SHA-256 hashes canonical UTF-8 bytes; JSON whitespace
 and key formatting have no identity effect. Immutable objects use content-addressed `.json` URIs.
 
-The whole-document editor is a temporary JSON textarea. It permits invalid local text while typing,
-shows syntax/schema-path/domain errors and admits durable autosave only after parse and validation.
-Invalid buffers cannot preview, confirm, correct or publish, and have no durable storage. Reload
-loads the latest valid object. Existing working-version CAS, conflict-buffer preservation, source
-authority, confirmation and lineage remain. Historical rows explicitly use `format: markdown`.
+The current fresh-format editor (ESL-83) is a workbook surface in step 4. Incomplete local fields
+stay visible with field/domain errors; only validated objects cross durable autosave. Invalid
+buffers cannot preview, confirm, correct or publish and have no durable storage. Reload loads the
+latest valid object. Existing working-version CAS, source authority, confirmation and lineage remain.
+Historical rows explicitly use `format: markdown`.
+
+Prompts are edited on the page with answers/explanations in one contextual panel. Existing speaker
+IDs/references, study-text type, input kind and pronunciation mode stay fixed. Source URL choices
+are limited to supplied URLs. Bounded list edits preserve required structures; this is not a
+manual activity builder or older-format conversion path. Session-local Undo/Redo includes text
+and structural actions without being reset by autosave. All save entries share one flight; a late
+response cannot replace newer typing or Undo. Conflicts preserve local and fetched saved content
+until explicit reconciliation against a fresh working version. Assignment teaching notes remain
+separate from step-3 generation guidance. Learner view uses the shared renderer for valid current
+content and never satisfies the final step-5 preview gate. Completed references use the same editor
+only after explicit correction entry; text edits do not claim regenerated audio.
+
+Practice presentation is Practice → titled groups → numbered items, with pronunciation distinct
+and matching group/item numbering in the answer key. The checked-in prompt prefers purposeful
+groups sharing a learner action/instruction and useful attempts before unnecessary format changes,
+with varied contexts, free task choice and no quotas/filler. Existing mixed-action groups stay
+editable without classification or rewriting. This changes no schema or canonical identity;
+checked-in guidance is not live activation or evidence of live generation quality.
 
 Confirmed Create and jobs freeze format/schema/serialization/working-version/URI/hash references.
 Slice 2 jobs pinned PMD renderer version 1. Publication and corrections read and integrity-check

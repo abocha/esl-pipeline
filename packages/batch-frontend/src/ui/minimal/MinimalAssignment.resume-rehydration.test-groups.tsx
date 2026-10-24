@@ -399,7 +399,7 @@ export function registerResumeBasicTests() {
       await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       expect(await screen.findByDisplayValue('Session transcript')).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /Create/i }));
-      expect(await screen.findByDisplayValue(makeAssignmentText('# Session draft'))).toBeTruthy();
+      expect(await screen.findByDisplayValue('Session draft')).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(((await screen.findByLabelText(/Teacher notes/i)) as HTMLTextAreaElement).value).toBe(
         'Remember the travel vocab.',
@@ -694,7 +694,7 @@ export function registerResumeBasicTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      await screen.findByDisplayValue(makeAssignmentText('# Stale draft'));
+      await screen.findByDisplayValue('Stale draft');
       vi.mocked(api.createDraft).mockClear();
       vi.mocked(api.updateDraft).mockClear();
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
@@ -1178,19 +1178,18 @@ export function registerResumeBasicTests() {
         renderMinimalAssignment();
 
         const draftTextarea = (await screen.findByDisplayValue(
-          makeAssignmentText('# Original draft'),
+          'Original draft',
         )) as HTMLTextAreaElement;
         vi.useFakeTimers();
         fireEvent.change(draftTextarea, {
-          target: { value: makeAssignmentText('# Older autosave') },
+          target: { value: 'Older autosave' },
         });
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
-        expect(api.updateDraft).toHaveBeenCalledWith(
-          'draft-1',
-          makeAssignmentText('# Older autosave'),
-          1,
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', expect.any(String), 1);
+        expect(JSON.parse(vi.mocked(api.updateDraft).mock.calls[0]![1]).metadata.title).toBe(
+          'Older autosave',
         );
         vi.useRealTimers();
 
@@ -1201,7 +1200,7 @@ export function registerResumeBasicTests() {
         await user.click(screen.getByRole('button', { name: /Continue assignment/i }));
 
         const nextDraftTextarea = (await screen.findByDisplayValue(
-          makeAssignmentText('# Next session draft'),
+          'Next session draft',
         )) as HTMLTextAreaElement;
 
         await act(async () => {
@@ -1221,8 +1220,8 @@ export function registerResumeBasicTests() {
           await Promise.resolve();
         });
 
-        expect(nextDraftTextarea.value).toBe(makeAssignmentText('# Next session draft'));
-        expect(screen.queryByDisplayValue(makeAssignmentText('# Older autosave'))).toBeNull();
+        expect(nextDraftTextarea.value).toBe('Next session draft');
+        expect(screen.queryByDisplayValue('Older autosave')).toBeNull();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

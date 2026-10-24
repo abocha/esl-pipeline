@@ -285,8 +285,7 @@ describe('React learner handout static foundation', () => {
         'Check Your Understanding',
         'A. How the Grammar Works',
         'B. Vocabulary',
-        'A. Exercises',
-        ...(mode === 'none' ? [] : ['B. Say It Clearly (≈1 min)']),
+        ...(mode === 'none' ? [] : ['Say It Clearly (≈1 min)']),
       ]);
       for (const icon of doc.querySelectorAll('.heading-icon')) {
         expect(icon.getAttribute('aria-hidden')).toBe('true');
@@ -336,7 +335,7 @@ describe('React learner handout static foundation', () => {
       );
       expect([...key.querySelectorAll('h4')].map((h) => h.textContent)).toEqual(parts);
       expect(
-        [...doc.querySelectorAll('main > .practice-part h4')].map((h) => h.textContent),
+        [...doc.querySelectorAll('main > .practice-part h3')].map((h) => h.textContent),
       ).toEqual(parts);
       expect(key.textContent).toContain(a.outputTask.sampleResponse);
       expect(doc.documentElement.outerHTML).not.toContain(a.teacherFollowUp.correctionFocus);

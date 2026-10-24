@@ -540,7 +540,7 @@ export const MinimalAssignment: React.FC = () => {
   >({});
   useEffect(() => {
     setMixedSpeakerRoleSelections({});
-  }, [source.transcript?.transcriptId]);
+  }, []);
   const mixedSpeakerRoles = useMemo(() => {
     if (source.recording?.audioTopology !== 'mixed_recording') return [];
     const summary = source.transcript?.summaryJson;
@@ -1274,9 +1274,6 @@ export const MinimalAssignment: React.FC = () => {
     assignmentSessionWritesAllowed,
     learnerContext?.confirmationAvailable,
     currentLearnerProfile?.studentId,
-    context.selectedProfileId,
-    context.selectedProfileRevisionHash,
-    context.selectedProfileRevisionId,
     durableProfileLineage,
     flushPendingSessionRecovery,
     refreshDebouncedRecoveryPendingState,
@@ -1814,11 +1811,11 @@ export const MinimalAssignment: React.FC = () => {
       if (timer) clearTimeout(timer);
       window.removeEventListener('focus', onFocus);
     };
-  }, [learnerContextSourceKey, activeAssignmentSession?.id, activeStep]);
+  }, [learnerContextSourceKey, activeAssignmentSession?.id]);
   useEffect(() => {
     setLearnerContext(null);
     setLearnerContextError(null);
-  }, [learnerContextSourceKey]);
+  }, []);
 
   const jobReady = Boolean(jobStatus?.jobId);
   const hasPublishedHandout =
@@ -2128,7 +2125,6 @@ export const MinimalAssignment: React.FC = () => {
       activeStepIndex,
       authoring.draftDirty,
       authoringOperationBusy,
-      context.selectedProfileId,
       context.selectedProfileRevisionHash,
       context.selectedProfileRevisionId,
       completedReferenceMode,
@@ -2227,7 +2223,7 @@ export const MinimalAssignment: React.FC = () => {
     if (activeStep === 'assignment') {
       if (!authoring.draftValid || authoring.draftRecoveryConflict) return;
       const promptPackageId = authoring.promptPackage?.id;
-      const draft = authoring.draftDirty ? await authoring.saveDraft() : authoring.draft;
+      const draft = await authoring.flushDraftAutosave();
       if (!promptPackageId || !draft?.id || !draft.workingVersion) return;
       const confirmedContext = activeAssignmentSessionRef.current?.confirmed.context;
       const recovered = await saveAssignmentSessionProgress({
@@ -2584,7 +2580,8 @@ export const MinimalAssignment: React.FC = () => {
   const draftDirty = authoring.draftDirty;
   const transcriptRecoveryConflict = source.transcriptRecoveryConflict;
   const draftRecoveryConflict = authoring.draftRecoveryConflict;
-  const saveDraft = authoring.saveDraft;
+  const flushDraftAutosave = authoring.flushDraftAutosave;
+  const savingDraft = authoring.savingDraft;
   const refreshSelectedProfile = context.refreshSelectedProfile;
   const applyJobStatusTransition = resume.applyJobStatusTransition;
 
@@ -2675,7 +2672,7 @@ export const MinimalAssignment: React.FC = () => {
     try {
       if (!authoring.draftValid)
         throw new Error(
-          authoring.assignmentValidationError ?? 'Repair the assignment JSON before correction.',
+          authoring.assignmentValidationError ?? 'Fix the assignment fields before correction.',
         );
       let payload = correctionPayloadRef.current;
       if (!payload) {
@@ -2684,7 +2681,7 @@ export const MinimalAssignment: React.FC = () => {
         }
         const saved = await authoring.flushDraftAutosave();
         if (!authoring.isCurrentDraftValid())
-          throw new Error('Repair the assignment JSON before correction.');
+          throw new Error('Fix the assignment fields before correction.');
         if (authoring.draftDirty && !saved)
           throw new Error('Save the valid assignment before correction.');
         const draft = saved ?? authoring.draft;
@@ -2756,7 +2753,7 @@ export const MinimalAssignment: React.FC = () => {
     if (transcriptRecoveryConflict || draftRecoveryConflict) return false;
     if (!(await flushPendingSessionRecovery())) return false;
     if (sourceTranscriptDirty && !(await saveTranscript())) return false;
-    if (draftDirty && !(await saveDraft())) return false;
+    if ((draftDirty || savingDraft) && !(await flushDraftAutosave())) return false;
     const sessionQueueSettled = await assignmentSessionMutationQueueRef.current.then(
       () => true,
       () => false,
@@ -2767,7 +2764,8 @@ export const MinimalAssignment: React.FC = () => {
     draftDirty,
     draftRecoveryConflict,
     flushPendingSessionRecovery,
-    saveDraft,
+    flushDraftAutosave,
+    savingDraft,
     saveTranscript,
     sourceTranscriptDirty,
     transcriptRecoveryConflict,
@@ -2871,7 +2869,6 @@ export const MinimalAssignment: React.FC = () => {
     resumeSelectedResumeJobId,
     setActiveAssignmentSession,
     source.selectedStudentId,
-    context.selectedProfileId,
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
     teacherNotes,
@@ -3023,6 +3020,9 @@ export const MinimalAssignment: React.FC = () => {
   return (
     <div className="minimal-assignment">
       <AssignmentWorkflow
+        editorActive={
+          activeStep === 'assignment' && hasAssignmentContent && Boolean(authoring.structuredDraft)
+        }
         steps={focusedWorkflowSteps}
         activeStep={activeStep}
         highestAvailableStep={
@@ -3303,6 +3303,15 @@ export const MinimalAssignment: React.FC = () => {
         >
           <CreateAssignmentStep>
             <AssignmentStageSection
+              onEditorContinue={completedReferenceMode ? undefined : handleFocusedContinue}
+              editorContinueDisabled={continueDisabled}
+              editorSessionKey={authoring.editorSessionKey}
+              editorValidationContext={authoring.editorValidationContext}
+              savingDraft={authoring.savingDraft}
+              draftConflict={authoring.draftRecoveryConflict}
+              savedDraftText={authoring.draft?.text}
+              onRetrySave={() => void authoring.saveDraft()}
+              onReconcileDraft={(choice) => void authoring.reconcileDraft(choice)}
               stage={assignmentStage}
               sectionRef={assignmentSectionRef}
               headingRef={assignmentHeadingRef}

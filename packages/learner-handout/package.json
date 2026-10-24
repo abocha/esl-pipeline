@@ -13,7 +13,8 @@
       "types": "./dist/server.d.ts",
       "import": "./dist/server.js"
     },
-    "./handout.css": "./dist/handout.css"
+    "./handout.css": "./dist/handout.css",
+    "./handout-interactions.js": "./dist/handout-interactions.js"
   },
   "files": [
     "dist"

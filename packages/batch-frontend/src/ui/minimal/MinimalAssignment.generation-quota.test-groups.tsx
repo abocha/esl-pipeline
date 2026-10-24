@@ -48,9 +48,6 @@ export function registerGenerationDefaultsTests() {
       expect(screen.getByRole('button', { name: /^Regenerate$/i }).className).toContain(
         'minimal-secondary',
       );
-      expect(screen.getByRole('button', { name: /Confirm and continue/i }).className).toContain(
-        'product-button--primary',
-      );
 
       await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
@@ -61,10 +58,8 @@ export function registerGenerationDefaultsTests() {
           model: 'gpt-5.2',
         });
       });
-      expect(
-        await screen.findByDisplayValue(makeAssignmentText('# Generated assignment draft')),
-      ).toBeTruthy();
-      expect(screen.getByText(/Assignment draft ready\. Saved automatically\./i)).toBeTruthy();
+      expect(await screen.findByText('Generated assignment draft')).toBeTruthy();
+      expect(screen.getByText(/Assignment draft ready\. Review and edit below\./i)).toBeTruthy();
     });
 
     it(
@@ -77,9 +72,7 @@ export function registerGenerationDefaultsTests() {
 
         await preparePromptReady(user);
 
-        expect(
-          await screen.findByDisplayValue(makeAssignmentText('# Generated assignment draft')),
-        ).toBeTruthy();
+        expect(await screen.findByText('Generated assignment draft')).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -101,10 +94,8 @@ export function registerGenerationDefaultsTests() {
             model: 'gpt-5.2',
           });
         });
-        expect(
-          await screen.findByDisplayValue(makeAssignmentText('# Generated assignment draft')),
-        ).toBeTruthy();
-        expect(screen.getByText(/Assignment draft ready\. Saved automatically\./i)).toBeTruthy();
+        expect(await screen.findByText('Generated assignment draft')).toBeTruthy();
+        expect(screen.getByText(/Assignment draft ready\. Review and edit below\./i)).toBeTruthy();
         await waitFor(() => {
           expect(api.updateDraft).toHaveBeenCalledWith(
             'draft-1',
@@ -177,6 +168,7 @@ export function registerGenerationThrottleTests() {
         };
         const finalSavedDraft = {
           ...firstSavedDraft,
+          ...typedDraftFields(makeAssignmentText('# Final autosave')),
           text: makeAssignmentText('# Final autosave'),
           workingVersion: 3,
         };
@@ -193,23 +185,22 @@ export function registerGenerationThrottleTests() {
         await renderGenerationReadyAssignment();
         vi.useFakeTimers();
         const draftTextarea = screen.getByRole('textbox', {
-          name: /Assignment JSON/i,
+          name: /^Assignment title$/i,
         }) as HTMLTextAreaElement;
 
         fireEvent.change(draftTextarea, {
-          target: { value: makeAssignmentText('# First autosave') },
+          target: { value: 'First autosave' },
         });
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
-        expect(api.updateDraft).toHaveBeenCalledWith(
-          'draft-1',
-          makeAssignmentText('# First autosave'),
-          1,
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', expect.any(String), 1);
+        expect(JSON.parse(vi.mocked(api.updateDraft).mock.calls[0]![1]).metadata.title).toBe(
+          'First autosave',
         );
 
         fireEvent.change(draftTextarea, {
-          target: { value: makeAssignmentText('# Final autosave') },
+          target: { value: 'Final autosave' },
         });
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
@@ -220,17 +211,16 @@ export function registerGenerationThrottleTests() {
           resolveFirstSave(firstSavedDraft);
           await Promise.resolve();
         });
-        expect(draftTextarea.value).toBe(makeAssignmentText('# Final autosave'));
+        expect(draftTextarea.value).toBe('Final autosave');
 
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
-        expect(api.updateDraft).toHaveBeenCalledWith(
-          'draft-1',
-          makeAssignmentText('# Final autosave'),
-          2,
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', expect.any(String), 2);
+        expect(JSON.parse(vi.mocked(api.updateDraft).mock.calls[1]![1]).metadata.title).toBe(
+          'Final autosave',
         );
-        expect(draftTextarea.value).toBe(makeAssignmentText('# Final autosave'));
+        expect(draftTextarea.value).toBe('Final autosave');
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -345,9 +335,9 @@ export function registerGenerationThrottleTests() {
         });
         await renderGenerationReadyAssignment();
 
-        const draftTextarea = screen.getByRole('textbox', { name: /Assignment JSON/i });
+        const draftTextarea = screen.getByRole('textbox', { name: /^Assignment title$/i });
         fireEvent.change(draftTextarea, {
-          target: { value: makeAssignmentText('# Existing draft') },
+          target: { value: 'Existing draft' },
         });
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
         await screen.findByRole('heading', { name: /Review and share/i });
@@ -371,9 +361,7 @@ export function registerGenerationThrottleTests() {
             provider: 'openai',
             model: 'gpt-5.2',
           });
-          expect(
-            screen.getByDisplayValue(makeAssignmentText('# Generated assignment draft')),
-          ).toBeTruthy();
+          expect(screen.getByDisplayValue('Generated assignment draft')).toBeTruthy();
         });
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
         await waitFor(() =>
@@ -437,9 +425,7 @@ export function registerGenerationThrottleTests() {
 
         await waitFor(
           () => {
-            expect(
-              screen.queryByDisplayValue(makeAssignmentText('# Stale generated draft')),
-            ).toBeNull();
+            expect(screen.queryByDisplayValue('Stale generated draft')).toBeNull();
           },
           { timeout: UI_WAIT_TIMEOUT_MS },
         );

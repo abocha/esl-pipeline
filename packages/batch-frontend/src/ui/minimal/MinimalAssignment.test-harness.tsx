@@ -515,11 +515,7 @@ export async function preparePromptReady(user: ReturnType<typeof userEvent.setup
   await advanceSourceToCreate(user);
 
   fireEvent.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
-  await screen.findByDisplayValue(
-    makeAssignmentText('# Generated assignment draft'),
-    {},
-    { timeout: UI_WAIT_TIMEOUT_MS },
-  );
+  await screen.findByText('Generated assignment draft', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
 function hydrateResumedAssignment(
@@ -617,7 +613,10 @@ async function openResumedJobAssignment(user: ReturnType<typeof userEvent.setup>
   );
 }
 
-async function waitForResumedPromptReady(user: ReturnType<typeof userEvent.setup>) {
+async function waitForResumedPromptReady(
+  user: ReturnType<typeof userEvent.setup>,
+  hasDraft: boolean,
+) {
   const createStep = await screen.findByRole(
     'button',
     { name: /Create/i },
@@ -633,7 +632,12 @@ async function waitForResumedPromptReady(user: ReturnType<typeof userEvent.setup
     { name: /^(Generate assignment|Regenerate)$/i },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
-  await screen.findByRole('textbox', { name: /Assignment JSON/i }, { timeout: UI_WAIT_TIMEOUT_MS });
+  if (hasDraft)
+    await screen.findByRole(
+      'textbox',
+      { name: /^Assignment title$/i },
+      { timeout: UI_WAIT_TIMEOUT_MS },
+    );
 }
 
 async function waitForJobActionsReady(jobId = 'job-1', hasPublishedHandout = true) {
@@ -824,7 +828,7 @@ export async function renderResumedAssignment(
   await openResumedJobAssignment(user);
   const readyState = options.waitFor ?? 'promptReady';
   if (readyState === 'promptReady') {
-    await waitForResumedPromptReady(user);
+    await waitForResumedPromptReady(user, Boolean(overrides.draftText));
   } else if (readyState === 'jobActions') {
     await waitForJobActionsReady(
       status.jobId,
@@ -864,6 +868,7 @@ export async function renderPublishedAssignment(
 export function setupMinimalAssignmentTest() {
   vi.useRealTimers();
   vi.resetAllMocks();
+  vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
   globalThis.history.replaceState(null, '', '/');
   scrollIntoViewMock.mockReset();
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {

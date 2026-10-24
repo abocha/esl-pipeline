@@ -107,12 +107,13 @@ function PracticeParts({
   assignment: AssignmentV1;
   answers?: boolean;
 }) {
+  const Heading = answers ? 'h4' : 'h3';
   return (
     <>
       {assignment.practice.map((part, i) => (
         <div className="practice-part" key={i}>
           {(part.title !== null || assignment.practice.length > 1) && (
-            <h4>
+            <Heading>
               <span className="practice-part-number">Part {i + 1}</span>
               {part.title && (
                 <>
@@ -122,7 +123,7 @@ function PracticeParts({
                   </Inline>
                 </>
               )}
-            </h4>
+            </Heading>
           )}
           {!answers && part.instructions && <Text>{part.instructions}</Text>}
           {answers ? (
@@ -470,13 +471,10 @@ export function LearnerHandout(props: LearnerHandoutProps) {
         >
           Practice
         </IconHeading>
-        <IconHeading icon={PencilLine} prefix="A." tone="exercises">
-          Exercises
-        </IconHeading>
         <PracticeParts assignment={a} />
         {a.pronunciation && (
           <>
-            <IconHeading icon={Mic} prefix="B." tone="listen">
+            <IconHeading icon={Mic} tone="listen">
               Say It Clearly (≈1 min)
             </IconHeading>
             <Pronunciation
