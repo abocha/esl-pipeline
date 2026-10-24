@@ -188,7 +188,8 @@ describe('AssignmentV1 authoring and historical access', () => {
     render(<LiveEditor />);
     const prompt = screen.getByRole('textbox', { name: 'Group 1 · Prompt 1' });
     fireEvent.focus(prompt);
-    fireEvent.change(prompt, { target: { value: 'We ___ visit the park.' } });
+    prompt.textContent = 'We ___ visit the park.';
+    fireEvent.input(prompt);
     const edited = JSON.parse(controller.draftText);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);

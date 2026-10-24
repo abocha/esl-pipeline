@@ -1,269 +1,847 @@
+/* Desktop workbook editing, using the application palette. */
 .assignment-editor {
-  --editor-blue: #2563a5;
-  color: #25354c;
-  width: 100%;
+  --assignment-editor-top: var(--assignment-progress-height, 0px);
+  --assignment-editor-sticky-bottom: calc(
+    var(--assignment-editor-top) +
+    var(--assignment-editor-toolbar-height, 67px)
+  );
+  --editor-line: var(--cs-border, #dce4ec);
+  --editor-muted: var(--cs-ink-muted, #697e91);
+  --editor-accent: var(--cs-primary, #275782);
+  color: var(--cs-ink, #20364b);
+  background: var(--cs-surface, #fff);
   min-width: 0;
+  position: relative;
 }
-.assignment-editor * {
-  box-sizing: border-box;
-}
-.assignment-editor-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 0;
-  border-block: 1px solid #dae3ef;
-  margin-bottom: 20px;
-}
-.assignment-editor-toolbar strong {
-  margin-right: auto;
-}
-.assignment-editor-toolbar span[role="status"] {
-  font-size: 13px;
-  color: #52647c;
-}
-.assignment-editor button,
-.assignment-editor select {
+.assignment-editor button {
   font: inherit;
-  font-size: 13px;
-  color: #25527f;
-  background: #f5f9fe;
-  border: 1px solid #c9d7e8;
-  border-radius: 7px;
-  padding: 8px 10px;
-  min-height: 36px;
   cursor: pointer;
 }
 .assignment-editor button:disabled {
-  opacity: 0.5;
   cursor: default;
+  opacity: 0.4;
 }
-.assignment-editor :is(button, select, textarea):focus-visible {
-  outline: 2px solid #2878c7;
+.assignment-editor button:focus-visible {
+  outline: 2px solid #5792c2;
   outline-offset: 2px;
 }
-.assignment-editor-workbook {
-  padding: 12px 310px 24px 12px;
-  max-width: 1160px;
-  margin: auto;
+.assignment-editor-toolbar {
+  position: sticky;
+  top: var(--assignment-editor-top);
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--editor-line);
+  background: var(--cs-surface, #fff);
 }
-.assignment-editor section {
-  scroll-margin-top: 140px;
-  margin-block: 24px 40px;
+.assignment-editor-title {
+  min-width: 120px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 10px;
 }
-.assignment-editor h2 {
-  color: #244d79;
-  font-size: 21px;
-  margin-bottom: 18px;
+.assignment-editor-title .assignment-editor-field {
+  margin: 0;
+  font-weight: 650;
+  max-width: 480px;
 }
-.assignment-editor h3 {
-  font-size: 18px;
+.assignment-editor-title > span {
+  font-size: 12px;
+  color: var(--editor-muted);
+  white-space: nowrap;
 }
-.assignment-editor h5 {
-  font-size: 14px;
-  margin: 10px 0;
+.assignment-editor-toolbar > [role="status"] {
+  font-size: 11px;
+  color: #4b7867;
+  max-width: 150px;
 }
-.assignment-editor-field {
-  margin-block: 10px;
-  min-width: 0;
+.assignment-editor-toolbar > .is-unsaved {
+  color: var(--cs-error, #a64242);
 }
-.assignment-editor-field label,
-.assignment-editor-label {
-  display: block;
+.assignment-editor-history,
+.assignment-editor-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.assignment-editor-history button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  width: 30px;
+  min-height: 32px;
+  padding: 4px;
+}
+.assignment-editor-view-switch {
+  background: var(--cs-background, #f4f7fa);
+  border: 1px solid var(--editor-line);
+  border-radius: 6px;
+  padding: 3px;
+}
+.assignment-editor-view-switch button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.assignment-editor-view-switch [aria-pressed="true"] {
+  background: var(--cs-surface, #fff);
+  box-shadow: 0 1px 3px #17334d15;
+}
+.assignment-editor .assignment-editor-continue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: var(--editor-accent);
+  color: #fff;
+  min-height: 38px;
+  padding: 8px 13px;
+  border-radius: 5px;
   font-size: 12px;
   font-weight: 600;
-  color: #62748a;
-  margin-bottom: 4px;
+  white-space: nowrap;
 }
-.assignment-editor .assignment-editor-field textarea {
-  scroll-margin-block: 140px;
-  font: inherit;
-  line-height: 1.65;
-  color: #23344b;
-  resize: vertical;
-  width: 100%;
-  max-width: 100%;
-  min-height: 46px;
-  border: 1px solid transparent;
+.assignment-editor .assignment-editor-continue:hover:not(:disabled),
+.assignment-editor .assignment-editor-continue:focus-visible {
+  background: var(--cs-action-hover, #20476b);
+  color: #fff;
+}
+.assignment-editor-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  min-height: 650px;
+}
+.assignment-editor-outline {
+  position: sticky;
+  top: var(--assignment-editor-sticky-bottom);
+  align-self: start;
+  height: calc(100vh - var(--assignment-editor-sticky-bottom));
+  min-height: 480px;
+  max-height: 900px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 20px 12px;
+  background: var(--cs-background, #f6f8fa);
+  border-right: 1px solid var(--editor-line);
+}
+.assignment-editor-outline button {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 12px;
+  padding: 11px 10px;
+  min-height: 42px;
+  border: 0;
   border-radius: 5px;
   background: transparent;
-  padding: 7px 8px;
-  margin: 0;
-  overflow-wrap: anywhere;
+  color: var(--editor-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
-.assignment-editor .assignment-editor-field textarea:hover {
-  border-color: #cbdbee;
+.assignment-editor-outline button svg {
+  flex-shrink: 0;
 }
-.assignment-editor .assignment-editor-field textarea:focus {
-  background: #fff;
-  border-color: #6e9cd0;
-  outline: 2px solid #dceafb;
+.assignment-editor-outline button:hover {
+  background: #7da4c510;
 }
-.assignment-editor .assignment-editor-field textarea[aria-invalid="true"] {
-  border-color: #bd493f;
-  background: #fff9f8;
-}
-.assignment-editor-field.is-compact textarea {
+.assignment-editor-outline button[aria-current="page"] {
+  background: #749fc420;
+  color: var(--editor-accent);
   font-weight: 600;
 }
-.assignment-editor-optional,
-.assignment-editor-hint {
-  font-size: 12px;
-  font-weight: 400;
-  color: #63758b;
-  line-height: 1.6;
+.assignment-editor-parts {
+  margin: 0 0 14px 22px;
+  padding-left: 7px;
+  border-left: 1px solid var(--editor-line);
 }
-.assignment-editor-entity {
-  position: relative;
-  border-radius: 7px;
+.assignment-editor-parts button {
+  width: 100%;
+  font-size: 11px;
+  min-height: 32px;
   padding: 8px;
-  margin-block: 8px;
 }
-.assignment-editor-entity.is-selected {
-  background: #f0f6ff;
-  box-shadow: inset 3px 0 #4c88ca;
-}
-.assignment-editor-related {
-  margin-top: 5px;
-}
-.assignment-editor-context {
-  position: absolute;
-  left: calc(100% + 18px);
-  top: 0;
-  width: 270px;
-  padding: 15px;
-  background: #f7faff;
-  border: 1px solid #c9d9ec;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px #2548730a;
-  z-index: 1;
-}
-.assignment-editor-context-heading {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-}
-.assignment-editor-context-heading h4 {
-  margin: 0;
-}
-.assignment-editor .assignment-editor-context .assignment-editor-field textarea {
-  background: #fff;
-  border-color: #d4dfec;
-}
-.assignment-editor-context p {
-  font-size: 12px;
-  line-height: 1.6;
-}
-.assignment-editor-group {
-  border-block-start: 1px solid #d9e3ef;
-  margin-top: 20px;
+.assignment-editor-outline-secondary {
+  border-top: 1px solid var(--editor-line);
   padding-top: 12px;
+  margin-top: auto;
 }
+.assignment-editor-outline-secondary button {
+  width: 100%;
+}
+.assignment-editor-content {
+  min-width: 0;
+}
+.assignment-editor-workbook {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 48px 80px 65px;
+  line-height: 1.65;
+}
+.assignment-editor-workbook h2 {
+  font-size: 26px;
+  line-height: 1.25;
+  margin: 0 0 28px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.assignment-editor-workbook h3 {
+  font-size: 14px;
+  margin: 28px 0 10px;
+  font-weight: 600;
+}
+.assignment-editor-field {
+  min-width: 0;
+  margin: 4px 0;
+}
+.assignment-editor-text,
+.assignment-editor-read-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-height: 1.65em;
+  padding: 5px 7px;
+  margin: 0 -7px;
+  border-radius: 4px;
+  outline: 1px solid transparent;
+  line-height: 1.65;
+  font-size: 15px;
+}
+.assignment-editor-text:hover {
+  outline-color: #b1c7da70;
+}
+.assignment-editor-text:focus {
+  outline-color: #8eb5d8;
+  box-shadow: 0 0 0 3px #5d91bf12;
+  background: var(--cs-surface, #fff);
+}
+.assignment-editor-text[aria-invalid="true"] {
+  outline-color: var(--cs-error, #b65454);
+}
+.assignment-editor-text:empty::before {
+  content: attr(data-placeholder);
+  color: var(--editor-muted);
+  opacity: 0.65;
+  pointer-events: none;
+}
+.assignment-editor .is-heading .assignment-editor-text,
+.assignment-editor .is-heading .assignment-editor-read-text {
+  font-size: 19px;
+  font-weight: 600;
+}
+.assignment-editor-title .assignment-editor-text {
+  font-size: 16px;
+  line-height: 1.35;
+}
+.assignment-editor-field small {
+  display: block;
+  font-size: 12px;
+}
+.assignment-editor-hero {
+  font-size: 19px;
+  margin-bottom: 28px;
+}
+.assignment-editor-hero .assignment-editor-text {
+  font-size: 20px;
+  line-height: 1.65;
+}
+.assignment-editor-hint {
+  color: var(--editor-muted);
+  font-size: 12px;
+}
+.assignment-editor-item {
+  position: relative;
+  min-width: 0;
+}
+.assignment-editor-item-content {
+  min-width: 0;
+}
+.assignment-editor-grip-slot {
+  position: absolute;
+  left: -37px;
+  top: 10px;
+  z-index: 3;
+}
+.assignment-editor .assignment-editor-grip {
+  padding: 4px;
+  min-height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--editor-muted);
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+}
+.assignment-editor-item:hover > .assignment-editor-grip-slot > .assignment-editor-grip,
+.assignment-editor-item:focus-within > .assignment-editor-grip-slot > .assignment-editor-grip,
+.assignment-editor-grip[aria-expanded="true"] {
+  opacity: 1;
+}
+.assignment-editor-item-menu {
+  position: absolute;
+  z-index: 21;
+  left: 0;
+  top: 30px;
+  width: max-content;
+  padding: 5px;
+  background: var(--cs-surface, #fff);
+  border: 1px solid var(--editor-line);
+  box-shadow: 0 8px 30px #19334b20;
+  border-radius: 6px;
+}
+.assignment-editor .assignment-editor-item-menu button {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  min-height: 32px;
+  padding: 5px;
+  text-align: left;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.assignment-editor-item-menu svg {
+  flex-shrink: 0;
+}
+.assignment-editor-item-menu button:hover {
+  background: #6f96ba15;
+}
+.assignment-editor-drop {
+  position: absolute;
+  top: -1px;
+  left: -28px;
+  right: 0;
+  height: 2px;
+  background: #4485b8;
+  pointer-events: none;
+  z-index: 5;
+}
+.assignment-editor-drop::before {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  top: -2px;
+  left: -3px;
+  background: inherit;
+  border-radius: 50%;
+}
+.assignment-editor-drop.is-after {
+  top: auto;
+  bottom: -1px;
+}
+.assignment-editor-item.is-dragging {
+  opacity: 0.3;
+}
+.assignment-editor-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  background: var(--cs-surface, #fff);
+  border: 1px solid #b1cbe0;
+  box-shadow: 0 8px 26px #1b395c20;
+  border-radius: 5px;
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 260px;
+  font-size: 13px;
+}
+.assignment-editor-list {
+  margin: 18px 0;
+}
+.assignment-editor-list > .assignment-editor-item {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--editor-line);
+}
+.assignment-editor .assignment-editor-add {
+  display: inline-flex;
+  border: 0;
+  background: transparent;
+  color: var(--editor-muted);
+  padding: 10px 0;
+  min-height: 36px;
+  font-size: 12px;
+}
+.assignment-editor-add:hover {
+  color: var(--editor-accent);
+}
+.assignment-editor-question-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.62fr);
+  gap: 30px;
+  margin-top: 22px;
+  padding: 0 0 12px 31px;
+  color: var(--editor-muted);
+  font-size: 12px;
+}
+.assignment-editor-questions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.assignment-editor-question {
+  border-top: 1px solid var(--editor-line);
+  padding: 20px 0;
+  min-height: 105px;
+}
+.assignment-editor-question:last-child {
+  border-bottom: 1px solid var(--editor-line);
+}
+.assignment-editor-question > .assignment-editor-item-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.62fr);
+  gap: 30px;
+}
+.assignment-editor-question-prompt {
+  display: flex;
+  gap: 22px;
+}
+.assignment-editor-question-prompt > .assignment-editor-field {
+  flex: 1;
+}
+.assignment-editor-number {
+  color: var(--editor-muted);
+  min-width: 12px;
+  padding-top: 10px;
+  font-size: 13px;
+}
+.assignment-editor-answer {
+  color: var(--editor-accent);
+}
+.assignment-editor-answer > .assignment-editor-field + .assignment-editor-field {
+  color: var(--editor-muted);
+  margin-top: 8px;
+  font-size: 13px;
+}
+.assignment-editor-answer
+  > .assignment-editor-field
+  + .assignment-editor-field
+  .assignment-editor-text {
+  font-size: 13px;
+}
+.assignment-editor-answer > .is-empty:not(:focus-within) {
+  opacity: 0;
+}
+.assignment-editor-question:hover .assignment-editor-answer > .is-empty,
+.assignment-editor-question:focus-within .assignment-editor-answer > .is-empty {
+  opacity: 1;
+}
+.assignment-editor-group-heading {
+  margin-bottom: 12px;
+}
+.assignment-editor-group-heading .is-heading .assignment-editor-text {
+  font-size: 26px;
+  line-height: 1.3;
+}
+.assignment-editor-group-heading .assignment-editor-field + .assignment-editor-field {
+  color: var(--editor-muted);
+}
+.assignment-editor-group,
 .assignment-editor-subgroup {
-  border-left: 2px solid #d7e5f4;
-  padding-left: 14px;
-  margin-block: 15px;
+  margin: 22px 0;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--editor-line);
 }
 .assignment-editor-pair {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 30px;
 }
-.assignment-editor-item-actions {
+.assignment-editor-vocabulary {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--editor-line);
+}
+.assignment-editor-vocabulary > .assignment-editor-item-content {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.7fr) minmax(0, 1fr);
+  gap: 0 28px;
+}
+.assignment-editor-vocabulary .assignment-editor-field:first-child {
+  grid-row: span 2;
+  font-weight: 600;
+}
+.assignment-editor-vocabulary .assignment-editor-field:last-child {
+  color: var(--editor-muted);
+  font-style: italic;
+}
+.assignment-editor-turn {
+  margin: 22px 0;
+}
+.assignment-editor-label {
+  color: var(--editor-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.assignment-editor-speakers {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  margin: 5px 0 12px;
+  gap: 30px;
+  margin: 20px 0;
 }
-.assignment-editor-entity > div > .assignment-editor-item-actions {
+.assignment-editor-related {
   display: inline-flex;
-  margin-right: 10px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--editor-muted);
+  font-size: 12px !important;
+  padding: 5px 0;
 }
-.assignment-editor-item-actions button {
-  padding: 5px 8px;
+.assignment-editor-context {
+  position: fixed;
+  right: 22px;
+  top: 140px;
+  max-height: calc(100vh - 170px);
+  overflow: auto;
+  z-index: 30;
+  width: 300px;
+  padding: 20px;
+  background: var(--cs-surface, #fff);
+  border: 1px solid var(--editor-line);
+  border-radius: 8px;
+  box-shadow: 0 12px 48px #193a5426;
 }
-.assignment-editor-item-actions small {
-  font-size: 11px;
-  color: #66788c;
+.assignment-editor-context-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
 }
-.assignment-editor-questions {
-  padding-left: 24px;
+.assignment-editor-context-heading h3 {
+  margin: 0;
 }
-.assignment-editor-questions > li::marker {
-  color: #385b82;
-  font-weight: 600;
+.assignment-editor-context-heading button {
+  border: 0;
+  background: transparent;
+  padding: 5px;
 }
-.assignment-editor-add {
-  margin: 8px 0;
+.assignment-editor-context .assignment-editor-field {
+  margin: 15px 0;
+}
+.assignment-editor-context .assignment-editor-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--editor-muted);
+  margin-bottom: 5px;
+}
+.assignment-editor-context select {
+  max-width: 100%;
+  width: 100%;
+  padding: 6px;
+}
+.assignment-editor-context p {
+  color: var(--editor-muted);
+  font-size: 12px;
 }
 .assignment-editor-errors {
-  border-left: 3px solid #b84b3f;
-  background: #fff6f4;
-  color: #8b352b;
-  padding: 12px 16px;
-  font-size: 13px;
-  overflow-wrap: anywhere;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  color: var(--cs-error, #a64b4b);
+  background: #b94f4710;
+  padding: 10px 20px;
+  font-size: 12px;
 }
-.assignment-editor-notes {
-  padding: 18px;
-  background: #fff9e9;
-  border: 1px solid #e9d9b2;
-  border-radius: 10px;
-}
-.assignment-editor-highlight-preview {
-  padding: 4px 8px;
-  font-size: 13px;
-  white-space: pre-wrap;
-}
-.assignment-editor mark {
-  background: #e1edff;
+.assignment-editor-errors button {
+  border: 0;
+  background: transparent;
   color: inherit;
-  font-weight: 600;
-  border-radius: 3px;
-  padding-inline: 2px;
+  text-decoration: underline;
 }
-.assignment-editor-read-text {
-  white-space: pre-wrap;
-  line-height: 1.65;
-  padding: 8px;
-  overflow-wrap: anywhere;
+.assignment-editor-floating {
+  position: absolute;
+  z-index: 40;
+  transform: translate(-50%, -100%);
+  border: 1px solid var(--editor-line);
+  border-radius: 7px;
+  padding: 4px;
+  box-shadow: 0 6px 22px #16344c20;
+  background: var(--cs-surface, #fff);
 }
-@media (max-width: 1250px) {
-  .assignment-editor-workbook {
-    padding-right: 12px;
-    max-width: 760px;
-  }
-  .assignment-editor-context {
-    position: static;
-    width: 100%;
-    margin-top: 14px;
-  }
+.assignment-editor .assignment-editor-floating button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 9px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 12px;
 }
-@media (max-width: 600px) {
-  .assignment-editor-workbook {
-    padding-inline: 0;
-  }
-  .assignment-editor-pair {
-    grid-template-columns: minmax(0, 1fr);
+.assignment-editor-notice {
+  position: fixed;
+  bottom: 25px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 15px;
+  background: var(--cs-ink, #20364b);
+  color: var(--cs-surface, #fff);
+  border-radius: 7px;
+  z-index: 35;
+  font-size: 13px;
+}
+.assignment-editor-notice button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 3px;
+  min-height: 26px;
+}
+.assignment-editor-notice button:first-of-type {
+  text-decoration: underline;
+}
+.assignment-editor-content > .learner-handout {
+  margin: 25px;
+}
+.assignment-editor [id^="assignment-section-"],
+.assignment-editor [data-assignment-pronunciation] {
+  scroll-margin-top: calc(var(--assignment-editor-sticky-bottom) + 16px);
+}
+@media (max-width: 1050px) {
+  .assignment-editor-toolbar {
+    flex-wrap: wrap;
     gap: 8px;
   }
-  .assignment-editor-toolbar {
-    gap: 6px;
+  .assignment-editor-title {
+    flex-basis: 40%;
   }
-  .assignment-editor-toolbar strong {
-    width: 100%;
+  .assignment-editor-layout {
+    grid-template-columns: 175px minmax(0, 1fr);
   }
-  .assignment-editor button,
-  .assignment-editor select {
-    min-height: 44px;
+  .assignment-editor-workbook {
+    padding: 30px 25px 60px 48px;
   }
-  .assignment-editor .assignment-editor-field textarea {
-    font-size: 16px;
+  .assignment-editor-outline {
+    padding: 15px 8px;
   }
-  .assignment-editor-entity {
-    padding: 6px;
+}
+@media (max-width: 650px) {
+  .assignment-editor-layout {
+    grid-template-columns: 140px minmax(0, 1fr);
   }
+  .assignment-editor-workbook {
+    padding: 25px;
+  }
+  .assignment-editor-question > .assignment-editor-item-content,
+  .assignment-editor-pair {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .assignment-editor-question-heading {
+    display: none;
+  }
+  .assignment-editor-answer {
+    padding-left: 34px;
+  }
+}
+
+.assignment-editor-setting-label {
+  display: none;
+}
+.assignment-editor-context .assignment-editor-setting-label,
+.assignment-editor-metadata .assignment-editor-setting-label {
+  display: block;
+}
+.assignment-editor-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 40px;
+  max-width: 640px;
+}
+.assignment-editor-metadata .assignment-editor-setting-label {
+  font-size: 12px;
+  color: var(--editor-muted);
+  margin-bottom: 6px;
+}
+.assignment-editor-outline button {
+  justify-content: flex-start;
+}
+
+.assignment-editor-form {
+  margin: 22px 0;
+  padding: 18px 22px;
+  background: #789cbb0d;
+  border-left: 2px solid #789cbb40;
+  border-radius: 0 5px 5px 0;
+}
+.assignment-editor-form > .assignment-editor-field:nth-child(2) {
+  font-family: ui-monospace, monospace;
+  color: var(--editor-accent);
+}
+.assignment-editor-usage {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.45fr) minmax(0, 1fr);
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--editor-line);
+}
+.assignment-editor-caption {
+  font-size: 12px;
+  color: var(--editor-muted);
+}
+.assignment-editor-correction {
+  padding: 15px 0 26px;
+}
+.assignment-editor-correction > div:first-child > .assignment-editor-field {
+  color: var(--editor-muted);
+}
+.assignment-editor-correction > div:last-child > .assignment-editor-field:last-child {
+  color: var(--editor-muted);
+  font-size: 13px;
+}
+.assignment-editor-vocabulary > .assignment-editor-item-content {
+  grid-template-columns: minmax(100px, 0.7fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 22px;
+}
+.assignment-editor-vocabulary .assignment-editor-field:first-child {
+  grid-row: auto;
+}
+
+.assignment-editor .assignment-editor-notice button:hover:not(:disabled),
+.assignment-editor .assignment-editor-notice button:focus-visible {
+  color: #fff;
+  background: #ffffff22;
+}
+.assignment-editor-toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.assignment-editor .assignment-editor-toolbar-actions button {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 12px;
+  border: 1px solid var(--editor-line);
+  background: transparent;
+  color: var(--editor-muted);
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.assignment-editor .assignment-editor-toolbar-actions button:hover:not(:disabled) {
+  background: #789cbb18;
+  color: var(--editor-accent);
+}
+
+.assignment-editor-pronunciation-brief {
+  margin: 0 0 26px;
+}
+.assignment-editor-pronunciation-brief > div {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 18px;
+  margin: 8px 0;
+}
+.assignment-editor-pronunciation-brief dt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--editor-muted);
+}
+.assignment-editor-pronunciation-brief dd {
+  margin: 0;
+  min-width: 0;
+}
+.assignment-editor-pronunciation-brief > div:first-child dd {
+  font-weight: 600;
+}
+.assignment-editor-pronunciation-items {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+}
+.assignment-editor-pronunciation-item {
+  border-top: 1px solid var(--editor-line);
+  padding: 14px 0;
+}
+.assignment-editor-pronunciation-item:last-child {
+  border-bottom: 1px solid var(--editor-line);
+}
+.assignment-editor-pronunciation-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+}
+.assignment-editor-pronunciation-material {
+  min-width: 0;
+}
+.assignment-editor-pronunciation-word,
+.assignment-editor-pronunciation-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 24px;
+}
+.assignment-editor-pronunciation-word > .assignment-editor-field {
+  min-width: 80px;
+}
+.assignment-editor-pronunciation-word > .assignment-editor-field:last-child {
+  color: var(--editor-muted);
+  font-size: 13px;
+}
+.assignment-editor-pronunciation-word > .is-empty:not(:focus-within) {
+  opacity: 0;
+}
+.assignment-editor-pronunciation-item:hover .is-empty,
+.assignment-editor-pronunciation-item:focus-within .is-empty {
+  opacity: 1;
+}
+.assignment-editor-pronunciation-pair > span {
+  color: var(--editor-muted);
+}
+.assignment-editor-pronunciation-timing {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 35px;
+  margin-left: 20px;
+}
+.assignment-editor-pronunciation-timing h3 {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--editor-muted);
+}
+.assignment-editor-pronunciation-sentence {
+  margin: 28px 0;
+  padding: 18px 22px;
+  border-left: 3px solid #a3c5e4;
+  background: #edf5fc;
+  border-radius: 0 5px 5px 0;
+}
+.assignment-editor-pronunciation-sentence h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--editor-accent);
+}
+.assignment-editor-pronunciation-sentence .assignment-editor-text,
+.assignment-editor-pronunciation-sentence .assignment-editor-read-text {
+  font-size: 18px;
+}
+.assignment-editor-pronunciation-footer {
+  margin-top: 30px;
+  border-top: 1px solid var(--editor-line);
 }

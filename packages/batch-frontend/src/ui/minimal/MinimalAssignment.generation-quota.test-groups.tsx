@@ -48,9 +48,6 @@ export function registerGenerationDefaultsTests() {
       expect(screen.getByRole('button', { name: /^Regenerate$/i }).className).toContain(
         'minimal-secondary',
       );
-      expect(screen.getByRole('button', { name: /Confirm and continue/i }).className).toContain(
-        'product-button--primary',
-      );
 
       await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
@@ -61,7 +58,7 @@ export function registerGenerationDefaultsTests() {
           model: 'gpt-5.2',
         });
       });
-      expect(await screen.findByDisplayValue('Generated assignment draft')).toBeTruthy();
+      expect(await screen.findByText('Generated assignment draft')).toBeTruthy();
       expect(screen.getByText(/Assignment draft ready\. Review and edit below\./i)).toBeTruthy();
     });
 
@@ -75,7 +72,7 @@ export function registerGenerationDefaultsTests() {
 
         await preparePromptReady(user);
 
-        expect(await screen.findByDisplayValue('Generated assignment draft')).toBeTruthy();
+        expect(await screen.findByText('Generated assignment draft')).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -97,7 +94,7 @@ export function registerGenerationDefaultsTests() {
             model: 'gpt-5.2',
           });
         });
-        expect(await screen.findByDisplayValue('Generated assignment draft')).toBeTruthy();
+        expect(await screen.findByText('Generated assignment draft')).toBeTruthy();
         expect(screen.getByText(/Assignment draft ready\. Review and edit below\./i)).toBeTruthy();
         await waitFor(() => {
           expect(api.updateDraft).toHaveBeenCalledWith(

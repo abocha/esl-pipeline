@@ -359,6 +359,8 @@ function ProfileDossier({
 }
 
 interface AssignmentStageSectionProps {
+  onEditorContinue?: () => void;
+  editorContinueDisabled?: boolean;
   editorSessionKey?: number;
   editorValidationContext?: AssignmentValidationContext;
   savingDraft?: boolean;
@@ -1244,6 +1246,8 @@ export function ContextStageSection({
 }
 
 export function AssignmentStageSection({
+  onEditorContinue,
+  editorContinueDisabled,
   editorSessionKey,
   editorValidationContext,
   savingDraft = false,
@@ -1287,33 +1291,37 @@ export function AssignmentStageSection({
     !savingDraft &&
     !draftConflict &&
     !generationBlockedByQuota;
+  const regenerateAction =
+    !readOnly && allowGenerate && hasDraft ? (
+      <button
+        ref={generateDraftButtonRef}
+        type="button"
+        className="minimal-secondary"
+        onClick={() => {
+          if (
+            globalThis.confirm(
+              'Replace this assignment with a newly generated assignment? Local edits and undo history will be replaced.',
+            )
+          )
+            onGenerateAssignment();
+        }}
+        disabled={!canGenerateAssignment}
+      >
+        {assignmentBusy ? '✨ Generating assignment…' : 'Regenerate'}
+      </button>
+    ) : null;
   return (
     <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-header">
+          <div
+            className={`minimal-stage-panel-header${structuredDraft && hasDraft ? ' assignment-editor-legacy-header' : ''}`}
+          >
             <div className="minimal-stage-panel-title">
               <h3>Assignment draft</h3>
             </div>
             <div className="minimal-inline">
-              {!readOnly && allowGenerate && hasDraft ? (
-                <button
-                  ref={generateDraftButtonRef}
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => {
-                    if (
-                      globalThis.confirm(
-                        'Replace this assignment with a newly generated assignment? Local edits and undo history will be replaced.',
-                      )
-                    )
-                      onGenerateAssignment();
-                  }}
-                  disabled={!canGenerateAssignment}
-                >
-                  {assignmentBusy ? '✨ Generating assignment…' : 'Regenerate'}
-                </button>
-              ) : null}
+              {!structuredDraft && regenerateAction}
               {!structuredDraft && (
                 <span
                   className="minimal-muted assignment-draft-save-status"
@@ -1397,6 +1405,9 @@ export function AssignmentStageSection({
               )}
               <AssignmentEditor
                 key={editorSessionKey}
+                toolbarActions={regenerateAction}
+                onContinue={onEditorContinue}
+                continueDisabled={editorContinueDisabled}
                 text={draftText}
                 onChange={onDraftTextChange}
                 validationContext={editorValidationContext}

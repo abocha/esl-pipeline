@@ -24,6 +24,64 @@ function requestConfig(
 }
 
 describe('frontend sandbox API adapter', () => {
+  it('persists editor-sandbox Context and Create confirmations without losing the draft', async () => {
+    const adapter = createFrontendSandboxApiAdapter({ scenario: 'assignment-editor' });
+    const initial = await adapter(requestConfig('get', '/api/assignment-sessions/session-editor'));
+    const draft = await adapter(requestConfig('get', '/api/drafts/draft-editor'));
+    const context = await adapter(
+      requestConfig('post', '/api/assignment-sessions/session-editor/confirm', {
+        step: 'context',
+        expectedRevision: initial.data.revision,
+        teacherNotes: 'Keep the existing assignment.',
+        profileRevisionId: 'profile-revision-sandbox',
+        profileRevisionHash: 'profile-hash-sandbox',
+      }),
+    );
+    expect(context.data).toMatchObject({
+      session: {
+        id: 'session-editor',
+        confirmedStep: 'context',
+        revision: initial.data.revision + 1,
+        draftId: 'draft-editor',
+        teacherNotes: 'Keep the existing assignment.',
+        selectedProfileRevisionId: 'profile-revision-sandbox',
+        confirmed: {
+          context: {
+            teacherNotes: 'Keep the existing assignment.',
+            profileRevisionHash: 'profile-hash-sandbox',
+          },
+        },
+      },
+      invalidated: [],
+    });
+    const created = await adapter(
+      requestConfig('post', '/api/assignment-sessions/session-editor/confirm', {
+        step: 'create',
+        expectedRevision: context.data.session.revision,
+        promptPackageId: 'prompt-sandbox',
+        draftId: 'draft-editor',
+        draftWorkingVersion: draft.data.workingVersion,
+      }),
+    );
+    expect(created.data.session).toMatchObject({
+      confirmedStep: 'create',
+      revision: context.data.session.revision + 1,
+      confirmed: {
+        context: context.data.session.confirmed.context,
+        create: {
+          draftId: 'draft-editor',
+          draftWorkingVersion: draft.data.workingVersion,
+          draftHash: draft.data.contentHash,
+        },
+      },
+    });
+    const resumed = await adapter(requestConfig('get', '/api/assignment-sessions/session-editor'));
+    expect(resumed.data).toEqual(created.data.session);
+    expect((await adapter(requestConfig('get', '/api/drafts/draft-editor'))).data).toEqual(
+      draft.data,
+    );
+  });
+
   it('keeps directory previews scoped to the requested status, name and page', async () => {
     const adapter = createFrontendSandboxApiAdapter();
     const matched = await adapter(

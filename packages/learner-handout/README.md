@@ -223,6 +223,8 @@ The packaged interaction script also animates shared native details in both dire
 Animations, cancels interrupted animations from the current height, clears clipping on completion,
 and uses native behavior under reduced motion or without animation support. Native summary clicks
 include Enter/Space keyboard activation. There is no hydration or general interaction framework.
+React consumers load the same behavior with the side-effect import
+`@esl-pipeline/learner-handout/handout-interactions.js`; the editor's Learner preview does this too.
 
 Fresh schema/template identity is v8; see [the canonical contract](../../docs/reference/ASSIGNMENT_V1.md#learner-handout-convention-and-authored-emoji-esl-32).
 Renderer 3 remains the native architecture identity; changed HTML gets a new exact-byte publisher

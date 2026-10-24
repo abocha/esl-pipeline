@@ -640,3 +640,57 @@
     grid-column: 2;
   }
 }
+
+/* While authoring, the workbook owns its toolbar and save indicator. */
+.assignment-workflow--editing {
+  width: 100%;
+}
+.assignment-workflow--editing .assignment-workflow__canvas {
+  padding: 0;
+  overflow: visible;
+}
+.assignment-workflow--editing .minimal-stage-card {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.assignment-workflow--editing .minimal-stage-header {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.assignment-workflow--editing .minimal-stage-panel {
+  padding: 0;
+  border: 0;
+}
+.assignment-workflow--editing .minimal-stage-layout {
+  display: block;
+}
+.assignment-workflow--editing .minimal-stage-panel-header {
+  margin: 0;
+  padding: 6px 16px;
+  justify-content: flex-end;
+  border-bottom: 1px solid var(--cs-border);
+}
+.assignment-workflow--editing .minimal-stage-panel-title {
+  display: none;
+}
+.assignment-workflow--editing .minimal-stage-panel-header button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.assignment-workflow--editing .assignment-editor button {
+  min-height: unset;
+}
+.assignment-workflow--editing .assignment-editor .assignment-editor-continue {
+  min-height: 38px;
+}
+
+.assignment-workflow--editing .assignment-editor-legacy-header {
+  display: none;
+}

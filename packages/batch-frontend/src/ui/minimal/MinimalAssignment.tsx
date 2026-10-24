@@ -3020,6 +3020,9 @@ export const MinimalAssignment: React.FC = () => {
   return (
     <div className="minimal-assignment">
       <AssignmentWorkflow
+        editorActive={
+          activeStep === 'assignment' && hasAssignmentContent && Boolean(authoring.structuredDraft)
+        }
         steps={focusedWorkflowSteps}
         activeStep={activeStep}
         highestAvailableStep={
@@ -3300,6 +3303,8 @@ export const MinimalAssignment: React.FC = () => {
         >
           <CreateAssignmentStep>
             <AssignmentStageSection
+              onEditorContinue={completedReferenceMode ? undefined : handleFocusedContinue}
+              editorContinueDisabled={continueDisabled}
               editorSessionKey={authoring.editorSessionKey}
               editorValidationContext={authoring.editorValidationContext}
               savingDraft={authoring.savingDraft}

@@ -515,11 +515,7 @@ export async function preparePromptReady(user: ReturnType<typeof userEvent.setup
   await advanceSourceToCreate(user);
 
   fireEvent.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
-  await screen.findByDisplayValue(
-    'Generated assignment draft',
-    {},
-    { timeout: UI_WAIT_TIMEOUT_MS },
-  );
+  await screen.findByText('Generated assignment draft', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
 function hydrateResumedAssignment(

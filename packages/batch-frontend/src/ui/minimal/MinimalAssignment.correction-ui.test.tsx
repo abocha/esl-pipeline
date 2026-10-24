@@ -139,7 +139,7 @@ describe('MinimalAssignment post-share correction UI', () => {
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
     await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
     const correctionDraft = screen.getByRole('textbox', { name: /^Assignment title$/i });
-    expect((correctionDraft as HTMLTextAreaElement).disabled).toBe(false);
+    expect(correctionDraft.getAttribute('contenteditable')).toBe('true');
     expect(screen.queryByRole('button', { name: /Generate assignment/i })).toBeNull();
   });
 
@@ -326,9 +326,8 @@ describe('MinimalAssignment post-share correction UI', () => {
     );
     await screen.findByRole('heading', { name: /Review and share/i });
     await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /^Assignment title$/i }), {
-      target: { value: 'Corrected draft' },
-    });
+    screen.getByRole('textbox', { name: /^Assignment title$/i }).textContent = 'Corrected draft';
+    fireEvent.input(screen.getByRole('textbox', { name: /^Assignment title$/i }));
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
     await screen.findByRole('heading', { name: /Review and share/i });
     await waitFor(() => {
@@ -339,7 +338,7 @@ describe('MinimalAssignment post-share correction UI', () => {
     await screen.findByText(/Network Error/i);
     await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
     expect(screen.getByRole('textbox', { name: /^Assignment title$/i })).toHaveProperty(
-      'value',
+      'textContent',
       'Corrected draft',
     );
     const firstRequest = vi.mocked(api.publishAssignmentCorrection).mock.calls[0]?.[1];
@@ -409,9 +408,8 @@ describe('MinimalAssignment post-share correction UI', () => {
     );
     await screen.findByRole('heading', { name: /Review and share/i });
     await user.click(screen.getByRole('button', { name: /Correct published assignment/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /^Assignment title$/i }), {
-      target: { value: 'Corrected draft' },
-    });
+    screen.getByRole('textbox', { name: /^Assignment title$/i }).textContent = 'Corrected draft';
+    fireEvent.input(screen.getByRole('textbox', { name: /^Assignment title$/i }));
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
     await waitFor(() => {
       expect(
@@ -424,7 +422,7 @@ describe('MinimalAssignment post-share correction UI', () => {
     await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
 
     expect(screen.getByRole('textbox', { name: /^Assignment title$/i })).toHaveProperty(
-      'value',
+      'textContent',
       'Corrected draft',
     );
     expect(screen.getByText(/Newer saved draft work was found/i)).toBeTruthy();

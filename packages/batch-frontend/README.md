@@ -116,6 +116,8 @@ Canonical behavior and current status live in:
     focused current-format editor with fictional material and the real authoring hooks. Saves stay
     in that sandbox instance's memory; reload resets the fixture. This is editor walkthrough
     evidence, not backend persistence, provider or publication evidence.
+  - After changing shared-package export paths during local development, rebuild the owning package
+    and restart Vite so its resolver picks up the updated exports.
   - Open `http://localhost:5173/students/student-alex/history` for fictional recorded transitions,
     transcript/homework outcomes, reversals and older-page loading. These are preview examples,
     not evidence of production action recording or authorization.
@@ -191,12 +193,14 @@ Canonical behavior and current status live in:
   reserved for exhausted or ambiguous outcomes.
 - ESL-83 replaces normal JSON editing with a current-format workbook in step 4.
   `AssignmentEditor` edits the same AssignmentV1 object through the authoring controller.
-  Prompts remain on the page; one contextual panel holds answers/explanations and supporting
-  source, speaker, metadata or sample-response fields. Assignment teaching notes are separate from
+  A desktop section rail keeps each part focused. Prompts, answers and explanations edit together
+  on the page; source, speaker and metadata settings open on demand. Assignment teaching notes are separate from
   step-3 generation guidance and absent from Learner view, including hidden DOM.
   The editor covers current grammar/mission/rationale shapes and all six pronunciation modes;
   it does not provide older-format forms, conversions, new speaker sets, new groups or mode pickers.
-  It supports bounded list operations, paired-backtick Highlight, and session-local Undo/Redo.
+  It supports contextual drag/menu list operations, selection-based Highlight and session-local
+  Undo/Redo. Highlight serializes to existing paired backticks; contenteditable DOM is only a text
+  projection, never a stored HTML format. No-op moves do not create history or notifications.
   Autosave acknowledgements retain history; a new assignment, hydration or regeneration starts a
   new edit session. Regeneration explicitly asks before replacing the workbook.
 - Incomplete fields stay visible with errors and remain browser-local. Only valid objects may

@@ -296,11 +296,12 @@ describe('MinimalAssignment - staged workflow UI', () => {
     );
     vi.mocked(api.fetchDraft).mockResolvedValueOnce(latest);
 
-    fireEvent.change(editor, { target: { value: 'My local draft' } });
+    editor.textContent = 'My local draft';
+    fireEvent.input(editor);
     await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
     await waitFor(() => expect(api.fetchDraft).toHaveBeenCalledWith('draft-1'));
-    expect((editor as HTMLTextAreaElement).value).toBe('My local draft');
+    expect(editor.textContent).toBe('My local draft');
     expect(screen.getByText(/Newer saved artifact content was found/i)).toBeTruthy();
   });
 
@@ -353,7 +354,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     const user = createMinimalUser();
     renderMinimalAssignment();
 
-    await screen.findByDisplayValue('Draft markdown');
+    await screen.findByText('Draft markdown');
     vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
     await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
@@ -1226,14 +1227,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
       });
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
-      await screen.findByDisplayValue('Generated assignment draft');
+      await screen.findByText('Generated assignment draft');
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
 
       await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
-      fireEvent.change(screen.getByRole('textbox', { name: /^Assignment title$/i }), {
-        target: { value: 'Final lesson assignment' },
-      });
+      screen.getByRole('textbox', { name: /^Assignment title$/i }).textContent =
+        'Final lesson assignment';
+      fireEvent.input(screen.getByRole('textbox', { name: /^Assignment title$/i }));
       await user.click(screen.getByRole('button', { name: /Step 5Review & share/i }));
 
       await previewCurrentDraft(user);
@@ -1346,7 +1347,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
           model: 'gpt-5.2',
         });
       });
-      expect(await screen.findByDisplayValue('Generated assignment draft')).toBeTruthy();
+      expect(await screen.findByText('Generated assignment draft')).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );

@@ -1,7 +1,12 @@
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { AxiosError } from 'axios';
 
-import { parseAssignmentV1, serializeAssignmentV1 } from '@esl-pipeline/contracts';
+import {
+  type AssignmentConfirmedSnapshot,
+  type ConfirmAssignmentSessionStepRequest,
+  parseAssignmentV1,
+  serializeAssignmentV1,
+} from '@esl-pipeline/contracts';
 
 import { editorFixture } from './assignment-editor-fixture';
 import assignmentFixture from './assignment-fixture.json';
@@ -1095,7 +1100,7 @@ export function createFrontendSandboxApiAdapter(
     confirmedStep: 'context',
     teacherNotes: 'Sandbox teacher notes',
   });
-  let editorSession = {
+  let editorSession: Record<string, unknown> = {
     ...baseEditorSession,
     confirmed: {
       ...baseEditorSession.confirmed,
@@ -1121,6 +1126,67 @@ export function createFrontendSandboxApiAdapter(
           revision: Number(editorSession.revision) + 1,
         };
         return responseFor(config, editorSession);
+      }
+      if (method === 'post' && path === '/assignment-sessions/session-editor/confirm') {
+        const body = readRequestBody(config.data) as unknown as ConfirmAssignmentSessionStepRequest;
+        const confirmed = editorSession.confirmed as AssignmentConfirmedSnapshot;
+        if (body.step === 'context') {
+          editorSession = {
+            ...editorSession,
+            teacherNotes: body.teacherNotes,
+            selectedProfileRevisionId: body.profileRevisionId,
+            selectedProfileRevisionHash: body.profileRevisionHash,
+            confirmed: {
+              ...confirmed,
+              context: {
+                teacherNotes: body.teacherNotes,
+                profileRevisionId: body.profileRevisionId,
+                profileRevisionHash: body.profileRevisionHash,
+              },
+            },
+          };
+        } else if (body.step === 'create') {
+          editorSession = {
+            ...editorSession,
+            promptPackageId: body.promptPackageId,
+            draftId: body.draftId,
+            confirmed: {
+              ...confirmed,
+              create: {
+                promptPackageId: body.promptPackageId,
+                draftId: body.draftId,
+                draftWorkingVersion: editorDraft.workingVersion,
+                draftStorageUri: editorDraft.storageUri,
+                draftHash: editorDraft.contentHash,
+              },
+            },
+          };
+        } else if (body.step === 'source') {
+          editorSession = {
+            ...editorSession,
+            lessonId: body.lessonId,
+            recordingId: body.recordingId,
+            transcriptId: body.transcriptId,
+            confirmed: {
+              ...confirmed,
+              source: {
+                ...confirmed.source,
+                lessonId: body.lessonId,
+                recordingId: body.recordingId,
+                transcriptId: body.transcriptId,
+                transcriptWorkingVersion: body.transcriptWorkingVersion,
+                transcriptStorageUri: baseEditorSession.confirmed.source.transcriptStorageUri,
+                transcriptHash: baseEditorSession.confirmed.source.transcriptHash,
+              },
+            },
+          };
+        } else throw notFoundFor(config);
+        editorSession = {
+          ...editorSession,
+          confirmedStep: body.step,
+          revision: Number(editorSession.revision) + 1,
+        };
+        return responseFor(config, { session: editorSession, invalidated: [] });
       }
       if (method === 'get' && path === '/drafts/draft-editor')
         return responseFor(config, editorDraft);
