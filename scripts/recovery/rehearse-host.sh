@@ -101,15 +101,6 @@ services:
     ports: !override
       - '127.0.0.1:18081:80'
       - '127.0.0.1:18443:443'
-  rehearsal-s3:
-    image: motoserver/moto:5.1.15
-    healthcheck:
-      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:5000/", timeout=2)']
-      interval: 2s
-      timeout: 3s
-      retries: 30
-    ports:
-      - '127.0.0.1:15001:5000'
 YAML
 # Deploy accepts one Compose file, so resolve the production file + disposable isolation overlay.
 export BATCH_BACKEND_IMAGE="localhost:15000/esl/batch-backend:$revision"
@@ -152,8 +143,19 @@ backend_tool() { compose run --rm --no-deps -T batch-backend node "$@"; }
 # Block only forwarded container egress via this guest's external NIC; host bootstrap/pulls still work.
 iptables -I DOCKER-USER -o eth0 -j REJECT
 iptables -C DOCKER-USER -o eth0 -j REJECT
-compose up -d --wait --wait-timeout 120 postgres redis rehearsal-s3
+compose up -d --wait --wait-timeout 120 postgres redis
 [[ "$(docker network inspect "${PROJECT_NAME}_default" --format '{{.EnableIPv6}}')" == false ]]
+# S3 is an external dependency, not an application writer. Keep the emulator outside the
+# application Compose project so normal fail-closed writer discovery stays unchanged.
+docker run -d --name rehearsal-s3 --network "${PROJECT_NAME}_default" --network-alias rehearsal-s3 \
+  -p 127.0.0.1:15001:5000 \
+  --health-cmd 'python -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:5000/\", timeout=2)"' \
+  --health-interval 2s --health-timeout 3s --health-retries 30 motoserver/moto:5.1.15
+for ((attempt=0; attempt<60; attempt++)); do
+  if [[ "$(docker inspect rehearsal-s3 --format '{{.State.Health.Status}}')" == healthy ]]; then break; fi
+  sleep 1
+done
+[[ "$(docker inspect rehearsal-s3 --format '{{.State.Health.Status}}')" == healthy ]]
 aws s3 mb s3://esl-rehearsal
 if [[ "$phase" == source ]]; then
   backend_tool dist/tools/migrate-db.js migrate

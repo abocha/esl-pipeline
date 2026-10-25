@@ -61,8 +61,8 @@ cleanup() {
     fi
   done
   # Evidence is retained even on failure. Source/build staging belongs to this allocation.
-  rm -rf "$work/source" "$work/host" "$work/images.tar" "$work/repository.tar" "$work/tooling.tar" "$work/bundle"
-  rm -f "$work/buildkitd.toml" "$work/"*.Dockerfile
+  rm -rf "$work/source" "$work/host" "$work/images.tar" "$work/repository.tar" "$work/tooling.tar" "$work/bundle" || cleanup_ok=false
+  rm -f "$work/buildkitd.toml" "$work/"*.Dockerfile || cleanup_ok=false
   printf '{"allocatedResourcesRemoved":%s,"originalExitCode":%s}\n' "$cleanup_ok" "$rc" > "$evidence/cleanup.json" || cleanup_ok=false
   if [[ "$cleanup_ok" != true ]]; then
     echo 'Invocation-owned resource cleanup failed; inspect cleanup.json and Docker resources' >&2
@@ -162,7 +162,7 @@ start_host() {
   # before invocation so the EXIT trap can still remove that partial allocation.
   container="$host_name"
   docker run -d --name "$host_name" --label esl.rehearsal="$run_id" --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock --mount "type=volume,src=$volume,dst=/var/lib/docker" --mount "type=volume,src=$containerd_volume,dst=/var/lib/containerd" "${extra_args[@]}" "$host_image" >/dev/null
-  container="$(docker inspect "$host_name" --format '{{.Id}}')"
+  container="$(docker inspect "$host_name" --format '{{.Id}}')" || { container="$host_name"; return 1; }
   docker inspect "$container" --format '{{json .}}' > "$evidence/$phase-host.json"
   for ((attempt=0; attempt<60; attempt++)); do
     if docker exec "$container" systemctl is-active --quiet multi-user.target; then break; fi

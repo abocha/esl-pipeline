@@ -82,7 +82,9 @@ Compose bindings are replaced only in a generated guest-only overlay. The overla
 Caddy automatic HTTPS globally, including for the fixed marketing hostname, while preserving the
 repository routing rules. The API, frontend, workers,
 PostgreSQL, Redis and Caddy retain their production images, commands, dependencies and mounts.
-A guest-local registry and S3 emulator supply synthetic external dependencies. A guest-only `DOCKER-USER` rule rejects forwarded container traffic through the guest external
+A guest-local registry and S3 emulator supply synthetic external dependencies. The emulator joins
+the application network with the `rehearsal-s3` alias but lives outside its Compose project; normal
+deployment still rejects unknown application writers. A guest-only `DOCKER-USER` rule rejects forwarded container traffic through the guest external
 interface; IPv6 on the application network is disabled. Normal bridge networking preserves
 loopback port publication. No paid providers are called.
 
