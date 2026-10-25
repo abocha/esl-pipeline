@@ -49,13 +49,27 @@ cleanup_host() {
 }
 cleanup() {
   local rc=$?
+  # Cleanup must run to completion even when an individual Docker operation fails.
+  set +e
   cleanup_host
-  if [[ "$builder_created" == true ]]; then docker buildx rm "$builder" >/dev/null 2>&1 || true; fi
-  if [[ "${#created_images[@]}" -gt 0 ]]; then docker image rm "${created_images[@]}" >/dev/null 2>&1 || true; fi
+  if [[ "$builder_created" == true ]] && docker buildx rm "$builder" >/dev/null 2>&1; then builder_created=false; fi
+  local image cleanup_ok=true
+  [[ -z "$container" && -z "$volume" && -z "$containerd_volume" && "$builder_created" == false ]] || cleanup_ok=false
+  for image in "${created_images[@]}"; do
+    if docker image inspect "$image" >/dev/null 2>&1; then
+      docker image rm "$image" >/dev/null 2>&1 || cleanup_ok=false
+    fi
+  done
   # Evidence is retained even on failure. Source/build staging belongs to this allocation.
   rm -rf "$work/source" "$work/host" "$work/images.tar" "$work/repository.tar" "$work/tooling.tar" "$work/bundle"
   rm -f "$work/buildkitd.toml" "$work/"*.Dockerfile
+  printf '{"allocatedResourcesRemoved":%s,"originalExitCode":%s}\n' "$cleanup_ok" "$rc" > "$evidence/cleanup.json" || cleanup_ok=false
+  if [[ "$cleanup_ok" != true ]]; then
+    echo 'Invocation-owned resource cleanup failed; inspect cleanup.json and Docker resources' >&2
+    rc=1
+  fi
   printf 'Rehearsal exit=%s; retained evidence: %s\n' "$rc" "$evidence"
+  exit "$rc"
 }
 phase=build
 trap cleanup EXIT
@@ -105,8 +119,8 @@ for service in batch-backend batch-frontend; do
     build_args+=(--secret "id=proxy_ca,src=$CODEX_PROXY_CERT")
   fi
   if docker image inspect "$run_id/$service:$revision" >/dev/null 2>&1; then echo 'Allocated image tag already exists' >&2; exit 1; fi
-  docker buildx build --builder "$builder" --load "${build_args[@]}" --label "org.opencontainers.image.revision=$revision" -f "$dockerfile" -t "$run_id/$service:$revision" "$work/source" > "$evidence/build-$service.log" 2>&1
   created_images+=("$run_id/$service:$revision")
+  docker buildx build --builder "$builder" --load "${build_args[@]}" --label "org.opencontainers.image.revision=$revision" -f "$dockerfile" -t "$run_id/$service:$revision" "$work/source" > "$evidence/build-$service.log" 2>&1
   docker image inspect "$run_id/$service:$revision" --format '{{json .}}' > "$evidence/image-$service.json"
 done
 # Exact dependency refs from production Compose; no provider requests.
@@ -120,8 +134,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 CMD ["/sbin/init"]
 DOCKERFILE
 if docker image inspect "$host_image" >/dev/null 2>&1; then echo 'Allocated host image tag already exists' >&2; exit 1; fi
-docker buildx build --builder "$builder" --load -t "$host_image" "$work/host" > "$evidence/build-ubuntu.log" 2>&1
 created_images+=("$host_image")
+docker buildx build --builder "$builder" --load -t "$host_image" "$work/host" > "$evidence/build-ubuntu.log" 2>&1
 docker buildx rm "$builder" >/dev/null
 builder_created=false
 start_host() {
@@ -142,7 +156,10 @@ start_host() {
   if [[ -n "${HTTP_PROXY:-}" ]]; then
     extra_args+=(--env "HTTP_PROXY=$(resolve_proxy "$HTTP_PROXY")" --env "HTTPS_PROXY=$(resolve_proxy "${HTTPS_PROXY:-$HTTP_PROXY}")" --env 'NO_PROXY=localhost,127.0.0.1,::1,rehearsal-s3,postgres,redis')
   fi
-  container="$(docker run -d --name "$host_name" --label esl.rehearsal="$run_id" --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock --mount "type=volume,src=$volume,dst=/var/lib/docker" --mount "type=volume,src=$containerd_volume,dst=/var/lib/containerd" "${extra_args[@]}" "$host_image")"
+  # docker run can create a container and then fail to start it. Retain its allocated name
+  # before invocation so the EXIT trap can still remove that partial allocation.
+  container="$host_name"
+  docker run -d --name "$host_name" --label esl.rehearsal="$run_id" --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock --mount "type=volume,src=$volume,dst=/var/lib/docker" --mount "type=volume,src=$containerd_volume,dst=/var/lib/containerd" "${extra_args[@]}" "$host_image" >/dev/null
   docker inspect "$container" --format '{{json .}}' > "$evidence/$phase-host.json"
   for ((attempt=0; attempt<60; attempt++)); do
     if docker exec "$container" systemctl is-active --quiet multi-user.target; then break; fi

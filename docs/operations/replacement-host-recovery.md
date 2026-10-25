@@ -69,12 +69,18 @@ The revision must be a locally available full Git SHA; default is the current fe
 Fetch it first. Application code always comes from `git archive` of that revision; the rehearsal
 scripts under review are supplied separately. No ambient checkout `.env`, untracked product data,
 credential directory or real backup is read or copied. The evidence directory must be new.
+Each guest initializes a root-owned, clean Git snapshot of the archived source and reviewed
+rehearsal scripts so normal deployment checkout checks remain effective. Generated Compose and
+synthetic `/etc/esl-pipeline/production.env` live outside that snapshot; runtime secret directories
+retain the bootstrap's normal ownership and permissions.
 
 No target host, SSH address, Docker endpoint, cloud account, bucket or DNS override is accepted.
 The runner forces the local Unix Docker socket and allocates isolated resource names. No Docker
 socket is mounted in a guest. Host recovery refuses to run without its disposable-container marker,
 root and Docker container identity. All guest ports are isolated from the outer host; production
-Compose bindings are replaced only in a generated guest-only overlay. The API, frontend, workers,
+Compose bindings are replaced only in a generated guest-only overlay. The overlay also disables
+Caddy automatic HTTPS globally, including for the fixed marketing hostname, while preserving the
+repository routing rules. The API, frontend, workers,
 PostgreSQL, Redis and Caddy retain their production images, commands, dependencies and mounts.
 A guest-local registry and S3 emulator supply synthetic external dependencies. A guest-only `DOCKER-USER` rule rejects forwarded container traffic through the guest external
 interface; IPv6 on the application network is disabled. Normal bridge networking preserves
@@ -92,8 +98,14 @@ become committed assets or application image layers.
    Node or AWS CLI. Run `bootstrap-prod-host.sh apply` and `verify`. Exit 2 must report complete
    bootstrap and unresolved operator inputs, never application readiness.
 3. On the source only, use production Compose, migrator and prompt bootstrap, invite-only account
-   registration, student/lesson/session APIs, and image-packaged repositories/storage to create
-   synthetic finished recording/transcript/prompt/draft lineage. No ad hoc SQL seeds product data.
+   registration and student APIs, and image-packaged domain/storage code to create synthetic
+   lesson/session/recording/transcript/prompt/draft lineage. Synthetic calendar grant, connection
+   and association rows stand in for OAuth; the real calendar projection creates the lesson from a
+   controlled observation, then normal lesson completion and session code applies. Google Calendar
+   stays disabled and no provider is contacted. Fresh drafts use a repository AssignmentV1 fixture
+   with the matching pinned prompt envelope. The media handoff is an explicit JSON file, validated
+   before API reads; `source-media.json` retains only identifiers and hashes. It cannot select an
+   application log line as its payload.
 4. Stop application writers, create the real four-artifact PostgreSQL backup with
    `postgres-backup-restore.sh backup`, stop Redis and archive its quiet volume, and archive uploads.
    Keep checksums, full application revision and synthetic expected IDs/password in the bundle.
@@ -108,7 +120,7 @@ become committed assets or application image layers.
 8. Run `deploy-prod-images.sh <SHA>` against the guest-local registry: actual pulls, digest state,
    compatibility plan, pre-migration backup/upload, migration, Compose startup, S3 storage smoke,
    backend/frontend health, and all three current-instance worker readiness checks remain intact.
-9. Start Caddy with the unchanged repository Caddyfile and a local HTTP hostname. Verify `/` and
+9. Start Caddy with repository routing, automatic HTTPS disabled, and a local HTTP hostname. Verify `/` and
    `/api/health`, then log in with the recovered account and read the original student, lesson,
    assignment session, recording bytes and draft text without recreating them. Query restored DB
    anchor tables and collect the repository runtime queue monitor; all three queues must be idle
@@ -123,7 +135,8 @@ BuildKit builder/cache is removed before starting either guest, so VFS build sna
 compete with recovery storage. Ubuntu Docker selects its normal supported guest storage driver;
 the observed driver is retained in evidence. Hosts that only support VFS need substantially more
 disk because it duplicates image layers. Downloaded base images can remain in the development
-daemon. It never prunes unrelated resources. Failure logs remain available.
+daemon. It never prunes unrelated resources. `cleanup.json` records whether its allocated resources
+were removed, and cleanup failure makes the command fail. Failure logs remain available.
 
 Focused hazards: missing external input, missing uploads artifact, corrupt dump restore,
 incompatible schema ledger, and a current worker instance without readiness evidence. Preflight
@@ -146,6 +159,10 @@ same command on disposable Ubuntu 24.04 compute for relevant pull requests and m
 It has read-only repository access, no production environment or credentials, and retains
 `replacement-host-recovery-evidence` for 14 days even on failure. Pull requests recover the pinned
 base revision; manual runs accept a full SHA or default to `origin/main`.
+The public repository's standard GitHub-hosted Ubuntu runner supplies disposable compute without
+requiring a new Google Cloud allocation. If that runner is unavailable or unsuitable, the recorded
+Compute Engine alternative on ESL-15 still requires current cost/credit verification, an authorized
+budget, automatic VM/disk deletion and exported evidence before allocation.
 
 **Proven by disposable rehearsal, only after a successful run:** repository bootstrap plus synthetic durable-state restore and
 pinned application pull/deployment can reconstruct the current production-shaped topology, with

@@ -54,7 +54,7 @@ ESL_PIPELINE_CONFIG_PROVIDER=local
 BATCH_BACKEND_ENABLE_EXTENDED_API=true
 BATCH_BACKEND_ENABLE_OPS_CONTROL=false
 JWT_SECRET=synthetic-rehearsal-jwt-signing-input-not-a-production-secret
-REFRESH_COOKIE_SECURE=false
+REFRESH_COOKIE_SECURE=true
 MCP_OAUTH_ENABLED=false
 GOOGLE_CALENDAR_ENABLED=false
 STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false
@@ -210,14 +210,15 @@ else
   compose exec -T postgres psql -U esl -d esl_batch -v ON_ERROR_STOP=1 -c "UPDATE schema_migrations SET checksum = 'rehearsal-corrupt' WHERE id = (SELECT id FROM schema_migrations ORDER BY id LIMIT 1)"
   expect_failure /evidence/incompatible-schema.log bash scripts/deploy/deploy-prod-images.sh "$revision" --plan
   grep -q 'checksum mismatch in requested image' /evidence/incompatible-schema.log
-  # Only fault injection uses SQL; synthetic product state was created through APIs/repositories.
+  # Restore the injected fault; product state uses APIs/domain code, with synthetic calendar
+  # authority rows standing in for external OAuth in seed-media.mjs.
   IFS='|' read -r migration_id checksum < /tmp/original-migration
   compose exec -T postgres psql -U esl -d esl_batch -v ON_ERROR_STOP=1 -v migration_id="$migration_id" -v checksum="$checksum" <<'SQL'
 UPDATE schema_migrations SET checksum = :'checksum' WHERE id = :'migration_id';
 SQL
   [[ -z "$(compose ps -q batch-backend batch-worker transcribe-worker student-memory-worker)" ]]
   bash scripts/deploy/deploy-prod-images.sh "$revision" > /evidence/deploy.log 2>&1
-  # Use the unchanged production Caddyfile locally over HTTP; no DNS/ACME/public TLS calls.
+  # Use production Caddy routing locally with automatic HTTPS disabled in the guest overlay.
   CADDY_PUBLIC_HOSTNAME=http://recovery.invalid compose --profile edge up -d --no-build caddy-edge
   curl --retry 30 --retry-connrefused --retry-delay 1 -fsS -H 'Host: recovery.invalid' http://127.0.0.1:18081/ > /evidence/frontend.html
   curl -fsS -H 'Host: recovery.invalid' http://127.0.0.1:18081/api/health > /evidence/edge-health.json

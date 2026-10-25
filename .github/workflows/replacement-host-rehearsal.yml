@@ -41,7 +41,9 @@ jobs:
         env:
           ESL_REHEARSAL_REVISION: ${{ inputs.revision || github.event.pull_request.base.sha }}
           ESL_REHEARSAL_EVIDENCE_DIR: ${{ runner.temp }}/replacement-host-evidence
-        run: bash scripts/recovery/run-replacement-host-rehearsal.sh
+        run: |
+          node --test scripts/recovery/recovery-preflight.test.mjs scripts/recovery/media-fixture.test.mjs
+          bash scripts/recovery/run-replacement-host-rehearsal.sh
 
       - name: Retain recovery evidence even on failure
         if: always()
