@@ -175,7 +175,8 @@ start_host() {
   docker cp "$work/images.tar" "$container:/tmp/images.tar"
   docker exec "$container" bash -ec 'tar -xf /tmp/repository.tar -C /opt/esl-pipeline; tar -xf /tmp/tooling.tar -C /opt/esl-pipeline; printf "esl-disposable-recovery-v1\n" > /run/esl-recovery-disposable'
 }
-tar -C "$ROOT_DIR" -cf "$work/tooling.tar" scripts/recovery
+# Checkout files belong to the CI runner; privileged guest scripts must belong to root.
+tar --owner=0 --group=0 -C "$ROOT_DIR" -cf "$work/tooling.tar" scripts/recovery
 phase=source
 printf 'Starting pristine source host and synthetic backup creation\n'
 start_host
