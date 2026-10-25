@@ -113,9 +113,17 @@ revision content/history are preserved.
 
 ## Assignment Workflow Boundary
 
-- AssignmentV1 Slice 2 / ABO-29 uses a temporary JSON textarea for new structured assignments.
+- ESL-83 replaces the temporary JSON editor for current fresh-format assignments with workbook
+  editing, one contextual panel, separate assignment teaching notes, session-local Undo/Redo and
+  shared Learner view in step 4. Existing correction uses the same editor; completed references
+  remain read-only until that explicit entry. Bounded list operations keep required structures,
+  speaker identities, source URLs and generated content families intact. No legacy forms or manual
+  builder are introduced. Valid-only saves share one flight and preserve newer typing/Undo;
+  conflicts require an explicit choice against a fresh server version. Learner view does not
+  confirm Create or satisfy step-5 preview/share, and text edits do not claim regenerated audio.
+  Checked-in practice grouping guidance and shared headings change without live template activation.
   Create defers editor validation feedback before a draft exists and while generation is pending
-  (ESL-19); an absent draft is not valid, and clearing an editable draft remains a syntax error.
+  (ESL-19); an absent draft is not valid, and incomplete fields stay local with errors.
   Only parsed, schema/domain-valid AssignmentV1 can cross the durable autosave boundary. Invalid
   buffers stay local, suppress preview/confirmation/publication/correction, and disappear on reload.
   The API returns the same validated object and pinned context used by preview. Canonical sorted-key

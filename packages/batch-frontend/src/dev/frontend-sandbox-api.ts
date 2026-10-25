@@ -1,8 +1,14 @@
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { AxiosError } from 'axios';
 
-import { parseAssignmentV1 } from '@esl-pipeline/contracts';
+import {
+  type AssignmentConfirmedSnapshot,
+  type ConfirmAssignmentSessionStepRequest,
+  parseAssignmentV1,
+  serializeAssignmentV1,
+} from '@esl-pipeline/contracts';
 
+import { editorFixture } from './assignment-editor-fixture';
 import assignmentFixture from './assignment-fixture.json';
 import { createBusinessSandbox } from './business-sandbox';
 import type { FrontendSandboxScenario } from './frontend-sandbox';
@@ -908,7 +914,7 @@ const sandboxArtifact = {
   schemaVersion: 1 as const,
   serializationVersion: 1 as const,
   workingVersion: 1,
-  storageUri: 'memory://sandbox/content/' + 'b'.repeat(64) + '.json',
+  storageUri: `memory://sandbox/content/${'b'.repeat(64)}.json`,
   contentHash: 'b'.repeat(64),
 };
 
@@ -1081,9 +1087,122 @@ export function createFrontendSandboxApiAdapter(
   let manualTranscriptText = '';
   let manualTranscriptStudentId = 'student-alex';
   let manualTranscriptDisplayName = 'Pasted lesson transcript';
+  let editorDraft = {
+    ...draft,
+    id: 'draft-editor',
+    assignment: editorFixture(),
+    text: serializeAssignmentV1(editorFixture()),
+  };
+  const baseEditorSession = assignmentSession({
+    id: 'session-editor',
+    promptPackageId: 'prompt-sandbox',
+    draftId: 'draft-editor',
+    confirmedStep: 'context',
+    teacherNotes: 'Sandbox teacher notes',
+  });
+  let editorSession: Record<string, unknown> = {
+    ...baseEditorSession,
+    confirmed: {
+      ...baseEditorSession.confirmed,
+      context: {
+        teacherNotes: 'Sandbox teacher notes',
+        profileId: null,
+        profileRevisionId: null,
+        profileRevisionHash: null,
+      },
+    },
+  };
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const method = (config.method ?? 'get').toLowerCase();
     const path = normalizePath(config.url);
+    // Focused current editor entry; bypasses no application hooks or final preview gates.
+    if (scenario === 'assignment-editor') {
+      if (method === 'get' && path === '/assignment-sessions/session-editor')
+        return responseFor(config, editorSession);
+      if (method === 'patch' && path === '/assignment-sessions/session-editor/recovery') {
+        editorSession = {
+          ...editorSession,
+          ...(readRequestBody(config.data).patch as object),
+          revision: Number(editorSession.revision) + 1,
+        };
+        return responseFor(config, editorSession);
+      }
+      if (method === 'post' && path === '/assignment-sessions/session-editor/confirm') {
+        const body = readRequestBody(config.data) as unknown as ConfirmAssignmentSessionStepRequest;
+        const confirmed = editorSession.confirmed as AssignmentConfirmedSnapshot;
+        if (body.step === 'context') {
+          editorSession = {
+            ...editorSession,
+            teacherNotes: body.teacherNotes,
+            selectedProfileRevisionId: body.profileRevisionId,
+            selectedProfileRevisionHash: body.profileRevisionHash,
+            confirmed: {
+              ...confirmed,
+              context: {
+                teacherNotes: body.teacherNotes,
+                profileRevisionId: body.profileRevisionId,
+                profileRevisionHash: body.profileRevisionHash,
+              },
+            },
+          };
+        } else if (body.step === 'create') {
+          editorSession = {
+            ...editorSession,
+            promptPackageId: body.promptPackageId,
+            draftId: body.draftId,
+            confirmed: {
+              ...confirmed,
+              create: {
+                promptPackageId: body.promptPackageId,
+                draftId: body.draftId,
+                draftWorkingVersion: editorDraft.workingVersion,
+                draftStorageUri: editorDraft.storageUri,
+                draftHash: editorDraft.contentHash,
+              },
+            },
+          };
+        } else if (body.step === 'source') {
+          editorSession = {
+            ...editorSession,
+            lessonId: body.lessonId,
+            recordingId: body.recordingId,
+            transcriptId: body.transcriptId,
+            confirmed: {
+              ...confirmed,
+              source: {
+                ...confirmed.source,
+                lessonId: body.lessonId,
+                recordingId: body.recordingId,
+                transcriptId: body.transcriptId,
+                transcriptWorkingVersion: body.transcriptWorkingVersion,
+                transcriptStorageUri: baseEditorSession.confirmed.source.transcriptStorageUri,
+                transcriptHash: baseEditorSession.confirmed.source.transcriptHash,
+              },
+            },
+          };
+        } else throw notFoundFor(config);
+        editorSession = {
+          ...editorSession,
+          confirmedStep: body.step,
+          revision: Number(editorSession.revision) + 1,
+        };
+        return responseFor(config, { session: editorSession, invalidated: [] });
+      }
+      if (method === 'get' && path === '/drafts/draft-editor')
+        return responseFor(config, editorDraft);
+      if (method === 'put' && path === '/drafts/draft-editor') {
+        const text = readRequestText(config.data, editorDraft.text);
+        const assignment = parseAssignmentV1(text, sandboxContext);
+        editorDraft = {
+          ...editorDraft,
+          text: serializeAssignmentV1(assignment),
+          assignment: assignment as typeof editorDraft.assignment,
+          workingVersion: editorDraft.workingVersion + 1,
+          contentHash: String(editorDraft.workingVersion + 1).padStart(64, '0'),
+        };
+        return responseFor(config, editorDraft);
+      }
+    }
     if (method === 'get' && /^\/workspaces\/[^/]+\/calendar\/connection$/.test(path))
       return responseFor(config, {
         enabled: false,

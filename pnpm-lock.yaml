@@ -190,6 +190,9 @@ importers:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@esl-pipeline/learner-handout':
+        specifier: workspace:*
+        version: link:../learner-handout
       axios:
         specifier: ^1.20.0
         version: 1.20.0

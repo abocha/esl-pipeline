@@ -53,6 +53,12 @@ visible Pattern label; their cues/alternative rows align with headings and examp
 forms retain their Form label and render directly
 without inferred blocks or data mutation.
 
+Practice uses section 4 → titled groups (h3) → numbered items, with pronunciation under its own
+heading. The answer key retains matching group/item numbers (h4 within the key). Existing mixed
+activities are presented without classification or rewriting. `batch-frontend` reuses the default
+`LearnerHandout` for its valid current-content Learner view; editor fields, history and selection
+stay in that frontend package. The shared renderer has no authoring mode or editor-state payload.
+
 ## Public seam
 
 ```tsx
@@ -217,6 +223,8 @@ The packaged interaction script also animates shared native details in both dire
 Animations, cancels interrupted animations from the current height, clears clipping on completion,
 and uses native behavior under reduced motion or without animation support. Native summary clicks
 include Enter/Space keyboard activation. There is no hydration or general interaction framework.
+React consumers load the same behavior with the side-effect import
+`@esl-pipeline/learner-handout/handout-interactions.js`; the editor's Learner preview does this too.
 
 Fresh schema/template identity is v8; see [the canonical contract](../../docs/reference/ASSIGNMENT_V1.md#learner-handout-convention-and-authored-emoji-esl-32).
 Renderer 3 remains the native architecture identity; changed HTML gets a new exact-byte publisher

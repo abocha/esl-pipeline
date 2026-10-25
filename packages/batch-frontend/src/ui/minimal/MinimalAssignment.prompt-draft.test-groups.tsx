@@ -13,11 +13,9 @@ import {
   makeRecording,
   makeScheduleBillingSurface,
   makeStudentLesson,
-  makeTranscript,
   now,
   openRecordingSettings,
   renderMinimalAssignment,
-  renderMinimalAssignmentWithNavigationGuard,
   renderPromptReadyAssignment,
   testScreen as screen,
   setupMinimalAssignmentTest,
@@ -150,7 +148,7 @@ export function registerPromptEditorTests() {
       expect(
         screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
       ).toBe('step');
-      expect(screen.getByDisplayValue(makeAssignmentText('# Draft markdown'))).toBeTruthy();
+      expect(screen.getByText('Draft markdown')).toBeTruthy();
     });
 
     it('does not let a pending settings save restore stale teacher notes after commit', async () => {
@@ -405,8 +403,10 @@ export function registerPromptEditorTests() {
       await screen.findByRole('button', { name: /Generating assignment/i });
 
       expect(
-        (screen.getByRole('textbox', { name: /Assignment JSON/i }) as HTMLTextAreaElement).disabled,
-      ).toBe(true);
+        screen
+          .getByRole('textbox', { name: /^Assignment title$/i })
+          .getAttribute('contenteditable'),
+      ).toBe('false');
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(screen.getByRole('button', { name: /Create/i }).getAttribute('aria-current')).toBe(
         'step',
@@ -424,9 +424,10 @@ export function registerPromptEditorTests() {
       });
       await waitFor(() =>
         expect(
-          (screen.getByRole('textbox', { name: /Assignment JSON/i }) as HTMLTextAreaElement)
-            .disabled,
-        ).toBe(false),
+          screen
+            .getByRole('textbox', { name: /^Assignment title$/i })
+            .getAttribute('contenteditable'),
+        ).toBe('true'),
       );
     });
 
@@ -737,7 +738,7 @@ export function registerPromptEditorTests() {
       expect(
         screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }),
       ).toBeTruthy();
-      expect(screen.getByRole('textbox', { name: /Assignment JSON/i })).toBeTruthy();
+      expect(screen.getByRole('textbox', { name: /^Assignment title$/i })).toBeTruthy();
     });
 
     it('uses the default prompt template without exposing template selection', async () => {
