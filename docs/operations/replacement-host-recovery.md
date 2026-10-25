@@ -128,7 +128,7 @@ become committed assets or application image layers.
    anchor tables and collect the repository runtime queue monitor; all three queues must be idle
    with consumers. Installed backup/monitor units must match the repository and never have run.
 
-The runner retains build/bootstrap/restore/deploy logs, full image metadata/digests, JSON DB/product,
+The runner retains build/bootstrap/restore/deploy and Caddy logs, full image metadata/digests, JSON DB/product,
 health, readiness and queue evidence, negative-case logs, and `recovery-result.json` at the printed
 absolute evidence path. Synthetic credentials/tokens and the backup/media bundle are staging data;
 only sanitized verification evidence is retained. It removes its allocated guests, Docker volumes,

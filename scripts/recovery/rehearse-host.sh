@@ -139,6 +139,13 @@ CADDY_PUBLIC_HOSTNAME=http://recovery.invalid docker compose -f docker-compose.p
 chmod 0600 "$COMPOSE_FILE"
 compose() { docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"; }
 backend_tool() { compose run --rm --no-deps -T batch-backend node "$@"; }
+# Retain edge diagnostics on either outcome; compose up returns before Caddy listens.
+retain_edge_logs() {
+  local exit_code=$?
+  compose --profile edge logs --no-color --tail 100 caddy-edge > "/evidence/$phase-caddy.log" 2>&1 || true
+  exit "$exit_code"
+}
+trap retain_edge_logs EXIT
 # Published loopback ports require the normal bridge (Docker ignores publications on internal networks).
 # Block only forwarded container egress via this guest's external NIC; host bootstrap/pulls still work.
 iptables -I DOCKER-USER -o eth0 -j REJECT
@@ -222,8 +229,9 @@ SQL
   [[ -z "$(compose ps -q batch-backend batch-worker transcribe-worker student-memory-worker)" ]]
   bash scripts/deploy/deploy-prod-images.sh "$revision" > /evidence/deploy.log 2>&1
   # Use production Caddy routing locally with automatic HTTPS disabled in the guest overlay.
-  CADDY_PUBLIC_HOSTNAME=http://recovery.invalid compose --profile edge up -d --no-build caddy-edge
-  curl --retry 30 --retry-connrefused --retry-delay 1 -fsS -H 'Host: recovery.invalid' http://127.0.0.1:18081/ > /evidence/frontend.html
+  compose --profile edge run --rm --no-deps caddy-edge caddy validate --config /etc/caddy/Caddyfile > /evidence/caddy-validate.log 2>&1
+  CADDY_PUBLIC_HOSTNAME=http://recovery.invalid compose --profile edge up -d --no-build --no-deps caddy-edge
+  curl --retry 30 --retry-all-errors --retry-delay 1 --retry-max-time 60 --connect-timeout 2 --max-time 5 -fsS -H 'Host: recovery.invalid' http://127.0.0.1:18081/ > /evidence/frontend.html
   curl -fsS -H 'Host: recovery.invalid' http://127.0.0.1:18081/api/health > /evidence/edge-health.json
   node scripts/recovery/product-state.mjs verify-edge > /evidence/recovered-product.json
   mapfile -t workers < <(compose ps -q batch-worker transcribe-worker student-memory-worker)
