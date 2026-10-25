@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.3.1] - 2026-10-25
+
+### Changed
+
+- Automated release from PR #329: feat(recovery): rehearse replacement-host recovery on disposable Ubuntu (https://github.com/abocha/esl-pipeline/pull/329)
+
 ## [22.3.0] - 2026-10-25
 
 ### Changed
