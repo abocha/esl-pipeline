@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.3.0] - 2026-10-25
+
+### Changed
+
+- Automated release from PR #451: feat(frontend): add desktop workbook assignment editor (https://github.com/abocha/esl-pipeline/pull/451)
+
 ## [22.2.0] - 2026-10-23
 
 ### Changed
