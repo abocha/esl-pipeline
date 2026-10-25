@@ -121,6 +121,7 @@ export CADDY_PUBLIC_HOSTNAME='' CADDY_ACME_EMAIL=rehearsal@example.invalid
 export COMPOSE_FILE=/var/lib/esl-pipeline/rehearsal-compose.yml
 export PG_COMPOSE_FILE="$COMPOSE_FILE" PG_COMPOSE_PROJECT="$PROJECT_NAME"
 export PG_BACKUP_ENV_FILE="$ESL_PRODUCTION_ENV_FILE"
+export PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops
 export ESL_IMAGE_PREFIX=localhost:15000/esl
 export DEPLOY_STATE_DIR=/var/lib/esl-pipeline/deploy
 export PG_BACKUP_DIR=/bundle/postgres

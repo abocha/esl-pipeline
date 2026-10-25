@@ -74,7 +74,9 @@ cleanup() {
 phase=build
 trap cleanup EXIT
 mkdir "$work/source" "$work/host"
-git -C "$ROOT_DIR" archive "$revision" > "$work/repository.tar"
+# Git's default tar.umask can leave archived privileged code group-writable. Match the
+# production checkout trust contract before bootstrap/backup/deployment reads any scripts.
+git -C "$ROOT_DIR" -c tar.umask=0022 archive "$revision" > "$work/repository.tar"
 tar -xf "$work/repository.tar" -C "$work/source"
 # A dedicated builder owns its cache; remove it before guest image loads on small Cloud disks.
 # Native snapshotting works on nested filesystems without relying on an overlay-on-overlay mount.
@@ -160,6 +162,7 @@ start_host() {
   # before invocation so the EXIT trap can still remove that partial allocation.
   container="$host_name"
   docker run -d --name "$host_name" --label esl.rehearsal="$run_id" --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock --mount "type=volume,src=$volume,dst=/var/lib/docker" --mount "type=volume,src=$containerd_volume,dst=/var/lib/containerd" "${extra_args[@]}" "$host_image" >/dev/null
+  container="$(docker inspect "$host_name" --format '{{.Id}}')"
   docker inspect "$container" --format '{{json .}}' > "$evidence/$phase-host.json"
   for ((attempt=0; attempt<60; attempt++)); do
     if docker exec "$container" systemctl is-active --quiet multi-user.target; then break; fi

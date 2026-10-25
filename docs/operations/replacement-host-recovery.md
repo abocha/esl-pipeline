@@ -145,14 +145,15 @@ actual service-backed recovery, not replace it.
 
 ## Evidence boundary
 
-**Current evidence:** work stopped at the user's request after the final hosted attempt established
-source-host bootstrap, healthy dependencies/application, 60 applied migrations, and synthetic
-account/student/lesson/session creation. Source verification then failed because the media handoff
-lacked `recordingId`. No database backup or replacement recovery completed, and there is no
-successful `recovery-result.json`. See the
-[2026-10-02 evidence and failure report](replacement-host-recovery-evidence-2026-10-02.md) for
-the observed results, earlier network/storage failures, CI status, and remaining work. This runbook
-describes the implemented procedure and acceptance criteria, not end-to-end recovery success.
+**Execution evidence:** [PR #329](https://github.com/abocha/esl-pipeline/pull/329) and
+[ESL-15](https://linear.app/abocha/issue/ESL-15/rehearse-replacement-host-recovery-on-a-disposable-host)
+record the latest tested tooling revision, pinned application revision, hosted run and retained
+artifact. A successful claim requires `recovery-result.json`, `source-destroyed.json`, verified
+restored product/readiness/queue evidence and successful `cleanup.json`; source bootstrap or green
+application CI alone is insufficient. This runbook describes the procedure and acceptance criteria.
+The [2026-10-02 failure report](replacement-host-recovery-evidence-2026-10-02.md) is historical: that
+attempt stopped before backup because the media handoff lacked `recordingId`, and did not prove
+replacement recovery.
 
 The [hosted rehearsal workflow](../../.github/workflows/replacement-host-rehearsal.yml) executes the
 same command on disposable Ubuntu 24.04 compute for relevant pull requests and manual dispatches.
