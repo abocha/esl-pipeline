@@ -108,8 +108,7 @@ const assets = [...html.matchAll(/(?:src|href)="(\/assets\/[^" ]+\.(?:js|css))"/
 assert.ok(assets.length > 0);
 const assetEvidence = [];
 for (const asset of assets) {
-  const response = await fetch(`http://127.0.0.1:18081${asset}`, {
-    headers: { host: 'recovery.invalid' },
+  const response = await fetch(`http://recovery.invalid:18081${asset}`, {
     signal: AbortSignal.timeout(10000),
   });
   assert.equal(response.status, 200);

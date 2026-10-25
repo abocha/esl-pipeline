@@ -127,6 +127,9 @@ become committed assets or application image layers.
    assignment session, recording bytes and draft text without recreating them. Query restored DB
    anchor tables and collect the repository runtime queue monitor; all three queues must be idle
    with consumers. Installed backup/monitor units must match the repository and never have run.
+   The guest alone maps `recovery.invalid` to loopback in `/etc/hosts`; Node requests use that
+   hostname in their URLs because `fetch` ignores an explicit `Host` header. No runner/laptop hosts
+   file or external DNS is changed.
 
 The runner retains build/bootstrap/restore/deploy and Caddy logs, full image metadata/digests, JSON DB/product,
 health, readiness and queue evidence, negative-case logs, and `recovery-result.json` at the printed

@@ -7,16 +7,14 @@ const base =
   command === 'seed'
     ? 'http://127.0.0.1:18080'
     : command === 'verify-edge'
-      ? 'http://127.0.0.1:18081/api'
+      ? 'http://recovery.invalid:18081/api'
       : 'http://127.0.0.1:15173/api';
-const edgeHeaders = command === 'verify-edge' ? { host: 'recovery.invalid' } : {};
 let token;
 async function request(route, body) {
   const response = await fetch(`${base}${route}`, {
     method: body ? 'POST' : 'GET',
     headers: {
       'content-type': 'application/json',
-      ...edgeHeaders,
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -71,7 +69,7 @@ async function verify() {
   const recording = await request(`/recordings/${media.recordingId}`);
   assert.ok(JSON.stringify(recording).includes(fixture.studentId));
   const audio = await fetch(`${base}/recordings/${media.recordingId}/audio`, {
-    headers: { ...edgeHeaders, authorization: `Bearer ${token}` },
+    headers: { authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(10000),
   });
   assert.equal(audio.status, 200);

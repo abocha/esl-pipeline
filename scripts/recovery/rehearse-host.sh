@@ -229,6 +229,9 @@ SQL
   [[ -z "$(compose ps -q batch-backend batch-worker transcribe-worker student-memory-worker)" ]]
   bash scripts/deploy/deploy-prod-images.sh "$revision" > /evidence/deploy.log 2>&1
   # Use production Caddy routing locally with automatic HTTPS disabled in the guest overlay.
+  # Node fetch derives Host from the URL and ignores a supplied Host header. Resolve only
+  # this synthetic hostname inside the disposable guest; never use external DNS.
+  printf '127.0.0.1 recovery.invalid\n' >> /etc/hosts
   compose --profile edge run --rm --no-deps caddy-edge caddy validate --config /etc/caddy/Caddyfile > /evidence/caddy-validate.log 2>&1
   CADDY_PUBLIC_HOSTNAME=http://recovery.invalid compose --profile edge up -d --no-build --no-deps caddy-edge
   curl --retry 30 --retry-all-errors --retry-delay 1 --retry-max-time 60 --connect-timeout 2 --max-time 5 -fsS -H 'Host: recovery.invalid' http://127.0.0.1:18081/ > /evidence/frontend.html
