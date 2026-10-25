@@ -1,0 +1,56 @@
+name: Replacement-host recovery rehearsal
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/replacement-host-rehearsal.yml
+      - scripts/recovery/**
+      - scripts/deploy/**
+      - scripts/docker/postgres-backup*.sh
+      - docker-compose.prod.yml
+      - docs/operations/replacement-host-recovery.md
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full application commit SHA to recover (empty uses origin/main)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: replacement-host-recovery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rehearsal:
+    name: disposable Ubuntu recovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout recovery tooling
+        # actions/checkout v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Recover synthetic durable state on a clean replacement
+        env:
+          ESL_REHEARSAL_REVISION: ${{ inputs.revision || github.event.pull_request.base.sha }}
+          ESL_REHEARSAL_EVIDENCE_DIR: ${{ runner.temp }}/replacement-host-evidence
+        run: |
+          node --test scripts/recovery/recovery-preflight.test.mjs scripts/recovery/media-fixture.test.mjs
+          bash scripts/recovery/run-replacement-host-rehearsal.sh
+
+      - name: Retain recovery evidence even on failure
+        if: always()
+        # actions/upload-artifact v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: replacement-host-recovery-evidence
+          path: ${{ runner.temp }}/replacement-host-evidence
+          retention-days: 14
+          if-no-files-found: warn

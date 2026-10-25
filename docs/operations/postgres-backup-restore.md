@@ -149,3 +149,10 @@ Notes:
 3. Apply changes.
 4. If rollback needed:
    - `pnpm docker:db:restore -- <dump-file> --clean`
+
+## Replacement-host scope
+
+A database restore alone does not recover all current production durable state. Follow the
+[replacement-host recovery runbook](replacement-host-recovery.md) for the actual PostgreSQL, Redis,
+uploads, image/schema and external-input inventory, ordering, and disposable end-to-end command.
+Its synthetic proof does not authorize or prove a real production recovery.

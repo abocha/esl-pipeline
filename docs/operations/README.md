@@ -25,6 +25,7 @@ and does not run the transcription worker or call paid providers by default.
 
 For a fresh supported Ubuntu host, start with
 [production host bootstrap](../backend-frontend/DEPLOYMENT.md#fresh-ubuntu-production-host-bootstrap).
+For host loss, use the [replacement-host recovery inventory and disposable rehearsal](replacement-host-recovery.md).
 
 For an existing host with mixed checkout/configuration ownership, use the maintainer-controlled
 [production configuration reconciliation](production-config-reconciliation.md). Repository preparation
