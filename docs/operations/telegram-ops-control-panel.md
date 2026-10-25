@@ -125,7 +125,7 @@ Student browsing behavior:
 - `/students` shows unique students ordered by recent lesson activity, with null activity last
 - each row includes name, short student id, recent lesson time, and pending drafts count when present
 - `/student` highlights latest state, latest UTC time, latest homework title, and recent jobs
-- latest homework resolution matches the `/job` and `/share` title extraction path, including markdown file-path and HTML fallback handling
+- latest homework resolution matches the `/job` and `/share` durable publication metadata path; historical links remain readable, and Markdown/HTML scraping is retired
 
 ## Routing and Transport
 
@@ -174,6 +174,12 @@ Artifacts:
 
 - `tmp/telegram-ops-go-live/preflight.json`
 - `tmp/telegram-ops-go-live/verify.json`
+
+Verification transport, timeout and response-read failures write a failed version-1 report and
+exit nonzero. Inspect its failed request check, repair backend reachability, then rerun. A report
+write failure also exits nonzero; an older artifact is not evidence for that invocation.
+Transport-failure reports omit accumulated response bodies while retaining checks and HTTP status;
+authentication response bodies are always omitted.
 
 ## Troubleshooting
 

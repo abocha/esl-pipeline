@@ -11,6 +11,10 @@ const request = {
 
 function createSession(): AssignmentSessionRecord {
   return {
+    homeworkIntent: 'create',
+    transcriptCompletedAt: null,
+    transcriptCompletionHistory: [],
+    homeworkStartedFromRevision: null,
     id: 'session-1',
     userId: 'user-1',
     studentId: 'student-1',
@@ -43,6 +47,14 @@ function createSession(): AssignmentSessionRecord {
         draftWorkingVersion: 1,
         draftStorageUri: 'local://confirmed/draft.md',
         draftHash: 'b'.repeat(64),
+        artifact: {
+          format: 'assignment_v1',
+          schemaVersion: 1,
+          serializationVersion: 1,
+          workingVersion: 1,
+          contentHash: 'b'.repeat(64),
+          storageUri: `local://drafts/content/${'b'.repeat(64)}.json`,
+        },
       },
     },
     creationRequestId: null,

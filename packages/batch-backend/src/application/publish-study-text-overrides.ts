@@ -4,7 +4,7 @@ import type { TtsModelId, TtsProviderId, TtsStrategy } from '@esl-pipeline/contr
 import { isTtsModelForProvider } from '@esl-pipeline/tts-core';
 
 export const publishTtsStrategySchema = z.enum(['auto', 'dialogue', 'tts']);
-export const publishTtsProviderSchema = z.enum(['elevenlabs', 'google', 'inworld']);
+export const publishTtsProviderSchema = z.enum(['elevenlabs', 'google', 'inworld', 'gemini']);
 export const publishTtsModelSchema = z.enum([
   'eleven_v3',
   'eleven_multilingual_v2',
@@ -17,6 +17,8 @@ export const publishTtsModelSchema = z.enum([
   'inworld-tts-2',
   'inworld-tts-1.5-max',
   'inworld-tts-1.5-mini',
+  'gemini-3.8-flash-lite-tts',
+  'gemini-3.8-flash-tts',
 ]);
 
 export interface PublishStudyTextOverrides {

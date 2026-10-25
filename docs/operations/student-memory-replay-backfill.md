@@ -1,11 +1,22 @@
 # Student Memory Replay and Backfill
 
+Source review: current ordinary-memory replay is represented by
+[migration 0061](../../packages/batch-backend/migrations/0061_ordinary_memory_replay.sql);
+[migration 0064](../../packages/batch-backend/migrations/0064_historical_markdown_read_only.sql)
+retires historical Markdown execution as read-only and requires confirmed remote Batch status for
+the legacy homework boundary. Batch actions remain separately gated by
+`STUDENT_MEMORY_OPENAI_BATCH_ENABLED` and this runbook's authorization rules. Snapshot/replay tools
+apply source, lineage, currentness and idempotency checks; they do not establish which live students
+have residual eligible work or whether production cutover/replay is complete. No learner records or
+deployed state were inspected. Preserve the documented backup, lineage and rollback safeguards and
+require current, separately authorized, record-bound evidence before a mutating operation.
+
 ## Meta
 
 - Audience: operators and implementation agents maintaining the batch backend.
 - Read Time: 5 minutes.
 - Authority Level: active operations runbook.
-- Last Verified Against: 2026-07-27 repo state.
+- Last Verified Against: 2026-10-03 repo state (ESL-16 / GitHub #330).
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: after student-memory tooling changes.
 - Status: `active`.
@@ -22,17 +33,135 @@
 1. Repair generated student-memory artifacts by replaying from source truth.
 2. Do not hand-edit lesson-memory, homework-memory, or snapshot rows in place.
 3. Use `--dry-run` first when scoping a wider replay or backfill.
-4. Use provider/model overrides only when intentionally re-running extraction on a different
-   structured-output-capable model path.
+4. Ordinary lesson, homework and snapshot replay accept only `--provider openai`. Use `--model`
+   overrides only when intentionally re-running extraction on a supported OpenAI model path.
 5. Assignment-level provenance inspection remains on `GET /prompt-packages/:id`.
 6. Compose-managed production must run `student-memory-worker`; `batch-worker` does not consume
    lesson-memory, homework-memory, or snapshot jobs.
 7. OpenAI Batch replay is disabled by default and is not a deployment, target-model, or paid-call
    authorization.
 
+## Evidence availability and continuity (ESL-38)
+
+Existing verified observations are teaching evidence even when the originating assignment is
+historical. Source proof and new execution admission are separate: historical extraction,
+regeneration, initial enrichment and legacy Batch import remain blocked. Never infer missing
+provenance or retrofit confirmed bindings to make old evidence eligible.
+
+Snapshot selection and publication verify both lesson and homework contributors. Homework proof
+requires a retained ready observation, its succeeded source job, the matching root publication
+lineage and the same student throughout that lineage. Historical job format alone does not reject
+this proof. Missing, foreign, deleted or superseded contributors make established history
+repair-required; incremental refresh cannot carry that coverage forward. Explicit rebuild input
+includes only eligible materialized homework observations, while inspection retains raw audit rows.
+
+Memory overview/health, transcript progress and teaching context expose the shared aggregate
+`availability`: `absent`, `available`, `repair_required`, or `repository_unavailable`, with a bounded
+reason and lesson/homework reference counts. Stored status and pending/failed work are independent.
+Counts describe referenced evidence, not complete history or learner mastery. Reads never enqueue
+repair, verify by writing, or change stored status. MCP adds this field beside `context`; its closed
+`mcp_teaching_context.v1` content and disclosure limits remain unchanged.
+
+Genuine source invalidation conservatively rejects contaminated snapshots. New invalidations retain
+`continuityReason: source_invalidated` in existing generation notes under the student lock; blocked
+automatic refreshes retain `continuityReason: repair_required` on their failed intent. Old rows are
+classified from retained successful-result output/history without backfilling guesses. Failed or
+cancelled first intents alone do not establish history. Without an eligible parent, established
+history blocks the normal five-lesson/three-homework bootstrap before generation and at publication.
+A genuine first bootstrap remains bounded; an eligible-parent refresh remains incremental.
+
+An explicitly requested `manual_rebuild_v1_1` or `full_rebuild_v1` with replay key and operator reason
+uses all eligible materialized episodes and the existing currentness/cancellation/idempotency fences.
+This capability does not authorize production invocation. Do not start automatic full-history
+provider work, claim subtraction, learner scans, replay or reconciliation as part of rollout.
+
+### Approved-candidate draft application (ESL-47)
+
+Full draft refresh preserves the exact selected approved facts in their mapped structured fields
+after model generation, using the existing deterministic patch application. Review the resulting
+profile diff before activation. Semantically similar model wording may coexist with the preserved
+fact; semantic deduplication does not authorize removing approved wording.
+
+Draft responses retain `includedCandidateIds` and add `omittedCandidates` with candidate IDs and
+reasons. Empty approved wording is omitted rather than falling back to the original fact. The older
+candidate-patch endpoint preserves its explicit model decision and reports provider omissions.
+Activation adds `candidatePromotion` (`linkedCandidateCount`, `promotedCandidateIds`,
+`omittedCandidates`). Promotion still requires the same student, the actual active revision/hash,
+current approval and normalized whole-item equality in a mapped field. Changed/deleted wording,
+rejection, promotion elsewhere or a competing active revision is reported rather than promoted.
+Retries report facts already promoted by that revision without rewriting their promotion timestamps.
+
+The Learning page reports applied/omitted and promoted/omitted counts and reasons. Older servers
+without activation metadata are explicitly reported as not having verified promotion. These additive
+response fields need a minor release under the versioning model and a coordinated API/frontend
+rollout when separately authorized. No schema migration, retroactive candidate relabeling, snapshot
+repair or provider replay is part of this correction.
+
+For a web/MCP availability discrepancy, first compare fresh responses for the same student IDs,
+authenticated workspace, deployed images, database target and response/cache timestamps. Both paths
+use the shared snapshot selector. `available` proves eligible referenced evidence, not complete
+historical coverage; `repair_required` does not by itself prove damaged observations. Keep missing
+confirmed-source proof and superseded source references excluded while preparing an explicit rebuild.
+
+### Compatible application rollout and rollback
+
+No table/data migration or new memory artifact schema is required. Preserve observations, reviewed
+profiles/revisions, snapshots and frozen prompt-package bytes. The additive availability result is
+backward compatible for existing consumers that ignore new fields; new frontend fields are optional
+when reading older API responses. Use a minor release for the added public projection; no closed
+MCP context-version change is needed.
+
+For a separately authorized rollout, stop new refresh admission and quiesce **all old API and memory
+worker writers**, including already active snapshot work, before enabling new admission. Do not mix
+old/new workers: an old in-flight refresh could still publish a recent-only bootstrap. Retain queued
+intents and cancellation/supersession evidence. New workers re-read the durable intent, frozen target,
+source state and continuity before processing retained jobs; repair-required work becomes durably
+blocked rather than generated. Coordinate API/worker replacement, then frontend, and restore normal
+admission only with the compatible writer set. GET/health/MCP remain read-only throughout.
+
+The corrected reader may immediately expose already verified stored snapshots without provider calls
+or row rewrites. This is a read-policy correction, not reconstruction. Separately verify availability
+and stored-versus-selectable status after deployment; provider-backed learner recovery needs a new
+bounded approval/preflight. No production recovery is established by local fixtures.
+
+Rollback must quiesce writers again and use a compatible API/worker set. Earlier readers hide
+historical evidence again and earlier workers lack the continuity guard; do not resume their automatic
+refresh processing for repair-required learners. Rollback never revives superseded/cancelled work or
+clears repair notes. Preserve post-rollout writes and audit evidence; prefer forward repair if a safe
+compatible writer set is unavailable. Batch retirement remains ABO-26, outside this change.
+
+## Effective request transition (ESL-40)
+
+Memory and affected profile builders now use policy `learner_memory_generation_v2` inside the
+existing v1 envelope. OpenAI keeps its split instructions/input and other currently supported
+providers receive the envelope's flattened text. Snapshot diagnostics and pacing now account for
+that effective text. Correct estimates may change optional-context dropping or hard-budget admission;
+caps are unchanged, hard rejection dispatches no provider request, and explicit manual rebuild still
+warns rather than rejecting on its warning threshold. No caching or live call is needed for this change.
+
+Queued ordinary memory jobs reconstruct their request at execution time. For a separately authorized
+rollout after ESL-39, pause new memory enqueueing and quiesce API/profile and memory workers; let
+active calls finish and record durable results before swapping the compatible application image set.
+Pending jobs then reconstruct v2 requests with their frozen provider/model, source identity, strategy,
+reason and candidate/currentness policy intact. Stop the rollout if old writers or unresolved active
+calls remain. Do not trigger replay, regeneration or learner recovery as a rollout side effect.
+
+Existing stored prompt packages, request envelopes/hashes, snapshots, episodes, profile revisions,
+and Batch audit state are retained verbatim. Frozen submitted Batch bodies/results continue to use
+their stored evidence; the new builders apply only to newly constructed requests. No database
+migration or provider/env change is required. Rollback first quiesces the new writers, then restores
+the prior compatible API/worker image set that includes ESL-38 and ESL-39; it must not reinterpret
+stored request evidence or revive superseded/cancelled intents.
+
+The uncalled transcript-summary/heuristic/history-package fallback is removed. Prompt creation uses
+canonical `student-memory-package`; `extractStudentOnlyTranscript` remains an extraction helper.
+Do not use old fallback functions as a replay/recovery procedure. Dedicated Batch runtime, schema,
+default-off settings, claim arbitration and historical legacy rejection remain; retirement is still
+ABO-26. Google LLM migration is ESL-41, outside this rollout.
+
 ## Disabled OpenAI Batch Replay
 
-Use the Batch tool only for explicit, non-urgent historical replay after separate maintainer
+Use the Batch tool only for explicit, non-urgent replay of eligible lesson evidence or native AssignmentV1 history after separate maintainer
 authorization. It never replaces fresh online student-memory work.
 
 ```bash
@@ -75,10 +204,105 @@ docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml
 If replay commands request work but the worker is absent or stopped, memory rows may remain pending
 and the student workspace can look stale even though the replay command accepted the request.
 
+### ESL-7 historical Batch cutover
+
+Historical Markdown homework is read-only under ABO-30. Do not submit, retry, reconcile/import or
+regenerate it. Before migration 0064, refresh every remotely submitted historical homework Batch
+run with the updated tool's `status` or `poll` action, including rows already labelled `cancelled` or
+`reconciled`. This is a separately authorized provider-status read plus local status/audit update.
+It does not authorize paid generation or historical result import.
+
+```bash
+pnpm --filter @esl-pipeline/batch-backend student-memory:batch -- status --run-id <run-uuid>
+```
+
+Use the approved target DB/provider configuration with automatic migration disabled until quiescence
+is verified. The existing Batch access gate still applies. Cancellation requests can return OpenAI
+`cancelling` while requests remain in flight; the tool persists that as blocking `in_progress` and
+reports the raw status. Poll until an actual terminal response is recorded. The audit stores
+`remoteStatusConfirmation` with matching Batch id, raw status and observation time. Migration 0064
+rejects a remotely submitted historical run without matching terminal evidence, even when its old
+state says `cancelled`. A confirmed terminal response preserves `reconciled` bookkeeping; a
+nonterminal refresh makes the run blocking again. Unknown statuses remain blocking.
+
 ## Homework Memory Replay
 
+### Durable ordinary replay contract
+
+Ordinary replay uses persisted memory intent, the existing BullMQ student-memory queue, normal
+generation, a transactional canonical commit, and existing downstream delivery. Batch remains
+separately gated pending the later ABO-26 retirement slice.
+
+- Every operator run supplies `--replay-key <key>`. Keep the key when retrying/resubmitting the
+  same intended run, including after an uncertain response. Identity is scoped to the assignment
+  lineage for homework and the student for snapshots, and survives Redis retention and terminal
+  intent state. A failed intent may resume with its original target. Completed, cancelled, or
+  obsolete intent stays terminal; choose a new key for genuinely new regeneration.
+- A new manual snapshot key supersedes older pending/failed manual replay for that student. New forced
+  homework regeneration supersedes prior pending/failed intent for the same published job. Retry
+  uses the original provider/model and snapshot strategy/reason/candidate policy, even if current
+  configuration or command overrides differ. A new key can select a new explicit target.
+- Snapshot completion locks the student and exact pending intent. Canonical ready-source changes,
+  confirmed Source ownership changes, and snapshot writers share the student lock. Manual replay
+  freezes the canonical source-set fingerprint and latest ready snapshot at intent creation;
+  automatic refresh captures them before building its prompt. Both recheck before dispatch and
+  commit. New relevant lesson/homework state, lost Source authority, a newer snapshot, cancellation,
+  or supersession discards late output. Manual replay no longer overwrites newer valid state.
+- Lesson publication/replacement and Source confirmation/reconfirmation acquire that student lock
+  before transcript, binding, or memory-row locks. Homework retains its lineage job lock before
+  the student and memory rows. Triggers enforce participation but cannot repair reversed application
+  lock ordering. Migration `0061` is runtime-incompatible with previous writers: use the existing
+  deploy quiescence and schema-compatible recovery procedure; image-only rollback is blocked.
+- Snapshot canonical insertion, superseding prior ready state, and linking the pending intent to
+  its result commit together. Duplicate completion returns that same result, preserving lineage,
+  included/covered IDs, parent, prompt/source metadata, strategy, and ownership. Homework keeps its
+  existing publication-sequence ordering and transactional canonical commit.
+- Cancel by exact intent UUID using either tool with `--cancel-intent <uuid> --student-id <uuid>
+--reason <reason>` (add `--dry-run` to inspect the request). Cancellation is durable on the original
+  pending/failed row (`superseded`, `cancelledAt`, `cancellationReason`). It cannot undo an already
+  committed result. Redis removal alone does not cancel work. Checks before dispatch and canonical
+  commit fence an in-flight late response; provider execution or billing is not exactly once.
+- The worker's existing five-second reconciliation tick checks at most 50 lesson/homework/snapshot
+  deliveries, rotating by `deliveryCheckedAt`. It repairs committed intent without a queue job,
+  including retained failed/completed BullMQ delivery, using the persisted provider/model. Linked
+  canonical homework without downstream snapshot intent and explicitly requested snapshot
+  candidate delivery in `pending`/`failed` state are recovered without regenerating canonical
+  memory. Existing failed/cancelled downstream intent is not replaced automatically. Provider
+  failures still use existing pacing/retries and terminal failure policy.
+- Ready canonical lesson extraction with a missing `sourceEntryId` snapshot obligation is also
+  discovered in bounded batches for saved no-homework sources and promoted finish evidence that
+  still matches current authority. The shared student-locked ensure path converges scanner and
+  direct-worker requests, reuses pending/fulfilled lineage, and respects failed/cancelled/obsolete/
+  superseded obligations. A ready lesson retry repairs only this handoff; it never invokes the
+  extraction provider again or changes ready extraction to failed. Completion of the tutor's
+  transcript-only workflow preserves memory and eligible initial-enrichment admission. This repair
+  does not authorize replay of unrelated historical ready sources or terminal extraction failures.
+- Before recovered pending snapshot generation can enter BullMQ, reconciliation repairs the existing active
+  Batch claim supersession prerequisite. A failed fence leaves delivery retryable and unqueued;
+  a later Batch import cannot overwrite recovered ordinary output through an old active claim.
+  The existing Batch fencing transaction locks items/claims before the student and exact intent,
+  matching Batch import and ordinary completion ordering. It commits supersession only while that
+  intent is still pending; otherwise it rolls back, including if completion raced the recovery
+  selection. Redelivery of a completed intent preserves later Batch ownership and repairs downstream work.
+- Failure marking merges failure-owned metadata into current database JSONB. Concurrently adopted
+  replay identity, currentness, and delivery metadata survive, so same-key retry resumes the same
+  intent and frozen provider/model target.
+
+Inspect the original intent UUID and its `superseded_by_id` together with the linked result's
+`generation_notes.pendingEntryId`. `obsoleteReason` records discarded replay. Use a new key only
+after reviewing why the original attempt became obsolete. No new provider work is needed to
+recover downstream delivery of an already current canonical result.
+
+If a replay CLI stops on a later target, its nonzero failure summary reports confirmed request
+responses and requested counts. The failing target may already have persisted intent or queued work;
+the counts do not establish asynchronous worker completion. Inspect persisted intents and worker
+outcomes before resuming. Reuse the same replay key for the same homework/snapshot intent, including
+an uncertain response. Lesson replay uses its existing confirmed-source intent rather than a replay
+key; resume that same source intent with the existing lesson replay command.
+
 Homework memory is canonical only after publish succeeds, so replay operates from succeeded publish
-jobs and the canonical published markdown source.
+jobs and the frozen native AssignmentV1 artifact. Historical Markdown jobs remain available for
+inspection and export but cannot be replayed or regenerated.
 
 Host-run command:
 
@@ -101,7 +325,9 @@ Supported options:
 - `--selection missing|failed|all`
 - `--student-id <student-id>`
 - `--job-id <job-id>`
-- `--provider openai|google_ai_studio|openrouter`
+- `--replay-key <key>` (required unless dry-run or cancellation)
+- `--cancel-intent <pending-intent-uuid>` with `--student-id` and `--reason`
+- `--provider openai`
 - `--model <model-id>`
 
 Operator notes:
@@ -148,7 +374,9 @@ Supported options:
 - `--strategy manual_rebuild_v1_1|full_rebuild_v1`
 - `--reason <operator-reason>` (required unless `--dry-run`)
 - `--candidate-refresh` (explicitly request downstream profile-candidate refresh)
-- `--provider openai|google_ai_studio|openrouter`
+- `--replay-key <key>` (required unless dry-run or cancellation)
+- `--cancel-intent <pending-intent-uuid>` with `--student-id` and `--reason`
+- `--provider openai`
 - `--model <model-id>`
 
 Operator notes:
@@ -170,7 +398,7 @@ Operator notes:
 Example:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts --selection missing --limit 20 --strategy manual_rebuild_v1_1 --reason "Backfill missing alpha snapshots"
+pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts --selection missing --limit 20 --strategy manual_rebuild_v1_1 --reason "Backfill missing alpha snapshots" --replay-key alpha-snapshots-2026-10-03
 ```
 
 ### Snapshot eligibility repair recovery
@@ -192,7 +420,8 @@ release that includes 0045, stop after each step and review its bounded output b
 
 3. Compare the selected student count with the pre-deploy read-only audit. Obtain explicit operator
    approval before removing `--dry-run`.
-4. Execute the same bounded command without `--dry-run` only after that approval.
+4. Execute the same bounded command without `--dry-run`, adding a stable `--replay-key`, only after
+   that approval.
 5. Verify each processed student has an eligible ready snapshot and candidate-refresh metadata with
    `enqueueStatus` equal to `enqueued` or `not_requested` for a documented policy reason.
 6. Confirm `student_profile_candidate_refresh_requested` and a processed job event or persisted
@@ -211,6 +440,13 @@ docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml
 The candidate-only command revalidates snapshot eligibility and recorded candidate intent. It does
 not regenerate memory or infer candidate intent. Do not run either production command without a
 reviewed scope and explicit operator authorization.
+
+ESL-39 candidate consumers additionally require recorded lesson source context on that snapshot.
+Pre-upgrade jobs missing `sourceSnapshotId`, or snapshots without a recorded trigger/selected lesson
+input, skip with `student_profile_candidate_refresh_skipped`. Diagnose the reason before any retry.
+Never substitute the latest snapshot for a source-less job or replay a rejected candidate backlog.
+No automatic migration/relabeling of existing candidate history is required; any backlog recovery
+is a separately reviewed and authorized ABO-41 rollout action.
 
 ## Student Lesson Artifact Export
 
@@ -234,6 +470,9 @@ Operator notes:
 2. The export defaults to canonical ready lesson-memory and homework-memory artifacts only.
 3. Homework memory that cannot be tied back to a transcript or recording is placed under an
    `unmatched-homework-memory/` folder in the zip instead of being dropped silently.
+4. On staging or zip failure, the command exits nonzero and reports the retained staging directory
+   and intended output path without printing learner contents. Staged private artifacts remain for
+   operator-controlled recovery or cleanup; inspect and handle them as private exports.
 
 ## Sampled Rollout Verification
 

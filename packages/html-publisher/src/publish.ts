@@ -3,9 +3,10 @@ import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 
+import type { AssignmentV1 } from '@esl-pipeline/contracts';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 
-import { type RenderOptions, renderToHtml } from './rendering.js';
+import { type AssignmentRenderOptions, renderAssignmentToHtml } from './assignment-adapter.js';
 
 export interface PublishHtmlOptions {
   keyPrefix?: string;
@@ -13,11 +14,6 @@ export interface PublishHtmlOptions {
   filename?: string;
   key?: string;
   renderHash?: string;
-}
-
-export interface RenderAndPublishOptions extends RenderOptions, PublishHtmlOptions {
-  markdown: string;
-  title: string;
 }
 
 export interface HtmlPublishResult {
@@ -62,33 +58,6 @@ export async function publishHtmlToS3(
   }
 }
 
-export async function renderAndPublishMarkdownToS3(
-  options: RenderAndPublishOptions,
-): Promise<HtmlPublishResult> {
-  const html = await renderToHtml(options.markdown, options.title, {
-    css: options.css,
-    allowRawHtml: options.allowRawHtml,
-    showGeneratedDate: options.showGeneratedDate,
-    features: options.features,
-    theme: options.theme,
-    headingTheme: options.headingTheme,
-    pronunciationAudio: options.pronunciationAudio,
-  });
-
-  const upload = await publishHtmlToS3(html, {
-    keyPrefix: options.keyPrefix,
-    publicRead: options.publicRead,
-    filename: options.filename,
-    key: options.key,
-    renderHash: options.renderHash,
-  });
-
-  return {
-    ...upload,
-    html,
-  };
-}
-
 function resolveFilename(filename?: string): string {
   const trimmed = filename?.trim();
   if (!trimmed) {
@@ -126,4 +95,11 @@ function buildHtmlArtifactKey(hash: string, keyPrefix?: string): string {
   const normalizedPrefix = keyPrefix?.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '') ?? '';
   const baseKey = `materials/html/artifacts/${hash}.html`;
   return normalizedPrefix ? `${normalizedPrefix}/${baseKey}` : baseKey;
+}
+
+export async function renderAndPublishAssignmentToS3(
+  options: AssignmentRenderOptions & PublishHtmlOptions & { assignment: AssignmentV1 },
+): Promise<HtmlPublishResult> {
+  const html = await renderAssignmentToHtml(options.assignment, options);
+  return { ...(await publishHtmlToS3(html, options)), html };
 }

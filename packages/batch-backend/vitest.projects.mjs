@@ -13,9 +13,14 @@ const deterministicHttpFiles = discoveredFiles.filter((file) =>
 const postgresMigrationsFiles = ['integration.migrations.test.ts'];
 
 const postgresFiles = [
+  'application.calendar-cutover.test.ts',
+  'application.calendar-runtime.test.ts',
+  'transport.google-calendar-connection.postgres.test.ts',
+  'domain.no-homework-assignment-session.test.ts',
   'integration.student-area-authorization.test.ts',
   'transport.mcp-oauth.postgres.test.ts',
   'domain.job-repository.test.ts',
+  'domain.generation-budget-repository.test.ts',
   'domain.revision-repository.test.ts',
   'domain.lesson-memory-repository.test.ts',
   'domain.homework-memory-repository.test.ts',
@@ -28,7 +33,6 @@ const postgresFiles = [
   'domain.student-repository.workspace.test.ts',
   'integration.recording-tenant-authority.test.ts',
   'application.assignment-step-confirmation.test.ts',
-  'application.homework-memory-source.test.ts',
   'application.student-timeline.test.ts',
   'application.student-schedule-billing.test.ts',
   'application.alpha-invites.registration.test.ts',
@@ -36,6 +40,8 @@ const postgresFiles = [
 ];
 
 const workerFiles = [
+  'integration.no-homework-memory-recovery.test.ts',
+  'integration.memory-replay-delivery.test.ts',
   'transport.worker-runner.integration.test.ts',
   'integration.bullmq-v6-runtime.test.ts',
   'integration.worker-observation.redis.test.ts',

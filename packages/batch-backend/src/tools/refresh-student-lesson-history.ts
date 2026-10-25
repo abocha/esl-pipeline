@@ -80,8 +80,10 @@ function parseArgs(argv: string[]): CliOptions {
       if (!value) {
         throw new Error('Missing value for --provider');
       }
-      if (value !== 'openai' && value !== 'google_ai_studio' && value !== 'openrouter') {
-        throw new Error('Invalid --provider. Use openai, google_ai_studio, or openrouter');
+      if (value !== 'openai') {
+        throw new Error(
+          'Invalid --provider. Use openai; Google AI Studio and OpenRouter generation are retired',
+        );
       }
       options.provider = value;
       index += 1;
@@ -280,6 +282,7 @@ async function run(): Promise<void> {
   let requested = 0;
   let readyExists = 0;
   let pendingExists = 0;
+  let confirmedTargets = 0;
 
   for (const target of targets) {
     if (options.dryRun) {
@@ -298,20 +301,32 @@ async function run(): Promise<void> {
       continue;
     }
 
-    const result = await requestLessonMemoryGeneration({
-      config,
-      params: {
-        studentId: target.student_id,
-        transcriptId: target.transcript_id,
-        recordingId: target.recording_id,
-        assignmentSessionId: target.assignment_session_id,
-        sourceStorageUri: target.source_storage_uri,
-        sourceContentHash: target.source_content_hash,
-        trigger: 'replay',
-        providerOverride: provider,
-        modelOverride: model,
-      },
-    });
+    let result: Awaited<ReturnType<typeof requestLessonMemoryGeneration>>;
+    try {
+      result = await requestLessonMemoryGeneration({
+        config,
+        params: {
+          studentId: target.student_id,
+          transcriptId: target.transcript_id,
+          recordingId: target.recording_id,
+          assignmentSessionId: target.assignment_session_id,
+          sourceStorageUri: target.source_storage_uri,
+          sourceContentHash: target.source_content_hash,
+          trigger: 'replay',
+          providerOverride: provider,
+          modelOverride: model,
+        },
+      });
+    } catch (error) {
+      throw new Error(
+        `request_failed: confirmedTargets=${confirmedTargets}/${targets.length} confirmedRequested=${requested} readyExists=${readyExists} pendingExists=${pendingExists}. ` +
+          'The failing target outcome is unknown and may include persisted intent or queued work. ' +
+          'Confirmed request responses do not establish asynchronous worker completion. ' +
+          'Inspect persisted source intent and worker outcomes; resume the same confirmed-source intent with the existing replay command.',
+        { cause: error },
+      );
+    }
+    confirmedTargets += 1;
 
     if (!result) {
       continue;

@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and API usage guide.
-- Last Verified Against: 2026-09-27 repository state.
+- Last Verified Against: 2026-10-04 repository state.
 - Owner: orchestrator maintainers + automation agents.
 - Review Cadence: monthly or after major API/runtime changes.
 - Status: `active`.
@@ -26,6 +26,9 @@ Library-only ESL pipeline engine for the monorepo.
 
 Operational execution and workspace-scoped teaching-context reads belong to
 `@esl-pipeline/batch-backend`.
+Cross-package ownership invariants are maintained in
+[`docs/reference/agents-ssot.md`](../../docs/reference/agents-ssot.md); this README owns the
+current package API and execution recipe.
 
 ## Public API
 
@@ -56,6 +59,15 @@ operator intentionally changes it.
 
 ## Speech Plan Manifest Contract
 
+The default `gemini` provider uses Google Cloud Gemini TTS, separately from the existing `google`
+Chirp provider. Its lane defaults to Flash-Lite with Flash selectable. Deterministic prebuilt voice
+assignment and identity speech plans retain the canonical stages without external ranker/planner
+calls. `ESL_TTS_DEFAULT_PROVIDER` can override the default provider. Full pronunciation sentences
+follow the study-text provider/model; short pronunciation item clips default to Google `chirp3_hd`.
+Saved rerun family selections
+remain authoritative. No global default or historical job is retargeted. See the
+[adapter README](../tts-provider-gemini/README.md) for ADC, project, limits and cache behavior.
+
 The orchestrator persists schema-v1 and schema-v2 speech plans without inventing provenance for
 legacy manifests. Schema v2 records immutable authored text, validated TTS-only synthesis text,
 enhancer version, exact returned planner model, immutable annotation policy, and prompt hash.
@@ -77,8 +89,29 @@ and [`docs/reference/pipeline-manifest.md`](../../docs/reference/pipeline-manife
 
 ## Validation
 
+Unit tests use the root pure-provider setup before module imports: ambient credentials and env-file
+autoload are disabled, external Node requests fail before dispatch, and loopback fixtures remain
+available. `test:unit` and `test:unit:prebuilt` also run the poisoned-environment subprocess check
+before the regular suite. See the [testing guide](../../docs/reference/TESTING_GUIDELINES.md#local-feedback-ladder)
+for the poisoned-environment regression and prebuilt prerequisites.
+
 ```bash
 pnpm --filter @esl-pipeline/orchestrator build
 pnpm --filter @esl-pipeline/orchestrator test
 pnpm --filter @esl-pipeline/orchestrator test:integration
 ```
+
+## Structured AssignmentV1 execution
+
+`newAssignment` and `rerunAssignment` require `assignment` with optional pinned `validationContext`.
+They validate before execution, resolve typed study/pronunciation fields directly and publish native
+HTML. `md` remains a stable manifest locator; execution never reads or creates that file. Native
+schema-6 manifests carry canonical `assignmentHash` and title/icon/audio publication metadata.
+Provider cast, speech plans and selected audio-family rerun/upload behavior remain shared.
+
+Historical Markdown assignments are read-only records. Status and manifest readers preserve source
+hash checks, produced output URLs, audio availability and original manifest evidence. New execution,
+rerun planning, regeneration and publication reject missing AssignmentV1 or historical manifests;
+providing JSON alongside a historical manifest does not convert it. Markdown validation, parsing,
+normalization, source discovery, caching, audio-link insertion and publishing are retired. See
+[AssignmentV1](../../docs/reference/ASSIGNMENT_V1.md) for the source/hash contract.

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import type { PoolClient } from 'pg';
 
 import type {
@@ -6,13 +7,22 @@ import type {
   AssignmentConfirmedStep,
   AssignmentInvalidatedArtifact,
   ConfirmAssignmentSessionStepRequest,
+  FinishTranscriptAssignmentSessionRequest,
   GenerationProvider,
   PublishAssignmentCorrectionRequest,
   PublishTarget,
+  TranscriptCompletionEvent,
   TtsProviderId,
   TtsStrategy,
 } from '@esl-pipeline/contracts';
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
 
+import { draftArtifact, readAssignmentArtifact } from '../application/assignment-artifact.js';
+import {
+  HistoricalAssignmentReadOnlyError,
+  isHistoricalAssignmentSession,
+  requireTypedAssignment,
+} from '../application/historical-assignment.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { ArtifactWorkingConflictError } from './artifact-working-conflict.js';
@@ -33,11 +43,16 @@ import {
   resetFailedAssignmentCorrectionJob,
 } from './job-repository.js';
 import { reconcileInitialEnrichmentIntent } from './profile-initial-enrichment-repository.js';
+import { setStudentActivityActor } from './student-activity-recording.js';
 import { getTranscriptByIdForUpdateForUser } from './transcript-repository.js';
 
-export const ACTIVE_ASSIGNMENT_SESSION_SQL = `confirmed_step <> 'share'`;
+export const ACTIVE_ASSIGNMENT_SESSION_SQL = `confirmed_step <> 'share' AND transcript_completed_at IS NULL`;
 
 interface AssignmentSessionRow {
+  homework_intent: 'create' | 'none';
+  transcript_completed_at: Date | null;
+  transcript_completion_history: TranscriptCompletionEvent[];
+  homework_started_from_revision: number | null;
   id: string;
   user_id: string;
   student_id: string;
@@ -74,6 +89,7 @@ export interface ConfirmStudentAssignmentSessionParams {
 }
 
 export interface AssignmentSessionRecoveryPatch {
+  homeworkIntent?: 'create' | 'none';
   lessonId?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
@@ -115,6 +131,8 @@ export interface ConfirmAssignmentSessionStepPersistenceParams {
   userId: string;
   request: ConfirmAssignmentSessionStepRequest;
   lessonMemory?: { schemaVersion: string; provider: string; model: string; requestedAt: Date };
+  /** Finish preserves terminal memory outcomes already attached to the exact source. */
+  retryTerminalLessonMemory?: boolean;
 }
 
 export interface ConfirmedLessonMemoryIntent {
@@ -170,6 +188,7 @@ export interface PublishAssignmentCorrectionJobResult {
 }
 
 const RETURNING_COLUMNS = `
+  homework_intent, transcript_completed_at, transcript_completion_history, homework_started_from_revision,
   id, user_id, student_id, lesson_id, recording_id, transcript_id,
   prompt_package_id, draft_id, revision, confirmed_step, confirmed_snapshot,
   creation_request_id, publish_target, selected_tts_provider, selected_tts_strategy,
@@ -180,6 +199,7 @@ const RETURNING_COLUMNS = `
 `;
 
 const RECOVERY_COLUMNS = {
+  homeworkIntent: 'homework_intent',
   lessonId: 'lesson_id',
   recordingId: 'recording_id',
   transcriptId: 'transcript_id',
@@ -202,7 +222,8 @@ export class AssignmentSessionRepositoryError extends Error {
     readonly code:
       | 'ASSIGNMENT_SESSION_NOT_FOUND'
       | 'ASSIGNMENT_SESSION_COMPLETED'
-      | 'ASSIGNMENT_SESSION_SHARE_IN_PROGRESS',
+      | 'ASSIGNMENT_SESSION_SHARE_IN_PROGRESS'
+      | 'ASSIGNMENT_HOMEWORK_INTENT_CONFLICT',
   ) {
     super(code);
     this.name = 'AssignmentSessionRepositoryError';
@@ -311,7 +332,11 @@ export async function confirmAssignmentSessionStepPersistence(
       const row = locked.rows[0];
       if (!row) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
       const current = mapRow(row);
-      if (current.confirmedStep === 'share') {
+      await requireExecutableSession(client, current);
+      if (current.homeworkIntent !== 'create') {
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_HOMEWORK_INTENT_CONFLICT');
+      }
+      if (current.confirmedStep === 'share' || current.transcriptCompletedAt) {
         throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_COMPLETED');
       }
       if (current.shareJobId) {
@@ -326,6 +351,169 @@ export async function confirmAssignmentSessionStepPersistence(
       throw error;
     }
   });
+}
+
+/** The only command allowed to confirm an unfinished no-homework source. */
+export async function finishTranscriptAssignmentSessionPersistence(params: {
+  id: string;
+  userId: string;
+  request: FinishTranscriptAssignmentSessionRequest;
+  lessonMemory: NonNullable<ConfirmAssignmentSessionStepPersistenceParams['lessonMemory']>;
+}): Promise<ConfirmAssignmentSessionStepPersistenceResult> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const locked = await client.query<AssignmentSessionRow>(
+        `SELECT ${RETURNING_COLUMNS} FROM assignment_sessions WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+        [params.id, params.userId],
+      );
+      if (!locked.rows[0])
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
+      const current = mapRow(locked.rows[0]);
+      await requireExecutableSession(client, current);
+      if (current.homeworkIntent !== 'none') {
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_HOMEWORK_INTENT_CONFLICT');
+      }
+      const last = current.transcriptCompletionHistory.at(-1);
+      if (current.transcriptCompletedAt) {
+        if (
+          last &&
+          last.expectedRevision === params.request.expectedRevision &&
+          last.resultingRevision === current.revision &&
+          last.completedAt === current.transcriptCompletedAt.toISOString() &&
+          isDeepStrictEqual(last.source, current.confirmed.source) &&
+          finishSourceMatches(last.source, params.request)
+        ) {
+          await client.query('COMMIT');
+          return { session: current, invalidated: [], lessonMemoryIntent: null };
+        }
+        throw new AssignmentSessionRevisionConflictError(current);
+      }
+      await assertNoHomeworkDownstreamState(client, current);
+      if (current.lessonId !== params.request.lessonId) {
+        throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
+      }
+      // Lock before checking the reviewed hash; the same locked primitive below
+      // validates version, source authority, speaker mapping and nullable lesson.
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [current.studentId]);
+      const reviewed = await getTranscriptByIdForUpdateForUser(
+        client,
+        params.request.transcriptId,
+        params.userId,
+      );
+      if (
+        !reviewed ||
+        reviewed.contentHash !== params.request.transcriptHash ||
+        reviewed.workingVersion !== params.request.transcriptWorkingVersion
+      ) {
+        throw new AssignmentSessionRevisionConflictError(current);
+      }
+      const confirmation = await confirmLockedSource(client, current, {
+        ...params,
+        request: { ...params.request, step: 'source' },
+        retryTerminalLessonMemory: false,
+      });
+      const completedAt = new Date().toISOString();
+      const event: TranscriptCompletionEvent = {
+        completedAt,
+        expectedRevision: params.request.expectedRevision,
+        resultingRevision: confirmation.session.revision + 1,
+        studentId: current.studentId,
+        source: confirmation.session.confirmed.source!,
+      };
+      const updated = await client.query<AssignmentSessionRow>(
+        `UPDATE assignment_sessions SET transcript_completed_at = $2,
+           transcript_completion_history = transcript_completion_history || $3::jsonb,
+           revision = revision + 1, updated_at = NOW()
+         WHERE id = $1 RETURNING ${RETURNING_COLUMNS}`,
+        [current.id, completedAt, JSON.stringify([event])],
+      );
+      await client.query('COMMIT');
+      return { ...confirmation, session: mapRow(updated.rows[0]!) };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+function finishSourceMatches(
+  source: NonNullable<AssignmentConfirmedSnapshot['source']>,
+  request: FinishTranscriptAssignmentSessionRequest,
+): boolean {
+  return (
+    source.lessonId === request.lessonId &&
+    source.recordingId === request.recordingId &&
+    source.transcriptId === request.transcriptId &&
+    source.transcriptWorkingVersion === request.transcriptWorkingVersion &&
+    source.transcriptHash === request.transcriptHash
+  );
+}
+
+export async function startHomeworkAssignmentSessionPersistence(params: {
+  id: string;
+  userId: string;
+  expectedRevision: number;
+}): Promise<AssignmentSessionRecord> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      await setStudentActivityActor(client, params.userId);
+      const locked = await client.query<AssignmentSessionRow>(
+        `SELECT ${RETURNING_COLUMNS} FROM assignment_sessions WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+        [params.id, params.userId],
+      );
+      if (!locked.rows[0])
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
+      const current = mapRow(locked.rows[0]);
+      await requireExecutableSession(client, current);
+      if (
+        current.homeworkIntent === 'create' &&
+        current.homeworkStartedFromRevision === params.expectedRevision &&
+        current.revision === params.expectedRevision + 1
+      ) {
+        await client.query('COMMIT');
+        return current;
+      }
+      assertExpectedRevision(current, params.expectedRevision);
+      if (current.homeworkIntent !== 'none' || !current.transcriptCompletedAt) {
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_HOMEWORK_INTENT_CONFLICT');
+      }
+      await assertConfirmedSourceIsCurrent(client, current, params.userId);
+      const updated = await client.query<AssignmentSessionRow>(
+        `UPDATE assignment_sessions SET homework_intent = 'create', transcript_completed_at = NULL,
+           homework_started_from_revision = $2, revision = revision + 1, updated_at = NOW()
+         WHERE id = $1 RETURNING ${RETURNING_COLUMNS}`,
+        [current.id, params.expectedRevision],
+      );
+      await client.query('COMMIT');
+      return mapRow(updated.rows[0]!);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+async function assertNoHomeworkDownstreamState(
+  client: PoolClient,
+  current: AssignmentSessionRecord,
+): Promise<void> {
+  const artifacts = await client.query(
+    `SELECT 1 FROM prompt_packages WHERE assignment_session_id = $1 LIMIT 1`,
+    [current.id],
+  );
+  if (
+    current.confirmed.context ||
+    current.confirmed.create ||
+    current.promptPackageId ||
+    current.draftId ||
+    current.shareJobId ||
+    current.confirmedStep === 'share' ||
+    artifacts.rows[0]
+  ) {
+    throw new AssignmentSessionRepositoryError('ASSIGNMENT_HOMEWORK_INTENT_CONFLICT');
+  }
 }
 
 async function confirmLockedStep(
@@ -354,6 +542,16 @@ async function confirmLockedSource(
     ConfirmAssignmentSessionStepRequest,
     { step: 'source' }
   >;
+  assertExpectedRevision(current, request.expectedRevision);
+  if (
+    current.recordingId !== request.recordingId ||
+    current.transcriptId !== request.transcriptId
+  ) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_SOURCE_NOT_ATTACHED');
+  }
+  // Source authority and lesson publication share this root; take it before
+  // transcript, binding, or memory-row locks (including identical reconfirmation).
+  await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [current.studentId]);
   const transcript = await getTranscriptByIdForUpdateForUser(
     client,
     request.transcriptId,
@@ -676,6 +874,7 @@ async function confirmLockedCreate(
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND');
   }
   const { draft, packageRow } = authorized;
+  requireTypedAssignment(draftArtifact(draft));
   if (draft.workingVersion === null || draft.contentHash === null) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
   }
@@ -692,12 +891,16 @@ async function confirmLockedCreate(
   ) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
   }
+  const reference = draftArtifact(draft);
+  requireTypedAssignment(reference);
+  await readAssignmentArtifact(reference, draft.promptPackageId);
   const create = {
     promptPackageId: request.promptPackageId,
     draftId: request.draftId,
     draftWorkingVersion: draft.workingVersion,
     draftStorageUri: draft.storageUri,
     draftHash: draft.contentHash,
+    artifact: reference,
   };
   if (JSON.stringify(current.confirmed.create) === JSON.stringify(create)) {
     return { session: current, invalidated: [], lessonMemoryIntent: null };
@@ -738,6 +941,7 @@ async function getAuthorizedCreateLineageForUpdate(
       draft_prompt_package_id: string;
       draft_student_id: string | null;
       draft_lesson_id: string | null;
+      draft_format?: 'markdown' | 'assignment_v1';
       draft_storage_uri: string;
       draft_working_version: number | null;
       draft_content_hash: string | null;
@@ -757,6 +961,7 @@ async function getAuthorizedCreateLineageForUpdate(
        d.prompt_package_id AS draft_prompt_package_id,
        d.student_id AS draft_student_id,
        d.lesson_id AS draft_lesson_id,
+       d.format AS draft_format,
        d.storage_uri AS draft_storage_uri,
        d.working_version AS draft_working_version,
        d.content_hash AS draft_content_hash,
@@ -800,6 +1005,7 @@ async function getAuthorizedCreateLineageForUpdate(
       promptPackageId: row.draft_prompt_package_id,
       studentId: row.draft_student_id,
       lessonId: row.draft_lesson_id,
+      format: row.draft_format ?? 'markdown',
       storageUri: row.draft_storage_uri,
       workingVersion: row.draft_working_version,
       contentHash: row.draft_content_hash,
@@ -865,6 +1071,11 @@ async function reconcileConfirmedLessonMemoryIntent(
     [source.transcriptId, source.transcriptHash],
   );
   const entryId = exact.rows[0]?.id ?? randomUUID();
+  if (
+    params.retryTerminalLessonMemory === false &&
+    (exact.rows[0]?.status === 'failed' || exact.rows[0]?.status === 'superseded')
+  )
+    return null;
   if (exact.rows[0] && exact.rows[0].assignment_session_id !== session.id) {
     await client.query(
       `UPDATE lesson_memory_entries
@@ -936,6 +1147,7 @@ async function reconcileConfirmedLessonMemoryIntent(
     if (oldIds.length > 0) {
       await client.query(
         `UPDATE student_memory_snapshots SET status = 'superseded', superseded_by_id = NULL,
+         generation_notes = COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object('continuityReason', 'source_invalidated'),
          superseded_at = $2, updated_at = NOW()
          WHERE student_id = $1 AND status = 'ready'
            AND lesson_memory_entry_ids && $3::uuid[]`,
@@ -944,6 +1156,7 @@ async function reconcileConfirmedLessonMemoryIntent(
     }
     await client.query(
       `UPDATE student_memory_snapshots SET status = 'superseded', superseded_by_id = NULL,
+       generation_notes = COALESCE(generation_notes, '{}'::jsonb) || jsonb_build_object('obsoleteReason', 'source_invalidated'),
        superseded_at = $2, updated_at = NOW()
        WHERE student_id = $1 AND status = 'pending'`,
       [session.studentId, lessonMemory.requestedAt],
@@ -1107,12 +1320,14 @@ export async function attachAssignmentSourceCandidate(
       const row = locked.rows[0];
       if (!row) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
       const current = mapRow(row);
-      if (current.confirmedStep === 'share') {
+      await requireExecutableSession(client, current);
+      if (current.confirmedStep === 'share' || current.transcriptCompletedAt) {
         throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_COMPLETED');
       }
       if (current.shareJobId) {
         throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_SHARE_IN_PROGRESS');
       }
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [current.studentId]);
       const candidateResult = await client.query<{
         workspace_id: string;
         source_identity_kind: 'audio' | 'manual_transcript' | null;
@@ -1180,6 +1395,7 @@ export async function attachAssignmentSourceCandidate(
       if (ownerId && ownerId !== current.id) {
         const ownerRow = await findOwnedById(client, ownerId, params.userId);
         if (!ownerRow) throw new AssignmentRecoveryLineageError();
+        await requireExecutableSession(client, mapRow(ownerRow));
         await retireUnownedLosingCandidateAudio(client, params.recordingId);
         await client.query('COMMIT');
         return { outcome: 'existing_assignment_resumed', session: mapRow(ownerRow) };
@@ -1370,54 +1586,51 @@ export async function updateAssignmentSessionRecovery(
   }
 
   return withPgClient(async (client) => {
-    if (
-      params.patch.recordingId !== undefined ||
-      params.patch.transcriptId !== undefined ||
-      params.patch.promptPackageId !== undefined ||
-      params.patch.draftId !== undefined
-    ) {
-      const currentRow = await findOwnedById(client, params.id, params.userId);
-      if (currentRow) {
-        const current = mapRow(currentRow);
-        if (current.revision === params.expectedRevision) {
-          await assertRecoverySourceLineage(client, current, params.patch, params.userId);
-          await assertRecoveryPromptDraftLineage(client, current, params.patch, params.userId);
-        }
+    await client.query('BEGIN');
+    try {
+      const locked = await client.query<AssignmentSessionRow>(
+        `SELECT ${RETURNING_COLUMNS} FROM assignment_sessions WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+        [params.id, params.userId],
+      );
+      if (!locked.rows[0])
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
+      const current = mapRow(locked.rows[0]);
+      await requireExecutableSession(client, current);
+      if (current.confirmedStep === 'share' || current.transcriptCompletedAt) {
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_COMPLETED');
       }
+      if (current.shareJobId)
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_SHARE_IN_PROGRESS');
+      assertExpectedRevision(current, params.expectedRevision);
+      if (params.patch.homeworkIntent === 'none')
+        await assertNoHomeworkDownstreamState(client, current);
+      if (
+        current.homeworkIntent === 'none' &&
+        (params.patch.promptPackageId || params.patch.draftId)
+      ) {
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_HOMEWORK_INTENT_CONFLICT');
+      }
+      await assertRecoverySourceLineage(client, current, params.patch, params.userId);
+      await assertRecoveryPromptDraftLineage(client, current, params.patch, params.userId);
+      const assignments: string[] = [];
+      const values: unknown[] = [params.id, params.userId, params.expectedRevision];
+      for (const [field, value] of entries) {
+        values.push(value);
+        assignments.push(`${RECOVERY_COLUMNS[field]} = $${values.length}`);
+      }
+      assignments.push('revision = revision + 1', 'updated_at = NOW()');
+      const result = await client.query<AssignmentSessionRow>(
+        `UPDATE assignment_sessions SET ${assignments.join(', ')}
+         WHERE id = $1 AND user_id = $2 AND revision = $3 RETURNING ${RETURNING_COLUMNS}`,
+        values,
+      );
+      if (!result.rows[0]) throw new AssignmentSessionRevisionConflictError(current);
+      await client.query('COMMIT');
+      return mapRow(result.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
     }
-    const assignments: string[] = [];
-    const values: unknown[] = [params.id, params.userId, params.expectedRevision];
-    for (const [field, value] of entries) {
-      values.push(value);
-      assignments.push(`${RECOVERY_COLUMNS[field]} = $${values.length}`);
-    }
-    assignments.push('revision = revision + 1', 'updated_at = NOW()');
-
-    const result = await client.query(
-      `
-      UPDATE assignment_sessions
-      SET ${assignments.join(', ')}
-      WHERE id = $1
-        AND user_id = $2
-        AND revision = $3
-        AND ${ACTIVE_ASSIGNMENT_SESSION_SQL}
-        AND share_job_id IS NULL
-      RETURNING ${RETURNING_COLUMNS}
-      `,
-      values,
-    );
-    if (result.rows[0]) return mapRow(result.rows[0]);
-
-    const current = await findOwnedById(client, params.id, params.userId);
-    if (!current) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
-    const session = mapRow(current);
-    if (session.confirmedStep === 'share') {
-      throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_COMPLETED');
-    }
-    if (session.shareJobId) {
-      throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_SHARE_IN_PROGRESS');
-    }
-    throw new AssignmentSessionRevisionConflictError(session);
   });
 }
 
@@ -1436,7 +1649,8 @@ async function cancelWorkingAssignmentSource(
       const row = locked.rows[0];
       if (!row) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
       const current = mapRow(row);
-      if (current.confirmedStep === 'share') {
+      await requireExecutableSession(client, current);
+      if (current.confirmedStep === 'share' || current.transcriptCompletedAt) {
         throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_COMPLETED');
       }
       if (current.shareJobId) {
@@ -1584,6 +1798,9 @@ export async function reserveAssignmentShare(
         throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
       }
       const current = mapRow(locked.rows[0]);
+      if (current.homeworkIntent !== 'create')
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_HOMEWORK_INTENT_CONFLICT');
+      await requireExecutableSession(client, current);
       if (current.shareJobId) {
         if (current.shareJobId !== params.requestId) {
           throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_REQUEST_CONFLICT');
@@ -1655,7 +1872,8 @@ export async function reserveAssignmentShare(
         draft.studentId !== current.studentId ||
         draft.workingVersion !== create.draftWorkingVersion ||
         draft.storageUri !== create.draftStorageUri ||
-        draft.contentHash !== create.draftHash
+        draft.contentHash !== create.draftHash ||
+        !isDeepStrictEqual(draftArtifact(draft), create.artifact)
       ) {
         throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_DIRTY_RECOVERY');
       }
@@ -1672,7 +1890,9 @@ export async function reserveAssignmentShare(
           lessonId: source.lessonId,
           userId: current.userId,
           md: null,
-          mdStorageUri: create.draftStorageUri,
+          mdStorageUri: null,
+          assignmentArtifact: create.artifact,
+          assignmentRendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
         },
         { client },
       );
@@ -1725,12 +1945,14 @@ export async function publishAssignmentCorrectionJob(
         throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_SESSION_LINEAGE_INVALID');
       }
       const session = mapRow(sessionRow);
+      await requireExecutableSession(client, session);
       const source = session.confirmed.source;
       const create = session.confirmed.create;
       const parent = await getJobById(params.publishedJobId, { client, forUpdate: true });
       if (!parent || parent.userId !== params.userId) {
         throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_NOT_FOUND');
       }
+      requireTypedAssignment(parent.assignmentArtifact);
       if (parent.state !== 'succeeded' || parent.publishTarget !== 'html' || !parent.htmlUrl) {
         throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_PARENT_INVALID');
       }
@@ -1755,7 +1977,12 @@ export async function publishAssignmentCorrectionJob(
           existing.userId !== params.userId ||
           existing.sourceJobId !== parent.id ||
           existing.draftId !== params.request.draftId ||
-          !storageUriMatchesHash(existing.mdStorageUri, params.request.draftHash) ||
+          !(
+            existing.assignmentArtifact &&
+            existing.assignmentArtifact.contentHash === params.request.draftHash &&
+            existing.assignmentArtifact.workingVersion === params.request.draftWorkingVersion
+          ) ||
+          !isDeepStrictEqual(existing.assignmentArtifact ?? undefined, params.request.artifact) ||
           !correctionReplayMatches(replay, params)
         ) {
           throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_REQUEST_CONFLICT');
@@ -1766,7 +1993,7 @@ export async function publishAssignmentCorrectionJob(
                 {
                   jobId: existing.id,
                   sourceJobId: parent.id,
-                  expectedMarkdownHash: params.request.draftHash,
+                  expectedAssignmentHash: params.request.draftHash,
                 },
                 { client },
               )
@@ -1787,16 +2014,22 @@ export async function publishAssignmentCorrectionJob(
         draft.promptPackageId !== create.promptPackageId ||
         draft.studentId !== session.studentId ||
         draft.workingVersion !== params.request.draftWorkingVersion ||
-        draft.contentHash !== params.request.draftHash
+        draft.contentHash !== params.request.draftHash ||
+        !isDeepStrictEqual(draftArtifact(draft), params.request.artifact)
       ) {
         throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_DRAFT_CONFLICT');
       }
 
+      const reference = draftArtifact(draft);
+      requireTypedAssignment(reference);
+      await readAssignmentArtifact(reference, draft.promptPackageId);
       const job = await insertJob(
         {
           id: params.request.requestId,
           md: null,
-          mdStorageUri: draft.storageUri,
+          mdStorageUri: null,
+          assignmentArtifact: reference,
+          assignmentRendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
           recordingId: parent.recordingId,
           transcriptId: parent.transcriptId,
           promptPackageId: parent.promptPackageId,
@@ -1843,13 +2076,6 @@ export async function publishAssignmentCorrectionJob(
       throw error;
     }
   });
-}
-
-function storageUriMatchesHash(
-  storageUri: string | null | undefined,
-  contentHash: string,
-): boolean {
-  return storageUri?.endsWith(`/content/${contentHash}.md`) ?? false;
 }
 
 function correctionReplayPayload(
@@ -1920,7 +2146,7 @@ export async function completeAssignmentShare(params: {
              AND to_jsonb(j.prompt_package_id) = s.confirmed_snapshot #> '{create,promptPackageId}'
              AND to_jsonb(j.draft_id) = s.confirmed_snapshot #> '{create,draftId}'
              AND COALESCE(to_jsonb(j.lesson_id), 'null'::jsonb) = s.confirmed_snapshot #> '{source,lessonId}'
-             AND j.md_storage_uri = s.confirmed_snapshot #>> '{create,draftStorageUri}'
+             AND ((j.assignment_artifact IS NOT NULL AND j.assignment_artifact = s.confirmed_snapshot #> '{create,artifact}') OR (j.assignment_artifact IS NULL AND NOT (s.confirmed_snapshot #> '{create}') ? 'artifact' AND j.md_storage_uri = s.confirmed_snapshot #>> '{create,draftStorageUri}'))
              AND j.source_job_id IS NULL
          )
        RETURNING ${RETURNING_COLUMNS}`,
@@ -1972,7 +2198,8 @@ function shareJobMatchesSession(job: JobRecord, session: AssignmentSessionRecord
       job.promptPackageId === create.promptPackageId &&
       job.draftId === create.draftId &&
       job.lessonId === source.lessonId &&
-      job.mdStorageUri === create.draftStorageUri &&
+      create.artifact &&
+      isDeepStrictEqual(job.assignmentArtifact, create.artifact) &&
       job.sourceJobId === null,
   );
 }
@@ -2139,6 +2366,7 @@ export async function remapCanonicalAssignmentSource(params: {
         throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
       }
       const target = mapRow(targetResult.rows[0]);
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [target.studentId]);
       const source = target.confirmed.source;
       if (
         !source?.sourceIdentityKind ||
@@ -2250,28 +2478,34 @@ export async function remapCanonicalAssignmentSource(params: {
 export async function listAssignmentSessionsForUser(
   userId: string,
   limit: number,
+  scope: 'active' | 'history' = 'active',
+  offset = 0,
 ): Promise<AssignmentSessionRecord[]> {
   const rows = await withPgClient(async (client) => {
     const result = await client.query(
       `
       SELECT ${RETURNING_COLUMNS}
       FROM assignment_sessions
-      WHERE user_id = $1 AND ${ACTIVE_ASSIGNMENT_SESSION_SQL}
+      WHERE user_id = $1 AND ${scope === 'history' ? "(confirmed_step = 'share' OR jsonb_array_length(transcript_completion_history) > 0)" : ACTIVE_ASSIGNMENT_SESSION_SQL}
       ORDER BY updated_at DESC, id DESC
       LIMIT $2
+      OFFSET $3
       `,
-      [userId, limit],
+      [userId, limit, scope === 'history' ? offset : 0],
     );
     return result.rows;
   });
   return rows.map(mapRow);
 }
 
-export async function countAssignmentSessionsForUser(userId: string): Promise<number> {
+export async function countAssignmentSessionsForUser(
+  userId: string,
+  scope: 'active' | 'history' = 'active',
+): Promise<number> {
   const count = await withPgClient(async (client) => {
     const result = await client.query(
       `SELECT COUNT(*) AS count FROM assignment_sessions
-       WHERE user_id = $1 AND ${ACTIVE_ASSIGNMENT_SESSION_SQL}`,
+       WHERE user_id = $1 AND ${scope === 'history' ? "(confirmed_step = 'share' OR jsonb_array_length(transcript_completion_history) > 0)" : ACTIVE_ASSIGNMENT_SESSION_SQL}`,
       [userId],
     );
     return result.rows[0]?.count ?? '0';
@@ -2317,6 +2551,10 @@ function assertStudentReplay(
 
 function mapRow(row: AssignmentSessionRow): AssignmentSessionRecord {
   return {
+    homeworkIntent: row.homework_intent,
+    transcriptCompletedAt: row.transcript_completed_at ?? null,
+    transcriptCompletionHistory: row.transcript_completion_history,
+    homeworkStartedFromRevision: row.homework_started_from_revision ?? null,
     id: row.id,
     userId: row.user_id,
     studentId: row.student_id,
@@ -2357,4 +2595,12 @@ function isNamedUniqueViolation(error: unknown, constraint: string): boolean {
     typeof error.constraint === 'string' &&
     error.constraint === constraint
   );
+}
+
+async function requireExecutableSession(
+  client: PoolClient,
+  session: AssignmentSessionRecord,
+): Promise<void> {
+  if (await isHistoricalAssignmentSession(session, client))
+    throw new HistoricalAssignmentReadOnlyError();
 }

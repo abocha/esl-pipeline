@@ -22,8 +22,10 @@ import { getStudentById } from '../domain/student-repository.js';
 import { getTranscriptByIdForWorkspace } from '../domain/transcript-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { isHistoricalAssignmentSession } from './historical-assignment.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 import { completeElapsedScheduledLessonForHomework } from './student-schedule-billing.js';
+import { getTranscriptProcessingStatus } from './transcript-processing-status.js';
 import { resolvePrimaryWorkspaceIdForUser } from './workspace-context.js';
 
 export async function confirmStudentAssignmentSessionForUser(
@@ -89,26 +91,58 @@ export async function getAssignmentSessionForUser(
   config?: BatchBackendConfig,
 ): Promise<AssignmentSessionDto | null> {
   const requested = await getAssignmentSessionByIdForUser(sessionId, userId);
+  if (requested && (await isHistoricalAssignmentSession(requested))) {
+    return { ...toAssignmentSessionDto(requested), historicalReadOnly: true };
+  }
   const session = requested ? await resolveCanonicalSourceSession(userId, requested) : null;
+  if (session && (await isHistoricalAssignmentSession(session)))
+    return { ...toAssignmentSessionDto(session), historicalReadOnly: true };
   if (session && config) await reconcileConfirmedSourceMemory(session, config);
-  return session ? toAssignmentSessionDto(session) : null;
+  return session
+    ? {
+        ...toAssignmentSessionDto(session),
+        ...(session.homeworkIntent === 'none'
+          ? { transcriptProcessing: await getTranscriptProcessingStatus(session.id) }
+          : {}),
+      }
+    : null;
 }
 
 export async function listAssignmentSessionsForUserDto(
   userId: string,
   limit: number,
+  scope: 'active' | 'history' = 'active',
+  offset = 0,
 ): Promise<AssignmentSessionListResponse> {
   const boundedLimit = Math.min(Math.max(limit, 1), 50);
   const [sessions, total] = await Promise.all([
-    listAssignmentSessionsForUser(userId, boundedLimit),
-    countAssignmentSessionsForUser(userId),
+    listAssignmentSessionsForUser(userId, boundedLimit, scope, offset),
+    countAssignmentSessionsForUser(userId, scope),
   ]);
-  return { sessions: sessions.map(toAssignmentSessionDto), total, limit: boundedLimit };
+  return {
+    sessions: await Promise.all(
+      sessions.map(async (session) => ({
+        ...toAssignmentSessionDto(session),
+        historicalReadOnly: await isHistoricalAssignmentSession(session),
+      })),
+    ),
+    total,
+    limit: boundedLimit,
+  };
 }
 
 export function toAssignmentSessionDto(session: AssignmentSessionRecord): AssignmentSessionDto {
   return {
     id: session.id,
+    homeworkIntent: session.homeworkIntent,
+    transcriptCompletedAt: session.transcriptCompletedAt?.toISOString() ?? null,
+    transcriptCompletionHistory: session.transcriptCompletionHistory,
+    completionKind:
+      session.confirmedStep === 'share'
+        ? 'homework'
+        : session.homeworkIntent === 'none' && session.transcriptCompletedAt
+          ? 'transcript_only'
+          : null,
     userId: session.userId,
     studentId: session.studentId,
     lessonId: session.lessonId,
@@ -223,6 +257,7 @@ async function reconcileConfirmedSourceMemory(
         sourceStorageUri: source.transcriptStorageUri,
         sourceContentHash: source.transcriptHash,
         trigger: 'replay',
+        retryTerminal: false,
         assignmentSessionId: session.id,
       },
     });

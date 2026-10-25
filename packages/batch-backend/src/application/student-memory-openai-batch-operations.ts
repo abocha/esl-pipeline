@@ -4,11 +4,14 @@ import type { BatchBackendConfig } from '../config/env.js';
 import {
   createStudentMemoryOpenAiBatchRun,
   markStudentMemoryOpenAiBatchRunSubmitted,
+  updateStudentMemoryOpenAiBatchRunRemoteStatus,
 } from '../domain/student-memory-openai-batch-repository.js';
 import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 import {
   buildStudentMemoryOpenAiBatchJsonl,
   createStudentMemoryOpenAiBatchTransport,
+  type OpenAiBatchRemoteRecord,
   type StudentMemoryBatchWorkload,
 } from './student-memory-openai-batch.js';
 
@@ -49,6 +52,12 @@ export async function createStudentMemoryOpenAiBatchPlan(args: {
   jsonl: string;
   runId?: string;
 }> {
+  if (args.workload === 'homework_memory') {
+    for (const item of args.items)
+      requireTypedAssignment(
+        item.sourceRefs.sourceFormat === 'assignment_v1' && item.sourceRefs.assignmentArtifact,
+      );
+  }
   const jsonl = buildStudentMemoryOpenAiBatchJsonl({
     workload: args.workload,
     model: args.model,
@@ -166,4 +175,32 @@ export async function createAndSubmitStudentMemoryOpenAiBatchPlan(args: {
     },
   });
   return { ...plan, runId: plan.runId, ...submitted };
+}
+
+/** Persist actual provider status; cancelling/validating/unknown remain quiescence blockers. */
+export async function recordStudentMemoryOpenAiBatchRemoteStatus(args: {
+  runId: string;
+  remote: OpenAiBatchRemoteRecord;
+  recordStatus?: typeof updateStudentMemoryOpenAiBatchRunRemoteStatus;
+}) {
+  const status = args.remote.status;
+  const state =
+    status === 'finalizing' ||
+    status === 'completed' ||
+    status === 'failed' ||
+    status === 'expired' ||
+    status === 'cancelled'
+      ? status
+      : 'in_progress';
+  await (args.recordStatus ?? updateStudentMemoryOpenAiBatchRunRemoteStatus)({
+    runId: args.runId,
+    state,
+    remoteOutputFileId: args.remote.output_file_id ?? null,
+    remoteErrorFileId: args.remote.error_file_id ?? null,
+    requestCounts: args.remote.request_counts,
+    remoteError:
+      args.remote.errors && typeof args.remote.errors === 'object' ? { present: true } : undefined,
+    remoteStatusConfirmation: { batchId: args.remote.id, status: status ?? 'unknown' },
+  });
+  return state;
 }

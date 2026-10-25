@@ -98,6 +98,13 @@ const report = {
 const markdownLines = [];
 markdownLines.push('# Coverage Report (Non-Blocking)');
 markdownLines.push('');
+if (missingPackages.length > 0) {
+  const inputStatus = packageMetrics.length === 0 ? 'UNAVAILABLE' : 'PARTIAL';
+  markdownLines.push(
+    `**${inputStatus}: ${packageMetrics.length}/${targets.length} package inputs available.**`,
+  );
+  markdownLines.push('');
+}
 markdownLines.push(`Generated at: ${generatedAt}`);
 markdownLines.push('');
 

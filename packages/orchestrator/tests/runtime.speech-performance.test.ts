@@ -19,6 +19,22 @@ function createPrepared(): PreparedStudyTextSynthesis {
 }
 
 describe('runtime/speech-performance', () => {
+  it.each(['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'] as const)(
+    'retains the speech-plan stage without dispatching a planner for %s',
+    async (model) => {
+      const prepared = { ...createPrepared(), selection: { provider: 'gemini' as const, model } };
+      const plan = vi.fn().mockRejectedValue(new Error('Must not dispatch'));
+      const result = await resolveSpeechPerformancePlan({ prepared, planner: { plan } });
+      expect(plan).not.toHaveBeenCalled();
+      expect(result.plan).toMatchObject({
+        provider: 'gemini',
+        model,
+        mode: 'identity',
+        sourceHash: 'source-hash',
+      });
+      expect(result.plan.segments).toEqual(prepared.segments);
+    },
+  );
   it('rejects one malformed annotation segment with assignment-wide identity fallback', async () => {
     const prepared: PreparedStudyTextSynthesis = {
       ...createPrepared(),

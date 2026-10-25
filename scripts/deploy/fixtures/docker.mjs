@@ -19,7 +19,13 @@ const commands = {
 };
 
 if (args[0] === 'info') output(args.includes('--format') ? directory : 'docker healthy');
-else if (args[0] === 'pull' || args[0] === 'image') process.exit(0);
+else if (args[0] === 'pull') {
+  output('fixture layer: Pull complete');
+  if (scenario.pullFail) {
+    console.error('fixture registry unavailable');
+    process.exit(17);
+  }
+} else if (args[0] === 'image') process.exit(0);
 else if (args[0] === 'buildx') output(JSON.stringify({ digest: `sha256:${'b'.repeat(64)}` }));
 else if (args[0] === 'run') {
   output(
@@ -103,9 +109,18 @@ else if (args[0] === 'run') {
   else if (command === 'exec' && tail[1] === 'postgres')
     output(readFileSync(`${directory}/applied.json`, 'utf8'));
   else if (command === 'run') {
-    if (scenario.migrationFail) fail();
+    if (tail.includes('caddy-edge') && tail.includes('validate')) {
+      output('fixture Caddy routine lifecycle chatter');
+      if (scenario.caddyWarning) console.error('WARN caddyfile fixture nonfatal warning');
+    }
+    if (tail.includes('migrate') && scenario.migrationFail) fail();
+    if (tail.includes('dist/tools/validate-env.js') && scenario.environmentFail) fail();
+    if (tail.includes('caddy-edge') && tail.includes('validate') && scenario.caddyValidationFail)
+      fail();
   } else if (command === 'exec') {
     if (tail.at(-1) === 'verify' && scenario.verifyFail) fail();
+    if (tail.includes('caddy-edge') && tail.includes('cat'))
+      output('reverse_proxy batch-frontend:8080');
   } else if (command === 'up') {
     if (scenario.upFail) fail();
     running = [

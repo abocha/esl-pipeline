@@ -20,7 +20,6 @@ import type {
 
 import { ACTIVE_ASSIGNMENT_SESSION_SQL } from '../domain/assignment-session-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
-import { materializeWorkspaceLessonRecurrencesWithClient } from './student-schedule-billing.js';
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 const DEFAULT_CURRENCY = 'USD';
@@ -61,14 +60,13 @@ interface BusinessLessonRow {
   title: string | null;
   notes: string | null;
   credit_event_id: string | null;
-  recurrence_rule_id: string | null;
-  recurrence_slot_id: string | null;
-  recurrence_occurrence_key: string | null;
-  recurrence_origin: 'manual' | 'generated';
-  recurrence_override_kind: 'manual_edit' | 'manual_reschedule' | 'manual_cancel' | null;
+  schedule_origin_history: Record<string, unknown>;
+  calendar_lesson_id: string | null;
+  calendar_event_url: string | null;
   created_at: Date;
   updated_at: Date;
   homework_status: StudentLessonHomeworkStatus;
+  transcript_result_session_id: string | null;
   homework_assignment_session_id: string | null;
   homework_prompt_package_id: string | null;
   homework_draft_id: string | null;
@@ -126,15 +124,22 @@ export class TeacherBusinessDashboardError extends Error {
 
 const BUSINESS_LESSON_HOMEWORK_SELECT = `
   student_lessons.*,
+  calendar_lesson_link.lesson_id AS calendar_lesson_id,
+  calendar_lesson_link.event_url AS calendar_event_url,
   CASE
     WHEN lesson_homework_memory.id IS NOT NULL THEN 'memory_ready'
     WHEN lesson_published_job.id IS NOT NULL THEN 'published'
     WHEN lesson_active_job.id IS NOT NULL THEN 'publishing'
     WHEN lesson_assignment_session.draft_id IS NOT NULL THEN 'draft_in_progress'
     WHEN lesson_assignment_session.id IS NOT NULL THEN 'session_in_progress'
+    WHEN lesson_transcript_result.id IS NOT NULL THEN 'not_planned'
     ELSE 'not_started'
   END AS homework_status,
   lesson_assignment_session.id AS homework_assignment_session_id,
+  CASE WHEN lesson_assignment_session.id IS NULL
+    AND lesson_published_job.id IS NULL AND lesson_active_job.id IS NULL
+    AND lesson_homework_memory.id IS NULL THEN lesson_transcript_result.id
+    ELSE NULL END AS transcript_result_session_id,
   COALESCE(
     lesson_homework_memory.prompt_package_id,
     lesson_published_job.prompt_package_id,
@@ -154,11 +159,13 @@ const BUSINESS_LESSON_HOMEWORK_SELECT = `
     lesson_homework_memory.generated_at,
     lesson_published_job.updated_at,
     lesson_active_job.updated_at,
-    lesson_assignment_session.updated_at
+    lesson_assignment_session.updated_at,
+    lesson_transcript_result.updated_at
   ) AS homework_updated_at
 `;
 
 const BUSINESS_LESSON_HOMEWORK_JOINS = `
+  LEFT JOIN calendar_lesson_bindings calendar_lesson_link ON calendar_lesson_link.lesson_id = student_lessons.id
   LEFT JOIN LATERAL (
     SELECT id, prompt_package_id, draft_id, updated_at
     FROM assignment_sessions
@@ -167,6 +174,14 @@ const BUSINESS_LESSON_HOMEWORK_JOINS = `
     ORDER BY updated_at DESC, id DESC
     LIMIT 1
   ) lesson_assignment_session ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT id, updated_at
+    FROM assignment_sessions
+    WHERE lesson_id = student_lessons.id
+      AND homework_intent = 'none' AND transcript_completed_at IS NOT NULL
+    ORDER BY transcript_completed_at DESC, updated_at DESC, id DESC
+    LIMIT 1
+  ) lesson_transcript_result ON TRUE
   LEFT JOIN LATERAL (
     SELECT id, prompt_package_id, draft_id, html_url,
            COALESCE(finished_at, updated_at, created_at) AS updated_at
@@ -270,7 +285,6 @@ export async function getBusinessScheduleSurface(
   params: { from?: string; to?: string } = {},
 ): Promise<BusinessScheduleSurfaceResponse> {
   return withPgClient(async (client) => {
-    await materializeWorkspaceLessonRecurrencesWithClient(client, workspaceId);
     const settings = await getBusinessSettingsForWorkspace(client, workspaceId);
     const from = params.from ?? toDateInputInTimeZone(new Date(), settings.timezone);
     const to = params.to ?? addDaysToDateInput(from, 7);
@@ -325,7 +339,6 @@ export async function getBusinessStatsSurface(
   params: { month?: string } = {},
 ): Promise<BusinessStatsSurfaceResponse> {
   return withPgClient(async (client) => {
-    await materializeWorkspaceLessonRecurrencesWithClient(client, workspaceId);
     const settings = await getBusinessSettingsForWorkspace(client, workspaceId);
     const month = params.month ?? toDateInputInTimeZone(new Date(), settings.timezone).slice(0, 7);
     const monthRange = parseMonth(month);
@@ -459,7 +472,7 @@ async function listBusinessLessons(
     WHERE ${workspacePredicate('student_lessons.workspace_id', '$4', '$5')}
       AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
       AND students.archived_at IS NULL
-      AND student_lessons.recurrence_obsolete_at IS NULL
+      AND student_lessons.schedule_hidden_at IS NULL
       AND (student_lessons.starts_at AT TIME ZONE $3)::date >= $1::date
       AND (student_lessons.starts_at AT TIME ZONE $3)::date <= $2::date
     ORDER BY student_lessons.starts_at ASC, student_lessons.id ASC
@@ -489,7 +502,7 @@ async function listPlanningLessons(
     WHERE ${workspacePredicate('student_lessons.workspace_id', '$3', '$4')}
       AND ${workspacePredicate('students.workspace_id', '$3', '$4')}
       AND students.archived_at IS NULL
-      AND student_lessons.recurrence_obsolete_at IS NULL
+      AND student_lessons.schedule_hidden_at IS NULL
       AND student_lessons.status = 'scheduled'
       AND student_lessons.starts_at >= $1
       AND student_lessons.starts_at < $2
@@ -515,7 +528,7 @@ async function listOverdueBusinessLessonFollowups(
     WHERE ${workspacePredicate('student_lessons.workspace_id', '$1', '$2')}
       AND ${workspacePredicate('students.workspace_id', '$1', '$2')}
       AND students.archived_at IS NULL
-      AND student_lessons.recurrence_obsolete_at IS NULL
+      AND student_lessons.schedule_hidden_at IS NULL
       AND student_lessons.status IN ('scheduled', 'completed')
       AND student_lessons.starts_at + (student_lessons.duration_minutes * INTERVAL '1 minute') <= NOW()
       AND lesson_homework_memory.id IS NULL
@@ -564,7 +577,7 @@ async function listStudentCreditStates(
       WHERE ${workspacePredicate('student_lessons.workspace_id', '$3', '$5')}
         AND ${workspacePredicate('lesson_students.workspace_id', '$3', '$5')}
         AND lesson_students.archived_at IS NULL
-        AND student_lessons.recurrence_obsolete_at IS NULL
+        AND student_lessons.schedule_hidden_at IS NULL
       GROUP BY student_lessons.student_id
     )
     SELECT
@@ -718,7 +731,6 @@ async function getCollectedForMonth(
     JOIN students ON students.id = student_payment_records.student_id
     WHERE ${workspacePredicate('student_payment_records.workspace_id', '$4', '$5')}
       AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
-      AND students.archived_at IS NULL
       AND student_payment_records.voided_at IS NULL
       AND student_payment_records.currency = $3
       AND student_payment_records.received_at >= $1::date
@@ -750,7 +762,6 @@ async function getExcludedCurrenciesForMonth(
     JOIN students ON students.id = student_payment_records.student_id
     WHERE ${workspacePredicate('student_payment_records.workspace_id', '$4', '$5')}
       AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
-      AND students.archived_at IS NULL
       AND student_payment_records.voided_at IS NULL
       AND student_payment_records.currency <> $3
       AND student_payment_records.received_at >= $1::date
@@ -801,7 +812,7 @@ async function getLessonStatsForMonth(
     WHERE ${workspacePredicate('student_lessons.workspace_id', '$4', '$5')}
       AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
       AND students.archived_at IS NULL
-      AND student_lessons.recurrence_obsolete_at IS NULL
+      AND student_lessons.schedule_hidden_at IS NULL
       AND (student_lessons.starts_at AT TIME ZONE $3)::date >= $1::date
       AND (student_lessons.starts_at AT TIME ZONE $3)::date < $2::date
     `,
@@ -871,10 +882,7 @@ function buildBusinessReminders(
         severity: remaining < 0 ? 'urgent' : 'attention',
         title: remaining < 0 ? 'Balance is negative' : 'Lesson credits are low',
         message: `${remaining} lesson credit${Math.abs(remaining) === 1 ? '' : 's'} remaining.`,
-        copyText:
-          remaining <= 0
-            ? `Hi ${state.student_name}, please send payment for the next lesson package when convenient.`
-            : `Hi ${state.student_name}, you have ${remaining} lesson credit${remaining === 1 ? '' : 's'} remaining. Would you like to top up?`,
+        copyText: `Hi ${state.student_name}, your lesson balance is ${remaining} credit${Math.abs(remaining) === 1 ? '' : 's'}. Would you like to discuss a top-up?`,
       });
     }
   }
@@ -941,11 +949,9 @@ function mapBusinessLesson(row: BusinessLessonRow): BusinessLessonDto {
     title: row.title ?? null,
     notes: row.notes ?? null,
     creditEventId: row.credit_event_id ?? null,
-    recurrenceRuleId: row.recurrence_rule_id ?? null,
-    recurrenceSlotId: row.recurrence_slot_id ?? null,
-    recurrenceOccurrenceKey: row.recurrence_occurrence_key ?? null,
-    recurrenceOrigin: row.recurrence_origin ?? 'manual',
-    recurrenceOverrideKind: row.recurrence_override_kind ?? null,
+    historicalScheduleOrigin: row.schedule_origin_history ?? {},
+    schedulingSource: row.calendar_lesson_id ? 'calendar' : 'unmanaged',
+    calendarEventUrl: row.calendar_event_url ?? null,
     homework: mapBusinessLessonHomework(row),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
@@ -955,6 +961,7 @@ function mapBusinessLesson(row: BusinessLessonRow): BusinessLessonDto {
 function mapBusinessLessonHomework(row: BusinessLessonRow): StudentLessonHomeworkDto {
   return {
     status: row.homework_status ?? 'not_started',
+    transcriptResultSessionId: row.transcript_result_session_id ?? null,
     assignmentSessionId: row.homework_assignment_session_id ?? null,
     promptPackageId: row.homework_prompt_package_id ?? null,
     draftId: row.homework_draft_id ?? null,
@@ -985,7 +992,7 @@ function getBusinessLessonFollowupSuppressionKey(lesson: BusinessLessonDto): str
 
 function isBusinessLessonFollowUpDue(lesson: BusinessLessonDto): boolean {
   if (!['scheduled', 'completed'].includes(lesson.status)) return false;
-  if (lesson.homework.status === 'published' || lesson.homework.status === 'memory_ready') {
+  if (['published', 'memory_ready', 'not_planned'].includes(lesson.homework.status)) {
     return false;
   }
   const endsAt = new Date(lesson.startsAt).getTime() + lesson.durationMinutes * 60 * 1000;

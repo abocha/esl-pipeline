@@ -11,10 +11,6 @@ import type {
 
 import type { BotConfig, BotDomain, BotRuntimeSnapshot, CommandDefinition } from './types.js';
 
-const STUDY_TEXT_AUDIO_LINK_LABEL = 'Audio recording: Study Text';
-const PRONUNCIATION_AUDIO_LINK_LABEL = 'Audio recording: Pronunciation Practice';
-const PRONUNCIATION_AUDIO_PATH_HINTS = ['/audio/pronunciation/'] as const;
-
 export function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
@@ -172,7 +168,9 @@ export function formatJobDetails(
     assignmentTitle?: string | null;
   },
 ): string {
-  const assignmentTitle = normalizeAssignmentTitle(options?.assignmentTitle);
+  const assignmentTitle = normalizeAssignmentTitle(
+    options?.assignmentTitle ?? job.publication?.title,
+  );
   return [
     `<b>Job · ${escapeHtml(job.state.toUpperCase())}</b>`,
     `<code>${escapeHtml(job.jobId)}</code>`,
@@ -192,7 +190,9 @@ export function formatShareJobHeader(
     assignmentTitle?: string | null;
   },
 ): string {
-  const assignmentTitle = normalizeAssignmentTitle(options?.assignmentTitle);
+  const assignmentTitle = normalizeAssignmentTitle(
+    options?.assignmentTitle ?? job.publication?.title,
+  );
   return [
     '<b>Share package</b>',
     `<b>Student</b> ${escapeHtml(formatStudentIdentity(job))}`,
@@ -460,25 +460,22 @@ export function formatJobLinks(
 ): string {
   const assignmentUrl = job.htmlUrl ?? resolveAppJobUrl(job.jobId, appBaseUrl);
   const includeAudioLinks = options?.includeAudioLinks ?? true;
-  const assignmentTitle = normalizeAssignmentTitle(options?.assignmentTitle);
+  const assignmentTitle = normalizeAssignmentTitle(
+    options?.assignmentTitle ?? job.publication?.title,
+  );
   const headingText =
     assignmentTitle && assignmentTitle.toLowerCase() !== 'homework assignment'
       ? `Homework Assignment: ${assignmentTitle}`
       : 'Homework Assignment';
-  const assignmentLabel = [normalizeAssignmentEmoji(options?.assignmentEmoji), headingText]
+  const assignmentLabel = [
+    normalizeAssignmentEmoji(options?.assignmentEmoji ?? job.publication?.icon),
+    headingText,
+  ]
     .filter(Boolean)
     .join(' ');
-  const studyTextAudioUrl =
-    options?.studyTextAudioUrl ??
-    resolveAudioUrlFromMarkdown(job.md, STUDY_TEXT_AUDIO_LINK_LABEL, '/audio/final/');
+  const studyTextAudioUrl = options?.studyTextAudioUrl ?? job.publication?.studyTextAudioUrl;
   const pronunciationAudioUrl =
-    options?.pronunciationAudioUrl ??
-    resolveAudioUrlFromMarkdown(
-      job.md,
-      PRONUNCIATION_AUDIO_LINK_LABEL,
-      PRONUNCIATION_AUDIO_PATH_HINTS,
-    );
-
+    options?.pronunciationAudioUrl ?? job.publication?.pronunciationAudioUrl;
   const lines: string[] = [];
   if (assignmentUrl) {
     lines.push(`<a href="${escapeHtml(assignmentUrl)}">${escapeHtml(assignmentLabel)}</a>`);
@@ -512,40 +509,6 @@ function resolveAppJobUrl(jobId: string, appBaseUrl?: string): string | null {
   if (!appBaseUrl) return null;
   const normalized = appBaseUrl.replace(/\/+$/, '');
   return `${normalized}/jobs/${encodeURIComponent(jobId)}`;
-}
-
-function resolveAudioUrlFromMarkdown(
-  markdown: string | null | undefined,
-  linkLabel: string,
-  pathHints: string | readonly string[],
-): string | null {
-  if (!markdown) return null;
-
-  const labelRegex = new RegExp(
-    String.raw`\[${escapeRegExp(linkLabel)}\]\((https?:\/\/[^\s)]+)\)`,
-    'i',
-  );
-  const labeledMatch = markdown.match(labelRegex);
-  if (labeledMatch?.[1]) {
-    return labeledMatch[1];
-  }
-
-  for (const pathHint of Array.isArray(pathHints) ? pathHints : [pathHints]) {
-    const hintedRegex = new RegExp(
-      String.raw`(https?:\/\/\S*${escapeRegExp(pathHint)}\S*\.mp3(?:\?\S*)?)`,
-      'i',
-    );
-    const hintedMatch = markdown.match(hintedRegex);
-    if (hintedMatch?.[1]) {
-      return hintedMatch[1];
-    }
-  }
-
-  return null;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 function normalizeAssignmentTitle(value: string | null | undefined): string | null {

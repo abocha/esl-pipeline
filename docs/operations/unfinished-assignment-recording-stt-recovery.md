@@ -1,5 +1,16 @@
 # Recover an unfinished assignment after terminal recording/STT failure
 
+Source review: the current authenticated
+[`PATCH /assignment-sessions/:id/recovery` route](../../packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts)
+parses the recovery schema, applies the expected-revision update and reports revision, ownership,
+lineage and completed/share conflicts. The runbook's route and conflict handling match this contract;
+its narrower failed-recording checks remain operator preconditions. The current
+[transcription retry boundary](../../packages/batch-backend/src/application/retry-recording-transcription.ts)
+rejects retry after terminal failure and directs a new upload. No learner records or production state
+were inspected, so no record's eligibility or recovery completion is established. Before use, verify
+current record-bound identity/state and separately authorize the mutation; do not execute from this
+document alone.
+
 ## Meta
 
 - Audience: production operators and maintainers.

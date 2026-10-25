@@ -260,7 +260,6 @@ jobs:
             org.opencontainers.image.version=${{ env.RELEASE_TAG }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=batch-backend
-          cache-to: type=gha,mode=max,scope=batch-backend,ignore-error=true
 
       - name: Build and publish frontend
         if: needs.release-decision.outputs.build_frontend == 'true'
@@ -281,7 +280,6 @@ jobs:
             org.opencontainers.image.version=${{ env.RELEASE_TAG }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=batch-frontend
-          cache-to: type=gha,mode=max,scope=batch-frontend,ignore-error=true
 
       - name: Build and publish Telegram bot
         if: needs.release-decision.outputs.build_bot == 'true'
@@ -302,7 +300,6 @@ jobs:
             org.opencontainers.image.version=${{ env.RELEASE_TAG }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=telegram-ops-bot
-          cache-to: type=gha,mode=max,scope=telegram-ops-bot,ignore-error=true
 
       - name: Reuse unchanged production images
         env:
@@ -324,3 +321,13 @@ jobs:
           [[ "$BUILD_BACKEND" == "true" ]] || reuse_image batch-backend
           [[ "$BUILD_FRONTEND" == "true" ]] || reuse_image batch-frontend
           [[ "$BUILD_BOT" == "true" ]] || reuse_image telegram-ops-bot
+
+      - name: Record published release images
+        run: |
+          {
+            printf '### Published release images\n\n'
+            printf 'Release: %s\n\nPublished release SHA: %s\n\n' "$RELEASE_TAG" "$RELEASE_SHA"
+            for image in batch-backend batch-frontend telegram-ops-bot; do
+              printf -- '- %s/%s:%s\n' "$IMAGE_PREFIX" "$image" "$RELEASE_SHA"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

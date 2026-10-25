@@ -79,11 +79,9 @@ describe('StudentAreaShell', () => {
     renderStudentAreaShell('/students/student-alex-rivera/history');
 
     expect(
-      (await screen.findByRole('link', { name: /Back to all students/i })).getAttribute('href'),
-    ).toBe('/students');
-    expect(screen.getByText('AR')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Alex Rivera' })).toBeTruthy();
-    expect(screen.getByText('Support ID: alex-riv')).toBeTruthy();
+      (await screen.findByRole('link', { name: 'Back to students' })).getAttribute('href'),
+    ).toBe('/students?section=history');
+    expect(await screen.findByRole('heading', { name: 'Alex Rivera' })).toBeTruthy();
     expect(
       screen.queryByText(
         'A chronological teaching ledger for lessons, materials, and profile changes.',

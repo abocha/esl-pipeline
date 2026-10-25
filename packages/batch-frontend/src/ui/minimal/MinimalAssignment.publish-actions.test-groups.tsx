@@ -60,47 +60,44 @@ export function registerPublishValidationTests() {
     });
 
     it('prevents Create confirmation when automatic draft validation fails', async () => {
-      const user = createMinimalUser();
-      vi.mocked(api.validateMarkdown).mockResolvedValueOnce({
-        ok: false,
-        errors: ['Missing study text block'],
-        warnings: [],
-      });
+      const _user = createMinimalUser();
 
       await renderDraftReadyAssignment();
 
-      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-      expect(draftTextarea).toBeTruthy();
-      if (!draftTextarea) {
-        throw new Error('Expected draft textarea to be rendered');
+      const draftTitle = screen.getByRole('textbox', { name: /^Assignment title$/i });
+      expect(draftTitle).toBeTruthy();
+      if (!draftTitle) {
+        throw new Error('Expected assignment title to be rendered');
       }
-      fireEvent.change(draftTextarea, { target: { value: '# Broken draft' } });
+      draftTitle.textContent = '';
+      fireEvent.input(draftTitle);
 
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
-
-      await screen.findByText('Fix validation errors before saving.');
+      expect(screen.getByRole('button', { name: /Confirm and continue/i })).toHaveProperty(
+        'disabled',
+        true,
+      );
       expect(api.createDraft).not.toHaveBeenCalled();
     }, 30_000);
 
     it('publishes a valid draft and displays the resulting job link', async () => {
       const { user } = await renderPromptReadyAssignment();
 
-      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-      expect(draftTextarea).toBeTruthy();
-      if (!draftTextarea) {
-        throw new Error('Expected draft textarea to be rendered');
+      const draftTitle = screen.getByRole('textbox', { name: /^Assignment title$/i });
+      expect(draftTitle).toBeTruthy();
+      if (!draftTitle) {
+        throw new Error('Expected assignment title to be rendered');
       }
-      fireEvent.change(draftTextarea, { target: { value: '# Final draft' } });
+      draftTitle.textContent = 'Final draft';
+      fireEvent.input(draftTitle);
       await previewCurrentDraft(user);
       await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
       await waitFor(() => {
-        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Final draft', 1);
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', expect.any(String), 1);
+        expect(JSON.parse(vi.mocked(api.updateDraft).mock.calls[0]![1]).metadata.title).toBe(
+          'Final draft',
+        );
       });
-      const validationCall = vi.mocked(api.validateMarkdown).mock.calls.at(-1);
-      expect(validationCall?.[0]).toBe('# Final draft');
-      expect(validationCall?.[1]).toBe(true);
-      expect(validationCall?.[2]).toBeUndefined();
       await waitFor(() => {
         expect(api.shareAssignmentSession).toHaveBeenCalledWith(
           'session-1',
@@ -117,9 +114,8 @@ export function registerPublishValidationTests() {
 
     it('disables Share while its submission is in flight', async () => {
       const { user } = await renderPromptReadyAssignment();
-      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-        target: { value: '# Final draft' },
-      });
+      screen.getByRole('textbox', { name: /^Assignment title$/i }).textContent = 'Final draft';
+      fireEvent.input(screen.getByRole('textbox', { name: /^Assignment title$/i }));
       await previewCurrentDraft(user);
       let resolveShare!: (value: Awaited<ReturnType<typeof api.shareAssignmentSession>>) => void;
       vi.mocked(api.shareAssignmentSession).mockImplementationOnce(
@@ -147,9 +143,8 @@ export function registerPublishValidationTests() {
 
     it('reconciles dirty profile recovery and returns to Teaching context after Share rejects it', async () => {
       const { user } = await renderPromptReadyAssignment();
-      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-        target: { value: '# Final draft' },
-      });
+      screen.getByRole('textbox', { name: /^Assignment title$/i }).textContent = 'Final draft';
+      fireEvent.input(screen.getByRole('textbox', { name: /^Assignment title$/i }));
       await previewCurrentDraft(user);
 
       const dirtySession = makeAssignmentSession({
@@ -188,9 +183,8 @@ export function registerPublishValidationTests() {
 
     it('keeps Share disabled while confirmed Context recovery is dirty', async () => {
       const { user } = await renderPromptReadyAssignment();
-      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-        target: { value: '# Final draft' },
-      });
+      screen.getByRole('textbox', { name: /^Assignment title$/i }).textContent = 'Final draft';
+      fireEvent.input(screen.getByRole('textbox', { name: /^Assignment title$/i }));
       await previewCurrentDraft(user);
 
       const dirtySession = makeAssignmentSession({
@@ -242,8 +236,15 @@ export function registerJobActionTests() {
         await renderPreviewReadyAssignment();
 
         await user.click(screen.getByRole('button', { name: /Create/i }));
-        const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-        fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft' } });
+        const draftTitle = screen.getByRole('textbox', { name: /^Assignment title$/i });
+        draftTitle.textContent = 'Preview gated draft';
+        fireEvent.input(draftTitle);
+        const previewCalls = vi.mocked(api.renderHtmlPreview).mock.calls.length;
+        const confirmationCalls = vi.mocked(api.confirmAssignmentSessionStep).mock.calls.length;
+        await user.click(screen.getByRole('button', { name: 'Learner view' }));
+        expect(api.renderHtmlPreview).toHaveBeenCalledTimes(previewCalls);
+        expect(api.confirmAssignmentSessionStep).toHaveBeenCalledTimes(confirmationCalls);
+        await user.click(screen.getByRole('button', { name: 'Edit' }));
         await user.click(screen.getByRole('button', { name: /Review & share/i }));
         expect(screen.getByRole('heading', { name: /Create assignment/i })).toBeTruthy();
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));

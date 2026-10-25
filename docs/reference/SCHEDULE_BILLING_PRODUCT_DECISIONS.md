@@ -12,7 +12,9 @@
 
 ## Purpose
 
-This document is the durable reference for the first real `Schedule & Billing` implementation.
+This document records the lesson-ledger and billing decisions. ESL-62 supersedes the original
+independent scheduling MVP with the approved Google Calendar workflow. See the
+[Calendar cutover runbook](../operations/google-calendar-cutover.md) for activation and proof gates.
 
 It exists so scheduling, lesson-credit accounting, payments, reminders, and future account ownership
 do not get rediscovered from chat history or temporary plans.
@@ -38,7 +40,9 @@ smuggled into the pedagogical learner profile.
 3. The first UI remains single-workspace behavior while the database prepares for future account and
    membership expansion.
 4. Lesson credits are counted as lesson units. Duration is stored separately as lesson metadata.
-5. A credit is consumed only when a teacher marks a lesson `completed` and chargeable.
+5. A credit is consumed when a lesson becomes `completed` and chargeable. Current session linking
+   also completes an eligible elapsed scheduled lesson at Student confirmation/recovery, before
+   transcript finish or homework publication. Abandoning review does not reverse this ledger fact.
 6. Canceled, no-show, trial, or make-up lessons use explicit lesson status plus explicit
    credit-consumption state.
 7. Credit balances may go negative. Negative balance is an urgent operational signal, not a data
@@ -52,20 +56,21 @@ smuggled into the pedagogical learner profile.
 11. Reminder delivery is Telegram-first in product direction, but the first slice stores and shows
     reminder recommendations and copyable text only.
 12. Email reminders remain future-compatible and should not become a parallel reminder architecture.
-13. Calendar design must stay sync-ready, but Google Calendar or other bidirectional sync is outside
-    the MVP.
-14. Recurring lesson planning is first-class in the MVP. A student can have a primary weekly
-    recurrence rule with one or more local-time slots; the system materializes those slots into
-    normal lesson rows through a bounded horizon.
-15. Generated recurrence lessons are real operational lessons. Completing, canceling, marking
-    no-show, editing, or rescheduling one generated lesson is an occurrence-level exception and must
-    not rewrite the recurrence rule.
-16. When a recurrence rule changes, future unmodified generated placeholders are soft-voided rather
-    than represented as cancellations. Completed, no-show, canceled, or manually edited occurrences
-    remain factual history.
+13. Google Calendar is required for scheduling. Other teaching, history, homework and billing
+    operations remain usable without a connection.
+14. One selected writable lesson calendar owns timing and recurrence after creation. A student may
+    have several independent weekly series, each with its own durable creation/recovery operation.
+15. ESL owns lesson identity, completion/no-show, charge decisions, credits and lineage. Unused future
+    projections may be recreated when Google changes identities, provided visible lessons do not
+    disappear or duplicate; protected teaching and billing history keeps its identity and links.
+    Provider changes never erase those facts. Later timing edits happen in Google.
+16. Retired local rules/slots remain nonexecuting historical evidence. Reviewed cleanup hides unused
+    placeholders; protected lesson rows and immutable activity remain attached. Schedule reads do
+    not generate lessons.
 17. Elapsed lesson reminders are teacher-confirmed actions. The system may surface a
     `lesson_followup` when a lesson's scheduled end time has passed, but it must not mark the
-    lesson completed or consume credit until the teacher chooses that action.
+    lesson completed or consume credit merely by reading the reminder. Explicit lesson completion
+    or linking that eligible elapsed scheduled lesson to a session performs the current boundary.
 18. Homework created from a schedule follow-up keeps nullable `lesson_id` lineage through
     assignment sessions, prompt packages, drafts, jobs, and homework-memory entries. Schedule
     surfaces may summarize that lineage to show whether homework is not started, in progress,
@@ -91,30 +96,37 @@ The first implementation must not:
 1. generate invoices
 2. collect payment
 3. store card or bank data
-4. send Telegram or email messages
-5. sync with external calendars
-6. enforce the final multi-teacher account permission model
+4. send custom reminder emails or Telegram messages (Google Calendar invitations are supported)
+5. support providers other than Google Calendar
+6. implement multi-tutor routing or private student self-booking
 7. alter learner-profile semantics
 8. auto-publish homework for elapsed lessons
 
+## Workspace scheduling timezone
+
+Business settings (`workspace_business_settings.timezone`) owns the tutor-facing clock for schedule
+display and the default creation timezone. Calendar creation requires explicit valid local timing;
+ambiguous/nonexistent wall times are rejected instead of silently adjusted. Google expands recurring
+instances in the recorded IANA timezone. Changing workspace settings does not rewrite historical
+instants or retime existing Google series.
+
 ## Recurrence Architecture
 
-Student lesson planning keeps notes and defaults in `student_lesson_plans`, while executable
-calendar intent lives in structured recurrence records.
+`student_lesson_plans` retains useful duration defaults and operational notes. Google owns executable
+recurrence. Calendar schedule bindings are one-to-many per student; occurrence mappings preserve
+internal lesson IDs independently of moved actual start times. The bounded upcoming projection uses
+Google instances, with durable dirty intents and cursor checkpoints. A 410 rebaseline keeps the ESL
+ledger and billing history. The maintainer's 2026-10-19 clarification makes visible schedule
+equivalence authoritative for unused future projections: Google may replace IDs without forcing a
+manual relink flow. Exact registered association and durable create-request provenance can associate
+new masters with the same student, while each master/occurrence remains distinct. Complete family
+projection replaces unused obsolete rows atomically and hides implementation noise from normal
+surfaces. Protected history conflicts stay visible as attention, with no replacement duplicate.
+Titles, emails, time proximity and copied markers never establish old-to-new occurrence continuity.
 
-The MVP recurrence model is intentionally small:
-
-1. `student_lesson_recurrence_rules` stores the student/workspace-owned rule, IANA timezone,
-   weekly frequency, active/paused status, start/end dates, and generation horizon.
-2. `student_lesson_recurrence_slots` stores one or more ISO weekdays, local start times, and
-   duration values for a rule.
-3. `student_lessons` stores generated occurrences as normal lessons with stable rule ID, slot ID,
-   occurrence key, origin, override kind, and soft-void metadata.
-
-Teacher-wide schedule, stats, reminders, and future sync surfaces should read from materialized
-`student_lessons` rather than reimplementing recurrence math. Future Google Calendar or Telegram
-automation can attach to stable rule IDs, lesson IDs, and occurrence keys without reshaping the
-current tables.
+Student email is optional operational contact. Invitation defaults on when present, with opt-out;
+the chosen recipient is frozen into each new operation. Email edits affect future creates. Recovery
+reads never resend invitations. No Meet integration is included.
 
 ## Schedule-To-Homework Follow-Ups
 
@@ -122,15 +134,25 @@ The first schedule-to-homework workflow is an in-app operator reminder:
 
 1. Student and business schedule surfaces expose `lesson_followup` reminders for elapsed lessons
    that still lack successful linked homework.
-2. The `Complete + homework` action calls the existing lesson update path with
-   `status: completed` and `consumesCredit: true`, then opens the assignment flow with `studentId`
-   and `lessonId` context.
+2. `Add homework` opens the assignment flow with `studentId` and `lessonId` context; navigation
+   alone does not complete the lesson or consume credit. Confirming Student or successfully
+   recovering a session with that lesson link completes an eligible elapsed scheduled lesson and
+   consumes one credit. Abandoning before linking leaves the ledger unchanged; abandoning after
+   linking does not reverse the completed lesson. Explicit `Complete` remains a separate action.
 3. The assignment flow preserves the lesson link while prompt packages, drafts, publish jobs, and
    homework-memory extraction proceed through the normal review/publish pipeline.
+4. An explicit transcript-only finish records `not_planned` with a nullable transcript-result
+   session reference and suppresses only missing-homework follow-up on student/business surfaces.
+   A saved checkbox or immutable past finish event is insufficient. Actual homework work takes
+   precedence; promotion restores ordinary progress/reminders with accounting unchanged. Finished
+   transcript-only review does not create a lesson, charge/refund credit or alter payment records.
+5. Concurrent session linking/completion serializes on the shared lesson row before reading status
+   and reconciling the debit. Completed non-credit, future, cancelled/no-show and unlinked cases
+   retain their existing respective ledger state.
 
 ## Related
 
 - [`docs/reference/STUDENT_SYSTEM_ROADMAP.md`](STUDENT_SYSTEM_ROADMAP.md)
 - [`docs/reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md`](TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md)
-- [`docs/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md`](../plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md)
+- [Archived phase 5 design rationale](../archive/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md)
 - [`docs/plans/student-area-redesign/README.md`](../plans/student-area-redesign/README.md)

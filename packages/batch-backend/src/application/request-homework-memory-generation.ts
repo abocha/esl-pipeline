@@ -23,7 +23,7 @@ export interface RequestHomeworkMemoryGenerationDependencies {
     supersedeForOnlineWork: typeof supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork;
   };
   queue: {
-    enqueue: ReturnType<typeof createStudentMemoryQueue>['enqueue'];
+    reconcile: ReturnType<typeof createStudentMemoryQueue>['reconcile'];
   };
   now: () => Date;
 }
@@ -36,6 +36,7 @@ export async function requestHomeworkMemoryGeneration(args: {
     providerOverride?: GenerationProvider;
     modelOverride?: string;
     forceRegenerate?: boolean;
+    replayKey?: string;
     publishKind?: 'initial' | 'correction';
   };
   overrides?: Partial<RequestHomeworkMemoryGenerationDependencies>;
@@ -43,6 +44,8 @@ export async function requestHomeworkMemoryGeneration(args: {
   if (!args.params.studentId) {
     return null;
   }
+  if (args.params.forceRegenerate && !args.params.replayKey?.trim())
+    throw new Error('Homework regeneration requires replayKey');
 
   const source = args.overrides?.source ?? {
     resolveFromSucceededJob: resolveHomeworkMemorySourceFromSucceededJob,
@@ -82,6 +85,7 @@ export async function requestHomeworkMemoryGeneration(args: {
 
   const requestedAt = now();
   const pending = await homeworkMemory.ensurePending({
+    replayKey: args.params.replayKey?.trim(),
     studentId: sourceBundle.studentId,
     jobId: sourceBundle.jobId,
     assignmentLineageKey: sourceBundle.assignmentLineageKey,
@@ -97,6 +101,8 @@ export async function requestHomeworkMemoryGeneration(args: {
     contentHash: sourceBundle.contentHash,
     bypassReadyReuse: args.params.forceRegenerate ?? false,
     generationNotes: {
+      sourceFormat: sourceBundle.format ?? 'markdown',
+      ...(sourceBundle.artifact ? { assignmentArtifact: sourceBundle.artifact } : {}),
       trigger: publishKind === 'correction' ? 'publish-correction-succeeded' : 'publish-succeeded',
       publishKind,
       requestedAt: requestedAt.toISOString(),
@@ -108,17 +114,18 @@ export async function requestHomeworkMemoryGeneration(args: {
   });
 
   if (pending.outcome === 'created' || pending.outcome === 'pending_exists') {
-    await queue.enqueue(
+    await queue.reconcile(
       {
         kind: 'homework-memory-generate',
-        jobId: args.params.jobId,
-        studentId: args.params.studentId,
+        jobId: pending.entry.jobId,
+        studentId: pending.entry.studentId,
         pendingEntryId: pending.entry.id,
-        provider: target.provider,
-        model: target.model,
+        provider: pending.entry.provider as GenerationProvider,
+        model: pending.entry.model,
       },
       {
         jobId: `homework-memory:${pending.entry.id}`,
+        requeueCompleted: true,
       },
     );
   }

@@ -16,6 +16,12 @@ It is not a component specification or a mandate to copy the assignment resume l
 Use it to preserve the product's preferred information hierarchy, density, interaction style, and
 decision process while allowing each view to solve its own task.
 
+The assignment-entry source still implements the referenced resume-list example, including a
+collapsed lineage disclosure and labels derived from source-job relationships
+([`AssignmentEntryStep.tsx`](../../packages/batch-frontend/src/ui/assignments/steps/AssignmentEntryStep.tsx)).
+That source check confirms the example's current implementation only; it does not certify these
+preferences against every current screen or turn them into universal UI requirements.
+
 The desired register remains calm, precise, teacherly, and practical. The interface should feel like
 a trustworthy working tool for a tutor, not a generic SaaS dashboard, an AI showcase, or a decorated
 pipeline console.

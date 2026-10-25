@@ -1,6 +1,7 @@
 import type { ArtifactWorkingContentDto } from '@esl-pipeline/contracts';
 
 import type { AssignmentSession, ConfirmAssignmentSessionStepRequest } from '../../utils/api';
+import { isTranscriptOnlyCompleted } from './MinimalAssignment.no-homework';
 
 export type AssignmentWorkflowStep = 'student' | 'source' | 'context' | 'assignment' | 'review';
 
@@ -82,6 +83,8 @@ export function deriveResumeDestination(
   session: AssignmentSession,
   artifacts: AssignmentWorkingArtifacts = {},
 ): AssignmentWorkflowStep | { jobId: string } {
+  if (isTranscriptOnlyCompleted(session)) return 'review';
+  if (session.homeworkIntent === 'none') return 'source';
   if (session.confirmedStep === 'share') {
     if (!session.shareJobId)
       throw new Error('Completed assignment session is missing its Share job');
@@ -121,6 +124,8 @@ export function canShareAssignment(
   session: AssignmentSession,
   artifacts: AssignmentWorkingArtifacts,
 ): { allowed: true } | { allowed: false; reason: string } {
+  if (session.homeworkIntent === 'none')
+    return { allowed: false, reason: 'No homework is planned for this lesson.' };
   const dirty = deriveAssignmentDirtyState(session, artifacts);
   if (dirty.source) return { allowed: false, reason: 'Confirm Lesson source before sharing.' };
   if (dirty.context) return { allowed: false, reason: 'Confirm Teaching context before sharing.' };

@@ -3,7 +3,14 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
-ENV_FILE="${ESL_HOST_HEALTH_ENV_FILE:-${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}}"
+# shellcheck source=scripts/docker/postgres-ops-common.sh
+source "${ROOT_DIR}/scripts/docker/postgres-ops-common.sh"
+ENV_FILE="$(pg_backup_select_env_file "$ROOT_DIR" "${ESL_HOST_HEALTH_ENV_FILE:-${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}}")"
+[[ "$ENV_FILE" != /etc/esl-pipeline/production.env ]] || umask 0077
+if [[ "$ROOT_DIR" == /opt/esl-pipeline && -n "${ESL_HOST_HEALTH_ENV_FILE:-}" && "$ESL_HOST_HEALTH_ENV_FILE" != "$ENV_FILE" ]]; then
+  echo "ERROR: host health must use the canonical production env" >&2
+  exit 1
+fi
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "ERROR: required host/runtime health environment file is missing: $ENV_FILE" >&2
@@ -27,6 +34,9 @@ case "$HOST_STATE_DIR" in
     ;;
 esac
 
+if [[ "$ROOT_DIR" == /opt/esl-pipeline ]]; then
+  node "$ROOT_DIR/scripts/deploy/production-paths.mjs" ops-state "${HOST_STATE_DIR%/}"
+fi
 STATE_DIR="${HOST_STATE_DIR%/}/state"
 LOG_DIR="${HOST_STATE_DIR%/}/logs"
 mkdir -p "$STATE_DIR" "$LOG_DIR"

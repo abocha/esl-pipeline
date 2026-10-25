@@ -1,33 +1,48 @@
 # @esl-pipeline/html-publisher
 
-Shared HTML renderer/publisher for the pipeline's html-only publish path.
+Native AssignmentV1 publication authority. Learner presentation and deterministic static HTML are
+owned exclusively by [learner-handout](../learner-handout/README.md).
 
-## Exports
+## Exports and ownership
 
-- `renderToHtml(markdown, title, options)`
-- `renderAssignmentToPmd(assignment)`: deterministic eight-section compatibility output for
-  validated `AssignmentV1`, including safe YAML, plain-text escaping and pronunciation projection.
-  Draft storage, editing and publishing continue to consume Markdown; this is a transient adapter.
-- `createStaticPageHtml(markdown, title, options)`
-- `publishHtmlToS3(html, options)`
-- `renderAndPublishMarkdownToS3({ markdown, title, ...options })`
+- `renderAssignmentToHtml(assignment, options)`: adapts resolved media and narrow presentation inputs
+  into the React Node document renderer.
+- `renderAndPublishAssignmentToS3({ assignment, ...options })`: renders and publishes exact HTML bytes.
+- `publishHtmlToS3(html, options)`: uploads already-rendered HTML.
+- `ASSIGNMENT_HTML_RENDERER_VERSION`: `3` for new native jobs/publications.
+- `AssignmentRenderOptions`: study audio, primary pronunciation URL, structured pronunciation clips,
+  preview placeholders and explicit h2/h3 preset colors. Broad theme/features/raw HTML options are retired.
 
-## Markdown Preprocessing Notes
+Structured primary pronunciation URLs take precedence over the separate pronunciation URL input;
+that input supplies the fallback when the structured primary URL is absent. Item clips retain their
+IDs, indices and minimal-pair side. Learner-handout admits safe URLs and disables unavailable controls.
+Unsafe structured URLs are discarded before precedence selection, preserving the safe URL fallback.
 
-- Single-backtick inline snippets render as `<code>` and can include rich inline Markdown formatting
-  (for example `` `**Bold cue:** *slowly*` ``).
-- Multi-backtick inline code spans are preserved as literal code (for example ` `a` ` and
-  ` `a `b` c` `).
-- Fenced code blocks remain untouched by preprocessing.
-- Pronunciation micro-focus content receives additional normalization to clean LLM-variant bullet/code wrappers.
+Section 6 publishes only `learnerRationale` from the new shape. Legacy root `rationale` omits the
+whole section, and `teacherRationale` plus `teacherFollowUp` are absent from all emitted/uploaded HTML bytes. Adapter and
+mock-upload tests cover non-null teacher rationale, null teacher rationale and ambiguous legacy text.
 
-## URL and Media Safety
+HTML artifact identity is unchanged: SHA-256 over UTF-8 `html-v1:` followed by the exact emitted HTML.
+The default object key remains `materials/html/artifacts/<renderHash>.html`, with existing optional
+prefix/key/filename overrides. The same HTML bytes are written to the temporary upload file.
+Renderer version 3 changes presentation identity, not AssignmentV1 canonical identity or the artifact namespace.
 
-- `href` and `src` values are sanitized to block unsafe schemes (for example `javascript:`).
-- Safe relative URLs are preserved, including:
-  - root-relative (`/assets/file.png`)
-  - dot-relative (`./file.md`, `../audio/clip.mp3`)
-  - bare relative paths (`lesson-2.md`, `images/pic.png`)
-- `:::video` URLs are normalized for known variants:
-  - YouTube `watch`, `youtu.be`, `embed`, and `shorts` forms map to `youtube.com/embed/<id>`.
-  - Vimeo direct, `video`, `channels`, `groups/.../videos/...`, and `album/.../video/...` forms map to `player.vimeo.com/video/<id>`.
+Historical Markdown assignments are read-only records. Already-issued legacy standalone HTML is
+independent of this renderer path. There is no string renderer or native fallback renderer.
+
+## Build and focused checks
+
+`learner-handout` is a runtime workspace dependency, with React/React DOM and packaged CSS/playback
+assets. Build dependencies before html-publisher; the local `test:unit` setup does this automatically.
+Orchestrator declares html-publisher as a runtime dependency and keeps it external to its bundle so
+asset URLs resolve beside their owning module. Its local unit setup rebuilds orchestrator itself;
+the compiled import check isolates the bundle with only declared production dependencies available.
+
+`pnpm --filter @esl-pipeline/html-publisher test:unit` covers adapter mapping, exact upload bytes/hash/key,
+and plain-Node execution through the built package entry across timezones and production/development
+React runtimes. The compiled check requires no Vite, DOM, network, ambient clock or hydration.
+
+ESL-32 uses authored `metadata.icon` (display-only 🎧 fallback), selective escaped paired-backtick
+highlights, independent permanent grammar reveals and animated native disclosures through the same
+learner-handout renderer. Publication/share metadata carries the same authored emoji. The publisher
+continues hashing complete HTML bytes; renderer identity stays 3, with no historical republication.

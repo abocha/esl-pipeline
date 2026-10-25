@@ -13,8 +13,48 @@ test('accepts a public hostname and ACME email', () => {
     {
       hostname: 'alpha.example.com',
       email: 'ops@example.com',
+      transitionHostname: '',
+      transitionMode: 'disabled',
     },
   );
+});
+
+test('accepts one distinct temporary hostname for serving or redirecting', () => {
+  for (const transitionMode of ['serve', 'redirect']) {
+    assert.equal(
+      validateEdgeEnv({
+        CADDY_PUBLIC_HOSTNAME: 'app.eslpipeline.com',
+        CADDY_ACME_EMAIL: 'ops@example.com',
+        CADDY_TRANSITION_HOSTNAME: 'esl-pipeline.run.place',
+        CADDY_TRANSITION_MODE: transitionMode,
+      }).transitionMode,
+      transitionMode,
+    );
+  }
+});
+
+test('rejects ambiguous, duplicate, multiple, or invalid temporary host configuration', () => {
+  for (const [mode, hostname] of [
+    ['serve', ''],
+    ['redirect', 'APP.eslpipeline.com'],
+    ['serve', 'https://old.example.com'],
+    ['serve', '*.example.com'],
+    ['serve', 'old.example.com,new.example.com'],
+    ['serve', '127.0.0.1'],
+    ['disabled', 'old.example.com'],
+    ['../serve', 'old.example.com'],
+  ]) {
+    assert.throws(
+      () =>
+        validateEdgeEnv({
+          CADDY_PUBLIC_HOSTNAME: 'app.eslpipeline.com',
+          CADDY_ACME_EMAIL: 'ops@example.com',
+          CADDY_TRANSITION_HOSTNAME: hostname,
+          CADDY_TRANSITION_MODE: mode,
+        }),
+      /CADDY_TRANSITION/,
+    );
+  }
 });
 
 test('rejects missing, local-only, or Caddy site-address hostnames', () => {

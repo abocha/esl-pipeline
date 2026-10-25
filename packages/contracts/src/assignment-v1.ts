@@ -1,8 +1,11 @@
 import { z } from 'zod';
 
-export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1';
+import { assignmentPlainText } from './assignment-inline.js';
+
+export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_generation_v8';
 export const ASSIGNMENT_TEMPLATE_ID = 'hw_prompt_assignment_v1.md';
-export const ASSIGNMENT_TEMPLATE_CONTRACT = 'Assignment output contract: assignment_v1';
+export const ASSIGNMENT_TEMPLATE_CONTRACT =
+  'Assignment output contract: assignment_v1_generation_v8';
 
 const text = z.string();
 const optionalText = text.nullable();
@@ -45,10 +48,59 @@ const pronunciation = z.union([
   ),
 ]);
 
-/** Transient generation domain. Saved drafts remain Markdown in Slice 1. */
-export const AssignmentV1Schema = z.strictObject({
+const legacyOutputTask = z.strictObject({
+  task: text,
+  extension: optionalText,
+  sampleResponse: text,
+});
+const structuredOutputTask = z.strictObject({
+  task: text,
+  preparation: texts,
+  requirements: texts,
+  delivery: optionalText,
+  selfCheck: texts,
+  extension: optionalText,
+  sampleResponse: text,
+});
+
+const grammarFields = {
+  name: text,
+  explanation: text,
+  examples: texts,
+  uses: z.array(z.strictObject({ label: text, example: text })),
+  traps: z.array(z.strictObject({ original: text, improved: text, explanation: text })),
+};
+const legacyGrammar = z.strictObject({ ...grammarFields, form: optionalText });
+const structuredGrammar = z.strictObject({
+  ...grammarFields,
+  formBlocks: z
+    .array(z.strictObject({ label: text, pattern: text, examples: texts.min(1) }))
+    .min(1),
+  comparisons: z.array(
+    z.strictObject({
+      label: text,
+      alternatives: z
+        .array(z.strictObject({ label: text, example: text, explanation: text }))
+        .length(2),
+    }),
+  ),
+});
+
+// Conventional language tags for authored support text, e.g. en, ru, pt-BR.
+const instructionLanguage = z.string().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/);
+const metadata = z.strictObject({
+  title: text,
+  icon: text.optional(),
+  student: text,
+  level: text,
+  topic: text,
+  instructionLanguage: instructionLanguage.optional(),
+});
+
+// Metadata, rationale and mission read forms evolve independently, without rewriting older objects.
+const assignmentFields = {
   schemaVersion: z.literal(1),
-  metadata: z.strictObject({ title: text, student: text, level: text, topic: text }),
+  metadata,
   mission: z.strictObject({ goal: text, keyLanguage: texts }),
   input: z.strictObject({
     kind: z.enum(['generate', 'authentic']),
@@ -75,16 +127,7 @@ export const AssignmentV1Schema = z.strictObject({
     comprehension: z.array(questionAnswer),
   }),
   toolkit: z.strictObject({
-    grammar: z.array(
-      z.strictObject({
-        name: text,
-        form: optionalText,
-        explanation: text,
-        examples: texts,
-        uses: z.array(z.strictObject({ label: text, example: text })),
-        traps: z.array(z.strictObject({ original: text, improved: text, explanation: text })),
-      }),
-    ),
+    grammar: z.array(z.union([legacyGrammar, structuredGrammar])),
     vocabulary: z.array(z.strictObject({ expression: text, meaning: text, example: text })),
   }),
   practice: z.array(
@@ -95,20 +138,37 @@ export const AssignmentV1Schema = z.strictObject({
     }),
   ),
   pronunciation: pronunciation.nullable(),
-  outputTask: z.strictObject({ task: text, extension: optionalText, sampleResponse: text }),
-  rationale: text,
+  outputTask: z.union([legacyOutputTask, structuredOutputTask]),
   teacherFollowUp: z.strictObject({ warmUp: text, correctionFocus: text }),
+};
+
+export const LegacyAssignmentV1Schema = z.strictObject({ ...assignmentFields, rationale: text });
+const learnerRationaleAssignment = z.strictObject({
+  ...assignmentFields,
+  learnerRationale: text,
+  teacherRationale: optionalText,
 });
+export const FreshAssignmentV1Schema = learnerRationaleAssignment.extend({
+  metadata: metadata.extend({ instructionLanguage, icon: text.min(1) }),
+  outputTask: structuredOutputTask,
+  toolkit: assignmentFields.toolkit.extend({ grammar: z.array(structuredGrammar) }),
+});
+/** Durable runtime/read admission, without normalization or inserted defaults. */
+export const AssignmentV1Schema = z.union([LegacyAssignmentV1Schema, learnerRationaleAssignment]);
 
 export type AssignmentV1 = z.infer<typeof AssignmentV1Schema>;
+export type FreshAssignmentV1 = z.infer<typeof FreshAssignmentV1Schema>;
+export type AssignmentGrammar = AssignmentV1['toolkit']['grammar'][number];
+export type StructuredAssignmentGrammar = z.infer<typeof structuredGrammar>;
 export type AssignmentSpeaker = AssignmentV1['input']['studyText']['speakers'][number];
 export type AssignmentPronunciation = NonNullable<AssignmentV1['pronunciation']>;
 
-// One schema definition owns runtime admission, TypeScript and the provider projection.
-const { $schema: _dialect, ...providerSchema } = z.toJSONSchema(AssignmentV1Schema);
+// Fresh generation projects only the new shape, never the legacy read alternative.
+const { $schema: _dialect, ...providerSchema } = z.toJSONSchema(FreshAssignmentV1Schema);
 export const ASSIGNMENT_RESPONSE_SCHEMA = {
   name: ASSIGNMENT_RESPONSE_SCHEMA_NAME,
-  description: 'One complete ESL homework assignment with plain text domain fields.',
+  description:
+    'One complete ESL homework assignment with authored emoji and string content using selective paired-backtick linguistic highlights.',
   schema: providerSchema as Record<string, unknown>,
   strict: true,
 } as const;
@@ -124,11 +184,21 @@ const LEXICAL_WORD_PATTERN = /[\p{L}\p{M}\p{N}]+(?:['’‐‑-][\p{L}\p{M}\p{N}
 
 function lexicalWords(value: string): string[] {
   return (
-    value
+    assignmentPlainText(value)
       .normalize('NFKC')
       .match(LEXICAL_WORD_PATTERN)
       ?.map((word) => word.toLowerCase()) ?? []
   );
+}
+
+function schemaIssues(issues: readonly z.core.$ZodIssue[]): string {
+  return issues
+    .map((issue) =>
+      issue.code === 'invalid_union'
+        ? issue.errors.map(schemaIssues).join('; ')
+        : `${issue.path.join('.')}: ${issue.message}`,
+    )
+    .join('; ');
 }
 
 export function validateAssignmentV1(
@@ -137,10 +207,27 @@ export function validateAssignmentV1(
 ): AssignmentV1 {
   const parsed = AssignmentV1Schema.safeParse(output);
   if (!parsed.success)
+    throw new Error(`AssignmentV1 schema validation failed: ${schemaIssues(parsed.error.issues)}`);
+  return validateAssignmentDomain(parsed.data, context);
+}
+
+/** Application-side post-provider admission must not use the backward-compatible read union. */
+export function validateFreshAssignmentV1(
+  output: unknown,
+  context: AssignmentValidationContext = {},
+): FreshAssignmentV1 {
+  const parsed = FreshAssignmentV1Schema.safeParse(output);
+  if (!parsed.success)
     throw new Error(
-      `AssignmentV1 schema validation failed: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`,
+      `AssignmentV1 fresh-generation schema validation failed: ${schemaIssues(parsed.error.issues)}`,
     );
-  const assignment = parsed.data;
+  return validateAssignmentDomain(parsed.data, context);
+}
+
+function validateAssignmentDomain<T extends AssignmentV1>(
+  assignment: T,
+  context: AssignmentValidationContext,
+): T {
   const errors: string[] = [];
   function meaningful(value: unknown, path: string): void {
     if (typeof value === 'string' && !value.trim())
@@ -155,6 +242,16 @@ export function validateAssignmentV1(
       });
   }
   meaningful(assignment, 'assignment');
+  // Bounded emoji admission, including ZWJ families, flags, modifiers and keycaps.
+  // This is post-provider validation: no unsupported JSON Schema emoji pattern.
+  if (
+    assignment.metadata.icon !== undefined &&
+    ([...assignment.metadata.icon].length > 32 ||
+      !/^(?:\p{Extended_Pictographic}[\uFE0F\p{Emoji_Modifier}]*(?:\u200D\p{Extended_Pictographic}[\uFE0F\p{Emoji_Modifier}]*)*|\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3)$/u.test(
+        assignment.metadata.icon,
+      ))
+  )
+    errors.push('metadata.icon must be one nonempty emoji');
   if (context.studentName && assignment.metadata.student !== context.studentName)
     errors.push('metadata.student must match the canonical student display name');
   if (context.inputKind && assignment.input.kind !== context.inputKind)
@@ -215,8 +312,8 @@ export function validateAssignmentV1(
       for (const item of p.drills) {
         if (
           item.chunks.length &&
-          item.chunks.join(' ').replace(/\s+/g, ' ').trim() !==
-            item.text.replace(/\s+/g, ' ').trim()
+          item.chunks.map(assignmentPlainText).join(' ').replace(/\s+/g, ' ').trim() !==
+            assignmentPlainText(item.text).replace(/\s+/g, ' ').trim()
         )
           errors.push('pronunciation chunks must reconstruct drill text');
         const drillWords = new Set(lexicalWords(item.text));

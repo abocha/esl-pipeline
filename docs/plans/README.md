@@ -16,6 +16,11 @@
 - Keep implemented or superseded plans out of active routing so agents do not patch stale intent.
 - Clarify when a plan must be archived after a PR lands.
 
+Linear owns the planning backlog and durable decisions. The `ESL Execution` team tracks bounded
+repository work through the configured GitHub Issues sync. This directory contains approved
+repository execution plans when a multi-step task benefits from one; it is not a backlog or a
+replacement for current issue/PR state.
+
 ## Plan Types
 
 ### Topic router
@@ -39,6 +44,8 @@
 
 - Active plan statuses under `docs/plans/` are limited to `active`, `roadmap`, `backlog`, and
   `draft`.
+- A plan's `backlog` status labels that repository execution artifact; Linear remains the authority
+  for prioritization and work selection.
 - Completed and superseded plans belong under `docs/archive/plans/`.
 - Active topic routers, backlog entries, and standalone plans must declare `Status`,
   `Last Verified Against`, `Exit Trigger`, and `Current Focus`.
@@ -85,6 +92,7 @@
 8. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
 9. `docs/plans/slice-2-invite-workspace-first-student.md`
 10. `docs/plans/2026-06-23-alpha-readiness.md`
+11. `docs/plans/2026-10-22-script-safety.md`
 
 ## Historical and Generated Aids
 

@@ -1,3 +1,7 @@
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
+
+import { getPromptPackageById } from '../domain/prompt-package-repository.js';
+import { HISTORICAL_ASSIGNMENT_ERROR, requireTypedAssignment } from './historical-assignment.js';
 // packages/batch-backend/src/application/process-queue-job.ts
 // Application service executed by the BullMQ worker.
 // Flow:
@@ -8,9 +12,7 @@
 // 5. On success, transition running -> succeeded with manifestPath.
 // 6. On failure, transition running -> failed with error and rethrow so BullMQ can retry.
 
-import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
 import { manifestPathFor } from '@esl-pipeline/orchestrator';
@@ -27,17 +29,17 @@ import { registerRunningJob, unregisterRunningJob } from '../infrastructure/job-
 import { createJobLogger } from '../infrastructure/logger.js';
 import { runAssignmentJob, runRerunAssignmentJob } from '../infrastructure/orchestrator-service.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
-import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import {
   maybeRunTtsCacheMaintenanceWithPgLock,
   withTtsCacheActivitySharedLock,
 } from '../infrastructure/tts-cache-maintenance-coordinator.js';
+import { assignmentContext, readAssignmentArtifact } from './assignment-artifact.js';
 import { requestHomeworkMemoryGeneration } from './request-homework-memory-generation.js';
 
 function resolveInheritedVoiceIdForProviderChange(args: {
   explicitVoiceId?: string;
-  explicitProvider?: 'elevenlabs' | 'google' | 'inworld';
-  persistedProvider?: 'elevenlabs' | 'google' | 'inworld';
+  explicitProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
+  persistedProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   persistedVoiceId?: string | null;
 }): string | undefined {
   if (args.explicitVoiceId !== undefined) {
@@ -62,10 +64,25 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     return;
   }
 
+  if (!job.assignmentArtifact) {
+    if (job.state === 'queued' || job.state === 'running' || job.state === 'awaiting_approval') {
+      const terminal = await updateJobStateAndResult({
+        id: job.id,
+        expectedState: job.state,
+        nextState: 'failed',
+        error: HISTORICAL_ASSIGNMENT_ERROR,
+        finishedAt: new Date(),
+      });
+      if (terminal) publishJobEvent({ type: 'job_state_changed', job: terminal });
+    }
+    log.info('Historical Markdown delivery skipped', { event: HISTORICAL_ASSIGNMENT_ERROR });
+    return;
+  }
+
   if (job.state === 'failed' && payload.executionMode === 'correction') {
     if (
       !payload.sourceJobId ||
-      !payload.correction?.expectedMarkdownHash ||
+      !payload.correction?.expectedAssignmentHash ||
       !payload.correction.manifestMd
     ) {
       throw new Error('Corrupted correction retry payload');
@@ -73,7 +90,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     const reset = await resetFailedAssignmentCorrectionJob({
       jobId,
       sourceJobId: payload.sourceJobId,
-      expectedMarkdownHash: payload.correction.expectedMarkdownHash,
+      expectedAssignmentHash: payload.correction.expectedAssignmentHash,
     });
     if (reset) {
       job = reset;
@@ -131,7 +148,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         'Corrupted rerun queue payload: rerun jobs must include executionMode="rerun" and rerun metadata.',
       );
     }
-    if (payload.executionMode === 'correction' && !payload.correction?.expectedMarkdownHash) {
+    if (payload.executionMode === 'correction' && !payload.correction?.expectedAssignmentHash) {
       throw new Error(
         'Corrupted correction queue payload: correction jobs must include the expected markdown hash.',
       );
@@ -162,12 +179,10 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     const isRerunExecution = payload.executionMode === 'rerun';
     const isCorrectionExecution = payload.executionMode === 'correction';
-    const markdownInput = await resolveMarkdownInput(running, {
-      preferFilesystemMd: isRerunExecution,
-      expectedContentHash: isCorrectionExecution
-        ? payload.correction?.expectedMarkdownHash
+    const markdownInput = await resolveAssignmentInput(running, {
+      expectedAssignmentHash: isCorrectionExecution
+        ? payload.correction?.expectedAssignmentHash
         : undefined,
-      materializedFilename: isCorrectionExecution ? `${sanitizeForFs(jobId)}.md` : undefined,
     });
 
     const uploadFlag = resolveUploadTarget(running.upload, config.storage.provider);
@@ -176,7 +191,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     let userSettings:
       | {
           elevenLabsApiKey?: string | null;
-          ttsProvider?: 'elevenlabs' | 'google' | 'inworld' | null;
+          ttsProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini' | null;
         }
       | undefined;
     if (running.userId) {
@@ -202,13 +217,15 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     const userSettingsTtsProvider =
       userSettings?.ttsProvider === 'elevenlabs' ||
       userSettings?.ttsProvider === 'google' ||
-      userSettings?.ttsProvider === 'inworld'
+      userSettings?.ttsProvider === 'inworld' ||
+      userSettings?.ttsProvider === 'gemini'
         ? userSettings.ttsProvider
         : undefined;
     const persistedStudyTextProvider =
       running.ttsProvider === 'elevenlabs' ||
       running.ttsProvider === 'google' ||
-      running.ttsProvider === 'inworld'
+      running.ttsProvider === 'inworld' ||
+      running.ttsProvider === 'gemini'
         ? running.ttsProvider
         : userSettingsTtsProvider;
 
@@ -227,7 +244,16 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       ? await resolveManifestMdPath(payload.rerun?.manifestMd, markdownInput.mdPath)
       : isCorrectionExecution
         ? resolveCorrectionManifestMd(jobId, payload.correction?.manifestMd)
-        : await resolveManifestMdPath(running.md, markdownInput.mdPath);
+        : await resolveManifestMdPath(
+            running.assignmentArtifact
+              ? path.resolve(
+                  process.env.FILESYSTEM_UPLOAD_DIR || './uploads',
+                  'assignments',
+                  `${sanitizeForFs(jobId)}.md`,
+                )
+              : running.md,
+            markdownInput.mdPath,
+          );
 
     const executePipeline = async () => {
       try {
@@ -235,7 +261,9 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
           ? await runRerunAssignmentJob(
               {
                 jobId,
-                md: markdownInput.mdPath,
+                md: canonicalManifestMd,
+                assignment: markdownInput.assignment,
+                validationContext: markdownInput.validationContext,
                 manifestMd: canonicalManifestMd,
                 upload: payload.rerun?.upload ?? 's3',
                 republishOnly: payload.rerun?.republishOnly ?? false,
@@ -295,7 +323,9 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
           : await runAssignmentJob(
               {
                 jobId,
-                md: markdownInput.mdPath,
+                md: canonicalManifestMd,
+                assignment: markdownInput.assignment,
+                validationContext: markdownInput.validationContext,
                 preset: running.preset ?? undefined,
                 learningPresetId: running.learningPresetId ?? undefined,
                 learningPresetVersion: running.learningPresetVersion ?? undefined,
@@ -466,17 +496,6 @@ function buildMarkdownPathCandidates(mdPath: string): string[] {
   return [...candidates];
 }
 
-async function resolveMarkdownPath(mdPath: string): Promise<string> {
-  const candidates = buildMarkdownPathCandidates(mdPath);
-  for (const candidate of candidates) {
-    if (await fileExists(candidate)) {
-      return candidate;
-    }
-  }
-
-  throw new Error(`Markdown file not found: ${mdPath.trim()}`);
-}
-
 async function resolveManifestMdPath(
   rawManifestMd: string | null | undefined,
   fallbackMdPath: string,
@@ -519,89 +538,53 @@ async function promoteFilesystemManifestPath(
   return durableManifestPath;
 }
 
-interface ResolvedMarkdownInput {
+interface ResolvedAssignmentInput {
   mdPath: string;
+  assignment: import('@esl-pipeline/contracts').AssignmentV1;
+  validationContext?: import('@esl-pipeline/contracts').AssignmentValidationContext;
   contentHash: string;
   cleanup: () => Promise<void>;
 }
 
-async function resolveMarkdownInput(
+async function resolveAssignmentInput(
   job: {
     id: string;
     md: string | null;
     mdStorageUri?: string | null;
+    assignmentArtifact?: import('@esl-pipeline/contracts').AssignmentArtifactReference | null;
+    assignmentRendererVersion?: number | null;
+    promptPackageId?: string | null;
   },
   options: {
-    preferFilesystemMd?: boolean;
-    expectedContentHash?: string;
-    materializedFilename?: string;
+    expectedAssignmentHash?: string;
   } = {},
-): Promise<ResolvedMarkdownInput> {
-  if (options.preferFilesystemMd) {
-    if (!job.md) {
-      throw new Error('Rerun job is missing an approved markdown source');
-    }
-
-    const resolvedMdPath = await resolveMarkdownPath(job.md);
+): Promise<ResolvedAssignmentInput> {
+  if (job.assignmentArtifact) {
+    if (job.assignmentRendererVersion !== ASSIGNMENT_HTML_RENDERER_VERSION)
+      throw new Error('Unsupported structured assignment renderer version');
+    if (!job.promptPackageId) throw new Error('Structured job prompt identity missing');
+    if (
+      options.expectedAssignmentHash &&
+      options.expectedAssignmentHash !== job.assignmentArtifact.contentHash
+    )
+      throw new Error('Correction assignment identity mismatch');
+    const assignment = await readAssignmentArtifact(job.assignmentArtifact, job.promptPackageId);
+    const prompt = await getPromptPackageById(job.promptPackageId);
+    if (!prompt) throw new Error('Structured assignment prompt context not found');
     return {
-      mdPath: resolvedMdPath,
-      contentHash: await hashMarkdownFile(resolvedMdPath),
+      mdPath: path.resolve(
+        process.env.FILESYSTEM_UPLOAD_DIR || './uploads',
+        'assignments',
+        `${sanitizeForFs(job.id)}.md`,
+      ),
+      assignment,
+      validationContext: assignmentContext(prompt),
+      contentHash: job.assignmentArtifact.contentHash,
       cleanup: async () => {},
     };
   }
-
-  if (job.mdStorageUri) {
-    return materializeMarkdownFromStorage(
-      job.id,
-      job.mdStorageUri,
-      options.expectedContentHash,
-      options.materializedFilename,
-    );
-  }
-
-  if (job.md) {
-    const resolvedMdPath = await resolveMarkdownPath(job.md);
-    return {
-      mdPath: resolvedMdPath,
-      contentHash: await hashMarkdownFile(resolvedMdPath),
-      cleanup: async () => {},
-    };
-  }
-
-  throw new Error('Job is missing an approved markdown source');
-}
-
-async function materializeMarkdownFromStorage(
-  jobId: string,
-  storageUri: string,
-  expectedContentHash?: string,
-  materializedFilename = 'assignment.md',
-): Promise<ResolvedMarkdownInput> {
-  const storage = createTranscriptionStorageForUri(storageUri);
-  const contents = await storage.getText(storageUri);
-  const contentHash = hashMarkdown(contents);
-  if (expectedContentHash && contentHash !== expectedContentHash) {
-    throw new Error('Correction markdown content hash mismatch');
-  }
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), `esl-job-${sanitizeForFs(jobId)}-`));
-  const mdPath = path.join(baseDir, path.basename(materializedFilename));
-  await fs.writeFile(mdPath, contents, 'utf8');
-
-  return {
-    mdPath,
-    contentHash,
-    cleanup: async () => {
-      await fs.rm(baseDir, { recursive: true, force: true });
-    },
-  };
-}
-
-async function hashMarkdownFile(mdPath: string): Promise<string> {
-  return hashMarkdown(await fs.readFile(mdPath, 'utf8'));
-}
-
-function hashMarkdown(contents: string): string {
-  return createHash('sha256').update(contents, 'utf8').digest('hex');
+  requireTypedAssignment(job.assignmentArtifact);
+  throw new Error('AssignmentV1 authority missing');
 }
 
 function resolveCorrectionManifestMd(

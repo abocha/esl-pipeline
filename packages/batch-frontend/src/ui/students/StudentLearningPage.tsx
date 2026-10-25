@@ -37,12 +37,12 @@ import {
   foundationalProfileToFormState,
   getApprovedCandidatesReadyForPromotion,
   INITIAL_FOUNDATIONAL_PROFILE_FORM,
-  isPendingCandidate,
   isSelectableForPromotion,
   PROFILE_CANDIDATE_PENDING_FILTER,
   type ProfileCandidateFilter,
   type ProfileDraftDiffItem,
 } from './StudentProfileUi.logic';
+import { useStudentPageEdits } from './StudentWorkspaceContext';
 import { formatStudentShortId } from './studentIdentity';
 import './StudentLearningPage.css';
 
@@ -261,41 +261,6 @@ function findCurrentProfileRevisionSummary(
   return revisions.find((revision) => revision.status === 'active') ?? null;
 }
 
-function countFilledProfileSections(form: FoundationalProfileFormState): number {
-  return [
-    form.overallLevel,
-    form.primaryGoals,
-    form.communicationContexts,
-    form.interestsAndUsefulThemes,
-    form.stableStrengths,
-    form.persistentChallenges,
-    form.studyPreferences,
-    form.durableConstraints,
-    form.teacherNotes,
-  ].filter((value) => value.trim().length > 0).length;
-}
-
-function getProfileCoverageLabel(populatedFields: number): string {
-  if (populatedFields >= 7) return 'Strong coverage';
-  if (populatedFields >= 4) return 'Working coverage';
-  if (populatedFields >= 1) return 'Starter coverage';
-  return 'Needs first pass';
-}
-
-function getProfileCoverageDetail(form: FoundationalProfileFormState): string {
-  const populatedFields = countFilledProfileSections(form);
-  return `${populatedFields}/9 durable fields populated`;
-}
-
-function getSnapshotLabel(
-  snapshot: StudentMemoryOverviewResponse['latestReadyStudentMemorySnapshot'],
-): string {
-  if (!snapshot) return 'No Snapshot Yet';
-  return `Ready • ${snapshot.lessonMemoryEntryIds.length} lesson signal${
-    snapshot.lessonMemoryEntryIds.length === 1 ? '' : 's'
-  }`;
-}
-
 function formatHealthValue(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined || value === '') return 'not available';
   if (typeof value === 'boolean') return value ? 'yes' : 'no';
@@ -327,10 +292,12 @@ function formatBudgetDecision(decision: Record<string, unknown> | null): string 
 
 function MemoryHealthDetails({
   health,
+  readySnapshot,
   open,
   onToggle,
 }: {
   health: StudentMemoryHealthResponse | null;
+  readySnapshot: StudentMemoryOverviewResponse['latestReadyStudentMemorySnapshot'];
   open: boolean;
   onToggle: () => void;
 }): React.JSX.Element {
@@ -347,13 +314,24 @@ function MemoryHealthDetails({
       </button>
       {open ? (
         <div className="student-learning-memory-support-body">
+          {readySnapshot ? (
+            <section>
+              <h3>Selected ready snapshot</h3>
+              <p>{readySnapshot.id}</p>
+              <p>
+                Referenced sources: {readySnapshot.lessonMemoryEntryIds.length} lesson /{' '}
+                {readySnapshot.homeworkMemoryEntryIds.length} homework
+              </p>
+            </section>
+          ) : null}
           {health ? (
             <div className="student-learning-memory-support-grid">
               <section>
                 <h3>Latest Snapshot</h3>
+                <p>Availability: {health.availability?.state ?? 'not reported'}</p>
                 {snapshot ? (
                   <dl>
-                    <dt>Status</dt>
+                    <dt>Stored status</dt>
                     <dd>{snapshot.status}</dd>
                     <dt>Strategy</dt>
                     <dd>{formatHealthValue(snapshot.strategy)}</dd>
@@ -611,6 +589,24 @@ function formatDraftDiffChangeType(changeType: ProfileDraftDiffItem['changeType'
   return 'Changed';
 }
 
+function describeCandidateOmissions(omissions: Array<{ reason: string }>): string {
+  const reasons: Record<string, string> = {
+    empty_approved_fact: 'Approved wording was empty.',
+    provider_omitted: 'The candidate was omitted from the proposed patch.',
+    fact_not_represented: 'Approved wording is absent or changed in its target field.',
+    not_approved: 'The candidate is no longer approved.',
+    promoted_elsewhere: 'The candidate was already promoted in another revision.',
+    revision_changed: 'The active revision changed before promotion could be verified.',
+  };
+  return [
+    ...new Set(
+      omissions.map(({ reason }) => reasons[reason] ?? 'Application could not be verified.'),
+    ),
+  ]
+    .map((reason) => ` ${reason}`)
+    .join('');
+}
+
 export const StudentLearningPage: React.FC = () => {
   const { student, studentId, studentLoading, studentError, refreshStudent } =
     useStudentAreaContext();
@@ -626,6 +622,7 @@ export const StudentLearningPage: React.FC = () => {
   const [profileDraftDiffBase, setProfileDraftDiffBase] =
     useState<FoundationalProfileFormState | null>(null);
   const [profileAvailable, setProfileAvailable] = useState<boolean | null>(null);
+  const [learningRetryCount, setLearningRetryCount] = useState(0);
   const [currentRevision, setCurrentRevision] = useState<ProfileRevisionDetailResponse | null>(
     null,
   );
@@ -686,21 +683,11 @@ export const StudentLearningPage: React.FC = () => {
     () => getApprovedCandidatesReadyForPromotion(profileCandidates),
     [profileCandidates],
   );
-  const pendingProfileCandidateCount = useMemo(
-    () => profileCandidates.filter((candidate) => isPendingCandidate(candidate)).length,
-    [profileCandidates],
-  );
   const approvedCandidateIdsReadyForPromotion = useMemo(
     () => new Set(approvedCandidatesReadyForPromotion.map((candidate) => candidate.id)),
     [approvedCandidatesReadyForPromotion],
   );
 
-  const populatedProfileFields = useMemo(
-    () => countFilledProfileSections(profileForm),
-    [profileForm],
-  );
-
-  const profileCoverageDetail = useMemo(() => getProfileCoverageDetail(profileForm), [profileForm]);
   const profileVersionDisplay = useMemo(() => {
     const currentRevisionId = currentRevision?.id ?? null;
     const nonCurrentRevisions = profileRevisions.filter(
@@ -946,6 +933,7 @@ export const StudentLearningPage: React.FC = () => {
     ]);
   }, [loadMemoryOverview, loadProfileCandidates, loadProfileSurface]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Retry deliberately reloads the same learner.
   useEffect(() => {
     const requestId = latestPageLoadRequestRef.current + 1;
     latestPageLoadRequestRef.current = requestId;
@@ -1022,7 +1010,7 @@ export const StudentLearningPage: React.FC = () => {
     return () => {
       latestPageLoadRequestRef.current += 1;
     };
-  }, [clearLoadedLearningSurface, isCurrentPageLoadRequest, studentId]);
+  }, [clearLoadedLearningSurface, isCurrentPageLoadRequest, studentId, learningRetryCount]);
 
   const handleProfileFieldChange = useCallback(
     (field: keyof FoundationalProfileFormState, value: string) => {
@@ -1061,9 +1049,11 @@ export const StudentLearningPage: React.FC = () => {
       });
       setProfileRevisions(revisions.items ?? []);
       setProfileSuccess('Profile draft saved.');
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save profile draft.';
       setProfileError(message);
+      return false;
     } finally {
       setProfileBusy(null);
     }
@@ -1082,12 +1072,43 @@ export const StudentLearningPage: React.FC = () => {
       );
       await reloadCurrentLearningSurface();
       setProfileSuccess('Learner profile saved.');
+      return true;
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : 'Unable to save learner profile.');
+      return false;
     } finally {
       setProfileBusy(null);
     }
   };
+
+  const reviewDirty =
+    Object.entries(profileCandidateDrafts).some(([id, draft]) => {
+      const candidate = profileCandidates.find((item) => item.id === id);
+      return (
+        draft.reviewerNote !== (candidate?.reviewerNote ?? '') ||
+        (draft.approvedFactText.trim() !== '' &&
+          draft.approvedFactText !== (candidate?.approvedFactText ?? candidate?.proposedFact))
+      );
+    }) || profileCandidatePromotionNote.trim() !== '';
+  useStudentPageEdits({
+    dirty: profileDirty || reviewDirty,
+    busy:
+      (profileBusy !== null && profileBusy !== 'loading') ||
+      profileCandidateAction !== null ||
+      profileCandidatePromotionBusy,
+    save:
+      profileDirty && !reviewDirty && profileBusy === null
+        ? async () =>
+            Boolean(
+              await (currentRevision?.status === 'draft' ? handleSaveDraft() : handleSaveProfile()),
+            )
+        : undefined,
+    discard: () => {
+      setProfileForm(loadedProfileForm);
+      setProfileCandidateDrafts({});
+      setProfileCandidatePromotionNote('');
+    },
+  });
 
   const handleStartEmptyProfile = async () => {
     setProfileBusy('saving');
@@ -1125,11 +1146,16 @@ export const StudentLearningPage: React.FC = () => {
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      await activateProfileRevision(profileStudentId, currentRevision.id);
+      const activated = await activateProfileRevision(profileStudentId, currentRevision.id);
       await Promise.all([reloadCurrentLearningSurface(), refreshStudent()]);
       setProfileDraftDiffBase(null);
       setProfileError(null);
-      setProfileSuccess('Draft activated.');
+      const promotion = activated.candidatePromotion;
+      setProfileSuccess(
+        promotion
+          ? `Draft activated. ${promotion.promotedCandidateIds.length} of ${promotion.linkedCandidateCount} linked facts promoted; ${promotion.omittedCandidates.length} omitted.${describeCandidateOmissions(promotion.omittedCandidates)}`
+          : 'Draft activated. Candidate promotion was not reported by the server.',
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to activate the draft.';
       setProfileError(message);
@@ -1211,8 +1237,11 @@ export const StudentLearningPage: React.FC = () => {
       });
       setProfileRevisions(revisions.items ?? []);
       setSelectedCandidateIds([]);
+      const excludedCount = candidateIds.filter(
+        (id) => !response.includedCandidateIds.includes(id),
+      ).length;
       setProfileCandidatePromotionSuccess(
-        'Structured draft revision refreshed from approved candidates.',
+        `Draft refreshed. ${response.includedCandidateIds.length} of ${candidateIds.length} selected facts applied; ${excludedCount} omitted.${describeCandidateOmissions(response.omittedCandidates ?? (excludedCount > 0 ? [{ reason: 'fact_not_represented' }] : []))} Review the changes and repeated wording before activating.`,
       );
       setProfileSuccess('Draft revision opened in the editor.');
     } catch (error) {
@@ -1319,7 +1348,44 @@ export const StudentLearningPage: React.FC = () => {
     );
   }
 
-  const latestSnapshot = memoryOverview?.latestReadyStudentMemorySnapshot ?? null;
+  if (profileAvailable === null) {
+    return (
+      <section
+        className="student-learning-layout student-area-theme student-learning-standalone-state"
+        aria-busy={profileBusy === 'loading'}
+      >
+        <h2>{profileError ? 'Learning unavailable' : 'Loading learning workspace…'}</h2>
+        {profileError ? (
+          <>
+            <p role="alert">{profileError}</p>
+            <button
+              type="button"
+              className="workspace-secondary-btn"
+              onClick={() => setLearningRetryCount((count) => count + 1)}
+            >
+              Retry
+            </button>
+          </>
+        ) : (
+          <p>Loading the learner profile, revision history, and memory.</p>
+        )}
+      </section>
+    );
+  }
+
+  const availability = memoryOverview?.availability ?? memoryHealth?.availability;
+  const latestSnapshot =
+    availability?.state === 'repair_required' || availability?.state === 'repository_unavailable'
+      ? null
+      : (memoryOverview?.latestReadyStudentMemorySnapshot ?? null);
+  const memoryRequestFailed = Boolean(memoryOverviewError && !memoryOverview);
+  const candidatesUnavailable = profileCandidatesLoading || Boolean(profileCandidatesError);
+  const memoryUnavailableCopy =
+    availability?.state === 'repair_required'
+      ? 'Stored memory history requires explicit repair. Recent observations do not restore established history.'
+      : availability?.state === 'repository_unavailable'
+        ? 'Memory retrieval is unavailable. Existing history is unknown.'
+        : 'No established student-memory snapshot is available yet.';
   const canActivateDraft = currentRevision?.status === 'draft';
   const unresolvedIssues = latestSnapshot?.unresolvedIssues ?? [];
   const recentLessons = memoryOverview?.recentReadyLessonMemory ?? [];
@@ -1371,31 +1437,29 @@ export const StudentLearningPage: React.FC = () => {
       <article className="student-area-panel student-learning-hero">
         <div className="student-learning-status-grid">
           <LearningMetricCard
-            eyebrow="Profile coverage"
-            value={getProfileCoverageLabel(populatedProfileFields)}
-            detail={profileCoverageDetail}
-          />
-          <LearningMetricCard
             eyebrow="Memory Snapshot"
-            value={getSnapshotLabel(latestSnapshot)}
-            detail={
-              latestSnapshot
-                ? `${formatDateTime(latestSnapshot.generatedAt)} • ${
-                    unresolvedIssues.length
-                  } open thread${unresolvedIssues.length === 1 ? '' : 's'}`
-                : 'Generate student memory to strengthen this teaching view.'
+            value={
+              memoryOverviewLoading && !memoryOverview
+                ? 'Loading…'
+                : memoryRequestFailed
+                  ? 'Unavailable'
+                  : latestSnapshot
+                    ? 'Ready'
+                    : availability?.state === 'repair_required'
+                      ? 'Repair required'
+                      : availability?.state === 'repository_unavailable'
+                        ? 'Unavailable'
+                        : 'No Snapshot Yet'
             }
-          />
-          <LearningMetricCard
-            eyebrow="Pending Candidates"
-            value={`${pendingProfileCandidateCount} New`}
-            detail="Profile facts waiting for teacher review."
-            tone={pendingProfileCandidateCount > 0 ? 'accent' : 'success'}
-          />
-          <LearningMetricCard
-            eyebrow="Promotion Queue"
-            value={`${approvedCandidatesReadyForPromotion.length} Ready`}
-            detail="Approved profile candidates that can become the next draft revision."
+            detail={
+              memoryRequestFailed
+                ? 'Memory could not be loaded. Existing history is unknown.'
+                : memoryOverviewLoading && !memoryOverview
+                  ? 'Loading student memory…'
+                  : latestSnapshot
+                    ? `Updated ${formatDateTime(latestSnapshot.generatedAt)}`
+                    : memoryUnavailableCopy
+            }
           />
         </div>
 
@@ -1408,9 +1472,17 @@ export const StudentLearningPage: React.FC = () => {
                 approvedCandidatesReadyForPromotion.map((candidate) => candidate.id),
               )
             }
-            disabled={profileBusy !== null || approvedCandidatesReadyForPromotion.length === 0}
+            disabled={
+              profileBusy !== null ||
+              candidatesUnavailable ||
+              approvedCandidatesReadyForPromotion.length === 0
+            }
           >
-            {profileBusy === 'promoting' ? 'Refreshing…' : 'Refresh Draft From Approved Candidates'}
+            {profileBusy === 'promoting'
+              ? 'Refreshing…'
+              : candidatesUnavailable
+                ? 'Refresh Draft From Approved Candidates'
+                : `Refresh Draft From Approved Candidates (${approvedCandidatesReadyForPromotion.length})`}
           </button>
           {canActivateDraft ? (
             <>
@@ -1495,35 +1567,21 @@ export const StudentLearningPage: React.FC = () => {
             {memoryOverviewError ? (
               <p className="workspace-error" aria-live="polite">
                 {memoryOverviewError}
+                {memoryOverview ? ' Showing previously loaded memory.' : ''}
               </p>
             ) : null}
 
-            {memoryOverviewLoading ? (
+            {memoryOverviewLoading && !memoryOverview ? (
               <p className="workspace-muted">Loading memory summary…</p>
+            ) : memoryRequestFailed ? (
+              <p className="workspace-muted">
+                Memory could not be loaded. Existing history is unknown.
+              </p>
             ) : latestSnapshot ? (
               <>
-                <div className="student-learning-memory-summary">
-                  <LearningMetricCard
-                    eyebrow="Snapshot"
-                    value={latestSnapshot.id}
-                    detail={`Generated ${formatDateTime(latestSnapshot.generatedAt)}`}
-                  />
-                  <LearningMetricCard
-                    eyebrow="Recent Lessons"
-                    value={`${recentLessons.length}`}
-                    detail="memory entries in view"
-                  />
-                  <LearningMetricCard
-                    eyebrow="Recent Homework"
-                    value={`${recentHomework.length}`}
-                    detail="published assignment traces"
-                  />
-                  <LearningMetricCard
-                    eyebrow="Open Threads"
-                    value={`${unresolvedIssues.length}`}
-                    detail="issues still worth carrying forward"
-                  />
-                </div>
+                <p className="workspace-muted">
+                  Snapshot generated {formatDateTime(latestSnapshot.generatedAt)}
+                </p>
 
                 <div className="student-learning-memory-highlight">
                   <strong>Snapshot Summary</strong>
@@ -1577,16 +1635,20 @@ export const StudentLearningPage: React.FC = () => {
               </>
             ) : (
               <div className="student-learning-empty-block">
-                <strong>No ready student-memory snapshot is available yet.</strong>
+                <strong>{memoryUnavailableCopy}</strong>
                 <p>
-                  The profile can still be edited manually, and this area will become more useful as
-                  lesson and homework memory accumulates.
+                  {availability?.state === 'repair_required'
+                    ? 'Existing observations remain retained. A separately authorized rebuild is required before using the established summary.'
+                    : availability?.state === 'repository_unavailable'
+                      ? 'Try again when memory retrieval is restored. The profile can still be edited manually.'
+                      : 'The profile can still be edited manually, and this area will become more useful as lesson and homework memory accumulates.'}
                 </p>
               </div>
             )}
             {memoryHealth || latestSnapshot ? (
               <MemoryHealthDetails
                 health={memoryHealth}
+                readySnapshot={latestSnapshot}
                 open={memoryHealthDetailsOpen}
                 onToggle={() => setMemoryHealthDetailsOpen((current) => !current)}
               />

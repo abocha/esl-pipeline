@@ -31,12 +31,17 @@
 ## Current State
 
 - Active cross-screen product UI guidance: [`Product UI preferences`](PRODUCT_UI_PREFERENCES.md).
-- Approved first-profile onboarding behavior:
+- Approved first-profile onboarding product decision (implementation and activation have separate
+  owners):
   [`First-profile onboarding`](FIRST_PROFILE_ONBOARDING.md).
 - Approved assignment identity, recovery, confirmation, and lineage behavior:
   [`Canonical assignment state`](CANONICAL_ASSIGNMENT_STATE.md).
 - Active domain design spec: transcription pipeline.
 - Historical frontend vision docs are archived under `docs/archive/frontend/2026-02/`.
+
+This router points to design intent and owner routes. It does not establish implementation,
+deployment, or live activation; follow the linked package owners for source behavior and product or
+operator records for activation status.
 
 ## Living Review Records
 

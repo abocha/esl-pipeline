@@ -37,6 +37,7 @@ vi.mock('./ProfileCandidatesPanel', () => ({
   ProfileCandidatesPanel: (props: {
     profileCandidates: { id: string; status?: string }[];
     selectedCandidateIds: string[];
+    profileCandidatePromotionSuccess: string | null;
     setSelectedCandidateIds: (next: string[] | ((current: string[]) => string[])) => void;
     onPromoteProfileCandidates: () => void | Promise<void>;
     onReviewProfileCandidate: (
@@ -73,6 +74,9 @@ vi.mock('./ProfileCandidatesPanel', () => ({
       <button type="button" onClick={() => void props.onPromoteProfileCandidates()}>
         Generate Draft Revision
       </button>
+      {props.profileCandidatePromotionSuccess ? (
+        <p>{props.profileCandidatePromotionSuccess}</p>
+      ) : null}
     </div>
   ),
 }));
@@ -457,6 +461,56 @@ describe('StudentLearningPage', () => {
     });
   });
 
+  it('keeps a failed initial load unavailable until Retry succeeds', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentLearningSurface.mockRejectedValueOnce(new Error('Learning request failed'));
+    renderLearningPage();
+    expect(await screen.findByRole('heading', { name: 'Learning unavailable' })).toBeTruthy();
+    expect(screen.queryByText('No Snapshot Yet')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Save learner profile/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /Refresh Draft From Approved Candidates/i }),
+    ).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('heading', { name: 'Foundational Profile' })).toBeTruthy();
+    expect(apiMocks.getStudentLearningSurface).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['repair_required', 'repository_unavailable'])(
+    'explains %s without suggesting a fresh bootstrap',
+    async (state) => {
+      apiMocks.getStudentMemoryOverview.mockResolvedValue({
+        studentId: 'student-alex',
+        availability: {
+          state,
+          reason:
+            state === 'repair_required'
+              ? 'established_history_ineligible'
+              : 'repository_unavailable',
+          lessonReferenceCount: 19,
+          homeworkReferenceCount: 3,
+        },
+        latestReadyStudentMemorySnapshot: null,
+        recentReadyLessonMemory: [],
+        recentReadyHomeworkMemory: [],
+        unresolvedIssues: [],
+      });
+      renderLearningPage();
+      await waitFor(() =>
+        expect(
+          screen.getAllByText(
+            state === 'repair_required'
+              ? /Stored memory history requires explicit repair/
+              : /Memory retrieval is unavailable/,
+          ).length,
+        ).toBeGreaterThan(0),
+      );
+      expect(
+        screen.queryByText('Generate student memory to strengthen this teaching view.'),
+      ).toBeNull();
+    },
+  );
+
   it('lets a student without a profile start an empty learner profile without falling back to legacy UI', async () => {
     apiMocks.getProfileContent.mockResolvedValueOnce(null);
     const user = userEvent.setup();
@@ -541,6 +595,7 @@ describe('StudentLearningPage', () => {
     renderLearningPage();
 
     expect(await screen.findByText('Recent learner memory summary.')).toBeTruthy();
+    expect(screen.queryByText(/Referenced sources:/)).toBeNull();
     expect(screen.queryByText('incremental_v1_1')).toBeNull();
     expect(screen.queryByText('snapshot-hash')).toBeNull();
 
@@ -548,6 +603,7 @@ describe('StudentLearningPage', () => {
 
     expect(screen.getByText('incremental_v1_1')).toBeTruthy();
     expect(screen.getByText('snapshot-hash')).toBeTruthy();
+    expect(screen.getByText('Referenced sources: 1 lesson / 1 homework')).toBeTruthy();
     expect(screen.getByText(/Homework memory extraction failed/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /manual full rebuild/i })).toBeNull();
   });
@@ -569,7 +625,7 @@ describe('StudentLearningPage', () => {
     renderLearningPage();
 
     expect(
-      await screen.findByText(/No ready student-memory snapshot is available yet/i),
+      (await screen.findAllByText(/No established student-memory snapshot is available yet/i))[0],
     ).toBeTruthy();
     expect(screen.queryByText('incremental_v1_1')).toBeNull();
     expect(screen.queryByText('Content hash')).toBeNull();
@@ -620,7 +676,7 @@ describe('StudentLearningPage', () => {
     renderLearningPage();
 
     expect(
-      await screen.findByText(/No ready student-memory snapshot is available yet/i),
+      (await screen.findAllByText(/No established student-memory snapshot is available yet/i))[0],
     ).toBeTruthy();
     expect(screen.queryByText('incremental_v1_1')).toBeNull();
 
@@ -1194,8 +1250,7 @@ describe('StudentLearningPage', () => {
     apiMocks.refreshProfileDraftFromApprovedCandidates.mockResolvedValueOnce({
       draftRevisionId: 'revision-draft-2',
       studentId: 'student-alex',
-      includedCandidateIds: ['candidate-alex'],
-      excludedCandidateIds: [],
+      includedCandidateIds: [],
       contentHash: 'hash-draft-2',
       draftRevision: {
         id: 'revision-draft-2',
@@ -1267,6 +1322,11 @@ describe('StudentLearningPage', () => {
       );
     });
     expect(apiMocks.promoteStudentProfileCandidates).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(
+        'Draft refreshed. 0 of 1 selected facts applied; 1 omitted. Approved wording is absent or changed in its target field. Review the changes and repeated wording before activating.',
+      ),
+    ).toBeTruthy();
     expect(screen.getByText('Profile Draft Changes')).toBeTruthy();
     expect(
       screen.getByText('Profile Draft Changes').closest('.student-learning-profile-card'),
@@ -1295,6 +1355,20 @@ describe('StudentLearningPage', () => {
         }),
       );
     });
+    apiMocks.activateProfileRevision.mockResolvedValueOnce({
+      id: 'revision-draft-3',
+      candidatePromotion: {
+        linkedCandidateCount: 1,
+        promotedCandidateIds: [],
+        omittedCandidates: [{ candidateId: 'candidate-alex', reason: 'fact_not_represented' }],
+      },
+    });
+    await user.click(screen.getByRole('button', { name: 'Activate Draft' }));
+    expect(
+      await screen.findByText(
+        'Draft activated. 0 of 1 linked facts promoted; 1 omitted. Approved wording is absent or changed in its target field.',
+      ),
+    ).toBeTruthy();
   });
 
   it('limits older profile versions behind a view-all control', async () => {

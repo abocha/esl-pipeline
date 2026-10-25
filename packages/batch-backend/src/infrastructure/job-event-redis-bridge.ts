@@ -30,6 +30,8 @@ interface SerializedJobRecord {
   state: JobRecord['state'];
   md: string | null;
   mdStorageUri: string | null;
+  assignmentArtifact?: import('@esl-pipeline/contracts').AssignmentArtifactReference | null;
+  assignmentRendererVersion?: number | null;
   recordingId: string | null;
   transcriptId: string | null;
   promptPackageId: string | null;
@@ -290,6 +292,8 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     state: job.state,
     md: job.md,
     mdStorageUri: job.mdStorageUri ?? null,
+    assignmentArtifact: job.assignmentArtifact ?? null,
+    assignmentRendererVersion: job.assignmentRendererVersion ?? null,
     recordingId: job.recordingId ?? null,
     transcriptId: job.transcriptId ?? null,
     promptPackageId: job.promptPackageId ?? null,
@@ -319,6 +323,8 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     state: serialized.state,
     md: serialized.md,
     mdStorageUri: serialized.mdStorageUri ?? null,
+    assignmentArtifact: serialized.assignmentArtifact ?? null,
+    assignmentRendererVersion: serialized.assignmentRendererVersion ?? null,
     recordingId: serialized.recordingId ?? null,
     transcriptId: serialized.transcriptId ?? null,
     promptPackageId: serialized.promptPackageId ?? null,
@@ -353,7 +359,8 @@ function normalizeTtsStrategy(value: string | null | undefined): JobRecord['ttsS
 }
 
 function normalizeTtsProvider(value: string | null | undefined): JobRecord['ttsProvider'] {
-  if (value === 'elevenlabs' || value === 'google' || value === 'inworld') return value;
+  if (value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini')
+    return value;
   return null;
 }
 

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   compatibilityPlan,
@@ -90,7 +91,7 @@ test('database ahead of target, checksum drift, and ambiguous migration IDs fail
 
 test('production metadata retains 0060 as the known incompatible historical boundary', () => {
   const inventory = migrationInventory(
-    new URL('../../packages/batch-backend/migrations', import.meta.url).pathname,
+    fileURLToPath(new URL('../../packages/batch-backend/migrations', import.meta.url)),
   );
   const declarations = validateCompatibility(inventory);
   assert.equal(declarations['0060_user_settings_owner_key'], 'incompatible');
@@ -100,6 +101,34 @@ test('production metadata retains 0060 as the known incompatible historical boun
   const plan = compatibilityPlan(inventory, oldInventory.migrations, oldInventory);
   assert.deepEqual(plan.boundaries, ['0060_user_settings_owner_key']);
   assert.equal(plan.imageRollbackSafe, false);
+});
+
+test('0061 requires writer quiescence and blocks old-image recovery before and after commit', () => {
+  const inventory = migrationInventory(
+    fileURLToPath(new URL('../../packages/batch-backend/migrations', import.meta.url)),
+  );
+  const previous = { migrations: inventory.migrations.filter((m) => !m.id.startsWith('0061_')) };
+  assert.equal(validateCompatibility(inventory)['0061_ordinary_memory_replay'], 'incompatible');
+  for (const applied of [previous.migrations, inventory.migrations]) {
+    const plan = compatibilityPlan(inventory, applied, previous);
+    assert.equal(plan.quiesce, true);
+    assert.equal(plan.imageRollbackSafe, false);
+    assert.deepEqual(plan.rollbackBlockers, ['0061_ordinary_memory_replay']);
+  }
+});
+
+test('0067 quiesces old grant writers before profile backfill and blocks old-image recovery', () => {
+  const inventory = migrationInventory(
+    fileURLToPath(new URL('../../packages/batch-backend/migrations', import.meta.url)),
+  );
+  const previous = { migrations: inventory.migrations.filter((m) => !m.id.startsWith('0067_')) };
+  assert.equal(validateCompatibility(inventory)['0067_mcp_profile_identities'], 'incompatible');
+  for (const applied of [previous.migrations, inventory.migrations]) {
+    const plan = compatibilityPlan(inventory, applied, previous);
+    assert.equal(plan.quiesce, true);
+    assert.equal(plan.imageRollbackSafe, false);
+    assert.deepEqual(plan.rollbackBlockers, ['0067_mcp_profile_identities']);
+  }
 });
 
 test('invalid JSON is rejected by image inventory without application bootstrap', () => {

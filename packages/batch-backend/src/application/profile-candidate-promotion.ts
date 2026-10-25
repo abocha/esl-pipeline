@@ -9,6 +9,7 @@ import {
   getActiveProfileRevision,
   getProfileRevisionById,
 } from '../domain/profile-revision-repository.js';
+import { isStudentProfileCandidateRepresented } from '../domain/student-profile-candidate-model.js';
 import {
   linkStudentProfileCandidatesToDraftRevision,
   listStudentProfileCandidatesByIds,
@@ -18,7 +19,10 @@ import {
   type FoundationalProfile,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
-import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  createGenerationRequestEnvelope,
+  flattenGenerationRequestEnvelope,
+} from './generation-request-envelope.js';
 import {
   applyProfileCandidatePatch,
   PROFILE_CANDIDATE_PATCH_JSON_SCHEMA,
@@ -66,6 +70,7 @@ export interface PromoteStudentProfileCandidatesResult {
   baseRevisionId: string | null;
   draftRevision: ProfileRevisionDetailResponse;
   includedCandidateIds: string[];
+  omittedCandidates: Array<{ candidateId: string; reason: string }>;
   provider: GenerateProfileRevisionDraftResult['provider'];
   model: GenerateProfileRevisionDraftResult['model'];
   providerRequestId?: string;
@@ -149,18 +154,13 @@ export async function promoteStudentProfileCandidates(args: {
     baseRevision?.structuredContent ??
     deriveFoundationalProfileFromMarkdown(baseRevision?.content ?? '');
 
-  const prompt = buildPromotionPrompt({
-    studentName: student.student,
-    baseStructuredProfile,
-    selectedCandidates,
-    reviewerNote: request.reviewerNote ?? null,
-  });
   const envelope = buildPromotionEnvelope({
     studentName: student.student,
     baseStructuredProfile,
     selectedCandidates,
     reviewerNote: request.reviewerNote ?? null,
   });
+  const prompt = flattenGenerationRequestEnvelope(envelope);
 
   const drafting = await dependencies.drafting.generate({
     request: {
@@ -185,11 +185,18 @@ export async function promoteStudentProfileCandidates(args: {
   assertCandidatePromotionDraftIsComplete({
     draftText: drafting.rawText,
     finishReason: drafting.finishReason,
-    baseProfileContent:
-      renderStructuredProfileForComparison(baseStructuredProfile) ?? baseRevision?.content ?? '',
   });
 
-  const candidatePatch = drafting.structuredProfile as ProfileCandidatePatch;
+  let candidatePatch: ProfileCandidatePatch;
+  try {
+    candidatePatch = validateProfileCandidatePatch(drafting.structuredProfile);
+  } catch (error) {
+    throw new ProfileCandidatePromotionError(
+      error instanceof Error ? error.message : String(error),
+      'profile_candidate_patch_invalid',
+      502,
+    );
+  }
   if (candidatePatch.operation === 'no_change') {
     throw new ProfileCandidatePromotionError(
       'No selected candidate was safe to promote; no draft revision was saved.',
@@ -220,6 +227,20 @@ export async function promoteStudentProfileCandidates(args: {
     );
   }
   const renderedDraft = renderFoundationalProfileContent(structuredDraft);
+  const appliedCandidateIds = selectedCandidates
+    .filter(
+      (candidate) =>
+        candidatePatch.candidateIds.includes(candidate.id) &&
+        isStudentProfileCandidateRepresented(structuredDraft, candidate),
+    )
+    .map((candidate) => candidate.id);
+  if (appliedCandidateIds.length === 0) {
+    throw new ProfileCandidatePromotionError(
+      'No selected approved fact was represented in the completed profile.',
+      'profile_candidate_no_change',
+      409,
+    );
+  }
 
   const draftRevision = await dependencies.profileContent.saveRevision(
     request.studentId,
@@ -235,7 +256,7 @@ export async function promoteStudentProfileCandidates(args: {
 
   await dependencies.candidates.linkToDraft({
     studentId: request.studentId,
-    candidateIds: selectedCandidates.map((candidate) => candidate.id),
+    candidateIds: appliedCandidateIds,
     draftRevisionId: draftRevision.id,
   });
 
@@ -243,7 +264,15 @@ export async function promoteStudentProfileCandidates(args: {
     studentId: request.studentId,
     baseRevisionId: baseRevision?.id ?? null,
     draftRevision,
-    includedCandidateIds: selectedCandidates.map((candidate) => candidate.id),
+    includedCandidateIds: appliedCandidateIds,
+    omittedCandidates: selectedCandidates
+      .filter((candidate) => !appliedCandidateIds.includes(candidate.id))
+      .map((candidate) => ({
+        candidateId: candidate.id,
+        reason: candidatePatch.candidateIds.includes(candidate.id)
+          ? 'empty_approved_fact'
+          : 'provider_omitted',
+      })),
     provider: drafting.provider,
     model: drafting.model,
     ...(drafting.providerRequestId ? { providerRequestId: drafting.providerRequestId } : {}),
@@ -283,6 +312,7 @@ function validateCandidateSelection(
   selectedCandidates: ProfilePromotionCandidate[],
 ): void {
   const seen = new Set<string>();
+  const requested = new Set(requestedCandidateIds);
 
   if (selectedCandidates.length !== requestedCandidateIds.length) {
     throw new ProfileCandidatePromotionError(
@@ -293,7 +323,7 @@ function validateCandidateSelection(
   }
 
   for (const candidate of selectedCandidates) {
-    if (!candidate.id.trim()) {
+    if (!candidate.id.trim() || !requested.has(candidate.id)) {
       throw new ProfileCandidatePromotionError(
         'Candidate selection contains an item without an id',
         'profile_candidate_id_missing',
@@ -335,54 +365,6 @@ function validateCandidateSelection(
   }
 }
 
-function buildPromotionPrompt(args: {
-  studentName: string;
-  baseStructuredProfile: FoundationalProfile | null;
-  selectedCandidates: ProfilePromotionCandidate[];
-  reviewerNote: string | null;
-}): string {
-  const candidatePayload = args.selectedCandidates.map((candidate) => ({
-    id: candidate.id,
-    targetSection: candidate.targetSection,
-    category: candidate.category,
-    approvedFact: (candidate.approvedFact ?? candidate.fact).trim(),
-    originalFact: candidate.fact,
-    authority: candidate.authority,
-    confidence: candidate.confidence,
-    evidence: candidate.evidence,
-    sourceSnapshotId: candidate.sourceSnapshotId ?? null,
-    sourceLessonMemoryIds: candidate.sourceLessonMemoryIds ?? [],
-  }));
-
-  return [
-    'You are drafting a foundational student profile revision for an ESL homework system.',
-    'Return only one JSON object matching the foundational_profile_v1 schema.',
-    'This is a bounded promotion pass, not a full rewrite from scratch.',
-    'Preserve unrelated teacher-authored truths whenever possible.',
-    'Integrate only the selected approved candidate facts below.',
-    'Do not invent new durable facts beyond the selected candidate set.',
-    'Favor omission over invention.',
-    'You may smooth wording and deduplicate overlap where that improves coherence.',
-    'Keep arrays concise and durable. Teacher-only ambiguity belongs in teacherNotes.',
-    '',
-    '[STUDENT_NAME]',
-    args.studentName,
-    '',
-    '[BASE_STRUCTURED_PROFILE]',
-    args.baseStructuredProfile
-      ? JSON.stringify(args.baseStructuredProfile, null, 2)
-      : 'No existing structured profile. Build the first durable profile from the approved facts only.',
-    '',
-    '[SELECTED_APPROVED_CANDIDATES]',
-    JSON.stringify(candidatePayload, null, 2),
-    '',
-    '[REVIEWER_NOTE]',
-    args.reviewerNote ?? 'No reviewer note provided.',
-    '',
-    'Output only valid JSON.',
-  ].join('\n');
-}
-
 function buildPromotionEnvelope(args: {
   studentName: string;
   baseStructuredProfile: FoundationalProfile | null;
@@ -391,11 +373,13 @@ function buildPromotionEnvelope(args: {
 }) {
   return createGenerationRequestEnvelope({
     workload: 'profile_candidate_patch',
+    promptVersion: 'learner_memory_generation_v2',
     instructions: [
       'Decide whether selected approved candidates are safe to promote into the student profile.',
       'Return only a closed profile_candidate_patch_v1 JSON object.',
       'Use operation apply only with IDs from SELECTED_APPROVED_CANDIDATES.',
       'Use no_change with no IDs when no selected candidate should be promoted.',
+      'Integrate only selected approved candidate facts. Do not invent new durable facts beyond the selected candidate set. Favor omission over invention.',
       'Do not rewrite profile fields or invent wording; the backend preserves unrelated fields and applies approved facts.',
     ].join('\n'),
     sources: [
@@ -430,7 +414,6 @@ function buildPromotionEnvelope(args: {
 function assertCandidatePromotionDraftIsComplete(args: {
   draftText: string;
   finishReason?: string;
-  baseProfileContent: string;
 }): void {
   if (!isCompleteTextGenerationFinishReason(args.finishReason)) {
     throw new ProfileCandidatePromotionError(
@@ -441,7 +424,6 @@ function assertCandidatePromotionDraftIsComplete(args: {
   }
 
   const draftText = args.draftText.trim();
-  const baseProfileContent = args.baseProfileContent.trim();
   if (!draftText) {
     throw new ProfileCandidatePromotionError(
       'Profile draft generation returned empty output. No draft was saved.',
@@ -449,21 +431,4 @@ function assertCandidatePromotionDraftIsComplete(args: {
       502,
     );
   }
-
-  // Promotions should preserve most of the base profile. A dramatic collapse in output length
-  // is a strong signal that the generation stopped early even if the provider omitted metadata.
-  if (
-    baseProfileContent.length >= 1_500 &&
-    draftText.length < Math.floor(baseProfileContent.length * 0.4)
-  ) {
-    throw new ProfileCandidatePromotionError(
-      'Profile draft generation appears truncated compared with the base profile. No draft was saved.',
-      'profile_candidate_draft_truncated',
-      502,
-    );
-  }
-}
-
-function renderStructuredProfileForComparison(profile: FoundationalProfile | null): string | null {
-  return profile ? renderFoundationalProfileContent(profile) : null;
 }

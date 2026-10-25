@@ -25,6 +25,7 @@ import {
 export interface StudentProfileData {
   id: string;
   student: string;
+  email?: string | null;
   workspaceId?: string | null;
   dbId?: string | null;
   pageParentId?: string | null;
@@ -146,6 +147,12 @@ function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<Stud
   if ('student' in input && typeof input.student === 'string') {
     sanitized.student = normalizeStudentName(input.student);
   }
+  if ('email' in input) {
+    const email = normalizeOptionalString(input.email);
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      throw new StudentProfileStoreError('Invalid student email', 'invalid_email');
+    sanitized.email = email;
+  }
   if ('dbId' in input) sanitized.dbId = normalizeOptionalString(input.dbId);
   if ('workspaceId' in input) sanitized.workspaceId = normalizeOptionalString(input.workspaceId);
   if ('pageParentId' in input) sanitized.pageParentId = normalizeOptionalString(input.pageParentId);
@@ -168,6 +175,7 @@ function toStudentProfileData(entry: StudentProfileEntry): StudentProfileData {
   return {
     id: entry.id,
     student: entry.student,
+    email: entry.email ?? null,
     dbId: entry.dbId ?? null,
     workspaceId: entry.workspaceId ?? null,
     pageParentId: entry.pageParentId ?? null,
@@ -185,6 +193,7 @@ function mapStudentRecordToEntry(record: StudentRecord): StudentProfileEntry {
   return {
     id: record.id,
     student: normalizeStudentName(record.student),
+    email: record.email ?? null,
     workspaceId: record.workspaceId ?? null,
     dbId: normalizeOptionalString(record.dbId),
     pageParentId: normalizeOptionalString(record.pageParentId),
@@ -263,6 +272,7 @@ async function createStudentProfileDb(
   let inserted: StudentRecord;
   try {
     inserted = await dependencies.students.insert({
+      actorUserId: options?.audit?.changedBy,
       id,
       student,
       workspaceId,
@@ -270,6 +280,7 @@ async function createStudentProfileDb(
       pageParentId: sanitized.pageParentId ?? null,
       colorPreset: sanitized.colorPreset ?? null,
       accentPreference: sanitized.accentPreference ?? null,
+      email: sanitized.email ?? null,
       manifestPreset: sanitized.manifestPreset ?? null,
       voices: sanitized.voices ?? {},
     });
@@ -338,6 +349,7 @@ async function updateStudentProfileDb(
   const merged = {
     id: existing.id,
     student: has('student') ? (sanitized.student as string) : existing.student,
+    email: has('email') ? (sanitized.email ?? null) : (existing.email ?? null),
     workspaceId: existing.workspaceId ?? workspaceId,
     dbId: has('dbId') ? (sanitized.dbId ?? null) : existing.dbId,
     pageParentId: has('pageParentId') ? (sanitized.pageParentId ?? null) : existing.pageParentId,
@@ -352,8 +364,10 @@ async function updateStudentProfileDb(
   };
 
   const persisted = await options.dependencies.students.upsert({
+    actorUserId: options.audit?.changedBy,
     id: merged.id,
     student: merged.student,
+    email: merged.email,
     workspaceId: merged.workspaceId ?? null,
     dbId: merged.dbId,
     pageParentId: merged.pageParentId,
@@ -488,7 +502,7 @@ export async function archiveStudentProfile(
 
 export async function restoreStudentProfile(
   id: string,
-  _input: StudentRestoreInput = {},
+  input: StudentRestoreInput = {},
   overrides?: StudentStoreOverrides,
 ): Promise<StudentProfileData | null> {
   if (!id) return null;
@@ -498,6 +512,7 @@ export async function restoreStudentProfile(
 
   const dependencies = getDependencies(overrides);
   const restored = await dependencies.students.restore(id, {
+    actorUserId: input.restoredBy,
     workspaceId: overrides?.workspaceId ?? null,
   });
   if (!restored) return null;

@@ -5,6 +5,7 @@ import type {
   AssignmentLearnerContext,
   AssignmentSession,
   ConfirmAssignmentSessionStepRequest,
+  FinishTranscriptAssignmentSessionRequest,
   FoundationalProfile,
   GenerationProvider,
   JobEvent,
@@ -27,10 +28,12 @@ import {
   fetchAssignmentSession,
   fetchJobOptions,
   fetchPromptOptions,
+  finishTranscriptAssignmentSession,
   getJobStatus,
   getStudentScheduleBillingSurface,
   publishAssignmentCorrection,
   shareAssignmentSession,
+  startHomeworkAssignmentSession,
   subscribeToJobEvents,
   updateAssignmentSessionRecovery,
 } from '../../utils/api';
@@ -58,6 +61,7 @@ import {
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import {
   canShareAssignment,
+  deriveResumeDestination,
   findResumeStep,
   isAssignmentConfirmationApplied,
   shouldGuardAssignmentExit,
@@ -74,6 +78,11 @@ import {
   isValidAssignmentPublicationParent,
 } from './MinimalAssignment.correction';
 import type { AssignmentEntryView } from './MinimalAssignment.entry-state';
+import {
+  isTranscriptFinishApplied,
+  isTranscriptOnlyCompleted,
+  noHomeworkUnavailableReason,
+} from './MinimalAssignment.no-homework';
 import {
   getJobPollingDecision,
   getNextFallbackPollingDelay,
@@ -103,6 +112,7 @@ import {
   type WorkflowStage,
   type WorkflowStageStatus,
 } from './MinimalAssignment.stages';
+import { TranscriptReviewResult } from './MinimalAssignment.transcript-result';
 import './MinimalAssignment.css';
 
 class AssignmentMutationAmbiguousError extends Error {}
@@ -137,9 +147,15 @@ const FOCUSED_STEP_ORDER: AssignmentStepId[] = [
   'assignment',
   'review',
 ];
-const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google', 'inworld'] as const;
+const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google', 'inworld', 'gemini'] as const;
 type TeacherNotesCommitResult = 'unchanged' | 'committed' | 'invalidated' | null;
-const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['google', 'elevenlabs', 'inworld'] as const;
+const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = [
+  'google',
+  'elevenlabs',
+  'inworld',
+  'gemini',
+] as const;
+const FALLBACK_GEMINI_TTS_MODELS = ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const FALLBACK_INWORLD_TTS_MODELS = [
   'inworld-tts-2',
@@ -168,7 +184,7 @@ type PronunciationMode =
   | 'minimal_pair';
 
 function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
-  return value === 'elevenlabs' || value === 'google' || value === 'inworld';
+  return value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini';
 }
 
 function isSttProvider(value: string | null | undefined): value is SttProvider {
@@ -186,7 +202,7 @@ function isUiPublishTtsStrategy(value: string | null | undefined): value is UiPu
 }
 
 function isGenerationProvider(value: string | null | undefined): value is GenerationProvider {
-  return value === 'openai' || value === 'google_ai_studio' || value === 'openrouter';
+  return value === 'openai';
 }
 
 function buildFirstProfileSourceAuthorityKey(
@@ -335,6 +351,12 @@ export const MinimalAssignment: React.FC = () => {
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
   const [entryView, setEntryView] = useState<AssignmentEntryView>('choice');
   const [entrySummary, setEntrySummary] = useState<AssignmentEntrySummary | null>(null);
+  const [reviewedTranscript, setReviewedTranscript] = useState<{
+    request: FinishTranscriptAssignmentSessionRequest;
+    text: string;
+  } | null>(null);
+  const finishAttemptRef = useRef<FinishTranscriptAssignmentSessionRequest | null>(null);
+  const [transcriptWorkflowBusy, setTranscriptWorkflowBusy] = useState(false);
   const [activeStep, setActiveStep] = useState<AssignmentStepId>('student');
   const [assignmentSaveState, setAssignmentSaveState] = useState<
     'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'ambiguous'
@@ -435,6 +457,7 @@ export const MinimalAssignment: React.FC = () => {
     const elevenlabsConfigured = jobOptions?.ttsModelOptionsByProvider?.elevenlabs ?? [];
     const googleConfigured = jobOptions?.ttsModelOptionsByProvider?.google ?? [];
     const inworldConfigured = jobOptions?.ttsModelOptionsByProvider?.inworld ?? [];
+    const geminiConfigured = jobOptions?.ttsModelOptionsByProvider?.gemini ?? [];
     const elevenlabsDefault =
       (jobOptions?.defaultTtsModelByProvider?.elevenlabs ?? '').trim() || FALLBACK_ELEVENLABS_MODEL;
     const elevenlabsOptions = [
@@ -453,6 +476,7 @@ export const MinimalAssignment: React.FC = () => {
       elevenlabs: elevenlabsOptions.length > 0 ? elevenlabsOptions : [FALLBACK_ELEVENLABS_MODEL],
       google: googleOptions.length > 0 ? googleOptions : [...FALLBACK_GOOGLE_TTS_MODELS],
       inworld: inworldOptions.length > 0 ? inworldOptions : [...FALLBACK_INWORLD_TTS_MODELS],
+      gemini: geminiConfigured.length > 0 ? geminiConfigured : [...FALLBACK_GEMINI_TTS_MODELS],
     };
   }, [jobOptions?.defaultTtsModelByProvider, jobOptions?.ttsModelOptionsByProvider]);
   const elevenlabsModelOptions = useMemo(
@@ -516,7 +540,7 @@ export const MinimalAssignment: React.FC = () => {
   >({});
   useEffect(() => {
     setMixedSpeakerRoleSelections({});
-  }, [source.transcript?.transcriptId]);
+  }, []);
   const mixedSpeakerRoles = useMemo(() => {
     if (source.recording?.audioTopology !== 'mixed_recording') return [];
     const summary = source.transcript?.summaryJson;
@@ -841,10 +865,21 @@ export const MinimalAssignment: React.FC = () => {
   ]);
 
   const assignmentSessionWritesAllowed = useCallback(() => {
+    const session = activeAssignmentSessionRef.current;
+    if (
+      isTranscriptOnlyCompleted(session) ||
+      session?.historicalReadOnly ||
+      (session?.confirmed.create && !session.confirmed.create.artifact) ||
+      (jobStatus && !jobStatus.assignmentArtifact) ||
+      (authoring.draft && authoring.draft.format !== 'assignment_v1') ||
+      (authoring.promptPackage &&
+        authoring.promptPackage.requestEnvelope?.promptVersion !== 'assignment_v1')
+    )
+      return false;
     return (
       !assignmentSessionPersistenceSuppressedRef.current || assignmentSessionUserEditedRef.current
     );
-  }, []);
+  }, [jobStatus, authoring.draft, authoring.promptPackage]);
 
   const saveAssignmentSessionProgress = useCallback(
     async (
@@ -1188,7 +1223,13 @@ export const MinimalAssignment: React.FC = () => {
 
   useEffect(() => {
     const session = activeAssignmentSessionRef.current;
-    if (!session || session.confirmedStep === 'share') return;
+    if (
+      !session ||
+      session.homeworkIntent === 'none' ||
+      session.confirmedStep === 'share' ||
+      (session.confirmed.create && !session.confirmed.create.artifact)
+    )
+      return;
     const repairingPartialProfileLineage = Boolean(
       session.selectedProfileId &&
         (!session.selectedProfileRevisionId || !session.selectedProfileRevisionHash) &&
@@ -1233,9 +1274,6 @@ export const MinimalAssignment: React.FC = () => {
     assignmentSessionWritesAllowed,
     learnerContext?.confirmationAvailable,
     currentLearnerProfile?.studentId,
-    context.selectedProfileId,
-    context.selectedProfileRevisionHash,
-    context.selectedProfileRevisionId,
     durableProfileLineage,
     flushPendingSessionRecovery,
     refreshDebouncedRecoveryPendingState,
@@ -1352,7 +1390,12 @@ export const MinimalAssignment: React.FC = () => {
     assignmentSessionMilestoneRef.current.recordingId = recordingId;
     if (!assignmentSessionWritesAllowed()) return;
     const session = activeAssignmentSessionRef.current;
-    if (!session || session.confirmedStep === 'share') return;
+    if (
+      !session ||
+      session.confirmedStep === 'share' ||
+      (session.confirmed.create && !session.confirmed.create.artifact)
+    )
+      return;
     void ensureAssignmentSourceAttached(recordingId, transcriptId);
   }, [
     assignmentSessionWritesAllowed,
@@ -1768,30 +1811,70 @@ export const MinimalAssignment: React.FC = () => {
       if (timer) clearTimeout(timer);
       window.removeEventListener('focus', onFocus);
     };
-  }, [learnerContextSourceKey, activeAssignmentSession?.id, activeStep]);
+  }, [learnerContextSourceKey, activeAssignmentSession?.id]);
   useEffect(() => {
     setLearnerContext(null);
     setLearnerContextError(null);
-  }, [learnerContextSourceKey]);
+  }, []);
 
   const jobReady = Boolean(jobStatus?.jobId);
   const hasPublishedHandout =
     jobStatus?.state === 'succeeded' && Boolean(jobStatus.htmlUrl?.trim());
-  const completedReferenceMode = isCompletedAssignmentSession(activeAssignmentSession);
+  const historicalReadOnly = Boolean(
+    activeAssignmentSession?.historicalReadOnly ||
+      (activeAssignmentSession?.confirmed.create &&
+        !activeAssignmentSession.confirmed.create.artifact) ||
+      (jobStatus && !jobStatus.assignmentArtifact) ||
+      (authoring.draft && authoring.draft.format !== 'assignment_v1') ||
+      (authoring.promptPackage &&
+        authoring.promptPackage.requestEnvelope?.promptVersion !== 'assignment_v1'),
+  );
+  const completedReferenceMode =
+    historicalReadOnly ||
+    isCompletedAssignmentSession(activeAssignmentSession) ||
+    isTranscriptOnlyCompleted(activeAssignmentSession);
+  const noHomework = activeAssignmentSession?.homeworkIntent === 'none';
+  const transcriptCompleted = isTranscriptOnlyCompleted(activeAssignmentSession);
+  useEffect(() => {
+    if (!transcriptCompleted || !activeAssignmentSession) return;
+    const status = activeAssignmentSession.transcriptProcessing;
+    if (!status || !Object.values(status).includes('pending')) return;
+    let cancelled = false;
+    const timeout = setInterval(() => {
+      void fetchAssignmentSession(activeAssignmentSession.id)
+        .then((latest) => {
+          if (
+            cancelled ||
+            activeAssignmentSessionRef.current?.id !== activeAssignmentSession.id ||
+            activeAssignmentSessionRef.current?.revision !== activeAssignmentSession.revision
+          )
+            return;
+          activeAssignmentSessionRef.current = latest;
+          setActiveAssignmentSession(latest);
+          if (!isTranscriptOnlyCompleted(latest)) {
+            setReviewedTranscript(null);
+            finishAttemptRef.current = null;
+            setActiveStep('source');
+          }
+        })
+        .catch(() => {});
+    }, LEARNER_CONTEXT_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timeout);
+    };
+  }, [activeAssignmentSession, transcriptCompleted, setActiveAssignmentSession]);
   const effectivePublicationParent = isValidAssignmentPublicationParent(
     activeAssignmentSession,
     jobStatus,
   )
     ? jobStatus
     : publicationParentJob;
-  const validPublicationParent = isValidAssignmentPublicationParent(
-    activeAssignmentSession,
-    effectivePublicationParent,
-  );
-  const publicationRecoveryAvailable = canRetryAssignmentPublication(
-    activeAssignmentSession,
-    jobStatus,
-  );
+  const validPublicationParent =
+    !historicalReadOnly &&
+    isValidAssignmentPublicationParent(activeAssignmentSession, effectivePublicationParent);
+  const publicationRecoveryAvailable =
+    !historicalReadOnly && canRetryAssignmentPublication(activeAssignmentSession, jobStatus);
   useEffect(() => {
     let cancelled = false;
     if (!completedReferenceMode || !activeAssignmentSession) {
@@ -1923,6 +2006,13 @@ export const MinimalAssignment: React.FC = () => {
       return deriveHistoricalAssignmentOutputWorkflow();
     }
     const steps = deriveAssignmentWorkflow(activeAssignmentSession, assignmentWorkingArtifacts);
+    if (activeAssignmentSession?.homeworkIntent === 'none') {
+      return steps.map((step) =>
+        step.id === 'review' && reviewedTranscript && !transcriptCompleted
+          ? { ...step, status: 'available' as const }
+          : step,
+      );
+    }
     if (!completedReferenceMode || hasPublishedHandout) return steps;
     return steps.map((step) =>
       step.id === 'review' ? { ...step, status: 'available' as const } : step,
@@ -1930,6 +2020,8 @@ export const MinimalAssignment: React.FC = () => {
   }, [
     activeAssignmentSession,
     assignmentWorkingArtifacts,
+    reviewedTranscript,
+    transcriptCompleted,
     completedReferenceMode,
     hasPublishedHandout,
     jobReady,
@@ -1997,6 +2089,11 @@ export const MinimalAssignment: React.FC = () => {
   }, [authoring, commitTeacherNotes, completedReferenceMode, markAssignmentUserEdit]);
   const handleFocusedStepRequest = useCallback(
     async (requestedStep: AssignmentStepId) => {
+      if (
+        transcriptWorkflowBusy ||
+        (noHomework && (requestedStep === 'context' || requestedStep === 'assignment'))
+      )
+        return;
       if (authoringOperationBusy && requestedStep !== 'student') return;
       if (completedReferenceMode && !correctionMode) {
         setActiveStep(requestedStep);
@@ -2021,12 +2118,13 @@ export const MinimalAssignment: React.FC = () => {
       setActiveStep(requestedStep);
     },
     [
+      noHomework,
+      transcriptWorkflowBusy,
       activeAssignmentSession,
       activeStep,
       activeStepIndex,
       authoring.draftDirty,
       authoringOperationBusy,
-      context.selectedProfileId,
       context.selectedProfileRevisionHash,
       context.selectedProfileRevisionId,
       completedReferenceMode,
@@ -2037,49 +2135,85 @@ export const MinimalAssignment: React.FC = () => {
     ],
   );
   const handleFocusedBack = useCallback(() => {
-    if (authoringOperationBusy || (!activeAssignmentSession && jobReady)) return;
+    if (transcriptWorkflowBusy || authoringOperationBusy || (!activeAssignmentSession && jobReady))
+      return;
+    if (noHomework && activeStep === 'review') {
+      setActiveStep('source');
+      return;
+    }
     setActiveStep(FOCUSED_STEP_ORDER[Math.max(0, activeStepIndex - 1)] ?? 'student');
-  }, [activeAssignmentSession, activeStepIndex, authoringOperationBusy, jobReady]);
+  }, [
+    noHomework,
+    activeStep,
+    transcriptWorkflowBusy,
+    activeAssignmentSession,
+    activeStepIndex,
+    authoringOperationBusy,
+    jobReady,
+  ]);
   const handleFocusedContinue = useCallback(async () => {
-    if (authoringOperationBusy) return;
+    if (transcriptWorkflowBusy || authoringOperationBusy) return;
     if (completedReferenceMode) return;
     if (activeStep === 'source') {
-      const recordingId = source.recording?.recordingId;
-      const requiresSpeakerMapping = mixedSpeakerRoles.length > 0;
-      if (requiresSpeakerMapping && mixedSpeakerRoles.some((item) => !item.role)) return;
-      const speakerRoleMapping = requiresSpeakerMapping
-        ? {
-            roles: mixedSpeakerRoles.map((item) => ({
-              speaker: item.speaker,
-              role: item.role as 'teacher' | 'student',
-            })),
-          }
-        : undefined;
-      const transcript =
-        source.transcriptDirty || speakerRoleMapping
-          ? await source.handleSaveTranscript(speakerRoleMapping)
-          : source.transcript;
-      if (!recordingId || !transcript?.transcriptId || !transcript.workingVersion) return;
-      if (!(await ensureAssignmentSourceAttached(recordingId, transcript.transcriptId))) return;
-      const recovered = await saveAssignmentSessionProgress({ lessonId: linkedLessonId || null });
-      if (
-        !recovered ||
-        recovered.recordingId !== recordingId ||
-        recovered.transcriptId !== transcript.transcriptId
-      ) {
+      setTranscriptWorkflowBusy(true);
+      try {
+        const recordingId = source.recording?.recordingId;
+        const requiresSpeakerMapping = mixedSpeakerRoles.length > 0;
+        if (requiresSpeakerMapping && mixedSpeakerRoles.some((item) => !item.role)) return;
+        const speakerRoleMapping = requiresSpeakerMapping
+          ? {
+              roles: mixedSpeakerRoles.map((item) => ({
+                speaker: item.speaker,
+                role: item.role as 'teacher' | 'student',
+              })),
+            }
+          : undefined;
+        const transcript =
+          source.transcriptDirty || speakerRoleMapping
+            ? await source.handleSaveTranscript(speakerRoleMapping)
+            : source.transcript;
+        if (!recordingId || !transcript?.transcriptId || !transcript.workingVersion) return;
+        if (!(await ensureAssignmentSourceAttached(recordingId, transcript.transcriptId))) return;
+        const recovered = await saveAssignmentSessionProgress({ lessonId: linkedLessonId || null });
+        if (
+          !recovered ||
+          recovered.recordingId !== recordingId ||
+          recovered.transcriptId !== transcript.transcriptId
+        ) {
+          return;
+        }
+        if (recovered.homeworkIntent === 'none') {
+          if (!source.isCurrentTranscriptSaved(transcript)) return;
+          setReviewedTranscript({
+            request: {
+              expectedRevision: recovered.revision,
+              lessonId: recovered.lessonId,
+              recordingId,
+              transcriptId: transcript.transcriptId,
+              transcriptWorkingVersion: transcript.workingVersion,
+              transcriptHash: transcript.contentHash,
+            },
+            text: transcript.text ?? '',
+          });
+          finishAttemptRef.current = null;
+          setAssignmentConfirmationError(null);
+          setActiveStep('review');
+          return;
+        }
+        const confirmed = await confirmAssignmentStep((session) => ({
+          step: 'source',
+          expectedRevision: session.revision,
+          lessonId: linkedLessonId || null,
+          recordingId,
+          transcriptId: transcript.transcriptId,
+          transcriptWorkingVersion: transcript.workingVersion,
+        }));
+        if (!confirmed) return;
+        setActiveStep('context');
         return;
+      } finally {
+        setTranscriptWorkflowBusy(false);
       }
-      const confirmed = await confirmAssignmentStep((session) => ({
-        step: 'source',
-        expectedRevision: session.revision,
-        lessonId: linkedLessonId || null,
-        recordingId,
-        transcriptId: transcript.transcriptId,
-        transcriptWorkingVersion: transcript.workingVersion,
-      }));
-      if (!confirmed) return;
-      setActiveStep('context');
-      return;
     }
     if (activeStep === 'context') {
       if (!(await commitTeacherNotes())) return;
@@ -2087,8 +2221,9 @@ export const MinimalAssignment: React.FC = () => {
       return;
     }
     if (activeStep === 'assignment') {
+      if (!authoring.draftValid || authoring.draftRecoveryConflict) return;
       const promptPackageId = authoring.promptPackage?.id;
-      const draft = authoring.draftDirty ? await authoring.saveDraft() : authoring.draft;
+      const draft = await authoring.flushDraftAutosave();
       if (!promptPackageId || !draft?.id || !draft.workingVersion) return;
       const confirmedContext = activeAssignmentSessionRef.current?.confirmed.context;
       const recovered = await saveAssignmentSessionProgress({
@@ -2108,13 +2243,18 @@ export const MinimalAssignment: React.FC = () => {
         selectedPreset: authoring.selectedPreset || null,
       });
       if (!recovered) return;
-      const confirmed = await confirmAssignmentStep((session) => ({
-        step: 'create',
-        expectedRevision: session.revision,
-        promptPackageId,
-        draftId: draft.id,
-        draftWorkingVersion: draft.workingVersion,
-      }));
+      if (!authoring.isCurrentDraftSaved(draft)) return;
+      const confirmed = await confirmAssignmentStep((session) => {
+        if (!authoring.isCurrentDraftSaved(draft))
+          throw new Error('Save the current assignment before confirmation.');
+        return {
+          step: 'create',
+          expectedRevision: session.revision,
+          promptPackageId,
+          draftId: draft.id,
+          draftWorkingVersion: draft.workingVersion,
+        };
+      });
       if (!confirmed) return;
       setActiveStep('review');
       return;
@@ -2125,6 +2265,7 @@ export const MinimalAssignment: React.FC = () => {
   }, [
     activeStep,
     activeStepIndex,
+    transcriptWorkflowBusy,
     authoring,
     authoringOperationBusy,
     commitTeacherNotes,
@@ -2137,7 +2278,153 @@ export const MinimalAssignment: React.FC = () => {
     mixedSpeakerRoles,
   ]);
 
+  const handleHomeworkIntentChange = useCallback(
+    async (checked: boolean) => {
+      if (transcriptWorkflowBusy || assignmentSaveStateRef.current === 'ambiguous') return;
+      setTranscriptWorkflowBusy(true);
+      try {
+        if (!(await flushPendingSessionRecovery())) return;
+        const saved = await saveAssignmentSessionProgress({
+          homeworkIntent: checked ? 'none' : 'create',
+        });
+        if (!saved) return;
+        setReviewedTranscript(null);
+        finishAttemptRef.current = null;
+        setActiveStep('source');
+      } finally {
+        setTranscriptWorkflowBusy(false);
+      }
+    },
+    [flushPendingSessionRecovery, saveAssignmentSessionProgress, transcriptWorkflowBusy],
+  );
+
+  const handleFinishTranscript = useCallback(async () => {
+    const current = activeAssignmentSessionRef.current;
+    if (!current || !reviewedTranscript || transcriptWorkflowBusy) return;
+    setTranscriptWorkflowBusy(true);
+    setAssignmentSaveState('saving');
+    setAssignmentConfirmationError(null);
+    const request = finishAttemptRef.current ?? reviewedTranscript.request;
+    finishAttemptRef.current = request;
+    try {
+      if (!(await flushPendingSessionRecovery())) return;
+      await assignmentSessionMutationQueueRef.current.catch(() => null);
+      const response = await finishTranscriptAssignmentSession(current.id, request);
+      activeAssignmentSessionRef.current = response.session;
+      setActiveAssignmentSession(response.session);
+      assignmentSessionMutationQueueRef.current = Promise.resolve(response.session);
+      setAssignmentSaveState('saved');
+      setActiveStep('review');
+      if (response.session.studentId) {
+        void getStudentScheduleBillingSurface(response.session.studentId)
+          .then(setScheduleSurface)
+          .catch(() => {});
+      }
+    } catch (error) {
+      const latest =
+        error instanceof AssignmentSessionConflictApiError
+          ? error.latestSession
+          : await fetchAssignmentSession(current.id).catch(() => null);
+      if (latest && isTranscriptFinishApplied(latest, request)) {
+        activeAssignmentSessionRef.current = latest;
+        setActiveAssignmentSession(latest);
+        assignmentSessionMutationQueueRef.current = Promise.resolve(latest);
+        setAssignmentSaveState('saved');
+      } else if (
+        latest &&
+        latest.homeworkIntent === 'none' &&
+        !latest.transcriptCompletedAt &&
+        latest.revision === request.expectedRevision &&
+        latest.lessonId === request.lessonId &&
+        latest.recordingId === request.recordingId &&
+        latest.transcriptId === request.transcriptId &&
+        !(error instanceof ArtifactWorkingConflictApiError) &&
+        !(error instanceof AssignmentSpeakerRoleMappingRequiredApiError) &&
+        !(error instanceof AssignmentSessionConflictApiError)
+      ) {
+        setAssignmentSaveState('error');
+        setAssignmentConfirmationError(
+          `Could not finish this transcript: ${error instanceof Error ? error.message : 'Try again.'}`,
+        );
+      } else if (latest) {
+        activeAssignmentSessionRef.current = latest;
+        setActiveAssignmentSession(latest);
+        assignmentSessionMutationQueueRef.current = Promise.resolve(latest);
+        setAssignmentSaveState('conflict');
+        setAssignmentConfirmationError(
+          'The lesson changed. Review the current transcript before finishing.',
+        );
+        if (!isTranscriptOnlyCompleted(latest)) {
+          setReviewedTranscript(null);
+          finishAttemptRef.current = null;
+          await refreshTranscriptPreservingLocal();
+          const destination = deriveResumeDestination(latest);
+          setActiveStep(typeof destination === 'string' ? destination : 'review');
+        }
+      } else {
+        setAssignmentSaveState('ambiguous');
+        setAssignmentConfirmationError(
+          'The finish outcome could not be checked. Retry to check the same operation.',
+        );
+      }
+    } finally {
+      setTranscriptWorkflowBusy(false);
+    }
+  }, [
+    flushPendingSessionRecovery,
+    refreshTranscriptPreservingLocal,
+    reviewedTranscript,
+    setActiveAssignmentSession,
+    transcriptWorkflowBusy,
+  ]);
+
+  const handleStartHomework = useCallback(async () => {
+    const current = activeAssignmentSessionRef.current;
+    if (!current || !isTranscriptOnlyCompleted(current) || transcriptWorkflowBusy) return;
+    const request = { expectedRevision: current.revision };
+    setTranscriptWorkflowBusy(true);
+    setAssignmentSaveState('saving');
+    setAssignmentConfirmationError(null);
+    try {
+      const response = await startHomeworkAssignmentSession(current.id, request);
+      activeAssignmentSessionRef.current = response.session;
+      setActiveAssignmentSession(response.session);
+      assignmentSessionMutationQueueRef.current = Promise.resolve(response.session);
+      setReviewedTranscript(null);
+      finishAttemptRef.current = null;
+      setAssignmentSaveState('saved');
+      setActiveStep('context');
+    } catch (error) {
+      const latest =
+        error instanceof AssignmentSessionConflictApiError
+          ? error.latestSession
+          : await fetchAssignmentSession(current.id).catch(() => null);
+      if (latest) {
+        activeAssignmentSessionRef.current = latest;
+        setActiveAssignmentSession(latest);
+        assignmentSessionMutationQueueRef.current = Promise.resolve(latest);
+        setAssignmentSaveState('saved');
+        if (latest.homeworkIntent === 'create') {
+          const reopened = await openAssignmentSession(latest.id);
+          if (reopened.ok) setActiveStep(reopened.destination);
+        } else {
+          setAssignmentConfirmationError(
+            'The lesson changed. Review its current result before creating homework.',
+          );
+        }
+      } else {
+        setAssignmentSaveState('ambiguous');
+        setAssignmentConfirmationError(
+          'The homework transition could not be checked. Reopen this lesson to reconcile its current state.',
+        );
+      }
+    } finally {
+      setTranscriptWorkflowBusy(false);
+    }
+  }, [openAssignmentSession, setActiveAssignmentSession, transcriptWorkflowBusy]);
+
   const handleShareAssignment = useCallback(async () => {
+    if (!authoring.draftValid) return;
     const initialSession = activeAssignmentSessionRef.current;
     if (!initialSession || initialSession.confirmedStep !== 'create') return;
     if (shareReconciliationInFlightRef.current) return;
@@ -2183,6 +2470,7 @@ export const MinimalAssignment: React.FC = () => {
             selectedPreset: authoring.selectedPreset || null,
           });
       if (!recovered) return;
+      if (!authoring.isCurrentDraftSaved(authoring.draft)) return;
       const response = await shareAssignmentSession(recovered.id, {
         expectedRevision: recovered.revision,
         requestId,
@@ -2259,7 +2547,8 @@ export const MinimalAssignment: React.FC = () => {
     handleShareAssignment,
   ]);
   const continueDisabled =
-    activeStep === 'student'
+    transcriptWorkflowBusy ||
+    (activeStep === 'student'
       ? !hasStartedFlow || !source.selectedStudentId
       : activeStep === 'source'
         ? !transcriptReady ||
@@ -2267,8 +2556,11 @@ export const MinimalAssignment: React.FC = () => {
         : activeStep === 'context'
           ? !learnerContext?.confirmationAvailable
           : activeStep === 'assignment'
-            ? !hasAssignmentContent || authoringOperationBusy
-            : false;
+            ? !hasAssignmentContent ||
+              !authoring.draftValid ||
+              authoring.draftRecoveryConflict ||
+              authoringOperationBusy
+            : false);
   const guardAssignmentExit = shouldGuardAssignmentExit({
     recovery:
       source.transcriptDirty ||
@@ -2288,7 +2580,8 @@ export const MinimalAssignment: React.FC = () => {
   const draftDirty = authoring.draftDirty;
   const transcriptRecoveryConflict = source.transcriptRecoveryConflict;
   const draftRecoveryConflict = authoring.draftRecoveryConflict;
-  const saveDraft = authoring.saveDraft;
+  const flushDraftAutosave = authoring.flushDraftAutosave;
+  const savingDraft = authoring.savingDraft;
   const refreshSelectedProfile = context.refreshSelectedProfile;
   const applyJobStatusTransition = resume.applyJobStatusTransition;
 
@@ -2304,6 +2597,7 @@ export const MinimalAssignment: React.FC = () => {
     const current = activeAssignmentSessionRef.current;
     if (
       !current ||
+      historicalReadOnly ||
       !canRetryAssignmentPublication(current, jobStatus) ||
       shareReconciliationInFlightRef.current
     ) {
@@ -2353,7 +2647,7 @@ export const MinimalAssignment: React.FC = () => {
       shareReconciliationInFlightRef.current = false;
       setSharingAssignment(false);
     }
-  }, [jobStatus, resume, setActiveAssignmentSession]);
+  }, [jobStatus, resume, setActiveAssignmentSession, historicalReadOnly]);
 
   const exitCorrectionMode = useCallback(() => {
     correctionModeRef.current = false;
@@ -2376,13 +2670,23 @@ export const MinimalAssignment: React.FC = () => {
     setCorrectionError(null);
 
     try {
+      if (!authoring.draftValid)
+        throw new Error(
+          authoring.assignmentValidationError ?? 'Fix the assignment fields before correction.',
+        );
       let payload = correctionPayloadRef.current;
       if (!payload) {
         if (authoring.draftRecoveryConflict) {
           throw new Error('Resolve the saved draft conflict before publishing the correction.');
         }
         const saved = await authoring.flushDraftAutosave();
+        if (!authoring.isCurrentDraftValid())
+          throw new Error('Fix the assignment fields before correction.');
+        if (authoring.draftDirty && !saved)
+          throw new Error('Save the valid assignment before correction.');
         const draft = saved ?? authoring.draft;
+        if (!authoring.isCurrentDraftSaved(draft))
+          throw new Error('Save the current assignment before correction.');
         payload = buildAssignmentCorrectionRequest({
           requestId: correctionRequestRef.current ?? globalThis.crypto.randomUUID(),
           draft,
@@ -2449,7 +2753,7 @@ export const MinimalAssignment: React.FC = () => {
     if (transcriptRecoveryConflict || draftRecoveryConflict) return false;
     if (!(await flushPendingSessionRecovery())) return false;
     if (sourceTranscriptDirty && !(await saveTranscript())) return false;
-    if (draftDirty && !(await saveDraft())) return false;
+    if ((draftDirty || savingDraft) && !(await flushDraftAutosave())) return false;
     const sessionQueueSettled = await assignmentSessionMutationQueueRef.current.then(
       () => true,
       () => false,
@@ -2460,7 +2764,8 @@ export const MinimalAssignment: React.FC = () => {
     draftDirty,
     draftRecoveryConflict,
     flushPendingSessionRecovery,
-    saveDraft,
+    flushDraftAutosave,
+    savingDraft,
     saveTranscript,
     sourceTranscriptDirty,
     transcriptRecoveryConflict,
@@ -2526,6 +2831,14 @@ export const MinimalAssignment: React.FC = () => {
               }
               activeAssignmentSessionRef.current = latest;
               setActiveAssignmentSession(latest);
+              if (
+                latest.homeworkIntent !== current.homeworkIntent ||
+                latest.transcriptCompletedAt !== current.transcriptCompletedAt
+              ) {
+                setReviewedTranscript(null);
+                finishAttemptRef.current = null;
+                setActiveStep(isTranscriptOnlyCompleted(latest) ? 'review' : 'source');
+              }
               if (latest.confirmedStep === 'create' && latest.shareJobId) {
                 shareRequestRef.current = latest.shareJobId;
                 autoResumedShareSessionRef.current = latest.id;
@@ -2556,7 +2869,6 @@ export const MinimalAssignment: React.FC = () => {
     resumeSelectedResumeJobId,
     setActiveAssignmentSession,
     source.selectedStudentId,
-    context.selectedProfileId,
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
     teacherNotes,
@@ -2708,6 +3020,9 @@ export const MinimalAssignment: React.FC = () => {
   return (
     <div className="minimal-assignment">
       <AssignmentWorkflow
+        editorActive={
+          activeStep === 'assignment' && hasAssignmentContent && Boolean(authoring.structuredDraft)
+        }
         steps={focusedWorkflowSteps}
         activeStep={activeStep}
         highestAvailableStep={
@@ -2716,6 +3031,7 @@ export const MinimalAssignment: React.FC = () => {
         }
         saveState={assignmentSaveState}
         studentName={selectedStudentName}
+        lessonOnly={noHomework}
         onStepRequest={handleFocusedStepRequest}
         onBack={handleFocusedBack}
         {...(activeStep === 'review' ||
@@ -2725,7 +3041,10 @@ export const MinimalAssignment: React.FC = () => {
           ? {}
           : {
               onContinue: handleFocusedContinue,
-              continueLabel: 'Confirm and continue',
+              continueLabel:
+                noHomework && activeStep === 'source'
+                  ? 'Review transcript'
+                  : 'Confirm and continue',
               continueDisabled,
               continueFeedback:
                 activeStep === 'context' && !learnerContext?.confirmationAvailable ? (
@@ -2738,6 +3057,13 @@ export const MinimalAssignment: React.FC = () => {
                   <span role="status">{assignmentRecoveryNotice}</span>
                 ) : null,
             })}
+        {...(activeStep === 'review' && noHomework && !transcriptCompleted
+          ? {
+              onContinue: handleFinishTranscript,
+              continueLabel: 'Confirm transcript and finish',
+              continueDisabled: transcriptWorkflowBusy || !reviewedTranscript,
+            }
+          : {})}
         {...(activeStep === 'review' && hasPublishedHandout
           ? {
               onComplete: handleStartNewAssignmentWithSessionReset,
@@ -2832,6 +3158,30 @@ export const MinimalAssignment: React.FC = () => {
           >
             <SourceStageSection
               hideStudentSelection
+              homeworkChoice={
+                !historicalReadOnly && !transcriptCompleted ? (
+                  <div className="minimal-homework-choice">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={noHomework}
+                        disabled={
+                          transcriptWorkflowBusy ||
+                          assignmentSaveState === 'ambiguous' ||
+                          Boolean(noHomeworkUnavailableReason(activeAssignmentSession))
+                        }
+                        onChange={(event) => void handleHomeworkIntentChange(event.target.checked)}
+                      />{' '}
+                      No homework for this lesson
+                    </label>
+                    {noHomeworkUnavailableReason(activeAssignmentSession) ? (
+                      <p className="minimal-muted">
+                        {noHomeworkUnavailableReason(activeAssignmentSession)}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null
+              }
               stage={sourceStage}
               sectionRef={sourceSectionRef}
               headingRef={sourceHeadingRef}
@@ -2868,6 +3218,7 @@ export const MinimalAssignment: React.FC = () => {
               canReplaceAudio={Boolean(
                 source.recording?.source === 'upload' &&
                   activeAssignmentSession &&
+                  !transcriptCompleted &&
                   activeAssignmentSession.confirmedStep !== 'share' &&
                   !activeAssignmentSession.shareJobId,
               )}
@@ -2904,7 +3255,7 @@ export const MinimalAssignment: React.FC = () => {
               onMixedSpeakerRoleChange={(speaker, role) =>
                 setMixedSpeakerRoleSelections((current) => ({ ...current, [speaker]: role }))
               }
-              readOnly={completedReferenceMode}
+              readOnly={completedReferenceMode || transcriptWorkflowBusy}
             />
           </LessonSourceStep>
         </div>
@@ -2952,6 +3303,15 @@ export const MinimalAssignment: React.FC = () => {
         >
           <CreateAssignmentStep>
             <AssignmentStageSection
+              onEditorContinue={completedReferenceMode ? undefined : handleFocusedContinue}
+              editorContinueDisabled={continueDisabled}
+              editorSessionKey={authoring.editorSessionKey}
+              editorValidationContext={authoring.editorValidationContext}
+              savingDraft={authoring.savingDraft}
+              draftConflict={authoring.draftRecoveryConflict}
+              savedDraftText={authoring.draft?.text}
+              onRetrySave={() => void authoring.saveDraft()}
+              onReconcileDraft={(choice) => void authoring.reconcileDraft(choice)}
               stage={assignmentStage}
               sectionRef={assignmentSectionRef}
               headingRef={assignmentHeadingRef}
@@ -2976,7 +3336,8 @@ export const MinimalAssignment: React.FC = () => {
               }}
               validation={authoring.validation}
               validationError={authoring.validationError}
-              draftError={authoring.draftError}
+              draftError={authoring.assignmentValidationError ?? authoring.draftError}
+              structuredDraft={authoring.structuredDraft}
               readOnly={completedReferenceMode && !correctionMode}
               allowGenerate={!completedReferenceMode}
             />
@@ -2989,59 +3350,83 @@ export const MinimalAssignment: React.FC = () => {
           hidden={activeStep !== 'review'}
           inert={activeStep === 'review' ? undefined : true}
         >
-          <ReviewShareStep>
-            <ReviewStageSection
-              stage={reviewStage}
-              sectionRef={reviewSectionRef}
-              headingRef={reviewHeadingRef}
-              previewButtonRef={reviewPreviewButtonRef}
-              onPublish={() => void handleShareAssignment()}
-              shareAvailable={activeAssignmentSession?.confirmedStep === 'create'}
-              onCancelJob={() => void advancedActions.handleCancelJob()}
-              canPublishWithPreview={authoring.canPublishWithPreview && shareRecoveryReady}
-              cancelEnabled={advancedActions.cancelEnabled}
-              actionBusy={advancedActions.actionBusy}
-              publishing={authoring.publishing || sharingAssignment}
-              previewing={authoring.previewing}
-              onPreviewDraft={() => void authoring.previewDraft()}
-              draftHasContent={authoring.draftText.trim().length > 0}
-              previewReadyForCurrentDraft={authoring.previewReadyForCurrentDraft}
-              previewError={authoring.previewError}
-              previewHtml={authoring.previewHtml}
-              publishError={assignmentShareError ?? authoring.publishError}
-              jobActionFeedback={!hasPublishedHandout ? advancedActions.actionSuccess : null}
-              currentJobStatus={jobStatus}
-              jobFailureReason={
-                jobStatus?.state === 'failed' && jobStatus.error
-                  ? describeJobFailureReason(jobStatus)
-                  : null
+          {noHomework ? (
+            <TranscriptReviewResult
+              session={activeAssignmentSession}
+              transcriptText={
+                transcriptCompleted
+                  ? source.transcriptText
+                  : (reviewedTranscript?.text ?? source.transcriptText)
               }
-              jobReady={Boolean(jobReady)}
-              publishUrl={publishUrl}
-              onCopyPublishedUrl={(url) => void navigator.clipboard?.writeText(url)}
-              completedReferenceMode={completedReferenceMode}
-              correctionAvailable={validPublicationParent}
-              publicationRecoveryAvailable={
-                publicationRecoveryAvailable && jobStatus?.state === 'failed'
-              }
-              correctionMode={correctionMode}
-              correctionPublishing={correctionPublishing}
-              correctionError={correctionError}
-              correctionCanPublish={Boolean(
-                correctionMode &&
-                  !correctionPublishing &&
-                  !correctionReconciliationRef.current &&
-                  Boolean(authoring.draft?.id) &&
-                  !authoring.draftDirty &&
-                  !authoring.draftRecoveryConflict,
-              )}
-              savedUnpublishedChanges={savedUnpublishedChanges}
-              onEnterCorrection={enterCorrectionMode}
-              onRetryPublication={() => void handleRetryPublication()}
-              onExitCorrection={exitCorrectionMode}
-              onPublishCorrection={() => void handlePublishCorrection()}
+              studentName={selectedStudentName}
+              lesson={linkedLesson}
+              lessonLoadingError={scheduleSurfaceError}
+              roles={mixedSpeakerRoles}
+              completed={transcriptCompleted}
+              busy={transcriptWorkflowBusy}
+              error={assignmentConfirmationError ?? assignmentRecoveryError}
+              onEdit={() => setActiveStep('source')}
+              onChoiceChange={handleHomeworkIntentChange}
+              onStartHomework={handleStartHomework}
             />
-          </ReviewShareStep>
+          ) : (
+            <ReviewShareStep>
+              <ReviewStageSection
+                stage={reviewStage}
+                sectionRef={reviewSectionRef}
+                headingRef={reviewHeadingRef}
+                previewButtonRef={reviewPreviewButtonRef}
+                onPublish={() => void handleShareAssignment()}
+                shareAvailable={
+                  !historicalReadOnly && activeAssignmentSession?.confirmedStep === 'create'
+                }
+                onCancelJob={() => void advancedActions.handleCancelJob()}
+                canPublishWithPreview={authoring.canPublishWithPreview && shareRecoveryReady}
+                cancelEnabled={advancedActions.cancelEnabled}
+                actionBusy={advancedActions.actionBusy}
+                publishing={authoring.publishing || sharingAssignment}
+                previewing={authoring.previewing}
+                onPreviewDraft={() => void authoring.previewDraft()}
+                draftHasContent={authoring.draftValid && authoring.draftText.trim().length > 0}
+                previewReadyForCurrentDraft={authoring.previewReadyForCurrentDraft}
+                previewError={authoring.previewError}
+                previewHtml={authoring.previewHtml}
+                publishError={assignmentShareError ?? authoring.publishError}
+                jobActionFeedback={!hasPublishedHandout ? advancedActions.actionSuccess : null}
+                currentJobStatus={jobStatus}
+                jobFailureReason={
+                  jobStatus?.state === 'failed' && jobStatus.error
+                    ? describeJobFailureReason(jobStatus)
+                    : null
+                }
+                jobReady={Boolean(jobReady)}
+                publishUrl={publishUrl}
+                onCopyPublishedUrl={(url) => void navigator.clipboard?.writeText(url)}
+                historicalReadOnly={historicalReadOnly}
+                completedReferenceMode={completedReferenceMode}
+                correctionAvailable={validPublicationParent}
+                publicationRecoveryAvailable={
+                  publicationRecoveryAvailable && jobStatus?.state === 'failed'
+                }
+                correctionMode={correctionMode}
+                correctionPublishing={correctionPublishing}
+                correctionError={correctionError}
+                correctionCanPublish={Boolean(
+                  correctionMode &&
+                    !correctionPublishing &&
+                    !correctionReconciliationRef.current &&
+                    Boolean(authoring.draft?.id) &&
+                    !authoring.draftDirty &&
+                    !authoring.draftRecoveryConflict,
+                )}
+                savedUnpublishedChanges={savedUnpublishedChanges}
+                onEnterCorrection={enterCorrectionMode}
+                onRetryPublication={() => void handleRetryPublication()}
+                onExitCorrection={exitCorrectionMode}
+                onPublishCorrection={() => void handlePublishCorrection()}
+              />
+            </ReviewShareStep>
+          )}
         </div>
       </AssignmentWorkflow>
     </div>

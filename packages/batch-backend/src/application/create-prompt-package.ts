@@ -35,6 +35,10 @@ import {
   deriveFoundationalProfileFromMarkdown,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
+import {
+  HistoricalAssignmentReadOnlyError,
+  isHistoricalAssignmentSession,
+} from './historical-assignment.js';
 import { stitchPromptEnvelope, stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptTemplateSelection } from './prompt-options.js';
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
@@ -230,6 +234,14 @@ export async function createPromptPackage(
       'Assignment session was not found',
     );
   }
+  if (assignmentSession?.homeworkIntent === 'none') {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL',
+      'No homework is planned for this lesson',
+    );
+  }
+  if (assignmentSession && (await isHistoricalAssignmentSession(assignmentSession)))
+    throw new HistoricalAssignmentReadOnlyError();
   if (assignmentSession && (params.notes !== undefined || params.lessonId !== undefined)) {
     throw new PromptPackageAssignmentError(
       'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID',
@@ -321,7 +333,7 @@ export async function createPromptPackage(
   ) {
     throw new PromptPackageAssignmentError(
       'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED',
-      'Activate the AssignmentV1 structured homework template and recreate the prompt package. The selected active template has an unsupported output contract.',
+      'Activate a homework template revision with the supported AssignmentV1 generation contract and recreate the prompt package. The selected active template has an unsupported output contract.',
     );
   }
   const payload = stitchPromptPayload({

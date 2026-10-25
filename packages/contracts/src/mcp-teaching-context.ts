@@ -56,4 +56,5 @@ export interface McpTeachingContextDto {
 
 export interface GetStudentTeachingContextResultDto {
   context: McpTeachingContextDto;
+  availability: import('./student-memory-availability.js').StudentMemoryAvailability;
 }

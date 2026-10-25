@@ -10,13 +10,15 @@ import {
 import {
   assertLiveGenerationEvalAccess,
   buildGenerationEvalEnvelope,
+  createBudgetedGenerationEvalExecutor,
   evaluateGenerationEvalVerdict,
   evaluateInjectionOutcome,
   runGenerationEval,
   validateStructuredEvalOutput,
 } from '../src/application/generation-evaluator.js';
 import { stitchPromptEnvelope } from '../src/application/prompt-assembly.js';
-import { assignmentFixture } from './assignment-v1.test-harness.js';
+import { loadConfig } from '../src/config/env.js';
+import { freshAssignmentFixture as assignmentFixture } from './assignment-v1.test-harness.js';
 
 describe('application/generation-evaluator', () => {
   it('routes assignment evals to Sol and every other OpenAI eval to Luna', () => {
@@ -352,3 +354,63 @@ function validFoundationalProfile() {
     teacherNotes: null,
   };
 }
+
+it('live evaluator refuses quota before dispatch and keeps usage on the requested model', async () => {
+  const execute = vi
+    .fn()
+    .mockResolvedValue({ output: {}, rawText: '{}', usage: { totalTokens: 7 } });
+  const reserve = vi.fn().mockResolvedValue({
+    allowed: false,
+    reason: { limitType: 'daily_tokens', window: 'day', limit: 225000, used: 225000 },
+    usage: {},
+  });
+  const recordActual = vi.fn();
+  const guarded = createBudgetedGenerationEvalExecutor(loadConfig(), execute, {
+    repository: { reserve, recordActual, getUsage: vi.fn() },
+  });
+  const request = {
+    model: 'gpt-6.1-sol',
+    prompt: 'Synthetic evaluator source',
+    maxOutputTokens: 120,
+    responseSchema: { name: 'synthetic_eval', schema: { type: 'object' }, strict: true },
+  };
+  await expect(guarded({ request })).rejects.toMatchObject({ limitType: 'daily_tokens' });
+  expect(execute).not.toHaveBeenCalled();
+  expect(recordActual).not.toHaveBeenCalled();
+  reserve.mockResolvedValue({ allowed: true, usage: {} });
+  await guarded({ request });
+  expect(reserve).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      model: 'gpt-6.1-sol',
+      limits: expect.objectContaining({ dailyTokenBudget: 225000 }),
+    }),
+  );
+  expect(execute).toHaveBeenCalledOnce();
+  expect(execute).toHaveBeenCalledWith({ request });
+  await guarded({ request: { ...request, maxOutputTokens: undefined } });
+  expect(execute).toHaveBeenLastCalledWith({ request: { ...request, maxOutputTokens: 12000 } });
+  expect(recordActual).toHaveBeenCalledWith(
+    expect.objectContaining({ provider: 'openai', model: 'gpt-6.1-sol', actualTokens: 7 }),
+  );
+});
+
+it.each([false, true])(
+  'rejects live evaluator process-local budget fallback with PG enabled=%s',
+  async (pgEnabled) => {
+    const config = loadConfig();
+    config.pg.enabled = pgEnabled;
+    config.nodeEnv = 'test';
+    const execute = vi.fn();
+    const guarded = createBudgetedGenerationEvalExecutor(config, execute);
+    await expect(
+      guarded({
+        request: {
+          model: 'gpt-5.6-luna',
+          prompt: 'synthetic',
+          responseSchema: { name: 'fixture', schema: { type: 'object' } },
+        },
+      }),
+    ).rejects.toThrow('persistent PostgreSQL');
+    expect(execute).not.toHaveBeenCalled();
+  },
+);

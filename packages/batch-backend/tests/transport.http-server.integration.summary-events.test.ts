@@ -79,7 +79,7 @@ describeHttpServerIntegrationSuite(
         url: '/user/assignment-sessions?limit=20',
       });
       expect(listed.statusCode).toBe(200);
-      expect(listSessions).toHaveBeenCalledWith('test-user-id', 20);
+      expect(listSessions).toHaveBeenCalledWith('test-user-id', 20, 'active', 0);
       expect(listed.json()).toEqual({ sessions: [session], total: 1, limit: 20 });
 
       const loaded = await app.inject({
@@ -697,6 +697,15 @@ describeHttpServerIntegrationSuite(
 
       const job: JobRecord = {
         id: 'job-stream',
+        assignmentArtifact: {
+          format: 'assignment_v1',
+          schemaVersion: 1,
+          serializationVersion: 1,
+          workingVersion: 2,
+          storageUri: `local://drafts/draft-1/content/${'a'.repeat(64)}.json`,
+          contentHash: 'a'.repeat(64),
+        },
+        assignmentRendererVersion: 1,
         state: 'running',
         md: 'fixtures/ok.md',
         preset: 'b1-default',
@@ -791,6 +800,8 @@ describeHttpServerIntegrationSuite(
       expect(eventPayload.payload?.ttsStrategy).toBeNull();
       expect(eventPayload.payload?.learningPresetId).toBe('general-english');
       expect(eventPayload.payload?.md).toBe(job.md);
+      expect(eventPayload.payload?.assignmentArtifact).toEqual(job.assignmentArtifact);
+      expect(eventPayload.payload?.assignmentRendererVersion).toBe(1);
       expect(getJobStatus).not.toHaveBeenCalled();
     });
 

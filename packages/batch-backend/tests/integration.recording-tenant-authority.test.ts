@@ -5,9 +5,13 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
 import { manifestPathFor } from '@esl-pipeline/orchestrator';
+
+import { assignmentHash } from '../src/application/assignment-artifact.js';
+import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 
 vi.mock('../src/infrastructure/queue-bullmq.js', () => ({
   createJobQueue: vi.fn(() => ({ enqueue: vi.fn().mockResolvedValue(undefined) })),
@@ -60,6 +64,12 @@ import {
 import { createPgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import type { AuthenticatedRequest } from '../src/transport/auth-middleware.js';
 import { registerCoreRoutes } from '../src/transport/core-routes.js';
+
+const artifactDirs: string[] = [];
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  for (const dir of artifactDirs.splice(0)) await rm(dir, { recursive: true, force: true });
+});
 
 describe('recording tenant authority', () => {
   beforeEach(async () => {
@@ -146,6 +156,14 @@ describe('recording tenant authority', () => {
       studentId: tenantA.studentId,
       lessonId: null,
     });
+    // Simulate persisted foreign pointers so the test reaches workspace authorization
+    // beyond the source-attachment prerequisite, without using an authorized attach.
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        'UPDATE assignment_sessions SET recording_id = $2, transcript_id = $3 WHERE id = $1',
+        [session.id, recordingB.id, transcriptB.id],
+      ),
+    );
     await expect(
       confirmAssignmentSessionStepPersistence({
         id: session.id,
@@ -183,7 +201,7 @@ describe('recording tenant authority', () => {
       client.query(
         `INSERT INTO jobs (
            id, state, student_id, recording_id, transcript_id, prompt_package_id, draft_id
-         ) VALUES ($1, 'succeeded', $2, $3, $4, $5, $6)`,
+         , assignment_artifact, assignment_renderer_version) VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2)`,
         [
           jobId,
           tenantA.studentId,
@@ -226,8 +244,8 @@ describe('recording tenant authority', () => {
     const sourceJobId = randomUUID();
     await withPgClientSessionContext({ rlsBypass: true }, (client) =>
       client.query(
-        `INSERT INTO jobs (id, state, student_id, recording_id, transcript_id)
-         VALUES ($1, 'succeeded', $2, $3, $4)`,
+        `INSERT INTO jobs (id, state, student_id, recording_id, transcript_id, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id)
+         VALUES ($1, 'succeeded', $2, $3, $4, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())`,
         [sourceJobId, tenantB.studentId, lineageB.recordingId, lineageB.transcriptId],
       ),
     );
@@ -252,163 +270,63 @@ describe('recording tenant authority', () => {
     ).resolves.toBeNull();
   });
 
-  it('persists owner authority for the authenticated standalone job lifecycle', async () => {
+  it('preserves owner authority for historical standalone job reads and rejects processing', async () => {
     const tenantA = await seedTenant('Tutor A');
     const tenantB = await seedTenant('Tutor B');
-    const foreignLineage = await seedJobLineage(tenantB, 'b');
-    const workdir = await mkdtemp(path.join(tmpdir(), 'standalone-job-authority-'));
-    const markdownPath = path.join(workdir, 'assignment.md');
-    await writeFile(markdownPath, '# Standalone assignment', 'utf8');
-    await writeFile(
-      manifestPathFor(markdownPath),
-      JSON.stringify({
-        schemaVersion: 3,
-        mdHash: 'standalone-test-hash',
-        publishTarget: 'html',
-        timestamp: '2026-09-03T00:00:00.000Z',
-      }),
-      'utf8',
-    );
-    const appA = createCoreAppForTenant(tenantA);
-    const appB = createCoreAppForTenant(tenantB);
-
+    const jobId = randomUUID();
+    // Model a record produced before the cutover; only this fixture insert bypasses the new freeze.
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query('ALTER TABLE jobs DISABLE TRIGGER historical_jobs_read_only');
+      await client.query(
+        `INSERT INTO jobs(id, state, md, user_id) VALUES($1, 'succeeded', 'historical.md', $2)`,
+        [jobId, tenantA.userId],
+      );
+      await client.query('ALTER TABLE jobs ENABLE TRIGGER historical_jobs_read_only');
+    });
+    const appA = createCoreAppForTenant(tenantA),
+      appB = createCoreAppForTenant(tenantB);
     try {
-      const submitted = await appA.inject({
-        method: 'POST',
-        url: '/jobs',
-        payload: { md: markdownPath },
-      });
-      expect(submitted.statusCode).toBe(202);
-      const { jobId } = submitted.json<{ jobId: string }>();
-      await expect(getJobById(jobId)).resolves.toMatchObject({
-        userId: tenantA.userId,
-        recordingId: null,
-        transcriptId: null,
-        promptPackageId: null,
-        draftId: null,
-      });
+      expect(
+        (await appA.inject({ method: 'POST', url: '/jobs', payload: { md: 'historical.md' } }))
+          .statusCode,
+      ).toBe(410);
       await expect(
         getJobWorkspaceAuthority(jobId, tenantA.workspaceId, tenantA.userId),
       ).resolves.toEqual({ mode: 'standalone_owner', recordingId: null });
       await expect(
         getJobWorkspaceAuthority(jobId, tenantB.workspaceId, tenantB.userId),
       ).resolves.toBeNull();
-
-      const ownStatus = await appA.inject({ method: 'GET', url: `/jobs/${jobId}` });
-      expect(ownStatus.statusCode).toBe(200);
-      const ownProvenance = await appA.inject({
-        method: 'GET',
-        url: `/jobs/${jobId}/provenance`,
-      });
-      expect(ownProvenance.statusCode).toBe(200);
-      expect(ownProvenance.json()).toMatchObject({
-        job: { id: jobId },
-        recording: null,
-        transcript: null,
-        promptPackage: null,
-        draft: null,
-      });
-
-      const absentId = randomUUID();
       for (const url of [`/jobs/${jobId}`, `/jobs/${jobId}/provenance`]) {
+        expect((await appA.inject({ method: 'GET', url })).statusCode).toBe(200);
         const foreign = await appB.inject({ method: 'GET', url });
-        const absent = await appB.inject({
-          method: 'GET',
-          url: url.replace(jobId, absentId),
-        });
-        expect({ statusCode: foreign.statusCode, body: foreign.json() }).toEqual({
-          statusCode: absent.statusCode,
+        const absent = await appB.inject({ method: 'GET', url: url.replace(jobId, randomUUID()) });
+        expect({ status: foreign.statusCode, body: foreign.json() }).toEqual({
+          status: absent.statusCode,
           body: absent.json(),
         });
       }
-      const foreignSse = await appB.inject({
-        method: 'GET',
-        url: `/jobs/events?jobId=${jobId}`,
-      });
+      const own = await getJobById(jobId);
+      expect(await captureTargetedJobEvent(appA, own!)).toContain(`"jobId":"${jobId}"`);
+      const foreignSse = await appB.inject({ method: 'GET', url: `/jobs/events?jobId=${jobId}` });
       const absentSse = await appB.inject({
         method: 'GET',
-        url: `/jobs/events?jobId=${absentId}`,
+        url: `/jobs/events?jobId=${randomUUID()}`,
       });
-      expect({ statusCode: foreignSse.statusCode, body: foreignSse.json() }).toEqual({
-        statusCode: absentSse.statusCode,
+      expect({ status: foreignSse.statusCode, body: foreignSse.json() }).toEqual({
+        status: absentSse.statusCode,
         body: absentSse.json(),
       });
-
-      const standalone = await getJobById(jobId);
-      expect(standalone).not.toBeNull();
-      const ssePayload = await captureTargetedJobEvent(appA, standalone!);
-      expect(ssePayload).toContain(`\"jobId\":\"${jobId}\"`);
-
-      await withPgClientSessionContext({ rlsBypass: true }, (client) =>
-        client.query(`UPDATE jobs SET state = 'succeeded', finished_at = NOW() WHERE id = $1`, [
-          jobId,
-        ]),
-      );
-      const rerunResult = await rerun(jobId, {
-        type: JobActionType.RERUN,
-        requestedAt: new Date('2026-09-03T00:05:00.000Z'),
-        requestedBy: tenantA.userId,
-        payload: { republishOnly: true },
-      });
-      expect(rerunResult.success).toBe(true);
-      const childId = rerunResult.jobId;
-      await expect(getJobById(childId)).resolves.toMatchObject({
-        userId: tenantA.userId,
-        recordingId: null,
-        transcriptId: null,
-        promptPackageId: null,
-        draftId: null,
-        sourceJobId: jobId,
-      });
-
-      for (const id of [jobId, childId]) {
-        await expect(
-          getJobWorkspaceAuthority(id, tenantA.workspaceId, tenantA.userId),
-        ).resolves.toEqual({ mode: 'standalone_owner', recordingId: null });
-        await expect(
-          getJobWorkspaceAuthority(id, tenantB.workspaceId, tenantB.userId),
-        ).resolves.toBeNull();
-      }
-
-      await insertJobActionHistory({
-        jobId,
-        actionType: JobActionType.RERUN,
-        payload: { republishOnly: true },
-        requestedAt: new Date('2026-09-03T00:05:00.000Z'),
-        requestedBy: tenantA.userId,
-        outcome: 'succeeded',
-        message: 'Republish queued',
-        createdJobId: childId,
-      });
-
-      for (const id of [jobId, childId]) {
-        await expect(
-          getJobWorkspaceAuthority(id, tenantA.workspaceId, tenantA.userId),
-        ).resolves.toEqual({ mode: 'standalone_owner', recordingId: null });
-        expect((await appA.inject({ method: 'GET', url: `/jobs/${id}` })).statusCode).toBe(200);
-        expect(
-          (await appA.inject({ method: 'GET', url: `/jobs/${id}/provenance` })).statusCode,
-        ).toBe(200);
-        expect((await appB.inject({ method: 'GET', url: `/jobs/${id}` })).statusCode).toBe(404);
-      }
-
-      await withPgClientSessionContext({ rlsBypass: true }, (client) =>
-        client.query(`UPDATE jobs SET transcript_id = $2 WHERE id = $1`, [
-          childId,
-          foreignLineage.transcriptId,
-        ]),
-      );
       await expect(
-        getJobWorkspaceAuthority(childId, tenantA.workspaceId, tenantA.userId),
-      ).resolves.toBeNull();
-      await expect(
-        getJobWorkspaceAuthority(jobId, tenantA.workspaceId, tenantA.userId),
-      ).resolves.toBeNull();
-      expect((await appA.inject({ method: 'GET', url: `/jobs/${childId}` })).statusCode).toBe(404);
+        rerun(jobId, {
+          type: JobActionType.RERUN,
+          requestedAt: new Date(),
+          requestedBy: tenantA.userId,
+          payload: { republishOnly: true },
+        }),
+      ).resolves.toMatchObject({ success: false, error: 'legacy_assignment_read_only' });
     } finally {
       await appA.close();
       await appB.close();
-      await rm(workdir, { recursive: true, force: true });
     }
   });
 
@@ -423,8 +341,9 @@ describe('recording tenant authority', () => {
     await writeFile(
       manifestPathFor(markdownPath),
       JSON.stringify({
-        schemaVersion: 3,
-        mdHash: 'test-hash',
+        schemaVersion: 6,
+        assignmentHash: lineageA.artifact.contentHash,
+        assignmentRendererVersion: 2,
         publishTarget: 'html',
         timestamp: '2026-09-03T00:00:00.000Z',
       }),
@@ -437,7 +356,7 @@ describe('recording tenant authority', () => {
           `INSERT INTO jobs (
              id, state, md, student_id, recording_id, transcript_id,
              prompt_package_id, draft_id, publish_target, user_id
-           ) VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, 'html', $8)`,
+           , assignment_artifact, assignment_renderer_version) VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, 'html', $8, $9::jsonb, 2)`,
           [
             parentId,
             markdownPath,
@@ -447,6 +366,7 @@ describe('recording tenant authority', () => {
             lineageA.promptPackageId,
             lineageA.draftId,
             tenantA.userId,
+            JSON.stringify(lineageA.artifact),
           ],
         ),
       );
@@ -1131,26 +1051,44 @@ async function seedJobLineage(tenant: Awaited<ReturnType<typeof seedTenant>>, su
     sttProvider: 'elevenlabs',
     fallbackUsed: false,
   });
+  const assignment = assignmentFixture();
+  assignment.metadata.student = 'Alex';
+  const contentHash = assignmentHash(assignment);
+  const storageUri = `local://drafts/content/${contentHash}.json`;
+  const dir = await mkdtemp(path.join(tmpdir(), 'esl7-tenant-native-'));
+  artifactDirs.push(dir);
+  vi.stubEnv('FILESYSTEM_UPLOAD_DIR', dir);
+  vi.stubEnv('STORAGE_PROVIDER', 'filesystem');
+  await import('node:fs/promises').then((fs) =>
+    fs.mkdir(path.join(dir, 'drafts/content'), { recursive: true }),
+  );
+  await writeFile(
+    path.join(dir, `drafts/content/${contentHash}.json`),
+    serializeAssignmentV1(assignment),
+  );
+  const requestEnvelope = promptPackageFixture().requestEnvelope;
+  requestEnvelope.assignmentContext!.studentName = 'Alex';
   const promptPackageId = randomUUID();
   const draftId = randomUUID();
   await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query(
       `INSERT INTO prompt_packages (
-         id, recording_id, transcript_id, student_id, template_version, storage_uri
-       ) VALUES ($1, $2, $3, $4, 'v1', $5)`,
-      [promptPackageId, recording.id, transcript.id, tenant.studentId, `local://prompts/${suffix}`],
+         id, recording_id, transcript_id, student_id, template_version, storage_uri, request_envelope
+       ) VALUES ($1, $2, $3, $4, 'v1', $5, $6::jsonb)`,
+      [
+        promptPackageId,
+        recording.id,
+        transcript.id,
+        tenant.studentId,
+        `local://prompts/${suffix}`,
+        JSON.stringify(requestEnvelope),
+      ],
     );
     await client.query(
       `INSERT INTO drafts (
          id, prompt_package_id, student_id, storage_uri, working_version, content_hash
-       ) VALUES ($1, $2, $3, $4, 1, $5)`,
-      [
-        draftId,
-        promptPackageId,
-        tenant.studentId,
-        `local://drafts/${suffix}`,
-        suffix.repeat(64).slice(0, 64),
-      ],
+       , format) VALUES ($1, $2, $3, $4, 1, $5, 'assignment_v1')`,
+      [draftId, promptPackageId, tenant.studentId, storageUri, contentHash],
     );
   });
   return {
@@ -1158,6 +1096,14 @@ async function seedJobLineage(tenant: Awaited<ReturnType<typeof seedTenant>>, su
     transcriptId: transcript.id,
     promptPackageId,
     draftId,
+    artifact: {
+      format: 'assignment_v1' as const,
+      schemaVersion: 1 as const,
+      serializationVersion: 1 as const,
+      workingVersion: 1,
+      contentHash,
+      storageUri,
+    },
   };
 }
 

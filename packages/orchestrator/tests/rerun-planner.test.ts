@@ -7,6 +7,8 @@ describe('rerun planner', () => {
     const plan = computeRerunPlan({
       md: '/tmp/lesson.md',
       manifest: {
+        schemaVersion: 6,
+        assignmentHash: 'hash',
         mdHash: 'hash',
         timestamp: '2026-01-01T00:00:00.000Z',
       },
@@ -23,6 +25,8 @@ describe('rerun planner', () => {
       md: '/tmp/lesson.md',
       republishOnly: true,
       manifest: {
+        schemaVersion: 6,
+        assignmentHash: 'hash',
         mdHash: 'hash',
         publishTarget: 'html',
         timestamp: '2026-01-01T00:00:00.000Z',
@@ -44,6 +48,8 @@ describe('rerun planner', () => {
       md: '/tmp/lesson.md',
       regenerateStudyTextAudio: true,
       manifest: {
+        schemaVersion: 6,
+        assignmentHash: 'hash',
         mdHash: 'hash',
         timestamp: '2026-01-01T00:00:00.000Z',
       },
@@ -73,6 +79,8 @@ describe('rerun planner', () => {
       md: '/tmp/lesson.md',
       republishOnly: true,
       manifest: {
+        schemaVersion: 6,
+        assignmentHash: 'hash',
         mdHash: 'hash',
         audioArtifacts: {
           studyText: {
@@ -87,20 +95,23 @@ describe('rerun planner', () => {
     expect(plan.errors).toEqual([]);
   });
 
-  it('normalizes legacy manifest publish targets to html without requiring retired fields', () => {
+  it('rejects historical manifests even when republishing existing artifacts', () => {
     const plan = computeRerunPlan({
       md: '/tmp/lesson.md',
       republishOnly: true,
       manifest: {
+        schemaVersion: 5,
         mdHash: 'hash',
         publishTarget: 'notion' as never,
         timestamp: '2026-01-01T00:00:00.000Z',
       },
     });
 
-    expect(plan.executable).toEqual(['add-audio']);
+    expect(plan.executable).toEqual([]);
     expect(plan.requires.missingManifestFields).toEqual([]);
-    expect(plan.errors).toEqual([]);
+    expect(plan.errors).toContain(
+      'Historical Markdown assignments are read-only; processing and conversion are retired.',
+    );
   });
 
   it('detects canonical pronunciation mode from manifest artifacts', () => {
@@ -108,6 +119,8 @@ describe('rerun planner', () => {
       md: '/tmp/lesson.md',
       regeneratePronunciationChunkAudio: true,
       manifest: {
+        schemaVersion: 6,
+        assignmentHash: 'hash',
         mdHash: 'hash',
         audioArtifacts: {
           pronunciation: {

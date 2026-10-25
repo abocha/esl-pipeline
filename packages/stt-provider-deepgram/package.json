@@ -28,13 +28,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@deepgram/sdk": "^5.10.1",
+    "@deepgram/sdk": "^5.14.0",
     "@esl-pipeline/stt-core": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^24.13.4",
+    "@types/node": "^24.19.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": ">=24.15.0"

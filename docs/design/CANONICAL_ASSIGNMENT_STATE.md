@@ -24,6 +24,14 @@ authority boundaries. It is not an implementation plan.
 The browser must never be responsible for assembling structural relationships among an assignment,
 source, transcript, profile revision, prompt package, draft, preview, or published job.
 
+For new structured assignments, AssignmentV1 is the sole durable editable content authority. The
+ABO-29 Slice 2 bridge exposes pretty-printed JSON in the existing whole-document editor. Invalid
+syntax/schema/domain state stays local and cannot autosave, preview, confirm, correct or publish.
+Resume loads the latest valid durable object. Formatting does not change canonical identity.
+Historical Markdown remains behind explicit read-only compatibility paths. AssignmentV1 is published
+through the native HTML renderer described in [AssignmentV1](../reference/ASSIGNMENT_V1.md); it does
+not create a Markdown projection or another editable authority.
+
 ## One Canonical Owner Per Lesson Source
 
 For one tutor, one student, and one classified canonical lesson source, there is at most one current

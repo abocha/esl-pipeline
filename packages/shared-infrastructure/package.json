@@ -2,7 +2,7 @@
   "name": "@esl-pipeline/shared-infrastructure",
   "version": "1.2.0",
   "private": true,
-  "license": "MIT",
+  "license": "UNLICENSED",
   "type": "module",
   "exports": {
     ".": {
@@ -31,8 +31,8 @@
     "@esl-pipeline/contracts": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^24.13.4",
+    "@types/node": "^24.19.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.3"
   }
 }

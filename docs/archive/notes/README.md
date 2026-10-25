@@ -6,6 +6,12 @@ Historical notes, correction plans, and implementation memos that are no longer 
 
 - `docs/archive/notes/2026-02/`
 - `docs/archive/notes/2026-06/`
+- `docs/archive/notes/2026-10/`
+
+## 2026-10 Highlights
+
+- [ESL-54 documentation revision and disposition evidence](2026-10/documentation-revision-esl-54.md)
+- [ESL-33 retained handout design QA](2026-10/esl-33-handout-design-qa.md)
 
 ## 2026-02 Highlights
 

@@ -164,6 +164,62 @@
   gap: var(--space-3);
 }
 
+.minimal-homework-choice {
+  padding: var(--space-4) 0;
+}
+
+.minimal-homework-choice label,
+.minimal-transcript-result .minimal-homework-choice-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.minimal-homework-choice input[type="checkbox"],
+.minimal-transcript-result input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--color-primary-600);
+}
+
+.minimal-transcript-identity p {
+  margin: 0;
+}
+
+.minimal-transcript-identity {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.minimal-transcript-details {
+  border-top: 1px solid var(--border-light);
+  padding-top: var(--space-3);
+  color: var(--text-secondary);
+}
+
+.minimal-transcript-details summary {
+  min-height: 44px;
+  cursor: pointer;
+  align-content: center;
+  font-weight: 600;
+}
+
+.minimal-transcript-processing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+}
+
+.minimal-transcript-processing dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .minimal-stage-card {
   gap: var(--space-4);
 }

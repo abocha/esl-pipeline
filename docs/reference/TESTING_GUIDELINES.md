@@ -14,39 +14,57 @@ Use the smallest reliable local evidence for the change in progress. Hosted PR C
 comprehensive merge gate. Local commands do not emulate the hosted gate and are not a substitute
 for a successful `CI gate`.
 
-Hosted CI selects evidence by changed risk surface using deterministic ownership rules in
-`scripts/check/workspace-change-scope.mjs`. The workspace graph and transitive dependents drive
-ordinary build/unit impact. Those two hosted jobs currently execute workspace-wide; package impact
-does not automatically select specialized evidence:
+## Choose the evidence route
 
-- deterministic integration: HTTP/API transport boundaries, pipeline/provider packages and their
-  owned support/tests;
-- backend DB/worker: migrations, PostgreSQL repositories/infrastructure, queues/workers, durable
-  execution entrypoints and service-project tests/support;
-- media: recording preparation, audio/STT processing and owned tests/support, in a separate FFmpeg job;
-- Telegram: the bot package, its transitive workspace dependencies, Compose and Telegram smoke inputs.
+Start from the changed behavior and the plausible regression, then follow the applicable route.
+These are entrypoints, not a checklist to read in full for every task.
 
-Repository policy always runs, including tooling tests and docs checks. `docs/**`, `scripts/docs/**`,
-`AGENTS.md` and `.codex/**` are docs/tooling scope. Explicit maintenance scope additionally covers
-`.gitignore`, `.agents/skills/**`, `scripts/git/**` and the release-label and production-image scope
-modules/tests. These paths alone skip application lanes and production packaging. `.dockerignore`
-is a known packaging input: it selects production images, but no application evidence lanes.
-Do not extend that allowlist to arbitrary
-maintenance-looking paths. Unknown paths or untrusted workspace ownership select all application lanes.
-Classifier (`scripts/check/**`), workflow and root toolchain changes retain an independent bootstrap
-`force_all` safeguard: a routing PR itself receives broad hosted evidence. Each selected lane has
-path/rule reasons in the CI summary. Production packaging remains an independent projection.
+| Task                                     | Next owner                                                                                                                                                    | Evidence decision                                                                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ordinary application change              | Owning package README and existing tests; [backend recipe](../../packages/batch-backend/README.md#validation)                                                 | Use an existing owner-boundary check or a focused regression test. Add package build, typecheck or lint evidence when the changed surface needs it. |
+| Docs or instruction change               | [Docs-only recipe](#docs-only-changes)                                                                                                                        | Synchronize affected generated references, check formatting and run the appropriate docs mode.                                                      |
+| Hosted failure                           | [Selected job reproduction](#hosted-pr-ci-job-reproduction)                                                                                                   | Inspect retained job logs/artifacts, then reproduce the first relevant failure's command and prerequisites if needed.                               |
+| Validation-system change                 | [Infrastructure skill](../../.agents/skills/esl-pipeline-validation-evidence/SKILL.md) and [SSOT contracts](agents-ssot.md#runtime-and-verification-baseline) | Follow the changed mechanism to existing contract cases; use services only when the actual service boundary needs evidence.                         |
+| Test authoring, audit or fixture failure | [Test-value policy](#test-design-and-value), [fixture classification](#fixture-and-snapshot-drift), shared `codex-workflow:test-audit` procedure              | Identify the independent contract and defect-catching value before adding, deleting or updating expectations.                                       |
 
-If hosted CI fails, inspect that job's logs and retained manifest, then reproduce the job's actual
-command, configuration, and prerequisites. Do not replace a failing hosted job with a repository-wide
-local approximation.
+Package READMEs own execution recipes; manifests, test configuration and workflows own exact commands,
+membership and prerequisites. This guide owns evidence selection; the SSOT owns validation invariants.
+Remembered commands and historical results are discovery hints, not current execution instructions.
 
-The conditional `production backend packaging` job reuses the release production-image scope and
-executes the same backend Dockerfile, Buildx action, target platform, and fresh-base behavior as the
-release image build, without pushing an image. Shared image inputs and workspace changes that affect
-the backend select it; unrelated PRs skip it. `CI gate` requires the job to succeed whenever selected.
+Before running checks, inspect [existing evidence](#evidence-and-merge-boundary) for applicability.
+Broader local or service-backed evidence requires a concrete plausible wider failure, local environment
+behavior under test, an unavailable hosted equivalent or a specific hosted failure to diagnose. Diff
+breadth alone does not justify a broad run. Finish when the applicable completion criteria are met,
+following the mandatory evidence/closure rules in [AGENTS.md](../../AGENTS.md#evidence-and-validation).
+The plugin's workflow reference owns the fuller shared method.
 
 ## Local feedback ladder
+
+The root Vitest configuration aliases HTML publication and storage upload to their canonical
+compiled workspace entries. This keeps upload mocks shared across pnpm's injected workspace
+copies while exercising the real renderer and publication flow. Build the package graph before
+running these prebuilt tests; do not replace their imports with unbuilt source aliases.
+
+The root Vitest setup isolates orchestrator, storage-uploader, provider-runtime and STT/TTS
+provider unit tests before test modules initialize, including direct package, watch and prebuilt
+entrypoints. It reuses `scripts/test/pure-test-env.mjs`, disables SDK user-profile/ADC credential
+files and AWS metadata discovery, and sets `VALIDATION_TEST_CLASS=pure`. Application/CLI env
+bootstrap and mutating shared env loaders skip env files in pure mode; explicit non-mutating
+`loadEnvFiles({ assignToProcess: false })` remains available for parser fixtures.
+
+The setup blocks external fetch and TCP/TLS connections before dispatch, including unmocked SDK
+requests. Literal loopback addresses and localhost remain available to intentional mock servers.
+Integration suites (including ElevenLabs' `tests/integration.test.ts`) and backend project/service
+classification retain their existing setup. This guard covers in-process Node transports, not
+arbitrary subprocesses or native networking. Reproduce the dummy-credential/env-file regression
+after building the orchestrator test prerequisites. The orchestrator's `test:unit:prebuilt` runs
+this poisoned-environment check before its regular suite, so both `test:unit` and the hosted
+post-build unit job enforce it without adding build prerequisites to repository-policy tests:
+
+```bash
+pnpm --filter @esl-pipeline/orchestrator test:unit:setup
+node --test scripts/test/provider-unit-isolation.mjs scripts/test/pure-test-env.test.mjs
+```
 
 While editing, run the narrowest relevant command:
 
@@ -54,14 +72,46 @@ While editing, run the narrowest relevant command:
 - the owning package's `test`, `typecheck`, `lint`, or `build` command when package behavior is
   involved;
 - direct tooling or contract tests for scripts, workflows, manifests, and release policy;
-- `pnpm docs:generate:indexes`, `pnpm format`, and the appropriate docs check for docs-only changes:
-  use `pnpm docs:check:pr -- --from <base> --to <head>` for PR scope or `pnpm docs:check` for a
-  full configured-scope audit.
+- the [docs-only recipe](#docs-only-changes) for documentation and instruction changes.
 
 Before pushing, rerun focused evidence appropriate to the final diff. Do not automatically run a
 repository-wide local gate. Broader local or service-backed diagnostics require a concrete suspected
 cross-package or environment failure, an unavailable hosted equivalent, or a specific hosted-CI
 failure to reproduce.
+
+## Docs-only changes
+
+From repo root, refresh generated references when affected and check formatting:
+
+```bash
+pnpm docs:generate:indexes
+pnpm exec prettier --ignore-path .prettierignore --check <changed-markdown-or-yaml-files>
+pnpm docs:check:pr -- --from <base> --to <head>
+```
+
+Replace the formatter placeholder with explicit changed file paths. The explicit ignore file keeps
+Git-ignored but tracked skill files from being silently skipped. Use `--write` on those paths
+when a formatting repair is needed; `pnpm format` includes repository-wide code checks and belongs
+to a formatting audit or the hosted job that requires it, not the ordinary docs-only local recipe.
+
+Replace `<base>` and `<head>` with the actual comparison refs. PR mode validates the configured
+documents structurally and treats age-only findings as advisory; it is not a changed-files-only
+checker. It also compares local path/Markdown-anchor regressions in authored changed Markdown and
+directly affected unchanged consumers against the merge base, including skills and archive moves
+outside the configured set. Existing debt in that additional scope remains non-blocking; raw runtime
+prompt/fixture content is excluded. The [link checker](../../scripts/docs/pr-markdown-links.mjs)
+defines its supported syntax; literal source references and unsupported Markdown forms still need
+inspection when material. These checks do not establish semantic currentness.
+The comparison requires a non-empty committed diff; after a task commit exists, compare its
+actual base and head. The checker reads current working-tree documents. Inspect the resulting Git
+diff after generation or formatting.
+
+Use `pnpm docs:check` for a full audit with repository-wide age enforcement, such as scheduled
+gardening. Before advancing an enforced document's `Last Verified Against` date, follow the
+[governed verification procedure](DOCS_GOVERNANCE.md#verification-procedure) and record what was
+reviewed; an ordinary docs-only PR does not itself satisfy that audit. Do not turn an unrelated age
+warning into additional cleanup during a bounded change. The
+[docs governance contract](DOCS_GOVERNANCE.md#harness-contract) owns the distinction between modes.
 
 ## Hosted PR CI job reproduction
 
@@ -110,6 +160,38 @@ Keep package-level test scripts that have concrete hosted or diagnostic callers.
 aliases whose only purpose was to assemble the retired local validation hierarchy; do not add a new
 generalized local orchestrator.
 
+## Test design and value
+
+A passing suite is useful only when it protects meaningful behavior with an independent oracle
+and a plausible defect it can catch. Do not require a new test for every code change or ban tests
+categorically. Existing owner-boundary evidence should be reused; additional layers need distinct
+transport, persistence, concurrency or lifecycle risks. Do not create test-only production exports,
+flags or wrappers without a real need. Test count and line coverage alone do not establish value.
+
+Use the shared `codex-workflow:test-audit` skill for the authoring gate, scoped audit and authorized
+pruning procedure. This guide owns ESL testing policy and commands; the shared method cannot
+change test membership, compatibility baselines, CI gates or authorization.
+
+Especially preserve independently useful coverage for worker leases/retries/idempotency; upload
+identity and persisted publication/recovery; schema/history lineage and workspace authorization;
+provider compatibility, speaker/channel provenance and user-visible transcript/assignment output.
+
+## Fixture and snapshot drift
+
+A fixture failure requires diagnosis before expectations change. Use the shared test-audit fixture
+method to distinguish current representative input, deliberate negative cases, generated previews
+and historical/golden contracts. Current output alone cannot authorize a new expected value.
+
+Preserve ESL's pinned historical, compatibility and provenance baselines unless the protected
+requirement is deliberately changed and approved. For an intended contract change, repair the
+smallest canonical fixture/factory and affected expectations. Regenerate previews from their
+canonical source and inspect the diff. Narrow incidental assertions only after establishing that
+meaningful defect coverage survives; never bulk-update snapshots merely to turn CI green.
+
+For a fixture-changing PR, report the changed contract or unchanged behavior, fixture source and
+expected values changed, why the old value was obsolete, and the focused evidence establishing
+the desired result. Do not grow fixtures or cascade unrelated updates to make checks pass.
+
 ## Test portfolio maintenance
 
 During ordinary maintenance, obsolete or superseded assertions may be removed when cheaper or stronger evidence still protects the same meaningful defect class. Before removing coverage, identify the plausible regression it uniquely catches and the surviving evidence for that regression. Do not retain tests merely because they already exist, but do not remove consequential coverage merely because it is mocked, old, slow, or implementation-coupled.
@@ -120,5 +202,80 @@ Report the exact focused commands run and their outcomes. Distinguish local evid
 manual, and environment-owned evidence. A focused local pass means only that the covered scope
 passed. Merge readiness requires every selected hosted PR job and `CI gate` to succeed.
 
+For reused evidence, identify the command and covered behavior, result/log or hosted run/job/artifact,
+and the source/configuration and prerequisites it exercised. Check subsequent changes against that
+coverage. A matching HEAD with a dirty flag does not establish unchanged working-tree content;
+unknown execution continuity requires fresh evidence for the affected behavior. Reuse unaffected
+evidence and run only the newly uncovered checks, subject to required hosted checks on the final head.
+
+For an unchanged failure, allow at most one isolated rerun when it can resolve a concrete uncertainty.
+A broader rerun requires a relevant source, configuration, toolchain or diagnosed prerequisite change.
+Report a stable infrastructure failure instead of repeating runs to accumulate green results.
+
 Historical acceptance records and archived documents may mention commands that were valid when they
 ran; they are not current instructions and do not justify restoring compatibility aliases.
+
+## Hosted CI implementation notes
+
+Read this section when changing hosted scope, packaging or job setup. Routine local work starts
+with the evidence route above; the workflow owns current job commands.
+
+Hosted CI selects evidence by changed risk surface using deterministic ownership rules in
+`scripts/check/workspace-change-scope.mjs`. The workspace graph and transitive dependents drive
+ordinary build/unit impact. Those two hosted jobs currently execute workspace-wide; package impact
+does not automatically select specialized evidence:
+
+- deterministic integration: HTTP/API transport boundaries, pipeline/provider packages and their
+  owned support/tests;
+- backend DB/worker: migrations, PostgreSQL repositories/infrastructure, queues/workers, durable
+  execution entrypoints and service-project tests/support;
+- media: recording preparation, audio/STT processing and owned tests/support, in a separate FFmpeg job;
+- Telegram: the bot package, its transitive workspace dependencies, Compose and Telegram smoke inputs.
+
+Repository policy always runs, including tooling tests and docs checks. `docs/**`, `scripts/docs/**`,
+`AGENTS.md` and `.codex/**` are docs/tooling scope. Explicit maintenance scope additionally covers
+`.gitignore`, `.agents/skills/**`, `scripts/git/**` and the release-label and production-image scope
+modules/tests. These paths alone skip application lanes and production packaging. `.dockerignore`
+is a known packaging input: it selects production images, but no application evidence lanes.
+Do not extend that allowlist to arbitrary
+maintenance-looking paths. Unknown paths or untrusted workspace ownership select all application lanes.
+Classifier (`scripts/check/**`), workflow and root toolchain changes retain an independent bootstrap
+`force_all` safeguard: a routing PR itself receives broad hosted evidence. Each selected lane has
+path/rule reasons in the CI summary. Production packaging remains an independent projection.
+
+If hosted CI fails, inspect that job's logs and retained manifest, then reproduce the job's actual
+command, configuration, and prerequisites. Do not replace a failing hosted job with a repository-wide
+local approximation.
+
+The conditional `production backend packaging` job executes the same backend Dockerfile, Buildx
+action, target platform, and fresh-base behavior as the release image build, without pushing an image.
+It does not import or export a BuildKit cache. PR workflows can restore accessible caches from the
+base and default branches, but PR-created caches are scoped to the PR merge ref and are not
+automatically readable by base/default-branch or other PR workflows. The prior PR exporter used a
+separate `pr-batch-backend` scope; with that exporter removed, this job no longer imports that
+orphaned scope. The release workflow uses a separate scope, so its cache is not an input to this job.
+Release image builds retain their cache imports and do not export caches. Their `pull_request_target`
+trigger keeps the default read-only cache access; the workflow does not grant write-capable cache
+access. Shared image inputs and workspace changes that affect the backend select the job; unrelated
+PRs skip it. `CI gate` requires the job to succeed whenever selected.
+
+Historical PR job observations took 166s, 195s, 198s, and 157s, with respective max-mode cache
+exports of 21s, 24s, 72s, and 22s. Subtracting only each run's own export time gives counterfactual
+durations of about 145s, 171s, 126s, and 135s without export. These are not measured no-cache
+durations: removing cache imports can also require rebuilding the build-stage toolchain and rerunning
+`pnpm fetch`, while the persisted fetched pnpm artifacts keep deployment offline. BuildKit logs marked
+`pnpm fetch` as `CACHED`, but restoring that layer still took 25–29s; a cache miss would execute the
+command and incur its own work. Consequently, exporter-only subtraction overstates likely net savings.
+With nearest-minute job billing, the exporter-only estimates cross a minute boundary for the 195s
+and 198s observations (4 to 3 minutes), but not for 166s or 157s (3 to 3 minutes). Rebuild work can
+erase those estimated minute savings. Compare successive changed-source PR runs, not only identical-
+SHA reruns, before concluding that removing PR cache exports reduced billed minutes.
+
+### Recording-media job setup
+
+The `recording-media` job installs FFmpeg concurrently with frozen pnpm dependency installation
+and the backend prerequisite build in one Bash step. The step waits for apt completion, propagates
+apt/install/build failures, and waits for apt during exit cleanup before media tests can run.
+Build/test logs and the required `CI gate` remain unchanged. Reduced wall time and rounded billed
+job-minutes are predictions until hosted CI measures them against the 61s/78s baseline; report the
+observed duration even if it remains above 60 seconds.

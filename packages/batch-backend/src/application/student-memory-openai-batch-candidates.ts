@@ -29,7 +29,6 @@ export async function buildHomeworkMemoryBatchCandidates(args: {
       throw new Error(`Homework-memory Batch job must be the lineage root: ${jobId}`);
     }
     const envelope = buildHomeworkMemoryEnvelope({
-      normalizedMarkdown: source.normalizedMarkdown,
       source,
     });
     const planned = buildStudentMemoryOpenAiBatchItem({
@@ -46,6 +45,8 @@ export async function buildHomeworkMemoryBatchCandidates(args: {
       ),
       envelope,
       sourceRefs: {
+        sourceFormat: source.format ?? 'markdown',
+        ...(source.artifact ? { assignmentArtifact: source.artifact } : {}),
         jobId: source.jobId,
         assignmentLineageKey: source.assignmentLineageKey,
         promptPackageId: source.promptPackageId ?? null,

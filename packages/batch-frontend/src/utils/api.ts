@@ -8,7 +8,6 @@
  * - GET /jobs/:jobId/provenance (authenticated)
  * - GET /user/jobs, /user/jobs/summary (authenticated)
  * - GET /students/summary (authenticated)
- * - POST /validation/markdown (authenticated)
  * - POST /uploads (authenticated)
  * - POST /recordings/upload (authenticated)
  * - POST /recordings/:id/transcribe (authenticated)
@@ -31,10 +30,18 @@ import type {
   BusinessScheduleSurfaceResponse,
   BusinessSettingsDto,
   BusinessStatsSurfaceResponse,
+  CalendarConnectionStatusDto,
+  CalendarOperationReviewDto,
+  CalendarSchedulingStatusDto,
+  CalendarSelectionDto,
+  CalendarSetupDto,
+  CalendarSetupRequestDto,
+  CalendarUnlinkedEventsPageDto,
   ArtifactWorkingContentDto as ContractArtifactWorkingContentDto,
   AssignmentLearnerContextDto as ContractAssignmentLearnerContextDto,
   AssignmentSessionDto as ContractAssignmentSessionDto,
   AssignmentSessionListResponse as ContractAssignmentSessionListResponse,
+  AssignmentValidationResponse as ContractAssignmentValidationResponse,
   AttachAssignmentSourceRequest as ContractAttachAssignmentSourceRequest,
   AttachAssignmentSourceResponse as ContractAttachAssignmentSourceResponse,
   ConfirmAssignmentSessionShareRequest as ContractConfirmAssignmentSessionShareRequest,
@@ -43,6 +50,7 @@ import type {
   ConfirmAssignmentSessionStepResponse as ContractConfirmAssignmentSessionStepResponse,
   ConfirmStudentAssignmentSessionRequest as ContractConfirmStudentAssignmentSessionRequest,
   ElevenLabsTtsModelId as ContractElevenLabsTtsModelId,
+  FinishTranscriptAssignmentSessionRequest as ContractFinishTranscriptAssignmentSessionRequest,
   GenerateDraftRequest as ContractGenerateDraftRequest,
   GenerateDraftResponse as ContractGenerateDraftResponse,
   GenerationProvider as ContractGenerationProvider,
@@ -55,13 +63,13 @@ import type {
   JobOptionsPayload as ContractJobOptionsPayload,
   JobState as ContractJobState,
   JobSummaryResponse as ContractJobSummaryResponse,
-  MarkdownValidationResponse as ContractMarkdownValidationResponse,
   PronunciationChunkTtsProviderId as ContractPronunciationChunkTtsProviderId,
   PublishAssignmentCorrectionRequest as ContractPublishAssignmentCorrectionRequest,
   PublishAssignmentCorrectionResponse as ContractPublishAssignmentCorrectionResponse,
   RecordingDto as ContractRecordingDto,
   RecordingStatus as ContractRecordingStatus,
   RerunJobPayload as ContractRerunJobPayload,
+  StartHomeworkAssignmentSessionRequest as ContractStartHomeworkAssignmentSessionRequest,
   SttProviderId as ContractSttProviderId,
   StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
@@ -71,7 +79,6 @@ import type {
   TtsStrategy as ContractTtsStrategy,
   UpdateAssignmentSessionRecoveryRequest as ContractUpdateAssignmentSessionRecoveryRequest,
   VoiceOption as ContractVoiceOption,
-  CreateStudentLessonRequest,
   GenerationErrorCategory,
   JobActionRequest,
   JobStatusDto,
@@ -79,12 +86,12 @@ import type {
   RecordingErrorCode,
   RecordStudentPaymentRequest,
   StreamEventMessage,
+  StudentMemoryAvailability,
   StudentScheduleBillingSurfaceResponse,
   TemplateControlPlaneListDto,
   UpdateBusinessSettingsRequest,
   UpdateStudentLessonPlanRequest,
   UpdateStudentLessonRequest,
-  UpsertStudentLessonRecurrenceRequest,
 } from '@esl-pipeline/contracts';
 import { DEFAULT_RECORDING_UPLOAD_MAX_BYTES, JobActionType } from '@esl-pipeline/contracts';
 
@@ -114,6 +121,9 @@ export type JobSummaryResponse = ContractJobSummaryResponse;
 export type StudentSummaryResponse = ContractStudentSummaryResponse;
 export type JobConfigOverrides = ContractJobConfigOverrides;
 export type AssignmentSession = ContractAssignmentSessionDto;
+export type FinishTranscriptAssignmentSessionRequest =
+  ContractFinishTranscriptAssignmentSessionRequest;
+export type StartHomeworkAssignmentSessionRequest = ContractStartHomeworkAssignmentSessionRequest;
 export type AssignmentSessionListResponse = ContractAssignmentSessionListResponse;
 export type AttachAssignmentSourceRequest = ContractAttachAssignmentSourceRequest;
 export type AttachAssignmentSourceResponse = ContractAttachAssignmentSourceResponse;
@@ -131,7 +141,7 @@ export type GoogleTtsModel = ContractGoogleTtsModel;
 export type InworldTtsModel = ContractInworldTtsModel;
 export type ElevenLabsTtsModelId = ContractElevenLabsTtsModelId;
 export type PronunciationChunkTtsProviderId = ContractPronunciationChunkTtsProviderId;
-export type MarkdownValidationResponse = ContractMarkdownValidationResponse;
+export type AssignmentValidationResponse = ContractAssignmentValidationResponse;
 export type GenerateDraftRequest = ContractGenerateDraftRequest;
 export type RecordingSourceAcquisitionResult =
   | RecordingListItem
@@ -220,6 +230,7 @@ export interface StudentOptionsResponse {
 }
 
 export interface StudentProfile {
+  email?: string | null;
   id: string;
   student: string;
   dbId?: string | null;
@@ -246,6 +257,7 @@ export interface StarterProfileInput {
 }
 
 export interface StudentProfileInput {
+  email?: string | null;
   student: string;
   dbId?: string | null;
   pageParentId?: string | null;
@@ -309,6 +321,11 @@ export interface ProfileRevisionSummaryResponse {
 export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryResponse {
   content: string;
   structuredContent?: ProfileContentResponse['structuredContent'];
+  candidatePromotion?: {
+    linkedCandidateCount: number;
+    promotedCandidateIds: string[];
+    omittedCandidates: Array<{ candidateId: string; reason: string }>;
+  };
 }
 
 export interface SaveProfileDraftRevisionRequest {
@@ -674,6 +691,7 @@ export interface StudentMemorySnapshotRecord {
 }
 
 export interface StudentMemoryOverviewResponse {
+  availability?: StudentMemoryAvailability;
   studentId: string;
   latestReadyStudentMemorySnapshot: StudentMemorySnapshotRecord | null;
   recentReadyLessonMemory: LessonMemoryRecord[];
@@ -710,6 +728,7 @@ export interface StudentMemoryStatusCount {
 }
 
 export interface StudentMemoryHealthResponse {
+  availability?: StudentMemoryAvailability;
   studentId: string;
   latestSnapshot: StudentMemoryLatestSnapshotHealth | null;
   memoryCounts: {
@@ -877,6 +896,7 @@ export interface StudentProfileCandidatePromotionRequest {
 export interface StudentProfileCandidatePromotionResponse {
   draftRevisionId: string;
   includedCandidateIds: string[];
+  omittedCandidates?: Array<{ candidateId: string; reason: string }>;
   excludedCandidateIds: string[];
   contentHash?: string | null;
   draftRevision?: ProfileRevisionDetailResponse;
@@ -894,7 +914,7 @@ function buildCandidateSourceSummary(record: StudentProfileCandidateApiRecord): 
 
   const parts: string[] = [];
   if (record.sourceSnapshotId) {
-    parts.push('Latest student-memory snapshot');
+    parts.push('Source student-memory snapshot');
   }
   if (record.sourceLessonMemoryIds.length > 0) {
     const lessonCount = record.sourceLessonMemoryIds.length;
@@ -959,16 +979,8 @@ export interface StudentLearningSurfaceResponse {
   candidates: StudentProfileCandidateListResponse;
 }
 
-export interface StudentHistorySurfaceResponse {
-  timeline: StudentTimelineResponse;
-  lessonMemory: StudentLessonMemoryListResponse;
-  homeworkMemory: StudentHomeworkMemoryListResponse;
-}
-
 export type StudentScheduleBillingSurface = StudentScheduleBillingSurfaceResponse;
 export type StudentLessonPlanUpdate = UpdateStudentLessonPlanRequest;
-export type StudentLessonRecurrenceUpsert = UpsertStudentLessonRecurrenceRequest;
-export type StudentLessonCreate = CreateStudentLessonRequest;
 export type StudentLessonUpdate = UpdateStudentLessonRequest;
 export type StudentPackageCreate = AddStudentPackageRequest;
 export type StudentCreditAdjustmentCreate = AdjustStudentCreditsRequest;
@@ -987,6 +999,10 @@ export interface PromptOptionsResponse {
 }
 
 export interface PromptPackageResponse {
+  requestEnvelope?: {
+    promptVersion?: string;
+    assignmentContext?: import('@esl-pipeline/contracts').AssignmentValidationContext;
+  } | null;
   id: string;
   recordingId: string;
   transcriptId: string;
@@ -1178,30 +1194,16 @@ export interface JobProvenanceResponse {
   }[];
 }
 
-export interface DraftResponse {
-  id: string;
-  promptPackageId: string;
-  studentId: string | null;
-  lessonId?: string | null;
-  storageUri: string;
-  createdBy: string | null;
-  text: string;
-  workingVersion: number;
-  contentHash: string;
-  createdAt: string;
-  updatedAt: string;
-}
+export type DraftResponse = Omit<
+  import('@esl-pipeline/contracts').AssignmentDraftDto,
+  'workingVersion' | 'contentHash'
+> & { workingVersion: number; contentHash: string };
 
 export interface MaterializeDraftResponse {
   draftId: string;
   jobId: string;
   mdPath: string | null;
   mdStorageUri: string;
-}
-
-export interface UploadMarkdownResponse {
-  id: string;
-  md: string;
 }
 
 export interface SubmitJobResponse {
@@ -1550,33 +1552,9 @@ export async function getStudentSummary(
   }
 }
 
-export async function validateMarkdown(
-  text: string,
-  strict?: boolean,
-  context?: {
-    learningPresetId?: string | null;
-    learningPresetVersion?: string | null;
-  },
-): Promise<MarkdownValidationResponse> {
-  try {
-    const response = await apiClient.post(buildApiProxyPath('/validation/markdown'), {
-      text,
-      strict,
-      learningPresetId: context?.learningPresetId ?? undefined,
-      learningPresetVersion: context?.learningPresetVersion ?? undefined,
-    });
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to validate markdown.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
 export async function renderHtmlPreview(params: {
-  text: string;
+  assignment: import('@esl-pipeline/contracts').AssignmentV1;
+  promptPackageId?: string;
   title?: string;
   learningPresetId?: string | null;
   audioUrl?: string | null;
@@ -1584,7 +1562,8 @@ export async function renderHtmlPreview(params: {
 }): Promise<{ html: string }> {
   try {
     const response = await apiClient.post(buildApiProxyPath('/preview/html'), {
-      text: params.text,
+      assignment: params.assignment,
+      promptPackageId: params.promptPackageId,
       title: params.title,
       learningPresetId: params.learningPresetId,
       audioUrl: params.audioUrl,
@@ -1873,36 +1852,6 @@ export async function createJob(body: SubmitJobRequest): Promise<SubmitJobRespon
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to submit jobs.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-/**
- * Upload a markdown file via POST /uploads and receive an md identifier
- * that can be passed through to POST /jobs. Now uses authenticated API client.
- */
-export async function uploadMarkdown(
-  file: File,
-  options: { onProgress?: UploadProgressCallback; signal?: AbortSignal } = {},
-): Promise<UploadMarkdownResponse> {
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await apiClient.post(buildApiProxyPath('/uploads'), formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress: (event) => reportUploadProgress(event, options.onProgress),
-      signal: options.signal,
-    });
-
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to upload files.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
@@ -2694,12 +2643,20 @@ export async function getStudentLearningSurface(
   }
 }
 
-export async function getStudentHistorySurface(
+export async function getStudentActivity(
   studentId: string,
-): Promise<StudentHistorySurfaceResponse> {
+  params: {
+    category?: 'all' | 'lessons' | 'profile' | 'billing';
+    from?: string;
+    to?: string;
+    limit?: number;
+    cursor?: string;
+  } = {},
+): Promise<import('@esl-pipeline/contracts').StudentActivityResponse> {
   try {
     const response = await apiClient.get(
-      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/surfaces/history`),
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/activity`),
+      { params },
     );
     return response.data;
   } catch (error: unknown) {
@@ -2735,40 +2692,6 @@ export async function updateStudentLessonPlan(
   try {
     const response = await apiClient.put(
       buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/operations/lesson-plan`),
-      body,
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function upsertPrimaryStudentLessonRecurrence(
-  studentId: string,
-  body: StudentLessonRecurrenceUpsert,
-): Promise<StudentScheduleBillingSurface> {
-  try {
-    const response = await apiClient.put(
-      buildApiProxyPath(
-        `/students/${encodeURIComponent(studentId)}/operations/primary-lesson-recurrence`,
-      ),
-      body,
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function createStudentLesson(
-  studentId: string,
-  body: StudentLessonCreate,
-): Promise<StudentScheduleBillingSurface> {
-  try {
-    const response = await apiClient.post(
-      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/lessons`),
       body,
     );
     return response.data;
@@ -3356,10 +3279,14 @@ export async function fetchJobProvenance(jobId: string): Promise<JobProvenanceRe
   }
 }
 
-export async function listAssignmentSessions(limit = 20): Promise<AssignmentSessionListResponse> {
+export async function listAssignmentSessions(
+  limit = 20,
+  scope?: 'history',
+  offset?: number,
+): Promise<AssignmentSessionListResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/user/assignment-sessions'), {
-      params: { limit },
+      params: { limit, ...(scope ? { scope } : {}), ...(offset !== undefined ? { offset } : {}) },
     });
     return response.data;
   } catch (error: unknown) {
@@ -3501,6 +3428,46 @@ export async function confirmAssignmentSessionStep(
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
+}
+
+async function mutateTranscriptWorkflow(
+  sessionId: string,
+  command: 'finish-transcript' | 'start-homework',
+  request: FinishTranscriptAssignmentSessionRequest | StartHomeworkAssignmentSessionRequest,
+): Promise<{ session: AssignmentSession }> {
+  try {
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(
+        buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/${command}`),
+        request,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    const conflict = getAssignmentSessionConflict(axiosError);
+    if (conflict) throw new AssignmentSessionConflictApiError(conflict);
+    const artifactConflict = getArtifactWorkingConflict(axiosError);
+    if (artifactConflict) throw new ArtifactWorkingConflictApiError(artifactConflict);
+    if (isAssignmentSpeakerRoleMappingRequired(axiosError)) {
+      throw new AssignmentSpeakerRoleMappingRequiredApiError();
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export function finishTranscriptAssignmentSession(
+  sessionId: string,
+  request: FinishTranscriptAssignmentSessionRequest,
+) {
+  return mutateTranscriptWorkflow(sessionId, 'finish-transcript', request);
+}
+
+export function startHomeworkAssignmentSession(
+  sessionId: string,
+  request: StartHomeworkAssignmentSessionRequest,
+) {
+  return mutateTranscriptWorkflow(sessionId, 'start-homework', request);
 }
 
 export async function shareAssignmentSession(
@@ -3780,4 +3747,110 @@ export async function updateDraft(
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
+}
+
+// Calendar operations use shared versioned DTOs. Request keys persist across retries.
+const calendarPath = (workspaceId: string, suffix: string) =>
+  buildApiProxyPath(`/workspaces/${encodeURIComponent(workspaceId)}/calendar/${suffix}`);
+export async function getCalendarSchedulingStatus(
+  workspaceId: string,
+): Promise<CalendarSchedulingStatusDto> {
+  return (await apiClient.get(calendarPath(workspaceId, 'scheduling-status'))).data;
+}
+export async function createCalendarSetup(
+  workspaceId: string,
+  studentId: string,
+  body: CalendarSetupRequestDto,
+  key: string,
+): Promise<CalendarSetupDto> {
+  return (
+    await apiClient.post(
+      buildApiProxyPath(
+        `/workspaces/${encodeURIComponent(workspaceId)}/students/${encodeURIComponent(studentId)}/calendar/setups`,
+      ),
+      body,
+      { headers: { 'Idempotency-Key': key } },
+    )
+  ).data;
+}
+export async function getCalendarSetup(
+  workspaceId: string,
+  setupId: string,
+): Promise<CalendarSetupDto> {
+  return (await apiClient.get(calendarPath(workspaceId, `setups/${encodeURIComponent(setupId)}`)))
+    .data;
+}
+export async function retryCalendarOperation(
+  workspaceId: string,
+  operationId: string,
+): Promise<void> {
+  await apiClient.post(
+    calendarPath(workspaceId, `operations/${encodeURIComponent(operationId)}/retry`),
+  );
+}
+export async function requestCalendarSync(workspaceId: string): Promise<void> {
+  await apiClient.post(calendarPath(workspaceId, 'sync'));
+}
+export async function getCalendarUnlinkedEvents(
+  workspaceId: string,
+  pageToken?: string,
+): Promise<CalendarUnlinkedEventsPageDto> {
+  return (
+    await apiClient.get(calendarPath(workspaceId, 'unlinked-events'), {
+      params: pageToken ? { pageToken } : undefined,
+    })
+  ).data;
+}
+export async function bindCalendarEvent(
+  workspaceId: string,
+  studentId: string,
+  eventId: string,
+): Promise<void> {
+  await apiClient.post(calendarPath(workspaceId, 'bindings'), { studentId, eventId });
+}
+export async function beginCalendarConnect(
+  workspaceId: string,
+): Promise<{ authorizationUrl: string }> {
+  return (await apiClient.post(calendarPath(workspaceId, 'connect'))).data;
+}
+export async function selectLessonCalendar(
+  workspaceId: string,
+  calendarId: string,
+  confirmReplacement: boolean,
+): Promise<void> {
+  await apiClient.post(calendarPath(workspaceId, 'select'), { calendarId, confirmReplacement });
+}
+export async function disconnectLessonCalendar(workspaceId: string): Promise<void> {
+  await apiClient.post(calendarPath(workspaceId, 'disconnect'));
+}
+
+export async function getCalendarConnection(
+  workspaceId: string,
+): Promise<CalendarConnectionStatusDto> {
+  return (await apiClient.get(calendarPath(workspaceId, 'connection'))).data;
+}
+export async function getLessonCalendars(
+  workspaceId: string,
+): Promise<{ calendars: CalendarSelectionDto[] }> {
+  return (await apiClient.get(calendarPath(workspaceId, 'calendars'))).data;
+}
+export async function reviewCalendarOperation(
+  workspaceId: string,
+  operationId: string,
+): Promise<CalendarOperationReviewDto> {
+  return (
+    await apiClient.get(
+      calendarPath(workspaceId, `operations/${encodeURIComponent(operationId)}/review`),
+    )
+  ).data;
+}
+export async function adoptCalendarOperation(
+  workspaceId: string,
+  operationId: string,
+  reviewedRequestHash: string,
+): Promise<void> {
+  await apiClient.post(
+    calendarPath(workspaceId, `operations/${encodeURIComponent(operationId)}/adopt`),
+    { reviewedRequestHash },
+  );
 }

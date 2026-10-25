@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers for batch frontend/backend tasks.
 - Read Time: 4 minutes.
 - Authority Level: Active system map.
-- Last Verified Against: 2026-09-09 recording-ingest closeout state.
+- Last Verified Against: 2026-10-11 native assignment, transcript completion and profile review audit.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major batch workflow changes.
 - Status: `active`.
@@ -51,10 +51,19 @@ Telegram bot are operator surfaces; neither owns alternate workflow or pipeline 
 Sharing completes an immutable assignment session. A tutor can explicitly enter correction mode to
 edit the mutable working draft; **Publish corrected version** snapshots the exact saved draft into a
 child job and executes the normal assignment pipeline. Historical rerun and **Republish published
-version** remain separate Advanced actions: reruns create `source_job_id` children, while republish
+version** for supported native assignments remain separate Advanced actions: reruns create `source_job_id` children, while republish
 and selected study-text or pronunciation regeneration remain job actions rather than assignment-flow
 steps. Starting another assignment is always an explicit tutor action; asynchronous readiness changes
 do not navigate steps.
+
+Historical Markdown/renderer-1 jobs remain readable but cannot rerun, republish, correct or create
+new memory extractions. Native AssignmentV1 preview and publication share `learner-handout`;
+previously materialized historical observations remain usable only under verified memory lineage.
+
+For no-homework lessons, explicit **Review & finish** confirms the exact source and records current
+transcript completion. Completed transcripts appear in student History; **Create homework** clears
+current completion and returns the retained source to Teaching context. Memory processing continues
+without inventing a Share job or changing lesson billing.
 
 ## Runtime Boundaries
 

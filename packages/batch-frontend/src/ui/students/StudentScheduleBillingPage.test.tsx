@@ -1,25 +1,27 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StudentScheduleBillingPage } from './StudentScheduleBillingPage';
 
 const apiMocks = vi.hoisted(() => ({
   addStudentPackage: vi.fn(),
-  createStudentLesson: vi.fn(),
   getStudentScheduleBillingSurface: vi.fn(),
+  getBusinessSettings: vi.fn(),
   hideStudentLessonFollowupReminder: vi.fn(),
   recordStudentPayment: vi.fn(),
   undoLatestHiddenStudentReminder: vi.fn(),
   updateStudentLesson: vi.fn(),
   updateStudentLessonPlan: vi.fn(),
-  upsertPrimaryStudentLessonRecurrence: vi.fn(),
 }));
 
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../utils/api', () => apiMocks);
+vi.mock('../calendar/CalendarSchedulingPanel', () => ({
+  CalendarSchedulingPanel: () => <div>Calendar scheduling</div>,
+}));
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>();
@@ -41,6 +43,7 @@ function makeHomework(overrides: Record<string, unknown> = {}) {
     draftId: null,
     jobId: null,
     homeworkMemoryEntryId: null,
+    transcriptResultSessionId: null,
     htmlUrl: null,
     updatedAt: null,
     ...overrides,
@@ -125,8 +128,10 @@ function renderPage() {
 }
 
 describe('StudentScheduleBillingPage', () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'Asia/Bangkok' });
     useStudentAreaContextMock.mockReturnValue({
       student: {
         id: 'student-alex',
@@ -139,7 +144,6 @@ describe('StudentScheduleBillingPage', () => {
     });
     apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(makeSurface());
     apiMocks.addStudentPackage.mockResolvedValue(makeSurface());
-    apiMocks.createStudentLesson.mockResolvedValue(makeSurface());
     apiMocks.recordStudentPayment.mockResolvedValue(makeSurface());
     apiMocks.updateStudentLesson.mockResolvedValue(
       makeSurface({
@@ -155,7 +159,6 @@ describe('StudentScheduleBillingPage', () => {
       }),
     );
     apiMocks.updateStudentLessonPlan.mockResolvedValue(makeSurface());
-    apiMocks.upsertPrimaryStudentLessonRecurrence.mockResolvedValue(makeSurface());
   });
 
   it('renders real schedule and billing state from the backend surface', async () => {
@@ -166,7 +169,7 @@ describe('StudentScheduleBillingPage', () => {
     expect(screen.getAllByText('USD 120.00')).toHaveLength(2);
     expect(screen.getByText('Package And Payment')).toBeTruthy();
     expect(screen.getByText('Payment History')).toBeTruthy();
-    expect(screen.getAllByText('Manual follow-ups; some include actions.')).toHaveLength(2);
+    expect(screen.getByText('Manual follow-ups; some include actions.')).toBeTruthy();
     expect(screen.queryByText('Copyable text only for now.')).toBeNull();
     expect(screen.getByText(/Bank transfer/)).toBeTruthy();
     expect(
@@ -198,45 +201,6 @@ describe('StudentScheduleBillingPage', () => {
     });
   });
 
-  it('creates new lessons with today plus tutor duration and timezone defaults', async () => {
-    const today = new Date();
-    const expectedStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
-      2,
-      '0',
-    )}-${String(today.getDate()).padStart(2, '0')}T10:00`;
-    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
-      makeSurface({
-        lessonPlan: {
-          ...makeSurface().lessonPlan,
-          timezone: 'Asia/Kolkata',
-          defaultDurationMinutes: 75,
-        },
-      }),
-    );
-
-    renderPage();
-
-    const startsInput = (await screen.findByLabelText('Starts')) as HTMLInputElement;
-    expect(startsInput.value).toBe(expectedStart);
-    expect((screen.getAllByLabelText('Duration')[1] as HTMLInputElement).value).toBe('75');
-    expect((screen.getAllByLabelText('Timezone')[1] as HTMLInputElement).value).toBe(
-      'Asia/Kolkata',
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add lesson' }));
-
-    await waitFor(() => {
-      expect(apiMocks.createStudentLesson).toHaveBeenCalledWith(
-        'student-alex',
-        expect.objectContaining({
-          startsAt: new Date(expectedStart).toISOString(),
-          durationMinutes: 75,
-          timezone: 'Asia/Kolkata',
-        }),
-      );
-    });
-  });
-
   it('marks scheduled lessons complete and chargeable', async () => {
     renderPage();
 
@@ -251,7 +215,7 @@ describe('StudentScheduleBillingPage', () => {
     });
   });
 
-  it('completes an elapsed lesson follow-up and opens assignment with lesson context', async () => {
+  it('opens an elapsed lesson follow-up without completing it', async () => {
     apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
       makeSurface({
         nextLesson: null,
@@ -281,12 +245,9 @@ describe('StudentScheduleBillingPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add homework from reminder' }));
 
     await waitFor(() => {
-      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
-        status: 'completed',
-        consumesCredit: true,
-      });
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
     });
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 
   it('shows lesson context, hides follow-up reminders, and offers latest undo', async () => {
@@ -377,6 +338,31 @@ describe('StudentScheduleBillingPage', () => {
     expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 
+  it('shows a completed transcript result instead of a missing-homework action', async () => {
+    const original = makeSurface();
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        lessons: [
+          {
+            ...original.lessons[0],
+            status: 'completed',
+            homework: makeHomework({
+              status: 'not_planned',
+              transcriptResultSessionId: 'transcript-result',
+            }),
+          },
+        ],
+        reminders: [],
+      }),
+    );
+    renderPage();
+    const result = await screen.findByRole('link', { name: 'View transcript' });
+    expect(result.getAttribute('href')).toBe('/?sessionId=transcript-result');
+    expect(screen.getByText('No homework planned')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add homework' })).toBeNull();
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
+  });
+
   it('offers homework row actions for published, completed, and elapsed scheduled lessons only', async () => {
     apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
       makeSurface({
@@ -439,217 +425,14 @@ describe('StudentScheduleBillingPage', () => {
         '/?studentId=student-alex&lessonId=completed-no-homework',
       );
     });
+    fireEvent.click(addButtons[1]!);
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenNthCalledWith(
+        2,
+        '/?studentId=student-alex&lessonId=elapsed-scheduled',
+      );
+    });
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
     expect(screen.getByText('future-scheduled')).toBeTruthy();
-  });
-
-  it('saves structured weekly recurrence rules', async () => {
-    renderPage();
-
-    expect(await screen.findByText('Lesson Planning')).toBeTruthy();
-    fireEvent.change(screen.getAllByLabelText('Timezone')[0] as HTMLElement, {
-      target: { value: 'Asia/Kolkata' },
-    });
-    fireEvent.change(screen.getByLabelText('Starts on'), { target: { value: '2026-05-11' } });
-    fireEvent.change(screen.getAllByLabelText('Time')[0] as HTMLElement, {
-      target: { value: '09:30' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Wed' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
-
-    await waitFor(() => {
-      expect(apiMocks.upsertPrimaryStudentLessonRecurrence).toHaveBeenCalledWith(
-        'student-alex',
-        expect.objectContaining({
-          timezone: 'Asia/Kolkata',
-          startsOn: '2026-05-11',
-          slots: expect.arrayContaining([
-            { isoWeekday: 1, localStartTime: '09:30', durationMinutes: 60 },
-            { isoWeekday: 3, localStartTime: '09:30', durationMinutes: 60 },
-          ]),
-        }),
-      );
-    });
-  });
-
-  it('offers the shared timezone picker shape used by business settings', async () => {
-    renderPage();
-
-    const picker = (await screen.findAllByLabelText('Timezone'))[0] as HTMLSelectElement;
-    const options = Array.from(picker.querySelectorAll('option')).map((option) => ({
-      label: option.textContent,
-      value: option.value,
-    }));
-
-    expect(options.map((option) => option.value)).toEqual([
-      'America/Los_Angeles',
-      'America/Denver',
-      'America/Chicago',
-      'America/New_York',
-      'UTC',
-      'Europe/London',
-      'Europe/Berlin',
-      'Europe/Moscow',
-      'Asia/Dubai',
-      'Asia/Tbilisi',
-      'Asia/Almaty',
-      'Asia/Kolkata',
-      'Asia/Bishkek',
-      'Asia/Bangkok',
-      'Asia/Singapore',
-      'Asia/Tokyo',
-      'Australia/Sydney',
-    ]);
-    expect(options).toEqual(
-      expect.arrayContaining([
-        { value: 'Asia/Kolkata', label: 'India (UTC+5:30)' },
-        { value: 'Asia/Bishkek', label: 'Bishkek (UTC+6)' },
-        { value: 'Asia/Singapore', label: 'Singapore / Shanghai (UTC+8)' },
-      ]),
-    );
-  });
-
-  it('preserves distinct times and durations for existing recurrence slots', async () => {
-    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
-      makeSurface({
-        recurrenceRule: {
-          id: 'rule-1',
-          studentId: 'student-alex',
-          workspaceId: 'workspace-1',
-          timezone: 'Asia/Bangkok',
-          frequency: 'weekly',
-          startsOn: '2026-05-04',
-          endsOn: null,
-          status: 'active',
-          generationHorizonDays: 56,
-          materializedThrough: '2026-06-29',
-          updatedAt: '2026-05-06T10:00:00.000Z',
-          slots: [
-            {
-              id: 'slot-1',
-              ruleId: 'rule-1',
-              isoWeekday: 1,
-              localStartTime: '11:00',
-              durationMinutes: 50,
-              sortOrder: 0,
-            },
-            {
-              id: 'slot-2',
-              ruleId: 'rule-1',
-              isoWeekday: 3,
-              localStartTime: '15:30',
-              durationMinutes: 60,
-              sortOrder: 1,
-            },
-          ],
-        },
-      }),
-    );
-    renderPage();
-
-    expect(await screen.findByDisplayValue('15:30')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
-
-    await waitFor(() => {
-      expect(apiMocks.upsertPrimaryStudentLessonRecurrence).toHaveBeenCalledWith(
-        'student-alex',
-        expect.objectContaining({
-          slots: [
-            { isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 },
-            { isoWeekday: 3, localStartTime: '15:30', durationMinutes: 60 },
-          ],
-        }),
-      );
-    });
-  });
-
-  it('supports no-show, cancel, edit, and standalone payment actions', async () => {
-    renderPage();
-
-    await screen.findByRole('button', { name: 'No-show' });
-    fireEvent.click(screen.getByRole('button', { name: 'No-show' }));
-    await waitFor(() => {
-      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
-        status: 'no_show',
-        consumesCredit: false,
-      });
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    await waitFor(() => {
-      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
-        status: 'canceled',
-        consumesCredit: false,
-      });
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    const durationInputs = screen.getAllByLabelText('Duration');
-    fireEvent.change(durationInputs[durationInputs.length - 1] as HTMLElement, {
-      target: { value: '75' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => {
-      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith(
-        'student-alex',
-        'lesson-1',
-        expect.objectContaining({ durationMinutes: 75 }),
-      );
-    });
-
-    const paymentAmountInput = screen.getAllByLabelText('Amount')[1];
-    expect(paymentAmountInput).toBeDefined();
-    fireEvent.change(paymentAmountInput as HTMLElement, { target: { value: '90' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
-    await waitFor(() => {
-      expect(apiMocks.recordStudentPayment).toHaveBeenCalledWith(
-        'student-alex',
-        expect.objectContaining({ amountMinor: 9000, currency: 'USD' }),
-      );
-    });
-  });
-
-  it('restores completed, no-show, and canceled lessons back to scheduled', async () => {
-    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
-      makeSurface({
-        lessons: [
-          {
-            ...(makeSurface().lessons[0] as Record<string, unknown>),
-            id: 'lesson-completed',
-            status: 'completed',
-            consumesCredit: true,
-            creditEventId: 'credit-event-1',
-          },
-          {
-            ...(makeSurface().lessons[0] as Record<string, unknown>),
-            id: 'lesson-no-show',
-            status: 'no_show',
-            consumesCredit: false,
-          },
-          {
-            ...(makeSurface().lessons[0] as Record<string, unknown>),
-            id: 'lesson-canceled',
-            status: 'canceled',
-            consumesCredit: false,
-          },
-        ],
-      }),
-    );
-    renderPage();
-
-    const restoreButtons = await screen.findAllByRole('button', { name: 'Restore' });
-    expect(restoreButtons).toHaveLength(3);
-    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(3);
-    for (const restoreButton of restoreButtons) {
-      fireEvent.click(restoreButton);
-    }
-
-    await waitFor(() => {
-      for (const lessonId of ['lesson-completed', 'lesson-no-show', 'lesson-canceled']) {
-        expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', lessonId, {
-          status: 'scheduled',
-          consumesCredit: false,
-        });
-      }
-    });
   });
 });

@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createEmptyFoundationalProfile } from '../src/application/foundational-profile.js';
+import type { ProviderStructuredExecutionRequest } from '../src/application/generation-providers.js';
 import { refreshProfileDraftFromApprovedCandidates } from '../src/application/profile-draft-refresh.js';
+import { ProfileRevisionDraftingError } from '../src/application/profile-revision-drafting.js';
 import { loadConfig } from '../src/config/env.js';
 import type { StudentProfileCandidateRecord } from '../src/domain/student-profile-candidate-model.js';
+import { assertMemoryRequest } from './support/memory-request-capture.js';
 
 function makeCandidate(
   overrides: Partial<StudentProfileCandidateRecord> & Pick<StudentProfileCandidateRecord, 'id'>,
@@ -37,13 +41,77 @@ function makeCandidate(
 }
 
 describe('application/profile-draft-refresh', () => {
-  it('generates and saves a complete foundational profile draft from approved candidates', async () => {
+  it('reports zero applied for empty approved wording without reviving the original fact', async () => {
+    const profile = createEmptyFoundationalProfile();
+    const linkToDraft = vi.fn(async () => {});
+    const result = await refreshProfileDraftFromApprovedCandidates({
+      request: { studentId: 'tolik', candidateIds: ['empty'] },
+      overrides: {
+        config: loadConfig(),
+        students: { getById: async () => ({ id: 'tolik', student: 'Tolik', voices: {} }) },
+        revisions: { getActive: async () => null, getById: async () => null },
+        memory: { getOverview: async () => null },
+        candidates: {
+          listByIds: async () => [
+            makeCandidate({ id: 'empty', fact: 'Original fact.', approvedFact: ' ' }),
+          ],
+          linkToDraft,
+        },
+        drafting: {
+          generate: async () => ({
+            structuredProfile: profile,
+            rawOutput: profile,
+            rawText: JSON.stringify(profile),
+            provider: 'openai',
+            model: 'fixture',
+            finishReason: 'stop',
+          }),
+        },
+        profileContent: {
+          saveRevision: async () => ({
+            id: 'draft-empty',
+            studentId: 'tolik',
+            contentHash: 'hash',
+            source: 'profile_revision_refresh',
+            status: 'draft',
+            versionNumber: 1,
+            versionLabel: 'v1',
+            activatedAt: null,
+            deprecatedAt: null,
+            createdAt: '2026-10-11T00:00:00Z',
+            createdBy: null,
+            restoredFromRevisionId: null,
+            content: '',
+            structuredContent: profile,
+          }),
+        },
+      },
+    });
+    expect(result.includedCandidateIds).toEqual([]);
+    expect(result.omittedCandidates).toEqual([
+      { candidateId: 'empty', reason: 'empty_approved_fact' },
+    ]);
+    expect(linkToDraft).toHaveBeenCalledWith(expect.objectContaining({ candidateIds: [] }));
+    expect(result.draftRevision.structuredContent?.interestsAndUsefulThemes).toEqual([]);
+  });
+  it.each([
+    [
+      'exact approved wording',
+      'Uses product launches as a useful speaking theme.',
+      ['candidate-1', 'candidate-2'],
+    ],
+    ['a paraphrase', 'Product launches', ['candidate-1', 'candidate-2']],
+    ['merged wording', 'Product launches and hiking', ['candidate-1', 'candidate-2']],
+    ['moved wording', 'Unrelated theme', ['candidate-1', 'candidate-2']],
+    ['quota refusal', 'Product launches', []],
+  ])('preserves selected approved wording despite %s', async (_label, theme, included) => {
+    const linkToDraft = vi.fn().mockResolvedValue(undefined);
     const structuredProfile = {
       schemaVersion: 'foundational_profile_v1' as const,
       overallLevel: 'B1',
       primaryGoals: ['Lead project updates clearly.'],
       communicationContexts: ['Team updates'],
-      interestsAndUsefulThemes: ['Product launches'],
+      interestsAndUsefulThemes: [theme as string],
       stableStrengths: ['Prepared notes'],
       persistentChallenges: ['Article usage'],
       studyPreferences: ['Short practical tasks'],
@@ -54,32 +122,44 @@ describe('application/profile-draft-refresh', () => {
       structuredProfile,
       rawOutput: structuredProfile,
       rawText: JSON.stringify(structuredProfile),
-      provider: 'google_ai_studio' as const,
-      model: 'gemini-3-flash-preview',
+      provider: 'openai' as const,
+      model: 'gpt-5.6-luna',
       finishReason: 'stop',
     }));
-    const saveRevision = vi.fn(async () => ({
-      id: 'revision-draft-1',
-      studentId: 'tolik',
-      contentHash: 'hash',
-      source: 'profile_revision_refresh' as const,
-      status: 'draft' as const,
-      versionNumber: 3,
-      versionLabel: 'v3',
-      activatedAt: null,
-      deprecatedAt: null,
-      createdAt: '2026-03-22T00:00:00.000Z',
-      createdBy: 'teacher-1',
-      restoredFromRevisionId: null,
-      content: '# Foundational Profile',
-      structuredContent: structuredProfile,
-    }));
+    const saveRevision = vi.fn(
+      async (_studentId: string, _content: string, options?: { structuredContent?: unknown }) => ({
+        id: 'revision-draft-1',
+        studentId: 'tolik',
+        contentHash: 'hash',
+        source: 'profile_revision_refresh' as const,
+        status: 'draft' as const,
+        versionNumber: 3,
+        versionLabel: 'v3',
+        activatedAt: null,
+        deprecatedAt: null,
+        createdAt: '2026-03-22T00:00:00.000Z',
+        createdBy: 'teacher-1',
+        restoredFromRevisionId: null,
+        content: '# Foundational Profile',
+        structuredContent: options?.structuredContent as typeof structuredProfile,
+      }),
+    );
 
-    const result = await refreshProfileDraftFromApprovedCandidates({
+    const quotaError = new ProfileRevisionDraftingError({
+      category: 'budget_exceeded',
+      provider: 'openai',
+      model: 'gpt-5.6-luna',
+      message: 'Daily group budget exhausted.',
+      limitType: 'daily_tokens',
+      limit: 2250000,
+      used: 2250000,
+    });
+    if (_label === 'quota refusal') generate.mockRejectedValueOnce(quotaError);
+    const attempt = refreshProfileDraftFromApprovedCandidates({
       request: {
         studentId: 'tolik',
         reviewerId: 'teacher-1',
-        candidateIds: ['candidate-1'],
+        candidateIds: ['candidate-1', 'candidate-2'],
       },
       overrides: {
         config: loadConfig(),
@@ -128,11 +208,18 @@ describe('application/profile-draft-refresh', () => {
               approvedFact: 'Uses product launches as a useful speaking theme.',
               evidence: [{ quote: 'Launch meetings are hard.', speakerRole: 'student' }],
             }),
+            makeCandidate({ id: 'candidate-2', fact: 'Likes hiking.' }),
           ],
-          linkToDraft: async () => {},
+          linkToDraft,
         },
         memory: {
           getOverview: async () => ({
+            availability: {
+              state: 'absent',
+              reason: 'no_established_snapshot',
+              lessonReferenceCount: 0,
+              homeworkReferenceCount: 0,
+            },
             studentId: 'tolik',
             latestReadyStudentMemorySnapshot: null,
             recentReadyLessonMemory: [],
@@ -149,8 +236,41 @@ describe('application/profile-draft-refresh', () => {
       },
     });
 
+    const outcome = await attempt.then(
+      (result) => ({ result, error: null }),
+      (error) => ({ result: null, error }),
+    );
+    expect(outcome.error).toBe(_label === 'quota refusal' ? quotaError : null);
+    expect(saveRevision).toHaveBeenCalledTimes(_label === 'quota refusal' ? 0 : 1);
+    expect(linkToDraft).toHaveBeenCalledTimes(_label === 'quota refusal' ? 0 : 1);
+    if (!outcome.result) return;
+    const result = outcome.result;
+    const captured = (
+      generate.mock.calls as unknown as [{ request: ProviderStructuredExecutionRequest }][]
+    )[0]![0].request;
+    await assertMemoryRequest('profile-refresh', { ...captured, model: 'fixture' });
     expect(result.draftRevision.status).toBe('draft');
-    expect(result.includedCandidateIds).toEqual(['candidate-1']);
+    expect(result.includedCandidateIds).toEqual(included);
+    // Exact duplicates appear once. Paraphrases and merged items remain visible for teacher review;
+    // semantic similarity must neither delete provider content nor confer application proof.
+    expect(result.draftRevision.structuredContent?.interestsAndUsefulThemes).toEqual(
+      _label === 'exact approved wording'
+        ? ['Uses product launches as a useful speaking theme.', 'Likes hiking.']
+        : [theme, 'Uses product launches as a useful speaking theme.', 'Likes hiking.'],
+    );
+    expect(saveRevision.mock.calls[0]?.[2]).toMatchObject({
+      structuredContent: {
+        interestsAndUsefulThemes: expect.arrayContaining([
+          'Uses product launches as a useful speaking theme.',
+          'Likes hiking.',
+        ]),
+      },
+    });
+    expect(linkToDraft).toHaveBeenCalledWith({
+      studentId: 'tolik',
+      candidateIds: included,
+      draftRevisionId: 'revision-draft-1',
+    });
     expect(generate).toHaveBeenCalledWith(
       expect.objectContaining({
         request: expect.objectContaining({

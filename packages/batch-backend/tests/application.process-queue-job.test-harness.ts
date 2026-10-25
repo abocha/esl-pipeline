@@ -1,15 +1,20 @@
 import path from 'node:path';
 import { beforeEach, vi } from 'vitest';
 
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
+
+import { assignmentHash } from '../src/application/assignment-artifact.js';
 import * as homeworkMemoryGeneration from '../src/application/request-homework-memory-generation.js';
 import * as jobEvents from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import * as jobRepository from '../src/domain/job-repository.js';
+import * as promptRepository from '../src/domain/prompt-package-repository.js';
 import * as settingsRepository from '../src/domain/settings-repository.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
 import * as transcriptionStorage from '../src/infrastructure/transcription-storage.js';
 import * as ttsCacheMaintenanceCoordinator from '../src/infrastructure/tts-cache-maintenance-coordinator.js';
+import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 
 vi.mock('../src/infrastructure/logger', async () => {
   const actual = await vi.importActual<typeof loggerModule>('../src/infrastructure/logger');
@@ -56,6 +61,12 @@ export const requestHomeworkMemoryGenerationSpy = vi.spyOn(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(promptRepository, 'getPromptPackageById').mockResolvedValue(
+    promptPackageFixture() as never,
+  );
+  createTranscriptionStorageForUriSpy.mockReturnValue({
+    getText: vi.fn().mockResolvedValue(serializeAssignmentV1(assignmentFixture())),
+  } as never);
   maybeRunTtsCacheMaintenanceWithPgLockSpy.mockResolvedValue({
     ran: false,
     reason: 'interval',
@@ -72,6 +83,16 @@ export function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
   const now = new Date('2024-01-01T10:00:00Z');
   return {
     id: 'job-1',
+    assignmentArtifact: {
+      format: 'assignment_v1',
+      schemaVersion: 1,
+      serializationVersion: 1,
+      workingVersion: 1,
+      contentHash: assignmentHash(assignmentFixture()),
+      storageUri: `local://drafts/content/${assignmentHash(assignmentFixture())}.json`,
+    },
+    assignmentRendererVersion: 3,
+    promptPackageId: 'prompt-1',
     state: 'queued',
     md: path.resolve(import.meta.dirname, '../../../fixtures/ok.md'),
     mdStorageUri: null,

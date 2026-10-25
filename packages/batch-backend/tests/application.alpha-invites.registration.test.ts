@@ -1,6 +1,6 @@
 import './support/bootstrap-pg-test-env.js';
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAlphaInvite, registerInvitedUser } from '../src/application/alpha-invites.js';
 import { sanitizeSettings } from '../src/domain/settings-model.js';
@@ -32,6 +32,8 @@ describe('application/alpha-invites invited registration', () => {
   beforeEach(async () => {
     await resetAlphaSignupTables();
   });
+
+  afterEach(() => vi.unstubAllEnvs());
 
   afterAll(async () => {
     await resetAlphaSignupTables();
@@ -110,6 +112,7 @@ describe('application/alpha-invites invited registration', () => {
   });
 
   it('keeps owner-keyed defaults, encrypted keys and partial updates isolated under concurrent writes', async () => {
+    vi.stubEnv('ESL_TTS_DEFAULT_PROVIDER', undefined);
     async function register(email: string) {
       const invite = await createAlphaInvite({ email, expiresAt: new Date(Date.now() + 60_000) });
       return registerInvitedUser({ email, passwordHash: 'fixture', inviteToken: invite.token });
@@ -128,7 +131,7 @@ describe('application/alpha-invites invited registration', () => {
     expect(defaults[0]).not.toHaveProperty('id');
     expect(defaults[0]).toMatchObject({
       userId: user.id,
-      ttsProvider: 'elevenlabs',
+      ttsProvider: 'gemini',
       enableNotifications: true,
     });
     const keyed = await upsertSettings(user.id, {
@@ -173,7 +176,7 @@ describe('application/alpha-invites invited registration', () => {
     ).toMatchObject({
       userId: user.id,
       elevenLabsKeyEncrypted: null,
-      ttsProvider: 'elevenlabs',
+      ttsProvider: 'gemini',
       defaultPreset: 'b1-default',
       defaultVoiceAccent: 'american',
       defaultTtsStrategy: 'tts',

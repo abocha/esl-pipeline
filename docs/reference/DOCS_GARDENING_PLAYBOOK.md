@@ -2,91 +2,98 @@
 
 ## Meta
 
-- Audience: maintainers and AI agents curating docs quality.
-- Read Time: 5 minutes.
+- Audience: maintainers and AI agents resolving documentation drift.
 - Authority Level: operational playbook.
 - Last Verified Against: 2026-09-30 docs-gardening scripts and workflow.
 - Owner: founder-maintainer + automation agents.
-- Review Cadence: weekly.
+- Review Cadence: after ownership/tooling changes or recurring documentation confusion.
 - Status: `reference`.
 
-## Purpose
+## Purpose and ownership
 
-- Provide the repeatable workflow for the v2 docs-gardening harness.
-- Keep the loop short: hard gate, generated report, heuristic queue, manual triage.
+The shared `codex-workflow:docs-gardening` skill owns task-based semantic review, disposition
+and consolidation methods. This playbook applies them to ESL's local lifecycle and tooling.
+[Governance](DOCS_GOVERNANCE.md) owns policy and verification dates; the
+[testing guide](TESTING_GUIDELINES.md#docs-only-changes) owns validation selection. Existing
+scripts/configuration own mechanical behavior. Mandatory scope and stopping rules remain in
+[AGENTS.md](../../AGENTS.md), effective even when the plugin is unavailable.
 
-## Standard Loop
+## Change-driven upkeep
 
-1. Run `pnpm docs:garden`.
-2. For PR work, run `pnpm docs:check:pr -- --from <base> --to <head>`; use `pnpm docs:check`
-   when a full configured-scope audit is intended.
-3. For plan-only lifecycle updates, run `pnpm docs:generate:plans-index` instead of regenerating
-   every generated index.
-4. Review the rolling issue queue.
-5. Update docs, routing, archive state, or governance policy as needed.
+Start from the changed ESL behavior and affected agent task, then use the shared method to
+follow concrete claims and consumers. Ordinary isolated edits can update their owner directly.
 
-## What Each Artifact Is For
+At task closure, apply the [plan lifecycle contract](../plans/README.md#lifecycle-contract):
+preserve still-useful procedure in its owner before archiving completed execution context,
+or retain an explicitly justified roadmap. Repair active routes in the same change. Do not
+archive based on age or missing inbound links alone; historical observations remain immutable.
 
-- `docs:garden`: single harness entrypoint for the weekly gardening run.
-- `docs:check:pr`: PR hard gate for structural validity; age-only freshness is always advisory.
-- `docs:check`: full configured-scope hard check, including repository-wide freshness age.
-- `tmp/docs-gardening.json`: canonical structured snapshot for the run.
-- `tmp/docs-gardening-issue.json` / `.md`: rolling issue payload generated from the snapshot.
-- `tmp/docs-health-report.json` / `.md`: health snapshot and scorecard rendering.
-- `tmp/docs-stale-active.json` / `.md`: heuristic queue for manual review.
-- `tmp/docs-plan-lifecycle.json` / `.md`: hard-gated plan lifecycle, editability, and current-focus report.
-- Rolling issue: triage surface for unresolved warnings and candidates.
+## Scoped semantic review
 
-The weekly workflow uploads the complete artifact set above for 30 days. Its rolling-issue lookup
-paginates through all repository issues before deciding whether to create, update, reopen, or close
-the single gardening issue.
+Use the shared docs-gardening semantic review for a named claim, task route or subsystem.
+Current source establishes implementation; [the SSOT](agents-ssot.md) establishes binding
+ESL contracts. Source presence alone does not establish production activation, cohort readiness,
+provider-account state or residual learner-data eligibility. Genuine missing product/operator
+evidence retains its owner and practical consequence; do not run production or learner-data
+probes merely to refresh prose.
 
-## Triage Rules
+## Periodic triage
 
-### Fix now
+The [weekly workflow](../../.github/workflows/docs-gardening.yml) runs `pnpm docs:garden`,
+retains generated evidence and updates the rolling gardening issue. It supplies leads, not
+semantic verdicts or authorization to fix them. A maintenance task selects a bounded area.
 
-- Broken links.
-- Missing or invalid metadata/freshness.
-- Age-only freshness is advisory in PR checks; scheduled/full gardening retains repository-wide
-  age enforcement.
-- Route hints or governance requirements that are mechanically failing.
-- Active plan lifecycle violations: completed/superseded plans under `docs/plans/`, missing exit
-  triggers or current focus on routed active plans, non-editable active statuses, non-editable router
-  targets, or orphan standalone plans.
+Reuse a relevant report while its revision and inputs apply. Run gardening when a fresh snapshot
+answers the question; targeted upkeep does not require a full snapshot first. Read reported
+artifact paths and relevant findings rather than loading every artifact or adding a manual catalog.
+Prioritize active misleading guidance, recurring task confusion and recently changed ownership.
+Age/overlap/no-route heuristics remain investigation leads. Historical material and runtime
+prompt/fixture content retain their separate roles.
 
-### Review manually
+Keep the rolling issue as Governance's generated triage surface. Record durable planning or
+deferred work through [the intake boundary](../operations/github-issue-intake-and-codex-work-selection.md);
+existing execution issues remain their scope authority. Skill invocation adds no tracker mutation,
+recurring automation, provider, production or external-message authority.
 
-- Stale-active candidates.
-- Repeated warnings that are not yet hard failures.
-- Ambiguous archive versus refresh decisions.
-- P1 stale-by-age candidates in the weekly queue; authoritative docs should be verified first even
-  when they are not yet hard-gate failures.
+## Semantic disposition
 
-### Archive or split
+Apply the shared method's KEEP, CORRECT, CONSOLIDATE, ARCHIVE, REMOVE or DEFER dispositions to
+material findings. ESL's surviving contracts and useful historical rationale must remain available;
+repair affected routes when ownership moves. Accurate summaries can remain useful without copying
+implementation detail. Generated owners carry mutable inventories; new prose or separate records
+need a concrete future reader and maintenance purpose.
 
-- Docs that are no longer routed by active docs.
-- Mixed-purpose docs that keep generating stale noise.
-- Inventory-style docs that are better generated than hand-maintained.
-- Low-signal content galleries should usually be tuned in the gardening config rather than routed
-  just to satisfy generic no-route heuristics.
-- Implementation plans should normally archive after their PR lands unless they remain explicit
-  roadmaps.
+## Bounded Luna questions
 
-## Habitual Checkpoints
+Optional documentation investigations follow shared delegation/context methods and current task
+authorization. Keep simple checks with the primary and group questions sharing source context.
+When subagents are authorized for these bounded read-only questions, retain the ESL routing default
+of GPT-6 Luna/high; honor explicit user routing overrides and report unavailable routing. Use
+in-task subagents, not Luna Lab Dispatch root tasks or tracker operations. The primary owns the
+semantic verdict and consequential decisions. Read-only scope includes no edits, builds, broad
+tests, provider/data/production calls or tracker updates unless separately within authorization.
 
-- Keep router docs short.
-- Keep generated artifacts data-first.
-- Keep policy in governance docs, not in scripts or workflow comments.
-- Keep the issue body readable for a stressed maintainer.
+## Mechanical evidence
 
-## Non-Goals
+Follow the [docs-only recipe](TESTING_GUIDELINES.md#docs-only-changes), including affected generated
+references and explicit changed-path formatting. PR mode requires a non-empty committed comparison
+and reads current working-tree documents. Its structural/metadata/lifecycle gates remain blocking;
+age-only findings are advisory. [Checker implementation](../../scripts/docs/check-pr-docs.mjs) and
+tests own local-link coverage and limitations. Structural green cannot certify claims or live state.
 
-- Do not auto-archive on heuristic output alone.
-- Do not expand the loop with extra manual steps unless they reduce false positives.
-- Do not duplicate policy across multiple reference docs.
+The [verification procedure](DOCS_GOVERNANCE.md#verification-procedure) remains required before
+advancing an enforced document's `Last Verified Against`, including full `pnpm docs:check`.
+A selected-claim repair is not a full-document audit; preserve the date unless that obligation
+is satisfied. Record the actual review evidence in the task/PR.
 
-## Related
+Inspect generated changes and affected paths/anchors and known consumers. Run focused tooling
+tests when tooling changes. Respect authored-doc versus runtime prompt/fixture boundaries.
 
-- [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
-- [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](HARNESS_AGENTIC_DOCS_MODEL.md)
-- [`docs/generated/README.md`](../generated/README.md)
+## Completion boundary
+
+Conclude when the scoped ESL task route supports correct decisions, material contradictions
+are resolved, unique constraints survive, required evidence exists and consequential missing
+product/operator evidence is explicit. Distinguish completed investigation from implementation,
+and local/hosted observations from unperformed provider, learner-data or production checks.
+Apply root `AGENTS.md` stopping rules and the shared closure method; cosmetic refinement does
+not keep a resolved review open. Archiving an old plan does not require inventing a new one.

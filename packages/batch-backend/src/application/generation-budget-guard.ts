@@ -11,6 +11,8 @@ import {
   recordGenerationActualUsage,
   reserveGenerationBudget,
 } from '../domain/generation-budget-repository.js';
+import { getOpenAiModelGroup, OPENAI_MODEL_GROUPS } from '../domain/openai-model-groups.js';
+import { assertSupportedGenerationTarget } from './generation-policy.js';
 
 const ESTIMATED_CHARS_PER_TOKEN = 4;
 
@@ -109,6 +111,29 @@ function getCounter(map: Map<string, InMemoryCounters>, key: string): InMemoryCo
   return created;
 }
 
+function readInMemoryGroupUsage(input: { provider: GenerationProvider; model: string; now: Date }) {
+  const group = getOpenAiModelGroup(input.model);
+  let reserved = 0,
+    actual = 0;
+  for (const model of OPENAI_MODEL_GROUPS[group]) {
+    const counter = inMemoryBudgetCounters.get(
+      counterKey({
+        provider: input.provider,
+        model,
+        bucket: 'day',
+        bucketStart: startOfUtcDay(input.now),
+      }),
+    );
+    reserved += counter?.reservedTokens ?? 0;
+    actual += counter?.actualTokens ?? 0;
+  }
+  return {
+    dailyTokenGroup: group,
+    groupReservedTokensToday: reserved,
+    groupActualTokensToday: actual,
+  };
+}
+
 const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
   async reserve(input) {
     const minuteStart = startOfUtcMinute(input.now);
@@ -130,6 +155,7 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
     const minute = getCounter(inMemoryBudgetCounters, minuteKey);
     const day = getCounter(inMemoryBudgetCounters, dayKey);
 
+    const groupUsage = readInMemoryGroupUsage(input);
     const nextMinuteRequests = minute.requests + 1;
     const nextMinuteReservedTokens = minute.reservedTokens + input.estimatedTokens;
     const nextDayRequests = day.requests + 1;
@@ -154,6 +180,7 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
           requestsToday: day.requests,
           reservedTokensToday: day.reservedTokens,
           actualTokensToday: day.actualTokens,
+          ...readInMemoryGroupUsage(input),
         },
       };
     }
@@ -177,6 +204,7 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
           requestsToday: day.requests,
           reservedTokensToday: day.reservedTokens,
           actualTokensToday: day.actualTokens,
+          ...readInMemoryGroupUsage(input),
         },
       };
     }
@@ -200,6 +228,7 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
           requestsToday: day.requests,
           reservedTokensToday: day.reservedTokens,
           actualTokensToday: day.actualTokens,
+          ...readInMemoryGroupUsage(input),
         },
       };
     }
@@ -208,7 +237,7 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
       input.limits.dailyTokenBudget !== undefined &&
       input.limits.dailyTokenBudget !== null &&
       input.limits.dailyTokenBudget >= 0 &&
-      nextReservedTokens > input.limits.dailyTokenBudget
+      groupUsage.groupReservedTokensToday + input.estimatedTokens > input.limits.dailyTokenBudget
     ) {
       return {
         allowed: false,
@@ -216,13 +245,14 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
           limitType: 'daily_tokens',
           window: 'day',
           limit: input.limits.dailyTokenBudget,
-          used: day.reservedTokens,
+          used: groupUsage.groupReservedTokensToday,
         },
         usage: {
           requestsPerMinuteUsed: minute.requests,
           requestsToday: day.requests,
           reservedTokensToday: day.reservedTokens,
           actualTokensToday: day.actualTokens,
+          ...readInMemoryGroupUsage(input),
         },
       };
     }
@@ -239,6 +269,7 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
         requestsToday: day.requests,
         reservedTokensToday: day.reservedTokens,
         actualTokensToday: day.actualTokens,
+        ...readInMemoryGroupUsage(input),
       },
     };
   },
@@ -279,6 +310,7 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
       requestsToday: day.requests,
       reservedTokensToday: day.reservedTokens,
       actualTokensToday: day.actualTokens,
+      ...readInMemoryGroupUsage(input),
     };
   },
 };
@@ -287,25 +319,11 @@ function resolveProviderLimits(
   config: BatchBackendConfig['generation'],
   provider: GenerationProvider,
 ) {
-  if (provider === 'openai') {
-    return {
-      rpmBudget: config.providers.openai.rpmBudget,
-      tpmBudget: config.providers.openai.tpmBudget,
-      dailyRequestBudget: config.providers.openai.dailyRequestBudget,
-      dailyTokenBudget: config.providers.openai.dailyTokenBudget,
-    };
-  }
-  if (provider === 'google_ai_studio') {
-    return {
-      rpmBudget: config.providers.googleAiStudio.rpmBudget,
-      dailyRequestBudget: config.providers.googleAiStudio.dailyRequestBudget,
-      dailyTokenBudget: undefined,
-    };
-  }
+  assertSupportedGenerationTarget({ provider, model: '' });
   return {
-    rpmBudget: config.providers.openrouter.rpmBudget,
-    dailyRequestBudget: config.providers.openrouter.dailyRequestBudget,
-    dailyTokenBudget: config.providers.openrouter.dailyTokenBudget,
+    rpmBudget: config.providers.openai.rpmBudget,
+    tpmBudget: config.providers.openai.tpmBudget,
+    dailyRequestBudget: config.providers.openai.dailyRequestBudget,
   };
 }
 
@@ -313,15 +331,8 @@ function resolveAllowedModels(
   config: BatchBackendConfig['generation'],
   provider: GenerationProvider,
 ): Set<string> {
-  if (provider === 'openai') {
-    return new Set(config.models.openai.allowed.map((model) => model.trim()).filter(Boolean));
-  }
-  if (provider === 'google_ai_studio') {
-    return new Set(
-      config.models.googleAiStudio.allowed.map((model) => model.trim()).filter(Boolean),
-    );
-  }
-  return new Set(config.models.openrouter.allowed.map((model) => model.trim()).filter(Boolean));
+  if (provider !== 'openai') return new Set();
+  return new Set(config.models.openai.allowed.map((model) => model.trim()).filter(Boolean));
 }
 
 export function getConfiguredGenerationAllowedModels(
@@ -391,6 +402,7 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
   repository: GenerationBudgetRepository;
   limits?: GenerationBudgetLimits;
 }): Promise<GenerationBudgetUsage> {
+  assertSupportedGenerationTarget(args);
   const generationConfig = args.config.generation;
 
   if (
@@ -408,6 +420,20 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
     });
   }
 
+  let group;
+  try {
+    group = getOpenAiModelGroup(args.model);
+  } catch {
+    throw new GenerationBudgetExceededError({
+      provider: args.provider,
+      model: args.model,
+      limitType: 'model_not_allowed',
+      limit: 0,
+      used: 0,
+      window: 'request',
+      message: 'OpenAI model has no reviewed daily-budget group. Select a classified model.',
+    });
+  }
   if (generationConfig.safetyMode !== 'hard_stop') {
     return args.repository.getUsage({
       provider: args.provider,
@@ -416,7 +442,10 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
     });
   }
 
-  const limits = args.limits ?? resolveProviderLimits(generationConfig, args.provider);
+  const limits = {
+    ...(args.limits ?? resolveProviderLimits(generationConfig, args.provider)),
+    dailyTokenBudget: generationConfig.providers.openai.dailyTokenBudgets[group],
+  };
   const reservation = await args.repository.reserve({
     provider: args.provider,
     model: args.model,
@@ -437,7 +466,10 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
       limit: reservation.reason.limit,
       used: reservation.reason.used,
       window: reservation.reason.window,
-      message: `Generation blocked by ${reservation.reason.limitType} safety limit (${reservation.reason.used}/${reservation.reason.limit}).`,
+      message:
+        reservation.reason.limitType === 'model_not_allowed'
+          ? 'Existing OpenAI daily reservations include unclassified models. Wait for 00:00 UTC or ask the operator to review model-group membership.'
+          : `Generation blocked by ${reservation.reason.limitType} safety limit (${reservation.reason.used}/${reservation.reason.limit}).${reservation.reason.limitType === 'daily_tokens' ? ` The ${group} group counts reserved tokens across its models; actual usage is tracked separately. Wait for 00:00 UTC or ask the operator to review the daily budget.` : ''}`,
     });
   }
 

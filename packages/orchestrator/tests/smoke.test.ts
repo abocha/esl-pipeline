@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { assignmentFixture } from './assignment-fixture.js';
+
 vi.mock('@esl-pipeline/tts-core', async () => {
   const actual =
     await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core');
@@ -71,6 +73,7 @@ describe('orchestrator smoke', () => {
 
     const { newAssignment, getAssignmentStatus, rerunAssignment } = await import('../src/index.js');
     const result = await newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       preset: 'default',
       withTts: true,
@@ -98,10 +101,11 @@ describe('orchestrator smoke', () => {
 
     const statusBefore = await getAssignmentStatus(mdPath);
     expect(statusBefore.manifest?.publishTarget).toBe('html');
-    expect(statusBefore.mdHashMatches).toBe(true);
+    expect(statusBefore.mdHashMatches).toBe(false);
     const initialTimestamp = statusBefore.manifest?.timestamp;
 
     const rerun = await rerunAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       republishOnly: true,
       upload: 's3',
@@ -122,13 +126,17 @@ describe('orchestrator smoke', () => {
   it('keeps HTML publishing on the static theme path even when rerunning the same preset', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-colorize-skip-'));
     const mdPath = join(dir, 'assignment.md');
-    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+    const okFixturePath = join(
+      import.meta.dirname,
+      '../../contracts/tests/assignment-fixture.json',
+    );
     const okDoc = await readFile(okFixturePath, 'utf8');
     await writeFile(mdPath, okDoc);
 
     const { newAssignment } = await import('../src/index.js');
 
     const first = await newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       preset: 'default',
       withTts: false,
@@ -137,6 +145,7 @@ describe('orchestrator smoke', () => {
     expect(first.steps).not.toContain('colorize');
 
     const second = await newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       preset: 'default',
       withTts: false,
@@ -154,7 +163,10 @@ describe('orchestrator smoke', () => {
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
 
-    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+    const okFixturePath = join(
+      import.meta.dirname,
+      '../../contracts/tests/assignment-fixture.json',
+    );
     const okDoc = await readFile(okFixturePath, 'utf8');
     await writeFile(mdPath, okDoc);
     await writeFile(audioPath, 'dummy audio');
@@ -168,6 +180,7 @@ describe('orchestrator smoke', () => {
 
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     const firstRun = await newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       preset: 'default',
       withTts: true,
@@ -189,6 +202,7 @@ describe('orchestrator smoke', () => {
     vi.mocked(buildStudyTextMp3).mockClear();
 
     const rerun = await rerunAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       republishOnly: true,
       upload: 's3',
@@ -207,7 +221,10 @@ describe('orchestrator smoke', () => {
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
 
-    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+    const okFixturePath = join(
+      import.meta.dirname,
+      '../../contracts/tests/assignment-fixture.json',
+    );
     const okDoc = await readFile(okFixturePath, 'utf8');
     await writeFile(mdPath, okDoc);
     await writeFile(audioPath, 'dummy audio');
@@ -221,6 +238,7 @@ describe('orchestrator smoke', () => {
 
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     await newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       preset: 'default',
       withTts: true,
@@ -233,6 +251,7 @@ describe('orchestrator smoke', () => {
     await writeFile(mdPath, '# broken markdown without frontmatter\n');
 
     const rerun = await rerunAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       republishOnly: true,
       upload: 's3',
@@ -247,7 +266,10 @@ describe('orchestrator smoke', () => {
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
 
-    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+    const okFixturePath = join(
+      import.meta.dirname,
+      '../../contracts/tests/assignment-fixture.json',
+    );
     const okDoc = await readFile(okFixturePath, 'utf8');
     await writeFile(mdPath, okDoc);
     await writeFile(audioPath, 'dummy audio');
@@ -261,6 +283,7 @@ describe('orchestrator smoke', () => {
 
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     const firstRun = await newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       preset: 'default',
       withTts: true,
@@ -279,6 +302,7 @@ describe('orchestrator smoke', () => {
     await writeFile(firstRun.manifestPath!, JSON.stringify(manifest, null, 2));
 
     await rerunAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       republishOnly: true,
       upload: 's3',
@@ -298,7 +322,10 @@ describe('orchestrator smoke', () => {
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
 
-    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+    const okFixturePath = join(
+      import.meta.dirname,
+      '../../contracts/tests/assignment-fixture.json',
+    );
     const okDoc = await readFile(okFixturePath, 'utf8');
     await writeFile(mdPath, okDoc);
     await writeFile(audioPath, 'dummy audio');
@@ -312,6 +339,7 @@ describe('orchestrator smoke', () => {
 
     const { newAssignment, rerunAssignment, getAssignmentStatus } = await import('../src/index.js');
     const initial = await newAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       preset: 'default',
       withTts: true,
@@ -328,6 +356,7 @@ describe('orchestrator smoke', () => {
     expect(statusBefore.manifest?.publishTarget).toBe('html');
 
     const rerun = await rerunAssignment({
+      assignment: assignmentFixture(),
       md: mdPath,
       republishOnly: true,
       upload: 's3',

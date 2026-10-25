@@ -7,7 +7,12 @@ import {
   applyUserSettingsToEnv,
   resolveEffectiveElevenLabsApiKey,
 } from '../src/infrastructure/pipeline-worker-env.js';
+import {
+  buildNewAssignmentFlags,
+  buildRerunFlags,
+} from '../src/infrastructure/pipeline-worker-flags.js';
 import { toWorkerV2FailureError } from '../src/infrastructure/pipeline-worker-v2.js';
+import { assignmentFixture } from './assignment-v1.test-harness.js';
 
 const ORIGINAL_ELEVEN_KEY = process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY;
 const ORIGINAL_DEFAULT_PROVIDER = process.env.ESL_TTS_DEFAULT_PROVIDER;
@@ -99,35 +104,39 @@ describe('infrastructure/pipeline-worker-entry', () => {
     expect(source).not.toContain("manifestStore: 'filesystem'");
   });
 
-  it('maps fresh-job voice preferences into new-assignment orchestrator flags', async () => {
-    const sourcePath = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      '../src/infrastructure/pipeline-worker-entry.ts',
+  it('maps fresh-job voice preferences and persisted learning preset into orchestrator flags', () => {
+    const flags = buildNewAssignmentFlags(
+      {
+        jobId: 'job-1',
+        md: 'job-1.md',
+        assignment: assignmentFixture(),
+        voiceAccent: 'british_female',
+        voiceId: 'voice-1',
+        learningPresetVersion: 'preset-v2',
+      },
+      '/tmp/tts',
     );
-    const source = await fs.readFile(sourcePath, 'utf8');
 
-    expect(source).toContain('accentPreference: payload.voiceAccent ?? undefined');
-    expect(source).toContain('voiceId: payload.voiceId ?? undefined');
+    expect(flags).toMatchObject({
+      accentPreference: 'british_female',
+      voiceId: 'voice-1',
+      learningPresetVersion: 'preset-v2',
+      out: '/tmp/tts',
+    });
   });
 
-  it('maps persisted learning preset versions into new-assignment orchestrator flags', async () => {
-    const sourcePath = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      '../src/infrastructure/pipeline-worker-entry.ts',
+  it('maps persisted color presets into rerun orchestrator flags', () => {
+    const flags = buildRerunFlags(
+      {
+        jobId: 'job-rerun-1',
+        md: 'job-rerun-1.md',
+        assignment: assignmentFixture(),
+        preset: 'dark-theme',
+      },
+      '/tmp/tts',
     );
-    const source = await fs.readFile(sourcePath, 'utf8');
 
-    expect(source).toContain('learningPresetVersion: payload.learningPresetVersion');
-  });
-
-  it('maps persisted color presets into rerun orchestrator flags', async () => {
-    const sourcePath = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      '../src/infrastructure/pipeline-worker-entry.ts',
-    );
-    const source = await fs.readFile(sourcePath, 'utf8');
-    const rerunPipelineSource = source.slice(source.indexOf('async function runRerunPipeline'));
-
-    expect(rerunPipelineSource).toContain('preset: payload.preset');
+    expect(flags.preset).toBe('dark-theme');
+    expect(flags.out).toBe('/tmp/tts');
   });
 });

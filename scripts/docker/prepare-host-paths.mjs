@@ -5,6 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
+import { assertProductionEnv } from '../deploy/production-paths.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const requiredDirs = ['uploads', path.join('uploads', 'drafts')];
@@ -14,7 +15,7 @@ const defaultElevenLabsVoicesPath = path.join(
   'configs',
   'elevenlabs.voices.json',
 );
-const envFiles = ['.env'];
+const envFiles = [rootDir === '/opt/esl-pipeline' ? '/etc/esl-pipeline/production.env' : '.env'];
 const productionRuntimeUid = 1000;
 const productionRuntimeGid = 1000;
 
@@ -36,9 +37,11 @@ function permissionFixHint(target) {
 }
 
 async function loadLocalEnvFiles() {
+  if (rootDir === '/opt/esl-pipeline')
+    assertProductionEnv('/etc/esl-pipeline/production.env', rootDir);
   for (const rel of envFiles) {
     try {
-      const parsed = parseEnv(await fs.readFile(path.join(rootDir, rel), 'utf8'));
+      const parsed = parseEnv(await fs.readFile(path.resolve(rootDir, rel), 'utf8'));
       for (const [key, value] of Object.entries(parsed)) {
         if (value !== undefined && process.env[key] === undefined) {
           process.env[key] = value;

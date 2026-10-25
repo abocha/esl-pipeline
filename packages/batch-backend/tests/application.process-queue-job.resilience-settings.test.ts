@@ -63,7 +63,7 @@ describe('application/process-queue-job', () => {
     runAssignmentJobSpy.mockResolvedValue({ manifestPath: '/manifests/job-1.json' });
 
     // Mock settings repository
-    getSettingsByUserIdSpy.mockResolvedValue({ userId: 'user-123' } as any);
+    getSettingsByUserIdSpy.mockResolvedValue({ userId: 'user-123', ttsProvider: 'gemini' } as any);
     getDecryptedElevenLabsKeySpy.mockResolvedValue('user-eleven-key');
 
     await processQueueJob({ jobId: 'job-1' });
@@ -75,6 +75,7 @@ describe('application/process-queue-job', () => {
     const [payload] = runAssignmentJobSpy.mock.calls[0]!;
     expect(payload.settings).toEqual({
       elevenLabsApiKey: 'user-eleven-key',
+      ttsProvider: 'gemini',
     });
   });
 });

@@ -8,7 +8,7 @@ const { enqueueMock, ensurePendingMock, supersedeClaimsMock } = vi.hoisted(() =>
 
 vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
   createStudentMemoryQueue: vi.fn(() => ({
-    enqueue: enqueueMock,
+    reconcile: enqueueMock,
   })),
 }));
 
@@ -40,12 +40,10 @@ import { requestStudentMemorySnapshotRefresh } from '../src/application/request-
 describe('application/request-student-memory-snapshot-refresh', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    ensurePendingMock.mockResolvedValue({
+    ensurePendingMock.mockImplementation(async (params) => ({
       outcome: 'created',
-      entry: {
-        id: 'snapshot-pending-1',
-      },
-    });
+      entry: { ...params, id: 'snapshot-pending-1' },
+    }));
     supersedeClaimsMock.mockResolvedValue([]);
   });
 
@@ -83,6 +81,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
       params: {
         studentId: 'student-1',
         trigger: 'manual-replay',
+        replayKey: 'replay-1',
         strategy: 'manual_rebuild_v1_1',
         operatorReason: 'Backfill missing alpha snapshots',
       },
@@ -104,6 +103,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
       params: {
         studentId: 'student-1',
         trigger: 'manual-replay',
+        replayKey: 'replay-1',
         strategy: 'manual_rebuild_v1_1',
         operatorReason: 'Backfill missing alpha snapshots',
       },
@@ -130,6 +130,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
       params: {
         studentId: 'student-1',
         trigger: 'manual-replay',
+        replayKey: 'replay-1',
         strategy: 'manual_rebuild_v1_1',
         operatorReason: 'Backfill missing alpha snapshots',
         providerOverride: 'openrouter',
@@ -155,6 +156,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
       params: {
         studentId: 'student-1',
         trigger: 'manual-replay',
+        replayKey: 'replay-1',
         strategy: 'manual_rebuild_v1_1',
         operatorReason: 'Backfill missing alpha snapshots',
         requestCandidateRefresh: true,
@@ -180,7 +182,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
     await expect(
       requestStudentMemorySnapshotRefresh({
         config: { generation: {} } as never,
-        params: { studentId: 'student-1', trigger: 'manual-replay' },
+        params: { studentId: 'student-1', trigger: 'manual-replay', replayKey: 'replay-1' },
       }),
     ).rejects.toThrow('Manual student-memory snapshot replay requires --strategy');
 
@@ -190,6 +192,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
         params: {
           studentId: 'student-1',
           trigger: 'manual-replay',
+          replayKey: 'replay-1',
           strategy: 'manual_rebuild_v1_1',
         },
       }),
@@ -213,7 +216,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
   });
 
   it('reuses the existing pending snapshot row when the same source entry is requested again', async () => {
-    ensurePendingMock.mockResolvedValueOnce({
+    ensurePendingMock.mockResolvedValue({
       outcome: 'pending_exists',
       entry: {
         id: 'snapshot-pending-existing',
@@ -382,7 +385,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
   });
 
   it('creates a new queue job when the same source entry is retriggered after a new pending row is created', async () => {
-    ensurePendingMock.mockResolvedValueOnce({
+    ensurePendingMock.mockResolvedValue({
       outcome: 'created',
       entry: {
         id: 'snapshot-pending-2',

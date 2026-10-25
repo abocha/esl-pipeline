@@ -16,13 +16,28 @@ import {
 } from '@esl-pipeline/contracts';
 import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
 
-import type { GenerationTarget, GenerationWorkload } from '../application/generation-policy.js';
+import {
+  assertSupportedGenerationTarget,
+  type GenerationTarget,
+  type GenerationWorkload,
+} from '../application/generation-policy.js';
 
 export type GenerationSafetyMode = 'off' | 'warn' | 'hard_stop';
 
 export type NodeEnv = 'development' | 'test' | 'production';
 
+export interface GoogleCalendarConfig {
+  enabled: boolean;
+  configurationError?: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  activeKeyId: string;
+  encryptionKeys: Record<string, string>;
+}
+
 export interface BatchBackendConfig {
+  googleCalendar?: GoogleCalendarConfig;
   nodeEnv: NodeEnv;
   httpPort: number;
   pg: {
@@ -180,8 +195,6 @@ export interface BatchBackendConfig {
     maxOutputTokensHard: number;
     models: {
       openai: { model: string; allowed: string[] };
-      googleAiStudio: { model: string; allowed: string[] };
-      openrouter: { model?: string; allowed: string[] };
     };
     providers: {
       openai: {
@@ -189,28 +202,10 @@ export interface BatchBackendConfig {
         requestTimeoutMs: number;
         retryMax: number;
         retryBackoffMs: number;
-        dailyTokenBudget?: number;
+        dailyTokenBudgets: { efficient: number; larger: number };
         dailyRequestBudget?: number;
         rpmBudget?: number;
         tpmBudget?: number;
-      };
-      googleAiStudio: {
-        apiKey?: string;
-        requestTimeoutMs: number;
-        retryMax: number;
-        retryBackoffMs: number;
-        dailyRequestBudget?: number;
-        rpmBudget?: number;
-      };
-      openrouter: {
-        apiKey?: string;
-        httpReferer?: string;
-        xTitle?: string;
-        requestTimeoutMs: number;
-
-        dailyTokenBudget?: number;
-        dailyRequestBudget?: number;
-        rpmBudget?: number;
       };
     };
   };
@@ -255,7 +250,7 @@ export interface BatchBackendConfig {
   };
 }
 
-export type SpeechPlannerProvider = 'google_ai_studio' | 'openai';
+export type SpeechPlannerProvider = 'openai';
 
 function normalizeSameSite(value: string): 'lax' | 'strict' | 'none' {
   const normalized = value.trim().toLowerCase();
@@ -267,10 +262,12 @@ function normalizeSameSite(value: string): 'lax' | 'strict' | 'none' {
 
 function normalizeGenerationProvider(value: string): GenerationProvider {
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'openai' || normalized === 'google_ai_studio' || normalized === 'openrouter') {
+  if (normalized === 'openai') {
     return normalized;
   }
-  throw new Error('Generation provider must be one of: openai, google_ai_studio, openrouter');
+  throw new Error(
+    'Generation provider must be openai; Google AI Studio and OpenRouter generation are retired',
+  );
 }
 
 function normalizeGenerationQuotaSource(value: string): GenerationQuotaSource {
@@ -637,6 +634,73 @@ export function loadConfig(): BatchBackendConfig {
 
   const refreshCookieSameSite = normalizeSameSite(refreshCookieSameSiteRaw);
 
+  const googleCalendarEnabled = readBool('GOOGLE_CALENDAR_ENABLED', false);
+  const googleCalendar: GoogleCalendarConfig = {
+    enabled: googleCalendarEnabled,
+    clientId: readString('GOOGLE_CALENDAR_CLIENT_ID', '')!,
+    clientSecret: readString('GOOGLE_CALENDAR_CLIENT_SECRET', '')!,
+    redirectUri: readString('GOOGLE_CALENDAR_REDIRECT_URI', '')!,
+    activeKeyId: readString('INTEGRATION_CREDENTIAL_ACTIVE_KEY_ID', '')!,
+    encryptionKeys: {},
+  };
+  if (googleCalendarEnabled) {
+    try {
+      try {
+        googleCalendar.encryptionKeys = JSON.parse(
+          readString('INTEGRATION_CREDENTIAL_KEYS', '{}')!,
+        );
+      } catch {
+        throw new Error('Invalid integration credential key configuration');
+      }
+      const { clientId, clientSecret, redirectUri, activeKeyId, encryptionKeys } = googleCalendar;
+      let callback: URL;
+      try {
+        callback = new URL(redirectUri);
+      } catch {
+        throw new Error('Invalid Google Calendar callback configuration');
+      }
+      if (
+        !clientId ||
+        !clientSecret ||
+        callback.pathname !== '/api/google/calendar/callback' ||
+        callback.search ||
+        callback.hash ||
+        callback.username ||
+        callback.password ||
+        (callback.protocol !== 'https:' &&
+          !(nodeEnv !== 'production' && ['localhost', '127.0.0.1'].includes(callback.hostname)))
+      )
+        throw new Error('Invalid Google Calendar callback configuration');
+      if (
+        !activeKeyId ||
+        !encryptionKeys ||
+        typeof encryptionKeys !== 'object' ||
+        Array.isArray(encryptionKeys) ||
+        !encryptionKeys[activeKeyId] ||
+        Object.entries(encryptionKeys).some(
+          ([id, key]) =>
+            !/^[a-zA-Z0-9_-]{1,64}$/.test(id) ||
+            typeof key !== 'string' ||
+            Buffer.from(key, 'base64').length !== 32 ||
+            Buffer.from(key, 'base64').toString('base64') !== key,
+        )
+      )
+        throw new Error('Invalid integration credential key configuration');
+      if (
+        nodeEnv === 'production' &&
+        (!refreshCookieSecure ||
+          refreshCookieSameSite === 'strict' ||
+          !(
+            refreshCookiePath === '/' ||
+            '/api/google/calendar/callback'.startsWith(`${refreshCookiePath}/`)
+          ))
+      )
+        throw new Error('Google Calendar requires a callback-compatible refresh cookie');
+    } catch {
+      googleCalendar.configurationError = 'google_calendar_configuration_invalid';
+    }
+  }
+
   // Security configuration
   const maxFileSize = readInt('MAX_FILE_SIZE', 10 * 1024 * 1024); // 10MB default
   const allowedMimeTypesEnv =
@@ -691,18 +755,11 @@ export function loadConfig(): BatchBackendConfig {
   );
   const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 12000);
   const generationOpenAiModel = readString('GEN_OPENAI_MODEL', 'gpt-5.6-luna')!;
-  const generationGoogleModel = readString('GEN_GOOGLE_MODEL', 'gemini-3-flash-preview')!;
-  const generationOpenRouterModel = readString('GEN_OPENROUTER_MODEL');
   const target = (name: string, openAiModel: string): GenerationTarget => {
     const provider = normalizeGenerationProvider(readString(`GEN_${name}_PROVIDER`, 'openai')!);
-    const defaultModel =
-      provider === 'openai'
-        ? openAiModel
-        : provider === 'google_ai_studio'
-          ? generationGoogleModel
-          : generationOpenRouterModel;
-    const model = readString(`GEN_${name}_MODEL`, defaultModel)?.trim();
+    const model = readString(`GEN_${name}_MODEL`, openAiModel)?.trim();
     if (!model) throw new Error(`GEN_${name}_MODEL is required for ${provider}`);
+    assertSupportedGenerationTarget({ provider, model });
     return { provider, model };
   };
   const generationTargets = {
@@ -722,54 +779,34 @@ export function loadConfig(): BatchBackendConfig {
         .map((t) => t.model),
     ]).join(','),
   );
-  const generationGoogleAllowedModels = readStringList(
-    'GEN_ALLOWED_MODELS_GOOGLE',
-    [
-      generationGoogleModel,
-      'gemini-3.1-pro-preview',
-      'gemini-3.5-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-3.5-flash-lite',
-      'gemini-2.5-pro',
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemma-4-31b-it',
-      'gemma-4-26b-a4b-it',
-    ].join(','),
-  );
-  const generationOpenRouterAllowedModels = readStringList('GEN_ALLOWED_MODELS_OPENROUTER', '');
 
   const generationOpenAiTimeoutMs = readInt('GEN_OPENAI_REQUEST_TIMEOUT_MS', 240_000);
   const generationOpenAiRetryMax = readInt('GEN_OPENAI_RETRY_MAX', 1);
   const generationOpenAiRetryBackoffMs = readInt('GEN_OPENAI_RETRY_BACKOFF_MS', 250);
   const generationOpenAiRpmBudget = readInt('GEN_OPENAI_RPM_BUDGET', 3);
   const generationOpenAiTpmBudget = readInt('GEN_OPENAI_TPM_BUDGET', 160_000);
-  const generationOpenAiDailyRequestBudget = readInt('GEN_OPENAI_DAILY_REQUEST_BUDGET', 40);
-  const generationGoogleTimeoutMs = readInt('GEN_GOOGLE_REQUEST_TIMEOUT_MS', 240_000);
-  const generationGoogleRetryMax = readInt('GEN_GOOGLE_RETRY_MAX', 1);
-  const generationGoogleRetryBackoffMs = readInt('GEN_GOOGLE_RETRY_BACKOFF_MS', 250);
-  const generationGoogleRpmBudget = readInt('GEN_GOOGLE_RPM_BUDGET', 4);
-  const generationOpenRouterTimeoutMs = readInt('GEN_OPENROUTER_REQUEST_TIMEOUT_MS', 240_000);
-  const generationOpenRouterRpmBudget = readInt('GEN_OPENROUTER_RPM_BUDGET', 0);
-  const generationOpenRouterDailyRequestBudget = readInt('GEN_OPENROUTER_DAILY_REQUEST_BUDGET', 0);
+  const readBudget = (name: string, fallback?: number): number | undefined => {
+    const raw = readString(name);
+    if (!raw) return fallback;
+    const value = Number(raw);
+    if (!Number.isSafeInteger(value) || value < 0)
+      throw new Error(`${name} must be a nonnegative safe integer`);
+    return value;
+  };
+  const generationOpenAiDailyRequestBudget = readBudget('GEN_OPENAI_DAILY_REQUEST_BUDGET');
 
   const openAiApiKey = readString('OPENAI_API_KEY');
-  const geminiApiKey = readString('GEMINI_API_KEY');
-  const openRouterApiKey = readString('OPENROUTER_API_KEY');
-  const openRouterHttpReferer = readString('OPENROUTER_HTTP_REFERER');
-  const openRouterXTitle = readString('OPENROUTER_X_TITLE');
 
-  const generationOpenAiDailyTokenBudget = readInt('GEN_OPENAI_DAILY_TOKEN_BUDGET', 120_000);
-  const generationGoogleDailyRequestBudget = readInt('GEN_GOOGLE_DAILY_REQUEST_BUDGET', 12);
-  const generationOpenRouterDailyTokenBudget = readInt('GEN_OPENROUTER_DAILY_TOKEN_BUDGET', 0);
+  const generationOpenAiDailyTokenBudgets = {
+    efficient: readBudget('GEN_OPENAI_EFFICIENT_DAILY_TOKEN_BUDGET', 2_250_000)!,
+    larger: readBudget('GEN_OPENAI_LARGER_DAILY_TOKEN_BUDGET', 225_000)!,
+  };
 
   const extendedApiEnabled = readBool('BATCH_BACKEND_ENABLE_EXTENDED_API', true);
   const speechPlannerEnabled = readBool('ESL_TTS_SPEECH_PLANNER_ENABLED', false);
   const speechPlannerProviderRaw = readString('ESL_TTS_SPEECH_PLANNER_PROVIDER', 'openai')!;
-  if (speechPlannerProviderRaw !== 'google_ai_studio' && speechPlannerProviderRaw !== 'openai') {
-    throw new Error(
-      'ESL_TTS_SPEECH_PLANNER_PROVIDER must be either "google_ai_studio" or "openai"',
-    );
+  if (speechPlannerProviderRaw !== 'openai') {
+    throw new Error('ESL_TTS_SPEECH_PLANNER_PROVIDER must be "openai"');
   }
   const speechPlannerProvider: SpeechPlannerProvider = speechPlannerProviderRaw;
   const speechPlannerModel = readString('ESL_TTS_SPEECH_PLANNER_MODEL', 'gpt-5.6-luna')!;
@@ -781,11 +818,19 @@ export function loadConfig(): BatchBackendConfig {
   );
   const speechPlannerDebugLogPlan = readBool('ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN', false);
   const voiceRankerEnabled = readBool('ESL_TTS_VOICE_RANKER_ENABLED', true);
-  const voiceRankerModel = readString('ESL_TTS_VOICE_RANKER_MODEL', 'gemma-4-31b-it')!;
+  const voiceRankerModel = readString('ESL_TTS_VOICE_RANKER_MODEL', 'gpt-5.6-luna')!;
   const voiceRankerMaxOutputTokens = readInt('ESL_TTS_VOICE_RANKER_MAX_OUTPUT_TOKENS', 1200);
   const voiceRankerRpmBudget = readInt('ESL_TTS_VOICE_RANKER_RPM_BUDGET', 12);
   const voiceRankerDailyRequestBudget = readInt('ESL_TTS_VOICE_RANKER_DAILY_REQUEST_BUDGET', 1000);
   const voiceRankerDebugLogPlan = readBool('ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN', false);
+  for (const model of [
+    generationOpenAiModel,
+    ...generationOpenAiAllowedModels,
+    speechPlannerModel,
+    voiceRankerModel,
+  ]) {
+    assertSupportedGenerationTarget({ provider: 'openai', model });
+  }
 
   return {
     nodeEnv,
@@ -904,6 +949,7 @@ export function loadConfig(): BatchBackendConfig {
       configConditionalRequests,
       configDir,
     },
+    googleCalendar,
     auth: {
       jwtSecret,
       jwtExpiresIn,
@@ -945,11 +991,6 @@ export function loadConfig(): BatchBackendConfig {
       maxOutputTokensHard: generationMaxOutputTokensHard,
       models: {
         openai: { model: generationOpenAiModel, allowed: generationOpenAiAllowedModels },
-        googleAiStudio: { model: generationGoogleModel, allowed: generationGoogleAllowedModels },
-        openrouter: {
-          model: generationOpenRouterModel,
-          allowed: generationOpenRouterAllowedModels,
-        },
       },
       providers: {
         openai: {
@@ -957,28 +998,10 @@ export function loadConfig(): BatchBackendConfig {
           requestTimeoutMs: generationOpenAiTimeoutMs,
           retryMax: generationOpenAiRetryMax,
           retryBackoffMs: generationOpenAiRetryBackoffMs,
-          dailyTokenBudget: generationOpenAiDailyTokenBudget,
+          dailyTokenBudgets: generationOpenAiDailyTokenBudgets,
           dailyRequestBudget: generationOpenAiDailyRequestBudget,
           rpmBudget: generationOpenAiRpmBudget,
           tpmBudget: generationOpenAiTpmBudget,
-        },
-        googleAiStudio: {
-          apiKey: geminiApiKey,
-          requestTimeoutMs: generationGoogleTimeoutMs,
-          retryMax: generationGoogleRetryMax,
-          retryBackoffMs: generationGoogleRetryBackoffMs,
-          dailyRequestBudget: generationGoogleDailyRequestBudget,
-          rpmBudget: generationGoogleRpmBudget,
-        },
-        openrouter: {
-          apiKey: openRouterApiKey,
-          httpReferer: openRouterHttpReferer,
-          xTitle: openRouterXTitle,
-          requestTimeoutMs: generationOpenRouterTimeoutMs,
-
-          dailyTokenBudget: generationOpenRouterDailyTokenBudget,
-          dailyRequestBudget: generationOpenRouterDailyRequestBudget,
-          rpmBudget: generationOpenRouterRpmBudget,
         },
       },
     },

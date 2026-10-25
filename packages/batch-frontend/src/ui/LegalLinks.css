@@ -1,0 +1,18 @@
+.legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 1rem;
+  font-size: 0.8125rem;
+}
+
+.legal-links a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.legal-links a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}

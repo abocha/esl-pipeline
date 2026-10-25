@@ -1,8 +1,7 @@
-import { access, copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 
-import { type AssignmentManifest, manifestPathFor } from '@esl-pipeline/orchestrator';
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
 import { isTtsModelForProvider } from '@esl-pipeline/tts-core';
 
 import type { JobActionResult, RerunAction } from '../../domain/job-actions.js';
@@ -11,14 +10,11 @@ import { publishJobEvent } from '../../domain/job-events.js';
 import type { TtsModelId, TtsProviderId } from '../../domain/job-model.js';
 import { getJobById, insertJob } from '../../domain/job-repository.js';
 import { createJobQueue } from '../../infrastructure/queue-bullmq.js';
+import { HistoricalAssignmentReadOnlyError } from '../historical-assignment.js';
 import {
   collectPublishStudyTextOverrideIssues,
   publishTtsModelSchema,
 } from '../publish-study-text-overrides.js';
-
-type PronunciationManifestArtifacts = NonNullable<
-  NonNullable<AssignmentManifest['audioArtifacts']>['pronunciation']
->;
 
 const rerunSchema = z
   .object({
@@ -26,7 +22,7 @@ const rerunSchema = z
     regenerateStudyTextAudio: z.boolean().optional(),
     regeneratePronunciationMainAudio: z.boolean().optional(),
     regeneratePronunciationChunkAudio: z.boolean().optional(),
-    studyTextTtsProvider: z.enum(['elevenlabs', 'google', 'inworld']).optional(),
+    studyTextTtsProvider: z.enum(['elevenlabs', 'google', 'inworld', 'gemini']).optional(),
     studyTextTtsModel: publishTtsModelSchema.optional(),
     studyTextVoiceId: z.string().min(1).optional(),
     studyTextVoiceAccent: z.string().min(1).optional(),
@@ -34,11 +30,11 @@ const rerunSchema = z
     studyTextDialogueLanguage: z.string().min(1).optional(),
     studyTextDialogueStability: z.number().min(0).max(1).optional(),
     studyTextDialogueSeed: z.number().int().optional(),
-    pronunciationMainTtsProvider: z.enum(['elevenlabs', 'google', 'inworld']).optional(),
+    pronunciationMainTtsProvider: z.enum(['elevenlabs', 'google', 'inworld', 'gemini']).optional(),
     pronunciationMainTtsModel: publishTtsModelSchema.optional(),
     pronunciationMainVoiceId: z.string().min(1).optional(),
     pronunciationMainVoiceAccent: z.string().min(1).optional(),
-    pronunciationChunkTtsProvider: z.enum(['elevenlabs', 'google', 'inworld']).optional(),
+    pronunciationChunkTtsProvider: z.enum(['elevenlabs', 'google', 'inworld', 'gemini']).optional(),
     pronunciationChunkTtsModel: publishTtsModelSchema.optional(),
     pronunciationChunkVoiceId: z.string().min(1).optional(),
     pronunciationChunkVoiceAccent: z.string().min(1).optional(),
@@ -189,7 +185,7 @@ function resolveInheritedTtsModelForProviderChange(args: {
 
 function resolveInheritedVoiceIdForProviderChange(args: {
   explicitVoiceId?: string;
-  explicitProvider?: 'elevenlabs' | 'google' | 'inworld';
+  explicitProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   persistedProvider?: string | null;
   persistedVoiceId?: string | null;
 }): string | undefined {
@@ -202,115 +198,6 @@ function resolveInheritedVoiceIdForProviderChange(args: {
   }
 
   return args.persistedVoiceId ?? undefined;
-}
-
-async function fileExists(targetPath: string): Promise<boolean> {
-  try {
-    await access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function sanitizeRecoveredAudioArtifacts(
-  pronunciation: PronunciationManifestArtifacts | undefined,
-): PronunciationManifestArtifacts | undefined {
-  if (!pronunciation) {
-    return pronunciation;
-  }
-
-  return {
-    ...pronunciation,
-    primaryClip: pronunciation.primaryClip
-      ? (() => {
-          const { path: _path, ...clipWithoutPath } = pronunciation.primaryClip;
-          return clipWithoutPath;
-        })()
-      : pronunciation.primaryClip,
-    itemClips: pronunciation.itemClips?.map((clip) => {
-      const { path: _path, ...clipWithoutPath } = clip;
-      return clipWithoutPath;
-    }),
-  };
-}
-
-function extractStudyTextAudioUrl(html: string): string | undefined {
-  const anchoredMatch = html.match(
-    /<a[^>]+href="([^"]+)"[^>]*>\s*Audio recording:\s*Study Text\s*<\/a>/i,
-  );
-  if (anchoredMatch?.[1]) {
-    return anchoredMatch[1].trim();
-  }
-
-  const figureMatch = html.match(/<figure class="audio-figure">[\s\S]*?<audio[^>]+src="([^"]+)"/i);
-  return figureMatch?.[1]?.trim() || undefined;
-}
-
-function extractPronunciationAudioPayload(
-  html: string,
-): PronunciationManifestArtifacts | undefined {
-  const match = html.match(
-    /<script[^>]+id=["']esl-pronunciation-audio["'][^>]*>([\s\S]*?)<\/script>/i,
-  );
-  if (!match?.[1]) {
-    return undefined;
-  }
-
-  try {
-    return sanitizeRecoveredAudioArtifacts(JSON.parse(match[1]) as never);
-  } catch {
-    return undefined;
-  }
-}
-
-async function recoverDurableHtmlManifest(
-  job: Awaited<ReturnType<typeof getJobById>>,
-): Promise<void> {
-  if (!job?.md || job.publishTarget !== 'html' || !job.htmlUrl) {
-    return;
-  }
-
-  const durableManifestPath = manifestPathFor(job.md);
-  if (await fileExists(durableManifestPath)) {
-    return;
-  }
-
-  if (
-    job.manifestPath &&
-    !job.manifestPath.startsWith('s3://') &&
-    (await fileExists(job.manifestPath))
-  ) {
-    await mkdir(path.dirname(durableManifestPath), { recursive: true });
-    await copyFile(job.manifestPath, durableManifestPath);
-    return;
-  }
-
-  const response = await fetch(job.htmlUrl);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to recover durable manifest from published HTML (${response.status} ${response.statusText}).`,
-    );
-  }
-
-  const html = await response.text();
-  const studyTextUrl = extractStudyTextAudioUrl(html);
-  const pronunciation = extractPronunciationAudioPayload(html);
-  const recoveredManifest: AssignmentManifest = {
-    schemaVersion: 5,
-    mdHash: `recovered:${job.id}`,
-    publishTarget: 'html',
-    htmlUrl: job.htmlUrl,
-    preset: job.preset ?? undefined,
-    audioArtifacts: {
-      studyText: studyTextUrl ? { url: studyTextUrl } : undefined,
-      pronunciation,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  await mkdir(path.dirname(durableManifestPath), { recursive: true });
-  await writeFile(durableManifestPath, JSON.stringify(recoveredManifest, null, 2), 'utf8');
 }
 
 export async function rerun(jobId: string, action: RerunAction): Promise<JobActionResult> {
@@ -326,6 +213,18 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     };
   }
 
+  if (!job.assignmentArtifact) {
+    const error = new HistoricalAssignmentReadOnlyError();
+    return {
+      success: false,
+      message: error.message,
+      jobId,
+      actionType: action.type,
+      timestamp: new Date(),
+      error: error.code,
+    };
+  }
+
   if (job.state !== 'succeeded') {
     return {
       success: false,
@@ -337,18 +236,14 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     };
   }
 
-  if (!job.md) {
-    return {
-      success: false,
-      message: 'Job is missing markdown path; cannot rerun',
-      jobId,
-      actionType: JobActionType.RERUN,
-      timestamp: new Date(),
-      error: 'validation_failed',
-    };
-  }
-
-  await recoverDurableHtmlManifest(job);
+  // For typed jobs this is a manifest identity, never editable content authority.
+  const manifestMd =
+    job.md ??
+    path.resolve(
+      process.env.FILESYSTEM_UPLOAD_DIR || './uploads',
+      job.sourceJobId ? 'corrections' : 'assignments',
+      `${job.id}.md`,
+    );
 
   const parsed = rerunSchema.safeParse(action.payload ?? {});
   if (!parsed.success) {
@@ -402,7 +297,7 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     : (job.ttsModel ?? undefined);
 
   const rerunJob = await insertJob({
-    md: job.md,
+    md: manifestMd,
     studentId: job.studentId ?? null,
     recordingId: job.recordingId ?? null,
     transcriptId: job.transcriptId ?? null,
@@ -422,6 +317,10 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     userId: job.userId ?? undefined,
     autoPublish: job.autoPublish ?? undefined,
     sourceJobId: jobId,
+    assignmentArtifact: job.assignmentArtifact,
+    assignmentRendererVersion: job.assignmentArtifact
+      ? ASSIGNMENT_HTML_RENDERER_VERSION
+      : job.assignmentRendererVersion,
   });
 
   publishJobEvent({ type: 'job_created', job: rerunJob });
@@ -432,7 +331,7 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     executionMode: 'rerun',
     sourceJobId: jobId,
     rerun: {
-      manifestMd: job.md,
+      manifestMd,
       republishOnly: payload.republishOnly ?? false,
       regenerateStudyTextAudio: payload.regenerateStudyTextAudio ?? false,
       regeneratePronunciationMainAudio: payload.regeneratePronunciationMainAudio ?? false,

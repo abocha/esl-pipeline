@@ -1,5 +1,6 @@
 import { ArrowLeft, AudioLines, BookOpen, Check, Send, Sparkles, UserRound } from 'lucide-react';
 import type React from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 import { ProductButton } from '../system/ProductButton';
 import type { AssignmentStepId, AssignmentWorkflowStep } from './assignment-workflow';
@@ -7,11 +8,13 @@ import type { AssignmentStepId, AssignmentWorkflowStep } from './assignment-work
 import './AssignmentWorkflow.css';
 
 export interface AssignmentWorkflowProps {
+  editorActive?: boolean;
   steps: readonly AssignmentWorkflowStep[];
   activeStep: AssignmentStepId;
   highestAvailableStep: AssignmentStepId;
   saveState: 'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'ambiguous';
   studentName?: string | null;
+  lessonOnly?: boolean;
   guidance?: React.ReactNode;
   postFooter?: React.ReactNode;
   support?: React.ReactNode;
@@ -44,10 +47,12 @@ const saveLabels = {
 } as const;
 
 export function AssignmentWorkflow({
+  editorActive = false,
   steps,
   activeStep,
   saveState,
   studentName,
+  lessonOnly = false,
   guidance,
   postFooter,
   support,
@@ -61,28 +66,60 @@ export function AssignmentWorkflow({
   completionLabel,
   children,
 }: AssignmentWorkflowProps) {
+  const root = useRef<HTMLElement>(null);
+  const progress = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const host = root.current;
+    const bar = progress.current;
+    if (!editorActive || !host || !bar) return;
+    const measure = () => {
+      host.style.setProperty(
+        '--assignment-progress-height',
+        `${bar.getBoundingClientRect().height}px`,
+      );
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(bar);
+    return () => {
+      observer?.disconnect();
+      host.style.removeProperty('--assignment-progress-height');
+    };
+  }, [editorActive]);
   return (
-    <section className="assignment-workflow" aria-label="Assignment builder">
-      <div className="assignment-workflow__status">
-        {studentName?.trim() ? (
-          <span className="assignment-workflow__identity">Assignment for {studentName.trim()}</span>
-        ) : null}
-        <span
-          className={`assignment-workflow__save assignment-workflow__save--${saveState}`}
-          role="status"
-          aria-live="polite"
-        >
-          {saveState === 'saved' ? <Check aria-hidden="true" /> : null}
-          {saveLabels[saveState]}
-        </span>
-      </div>
+    <section
+      ref={root}
+      className={`assignment-workflow${editorActive ? ' assignment-workflow--editing' : ''}`}
+      aria-label="Assignment builder"
+    >
+      {!editorActive && (
+        <div className="assignment-workflow__status">
+          {studentName?.trim() ? (
+            <span className="assignment-workflow__identity">
+              {lessonOnly ? 'Lesson' : 'Assignment'} for {studentName.trim()}
+            </span>
+          ) : null}
+          <span
+            className={`assignment-workflow__save assignment-workflow__save--${saveState}`}
+            role="status"
+            aria-live="polite"
+          >
+            {saveState === 'saved' ? <Check aria-hidden="true" /> : null}
+            {saveLabels[saveState]}
+          </span>
+        </div>
+      )}
 
-      <nav className="assignment-workflow__progress" aria-label="Assignment progress">
+      <nav
+        ref={progress}
+        className="assignment-workflow__progress"
+        aria-label="Assignment progress"
+      >
         <ol>
           {steps.map((step, index) => {
             const Icon = stepIcons[step.id];
             const visualStatus = step.id === activeStep ? 'current' : step.status;
-            const disabled = visualStatus === 'locked';
+            const disabled = visualStatus === 'locked' || visualStatus === 'skipped';
             return (
               <li key={step.id} data-status={visualStatus}>
                 <button
@@ -99,7 +136,7 @@ export function AssignmentWorkflow({
                     )}
                   </span>
                   <span className="assignment-workflow__step-copy">
-                    <small>Step {index + 1}</small>
+                    <small>{visualStatus === 'skipped' ? 'Skipped' : `Step ${index + 1}`}</small>
                     <strong>{step.label}</strong>
                   </span>
                 </button>
@@ -130,7 +167,7 @@ export function AssignmentWorkflow({
             <ProductButton variant="secondary" onClick={onComplete}>
               {completionLabel}
             </ProductButton>
-          ) : onContinue && continueLabel ? (
+          ) : !editorActive && onContinue && continueLabel ? (
             <ProductButton onClick={onContinue} disabled={continueDisabled}>
               {continueLabel}
             </ProductButton>

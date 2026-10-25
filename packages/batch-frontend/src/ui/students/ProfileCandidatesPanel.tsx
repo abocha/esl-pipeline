@@ -7,6 +7,7 @@ import {
   formatCandidateStateLabel,
   getApprovedCandidatesReadyForPromotion,
   groupVisibleCandidatesBySection,
+  isPendingCandidate,
   isSelectableForPromotion,
   PROFILE_CANDIDATE_APPROVED_FILTER,
   PROFILE_CANDIDATE_FILTER_OPTIONS,
@@ -107,6 +108,11 @@ export function ProfileCandidatesPanel({
     <article className={['workspace-card workspace-panel', className].filter(Boolean).join(' ')}>
       <header>
         <h2>Profile Candidates</h2>
+        {!profileCandidatesLoading && !profileCandidatesError ? (
+          <span className="workspace-muted">
+            {profileCandidates.filter(isPendingCandidate).length} awaiting review
+          </span>
+        ) : null}
       </header>
 
       <div className="student-history-filters" role="group" aria-label="Candidate filter">
@@ -125,7 +131,7 @@ export function ProfileCandidatesPanel({
         ))}
       </div>
 
-      {showingPromotionQueue ? (
+      {showingPromotionQueue && !profileCandidatesLoading && !profileCandidatesError ? (
         <div className="workspace-create-panel">
           <div className="workspace-inline workspace-header-row">
             <div>
@@ -307,9 +313,6 @@ export function ProfileCandidatesPanel({
                               <strong>Authority:</strong> {candidate.authority ?? 'n/a'}
                             </span>
                             <span>
-                              <strong>Confidence:</strong> {candidate.confidence ?? 'n/a'}
-                            </span>
-                            <span>
                               <strong>Source summary:</strong> {candidate.sourceSummary ?? 'n/a'}
                             </span>
                             <span>
@@ -329,6 +332,13 @@ export function ProfileCandidatesPanel({
                               <strong>Source lesson date:</strong>{' '}
                               {formatCandidateDate(candidate.sourceLessonStartedAt)}
                             </span>
+                            {!candidate.sourceLessonStartedAt &&
+                            typeof candidate.provenance?.sourceLessonGeneratedAt === 'string' ? (
+                              <span>
+                                <strong>Extraction date (lesson date unknown):</strong>{' '}
+                                {formatCandidateDate(candidate.provenance.sourceLessonGeneratedAt)}
+                              </span>
+                            ) : null}
                             <span>
                               <strong>Source memory IDs:</strong>{' '}
                               {candidate.sourceMemoryIds && candidate.sourceMemoryIds.length > 0
@@ -427,7 +437,7 @@ export function ProfileCandidatesPanel({
               </div>
             </section>
           ))
-        ) : (
+        ) : profileCandidatesError ? null : (
           <p className="workspace-muted">
             No {profileCandidateFilter} profile candidates visible for this student.
           </p>

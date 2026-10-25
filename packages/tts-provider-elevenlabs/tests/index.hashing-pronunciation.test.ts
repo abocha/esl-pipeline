@@ -1,11 +1,16 @@
+import { readFileSync as readAssignmentFixture } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
+
 import { createElevenLabsTtsProvider } from '../src/adapter.js';
-import { hashStudyText } from '../src/index.js';
+import { buildStudyTextMp3, hashStudyText } from '../src/index.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 import {
   buildPronunciationShadowSentenceMp3FromPath,
   createTempDir,
+  mockConcat,
   setupClientMock,
   setupTtsTestSuite,
   writeFixture,
@@ -14,42 +19,62 @@ import {
 setupTtsTestSuite();
 
 describe('tts elevenlabs integration', () => {
-  it('hashes study text deterministically', () => {
-    expect(hashStudyText('hello')).toEqual(hashStudyText('hello'));
+  it('uses SHA-256 over the exact study text', () => {
+    const helloHash = '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824';
+    expect(hashStudyText('hello')).toBe(helloHash);
+    expect(hashStudyText('hello!')).not.toBe(helloHash);
   });
 
   it('buildPronunciationShadowSentenceMp3 preview mode', async () => {
     const dir = await createTempDir('tts-shadow-');
-    const tempMdPath = join(dir, 'lesson-shadow.md');
+    const assignmentPath = join(dir, 'lesson-shadow.md');
     await writeFixture(
-      tempMdPath,
-      `
----
-title: Pronunciation Lesson
-student: Anna
-input_type: generate
----
-
-:::study-text
-Narrator: Main text.
-:::
-
-### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
-:::callout 🗣️
-**Mode:** shadow_sentence
-**Shadow sentence:** I was thinking about working this morning.
-1. thinking — /ˈθɪŋkɪŋ/
-2. working — /ˈwɜːrkɪŋ/
-3. morning — /ˈmɔːrnɪŋ/
-:::
-    `,
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Pronunciation Lesson', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [{ speakerId: 's0', text: 'Main text.' }],
+          },
+          pronunciation: {
+            mode: 'shadow_sentence',
+            target: '',
+            focus: '',
+            action: '',
+            deliverable: '',
+            shadowSentence: 'I was thinking about working this morning.',
+            words: [
+              { text: 'thinking', transcription: '/ˈθɪŋkɪŋ/' },
+              { text: 'working', transcription: '/ˈwɜːrkɪŋ/' },
+              { text: 'morning', transcription: '/ˈmɔːrnɪŋ/' },
+            ],
+          },
+        }),
+      ),
     );
 
     const convertMock = setupClientMock();
-    const result = await buildPronunciationShadowSentenceMp3FromPath(tempMdPath, 'voice_narrator', {
-      outPath: dir,
-      preview: true,
-    });
+    const result = await buildPronunciationShadowSentenceMp3FromPath(
+      assignmentPath,
+      'voice_narrator',
+      {
+        outPath: dir,
+        preview: true,
+      },
+    );
     expect(result.path.endsWith('-shadow-sentence.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
     expect(result.generatedCharacters).toBeGreaterThan(0);
@@ -58,42 +83,64 @@ Narrator: Main text.
 
   it('buildPronunciationShadowSentenceMp3 generates and caches output', async () => {
     const dir = await createTempDir('tts-shadow-cache-');
-    const tempMdPath = join(dir, 'lesson-shadow-cache.md');
+    const assignmentPath = join(dir, 'lesson-shadow-cache.md');
     await writeFixture(
-      tempMdPath,
-      `
----
-title: Pronunciation Lesson
-student: Anna
-input_type: generate
----
-
-:::study-text
-Narrator: Main text.
-:::
-
-### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
-:::callout 🗣️
-**Mode:** shadow_sentence
-**Shadow sentence:** I was thinking about working this morning.
-1. thinking — /ˈθɪŋkɪŋ/
-2. working — /ˈwɜːrkɪŋ/
-3. morning — /ˈmɔːrnɪŋ/
-:::
-    `,
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Pronunciation Lesson', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [{ speakerId: 's0', text: 'Main text.' }],
+          },
+          pronunciation: {
+            mode: 'shadow_sentence',
+            target: '',
+            focus: '',
+            action: '',
+            deliverable: '',
+            shadowSentence: 'I was thinking about working this morning.',
+            words: [
+              { text: 'thinking', transcription: '/ˈθɪŋkɪŋ/' },
+              { text: 'working', transcription: '/ˈwɜːrkɪŋ/' },
+              { text: 'morning', transcription: '/ˈmɔːrnɪŋ/' },
+            ],
+          },
+        }),
+      ),
     );
     const convertMock = setupClientMock();
 
-    const first = await buildPronunciationShadowSentenceMp3FromPath(tempMdPath, 'voice_narrator', {
-      outPath: dir,
-    });
+    const first = await buildPronunciationShadowSentenceMp3FromPath(
+      assignmentPath,
+      'voice_narrator',
+      {
+        outPath: dir,
+      },
+    );
     expect(first.generatedCharacters).toBeGreaterThan(0);
     expect(first.cachedCharacters).toBe(0);
     expect(convertMock).toHaveBeenCalledTimes(1);
 
-    const second = await buildPronunciationShadowSentenceMp3FromPath(tempMdPath, 'voice_narrator', {
-      outPath: dir,
-    });
+    const second = await buildPronunciationShadowSentenceMp3FromPath(
+      assignmentPath,
+      'voice_narrator',
+      {
+        outPath: dir,
+      },
+    );
     expect(second.generatedCharacters).toBe(0);
     expect(second.cachedCharacters).toBeGreaterThan(0);
     expect(convertMock).toHaveBeenCalledTimes(1);
@@ -125,3 +172,30 @@ Narrator: Main text.
     );
   });
 });
+
+it('strips paired highlight markers from speech without mutating the typed assignment', async () => {
+  const assignment = assignmentFixture();
+  const dir = await createTempDir('typed-eleven-');
+  const voiceMapPath = join(dir, 'voices.yml');
+  await writeFixture(voiceMapPath, 'default: voice_narrator');
+  const convert = setupClientMock();
+  mockConcat();
+  assignment.input.studyText.turns[0]!.text = '**literal** <tag> `code` and a lone `';
+  const stored = JSON.stringify(assignment);
+  await buildStudyTextMp3({ assignment }, { outPath: dir, voiceMapPath, ttsStrategy: 'tts' });
+  expect(
+    convert.mock.calls.some(([, request]) =>
+      request.text.includes('**literal** <tag> code and a lone `'),
+    ),
+  ).toBe(true);
+  expect(JSON.stringify(assignment)).toBe(stored);
+});
+
+function assignmentFixture(): FixtureAssignmentV1 {
+  return JSON.parse(
+    readAssignmentFixture(
+      new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+      'utf8',
+    ),
+  ) as FixtureAssignmentV1;
+}

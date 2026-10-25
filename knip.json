@@ -20,7 +20,7 @@
     "scripts/smoke/telegram-ops/fake-backend.mjs",
     "scripts/smoke/telegram-ops/fake-telegram-api.mjs"
   ],
-  "ignoreBinaries": ["actionlint", "rg", "shellcheck"],
+  "ignoreBinaries": ["jactionlint", "rg", "shellcheck"],
   "workspaces": {
     ".": {
       "ignoreDependencies": ["fastify"]
@@ -40,14 +40,10 @@
       "ignoreDependencies": [
         "@elevenlabs/elevenlabs-js",
         "@google-cloud/text-to-speech",
+        "google-auth-library",
         "js-yaml",
-        "remark-parse",
-        "unified",
         "zod"
       ]
-    },
-    "packages/batch-backend": {
-      "ignoreDependencies": ["pino-pretty"]
     }
   }
 }

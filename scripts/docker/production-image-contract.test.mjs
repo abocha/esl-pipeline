@@ -95,10 +95,7 @@ test('backend offline deploy uses layer-persisted fetched artifacts', () => {
     backend,
     /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --filter [^\n]+ deploy --prod \/app\/deployed/u,
   );
-  assert.doesNotMatch(
-    backend,
-    /--mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11/u,
-  );
+  assert.doesNotMatch(backend, /--mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11/u);
 });
 
 test('bot portable deployment reuses its cached store without persisting it', () => {
@@ -128,8 +125,8 @@ test('backend runtime image copies the runtime-owned prompt asset tree', () => {
 });
 
 test('production infrastructure stays on controlled official image lines', () => {
-  assert.match(dockerfiles.get('frontend'), /FROM nginx:1\.31-alpine3\.23-slim AS runtime/u);
-  assert.match(composeService('caddy-edge'), /^    image: caddy:2\.11-alpine$/mu);
+  assert.match(dockerfiles.get('frontend'), /FROM nginx:1\.31\.8-alpine3\.24-slim AS runtime/u);
+  assert.match(composeService('caddy-edge'), /^    image: caddy:2\.11\.7-alpine$/mu);
   assert.match(composeService('postgres'), /^    image: postgres:18\.6-alpine3\.24$/mu);
   const redisService = composeService('redis');
   assert.match(redisService, /^    image: redis:8\.10\.1-alpine3\.23$/mu);
@@ -158,7 +155,9 @@ test('release publication pulls refreshed upstream bases', () => {
   );
   assert.match(releaseWorkflow, /^\s+pull: true$/mu);
   assert.match(releaseWorkflow, /cache-from: type=gha,scope=batch-backend/u);
-  assert.match(releaseWorkflow, /cache-to: type=gha,mode=max,scope=batch-backend/u);
+  assert.match(releaseWorkflow, /cache-from: type=gha,scope=batch-frontend/u);
+  assert.match(releaseWorkflow, /cache-from: type=gha,scope=telegram-ops-bot/u);
+  assert.doesNotMatch(releaseWorkflow, /^\s+cache-to:/mu);
 });
 
 test('library-only orchestrator has no standalone image surface', () => {

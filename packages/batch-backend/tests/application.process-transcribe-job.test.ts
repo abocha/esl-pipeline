@@ -1674,14 +1674,6 @@ function createConfig(): BatchBackendConfig {
 
           allowed: ['gpt-5.2', 'gpt-5-mini'],
         },
-        googleAiStudio: {
-          model: 'gemini-3-flash-preview',
-
-          allowed: ['gemini-3-flash-preview', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'],
-        },
-        openrouter: {
-          allowed: [],
-        },
       },
       providers: {
         openai: {
@@ -1689,34 +1681,16 @@ function createConfig(): BatchBackendConfig {
           requestTimeoutMs: 240_000,
           retryMax: 1,
           retryBackoffMs: 250,
-          dailyTokenBudget: 120_000,
+          dailyTokenBudgets: { efficient: 120_000, larger: 120_000 },
           dailyRequestBudget: 40,
           rpmBudget: 3,
-        },
-        googleAiStudio: {
-          apiKey: undefined,
-          requestTimeoutMs: 240_000,
-          retryMax: 1,
-          retryBackoffMs: 250,
-          dailyRequestBudget: 12,
-          rpmBudget: 4,
-        },
-        openrouter: {
-          apiKey: undefined,
-          httpReferer: undefined,
-          xTitle: undefined,
-          requestTimeoutMs: 240_000,
-
-          dailyTokenBudget: 0,
-          dailyRequestBudget: 0,
-          rpmBudget: 0,
         },
       },
     },
     speechPlanner: {
       enabled: false,
-      provider: 'google_ai_studio',
-      model: 'gemini-3.1-flash-lite',
+      provider: 'openai',
+      model: 'gpt-5.6-luna',
       maxOutputTokens: 2400,
       rpmBudget: 4,
       dailyRequestBudget: 120,
@@ -1724,7 +1698,7 @@ function createConfig(): BatchBackendConfig {
     },
     voiceRanker: {
       enabled: true,
-      model: 'gemma-4-31b-it',
+      model: 'gpt-5.6-luna',
       maxOutputTokens: 1200,
       rpmBudget: 12,
       dailyRequestBudget: 1000,

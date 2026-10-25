@@ -6,6 +6,7 @@ export type {
 
 import type { ContractVersionRegistry } from './contract-versions.js';
 
+export { type McpProfileDto, mcpProfileSchema } from './mcp-profile.js';
 export {
   type FindStudentResultDto,
   type GetStudentTeachingContextResultDto,
@@ -13,12 +14,16 @@ export {
   type McpTeachingContextDto,
   type McpTeachingNoteDto,
 } from './mcp-teaching-context.js';
+export {
+  type StudentMemoryAvailability,
+  studentMemoryAvailabilitySchema,
+} from './student-memory-availability.js';
 
 export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed';
 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 export type TtsStrategyOption = TtsStrategy;
-export type TtsProviderId = 'elevenlabs' | 'google' | 'inworld';
+export type TtsProviderId = 'elevenlabs' | 'google' | 'inworld' | 'gemini';
 export type ElevenLabsTtsModelId =
   | 'eleven_v3'
   | 'eleven_multilingual_v2'
@@ -31,7 +36,8 @@ export type RecordingSourceId = 'upload' | 'manual_transcript';
 export type AudioInputTopology = 'mixed_recording' | 'trusted_split_channels';
 export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
 export type InworldTtsModel = 'inworld-tts-2' | 'inworld-tts-1.5-max' | 'inworld-tts-1.5-mini';
-export type TtsModelId = ElevenLabsTtsModelId | GoogleTtsModel | InworldTtsModel;
+export type GeminiTtsModelId = 'gemini-3.8-flash-lite-tts' | 'gemini-3.8-flash-tts';
+export type TtsModelId = ElevenLabsTtsModelId | GoogleTtsModel | InworldTtsModel | GeminiTtsModelId;
 export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
@@ -101,6 +107,7 @@ export interface VoiceOption {
   category?: string | null;
 }
 
+// Includes retired providers for historical persisted provenance; fresh LLM requests admit OpenAI only.
 export type GenerationProvider = 'openai' | 'google_ai_studio' | 'openrouter';
 
 export type GenerationErrorCategory =
@@ -120,6 +127,12 @@ export interface GenerationModelOption {
 }
 
 export interface GenerationQuotaView {
+  dailyTokenGroup?: 'efficient' | 'larger';
+  reservedTokensToday?: number | null;
+  actualTokensToday?: number | null;
+  groupReservedTokensToday?: number | null;
+  groupActualTokensToday?: number | null;
+  unclassifiedReservedTokensToday?: number | null;
   source: GenerationQuotaSource;
   lastUpdatedAt: string;
   dashboardUrl?: string;
@@ -165,6 +178,9 @@ export interface GenerateDraftUsage {
 
 export interface GenerateDraftResponse {
   text: string;
+  format?: import('./assignment-artifact.js').AssignmentFormat;
+  assignment?: import('./assignment-v1.js').AssignmentV1;
+  validationContext?: import('./assignment-v1.js').AssignmentValidationContext;
   provider: GenerationProvider;
   model: string;
   quota: GenerationQuotaView;
@@ -263,10 +279,30 @@ export interface AssignmentConfirmedSnapshot {
     draftWorkingVersion: number;
     draftStorageUri: string;
     draftHash: string;
+    artifact?: import('./assignment-artifact.js').AssignmentArtifactReference;
   } | null;
 }
 
 export interface AssignmentSessionDto {
+  transcriptProcessing?: {
+    availability?: import('./student-memory-availability.js').StudentMemoryAvailability;
+    lessonMemory: 'not_requested' | 'pending' | 'ready' | 'failed' | 'superseded';
+    snapshot: 'not_requested' | 'pending' | 'ready' | 'failed' | 'superseded';
+    enrichment:
+      | 'not_requested'
+      | 'pending'
+      | 'ready'
+      | 'failed'
+      | 'superseded'
+      | 'not_eligible'
+      | 'uncertain';
+  };
+  homeworkIntent: 'create' | 'none';
+  transcriptCompletedAt: string | null;
+  completionKind: 'homework' | 'transcript_only' | null;
+  transcriptCompletionHistory: TranscriptCompletionEvent[];
+  /** Backend-authoritative history classification; inspection must not trigger processing. */
+  historicalReadOnly?: boolean;
   id: string;
   userId: string;
   studentId: string;
@@ -343,6 +379,7 @@ export interface ConfirmStudentAssignmentSessionRequest {
 export interface UpdateAssignmentSessionRecoveryRequest {
   expectedRevision: number;
   patch: Partial<{
+    homeworkIntent: 'create' | 'none';
     lessonId: string | null;
     recordingId: string | null;
     transcriptId: string | null;
@@ -400,6 +437,32 @@ export interface ConfirmAssignmentSessionStepResponse {
   invalidated: AssignmentInvalidatedArtifact[];
 }
 
+/** Immutable evidence of one exact-source finish operation, separate from current completion. */
+export interface TranscriptCompletionEvent {
+  completedAt: string;
+  expectedRevision: number;
+  resultingRevision: number;
+  studentId: string;
+  source: NonNullable<AssignmentConfirmedSnapshot['source']>;
+}
+
+export interface FinishTranscriptAssignmentSessionRequest {
+  expectedRevision: number;
+  lessonId: string | null;
+  recordingId: string;
+  transcriptId: string;
+  transcriptWorkingVersion: number;
+  transcriptHash: string;
+}
+
+export interface StartHomeworkAssignmentSessionRequest {
+  expectedRevision: number;
+}
+
+export interface TranscriptAssignmentSessionResponse {
+  session: AssignmentSessionDto;
+}
+
 export interface ConfirmAssignmentSessionShareRequest {
   expectedRevision: number;
   requestId: string;
@@ -411,6 +474,7 @@ export interface ConfirmAssignmentSessionShareResponse {
 }
 
 export interface PublishAssignmentCorrectionRequest {
+  artifact?: import('./assignment-artifact.js').AssignmentArtifactReference;
   requestId: string;
   draftId: string;
   draftWorkingVersion: number;
@@ -436,6 +500,7 @@ export type RecentAssignmentItem =
   | { kind: 'job'; job: JobStatusDto };
 
 export interface JobStatusDto {
+  publication?: import('./assignment-artifact.js').AssignmentPublicationMetadata | null;
   jobId: string;
   assignmentSessionId?: string | null;
   studentId?: string | null;
@@ -443,6 +508,8 @@ export interface JobStatusDto {
   lessonId?: string | null;
   md: string | null;
   mdStorageUri?: string | null;
+  assignmentArtifact?: import('./assignment-artifact.js').AssignmentArtifactReference | null;
+  assignmentRendererVersion?: number | null;
   pronunciationMode?:
     | 'shadow_sentence'
     | 'connected_speech'
@@ -652,6 +719,7 @@ export type StudentReminderChannel = 'manual' | 'telegram' | 'email';
 export type StudentReminderActionIntent = 'copy_text' | 'complete_lesson_and_start_assignment';
 export type StudentLessonHomeworkStatus =
   | 'not_started'
+  | 'not_planned'
   | 'session_in_progress'
   | 'draft_in_progress'
   | 'publishing'
@@ -660,6 +728,7 @@ export type StudentLessonHomeworkStatus =
 
 export interface StudentLessonHomeworkDto {
   status: StudentLessonHomeworkStatus;
+  transcriptResultSessionId: string | null;
   assignmentSessionId: string | null;
   promptPackageId: string | null;
   draftId: string | null;
@@ -668,59 +737,11 @@ export interface StudentLessonHomeworkDto {
   htmlUrl: string | null;
   updatedAt: string | null;
 }
-export type StudentLessonRecurrenceStatus = 'active' | 'paused' | 'archived';
-export type StudentLessonRecurrenceFrequency = 'weekly';
-export type StudentLessonRecurrenceOrigin = 'manual' | 'generated';
-export type StudentLessonRecurrenceOverrideKind =
-  | 'manual_edit'
-  | 'manual_reschedule'
-  | 'manual_cancel';
-
-export interface StudentLessonRecurrenceSlotDto {
-  id: string;
-  ruleId: string;
-  isoWeekday: number;
-  localStartTime: string;
-  durationMinutes: number;
-  sortOrder: number;
-}
-
-export interface StudentLessonRecurrenceRuleDto {
-  id: string;
-  studentId: string;
-  workspaceId: string | null;
-  timezone: string;
-  frequency: StudentLessonRecurrenceFrequency;
-  startsOn: string;
-  endsOn: string | null;
-  status: StudentLessonRecurrenceStatus;
-  generationHorizonDays: number;
-  materializedThrough: string | null;
-  slots: StudentLessonRecurrenceSlotDto[];
-  updatedAt: string;
-}
-
-export interface UpsertStudentLessonRecurrenceRequest {
-  timezone: string;
-  frequency?: StudentLessonRecurrenceFrequency;
-  startsOn: string;
-  endsOn?: string | null;
-  status?: Exclude<StudentLessonRecurrenceStatus, 'archived'>;
-  generationHorizonDays?: number;
-  slots: {
-    isoWeekday: number;
-    localStartTime: string;
-    durationMinutes: number;
-  }[];
-}
-
 export interface StudentLessonPlanDto {
   studentId: string;
   workspaceId: string | null;
   timezone: string;
   defaultDurationMinutes: number;
-  cadence: string | null;
-  preferredTimes: string | null;
   schedulingNotes: string | null;
   updatedAt: string | null;
 }
@@ -728,8 +749,6 @@ export interface StudentLessonPlanDto {
 export interface UpdateStudentLessonPlanRequest {
   timezone?: string;
   defaultDurationMinutes?: number;
-  cadence?: string | null;
-  preferredTimes?: string | null;
   schedulingNotes?: string | null;
 }
 
@@ -745,33 +764,17 @@ export interface StudentLessonDto {
   title: string | null;
   notes: string | null;
   creditEventId: string | null;
-  recurrenceRuleId: string | null;
-  recurrenceSlotId: string | null;
-  recurrenceOccurrenceKey: string | null;
-  recurrenceOrigin: StudentLessonRecurrenceOrigin;
-  recurrenceOverrideKind: StudentLessonRecurrenceOverrideKind | null;
+  historicalScheduleOrigin: Record<string, unknown>;
+  schedulingSource: 'calendar' | 'unmanaged';
+  calendarEventUrl: string | null;
   homework: StudentLessonHomeworkDto;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface CreateStudentLessonRequest {
-  startsAt: string;
-  timezone?: string;
-  durationMinutes?: number;
-  status?: StudentLessonStatus;
-  consumesCredit?: boolean;
-  title?: string | null;
-  notes?: string | null;
-}
-
 export interface UpdateStudentLessonRequest {
-  startsAt?: string;
-  timezone?: string;
-  durationMinutes?: number;
-  status?: StudentLessonStatus;
+  status?: 'completed' | 'no_show';
   consumesCredit?: boolean;
-  title?: string | null;
   notes?: string | null;
 }
 
@@ -871,7 +874,6 @@ export interface StudentScheduleBillingSurfaceResponse {
   studentId: string;
   workspaceId: string | null;
   lessonPlan: StudentLessonPlanDto;
-  recurrenceRule: StudentLessonRecurrenceRuleDto | null;
   nextLesson: StudentLessonDto | null;
   lessons: StudentLessonDto[];
   creditSummary: StudentCreditSummaryDto;
@@ -1066,59 +1068,14 @@ export interface VoiceProviderErrorDetails {
   actionableHint?: string;
 }
 
-export interface MarkdownValidationVoiceDiagnostics {
-  errors?: string[];
-  warnings?: string[];
-  compatibilityMode?: {
-    enabled: boolean;
-    reason?: string;
-  };
-  shadowMode?: {
-    enabled: boolean;
-    mismatchClasses?: Record<string, number>;
-    mismatchTotal?: number;
-  };
-}
-
-export type MarkdownValidationIssueSeverity = 'error' | 'warning' | 'advisory';
-export type MarkdownValidationIssueCategory = 'runtime' | 'contract' | 'quality' | 'voice';
-
-export interface MarkdownValidationIssue {
-  code: string;
-  ruleId: string;
-  severity: MarkdownValidationIssueSeverity;
-  message: string;
-  line?: number;
-  category: MarkdownValidationIssueCategory;
-  blockingInStrict: boolean;
-}
-
-export interface MarkdownValidationRuleSetInfo {
-  id: string;
-  version: string;
-  requestedId?: string | null;
-  requestedVersion?: string | null;
-  fallbackApplied?: boolean;
-  fallbackReason?: string;
-}
-
-export interface MarkdownValidationResponse {
+export interface AssignmentValidationResponse {
   ok: boolean;
   errors: string[];
   warnings: string[];
-  issues?: MarkdownValidationIssue[];
-  ruleset?: MarkdownValidationRuleSetInfo;
-  voiceDiagnostics?: MarkdownValidationVoiceDiagnostics;
-  meta?: {
-    title: string;
-    student: string;
-    level: string;
-    topic: string | string[];
-    input_type: ContentSource;
-    study_text_type?: StudyTextType;
-    speaker_labels?: string[];
-    speaker_profiles?: SpeakerProfile[];
-  };
+  meta?: Pick<
+    import('./assignment-v1.js').AssignmentV1['metadata'],
+    'title' | 'student' | 'level' | 'topic'
+  >;
 }
 
 export type JobEventType = 'job_created' | 'job_state_changed';
@@ -1131,6 +1088,8 @@ export interface JobEventPayload {
   learningPresetId?: string | null;
   md?: string | null;
   mdStorageUri?: string | null;
+  assignmentArtifact?: import('./assignment-artifact.js').AssignmentArtifactReference | null;
+  assignmentRendererVersion?: number | null;
   htmlUrl?: string | null;
   publishTarget?: PublishTarget | null;
   recordingId?: string | null;
@@ -1159,9 +1118,16 @@ export interface VersionMetaResponse {
   };
 }
 
+export * from './assignment-artifact.js';
+export * from './assignment-domain.js';
+export * from './assignment-inline.js';
+export * from './assignment-projection.js';
 export * from './assignment-v1.js';
+export * from './calendar.js';
+export * from './calendar-connection.js';
 export * from './contract-versions.js';
 export * from './errors.js';
 // Job actions exports
 export * from './job-actions.js';
 export * from './observability.js';
+export * from './student-activity.js';

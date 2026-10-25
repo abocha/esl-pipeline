@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as uploader from '@esl-pipeline/storage-uploader';
 
-import { publishHtmlToS3, renderAndPublishMarkdownToS3 } from '../src/publish.js';
+import { publishHtmlToS3, renderAndPublishAssignmentToS3 } from '../src/publish.js';
 
 const uploadState = {
   seenKeys: new Set<string>(),
@@ -28,7 +30,7 @@ describe('publish', () => {
     );
   });
 
-  it('publishes deterministic html artifact keys by default', async () => {
+  it('publishes deterministic html artifact keys and requests existing-artifact reuse', async () => {
     const html = '<html><body><h1>Hello</h1></body></html>';
     const first = await publishHtmlToS3(html);
     const second = await publishHtmlToS3(html);
@@ -38,7 +40,56 @@ describe('publish', () => {
     expect(first.key).toMatch(/^materials\/html\/artifacts\/[a-f0-9]{64}\.html$/);
     expect(first.reused).toBe(false);
     expect(second.reused).toBe(true);
+    expect(uploader.uploadFile).toHaveBeenNthCalledWith(
+      1,
+      expect.any(String),
+      expect.objectContaining({ key: first.key, skipIfExists: true }),
+    );
+    expect(uploader.uploadFile).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.objectContaining({ key: second.key, skipIfExists: true }),
+    );
   });
+
+  it.each(['teacher', 'null', 'legacy'] as const)(
+    'uploads learner-safe HTML bytes for %s rationale',
+    async (shape) => {
+      const fresh = JSON.parse(
+        readFileSync(
+          new URL('../../contracts/tests/assignment-rationale-fixture.json', import.meta.url),
+          'utf8',
+        ),
+      );
+      const legacy = JSON.parse(
+        readFileSync(
+          new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+          'utf8',
+        ),
+      );
+      const assignment =
+        shape === 'legacy'
+          ? { ...legacy, rationale: 'ESL24_AMBIGUOUS_LEGACY_ONLY' }
+          : { ...fresh, teacherRationale: shape === 'null' ? null : fresh.teacherRationale };
+      assignment.teacherFollowUp = {
+        warmUp: 'ESL32_WARMUP_PRIVATE',
+        correctionFocus: 'ESL32_CORRECTION_PRIVATE',
+      };
+      let uploadedHtml = '';
+      vi.mocked(uploader.uploadFile).mockImplementationOnce(async (localPath, options) => {
+        uploadedHtml = readFileSync(localPath, 'utf8');
+        return { url: 'https://bucket.test/result', key: options.key!, sha256: options.sha256! };
+      });
+      const result = await renderAndPublishAssignmentToS3({ assignment });
+      expect(uploadedHtml).toBe(result.html);
+      expect(uploadedHtml).not.toContain('ESL32_WARMUP_PRIVATE');
+      expect(uploadedHtml).not.toContain('ESL32_CORRECTION_PRIVATE');
+      expect(uploadedHtml).not.toContain('ESL24_TEACHER_ONLY');
+      expect(uploadedHtml).not.toContain('ESL24_AMBIGUOUS_LEGACY_ONLY');
+      expect(uploadedHtml.includes('assignment-section-6')).toBe(shape !== 'legacy');
+      expect(uploadedHtml.includes(fresh.learnerRationale)).toBe(shape !== 'legacy');
+    },
+  );
 
   it('supports stable explicit filename keys when requested', async () => {
     const html = '<html><body><p>Named</p></body></html>';
@@ -49,20 +100,37 @@ describe('publish', () => {
     expect(result.key).toBe('materials/custom/lesson.html');
   });
 
-  it('propagates render hash metadata from render-and-publish flow', async () => {
-    const result = await renderAndPublishMarkdownToS3({
-      title: 'Lesson',
-      markdown: '# Hello',
+  it('uploads exact React HTML UTF-8 bytes with the existing html-v1 hash and default object key', async () => {
+    const assignment = JSON.parse(
+      readFileSync(
+        new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    let bytes!: Buffer;
+    vi.mocked(uploader.uploadFile).mockImplementationOnce(async (localPath, options) => {
+      bytes = readFileSync(localPath);
+      return { url: 'https://bucket.test/result', key: options.key!, sha256: options.sha256! };
     });
-    expect(result.html).toContain('<h1');
-    expect(result.renderHash).toHaveLength(64);
-    expect(result.key).toContain(result.renderHash);
+    const result = await renderAndPublishAssignmentToS3({ assignment });
+    expect(bytes).toEqual(Buffer.from(result.html, 'utf8'));
+    const hash = createHash('sha256').update('html-v1:').update(bytes).digest('hex');
+    expect(result.renderHash).toBe(hash);
+    expect(result.key).toBe(`materials/html/artifacts/${hash}.html`);
+    expect(uploader.uploadFile).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ sha256: hash, key: result.key }),
+    );
   });
 
   it('forwards explicit key and renderHash in render-and-publish flow', async () => {
-    const result = await renderAndPublishMarkdownToS3({
-      title: 'Lesson',
-      markdown: '# Hello',
+    const result = await renderAndPublishAssignmentToS3({
+      assignment: JSON.parse(
+        readFileSync(
+          new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+          'utf8',
+        ),
+      ),
       key: 'materials/html/manual/custom-key.html',
       renderHash: 'f'.repeat(64),
     });

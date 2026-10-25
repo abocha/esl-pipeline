@@ -21,12 +21,10 @@ describeHttpServerIntegrationSuite(
     mockResolvePrimaryWorkspaceIdForUser,
     mockUndoLatestHiddenStudentReminder,
     mockUpdateStudentLessonPlan,
-    mockCreateStudentLesson,
     mockUpdateStudentLesson,
     mockAddStudentPackage,
     mockAdjustStudentCredits,
     mockRecordStudentPayment,
-    mockUpsertPrimaryStudentLessonRecurrence,
     mockUpsertProfileContent,
     mockGetProfileContent,
     mockGetProfileRevisionForStudent,
@@ -38,6 +36,8 @@ describeHttpServerIntegrationSuite(
     mockRestoreTemplateRevision,
     mockActivateTemplateRevisionForTemplate,
     mockRestoreStudentProfile,
+    mockPromoteStudentProfileCandidates,
+    mockRefreshProfileDraftFromApprovedCandidates,
     mockUpdateStudentProfile,
   }) => {
     it('GET /students returns student profiles', async () => {
@@ -410,6 +410,7 @@ describeHttpServerIntegrationSuite(
         draftRevisionId: 'profile-revision-draft',
         includedCandidateIds: ['candidate-1'],
         excludedCandidateIds: [],
+        omittedCandidates: [],
         contentHash: 'profile-draft-hash',
         draftRevision: {
           id: 'profile-revision-draft',
@@ -429,6 +430,33 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('reports only the applied subset through both existing draft endpoints', async () => {
+      for (const [path, mock] of [
+        ['profile-candidates/promote', mockPromoteStudentProfileCandidates],
+        [
+          'profile-drafts/refresh-from-approved-candidates',
+          mockRefreshProfileDraftFromApprovedCandidates,
+        ],
+      ] as const) {
+        mock.mockResolvedValueOnce({
+          studentId: deriveStudentId('Anna'),
+          baseRevisionId: 'active',
+          draftRevision: { id: 'partial-draft', contentHash: 'hash', status: 'draft' },
+          includedCandidateIds: ['candidate-1'],
+        });
+        const response = await app.inject({
+          method: 'POST',
+          url: `/students/${deriveStudentId('Anna')}/${path}`,
+          payload: { candidateIds: ['candidate-1', 'candidate-2'] },
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json().includedCandidateIds).toEqual(['candidate-1']);
+        expect(response.json().excludedCandidateIds).toEqual(
+          path === 'profile-candidates/promote' ? ['candidate-2'] : undefined,
+        );
+      }
+    });
+
     it('POST /students/:id/profile-drafts/refresh-from-approved-candidates creates a full draft revision', async () => {
       const response = await app.inject({
         method: 'POST',
@@ -443,6 +471,7 @@ describeHttpServerIntegrationSuite(
         draftRevisionId: 'profile-revision-refreshed-draft',
         baseRevisionId: 'profile-revision-active',
         includedCandidateIds: ['candidate-1'],
+        omittedCandidates: [],
         contentHash: 'profile-refreshed-draft-hash',
         draftRevision: {
           id: 'profile-revision-refreshed-draft',
@@ -696,7 +725,11 @@ describeHttpServerIntegrationSuite(
         const expectedArgs = [
           deriveStudentId('Anna'),
           MIGRATED_PROFILE_REVISION_ID,
-          ...(action === '/restore' ? [{ createdBy: 'test-user-id' }] : []),
+          ...(action === '/activate'
+            ? [{ actorUserId: 'test-user-id' }]
+            : action === '/restore'
+              ? [{ createdBy: 'test-user-id' }]
+              : []),
         ];
         expect(operation).toHaveBeenCalledWith(...expectedArgs);
       },
@@ -1122,6 +1155,34 @@ describeHttpServerIntegrationSuite(
       expect(mockActivateTemplateRevisionForTemplate).not.toHaveBeenCalled();
     });
 
+    it('retires local scheduling endpoints and rejects timing/cancellation bypasses', async () => {
+      const studentId = deriveStudentId('Anna');
+      for (const [method, path] of [
+        ['POST', 'lessons'],
+        ['PUT', 'operations/primary-lesson-recurrence'],
+      ] as const) {
+        const response = await app.inject({
+          method,
+          url: `/students/${studentId}/${path}`,
+          payload: {},
+        });
+        expect(response.statusCode).toBe(404);
+      }
+      for (const payload of [
+        { startsAt: '2026-05-11T04:00:00Z' },
+        { localStartsAt: '2026-05-11T09:30', timezone: 'UTC' },
+        { status: 'canceled' },
+        { status: 'scheduled' },
+      ]) {
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/students/${studentId}/lessons/lesson-1`,
+          payload,
+        });
+        expect(response.statusCode).toBe(400);
+      }
+    });
+
     it('passes authenticated workspace membership through every student business route', async () => {
       const studentId = deriveStudentId('Anna');
       const lessonId = 'lesson-1';
@@ -1159,25 +1220,9 @@ describeHttpServerIntegrationSuite(
       expect(
         (
           await app.inject({
-            method: 'POST',
-            url: `/students/${studentId}/lessons`,
-            payload: { startsAt: '2026-05-08T10:00:00.000Z' },
-          })
-        ).statusCode,
-      ).toBe(201);
-      expect(mockCreateStudentLesson).toHaveBeenCalledWith(
-        DEFAULT_WORKSPACE_ID,
-        studentId,
-        { startsAt: '2026-05-08T10:00:00.000Z' },
-        'test-user-id',
-      );
-
-      expect(
-        (
-          await app.inject({
             method: 'PATCH',
             url: `/students/${studentId}/lessons/${lessonId}`,
-            payload: { title: 'Updated lesson' },
+            payload: { notes: 'Updated lesson' },
           })
         ).statusCode,
       ).toBe(200);
@@ -1185,7 +1230,7 @@ describeHttpServerIntegrationSuite(
         DEFAULT_WORKSPACE_ID,
         studentId,
         lessonId,
-        { title: 'Updated lesson' },
+        { notes: 'Updated lesson' },
         'test-user-id',
       );
 
@@ -1287,53 +1332,6 @@ describeHttpServerIntegrationSuite(
       });
       expect(mutationResponse.statusCode).toBe(403);
       expect(mutationResponse.json()).toMatchObject({ error: 'workspace_required' });
-    });
-
-    it('PUT /students/:id/operations/primary-lesson-recurrence validates and saves recurrence rules', async () => {
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/students/${deriveStudentId('Anna')}/operations/primary-lesson-recurrence`,
-        payload: {
-          timezone: 'Asia/Bangkok',
-          startsOn: '2026-05-11',
-          generationHorizonDays: 56,
-          slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(mockUpsertPrimaryStudentLessonRecurrence).toHaveBeenCalledWith(
-        DEFAULT_WORKSPACE_ID,
-        deriveStudentId('Anna'),
-        {
-          timezone: 'Asia/Bangkok',
-          startsOn: '2026-05-11',
-          generationHorizonDays: 56,
-          slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
-        },
-        'test-user-id',
-      );
-      expect(response.json()).toMatchObject({
-        recurrenceRule: {
-          timezone: 'Asia/Bangkok',
-          slots: [{ isoWeekday: 1, localStartTime: '11:00' }],
-        },
-      });
-    });
-
-    it('PUT /students/:id/operations/primary-lesson-recurrence rejects invalid recurrence rules', async () => {
-      const response = await app.inject({
-        method: 'PUT',
-        url: `/students/${deriveStudentId('Anna')}/operations/primary-lesson-recurrence`,
-        payload: {
-          timezone: 'Asia/Bangkok',
-          startsOn: '2026-05-11',
-          slots: [{ isoWeekday: 8, localStartTime: '11:00', durationMinutes: 50 }],
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toMatchObject({ error: 'validation_failed' });
     });
   },
 );

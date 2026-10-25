@@ -7,6 +7,8 @@ import type {
 
 import type { BatchBackendConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
+import { getOpenAiModelGroup } from '../domain/openai-model-groups.js';
+import { ProviderExecutionError } from './generation-providers.js';
 
 export interface GenerationTarget {
   provider: GenerationProvider;
@@ -20,10 +22,7 @@ export type GenerationWorkload =
   | 'student_memory_snapshot'
   | 'profile_revision_drafting';
 
-const GOOGLE_DASHBOARD_URL = 'https://ai.google.dev/gemini-api/docs/rate-limits';
-const OPENAI_DASHBOARD_URL =
-  'https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai';
-const OPENROUTER_DASHBOARD_URL = 'https://openrouter.ai/docs/models';
+const OPENAI_DASHBOARD_URL = 'https://platform.openai.com/settings/organization/limits';
 
 export function resolveGenerationTarget(args: {
   config: BatchBackendConfig['generation'];
@@ -33,47 +32,30 @@ export function resolveGenerationTarget(args: {
 }): GenerationTarget {
   const configured = args.config.targets[args.workload];
   const provider = args.providerOverride ?? configured.provider;
-  const model =
-    args.modelOverride?.trim() ||
-    (provider === configured.provider
-      ? configured.model
-      : args.config.models[provider === 'google_ai_studio' ? 'googleAiStudio' : provider].model);
+  const model = args.modelOverride?.trim() || configured.model;
+  assertSupportedGenerationTarget({ provider, model });
   if (!model) throw new Error(`No explicit model configured for ${args.workload} (${provider})`);
   return { provider, model };
 }
 
-function getGoogleQuotaBaseline(model: string): {
-  requestsPerMinute?: number;
-  tokensPerMinute?: number;
-  requestsPerDay?: number;
-} {
-  if (model === 'gemini-3-flash-preview') {
-    return {
-      requestsPerMinute: 5,
-      tokensPerMinute: 250_000,
-      requestsPerDay: 20,
-    };
+/** Retired targets are rejected, including frozen jobs; never rewrite their provenance. */
+export function assertSupportedGenerationTarget(target: GenerationTarget): void {
+  if (target.provider !== 'openai') {
+    throw new ProviderExecutionError({
+      provider: target.provider,
+      message: `LLM provider ${target.provider} is retired. Create new work with an explicit OpenAI target; frozen jobs are not retargeted.`,
+      code: 'unsupported_provider',
+      status: 400,
+    });
   }
-  if (model === 'gemini-2.5-flash-lite') {
-    return {
-      requestsPerMinute: 10,
-      tokensPerMinute: 250_000,
-      requestsPerDay: 20,
-    };
+  if (/^(gemini|gemma)(-|$)/i.test(target.model)) {
+    throw new ProviderExecutionError({
+      provider: target.provider,
+      message: `Model ${target.model} is not an OpenAI LLM target.`,
+      code: 'unsupported_model',
+      status: 400,
+    });
   }
-  if (model === 'gemini-2.5-pro') {
-    return {
-      requestsPerMinute: 15,
-      requestsPerDay: 1_500,
-    };
-  }
-  return {};
-}
-
-function getProviderDashboardUrl(provider: GenerationProvider): string {
-  if (provider === 'openai') return OPENAI_DASHBOARD_URL;
-  if (provider === 'google_ai_studio') return GOOGLE_DASHBOARD_URL;
-  return OPENROUTER_DASHBOARD_URL;
 }
 
 export function buildQuotaSnapshot(args: {
@@ -86,44 +68,33 @@ export function buildQuotaSnapshot(args: {
   const nowIso = (args.now ?? new Date()).toISOString();
   const usage = args.usage;
 
-  let requestsPerMinute: number | null | undefined;
-  let tokensPerMinute: number | null | undefined;
-  let requestsPerDay: number | null | undefined;
-  let dailyTokenBudget: number | null | undefined;
-
-  if (args.provider === 'openai') {
-    requestsPerMinute = args.config.providers.openai.rpmBudget ?? null;
-    requestsPerDay = args.config.providers.openai.dailyRequestBudget ?? null;
-    dailyTokenBudget = args.config.providers.openai.dailyTokenBudget ?? null;
-  } else if (args.provider === 'google_ai_studio') {
-    const googleBaseline = getGoogleQuotaBaseline(args.model);
-    requestsPerMinute =
-      args.config.providers.googleAiStudio.rpmBudget ?? googleBaseline.requestsPerMinute ?? null;
-    tokensPerMinute = googleBaseline.tokensPerMinute ?? null;
-    requestsPerDay =
-      args.config.providers.googleAiStudio.dailyRequestBudget ??
-      googleBaseline.requestsPerDay ??
-      null;
-  } else {
-    requestsPerMinute = args.config.providers.openrouter.rpmBudget ?? null;
-    requestsPerDay = args.config.providers.openrouter.dailyRequestBudget ?? null;
-    dailyTokenBudget = args.config.providers.openrouter.dailyTokenBudget ?? null;
-  }
+  assertSupportedGenerationTarget(args);
+  const requestsPerMinute = args.config.providers.openai.rpmBudget ?? null;
+  const tokensPerMinute = args.config.providers.openai.tpmBudget ?? null;
+  const requestsPerDay = args.config.providers.openai.dailyRequestBudget ?? null;
+  const dailyTokenBudget =
+    args.config.providers.openai.dailyTokenBudgets[getOpenAiModelGroup(args.model)];
 
   const usedRequestsToday = usage?.requestsToday ?? null;
   const usedTokensToday = usage
-    ? Math.max(usage.reservedTokensToday, usage.actualTokensToday)
+    ? (usage.groupReservedTokensToday ?? usage.reservedTokensToday)
     : null;
   const rpmUsed = usage?.requestsPerMinuteUsed ?? null;
 
   return {
     source: args.config.quotaSourceMode,
     lastUpdatedAt: nowIso,
-    dashboardUrl: getProviderDashboardUrl(args.provider),
+    dashboardUrl: OPENAI_DASHBOARD_URL,
     requestsPerMinute,
     tokensPerMinute,
     requestsPerDay,
     dailyTokenBudget,
+    dailyTokenGroup: getOpenAiModelGroup(args.model),
+    reservedTokensToday: usage?.reservedTokensToday ?? null,
+    actualTokensToday: usage?.actualTokensToday ?? null,
+    groupReservedTokensToday: usage?.groupReservedTokensToday ?? null,
+    groupActualTokensToday: usage?.groupActualTokensToday ?? null,
+    unclassifiedReservedTokensToday: usage?.unclassifiedReservedTokensToday ?? null,
     usedRequestsToday,
     usedTokensToday,
     dailyRequestBudget: requestsPerDay,
@@ -134,9 +105,11 @@ export function buildQuotaSnapshot(args: {
         : Math.max(0, requestsPerDay - usedRequestsToday),
     dailyTokenUsed: usedTokensToday,
     dailyTokenRemaining:
-      dailyTokenBudget === undefined || dailyTokenBudget === null || usedTokensToday === null
-        ? null
-        : Math.max(0, dailyTokenBudget - usedTokensToday),
+      (usage?.unclassifiedReservedTokensToday ?? 0) > 0
+        ? 0
+        : dailyTokenBudget === undefined || dailyTokenBudget === null || usedTokensToday === null
+          ? null
+          : Math.max(0, dailyTokenBudget - usedTokensToday),
     rpmBudget: requestsPerMinute,
     rpmUsed,
     rpmRemaining:
@@ -153,18 +126,11 @@ export function buildGenerationOptionsPayload(args: {
 }): GenerationOptionsPayload {
   const target = resolveGenerationTarget({ config: args.config, workload: 'draft_generation' });
   // Roster order is presentation only: none of these options are automatic fallbacks.
-  const providers: GenerationProvider[] = ['openai', 'google_ai_studio'];
-  if (
-    args.config.models.openrouter.model ||
-    args.config.models.openrouter.allowed.length ||
-    target.provider === 'openrouter'
-  )
-    providers.push('openrouter');
+  const providers: GenerationProvider[] = ['openai'];
   const modelOptions: GenerationModelOption[] = [];
   const defaultModelByProvider: Partial<Record<GenerationProvider, string>> = {};
   for (const provider of providers) {
-    const roster =
-      args.config.models[provider === 'google_ai_studio' ? 'googleAiStudio' : provider];
+    const roster = args.config.models.openai;
     const model = provider === target.provider ? target.model : roster.model;
     if (model) defaultModelByProvider[provider] = model;
     for (const id of new Set(

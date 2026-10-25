@@ -112,22 +112,8 @@ function normalizePresetSelection(
   return availablePresets[0] ?? '';
 }
 
-function detectPronunciationModeFromDraft(text: string): PronunciationMode | null {
-  const match = text.match(/\*\*Mode:\*\*\s*([a-z_]+)/i);
-  if (!match) return null;
-  const mode = match[1]?.trim().toLowerCase();
-  return mode === 'shadow_sentence' ||
-    mode === 'connected_speech' ||
-    mode === 'intonation' ||
-    mode === 'rhythm_chunking' ||
-    mode === 'sentence_stress' ||
-    mode === 'minimal_pair'
-    ? mode
-    : null;
-}
-
 function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
-  return value === 'elevenlabs' || value === 'google' || value === 'inworld';
+  return value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini';
 }
 
 function isUiPublishTtsStrategy(value: string | null | undefined): value is UiPublishTtsStrategy {
@@ -473,7 +459,10 @@ export function useMinimalAssignmentResume({
         const completedSession =
           knownCompletedSession ??
           (status.assignmentSessionId
-            ? await fetchAssignmentSession(status.assignmentSessionId)
+            ? await fetchAssignmentSession(status.assignmentSessionId).catch((error) => {
+                if (status.assignmentArtifact) throw error;
+                return null;
+              })
             : null);
         if (completedSession && completedSession.confirmedStep !== 'share') {
           throw new Error('Historical assignment link did not resolve to a completed session.');
@@ -631,9 +620,8 @@ export function useMinimalAssignmentResume({
             const resumedDraft = await fetchDraft(status.draftId);
             snapshot.authoring.draft = resumedDraft;
             snapshot.authoring.draftText = resumedDraft.text ?? '';
-            snapshot.rerunTargetPronunciationMode = detectPronunciationModeFromDraft(
-              resumedDraft.text ?? '',
-            );
+            snapshot.rerunTargetPronunciationMode =
+              resumedDraft.assignment?.pronunciation?.mode ?? null;
             if (!resolvedStudentId && resumedDraft.studentId) {
               resolvedStudentId = resumedDraft.studentId;
             }
@@ -802,9 +790,8 @@ export function useMinimalAssignmentResume({
             const resumedDraft = await fetchDraft(session.draftId);
             snapshot.authoring.draft = resumedDraft;
             snapshot.authoring.draftText = resumedDraft.text ?? '';
-            snapshot.rerunTargetPronunciationMode = detectPronunciationModeFromDraft(
-              resumedDraft.text ?? '',
-            );
+            snapshot.rerunTargetPronunciationMode =
+              resumedDraft.assignment?.pronunciation?.mode ?? null;
             if (!resolvedStudentId && resumedDraft.studentId) {
               resolvedStudentId = resumedDraft.studentId;
             }
@@ -827,20 +814,26 @@ export function useMinimalAssignmentResume({
         setActiveAssignmentSession(session);
         setSelectedResumeJobId(`session:${session.id}`);
         writeResumeTargetToQuery({ sessionId: session.id });
-        const destination = deriveResumeDestination(session, {
-          transcript: snapshot.transcript
-            ? {
-                workingVersion: snapshot.transcript.workingVersion,
-                contentHash: snapshot.transcript.contentHash,
-              }
-            : null,
-          draft: snapshot.authoring.draft
-            ? {
-                workingVersion: snapshot.authoring.draft.workingVersion,
-                contentHash: snapshot.authoring.draft.contentHash,
-              }
-            : null,
-        });
+        const destination =
+          session.historicalReadOnly ||
+          (snapshot.authoring.draft && snapshot.authoring.draft.format !== 'assignment_v1') ||
+          (snapshot.authoring.promptPackage &&
+            snapshot.authoring.promptPackage.requestEnvelope?.promptVersion !== 'assignment_v1')
+            ? 'review'
+            : deriveResumeDestination(session, {
+                transcript: snapshot.transcript
+                  ? {
+                      workingVersion: snapshot.transcript.workingVersion,
+                      contentHash: snapshot.transcript.contentHash,
+                    }
+                  : null,
+                draft: snapshot.authoring.draft
+                  ? {
+                      workingVersion: snapshot.authoring.draft.workingVersion,
+                      contentHash: snapshot.authoring.draft.contentHash,
+                    }
+                  : null,
+              });
         if (typeof destination !== 'string') {
           throw new Error('Active assignment unexpectedly resolved to a completed job.');
         }

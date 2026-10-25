@@ -7,25 +7,11 @@ import type {
   VoiceAssignmentCapabilities,
 } from '@esl-pipeline/tts-core';
 import {
+  normalizePlainSpeechText,
   SPEECH_ANNOTATION_CLOSE,
   SPEECH_ANNOTATION_OPEN,
   validateSpeechAnnotationText,
 } from '@esl-pipeline/tts-core';
-
-const MARKDOWN_STRIPPERS: [RegExp, string][] = [
-  [/\r?\n/g, ' '],
-  [/^\s*[-*+]\s+/, ''],
-  [/^\s*\d+[.)]\s+/, ''],
-  [/\*\*(.+?)\*\*/g, '$1'],
-  [/__(.+?)__/g, '$1'],
-  [/\*(.+?)\*/g, '$1'],
-  [/_([^_]+)_/g, '$1'],
-  [/~~(.+?)~~/g, '$1'],
-  [/`{1,3}([^`]+)`{1,3}/g, '$1'],
-  [/!\[(.*?)\]\([^)]*\)/g, '$1'],
-  [/\[(.+?)\]\((.+?)\)/g, '$1'],
-  [/<[^>]+>/g, ''],
-] as const;
 
 export interface RenderedInworldSpeechSegment {
   text: string;
@@ -36,16 +22,6 @@ export interface RenderedInworldSpeechSegment {
   temperature?: number;
   deliveryMode?: SpeechDeliveryMode;
   enhancerVersion?: SpeechEnhancementVersion;
-}
-
-export function cleanSpeechText(text: string): string {
-  let sanitized = text;
-  for (const [pattern, replacement] of MARKDOWN_STRIPPERS) {
-    sanitized = sanitized.replace(pattern, replacement);
-  }
-  sanitized = sanitized.replaceAll(/[*_`~>#]/g, '');
-  sanitized = sanitized.replaceAll(/\s+/g, ' ').trim();
-  return sanitized;
 }
 
 export function renderInworldSpeechSegment(args: {
@@ -72,7 +48,7 @@ export function renderInworldSpeechSegment(args: {
       enhancerVersion: args.enhancerVersion,
     };
   }
-  const cleanText = cleanSpeechText(args.segment.text);
+  const cleanText = normalizePlainSpeechText(args.segment.text);
   if (args.model !== 'inworld-tts-2') {
     return {
       text: cleanText,

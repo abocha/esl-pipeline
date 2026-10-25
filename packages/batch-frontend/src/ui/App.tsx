@@ -1,10 +1,10 @@
 import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
 import { isFrontendSandboxEnabled } from '../dev/frontend-sandbox';
 import type { AuthMode } from './auth/AuthDialog';
+import { LegalLinks } from './LegalLinks';
 import { CalmStudioShell } from './shell/CalmStudioShell';
 
 import './AppShell.css';
@@ -19,9 +19,14 @@ const MinimalAssignment = lazy(async () => {
   return { default: module.MinimalAssignment };
 });
 
-const StudentDirectoryPage = lazy(async () => {
-  const module = await import('./students/StudentDirectoryPage');
-  return { default: module.StudentDirectoryPage };
+const StudentWorkspace = lazy(async () => {
+  const module = await import('./students/StudentWorkspace');
+  return { default: module.StudentWorkspace };
+});
+
+const StudentWorkspaceEmpty = lazy(async () => {
+  const module = await import('./students/StudentWorkspace');
+  return { default: module.StudentWorkspaceEmpty };
 });
 
 const StudentAreaShell = lazy(async () => {
@@ -98,6 +103,7 @@ function oauthContinuation(location: Location): string | null {
 export const App: React.FC = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [prefillEmail, setPrefillEmail] = useState('');
   const [inviteToken, setInviteToken] = useState<string | null>(() =>
     extractInviteTokenFromLocation(window.location),
@@ -143,13 +149,13 @@ export const App: React.FC = () => {
   };
 
   const handleLogout = useCallback(async () => {
+    setLogoutError(null);
     try {
       await logout();
-      toast.success('Logged out successfully');
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'Unable to logout. Please try again.';
-      toast.error(message);
+      setLogoutError(message);
     }
   }, [logout]);
 
@@ -177,10 +183,11 @@ export const App: React.FC = () => {
           onLogin={openLogin}
           onRegister={openRegister}
         />
+        {logoutError && <p role="alert">{logoutError}</p>}
       </div>
     );
   } else {
-    appBody = <AuthenticatedApp user={user} onLogout={handleLogout} />;
+    appBody = <AuthenticatedApp user={user} onLogout={handleLogout} logoutError={logoutError} />;
   }
 
   return (
@@ -208,17 +215,23 @@ export const App: React.FC = () => {
 interface AuthenticatedAppProps {
   user: ReturnType<typeof useAuth>['user'];
   onLogout: () => void;
+  logoutError: string | null;
 }
 
-const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) => {
+const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, logoutError }) => {
   if (!user) return null;
   return (
     <Routes>
+      <Route
+        path="/calendar/connection-result"
+        element={<Navigate to="/business/schedule" replace />}
+      />
       <Route
         element={
           <CalmStudioShell
             user={user}
             onLogout={onLogout}
+            logoutError={logoutError}
             sandboxMode={isFrontendSandboxEnabled()}
           />
         }
@@ -285,51 +298,60 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
           path="/students"
           element={
             <Suspense fallback={<RouteLoadingFallback />}>
-              <StudentDirectoryPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/students/:studentId"
-          element={
-            <Suspense fallback={<RouteLoadingFallback />}>
-              <StudentAreaShell />
+              <StudentWorkspace />
             </Suspense>
           }
         >
-          <Route index element={<Navigate to="overview" replace />} />
           <Route
-            path="overview"
+            index
             element={
               <Suspense fallback={<RouteLoadingFallback />}>
-                <StudentOverviewPage />
+                <StudentWorkspaceEmpty />
               </Suspense>
             }
           />
           <Route
-            path="learning"
+            path=":studentId"
             element={
               <Suspense fallback={<RouteLoadingFallback />}>
-                <StudentLearningPage />
+                <StudentAreaShell />
               </Suspense>
             }
-          />
-          <Route
-            path="history"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <StudentHistoryPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="schedule-billing"
-            element={
-              <Suspense fallback={<RouteLoadingFallback />}>
-                <StudentScheduleBillingPage />
-              </Suspense>
-            }
-          />
+          >
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route
+              path="overview"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <StudentOverviewPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="learning"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <StudentLearningPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="history"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <StudentHistoryPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="schedule-billing"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <StudentScheduleBillingPage />
+                </Suspense>
+              }
+            />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -407,6 +429,7 @@ const UnauthenticatedNotice: React.FC<{
           {hasInvite ? 'Create invited account' : 'Create account with invite'}
         </button>
       </div>
+      <LegalLinks />
     </div>
   </section>
 );

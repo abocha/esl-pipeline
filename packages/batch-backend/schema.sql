@@ -50,6 +50,468 @@ BEGIN
   RETURN NEW;
 END $$;
 
+CREATE FUNCTION public.fence_calendar_authority_loss() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_TABLE_NAME = 'users' THEN
+    IF OLD.is_active AND NOT NEW.is_active THEN
+      UPDATE google_oauth_grants SET status='reconnect_required',credential_epoch=credential_epoch+1,refresh_lease_token=NULL,refresh_lease_expires_at=NULL WHERE authorizing_user_id=OLD.id AND status='active';
+      UPDATE workspace_calendar_connections c SET status='reconnect_required',generation=generation+1,error_code='permission_changed',lease_token=NULL,lease_expires_at=NULL FROM google_oauth_grants g WHERE c.grant_id=g.id AND g.authorizing_user_id=OLD.id AND c.status='connected';
+    END IF;
+  ELSIF TG_OP = 'DELETE' OR (OLD.role IN ('owner','admin') AND NEW.role NOT IN ('owner','admin')) THEN
+    UPDATE google_oauth_grants SET status='reconnect_required',credential_epoch=credential_epoch+1,refresh_lease_token=NULL,refresh_lease_expires_at=NULL WHERE authorizing_user_id=OLD.user_id AND workspace_id=OLD.workspace_id AND status='active';
+    UPDATE workspace_calendar_connections c SET status='reconnect_required',generation=generation+1,error_code='permission_changed',lease_token=NULL,lease_expires_at=NULL FROM google_oauth_grants g WHERE c.grant_id=g.id AND g.authorizing_user_id=OLD.user_id AND c.workspace_id=OLD.workspace_id AND c.status='connected';
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+CREATE FUNCTION public.guard_calendar_projection_reference() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE lesson uuid; hidden boolean;
+BEGIN
+  lesson := (to_jsonb(NEW)->>TG_ARGV[0])::uuid;
+  IF lesson IS NULL THEN RETURN NEW; END IF;
+  IF TG_OP='UPDATE' AND to_jsonb(OLD)->>TG_ARGV[0] IS NOT DISTINCT FROM lesson::text THEN
+    RETURN NEW;
+  END IF;
+  PERFORM id FROM student_lessons WHERE id=lesson FOR KEY SHARE;
+  SELECT schedule_hidden_at IS NOT NULL INTO hidden FROM student_lessons WHERE id=lesson;
+  IF hidden THEN
+    RAISE EXCEPTION 'Lesson schedule changed; refresh before continuing'
+      USING ERRCODE='23514', CONSTRAINT='calendar_projection_reference_visible';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.guard_completed_transcript_source() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE source_recording uuid; owner_record record;
+BEGIN
+  IF TG_TABLE_NAME = 'transcripts' THEN source_recording := NEW.recording_id;
+  ELSE source_recording := NEW.id; END IF;
+  FOR owner_record IN SELECT s.transcript_completed_at FROM assignment_sessions s
+    JOIN assignment_source_bindings b ON b.assignment_session_id = s.id
+    WHERE b.recording_id = source_recording ORDER BY s.id FOR UPDATE OF s NOWAIT
+  LOOP
+    IF owner_record.transcript_completed_at IS NOT NULL THEN RAISE EXCEPTION 'assignment_session_completed'; END IF;
+  END LOOP;
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.guard_session_homework_artifact() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE session_intent text;
+BEGIN
+  IF NEW.assignment_session_id IS NOT NULL THEN
+    SELECT homework_intent INTO session_intent FROM assignment_sessions
+      WHERE id = NEW.assignment_session_id FOR UPDATE;
+    IF session_intent IS DISTINCT FROM 'create' THEN RAISE EXCEPTION 'assignment_homework_intent_conflict'; END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TABLE public.assignment_sessions (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    recording_id uuid,
+    transcript_id uuid,
+    prompt_package_id uuid,
+    draft_id uuid,
+    publish_target text,
+    selected_tts_provider text,
+    selected_tts_strategy text,
+    selected_tts_model text,
+    selected_preset text,
+    selected_generation_provider text,
+    selected_generation_model text,
+    teacher_notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    lesson_id uuid,
+    revision integer DEFAULT 1 NOT NULL,
+    confirmed_step text NOT NULL,
+    confirmed_snapshot jsonb NOT NULL,
+    creation_request_id text,
+    selected_profile_id text,
+    selected_profile_revision_id uuid,
+    selected_profile_revision_hash text,
+    share_job_id uuid,
+    homework_intent text DEFAULT 'create'::text NOT NULL,
+    transcript_completed_at timestamp with time zone,
+    transcript_completion_history jsonb DEFAULT '[]'::jsonb NOT NULL,
+    homework_started_from_revision integer,
+    CONSTRAINT assignment_sessions_completed_share_job_check CHECK (((confirmed_step <> 'share'::text) OR (share_job_id IS NOT NULL))),
+    CONSTRAINT assignment_sessions_confirmed_snapshot_check CHECK (((jsonb_typeof(confirmed_snapshot) = 'object'::text) AND (confirmed_snapshot ?& ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text]) AND (jsonb_typeof((confirmed_snapshot -> 'student'::text)) = 'object'::text) AND (NULLIF((confirmed_snapshot #>> '{student,studentId}'::text[]), ''::text) IS NOT NULL) AND (((confirmed_snapshot #>> '{student,studentId}'::text[]))::uuid = student_id) AND (((confirmed_snapshot -> 'source'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'source'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'context'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'create'::text)) = 'object'::text)))),
+    CONSTRAINT assignment_sessions_confirmed_step_check CHECK ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text, 'share'::text]))),
+    CONSTRAINT assignment_sessions_creation_request_id_check CHECK (((creation_request_id IS NULL) OR (btrim(creation_request_id) <> ''::text))),
+    CONSTRAINT assignment_sessions_generation_provider_check CHECK (((selected_generation_provider IS NULL) OR (selected_generation_provider = ANY (ARRAY['openai'::text, 'google_ai_studio'::text, 'openrouter'::text])))),
+    CONSTRAINT assignment_sessions_homework_intent CHECK ((homework_intent = ANY (ARRAY['create'::text, 'none'::text]))),
+    CONSTRAINT assignment_sessions_no_homework_downstream CHECK (((homework_intent <> 'none'::text) OR ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text])) AND ((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) AND ((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) AND (prompt_package_id IS NULL) AND (draft_id IS NULL) AND (share_job_id IS NULL)))),
+    CONSTRAINT assignment_sessions_publish_target_check CHECK (((publish_target IS NULL) OR (publish_target = 'html'::text))),
+    CONSTRAINT assignment_sessions_revision_check CHECK ((revision > 0)),
+    CONSTRAINT assignment_sessions_selected_profile_revision_hash_check CHECK (((selected_profile_revision_hash IS NULL) OR (selected_profile_revision_hash ~ '^[0-9a-f]{64}$'::text))),
+    CONSTRAINT assignment_sessions_transcript_completion CHECK (((transcript_completed_at IS NULL) OR COALESCE(((homework_intent = 'none'::text) AND (confirmed_step = 'source'::text) AND ((confirmed_snapshot -> 'source'::text) <> 'null'::jsonb) AND (jsonb_array_length(transcript_completion_history) > 0) AND (((transcript_completion_history -> '-1'::integer) -> 'source'::text) = (confirmed_snapshot -> 'source'::text)) AND ((((transcript_completion_history -> '-1'::integer) ->> 'resultingRevision'::text))::integer = revision) AND ((((transcript_completion_history -> '-1'::integer) ->> 'completedAt'::text))::timestamp with time zone = transcript_completed_at) AND (((transcript_completion_history -> '-1'::integer) ->> 'studentId'::text) = (student_id)::text) AND (COALESCE(to_jsonb(lesson_id), 'null'::jsonb) = (confirmed_snapshot #> '{source,lessonId}'::text[])) AND ((recording_id)::text = (confirmed_snapshot #>> '{source,recordingId}'::text[])) AND ((transcript_id)::text = (confirmed_snapshot #>> '{source,transcriptId}'::text[]))), false))),
+    CONSTRAINT assignment_sessions_transcript_history_array CHECK ((jsonb_typeof(transcript_completion_history) = 'array'::text)),
+    CONSTRAINT assignment_sessions_tts_provider_check CHECK (((selected_tts_provider IS NULL) OR (selected_tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text, 'gemini'::text])))),
+    CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
+);
+
+CREATE FUNCTION public.historical_assignment_session(s public.assignment_sessions) RETURNS boolean
+    LANGUAGE plpgsql STABLE
+    AS $$
+BEGIN
+  RETURN (s.confirmed_snapshot -> 'create' IS NOT NULL
+    AND s.confirmed_snapshot -> 'create' <> 'null'::jsonb
+    AND (s.confirmed_snapshot #>> '{create,artifact,format}') IS DISTINCT FROM 'assignment_v1')
+    OR EXISTS (SELECT 1 FROM drafts d WHERE d.id = s.draft_id AND d.format <> 'assignment_v1')
+    OR EXISTS (SELECT 1 FROM prompt_packages p WHERE p.id = s.prompt_package_id
+      AND (p.request_envelope ->> 'promptVersion') IS DISTINCT FROM 'assignment_v1');
+END;
+$$;
+
+CREATE FUNCTION public.link_student_credit_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE transition_id uuid;
+BEGIN
+  IF TG_OP='UPDATE' AND NOT EXISTS (SELECT 1 FROM students WHERE id=NEW.student_id) THEN RETURN NEW; END IF;
+  IF TG_OP='UPDATE' THEN
+    IF OLD.workspace_id IS NOT NULL AND NEW.workspace_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM workspaces WHERE id=OLD.workspace_id) THEN RETURN NEW; END IF;
+    IF ((NEW.activity_id IS NULL AND OLD.activity_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM student_activity WHERE id=OLD.activity_id))
+      OR (NEW.reversal_activity_id IS NULL AND OLD.reversal_activity_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM student_activity WHERE id=OLD.reversal_activity_id)))
+      AND NEW.student_id=OLD.student_id AND NEW.workspace_id IS NOT DISTINCT FROM OLD.workspace_id
+      AND NEW.source_lesson_id IS NOT DISTINCT FROM OLD.source_lesson_id
+      THEN RETURN NEW; END IF;
+  END IF;
+
+  IF NEW.source_lesson_id IS NULL THEN
+    IF NEW.activity_id IS NULL AND NEW.reversal_activity_id IS NULL THEN RETURN NEW; END IF;
+    IF TG_OP='INSERT' THEN
+      RAISE EXCEPTION 'Credit activity requires a lesson' USING ERRCODE='23514';
+    END IF;
+    IF (OLD.source_lesson_id IS NOT NULL AND EXISTS (SELECT 1 FROM student_lessons WHERE id=OLD.source_lesson_id))
+      OR NEW.activity_id IS DISTINCT FROM OLD.activity_id
+      OR NEW.reversal_activity_id IS DISTINCT FROM OLD.reversal_activity_id THEN
+      RAISE EXCEPTION 'Credit activity source is retained' USING ERRCODE='23514';
+    END IF;
+  END IF;
+  SELECT id INTO transition_id FROM student_activity
+    WHERE student_id=NEW.student_id AND COALESCE(workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)
+      AND entity_id=NEW.source_lesson_id AND transaction_id=txid_current()
+      AND type IN ('lesson_created','lesson_changed','lesson_completed','lesson_restored','lesson_canceled','lesson_no_show')
+    ORDER BY occurred_at DESC,id DESC LIMIT 1;
+  IF TG_OP = 'INSERT' THEN NEW.activity_id := transition_id;
+  ELSIF OLD.voided_at IS NULL AND NEW.voided_at IS NOT NULL THEN NEW.reversal_activity_id := transition_id;
+  END IF;
+  IF EXISTS (SELECT 1 FROM unnest(ARRAY[NEW.activity_id,NEW.reversal_activity_id]) linked(id)
+    WHERE linked.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM student_activity a
+      WHERE a.id=linked.id AND a.student_id=NEW.student_id
+      AND COALESCE(a.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)
+      AND (NEW.source_lesson_id IS NULL OR a.entity_id=NEW.source_lesson_id) AND a.category='lessons')) THEN
+    RAISE EXCEPTION 'Credit activity ownership mismatch' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.lock_canonical_memory_student() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.status = 'ready' THEN
+      PERFORM id FROM students WHERE id = NEW.student_id FOR UPDATE;
+    END IF;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD.status = 'ready' THEN
+      PERFORM id FROM students WHERE id = OLD.student_id FOR UPDATE;
+    END IF;
+    RETURN OLD;
+  ELSE
+    IF OLD.status = 'ready' OR NEW.status = 'ready' THEN
+      PERFORM id FROM students WHERE id IN (OLD.student_id, NEW.student_id) ORDER BY id FOR UPDATE;
+    END IF;
+    RETURN NEW;
+  END IF;
+END;
+$$;
+
+CREATE FUNCTION public.lock_memory_source_student() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    PERFORM id FROM students WHERE id = NEW.student_id FOR UPDATE;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    PERFORM id FROM students WHERE id = OLD.student_id FOR UPDATE;
+    RETURN OLD;
+  ELSE
+    PERFORM id FROM students WHERE id IN (OLD.student_id, NEW.student_id) ORDER BY id FOR UPDATE;
+    RETURN NEW;
+  END IF;
+END;
+$$;
+
+CREATE FUNCTION public.preserve_assignment_artifact_identity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.assignment_artifact IS DISTINCT FROM OLD.assignment_artifact
+     OR NEW.assignment_renderer_version IS DISTINCT FROM OLD.assignment_renderer_version THEN
+    RAISE EXCEPTION 'Frozen assignment artifact identity cannot be changed';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.preserve_assignment_draft_format() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.format IS DISTINCT FROM OLD.format THEN
+    RAISE EXCEPTION 'Assignment draft authority format cannot be changed';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.preserve_transcript_completion_history() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.homework_intent = 'none' AND EXISTS (SELECT 1 FROM prompt_packages WHERE assignment_session_id = NEW.id) THEN
+    RAISE EXCEPTION 'assignment_homework_intent_conflict';
+  END IF;
+  IF jsonb_array_length(NEW.transcript_completion_history) < jsonb_array_length(OLD.transcript_completion_history)
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements(OLD.transcript_completion_history) WITH ORDINALITY e(value, n)
+      WHERE NEW.transcript_completion_history->(e.n::integer - 1) IS DISTINCT FROM e.value) THEN
+    RAISE EXCEPTION 'transcript_completion_history_immutable';
+  END IF;
+  IF NEW.transcript_completion_history IS DISTINCT FROM OLD.transcript_completion_history AND
+    (jsonb_array_length(NEW.transcript_completion_history) <> jsonb_array_length(OLD.transcript_completion_history) + 1
+      OR OLD.transcript_completed_at IS NOT NULL OR NEW.transcript_completed_at IS NULL) THEN
+    RAISE EXCEPTION 'transcript_completion_history_invalid_append';
+  END IF;
+  IF OLD.transcript_completed_at IS NOT NULL AND
+    NOT (NEW.homework_intent = 'create' AND NEW.transcript_completed_at IS NULL
+      AND NEW.homework_started_from_revision = OLD.revision AND NEW.revision = OLD.revision + 1
+      AND NEW.confirmed_snapshot = OLD.confirmed_snapshot AND NEW.lesson_id IS NOT DISTINCT FROM OLD.lesson_id
+      AND NEW.recording_id = OLD.recording_id AND NEW.transcript_id = OLD.transcript_id) THEN
+    RAISE EXCEPTION 'assignment_session_completed';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.record_student_candidate_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE event_type text; owner_workspace uuid;
+BEGIN
+  IF (NEW.status,NEW.review_state,NEW.approved_fact,NEW.reviewer_note,NEW.promoted_revision_id)
+    IS NOT DISTINCT FROM (OLD.status,OLD.review_state,OLD.approved_fact,OLD.reviewer_note,OLD.promoted_revision_id)
+    THEN RETURN NEW; END IF;
+  IF NEW.status = 'superseded' OR (NEW.status='promoted' AND OLD.status='promoted'
+    AND NEW.promoted_revision_id IS NOT DISTINCT FROM OLD.promoted_revision_id) THEN RETURN NEW; END IF;
+  event_type := CASE WHEN NEW.status = 'promoted' THEN 'candidate_promoted'
+    WHEN NEW.review_state = 'approved' THEN 'candidate_approved'
+    WHEN NEW.review_state = 'rejected' THEN 'candidate_rejected'
+    WHEN NEW.review_state = 'deferred' THEN 'candidate_deferred' ELSE NULL END;
+  IF event_type IS NULL THEN RETURN NEW; END IF;
+  SELECT workspace_id INTO owner_workspace FROM students WHERE id=NEW.student_id;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.student_id,owner_workspace,event_type,'profile',NEW.id,
+    CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+    jsonb_build_object('section',NEW.target_section,'fact',COALESCE(NEW.approved_fact,NEW.fact),
+      'previousDecision',OLD.review_state,'decision',NEW.review_state,'note',NEW.reviewer_note,
+      'promotedRevisionId',NEW.promoted_revision_id));
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_homework_started_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE owner_workspace uuid;
+BEGIN
+  IF OLD.homework_intent = 'none' AND NEW.homework_intent = 'create' AND
+    NEW.homework_started_from_revision IS DISTINCT FROM OLD.homework_started_from_revision THEN
+    SELECT workspace_id INTO owner_workspace FROM students WHERE id=NEW.student_id;
+    INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+    VALUES(NEW.student_id,owner_workspace,'homework_started','lessons',NEW.id,
+      CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+      jsonb_build_object('lessonId',NEW.lesson_id,'fromRevision',NEW.homework_started_from_revision));
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_job_failure_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE owner_workspace uuid;
+BEGIN
+  IF NEW.state <> 'failed' OR (TG_OP = 'UPDATE' AND OLD.state = 'failed') OR NEW.student_id IS NULL OR NEW.publish_target IS DISTINCT FROM 'html' THEN RETURN NEW; END IF;
+  SELECT workspace_id INTO owner_workspace FROM students WHERE id=NEW.student_id;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.student_id,owner_workspace,'homework_failed','lessons',NEW.id,'system',
+    jsonb_build_object('lessonId',NEW.lesson_id,'sourceJobId',NEW.source_job_id));
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_lesson_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE event_type text; previous jsonb := NULL; current_value jsonb;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM students s WHERE s.id=NEW.student_id
+    AND COALESCE(s.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=
+      COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)) THEN RETURN NEW; END IF;
+  current_value := jsonb_build_object('startsAt',NEW.starts_at,'timezone',NEW.timezone,
+    'durationMinutes',NEW.duration_minutes,'status',NEW.status,'consumesCredit',NEW.consumes_credit,
+    'title',NEW.title);
+  IF TG_OP = 'INSERT' THEN event_type := 'lesson_created';
+  ELSE
+    previous := jsonb_build_object('startsAt',OLD.starts_at,'timezone',OLD.timezone,
+      'durationMinutes',OLD.duration_minutes,'status',OLD.status,'consumesCredit',OLD.consumes_credit,
+      'title',OLD.title);
+    IF previous = current_value THEN RETURN NEW; END IF;
+    IF (previous - 'title') = (current_value - 'title') AND
+      (OLD.title IS NULL OR btrim(OLD.title) = '' OR OLD.title = 'Untitled lesson')
+      AND current_setting('app.student_activity_origin',true)='generated_title' THEN RETURN NEW; END IF;
+    event_type := CASE WHEN OLD.status IS DISTINCT FROM NEW.status THEN
+      CASE NEW.status WHEN 'completed' THEN 'lesson_completed' WHEN 'scheduled' THEN 'lesson_restored'
+        WHEN 'canceled' THEN 'lesson_canceled' WHEN 'no_show' THEN 'lesson_no_show' END
+      ELSE 'lesson_changed' END;
+  END IF;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.student_id,COALESCE(NEW.workspace_id,(SELECT workspace_id FROM students WHERE id=NEW.student_id)),event_type,'lessons',NEW.id,
+    CASE WHEN current_setting('app.calendar_sync',true)='on' THEN 'system'
+      WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+    jsonb_build_object('before',previous,'after',current_value,'scheduleOriginHistory',NEW.schedule_origin_history,
+      'generated',false));
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_lifecycle_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE event_type text; changes jsonb;
+BEGIN
+  IF TG_OP = 'INSERT' THEN event_type := 'student_created'; changes := jsonb_build_object('name',NEW.student);
+  ELSE
+    IF OLD.student IS DISTINCT FROM NEW.student THEN
+      INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+      VALUES(NEW.id,NEW.workspace_id,'student_renamed','lifecycle',NEW.id,
+        CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+        jsonb_build_object('beforeName',OLD.student,'name',NEW.student));
+    END IF;
+    IF OLD.archived_at IS NULL AND NEW.archived_at IS NOT NULL THEN event_type := 'student_archived';
+    ELSIF OLD.archived_at IS NOT NULL AND NEW.archived_at IS NULL THEN event_type := 'student_restored';
+    ELSE RETURN NEW; END IF;
+    changes := jsonb_build_object('name',NEW.student,'reason',NEW.archive_reason);
+  END IF;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.id,NEW.workspace_id,event_type,'lifecycle',NEW.id,
+    CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,changes);
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_profile_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE event_type text; sections jsonb; owner_workspace uuid;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    event_type := CASE WHEN NEW.restored_from_revision_id IS NOT NULL THEN 'profile_restored' ELSE 'profile_saved' END;
+    SELECT COALESCE(jsonb_agg(key ORDER BY key),'[]'::jsonb) INTO sections
+    FROM jsonb_object_keys(CASE WHEN jsonb_typeof(NEW.structured_content)='object'
+      THEN NEW.structured_content ELSE '{}'::jsonb END) key
+    WHERE key<>'schemaVersion' AND NEW.structured_content->key IS DISTINCT FROM (
+      SELECT r.structured_content->key FROM student_profile_revisions r
+      WHERE r.student_id=NEW.student_id AND r.version_number<NEW.version_number
+      ORDER BY r.version_number DESC LIMIT 1);
+  ELSIF NEW.status = 'active' AND OLD.status IS DISTINCT FROM NEW.status THEN
+    event_type := 'profile_activated'; sections := '[]'::jsonb;
+  ELSE RETURN NEW; END IF;
+  SELECT workspace_id INTO owner_workspace FROM students WHERE id=NEW.student_id;
+  INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+  VALUES(NEW.student_id,owner_workspace,event_type,'profile',NEW.id,
+    CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user'
+      WHEN NEW.source='lesson_population' AND TG_OP='INSERT' THEN 'system' ELSE 'unknown' END,
+    jsonb_build_object('version',NEW.version_label,'source',NEW.source,'status',NEW.status,
+      'sections',sections,'restoredFromRevisionId',NEW.restored_from_revision_id));
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.record_student_reminder_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE previous_keys text[] := ARRAY[]::text[]; hidden_key text; lesson uuid;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM students s WHERE s.id=NEW.student_id
+    AND COALESCE(s.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=
+      COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)) THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' THEN previous_keys := OLD.hidden_lesson_followup_keys; END IF;
+  FOR hidden_key IN SELECT unnest(NEW.hidden_lesson_followup_keys) EXCEPT SELECT unnest(previous_keys) LOOP
+    INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+    VALUES(NEW.student_id,COALESCE(NEW.workspace_id,(SELECT workspace_id FROM students WHERE id=NEW.student_id)),'reminder_hidden','operations',NEW.student_id,
+      CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,
+      jsonb_build_object('lessonId',NEW.latest_hidden_lesson_followup_lesson_id));
+  END LOOP;
+  FOR hidden_key IN SELECT unnest(previous_keys) EXCEPT SELECT unnest(NEW.hidden_lesson_followup_keys) LOOP
+    lesson := OLD.latest_hidden_lesson_followup_lesson_id;
+    INSERT INTO student_activity(student_id,workspace_id,type,category,entity_id,actor_kind,payload)
+    VALUES(NEW.student_id,COALESCE(NEW.workspace_id,(SELECT workspace_id FROM students WHERE id=NEW.student_id)),'reminder_restored','operations',NEW.student_id,
+      CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,jsonb_build_object('lessonId',lesson));
+  END LOOP;
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.reject_historical_assignment_write() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_TABLE_NAME = 'drafts' THEN
+    IF NEW.format <> 'assignment_v1' THEN RAISE EXCEPTION 'legacy_assignment_read_only'; END IF;
+  ELSIF TG_TABLE_NAME = 'jobs' THEN
+    IF NEW.assignment_artifact IS NULL THEN RAISE EXCEPTION 'legacy_assignment_read_only'; END IF;
+  ELSIF TG_TABLE_NAME = 'assignment_sessions' THEN
+    IF historical_assignment_session(NEW)
+      OR (TG_OP = 'UPDATE' AND historical_assignment_session(OLD)) THEN
+      RAISE EXCEPTION 'legacy_assignment_read_only';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'homework_memory_entries' THEN
+    IF EXISTS (SELECT 1 FROM jobs WHERE id = NEW.job_id AND assignment_artifact IS NULL) THEN
+      RAISE EXCEPTION 'legacy_assignment_read_only';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'profile_initial_enrichment_operations' THEN
+    IF NEW.state IN ('waiting_evidence', 'queued', 'submitting', 'result_ready', 'uncertain', 'succeeded')
+      AND EXISTS (SELECT 1 FROM assignment_sessions s WHERE s.id = NEW.assignment_session_id
+        AND historical_assignment_session(s)) THEN
+      RAISE EXCEPTION 'legacy_assignment_read_only';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'student_memory_openai_batch_items' THEN
+    IF NEW.workload = 'homework_memory'
+      AND (NEW.source_refs ->> 'sourceFormat') IS DISTINCT FROM 'assignment_v1'
+      AND NEW.state IN ('planned', 'submitted', 'completed', 'imported', 'retryable_failure') THEN
+      RAISE EXCEPTION 'legacy_assignment_read_only';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
 CREATE FUNCTION public.reject_legacy_profile_write() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -57,6 +519,35 @@ BEGIN
   RAISE EXCEPTION 'Legacy profile storage is frozen; reconcile ABO-12 before removal';
 END;
 $$;
+
+CREATE FUNCTION public.reject_mcp_profile_identity_update() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW IS DISTINCT FROM OLD THEN
+    RAISE EXCEPTION 'MCP profile identity is immutable' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.reject_student_activity_delete() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM students WHERE id=OLD.student_id)
+    OR (OLD.workspace_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM workspaces WHERE id=OLD.workspace_id)) THEN RETURN OLD; END IF;
+  RAISE EXCEPTION 'Student activity follows student retention' USING ERRCODE='23514';
+END $$;
+
+CREATE FUNCTION public.reject_student_activity_update() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.actor_user_id IS NULL AND OLD.actor_user_id IS NOT NULL
+    AND (to_jsonb(NEW) - 'actor_user_id') = (to_jsonb(OLD) - 'actor_user_id')
+    AND NOT EXISTS (SELECT 1 FROM users WHERE id=OLD.actor_user_id) THEN RETURN NEW; END IF;
+  RAISE EXCEPTION 'Student activity is append-only' USING ERRCODE = '23514';
+END $$;
 
 CREATE FUNCTION public.request_confirmed_source_audio_deletion() RETURNS trigger
     LANGUAGE plpgsql
@@ -260,6 +751,19 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.set_student_activity_actor() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM students s WHERE s.id=NEW.student_id
+    AND COALESCE(s.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=
+      COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)) THEN
+    RAISE EXCEPTION 'Student activity ownership mismatch' USING ERRCODE='23514';
+  END IF;
+  NEW.actor_user_id := CASE WHEN NEW.actor_kind = 'user' THEN student_activity_actor_id() ELSE NULL END;
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION public.set_student_memory_openai_batch_claims_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -350,6 +854,14 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.student_activity_actor_id() RETURNS uuid
+    LANGUAGE sql STABLE
+    AS $_$
+  SELECT CASE WHEN NULLIF(current_setting('app.activity_actor_id',true),'') ~*
+    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    THEN current_setting('app.activity_actor_id',true)::uuid ELSE app_current_user_id() END
+$_$;
+
 CREATE TABLE public.alpha_invites (
     id uuid NOT NULL,
     email text NOT NULL,
@@ -365,45 +877,6 @@ CREATE TABLE public.alpha_invites (
     CONSTRAINT alpha_invites_email_normalized_check CHECK ((email_normalized = lower(btrim(email_normalized)))),
     CONSTRAINT alpha_invites_expiration_check CHECK ((expires_at > created_at)),
     CONSTRAINT alpha_invites_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'revoked'::text, 'expired'::text])))
-);
-
-CREATE TABLE public.assignment_sessions (
-    id uuid NOT NULL,
-    user_id uuid NOT NULL,
-    student_id uuid NOT NULL,
-    recording_id uuid,
-    transcript_id uuid,
-    prompt_package_id uuid,
-    draft_id uuid,
-    publish_target text,
-    selected_tts_provider text,
-    selected_tts_strategy text,
-    selected_tts_model text,
-    selected_preset text,
-    selected_generation_provider text,
-    selected_generation_model text,
-    teacher_notes text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    lesson_id uuid,
-    revision integer DEFAULT 1 NOT NULL,
-    confirmed_step text NOT NULL,
-    confirmed_snapshot jsonb NOT NULL,
-    creation_request_id text,
-    selected_profile_id text,
-    selected_profile_revision_id uuid,
-    selected_profile_revision_hash text,
-    share_job_id uuid,
-    CONSTRAINT assignment_sessions_completed_share_job_check CHECK (((confirmed_step <> 'share'::text) OR (share_job_id IS NOT NULL))),
-    CONSTRAINT assignment_sessions_confirmed_snapshot_check CHECK (((jsonb_typeof(confirmed_snapshot) = 'object'::text) AND (confirmed_snapshot ?& ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text]) AND (jsonb_typeof((confirmed_snapshot -> 'student'::text)) = 'object'::text) AND (NULLIF((confirmed_snapshot #>> '{student,studentId}'::text[]), ''::text) IS NOT NULL) AND (((confirmed_snapshot #>> '{student,studentId}'::text[]))::uuid = student_id) AND (((confirmed_snapshot -> 'source'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'source'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'context'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'create'::text)) = 'object'::text)))),
-    CONSTRAINT assignment_sessions_confirmed_step_check CHECK ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text, 'share'::text]))),
-    CONSTRAINT assignment_sessions_creation_request_id_check CHECK (((creation_request_id IS NULL) OR (btrim(creation_request_id) <> ''::text))),
-    CONSTRAINT assignment_sessions_generation_provider_check CHECK (((selected_generation_provider IS NULL) OR (selected_generation_provider = ANY (ARRAY['openai'::text, 'google_ai_studio'::text, 'openrouter'::text])))),
-    CONSTRAINT assignment_sessions_publish_target_check CHECK (((publish_target IS NULL) OR (publish_target = 'html'::text))),
-    CONSTRAINT assignment_sessions_revision_check CHECK ((revision > 0)),
-    CONSTRAINT assignment_sessions_selected_profile_revision_hash_check CHECK (((selected_profile_revision_hash IS NULL) OR (selected_profile_revision_hash ~ '^[0-9a-f]{64}$'::text))),
-    CONSTRAINT assignment_sessions_tts_provider_check CHECK (((selected_tts_provider IS NULL) OR (selected_tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text])))),
-    CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
 );
 
 CREATE TABLE public.assignment_source_binding_audit (
@@ -441,6 +914,70 @@ CREATE TABLE public.assignment_source_bindings (
     CONSTRAINT assignment_source_bindings_role_check CHECK ((binding_role = ANY (ARRAY['confirmed'::text, 'working'::text])))
 );
 
+CREATE TABLE public.calendar_lesson_bindings (
+    lesson_id uuid NOT NULL,
+    schedule_binding_id uuid NOT NULL,
+    connection_id uuid NOT NULL,
+    provider_event_id text NOT NULL,
+    recurring_event_id text,
+    original_start_time text,
+    source_version text,
+    provider_updated_at timestamp with time zone,
+    provider_status text NOT NULL,
+    canceled_by_calendar boolean DEFAULT false NOT NULL,
+    event_url text,
+    attention_code text
+);
+
+CREATE TABLE public.calendar_operations (
+    id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    connection_id uuid NOT NULL,
+    connection_generation bigint NOT NULL,
+    student_id uuid,
+    initiating_user_id uuid,
+    adopted_by uuid,
+    authority_policy text NOT NULL,
+    parent_id uuid,
+    kind text NOT NULL,
+    idempotency_key text NOT NULL,
+    request_hash text NOT NULL,
+    request_payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+    provider_event_id text,
+    association_marker text,
+    slot_index integer,
+    state text DEFAULT 'pending'::text NOT NULL,
+    write_attempted_at timestamp with time zone,
+    lease_token uuid,
+    lease_expires_at timestamp with time zone,
+    attempts integer DEFAULT 0 NOT NULL,
+    due_at timestamp with time zone DEFAULT now() NOT NULL,
+    error_code text,
+    event_url text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT calendar_operations_authority_policy_check CHECK ((authority_policy = ANY (ARRAY['initiator'::text, 'workspace_service'::text]))),
+    CONSTRAINT calendar_operations_kind_check CHECK ((kind = ANY (ARRAY['setup'::text, 'create'::text, 'bind'::text, 'sync'::text, 'refresh'::text]))),
+    CONSTRAINT calendar_operations_state_check CHECK ((state = ANY (ARRAY['pending'::text, 'running'::text, 'retry_wait'::text, 'succeeded'::text, 'needs_review'::text, 'superseded'::text])))
+);
+
+CREATE TABLE public.calendar_schedule_bindings (
+    id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    connection_id uuid NOT NULL,
+    provider_event_id text NOT NULL,
+    kind text NOT NULL,
+    association_marker text NOT NULL,
+    source_version text,
+    setup_operation_id uuid,
+    projected_until timestamp with time zone,
+    next_projection_at timestamp with time zone DEFAULT now() NOT NULL,
+    attention_code text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT calendar_schedule_bindings_kind_check CHECK ((kind = ANY (ARRAY['one_off'::text, 'series'::text])))
+);
+
 CREATE TABLE public.drafts (
     id uuid NOT NULL,
     prompt_package_id uuid NOT NULL,
@@ -452,7 +989,10 @@ CREATE TABLE public.drafts (
     lesson_id uuid,
     working_version integer NOT NULL,
     content_hash text NOT NULL,
+    format text DEFAULT 'markdown'::text NOT NULL,
+    CONSTRAINT drafts_assignment_v1_identity CHECK (((format = 'markdown'::text) OR ((working_version IS NOT NULL) AND (content_hash IS NOT NULL) AND (storage_uri ~~ (('%/content/'::text || content_hash) || '.json'::text))))),
     CONSTRAINT drafts_content_hash_check CHECK ((content_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT drafts_format_check CHECK ((format = ANY (ARRAY['markdown'::text, 'assignment_v1'::text]))),
     CONSTRAINT drafts_working_version_check CHECK ((working_version > 0))
 );
 
@@ -464,6 +1004,46 @@ CREATE TABLE public.generation_budget_counters (
     request_count integer DEFAULT 0 NOT NULL,
     reserved_tokens bigint DEFAULT 0 NOT NULL,
     actual_tokens bigint DEFAULT 0 NOT NULL
+);
+
+CREATE TABLE public.google_oauth_attempts (
+    id uuid NOT NULL,
+    state_hash text NOT NULL,
+    browser_binding_hash text NOT NULL,
+    requesting_user_id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    purpose text NOT NULL,
+    verifier_encrypted text NOT NULL,
+    nonce text NOT NULL,
+    connection_id uuid,
+    connection_generation integer,
+    status text DEFAULT 'pending'::text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT google_oauth_attempts_purpose_check CHECK ((purpose = 'connect-calendar'::text)),
+    CONSTRAINT google_oauth_attempts_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'claimed'::text, 'invalidated'::text, 'completed'::text])))
+);
+
+CREATE TABLE public.google_oauth_grants (
+    id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    authorizing_user_id uuid NOT NULL,
+    issuer text NOT NULL,
+    subject text NOT NULL,
+    client_id text NOT NULL,
+    google_email text NOT NULL,
+    granted_scopes text[] NOT NULL,
+    refresh_credential text NOT NULL,
+    access_credential text,
+    access_expires_at timestamp with time zone,
+    credential_epoch integer DEFAULT 1 NOT NULL,
+    status text DEFAULT 'active'::text NOT NULL,
+    refresh_lease_token uuid,
+    refresh_lease_expires_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT google_oauth_grants_credential_epoch_check CHECK ((credential_epoch > 0)),
+    CONSTRAINT google_oauth_grants_status_check CHECK ((status = ANY (ARRAY['active'::text, 'reconnect_required'::text, 'disconnected'::text])))
 );
 
 CREATE TABLE public.homework_memory_entries (
@@ -568,10 +1148,13 @@ CREATE TABLE public.jobs (
     tts_model text,
     publication_sequence bigint DEFAULT 0 NOT NULL,
     published_content_hash text,
+    assignment_artifact jsonb,
+    assignment_renderer_version integer,
+    CONSTRAINT jobs_assignment_artifact_identity CHECK ((((assignment_artifact IS NULL) AND (assignment_renderer_version IS NULL)) OR (((assignment_artifact IS NOT NULL) AND (assignment_renderer_version = ANY (ARRAY[1, 2, 3])) AND (prompt_package_id IS NOT NULL) AND (draft_id IS NOT NULL) AND ((assignment_artifact ->> 'format'::text) = 'assignment_v1'::text) AND ((assignment_artifact ->> 'schemaVersion'::text) = '1'::text) AND ((assignment_artifact ->> 'serializationVersion'::text) = '1'::text) AND ((assignment_artifact ->> 'workingVersion'::text) ~ '^[1-9][0-9]*$'::text) AND ((assignment_artifact ->> 'contentHash'::text) ~ '^[0-9a-f]{64}$'::text) AND ((assignment_artifact ->> 'storageUri'::text) ~~ (('%/content/'::text || (assignment_artifact ->> 'contentHash'::text)) || '.json'::text)) AND (jsonb_typeof((assignment_artifact -> 'schemaVersion'::text)) = 'number'::text) AND (jsonb_typeof((assignment_artifact -> 'serializationVersion'::text)) = 'number'::text) AND (jsonb_typeof((assignment_artifact -> 'workingVersion'::text)) = 'number'::text) AND (assignment_artifact ?& ARRAY['format'::text, 'schemaVersion'::text, 'serializationVersion'::text, 'workingVersion'::text, 'contentHash'::text, 'storageUri'::text])) IS TRUE))),
     CONSTRAINT jobs_mode_check CHECK (((mode IS NULL) OR (mode = ANY (ARRAY['auto'::text, 'dialogue'::text, 'monologue'::text, 'tts'::text])))),
     CONSTRAINT jobs_state_check CHECK ((state = ANY (ARRAY['queued'::text, 'running'::text, 'awaiting_approval'::text, 'succeeded'::text, 'failed'::text]))),
-    CONSTRAINT jobs_tts_model_check CHECK (((tts_model IS NULL) OR ((tts_provider = 'elevenlabs'::text) AND (tts_model = ANY (ARRAY['eleven_v3'::text, 'eleven_multilingual_v2'::text, 'eleven_flash_v2_5'::text, 'eleven_flash_v2'::text]))) OR ((tts_provider = 'google'::text) AND (tts_model = ANY (ARRAY['chirp3_hd'::text, 'studio'::text, 'neural2'::text, 'wavenet'::text]))) OR ((tts_provider = 'inworld'::text) AND (tts_model = ANY (ARRAY['inworld-tts-2'::text, 'inworld-tts-1.5-max'::text, 'inworld-tts-1.5-mini'::text]))))),
-    CONSTRAINT jobs_tts_provider_check CHECK (((tts_provider IS NULL) OR (tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text]))))
+    CONSTRAINT jobs_tts_model_check CHECK (((tts_model IS NULL) OR ((tts_provider = 'elevenlabs'::text) AND (tts_model = ANY (ARRAY['eleven_v3'::text, 'eleven_multilingual_v2'::text, 'eleven_flash_v2_5'::text, 'eleven_flash_v2'::text]))) OR ((tts_provider = 'google'::text) AND (tts_model = ANY (ARRAY['chirp3_hd'::text, 'studio'::text, 'neural2'::text, 'wavenet'::text]))) OR ((tts_provider = 'inworld'::text) AND (tts_model = ANY (ARRAY['inworld-tts-2'::text, 'inworld-tts-1.5-max'::text, 'inworld-tts-1.5-mini'::text]))) OR ((tts_provider = 'gemini'::text) AND (tts_model = ANY (ARRAY['gemini-3.8-flash-lite-tts'::text, 'gemini-3.8-flash-tts'::text]))))),
+    CONSTRAINT jobs_tts_provider_check CHECK (((tts_provider IS NULL) OR (tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text, 'gemini'::text]))))
 );
 
 CREATE TABLE public.legacy_profile_revisions (
@@ -674,6 +1257,12 @@ CREATE TABLE public.mcp_oauth_grants (
     revoked_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT mcp_oauth_grants_scope_check CHECK ((scope = 'teaching_context.read'::text))
+);
+
+CREATE TABLE public.mcp_profile_identities (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    workspace_id uuid NOT NULL
 );
 
 CREATE TABLE public.ops_actions (
@@ -847,6 +1436,27 @@ CREATE TABLE public.schema_migrations (
     tool_version text NOT NULL
 );
 
+CREATE TABLE public.student_activity (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    student_id uuid NOT NULL,
+    workspace_id uuid,
+    type text NOT NULL,
+    category text NOT NULL,
+    entity_id uuid NOT NULL,
+    occurred_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    recorded_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    transaction_id bigint DEFAULT txid_current() NOT NULL,
+    actor_kind text DEFAULT 'unknown'::text NOT NULL,
+    actor_user_id uuid,
+    payload_version integer DEFAULT 1 NOT NULL,
+    payload jsonb NOT NULL,
+    CONSTRAINT student_activity_actor_kind_check CHECK ((actor_kind = ANY (ARRAY['user'::text, 'system'::text, 'unknown'::text]))),
+    CONSTRAINT student_activity_category_check CHECK ((category = ANY (ARRAY['lessons'::text, 'profile'::text, 'billing'::text, 'lifecycle'::text, 'operations'::text]))),
+    CONSTRAINT student_activity_payload_check CHECK ((jsonb_typeof(payload) = 'object'::text)),
+    CONSTRAINT student_activity_payload_version_check CHECK ((payload_version = 1)),
+    CONSTRAINT student_activity_type_check CHECK ((type = ANY (ARRAY['lesson_created'::text, 'lesson_changed'::text, 'lesson_completed'::text, 'lesson_restored'::text, 'lesson_canceled'::text, 'lesson_no_show'::text, 'recurrence_changed'::text, 'profile_saved'::text, 'profile_restored'::text, 'profile_activated'::text, 'candidate_approved'::text, 'candidate_rejected'::text, 'candidate_deferred'::text, 'candidate_promoted'::text, 'student_created'::text, 'student_renamed'::text, 'student_archived'::text, 'student_restored'::text, 'reminder_hidden'::text, 'reminder_restored'::text, 'homework_failed'::text, 'homework_started'::text])))
+);
+
 CREATE TABLE public.student_credit_events (
     id uuid NOT NULL,
     student_id uuid NOT NULL,
@@ -860,6 +1470,8 @@ CREATE TABLE public.student_credit_events (
     voided_by uuid,
     created_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    activity_id uuid,
+    reversal_activity_id uuid,
     CONSTRAINT student_credit_events_nonzero_check CHECK ((quantity_delta <> 0)),
     CONSTRAINT student_credit_events_type_check CHECK ((event_type = ANY (ARRAY['credit_added'::text, 'credit_consumed'::text, 'credit_adjusted'::text])))
 );
@@ -869,46 +1481,12 @@ CREATE TABLE public.student_lesson_plans (
     workspace_id uuid,
     timezone text DEFAULT 'UTC'::text NOT NULL,
     default_duration_minutes integer DEFAULT 60 NOT NULL,
-    cadence text,
-    preferred_times text,
     scheduling_notes text,
     updated_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    retired_schedule_preferences jsonb DEFAULT '{}'::jsonb NOT NULL,
     CONSTRAINT student_lesson_plans_duration_check CHECK ((default_duration_minutes > 0))
-);
-
-CREATE TABLE public.student_lesson_recurrence_rules (
-    id uuid NOT NULL,
-    student_id uuid NOT NULL,
-    workspace_id uuid,
-    timezone text DEFAULT 'UTC'::text NOT NULL,
-    frequency text DEFAULT 'weekly'::text NOT NULL,
-    starts_on date DEFAULT CURRENT_DATE NOT NULL,
-    ends_on date,
-    status text DEFAULT 'active'::text NOT NULL,
-    generation_horizon_days integer DEFAULT 56 CONSTRAINT student_lesson_recurrence_rule_generation_horizon_days_not_null NOT NULL,
-    materialized_through date,
-    created_by uuid,
-    updated_by uuid,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT student_lesson_recurrence_rules_date_window_check CHECK (((ends_on IS NULL) OR (ends_on >= starts_on))),
-    CONSTRAINT student_lesson_recurrence_rules_frequency_check CHECK ((frequency = 'weekly'::text)),
-    CONSTRAINT student_lesson_recurrence_rules_horizon_check CHECK (((generation_horizon_days >= 7) AND (generation_horizon_days <= 366))),
-    CONSTRAINT student_lesson_recurrence_rules_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paused'::text, 'archived'::text])))
-);
-
-CREATE TABLE public.student_lesson_recurrence_slots (
-    id uuid NOT NULL,
-    rule_id uuid NOT NULL,
-    iso_weekday integer NOT NULL,
-    local_start_time time without time zone NOT NULL,
-    duration_minutes integer NOT NULL,
-    sort_order integer DEFAULT 0 NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT student_lesson_recurrence_slots_duration_check CHECK ((duration_minutes > 0)),
-    CONSTRAINT student_lesson_recurrence_slots_weekday_check CHECK (((iso_weekday >= 1) AND (iso_weekday <= 7)))
 );
 
 CREATE TABLE public.student_lessons (
@@ -928,17 +1506,11 @@ CREATE TABLE public.student_lessons (
     completed_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    recurrence_rule_id uuid,
-    recurrence_slot_id uuid,
-    recurrence_occurrence_key text,
-    recurrence_origin text DEFAULT 'manual'::text NOT NULL,
-    recurrence_override_kind text,
-    recurrence_obsolete_at timestamp with time zone,
-    recurrence_obsolete_by uuid,
-    recurrence_obsolete_reason text,
+    schedule_hidden_at timestamp with time zone,
+    schedule_hidden_by uuid,
+    schedule_hidden_reason text,
+    schedule_origin_history jsonb DEFAULT '{}'::jsonb NOT NULL,
     CONSTRAINT student_lessons_duration_check CHECK ((duration_minutes > 0)),
-    CONSTRAINT student_lessons_recurrence_origin_check CHECK ((recurrence_origin = ANY (ARRAY['manual'::text, 'generated'::text]))),
-    CONSTRAINT student_lessons_recurrence_override_kind_check CHECK (((recurrence_override_kind IS NULL) OR (recurrence_override_kind = ANY (ARRAY['manual_edit'::text, 'manual_reschedule'::text, 'manual_cancel'::text])))),
     CONSTRAINT student_lessons_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'completed'::text, 'canceled'::text, 'no_show'::text])))
 );
 
@@ -1177,7 +1749,9 @@ CREATE TABLE public.students (
     workspace_id uuid,
     profile_provenance text DEFAULT 'tutor_only'::text NOT NULL,
     profile_initial_enrichment_completed_at timestamp with time zone,
+    email text,
     CONSTRAINT students_check CHECK (((profile_provenance = 'evidence_enriched'::text) = (profile_initial_enrichment_completed_at IS NOT NULL))),
+    CONSTRAINT students_email_length CHECK (((email IS NULL) OR ((length(email) <= 320) AND (email = btrim(email)) AND (email <> ''::text)))),
     CONSTRAINT students_profile_provenance_check CHECK ((profile_provenance = ANY (ARRAY['unknown'::text, 'tutor_only'::text, 'evidence_enriched'::text])))
 );
 
@@ -1285,7 +1859,7 @@ CREATE TABLE public.user_settings (
     enable_notifications boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT user_settings_tts_provider_check CHECK ((tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text]))),
+    CONSTRAINT user_settings_tts_provider_check CHECK ((tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text, 'gemini'::text]))),
     CONSTRAINT user_settings_tts_strategy_check CHECK ((default_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text])))
 );
 
@@ -1324,6 +1898,29 @@ CREATE TABLE public.workspace_business_settings (
     CONSTRAINT workspace_business_settings_top_up_threshold_check CHECK ((top_up_threshold >= 0))
 );
 
+CREATE TABLE public.workspace_calendar_connections (
+    id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    grant_id uuid NOT NULL,
+    calendar_id text NOT NULL,
+    calendar_name text NOT NULL,
+    calendar_timezone text NOT NULL,
+    generation integer DEFAULT 1 NOT NULL,
+    status text NOT NULL,
+    sync_token text,
+    sync_page_token text,
+    sync_query jsonb DEFAULT '{"showDeleted": true, "singleEvents": false}'::jsonb NOT NULL,
+    last_synced_at timestamp with time zone,
+    next_sync_at timestamp with time zone DEFAULT now() NOT NULL,
+    lease_token uuid,
+    lease_expires_at timestamp with time zone,
+    error_code text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT workspace_calendar_connections_generation_check CHECK ((generation > 0)),
+    CONSTRAINT workspace_calendar_connections_status_check CHECK ((status = ANY (ARRAY['connected'::text, 'reconnect_required'::text, 'disconnected'::text])))
+);
+
 CREATE TABLE public.workspace_memberships (
     workspace_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -1357,11 +1954,50 @@ ALTER TABLE ONLY public.assignment_source_binding_audit
 ALTER TABLE ONLY public.assignment_source_bindings
     ADD CONSTRAINT assignment_source_bindings_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.calendar_lesson_bindings
+    ADD CONSTRAINT calendar_lesson_bindings_connection_id_provider_event_id_key UNIQUE (connection_id, provider_event_id);
+
+ALTER TABLE ONLY public.calendar_lesson_bindings
+    ADD CONSTRAINT calendar_lesson_bindings_pkey PRIMARY KEY (lesson_id);
+
+ALTER TABLE ONLY public.calendar_lesson_bindings
+    ADD CONSTRAINT calendar_lesson_bindings_schedule_binding_id_original_start_key UNIQUE (schedule_binding_id, original_start_time);
+
+ALTER TABLE ONLY public.calendar_operations
+    ADD CONSTRAINT calendar_operations_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.calendar_operations
+    ADD CONSTRAINT calendar_operations_workspace_id_kind_idempotency_key_key UNIQUE (workspace_id, kind, idempotency_key);
+
+ALTER TABLE ONLY public.calendar_schedule_bindings
+    ADD CONSTRAINT calendar_schedule_bindings_connection_id_association_marker_key UNIQUE (connection_id, association_marker);
+
+ALTER TABLE ONLY public.calendar_schedule_bindings
+    ADD CONSTRAINT calendar_schedule_bindings_connection_id_provider_event_id_key UNIQUE (connection_id, provider_event_id);
+
+ALTER TABLE ONLY public.calendar_schedule_bindings
+    ADD CONSTRAINT calendar_schedule_bindings_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.generation_budget_counters
     ADD CONSTRAINT generation_budget_counters_pkey PRIMARY KEY (bucket_type, bucket_start, provider, model);
+
+ALTER TABLE ONLY public.google_oauth_attempts
+    ADD CONSTRAINT google_oauth_attempts_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.google_oauth_attempts
+    ADD CONSTRAINT google_oauth_attempts_state_hash_key UNIQUE (state_hash);
+
+ALTER TABLE ONLY public.google_oauth_grants
+    ADD CONSTRAINT google_oauth_grants_id_workspace_id_key UNIQUE (id, workspace_id);
+
+ALTER TABLE ONLY public.google_oauth_grants
+    ADD CONSTRAINT google_oauth_grants_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.google_oauth_grants
+    ADD CONSTRAINT google_oauth_grants_workspace_id_authorizing_user_id_issuer_key UNIQUE (workspace_id, authorizing_user_id, issuer, subject, client_id);
 
 ALTER TABLE ONLY public.homework_memory_entries
     ADD CONSTRAINT homework_memory_entries_pkey PRIMARY KEY (id);
@@ -1380,6 +2016,12 @@ ALTER TABLE ONLY public.mcp_oauth_artifacts
 
 ALTER TABLE ONLY public.mcp_oauth_grants
     ADD CONSTRAINT mcp_oauth_grants_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.mcp_profile_identities
+    ADD CONSTRAINT mcp_profile_identities_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.mcp_profile_identities
+    ADD CONSTRAINT mcp_profile_identities_user_id_workspace_id_key UNIQUE (user_id, workspace_id);
 
 ALTER TABLE ONLY public.ops_actions
     ADD CONSTRAINT ops_actions_pkey PRIMARY KEY (operation_id);
@@ -1411,17 +2053,14 @@ ALTER TABLE ONLY public.recordings
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.student_activity
+    ADD CONSTRAINT student_activity_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.student_credit_events
     ADD CONSTRAINT student_credit_events_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.student_lesson_plans
     ADD CONSTRAINT student_lesson_plans_pkey PRIMARY KEY (student_id);
-
-ALTER TABLE ONLY public.student_lesson_recurrence_rules
-    ADD CONSTRAINT student_lesson_recurrence_rules_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.student_lesson_recurrence_slots
-    ADD CONSTRAINT student_lesson_recurrence_slots_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_pkey PRIMARY KEY (id);
@@ -1510,19 +2149,31 @@ ALTER TABLE ONLY public.users
 ALTER TABLE ONLY public.workspace_business_settings
     ADD CONSTRAINT workspace_business_settings_pkey PRIMARY KEY (workspace_id);
 
+ALTER TABLE ONLY public.workspace_calendar_connections
+    ADD CONSTRAINT workspace_calendar_connections_id_workspace_id_key UNIQUE (id, workspace_id);
+
+ALTER TABLE ONLY public.workspace_calendar_connections
+    ADD CONSTRAINT workspace_calendar_connections_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.workspace_memberships
     ADD CONSTRAINT workspace_memberships_pkey PRIMARY KEY (workspace_id, user_id);
 
 ALTER TABLE ONLY public.workspaces
     ADD CONSTRAINT workspaces_pkey PRIMARY KEY (id);
 
+CREATE INDEX calendar_operations_dispatch ON public.calendar_operations USING btree (due_at) WHERE (state = ANY (ARRAY['pending'::text, 'running'::text, 'retry_wait'::text]));
+
+CREATE INDEX google_oauth_attempts_browser_pending ON public.google_oauth_attempts USING btree (browser_binding_hash) WHERE (status = ANY (ARRAY['pending'::text, 'claimed'::text]));
+
+CREATE UNIQUE INDEX homework_memory_replay_key ON public.homework_memory_entries USING btree (assignment_lineage_key, ((generation_notes ->> 'replayKey'::text))) WHERE (((generation_notes ->> 'replayKey'::text) IS NOT NULL) AND ((generation_notes ->> 'pendingEntryId'::text) IS NULL));
+
 CREATE UNIQUE INDEX idx_alpha_invites_pending_email_normalized ON public.alpha_invites USING btree (email_normalized) WHERE (status = 'pending'::text);
 
 CREATE INDEX idx_alpha_invites_status_expires_at ON public.alpha_invites USING btree (status, expires_at);
 
-CREATE INDEX idx_assignment_sessions_lesson_updated ON public.assignment_sessions USING btree (lesson_id, updated_at DESC, id DESC) WHERE ((confirmed_step <> 'share'::text) AND (lesson_id IS NOT NULL));
+CREATE INDEX idx_assignment_sessions_lesson_updated ON public.assignment_sessions USING btree (lesson_id, updated_at DESC, id DESC) WHERE ((confirmed_step <> 'share'::text) AND (transcript_completed_at IS NULL) AND (lesson_id IS NOT NULL));
 
-CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC) WHERE (confirmed_step <> 'share'::text);
+CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC) WHERE ((confirmed_step <> 'share'::text) AND (transcript_completed_at IS NULL));
 
 CREATE UNIQUE INDEX idx_assignment_sessions_user_creation_request ON public.assignment_sessions USING btree (user_id, creation_request_id) WHERE (creation_request_id IS NOT NULL);
 
@@ -1664,27 +2315,23 @@ CREATE INDEX idx_recordings_workspace_sha256 ON public.recordings USING btree (w
 
 CREATE INDEX idx_schema_migrations_applied_at ON public.schema_migrations USING btree (applied_at DESC);
 
+CREATE INDEX idx_student_activity_entity_transaction ON public.student_activity USING btree (entity_id, transaction_id);
+
+CREATE INDEX idx_student_activity_page ON public.student_activity USING btree (workspace_id, student_id, occurred_at DESC, id DESC);
+
 CREATE INDEX idx_student_credit_events_student_active ON public.student_credit_events USING btree (student_id, created_at DESC, id DESC) WHERE (voided_at IS NULL);
 
 CREATE INDEX idx_student_credit_events_student_created_at ON public.student_credit_events USING btree (student_id, created_at DESC, id DESC);
 
 CREATE INDEX idx_student_credit_events_workspace_active ON public.student_credit_events USING btree (workspace_id, student_id, created_at DESC, id DESC) WHERE (voided_at IS NULL);
 
-CREATE UNIQUE INDEX idx_student_lesson_recurrence_rules_primary_active ON public.student_lesson_recurrence_rules USING btree (student_id) WHERE (status <> 'archived'::text);
-
-CREATE INDEX idx_student_lesson_recurrence_rules_student ON public.student_lesson_recurrence_rules USING btree (student_id, status, id);
-
-CREATE INDEX idx_student_lesson_recurrence_slots_rule ON public.student_lesson_recurrence_slots USING btree (rule_id, iso_weekday, local_start_time, id);
-
-CREATE UNIQUE INDEX idx_student_lessons_recurrence_occurrence_active ON public.student_lessons USING btree (recurrence_rule_id, recurrence_occurrence_key) WHERE ((recurrence_rule_id IS NOT NULL) AND (recurrence_occurrence_key IS NOT NULL) AND (recurrence_obsolete_at IS NULL));
-
-CREATE INDEX idx_student_lessons_student_active_schedule ON public.student_lessons USING btree (student_id, starts_at DESC, id DESC) WHERE (recurrence_obsolete_at IS NULL);
+CREATE INDEX idx_student_lessons_student_active_schedule ON public.student_lessons USING btree (student_id, starts_at DESC, id DESC) WHERE (schedule_hidden_at IS NULL);
 
 CREATE INDEX idx_student_lessons_student_next ON public.student_lessons USING btree (student_id, starts_at, id) WHERE (status = 'scheduled'::text);
 
 CREATE INDEX idx_student_lessons_student_starts_at ON public.student_lessons USING btree (student_id, starts_at DESC, id DESC);
 
-CREATE INDEX idx_student_lessons_workspace_active_schedule ON public.student_lessons USING btree (workspace_id, starts_at, id) WHERE (recurrence_obsolete_at IS NULL);
+CREATE INDEX idx_student_lessons_workspace_active_schedule ON public.student_lessons USING btree (workspace_id, starts_at, id) WHERE (schedule_hidden_at IS NULL);
 
 CREATE INDEX idx_student_lessons_workspace_starts_at ON public.student_lessons USING btree (workspace_id, starts_at, id);
 
@@ -1794,19 +2441,79 @@ CREATE INDEX profile_initial_enrichment_reconcile_idx ON public.profile_initial_
 
 CREATE INDEX profile_initial_enrichment_success_student_idx ON public.profile_initial_enrichment_operations USING btree (student_id) WHERE (state = 'succeeded'::text);
 
+CREATE UNIQUE INDEX student_memory_snapshot_replay_key ON public.student_memory_snapshots USING btree (student_id, ((generation_notes ->> 'replayKey'::text))) WHERE (((generation_notes ->> 'replayKey'::text) IS NOT NULL) AND ((generation_notes ->> 'pendingEntryId'::text) IS NULL));
+
 CREATE UNIQUE INDEX student_profile_revisions_single_active ON public.student_profile_revisions USING btree (student_id) WHERE (status = 'active'::text);
 
 CREATE INDEX student_profile_revisions_student_created ON public.student_profile_revisions USING btree (student_id, created_at DESC);
 
 CREATE INDEX student_profile_revisions_student_hash ON public.student_profile_revisions USING btree (student_id, content_hash);
 
+CREATE UNIQUE INDEX workspace_calendar_connections_remote_active ON public.workspace_calendar_connections USING btree (calendar_id) WHERE (status <> 'disconnected'::text);
+
+CREATE UNIQUE INDEX workspace_calendar_connections_workspace_active ON public.workspace_calendar_connections USING btree (workspace_id) WHERE (status <> 'disconnected'::text);
+
+CREATE TRIGGER assignment_sessions_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
+
 CREATE TRIGGER assignment_sessions_confirmed_source_audio_deletion AFTER INSERT OR UPDATE OF confirmed_snapshot, recording_id, student_id ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.request_confirmed_source_audio_deletion();
+
+CREATE TRIGGER calendar_membership_authority_loss AFTER DELETE OR UPDATE OF role ON public.workspace_memberships FOR EACH ROW EXECUTE FUNCTION public.fence_calendar_authority_loss();
+
+CREATE TRIGGER calendar_user_authority_loss AFTER UPDATE OF is_active ON public.users FOR EACH ROW EXECUTE FUNCTION public.fence_calendar_authority_loss();
+
+CREATE TRIGGER drafts_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
 
 CREATE TRIGGER freeze_legacy_profile_bindings BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_student_profile_bindings FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
 
 CREATE TRIGGER freeze_legacy_profile_revisions BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_profile_revisions FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
 
 CREATE TRIGGER freeze_legacy_profiles BEFORE INSERT OR DELETE OR UPDATE ON public.legacy_profiles FOR EACH ROW EXECUTE FUNCTION public.reject_legacy_profile_write();
+
+CREATE TRIGGER guard_completed_recording_source BEFORE UPDATE OF student_id, audio_topology, source_identity_kind, source_fingerprint_scheme, source_fingerprint ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.guard_completed_transcript_source();
+
+CREATE TRIGGER guard_completed_transcript_insert BEFORE INSERT ON public.transcripts FOR EACH ROW EXECUTE FUNCTION public.guard_completed_transcript_source();
+
+CREATE TRIGGER guard_completed_transcript_update BEFORE UPDATE OF storage_uri, content_hash, working_version, summary_json, recording_id ON public.transcripts FOR EACH ROW EXECUTE FUNCTION public.guard_completed_transcript_source();
+
+CREATE TRIGGER guard_session_homework_prompt BEFORE INSERT OR UPDATE ON public.prompt_packages FOR EACH ROW EXECUTE FUNCTION public.guard_session_homework_artifact();
+
+CREATE TRIGGER historical_drafts_read_only BEFORE INSERT OR UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_homework_batch_read_only BEFORE INSERT OR UPDATE ON public.student_memory_openai_batch_items FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_homework_memory_read_only BEFORE INSERT OR UPDATE ON public.homework_memory_entries FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_jobs_read_only BEFORE INSERT OR UPDATE ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_profile_enrichment_read_only BEFORE INSERT OR UPDATE ON public.profile_initial_enrichment_operations FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER historical_sessions_read_only BEFORE INSERT OR UPDATE ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.reject_historical_assignment_write();
+
+CREATE TRIGGER homework_memory_canonical_student_lock BEFORE INSERT OR DELETE OR UPDATE ON public.homework_memory_entries FOR EACH ROW EXECUTE FUNCTION public.lock_canonical_memory_student();
+
+CREATE TRIGGER homework_memory_entries_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.homework_memory_entries FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
+
+CREATE TRIGGER jobs_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
+
+CREATE TRIGGER lesson_memory_canonical_student_lock BEFORE INSERT OR DELETE OR UPDATE ON public.lesson_memory_entries FOR EACH ROW EXECUTE FUNCTION public.lock_canonical_memory_student();
+
+CREATE TRIGGER mcp_profile_identity_immutable BEFORE UPDATE ON public.mcp_profile_identities FOR EACH ROW EXECUTE FUNCTION public.reject_mcp_profile_identity_update();
+
+CREATE TRIGGER memory_confirmed_source_delete_lock BEFORE DELETE ON public.assignment_source_bindings FOR EACH ROW WHEN ((old.binding_role = 'confirmed'::text)) EXECUTE FUNCTION public.lock_memory_source_student();
+
+CREATE TRIGGER memory_confirmed_source_insert_lock BEFORE INSERT ON public.assignment_source_bindings FOR EACH ROW WHEN ((new.binding_role = 'confirmed'::text)) EXECUTE FUNCTION public.lock_memory_source_student();
+
+CREATE TRIGGER memory_confirmed_source_snapshot_lock BEFORE UPDATE ON public.assignment_sessions FOR EACH ROW WHEN ((((old.confirmed_snapshot -> 'source'::text) IS DISTINCT FROM (new.confirmed_snapshot -> 'source'::text)) OR (old.student_id IS DISTINCT FROM new.student_id))) EXECUTE FUNCTION public.lock_memory_source_student();
+
+CREATE TRIGGER memory_confirmed_source_update_lock BEFORE UPDATE ON public.assignment_source_bindings FOR EACH ROW WHEN (((old.binding_role = 'confirmed'::text) OR (new.binding_role = 'confirmed'::text))) EXECUTE FUNCTION public.lock_memory_source_student();
+
+CREATE TRIGGER preserve_assignment_artifact_identity BEFORE UPDATE ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.preserve_assignment_artifact_identity();
+
+CREATE TRIGGER preserve_assignment_draft_format BEFORE UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.preserve_assignment_draft_format();
+
+CREATE TRIGGER preserve_transcript_completion_history BEFORE UPDATE ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.preserve_transcript_completion_history();
+
+CREATE TRIGGER prompt_packages_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.prompt_packages FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
 
 CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
 
@@ -1845,6 +2552,32 @@ CREATE TRIGGER set_uploaded_files_updated_at BEFORE UPDATE ON public.uploaded_fi
 CREATE TRIGGER set_user_settings_updated_at BEFORE UPDATE ON public.user_settings FOR EACH ROW EXECUTE FUNCTION public.set_user_settings_updated_at();
 
 CREATE TRIGGER set_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_users_updated_at();
+
+CREATE TRIGGER student_activity_actor BEFORE INSERT ON public.student_activity FOR EACH ROW EXECUTE FUNCTION public.set_student_activity_actor();
+
+CREATE TRIGGER student_activity_immutable BEFORE UPDATE ON public.student_activity FOR EACH ROW EXECUTE FUNCTION public.reject_student_activity_update();
+
+CREATE TRIGGER student_activity_retention BEFORE DELETE ON public.student_activity FOR EACH ROW EXECUTE FUNCTION public.reject_student_activity_delete();
+
+CREATE TRIGGER student_candidate_activity AFTER UPDATE ON public.student_profile_candidates FOR EACH ROW EXECUTE FUNCTION public.record_student_candidate_activity();
+
+CREATE TRIGGER student_credit_activity BEFORE INSERT OR UPDATE ON public.student_credit_events FOR EACH ROW EXECUTE FUNCTION public.link_student_credit_activity();
+
+CREATE TRIGGER student_credit_events_calendar_projection_guard BEFORE INSERT OR UPDATE OF source_lesson_id ON public.student_credit_events FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('source_lesson_id');
+
+CREATE TRIGGER student_homework_started_activity AFTER UPDATE ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.record_student_homework_started_activity();
+
+CREATE TRIGGER student_job_failure_activity AFTER INSERT OR UPDATE ON public.jobs FOR EACH ROW EXECUTE FUNCTION public.record_student_job_failure_activity();
+
+CREATE TRIGGER student_lesson_activity AFTER INSERT OR UPDATE ON public.student_lessons FOR EACH ROW EXECUTE FUNCTION public.record_student_lesson_activity();
+
+CREATE TRIGGER student_lifecycle_activity AFTER INSERT OR UPDATE ON public.students FOR EACH ROW EXECUTE FUNCTION public.record_student_lifecycle_activity();
+
+CREATE TRIGGER student_profile_activity AFTER INSERT OR UPDATE ON public.student_profile_revisions FOR EACH ROW EXECUTE FUNCTION public.record_student_profile_activity();
+
+CREATE TRIGGER student_profile_candidates_calendar_projection_guard BEFORE INSERT OR UPDATE OF source_lesson_id ON public.student_profile_candidates FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('source_lesson_id');
+
+CREATE TRIGGER student_reminder_activity AFTER INSERT OR UPDATE ON public.student_reminder_preferences FOR EACH ROW EXECUTE FUNCTION public.record_student_reminder_activity();
 
 CREATE TRIGGER trg_set_ops_actions_updated_at BEFORE UPDATE ON public.ops_actions FOR EACH ROW EXECUTE FUNCTION public.set_ops_actions_updated_at();
 
@@ -1896,6 +2629,45 @@ ALTER TABLE ONLY public.assignment_source_bindings
 ALTER TABLE ONLY public.assignment_source_bindings
     ADD CONSTRAINT assignment_source_bindings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
 
+ALTER TABLE ONLY public.calendar_lesson_bindings
+    ADD CONSTRAINT calendar_lesson_bindings_connection_id_fkey FOREIGN KEY (connection_id) REFERENCES public.workspace_calendar_connections(id);
+
+ALTER TABLE ONLY public.calendar_lesson_bindings
+    ADD CONSTRAINT calendar_lesson_bindings_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.student_lessons(id);
+
+ALTER TABLE ONLY public.calendar_lesson_bindings
+    ADD CONSTRAINT calendar_lesson_bindings_schedule_binding_id_fkey FOREIGN KEY (schedule_binding_id) REFERENCES public.calendar_schedule_bindings(id);
+
+ALTER TABLE ONLY public.calendar_operations
+    ADD CONSTRAINT calendar_operations_adopted_by_fkey FOREIGN KEY (adopted_by) REFERENCES public.users(id);
+
+ALTER TABLE ONLY public.calendar_operations
+    ADD CONSTRAINT calendar_operations_connection_id_fkey FOREIGN KEY (connection_id) REFERENCES public.workspace_calendar_connections(id);
+
+ALTER TABLE ONLY public.calendar_operations
+    ADD CONSTRAINT calendar_operations_initiating_user_id_fkey FOREIGN KEY (initiating_user_id) REFERENCES public.users(id);
+
+ALTER TABLE ONLY public.calendar_operations
+    ADD CONSTRAINT calendar_operations_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.calendar_operations(id);
+
+ALTER TABLE ONLY public.calendar_operations
+    ADD CONSTRAINT calendar_operations_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id);
+
+ALTER TABLE ONLY public.calendar_operations
+    ADD CONSTRAINT calendar_operations_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
+
+ALTER TABLE ONLY public.calendar_schedule_bindings
+    ADD CONSTRAINT calendar_schedule_bindings_connection_id_fkey FOREIGN KEY (connection_id) REFERENCES public.workspace_calendar_connections(id);
+
+ALTER TABLE ONLY public.calendar_schedule_bindings
+    ADD CONSTRAINT calendar_schedule_bindings_setup_operation_id_fkey FOREIGN KEY (setup_operation_id) REFERENCES public.calendar_operations(id);
+
+ALTER TABLE ONLY public.calendar_schedule_bindings
+    ADD CONSTRAINT calendar_schedule_bindings_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id);
+
+ALTER TABLE ONLY public.calendar_schedule_bindings
+    ADD CONSTRAINT calendar_schedule_bindings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
+
 ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
@@ -1904,6 +2676,21 @@ ALTER TABLE ONLY public.drafts
 
 ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_prompt_package_id_fkey FOREIGN KEY (prompt_package_id) REFERENCES public.prompt_packages(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.google_oauth_attempts
+    ADD CONSTRAINT google_oauth_attempts_connection_fkey FOREIGN KEY (connection_id, workspace_id) REFERENCES public.workspace_calendar_connections(id, workspace_id);
+
+ALTER TABLE ONLY public.google_oauth_attempts
+    ADD CONSTRAINT google_oauth_attempts_requesting_user_id_fkey FOREIGN KEY (requesting_user_id) REFERENCES public.users(id);
+
+ALTER TABLE ONLY public.google_oauth_attempts
+    ADD CONSTRAINT google_oauth_attempts_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
+
+ALTER TABLE ONLY public.google_oauth_grants
+    ADD CONSTRAINT google_oauth_grants_authorizing_user_id_fkey FOREIGN KEY (authorizing_user_id) REFERENCES public.users(id);
+
+ALTER TABLE ONLY public.google_oauth_grants
+    ADD CONSTRAINT google_oauth_grants_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
 
 ALTER TABLE ONLY public.homework_memory_entries
     ADD CONSTRAINT homework_memory_entries_assignment_lineage_key_fkey FOREIGN KEY (assignment_lineage_key) REFERENCES public.jobs(id) ON DELETE CASCADE;
@@ -1971,6 +2758,12 @@ ALTER TABLE ONLY public.mcp_oauth_grants
 ALTER TABLE ONLY public.mcp_oauth_grants
     ADD CONSTRAINT mcp_oauth_grants_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.mcp_profile_identities
+    ADD CONSTRAINT mcp_profile_identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.mcp_profile_identities
+    ADD CONSTRAINT mcp_profile_identities_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
 ALTER TABLE ONLY public.profile_initial_enrichment_operations
     ADD CONSTRAINT profile_initial_enrichment_op_student_id_result_revision_i_fkey FOREIGN KEY (student_id, result_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
 
@@ -2037,8 +2830,23 @@ ALTER TABLE ONLY public.recordings
 ALTER TABLE ONLY public.recordings
     ADD CONSTRAINT recordings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
 
+ALTER TABLE ONLY public.student_activity
+    ADD CONSTRAINT student_activity_actor_user_id_fkey FOREIGN KEY (actor_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_activity
+    ADD CONSTRAINT student_activity_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_activity
+    ADD CONSTRAINT student_activity_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_activity_id_fkey FOREIGN KEY (activity_id) REFERENCES public.student_activity(id) ON DELETE SET NULL;
+
 ALTER TABLE ONLY public.student_credit_events
     ADD CONSTRAINT student_credit_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_reversal_activity_id_fkey FOREIGN KEY (reversal_activity_id) REFERENCES public.student_activity(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_credit_events
     ADD CONSTRAINT student_credit_events_source_lesson_id_fkey FOREIGN KEY (source_lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
@@ -2064,21 +2872,6 @@ ALTER TABLE ONLY public.student_lesson_plans
 ALTER TABLE ONLY public.student_lesson_plans
     ADD CONSTRAINT student_lesson_plans_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
 
-ALTER TABLE ONLY public.student_lesson_recurrence_rules
-    ADD CONSTRAINT student_lesson_recurrence_rules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.student_lesson_recurrence_rules
-    ADD CONSTRAINT student_lesson_recurrence_rules_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.student_lesson_recurrence_rules
-    ADD CONSTRAINT student_lesson_recurrence_rules_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.student_lesson_recurrence_rules
-    ADD CONSTRAINT student_lesson_recurrence_rules_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.student_lesson_recurrence_slots
-    ADD CONSTRAINT student_lesson_recurrence_slots_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.student_lesson_recurrence_rules(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
@@ -2089,13 +2882,7 @@ ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_credit_event_id_fkey FOREIGN KEY (credit_event_id) REFERENCES public.student_credit_events(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_lessons
-    ADD CONSTRAINT student_lessons_recurrence_obsolete_by_fkey FOREIGN KEY (recurrence_obsolete_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.student_lessons
-    ADD CONSTRAINT student_lessons_recurrence_rule_id_fkey FOREIGN KEY (recurrence_rule_id) REFERENCES public.student_lesson_recurrence_rules(id) ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.student_lessons
-    ADD CONSTRAINT student_lessons_recurrence_slot_id_fkey FOREIGN KEY (recurrence_slot_id) REFERENCES public.student_lesson_recurrence_slots(id) ON DELETE SET NULL;
+    ADD CONSTRAINT student_lessons_recurrence_obsolete_by_fkey FOREIGN KEY (schedule_hidden_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
@@ -2235,6 +3022,12 @@ ALTER TABLE ONLY public.workspace_business_settings
 ALTER TABLE ONLY public.workspace_business_settings
     ADD CONSTRAINT workspace_business_settings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.workspace_calendar_connections
+    ADD CONSTRAINT workspace_calendar_connections_grant_id_workspace_id_fkey FOREIGN KEY (grant_id, workspace_id) REFERENCES public.google_oauth_grants(id, workspace_id);
+
+ALTER TABLE ONLY public.workspace_calendar_connections
+    ADD CONSTRAINT workspace_calendar_connections_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id);
+
 ALTER TABLE ONLY public.workspace_memberships
     ADD CONSTRAINT workspace_memberships_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
@@ -2372,5 +3165,18 @@ VALUES
   ('0057_historical_profile_provenance_timestamp', 'e203033eb30c1456a4df56bbf1b784d0d842cf28a4dcc1a510fd87217e7a7e09', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0058_mcp_oauth_foundation', '4c4d181b4f150b453c447f3d2fb652b990f479dcd5ddb5ab2a89089f0cfb1cc0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0059_student_owned_profile_revisions', '60b283fa0b95c8afe46b3233c3e7c50f38d8a3d81fdc98394a414846df6ceb01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0060_user_settings_owner_key', '80e6ba7ab7e15f5e8049a6114dc2bc6cee6fe43bf16121cec137d4af51f760c3', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0060_user_settings_owner_key', '80e6ba7ab7e15f5e8049a6114dc2bc6cee6fe43bf16121cec137d4af51f760c3', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0061_ordinary_memory_replay', '0f5da854ddd4ea23025e5f9d78938f5d4e4454c63e5fd9314ac887c4110565ff', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0062_assignment_v1_authority', 'df1b835d96032ecf9afb0d3fe034ee3cfe605dfecdb1dc578d7fb2f2f20c5b4d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0063_assignment_native_renderer', 'e58336ba97dc05926e652b786b370743061f8e4702029bb79fd84ffa7bb88492', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0064_historical_markdown_read_only', '9a74cf33697ccc187b1674e03d06a1f5b41b79a555e19918d9465fc5f00dd292', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0065_assignment_react_renderer', '2e37a9fd1fb5f1c3efa8807e985eb254c63bc4b972de2d544e9b8372233c40dc', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0066_no_homework_lesson', '47c8dc8f633f5d2ff07282d3ff393886245c477dd3854204c5970147bdfe2104', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0067_mcp_profile_identities', '430f6083475887792ed256290751ac5f4bff9ecf4cc8a84bf7f1402d2ef50f22', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0068_student_activity', '004e9d9a1b05415f9ab850ec241f34fa1ef68dbe7fc5843ec4dd35c53985af05', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0069_google_calendar_connection', 'e588c33b65438b42d6df0919cd4763221df195cdb35fd26c906906da3a009f3a', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0070_calendar_scheduling', 'c30cbc331b6f884ff7a732fe28d582b74e2bf1ef54bb0588dca063ddfeb2c759', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0071_scheduler_retirement', '45ee490d0893537325b299c0e6ee161ec72f139fe2c260aa95d3a5a4abf1eb7c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0072_calendar_projection_reference_guard', '50cf12476c3fd513fa328777a12ca2260d2c6a1b99b15b4b8c623a9093b3ef06', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0073_gemini_tts_provider', 'cdaee92f0b9f19241844d93ed34db298c4cf0f6d852de4c21bca555dcd33a169', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

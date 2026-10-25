@@ -24,6 +24,8 @@ interface LessonMemoryRow {
   transcript_id: string;
   recording_id: string;
   assignment_session_id?: string | null;
+  source_lesson_id?: string | null;
+  source_lesson_started_at?: Date | null;
   schema_version: string;
   generated_at: Date;
   provider: string;
@@ -86,6 +88,7 @@ export interface ListLessonMemoryEntriesOptions {
   studentId?: string | null;
   transcriptId?: string | null;
   recordingId?: string | null;
+  ids?: readonly string[];
   statuses?: LessonMemoryEntryStatus[];
   limit: number;
   offset: number;
@@ -93,7 +96,8 @@ export interface ListLessonMemoryEntriesOptions {
   canonicalOnly?: boolean;
 }
 
-export function buildCanonicalLessonMemoryAuthoritySqlPredicate(entryAlias: string): string {
+/** Source proof for existing observations, independent of workflow execution permission. */
+export function buildVerifiedLessonMemoryEvidenceSqlPredicate(entryAlias: string): string {
   if (!/^[a-z_][a-z0-9_]*$/.test(entryAlias)) {
     throw new Error('Invalid lesson-memory SQL alias');
   }
@@ -103,7 +107,16 @@ export function buildCanonicalLessonMemoryAuthoritySqlPredicate(entryAlias: stri
     JOIN assignment_sessions AS source_session
       ON source_session.id = source_binding.assignment_session_id
     JOIN recordings AS source_recording ON source_recording.id = ${entryAlias}.recording_id
+    JOIN students AS source_student ON source_student.id = ${entryAlias}.student_id
+    JOIN transcripts AS source_transcript ON source_transcript.id = ${entryAlias}.transcript_id
     WHERE source_binding.assignment_session_id = ${entryAlias}.assignment_session_id
+      AND source_binding.student_id = ${entryAlias}.student_id
+      AND source_session.student_id = ${entryAlias}.student_id
+      AND source_recording.student_id = ${entryAlias}.student_id
+      AND source_binding.user_id = source_session.user_id
+      AND source_binding.workspace_id = source_student.workspace_id
+      AND source_recording.workspace_id = source_student.workspace_id
+      AND source_transcript.recording_id = ${entryAlias}.recording_id
       AND source_binding.binding_role = 'confirmed'
       AND source_binding.recording_id = ${entryAlias}.recording_id
       AND source_binding.transcript_id = ${entryAlias}.transcript_id
@@ -120,6 +133,27 @@ export function buildCanonicalLessonMemoryAuthoritySqlPredicate(entryAlias: stri
   )`;
 }
 
+/** Admission for extraction, delivery and enrichment must keep the historical fence. */
+export function buildLessonMemoryExecutionSqlPredicate(entryAlias: string): string {
+  return `${buildVerifiedLessonMemoryEvidenceSqlPredicate(entryAlias)} AND EXISTS (
+    SELECT 1 FROM assignment_sessions execution_session
+    WHERE execution_session.id = ${entryAlias}.assignment_session_id
+      AND NOT historical_assignment_session(execution_session)
+  )`;
+}
+
+async function assertLessonMemoryWorkflowExecutable(
+  client: PoolClient,
+  sessionId: string | null | undefined,
+) {
+  if (!sessionId) return;
+  const result = await client.query(
+    'SELECT 1 FROM assignment_sessions s WHERE s.id = $1 AND historical_assignment_session(s)',
+    [sessionId],
+  );
+  if (result.rows[0]) throw new Error('Historical lesson-memory execution is read-only');
+}
+
 export interface ListRecentReadyLessonMemoryOptions {
   limit: number;
   excludeTranscriptId?: string | null;
@@ -130,10 +164,11 @@ export type InsertCanonicalReadyLessonMemoryParams = Omit<InsertLessonMemoryPara
 export type EnsurePendingLessonMemoryEntryParams = Omit<InsertLessonMemoryParams, 'status'> & {
   sourceStorageUri: string;
   sourceContentHash: string;
+  retryTerminal?: boolean;
 };
 
 export interface EnsurePendingLessonMemoryEntryResult {
-  outcome: 'created' | 'pending_exists' | 'ready_exists';
+  outcome: 'created' | 'pending_exists' | 'ready_exists' | 'terminal_exists';
   entry: LessonMemoryRecord;
 }
 
@@ -248,10 +283,13 @@ export async function insertCanonicalReadyLessonMemoryEntry(
   const write = async (client: PoolClient) => {
     if (!options?.client) await client.query('BEGIN');
     try {
+      // Acquire currentness ownership before transcript or memory-row locks.
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
       // Serialize canonical ready replacement per transcript to avoid supersession races.
       await client.query('SELECT id FROM transcripts WHERE id = $1 FOR UPDATE', [
         params.transcriptId,
       ]);
+      await assertLessonMemoryWorkflowExecutable(client, params.assignmentSessionId);
 
       const insertResult = await client.query(
         `
@@ -386,6 +424,7 @@ async function assertCanonicalAssignmentMemoryAuthority(
      JOIN assignment_sessions s ON s.id = b.assignment_session_id
      JOIN recordings r ON r.id = b.recording_id
      WHERE b.assignment_session_id = $1
+       AND NOT historical_assignment_session(s)
        AND b.student_id = $2
        AND b.binding_role = 'confirmed'
        AND b.recording_id = $3
@@ -423,11 +462,14 @@ export async function ensurePendingLessonMemoryEntry(
   return withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
+      // Reassignment and replacement can mutate ready sources as well as intent.
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
       const transcriptResult = await client.query<TranscriptVersionRow>(
         'SELECT id, updated_at FROM transcripts WHERE id = $1 FOR UPDATE',
         [params.transcriptId],
       );
       const transcript = transcriptResult.rows[0];
+      await assertLessonMemoryWorkflowExecutable(client, params.assignmentSessionId);
       if (!transcript) {
         throw new Error(`Transcript not found for lesson-memory request: ${params.transcriptId}`);
       }
@@ -471,6 +513,8 @@ export async function ensurePendingLessonMemoryEntry(
         [params.transcriptId, params.sourceContentHash],
       );
       const existing = existingResult.rows[0];
+      if (!params.assignmentSessionId)
+        await assertLessonMemoryWorkflowExecutable(client, existing?.assignment_session_id);
       if (existing && (existing.status === 'ready' || existing.status === 'pending')) {
         if (
           params.assignmentSessionId &&
@@ -515,6 +559,10 @@ export async function ensurePendingLessonMemoryEntry(
       }
 
       if (existing?.status === 'failed' || existing?.status === 'superseded') {
+        if (params.retryTerminal === false) {
+          await client.query('COMMIT');
+          return { outcome: 'terminal_exists', entry: mapRowToLessonMemory(existing) };
+        }
         const reset = await client.query<LessonMemoryRow>(
           `UPDATE lesson_memory_entries
            SET status = 'pending', generation_notes = $2::jsonb, generated_at = $3,
@@ -724,8 +772,11 @@ export async function publishConfirmedLessonMemoryEntry(
 ): Promise<LessonMemoryRecord | null> {
   const generatedAt = params.generatedAt ?? new Date();
   const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query<LessonMemoryRow>(
-      `
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+      const result = await client.query<LessonMemoryRow>(
+        `
       UPDATE lesson_memory_entries
       SET schema_version = $4, generated_at = $5, provider = $6, model = $7,
           status = 'ready', generation_notes = $8::jsonb, lesson_title = $9,
@@ -740,33 +791,38 @@ export async function publishConfirmedLessonMemoryEntry(
         AND source_content_hash = $3
         AND source_storage_uri = $20
         AND status = 'pending'
-        AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
+        AND ${buildLessonMemoryExecutionSqlPredicate('lesson_memory_entries')}
       RETURNING *
       `,
-      [
-        params.id,
-        params.transcriptId,
-        params.sourceContentHash,
-        params.schemaVersion,
-        generatedAt,
-        params.provider,
-        params.model,
-        JSON.stringify(params.generationNotes ?? null),
-        params.lessonTitle ?? null,
-        params.lessonSummary ?? null,
-        JSON.stringify(params.topicsDiscussed ?? []),
-        JSON.stringify(params.mistakePatterns ?? []),
-        JSON.stringify(params.grammarReviewed ?? []),
-        JSON.stringify(params.grammarWatchlist ?? []),
-        JSON.stringify(params.vocabularyFocus ?? []),
-        JSON.stringify(params.pronunciationFocus ?? []),
-        JSON.stringify(params.studentFacts ?? []),
-        JSON.stringify(params.progressSignals ?? []),
-        JSON.stringify(params.followUpRecommendations ?? []),
-        params.sourceStorageUri,
-      ],
-    );
-    return result.rows[0] ?? null;
+        [
+          params.id,
+          params.transcriptId,
+          params.sourceContentHash,
+          params.schemaVersion,
+          generatedAt,
+          params.provider,
+          params.model,
+          JSON.stringify(params.generationNotes ?? null),
+          params.lessonTitle ?? null,
+          params.lessonSummary ?? null,
+          JSON.stringify(params.topicsDiscussed ?? []),
+          JSON.stringify(params.mistakePatterns ?? []),
+          JSON.stringify(params.grammarReviewed ?? []),
+          JSON.stringify(params.grammarWatchlist ?? []),
+          JSON.stringify(params.vocabularyFocus ?? []),
+          JSON.stringify(params.pronunciationFocus ?? []),
+          JSON.stringify(params.studentFacts ?? []),
+          JSON.stringify(params.progressSignals ?? []),
+          JSON.stringify(params.followUpRecommendations ?? []),
+          params.sourceStorageUri,
+        ],
+      );
+      await client.query('COMMIT');
+      return result.rows[0] ?? null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
   return row ? mapRowToLessonMemory(row) : null;
 }
@@ -811,7 +867,7 @@ export async function getLatestReadyLessonMemoryByTranscriptId(
       WHERE lesson_memory_entries.transcript_id = $1
         AND lesson_memory_entries.status = 'ready'
         AND lesson_memory_entries.source_content_hash IS NOT NULL
-        AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
+        AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
       ORDER BY lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
       LIMIT 1
       `,
@@ -890,28 +946,34 @@ export async function listLessonMemoryEntries(
 
   if (studentId) {
     values.push(studentId);
-    clauses.push(`student_id = $${values.length}`);
+    clauses.push(`lesson_memory_entries.student_id = $${values.length}`);
   }
 
   if (transcriptId) {
     values.push(transcriptId);
-    clauses.push(`transcript_id = $${values.length}`);
+    clauses.push(`lesson_memory_entries.transcript_id = $${values.length}`);
   }
 
   if (recordingId) {
     values.push(recordingId);
-    clauses.push(`recording_id = $${values.length}`);
+    clauses.push(`lesson_memory_entries.recording_id = $${values.length}`);
+  }
+
+  if (options.ids) {
+    if (options.ids.length === 0) return [];
+    values.push([...options.ids]);
+    clauses.push(`lesson_memory_entries.id = ANY($${values.length}::uuid[])`);
   }
 
   if (statuses && statuses.length > 0) {
     values.push(statuses);
-    clauses.push(`status = ANY($${values.length}::text[])`);
+    clauses.push(`lesson_memory_entries.status = ANY($${values.length}::text[])`);
     if (statuses.length === 1 && statuses[0] === 'ready') {
-      clauses.push('source_content_hash IS NOT NULL');
+      clauses.push('lesson_memory_entries.source_content_hash IS NOT NULL');
     }
   }
   if (canonicalOnly) {
-    clauses.push(buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries'));
+    clauses.push(buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries'));
   }
 
   values.push(limit);
@@ -931,6 +993,11 @@ export async function listLessonMemoryEntries(
         lesson_memory_entries.transcript_id,
         lesson_memory_entries.recording_id,
         lesson_memory_entries.assignment_session_id,
+        CASE WHEN ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
+          THEN source_lesson.id ELSE NULL END AS source_lesson_id,
+        CASE WHEN source_lesson.status = 'completed'
+          AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
+          THEN source_lesson.starts_at ELSE NULL END AS source_lesson_started_at,
         lesson_memory_entries.schema_version,
         lesson_memory_entries.generated_at,
         lesson_memory_entries.provider,
@@ -956,8 +1023,19 @@ export async function listLessonMemoryEntries(
         lesson_memory_entries.created_at,
         lesson_memory_entries.updated_at
       FROM lesson_memory_entries
+      LEFT JOIN assignment_sessions AS source_session
+        ON source_session.id = lesson_memory_entries.assignment_session_id
+       AND source_session.student_id = lesson_memory_entries.student_id
+      LEFT JOIN student_lessons AS source_lesson
+        ON source_lesson.id = source_session.lesson_id
+       AND source_lesson.student_id = lesson_memory_entries.student_id
       ${whereClause}
-      ORDER BY lesson_memory_entries.generated_at ${orderDirection}, lesson_memory_entries.created_at ${orderDirection}, lesson_memory_entries.id ${orderDirection}
+      ORDER BY COALESCE(
+        CASE WHEN source_lesson.status = 'completed'
+          AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
+          THEN source_lesson.starts_at END,
+        lesson_memory_entries.generated_at
+      ) ${orderDirection}, lesson_memory_entries.generated_at ${orderDirection}, lesson_memory_entries.created_at ${orderDirection}, lesson_memory_entries.id ${orderDirection}
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
       `,
@@ -967,6 +1045,21 @@ export async function listLessonMemoryEntries(
   });
 
   return rows.map((row) => mapRowToLessonMemory(row));
+}
+
+export async function listVerifiedReadyLessonMemoryEntriesByIds(
+  studentId: string,
+  ids: readonly string[],
+): Promise<LessonMemoryRecord[]> {
+  if (ids.length === 0) return [];
+  return listLessonMemoryEntries({
+    studentId,
+    ids,
+    statuses: ['ready'],
+    limit: ids.length,
+    offset: 0,
+    canonicalOnly: true,
+  });
 }
 
 export async function listRecentReadyLessonMemoryByStudentId(
@@ -996,6 +1089,8 @@ export async function listRecentReadyLessonMemoryByStudentId(
         lesson_memory_entries.transcript_id,
         lesson_memory_entries.recording_id,
         lesson_memory_entries.assignment_session_id,
+        CASE WHEN source_lesson.status = 'completed' THEN source_lesson.id ELSE NULL END AS source_lesson_id,
+        CASE WHEN source_lesson.status = 'completed' THEN source_lesson.starts_at ELSE NULL END AS source_lesson_started_at,
         lesson_memory_entries.schema_version,
         lesson_memory_entries.generated_at,
         lesson_memory_entries.provider,
@@ -1021,10 +1116,19 @@ export async function listRecentReadyLessonMemoryByStudentId(
         lesson_memory_entries.created_at,
         lesson_memory_entries.updated_at
       FROM lesson_memory_entries
+      LEFT JOIN assignment_sessions AS source_session
+        ON source_session.id = lesson_memory_entries.assignment_session_id
+       AND source_session.student_id = lesson_memory_entries.student_id
+      LEFT JOIN student_lessons AS source_lesson
+        ON source_lesson.id = source_session.lesson_id
+       AND source_lesson.student_id = lesson_memory_entries.student_id
       WHERE ${clauses.join(' AND ')}
         AND lesson_memory_entries.source_content_hash IS NOT NULL
-        AND ${buildCanonicalLessonMemoryAuthoritySqlPredicate('lesson_memory_entries')}
-      ORDER BY lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
+        AND ${buildVerifiedLessonMemoryEvidenceSqlPredicate('lesson_memory_entries')}
+      ORDER BY COALESCE(
+        CASE WHEN source_lesson.status = 'completed' THEN source_lesson.starts_at END,
+        lesson_memory_entries.generated_at
+      ) DESC, lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
       LIMIT $${limitParam}
       `,
       values,
@@ -1051,8 +1155,16 @@ export async function supersedeReadyLessonMemoryEntriesForTranscript(params: {
   }
 
   const rows = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
-      `
+    await client.query('BEGIN');
+    try {
+      await client.query(
+        `SELECT s.id FROM students s
+        JOIN recordings r ON r.student_id = s.id JOIN transcripts t ON t.recording_id = r.id
+        WHERE t.id = $1 FOR UPDATE OF s`,
+        [params.transcriptId],
+      );
+      const result = await client.query(
+        `
       UPDATE lesson_memory_entries
       SET
         status = 'superseded',
@@ -1088,9 +1200,14 @@ export async function supersedeReadyLessonMemoryEntriesForTranscript(params: {
         created_at,
         updated_at
       `,
-      values,
-    );
-    return result.rows;
+        values,
+      );
+      await client.query('COMMIT');
+      return result.rows;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
 
   if (rows.length > 0) {
@@ -1231,6 +1348,8 @@ function mapRowToLessonMemory(row: LessonMemoryRow): LessonMemoryRecord {
     transcriptId: row.transcript_id,
     recordingId: row.recording_id,
     assignmentSessionId: row.assignment_session_id ?? null,
+    sourceLessonId: row.source_lesson_id ?? null,
+    sourceLessonStartedAt: row.source_lesson_started_at ?? null,
     schemaVersion: row.schema_version,
     generatedAt: row.generated_at,
     provider: row.provider,

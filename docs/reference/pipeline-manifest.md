@@ -5,29 +5,41 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 6 minutes.
 - Authority Level: canonical manifest schema reference.
-- Last Verified Against: 2026-09-14 repo state.
+- Last Verified Against: 2026-10-04 ESL-6 local implementation.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after manifest schema changes.
 - Status: `reference`.
 
-The orchestrator persists a manifest next to each Markdown lesson (or via a configured `ManifestStore`).
+The orchestrator persists a manifest at each assignment’s stable manifest locator (or via a configured `ManifestStore`).
 This document captures the canonical schema so remote stores and services can validate their payloads.
 
 ## Schema Versioning
 
-- **Current version:** `5`
-- Every manifest written by the pipeline now includes `schemaVersion: 5`.
+- **Current native version:** `6`; schemas `1`–`5` are read-only historical evidence. Legacy execution/writes are retired.
+- Schema 6 adds canonical `assignmentHash` and versioned `publication` metadata. Its `mdHash`
+  equals the canonical AssignmentV1 hash. Schema 1–5 `mdHash` retains Markdown semantics.
+- Native manifests retain the same audio/cast/speech-plan fields and historical readers.
+- Manifest contract version is `4.0.0`. No database migration is required.
 - Filesystem reads tag older manifests without `schemaVersion` as legacy version `1`; remote stores
   preserve the omitted version while remaining schema-compatible.
 - Future breaking changes to the manifest structure must bump `CURRENT_MANIFEST_SCHEMA_VERSION` in
   `packages/orchestrator/src/manifest.ts` and extend this document with migration guidance.
 
-## JSON Structure (v5)
+## JSON Structure (v6; audio/plan fields also readable in v5)
 
 ```jsonc
 {
-  "schemaVersion": 5,
-  "mdHash": "<sha256 hash of the Markdown study text>",
+  "schemaVersion": 6,
+  "assignmentHash": "<canonical AssignmentV1 sha256>",
+  "mdHash": "<same canonical AssignmentV1 sha256>",
+  "publication": {
+    "schemaVersion": 1,
+    "rendererVersion": 3,
+    "title": "Homework Assignment: Clear demos",
+    "icon": "🎧",
+    "studyTextAudioUrl": "https://...", // null when absent
+    "pronunciationAudioUrl": null, // primary sentence only; never an item clip
+  },
   "timestamp": "2024-07-19T12:34:56.789Z",
   "preset": "b1-default", // optional, last applied heading preset
   "publishTarget": "html",
@@ -146,7 +158,10 @@ This document captures the canonical schema so remote stores and services can va
 
 ### Field Notes
 
-- `mdHash` is produced by `hashStudyText` and enables idempotence/skip logic.
+- `mdHash` is produced by `hashStudyText` and enables idempotence/skip logic. Schema 6 hashes
+  canonical AssignmentV1 bytes; historical schemas hash their Markdown source.
+- `assignmentHash` identifies the frozen typed object. `publication` is direct sharing metadata;
+  legacy manifests without it remain readable and typed DTOs derive title from frozen JSON.
 - `timestamp` reflects the last pipeline write and is updated on reruns.
 - `audioArtifacts.studyText.voices` mirrors the response from `@esl-pipeline/tts-core` provider contracts; provider
   adapters compute values in that shared shape.

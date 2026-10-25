@@ -109,6 +109,7 @@ const readPaths = [
   'profile',
   'profile/revisions',
   'timeline',
+  'activity',
 ];
 
 function mutationPaths(candidateId: string) {

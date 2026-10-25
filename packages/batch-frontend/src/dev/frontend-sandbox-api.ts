@@ -1,7 +1,18 @@
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { AxiosError } from 'axios';
 
+import {
+  type AssignmentConfirmedSnapshot,
+  type ConfirmAssignmentSessionStepRequest,
+  parseAssignmentV1,
+  serializeAssignmentV1,
+} from '@esl-pipeline/contracts';
+
+import { editorFixture } from './assignment-editor-fixture';
+import assignmentFixture from './assignment-fixture.json';
+import { createBusinessSandbox } from './business-sandbox';
 import type { FrontendSandboxScenario } from './frontend-sandbox';
+import { studentActivitySandbox } from './student-activity-sandbox';
 
 const now = '2026-07-03T00:00:00.000Z';
 const sandboxFirstProfileStudentId = 'student-cora';
@@ -183,6 +194,8 @@ function assignmentSession(overrides: Record<string, unknown> = {}) {
 function jobStatus(overrides: Record<string, unknown> = {}) {
   return {
     jobId: 'job-sandbox',
+    assignmentArtifact: sandboxArtifact,
+    assignmentRendererVersion: 3,
     studentId: 'student-alex',
     studentName: 'Alex',
     lessonId: null,
@@ -841,12 +854,9 @@ function scheduleBillingSurface() {
       workspaceId: 'workspace-sandbox',
       timezone: 'Asia/Saigon',
       defaultDurationMinutes: 60,
-      cadence: null,
-      preferredTimes: null,
       schedulingNotes: 'Sandbox lesson data for local UI testing.',
       updatedAt: now,
     },
-    recurrenceRule: null,
     nextLesson: {
       id: 'lesson-sandbox-next',
       studentId: 'student-alex',
@@ -859,11 +869,9 @@ function scheduleBillingSurface() {
       title: 'Workplace update practice',
       notes: null,
       creditEventId: null,
-      recurrenceRuleId: null,
-      recurrenceSlotId: null,
-      recurrenceOccurrenceKey: null,
-      recurrenceOrigin: 'manual',
-      recurrenceOverrideKind: null,
+      historicalScheduleOrigin: {},
+      schedulingSource: 'unmanaged',
+      calendarEventUrl: null,
       homework: {
         status: 'not_started',
         assignmentSessionId: null,
@@ -871,6 +879,7 @@ function scheduleBillingSurface() {
         draftId: null,
         jobId: null,
         homeworkMemoryEntryId: null,
+        transcriptResultSessionId: null,
         htmlUrl: null,
         updatedAt: null,
       },
@@ -894,7 +903,23 @@ function scheduleBillingSurface() {
   };
 }
 
+const sandboxAssignment = parseAssignmentV1(JSON.stringify(assignmentFixture));
+const sandboxContext = {
+  studentName: 'Alex',
+  inputKind: sandboxAssignment.input.kind,
+  suppliedUrls: [],
+};
+const sandboxArtifact = {
+  format: 'assignment_v1' as const,
+  schemaVersion: 1 as const,
+  serializationVersion: 1 as const,
+  workingVersion: 1,
+  storageUri: `memory://sandbox/content/${'b'.repeat(64)}.json`,
+  contentHash: 'b'.repeat(64),
+};
+
 const promptPackage = {
+  requestEnvelope: { promptVersion: 'assignment_v1', assignmentContext: sandboxContext },
   id: 'prompt-sandbox',
   recordingId: 'recording-sandbox',
   transcriptId: 'transcript-sandbox',
@@ -924,15 +949,11 @@ const draft = {
   lessonId: null,
   storageUri: 'memory://sandbox/draft-sandbox',
   createdBy: 'sandbox-tutor',
-  text: [
-    '# Alex - Workplace Update Practice',
-    '',
-    '## Warm-up',
-    'Practice three ways to connect ideas: first, also, as a result.',
-    '',
-    '## Mission',
-    'Write a short project update and one polite follow-up question.',
-  ].join('\n'),
+  format: 'assignment_v1',
+  assignment: sandboxAssignment,
+  validationContext: { ...sandboxContext, studentName: 'Alex' },
+  artifact: sandboxArtifact,
+  text: JSON.stringify(sandboxAssignment, null, 2),
   workingVersion: 1,
   contentHash: 'b'.repeat(64),
   createdAt: now,
@@ -940,6 +961,10 @@ const draft = {
 };
 
 const firstProfilePromptPackage = {
+  requestEnvelope: {
+    promptVersion: 'assignment_v1',
+    assignmentContext: { ...sandboxContext, studentName: 'Cora' },
+  },
   id: 'prompt-cora',
   recordingId: sandboxFirstProfileRecordingId,
   transcriptId: sandboxFirstProfileTranscriptId,
@@ -969,15 +994,18 @@ const firstProfileDraft = {
   lessonId: null,
   storageUri: 'memory://sandbox/draft-cora',
   createdBy: 'sandbox-tutor',
-  text: [
-    '# Cora - Short Client Update',
-    '',
-    '## Warm-up',
-    'Practice one clear sentence for what changed today.',
-    '',
-    '## Mission',
-    'Write a short client update and one clarification question.',
-  ].join('\n'),
+  format: 'assignment_v1',
+  assignment: {
+    ...sandboxAssignment,
+    metadata: { ...sandboxAssignment.metadata, student: 'Cora' },
+  },
+  validationContext: { ...sandboxContext, studentName: 'Cora' },
+  artifact: sandboxArtifact,
+  text: JSON.stringify(
+    { ...sandboxAssignment, metadata: { ...sandboxAssignment.metadata, student: 'Cora' } },
+    null,
+    2,
+  ),
   workingVersion: 1,
   contentHash: 'c'.repeat(64),
   createdAt: now,
@@ -1055,12 +1083,171 @@ export function createFrontendSandboxApiAdapter(
   const scenario = options.scenario ?? 'default';
   sandboxFirstProfileLessonMemoryConfirmed = false;
   sandboxFirstProfileLessonMemoryHealthPolls = 0;
+  const businessSandbox = createBusinessSandbox();
   let manualTranscriptText = '';
   let manualTranscriptStudentId = 'student-alex';
   let manualTranscriptDisplayName = 'Pasted lesson transcript';
+  let editorDraft = {
+    ...draft,
+    id: 'draft-editor',
+    assignment: editorFixture(),
+    text: serializeAssignmentV1(editorFixture()),
+  };
+  const baseEditorSession = assignmentSession({
+    id: 'session-editor',
+    promptPackageId: 'prompt-sandbox',
+    draftId: 'draft-editor',
+    confirmedStep: 'context',
+    teacherNotes: 'Sandbox teacher notes',
+  });
+  let editorSession: Record<string, unknown> = {
+    ...baseEditorSession,
+    confirmed: {
+      ...baseEditorSession.confirmed,
+      context: {
+        teacherNotes: 'Sandbox teacher notes',
+        profileId: null,
+        profileRevisionId: null,
+        profileRevisionHash: null,
+      },
+    },
+  };
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const method = (config.method ?? 'get').toLowerCase();
     const path = normalizePath(config.url);
+    // Focused current editor entry; bypasses no application hooks or final preview gates.
+    if (scenario === 'assignment-editor') {
+      if (method === 'get' && path === '/assignment-sessions/session-editor')
+        return responseFor(config, editorSession);
+      if (method === 'patch' && path === '/assignment-sessions/session-editor/recovery') {
+        editorSession = {
+          ...editorSession,
+          ...(readRequestBody(config.data).patch as object),
+          revision: Number(editorSession.revision) + 1,
+        };
+        return responseFor(config, editorSession);
+      }
+      if (method === 'post' && path === '/assignment-sessions/session-editor/confirm') {
+        const body = readRequestBody(config.data) as unknown as ConfirmAssignmentSessionStepRequest;
+        const confirmed = editorSession.confirmed as AssignmentConfirmedSnapshot;
+        if (body.step === 'context') {
+          editorSession = {
+            ...editorSession,
+            teacherNotes: body.teacherNotes,
+            selectedProfileRevisionId: body.profileRevisionId,
+            selectedProfileRevisionHash: body.profileRevisionHash,
+            confirmed: {
+              ...confirmed,
+              context: {
+                teacherNotes: body.teacherNotes,
+                profileRevisionId: body.profileRevisionId,
+                profileRevisionHash: body.profileRevisionHash,
+              },
+            },
+          };
+        } else if (body.step === 'create') {
+          editorSession = {
+            ...editorSession,
+            promptPackageId: body.promptPackageId,
+            draftId: body.draftId,
+            confirmed: {
+              ...confirmed,
+              create: {
+                promptPackageId: body.promptPackageId,
+                draftId: body.draftId,
+                draftWorkingVersion: editorDraft.workingVersion,
+                draftStorageUri: editorDraft.storageUri,
+                draftHash: editorDraft.contentHash,
+              },
+            },
+          };
+        } else if (body.step === 'source') {
+          editorSession = {
+            ...editorSession,
+            lessonId: body.lessonId,
+            recordingId: body.recordingId,
+            transcriptId: body.transcriptId,
+            confirmed: {
+              ...confirmed,
+              source: {
+                ...confirmed.source,
+                lessonId: body.lessonId,
+                recordingId: body.recordingId,
+                transcriptId: body.transcriptId,
+                transcriptWorkingVersion: body.transcriptWorkingVersion,
+                transcriptStorageUri: baseEditorSession.confirmed.source.transcriptStorageUri,
+                transcriptHash: baseEditorSession.confirmed.source.transcriptHash,
+              },
+            },
+          };
+        } else throw notFoundFor(config);
+        editorSession = {
+          ...editorSession,
+          confirmedStep: body.step,
+          revision: Number(editorSession.revision) + 1,
+        };
+        return responseFor(config, { session: editorSession, invalidated: [] });
+      }
+      if (method === 'get' && path === '/drafts/draft-editor')
+        return responseFor(config, editorDraft);
+      if (method === 'put' && path === '/drafts/draft-editor') {
+        const text = readRequestText(config.data, editorDraft.text);
+        const assignment = parseAssignmentV1(text, sandboxContext);
+        editorDraft = {
+          ...editorDraft,
+          text: serializeAssignmentV1(assignment),
+          assignment: assignment as typeof editorDraft.assignment,
+          workingVersion: editorDraft.workingVersion + 1,
+          contentHash: String(editorDraft.workingVersion + 1).padStart(64, '0'),
+        };
+        return responseFor(config, editorDraft);
+      }
+    }
+    if (method === 'get' && /^\/workspaces\/[^/]+\/calendar\/connection$/.test(path))
+      return responseFor(config, {
+        enabled: false,
+        canManage: true,
+        canSchedule: true,
+        unavailableReason: 'google_calendar_disabled',
+        connection: null,
+        grant: null,
+      });
+    if (method === 'get' && /^\/workspaces\/[^/]+\/calendar\/scheduling-status$/.test(path))
+      return responseFor(config, {
+        state: 'disconnected',
+        connectionId: null,
+        calendarName: null,
+        googleEmail: null,
+        lastSyncedAt: null,
+        errorCode: null,
+        operations: [],
+      });
+    const businessData = businessSandbox(
+      method,
+      path,
+      new URL(config.url ?? '/', 'http://sandbox.local').searchParams,
+      readRequestBody(config.data),
+    );
+    if (businessData !== undefined) return responseFor(config, businessData);
+
+    // A reproducible Student availability preview, without mutating real data.
+    if (
+      scenario === 'student-availability' &&
+      method === 'get' &&
+      path.startsWith('/students/student-alex/') &&
+      path !== '/students/student-alex/surfaces/overview'
+    ) {
+      throw scenarioErrorFor(config, 'Student data is unavailable in this preview scenario.');
+    }
+
+    const activityMatch = /^\/students\/(student-alex|student-cora)\/activity$/.exec(path);
+    if (method === 'get' && activityMatch) {
+      const query = new URL(config.url ?? '/', 'http://sandbox.local').searchParams;
+      for (const [name, value] of Object.entries(config.params ?? {})) {
+        if (value !== undefined) query.set(name, String(value));
+      }
+      return responseFor(config, studentActivitySandbox(activityMatch[1]!, query));
+    }
 
     if (isSlowScenarioRequest(scenario, method, path)) {
       await delaySandboxResponse();
@@ -1083,12 +1270,30 @@ export function createFrontendSandboxApiAdapter(
     }
 
     if (method === 'get' && path === '/students') {
+      const params = new URL(config.url ?? '/', 'http://sandbox.local').searchParams;
+      for (const [key, value] of Object.entries(config.params ?? {})) {
+        if (value !== undefined) params.set(key, String(value));
+      }
+      const query = (params.get('q') ?? '').trim().toLowerCase();
+      const limit = Number(params.get('limit') ?? 200);
+      const offset = Number(params.get('offset') ?? 0);
+      const order = params.get('order') === 'desc' ? 'desc' : 'asc';
+      const items =
+        params.get('status') === 'archived'
+          ? []
+          : [studentProfile(), firstProfileStudentProfile()]
+              .filter((student) => student.student.toLowerCase().includes(query))
+              .sort((a, b) =>
+                order === 'asc'
+                  ? a.student.localeCompare(b.student)
+                  : b.student.localeCompare(a.student),
+              );
       return responseFor(config, {
-        items: [studentProfile(), firstProfileStudentProfile()],
-        total: 2,
-        limit: 200,
-        offset: 0,
-        order: 'asc',
+        items: items.slice(offset, offset + limit),
+        total: items.length,
+        limit,
+        offset,
+        order,
       });
     }
 
@@ -1104,7 +1309,19 @@ export function createFrontendSandboxApiAdapter(
       return responseFor(config, {
         profile: profileContent(),
         revisions: profileRevisionList(),
-        memory: memoryOverview(),
+        memory:
+          scenario === 'student-availability'
+            ? {
+                ...memoryOverview(),
+                latestReadyStudentMemorySnapshot: null,
+                availability: {
+                  state: 'repair_required',
+                  reason: 'established_history_ineligible',
+                  lessonReferenceCount: 3,
+                  homeworkReferenceCount: 1,
+                },
+              }
+            : memoryOverview(),
         pendingCandidates: emptyCandidateList(),
         recentTimeline: {
           items: [
@@ -1824,9 +2041,7 @@ export function createFrontendSandboxApiAdapter(
       const body = readRequestBody(config.data);
       if (body.promptPackageId === firstProfilePromptPackage.id) {
         return responseFor(config, {
-          id: firstProfileDraft.id,
-          promptPackageId: firstProfileDraft.promptPackageId,
-          text: firstProfileDraft.text,
+          ...firstProfileDraft,
           provider: 'openai',
           model: 'gpt-5.2',
           quota: {
@@ -1837,9 +2052,7 @@ export function createFrontendSandboxApiAdapter(
       }
 
       return responseFor(config, {
-        id: draft.id,
-        promptPackageId: draft.promptPackageId,
-        text: draft.text,
+        ...draft,
         provider: 'openai',
         model: 'gpt-5.2',
         quota: {
@@ -1882,6 +2095,7 @@ export function createFrontendSandboxApiAdapter(
       return responseFor(config, {
         ...draft,
         text: readRequestText(config.data, draft.text),
+        assignment: parseAssignmentV1(readRequestText(config.data, draft.text), sandboxContext),
         workingVersion: 2,
         contentHash: 'f'.repeat(64),
         updatedAt: now,
@@ -1889,26 +2103,21 @@ export function createFrontendSandboxApiAdapter(
     }
 
     if (method === 'post' && path === '/validation/markdown') {
-      return responseFor(config, { ok: true, errors: [], warnings: [] });
+      throw scenarioErrorFor(config, 'legacy_assignment_read_only');
     }
 
     if (method === 'post' && path === '/prompt-packages/prompt-sandbox/draft') {
+      const text = readRequestText(config.data, draft.text);
       return responseFor(config, {
-        id: 'draft-sandbox',
-        promptPackageId: 'prompt-sandbox',
-        studentId: 'student-alex',
-        lessonId: null,
-        storageUri: 'memory://sandbox/draft-sandbox',
-        createdBy: 'sandbox-tutor',
-        text: readRequestText(config.data, '# Alex - Workplace Update Practice'),
-        workingVersion: 1,
-        contentHash: 'b'.repeat(64),
-        createdAt: now,
-        updatedAt: now,
+        ...draft,
+        text,
+        assignment: parseAssignmentV1(text, sandboxContext),
       });
     }
 
     if (method === 'post' && path === '/preview/html') {
+      if (!readRequestBody(config.data).assignment)
+        throw scenarioErrorFor(config, 'legacy_assignment_read_only');
       return responseFor(config, {
         html: '<article><h1>Alex - Workplace Update Practice</h1><p>Sandbox preview.</p></article>',
       });

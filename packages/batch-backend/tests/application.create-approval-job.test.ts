@@ -12,9 +12,10 @@ function buildDraft(): DraftRecord {
     id: 'draft-1',
     promptPackageId: 'prompt-1',
     studentId: 'student-1',
-    storageUri: 'local://drafts/draft-1.md',
+    format: 'assignment_v1',
+    storageUri: `local://drafts/content/${'a'.repeat(64)}.json`,
     workingVersion: 1,
-    contentHash: 'draft-hash',
+    contentHash: 'a'.repeat(64),
     createdBy: 'user-1',
     createdAt: new Date('2024-01-01T00:00:00Z'),
     updatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -110,6 +111,15 @@ describe('application/create-approval-job', () => {
     );
 
     expect(insertApprovalJob).toHaveBeenCalledWith({
+      assignmentArtifact: {
+        format: 'assignment_v1',
+        schemaVersion: 1,
+        serializationVersion: 1,
+        workingVersion: 1,
+        contentHash: draft.contentHash,
+        storageUri: draft.storageUri,
+      },
+      assignmentRendererVersion: 3,
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
       promptPackageId: 'prompt-1',
@@ -136,51 +146,58 @@ describe('application/create-approval-job', () => {
     expect(publishEvent).toHaveBeenCalledWith({ type: 'job_created', job });
   });
 
-  it('defaults withTts=true when google provider is selected without ElevenLabs key availability', async () => {
-    const draft = buildDraft();
-    const promptPackage = buildPromptPackage();
-    const approvalJob = buildApprovalJob(true);
-    const insertApprovalJob = vi.fn().mockResolvedValue(approvalJob);
-    const publishEvent = vi.fn();
-    const config = loadConfig();
+  it.each([
+    ['google', 'chirp3_hd'],
+    ['inworld', 'inworld-tts-2'],
+    ['gemini', 'gemini-3.8-flash-lite-tts'],
+  ] as const)(
+    'defaults withTts=true for %s without an ElevenLabs key',
+    async (ttsProvider, ttsModel) => {
+      const draft = buildDraft();
+      const promptPackage = buildPromptPackage();
+      const approvalJob = buildApprovalJob(true);
+      const insertApprovalJob = vi.fn().mockResolvedValue(approvalJob);
+      const publishEvent = vi.fn();
+      const config = loadConfig();
 
-    await createApprovalJobFromDraft(
-      {
-        draft,
-        promptPackage,
-        jobOverrides: {
-          ttsProvider: 'google',
-          ttsModel: 'chirp3_hd',
-        },
-      },
-      {
-        jobs: { insertApprovalJob },
-        settings: {
-          getByUserId: vi.fn().mockResolvedValue({
-            ...buildSettings(),
-            elevenLabsKeyEncrypted: null,
-          }),
-          createDefault: vi.fn(),
-        },
-        config: {
-          ...config,
-          orchestrator: {
-            ...config.orchestrator,
-            elevenLabsApiKey: undefined,
+      await createApprovalJobFromDraft(
+        {
+          draft,
+          promptPackage,
+          jobOverrides: {
+            ttsProvider,
+            ttsModel,
           },
         },
-        publishEvent,
-      },
-    );
+        {
+          jobs: { insertApprovalJob },
+          settings: {
+            getByUserId: vi.fn().mockResolvedValue({
+              ...buildSettings(),
+              elevenLabsKeyEncrypted: null,
+            }),
+            createDefault: vi.fn(),
+          },
+          config: {
+            ...config,
+            orchestrator: {
+              ...config.orchestrator,
+              elevenLabsApiKey: undefined,
+            },
+          },
+          publishEvent,
+        },
+      );
 
-    expect(insertApprovalJob).toHaveBeenCalledWith(
-      expect.objectContaining({
-        withTts: true,
-        ttsProvider: 'google',
-        ttsModel: 'chirp3_hd',
-      }),
-    );
-  });
+      expect(insertApprovalJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          withTts: true,
+          ttsProvider,
+          ttsModel,
+        }),
+      );
+    },
+  );
 
   it('honors explicit withTts override even when google provider is selected', async () => {
     const draft = buildDraft();

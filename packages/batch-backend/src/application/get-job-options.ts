@@ -17,6 +17,7 @@ import {
   buildDefaultTtsModelByProvider,
   buildTtsModelOptionsByProvider,
   parseTtsProviderId,
+  resolveDefaultTtsProvider,
 } from '@esl-pipeline/tts-core';
 import { loadVoicesCatalog as loadElevenLabsVoicesCatalog } from '@esl-pipeline/tts-provider-elevenlabs';
 
@@ -41,7 +42,7 @@ interface JobOptionsCacheEntry {
 const DEFAULT_CEFR_LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const DEFAULT_CEFR_DEFAULT: CefrLevel = 'B1';
 const JOB_OPTIONS_CACHE_TTL_MS = 60_000;
-const DEFAULT_TTS_PROVIDERS: TtsProviderId[] = ['elevenlabs', 'google', 'inworld'];
+const DEFAULT_TTS_PROVIDERS: TtsProviderId[] = ['elevenlabs', 'google', 'inworld', 'gemini'];
 const DEFAULT_STT_PROVIDERS: SttProviderId[] = ['deepgram', 'elevenlabs', 'google'];
 
 // TODO: Remove static metadata fallback once orchestrator metadata reliability SLO is met.
@@ -294,8 +295,7 @@ function resolveTtsMetadata(
     }
   }
 
-  const normalizedDefaultProvider =
-    input.defaultTtsProvider ?? parseTtsProviderId(process.env.ESL_TTS_DEFAULT_PROVIDER);
+  const normalizedDefaultProvider = input.defaultTtsProvider ?? resolveDefaultTtsProvider();
   const defaultProvider =
     normalizedDefaultProvider && uniqueProviders.includes(normalizedDefaultProvider)
       ? normalizedDefaultProvider
@@ -331,46 +331,13 @@ async function withQuotaUsage(
     });
     return {
       ...generation,
-      quota: {
-        ...buildQuotaSnapshot({
-          config: runtimeConfig.generation,
-          provider,
-          model,
-          usage,
-          now: new Date(),
-        }),
-        ...generation.quota,
-        usedRequestsToday: usage.requestsToday,
-        usedTokensToday: Math.max(usage.reservedTokensToday, usage.actualTokensToday),
-        dailyRequestUsed: usage.requestsToday,
-        dailyRequestRemaining:
-          (generation.quota.dailyRequestBudget ?? generation.quota.requestsPerDay ?? null) === null
-            ? null
-            : Math.max(
-                0,
-                (generation.quota.dailyRequestBudget ?? generation.quota.requestsPerDay ?? 0) -
-                  usage.requestsToday,
-              ),
-        dailyTokenUsed: Math.max(usage.reservedTokensToday, usage.actualTokensToday),
-        dailyTokenRemaining:
-          generation.quota.dailyTokenBudget === undefined ||
-          generation.quota.dailyTokenBudget === null
-            ? null
-            : Math.max(
-                0,
-                generation.quota.dailyTokenBudget -
-                  Math.max(usage.reservedTokensToday, usage.actualTokensToday),
-              ),
-        rpmUsed: usage.requestsPerMinuteUsed,
-        rpmRemaining:
-          (generation.quota.rpmBudget ?? generation.quota.requestsPerMinute ?? null) === null
-            ? null
-            : Math.max(
-                0,
-                (generation.quota.rpmBudget ?? generation.quota.requestsPerMinute ?? 0) -
-                  usage.requestsPerMinuteUsed,
-              ),
-      },
+      quota: buildQuotaSnapshot({
+        config: runtimeConfig.generation,
+        provider,
+        model,
+        usage,
+        now: new Date(),
+      }),
     };
   } catch (error) {
     logger.warn(

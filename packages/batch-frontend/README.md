@@ -1,10 +1,16 @@
 # @esl-pipeline/batch-frontend
 
+Learning and transcript-processing details consume the shared aggregate availability contract.
+Stored-ready history can require explicit repair; repository failure remains unknown rather than
+empty. Repair-required copy never suggests that recent observations restore established history.
+Optional response fields permit older API responses during coordinated rollout; repair execution
+remains operator-owned. See [the memory runbook](../../docs/operations/student-memory-replay-backfill.md#evidence-availability-and-continuity-esl-38).
+
 ## Meta
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-10-01 student-owned profile revisions.
+- Last Verified Against: 2026-10-07 no-homework transcript UI and student-history placement (ESL-35).
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -20,7 +26,8 @@ This package is the operator-facing frontend for:
 - student-area directory, overview, learning, history, and schedule/billing views
 - student Learning page memory health support details for founder/operator diagnosis
 - student Learning page profile-draft change review after approved candidate refresh
-- student and business schedule follow-up actions that mark elapsed lessons completed and open lesson-linked homework assignment context
+- student and business schedule follow-up actions that open lesson-linked assignment context;
+  backend session linking completes eligible elapsed lessons and consumes credit
 - capability-gated job actions
 
 Canonical behavior and current status live in:
@@ -30,6 +37,10 @@ Canonical behavior and current status live in:
 
 ## Runtime Notes
 
+- Browser startup configures Zod in `jitless` mode before application schemas load, avoiding
+  eval probes under CSP. HTML keeps the resource policy; Vite and frontend nginx supply
+  `frame-ancestors 'none'` and `X-Frame-Options: DENY` as response headers. nginx also sends
+  `X-Content-Type-Options: nosniff` on the SPA entry response, including fallback routes.
 - API traffic goes through `src/utils/api.ts` and `@esl-pipeline/contracts`.
 - Base URL resolution uses runtime override first, then Vite env, then `/api`.
 - The app assumes the extended backend API is enabled.
@@ -70,15 +81,48 @@ Canonical behavior and current status live in:
   `sourceJobId` relationship proves the lineage, while every exact version remains selectable.
   Older lineages are revealed progressively through the existing job and assignment-session APIs;
   this is a short recovery/reference surface, not a searchable assignment archive.
-- This visual overhaul currently covers the authenticated shell and assignment workflow. Student,
-  Business routes remain operational on their existing content designs.
+- The Business area uses flat day-grouped lesson rows and bounded unfinished follow-up, with
+  booking/credit suggestions and recent payments behind disclosures. Stats focuses on recorded
+  payments and taught lessons/hours; default-rate monetary estimates are not displayed. Student
+  routes retain their existing content designs.
+- Monthly recorded payments include archived students' non-voided history in the selected
+  currency, with other currencies reported separately. Lesson/workload facts and the recent-payment
+  list remain scoped to non-archived students. Business top-up drafts offer a discussion based on
+  credit balance; they do not assert debt or renewal.
+- Student pages show scheduling/payment facts and review actions without profile-coverage,
+  reminder-total, recent-memory-total, or open-thread metric cards. Candidate review counts sit
+  beside the relevant controls; snapshot source counts and technical memory diagnostics remain
+  under Memory support details. Candidate confidence labels are not displayed to tutors.
+- History uses one student-authorized activity feed with server-side category/date filters and
+  older-page loading. Recorded transitions, retained outcomes and incomplete earlier records are
+  distinguished; practical facts and owner links lead, with technical evidence under Details.
+  Workspace timezone controls activity date display; calendar-only payment dates stay unchanged. The URL
+  preserves category/date filters, while failed refreshes retain the last loaded page. A learner
+  switch cannot retain another learner's data. Recording coverage is not inferred from schema
+  installation, and historical transcript finishes do not imply current no-homework completion.
+- Student availability distinguishes absent memory, repair-required history and repository failure.
+  Failed initial Learning loads show an unavailable state with Retry; they do not present an empty
+  editable profile or zero-candidate summary. History retains successful sources and previous
+  entries on retry failure, names unavailable sources, and separates genuine empty results from
+  incomplete history and filters with no matches. These states never initiate memory repair.
 - Local UI iteration can use the Vite mock-auth sandbox without a backend:
   - PowerShell:
     ` $env:VITE_BATCH_FRONTEND_SANDBOX='mock-auth'; pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
   - POSIX:
     `VITE_BATCH_FRONTEND_SANDBOX=mock-auth pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
   - The sandbox is dev-only, marks the UI with `Mock data`, bypasses frontend auth only, and uses
-    seeded mock API responses for the assignment builder.
+    seeded mock API responses for the assignment builder, Business routes and Student History.
+  - `http://localhost:5173/?sandboxScenario=assignment-editor&sessionId=session-editor` opens a
+    focused current-format editor with fictional material and the real authoring hooks. Saves stay
+    in that sandbox instance's memory; reload resets the fixture. This is editor walkthrough
+    evidence, not backend persistence, provider or publication evidence.
+  - After changing shared-package export paths during local development, rebuild the owning package
+    and restart Vite so its resolver picks up the updated exports.
+  - Open `http://localhost:5173/students/student-alex/history` for fictional recorded transitions,
+    transcript/homework outcomes, reversals and older-page loading. These are preview examples,
+    not evidence of production action recording or authorization.
+  - Open `http://localhost:5173/business/schedule` for a fictional, in-memory Business preview;
+    status changes and reminder hide/undo affect only that sandbox instance.
   - Sandbox scenarios are allow-listed through `sandboxScenario`; unknown values use the default:
     - `http://localhost:5173/?sandboxScenario=default`
     - `http://localhost:5173/?sandboxScenario=step-one-no-recent`
@@ -87,10 +131,34 @@ Canonical behavior and current status live in:
     - `http://localhost:5173/?sandboxScenario=step-one-no-learners`
     - `http://localhost:5173/?sandboxScenario=step-one-learner-error`
     - `http://localhost:5173/?sandboxScenario=step-one-slow`
+    - `http://localhost:5173/students/student-alex/overview?sandboxScenario=student-availability`
+      shows repair-required memory in Overview and unavailable Learning/History requests.
   - Add `jobId` or `sessionId` to any sandbox URL to inspect initial assignment hydration. For
     example, open `http://localhost:5173/?sandboxScenario=default&jobId=job-sandbox` to resume
     the seeded completed assignment with all primary stages unlocked for copy/layout review.
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
+- Students uses a persistent alphabetical roster next to Overview, Learning, History, and
+  Schedule & Billing. Learner switches retain the section and roster search; the student page
+  remounts before loading the next learner. URLs and browser history remain navigable.
+- The main navigation rail can collapse independently of student focus view, with Logout
+  available in the compact rail. On phones, list/detail navigation coexists with the workspace
+  menu. Student creation retains optional starter notes inside a centered modal.
+- Directory name search and 200-record paging use existing server contracts. Status, query and
+  page changes scope rows/actions to their own results; stale responses cannot replace them.
+  Archive/restore failures remain actionable, and selected-student archive requires confirmation.
+- Learning registers its actual editor state and save operation with the shared navigation guard.
+  Student/section changes, workspace navigation, creation/archive and logout protect unsaved
+  edits. Cancel and failed saves retain the editor; draft saves remain drafts. Candidate-review
+  text requires explicit discard or completion in Learning. In-flight writes must finish before
+  leaving. This does not redesign student-page content or change backend ownership.
+- Scheduling requires a connected selected Google Calendar; teaching, history, homework and billing
+  remain available without it. Set schedule creates one-offs or several independent weekly series
+  in the displayed timezone, with optional Google invitations and per-series outcomes. Later timing
+  edits open Google. The shared Calendar panel owns its styles on both Business and Student routes;
+  connection management is expandable, and submitted setups show their captured choices for recovery.
+  Existing lesson rows stay visible during connection/sync failures. See the
+  [Calendar cutover runbook](../../docs/operations/google-calendar-cutover.md) for remaining provider
+  identity and operator activation gates.
 - The Learning page can read `/students/:id/memory/health` for collapsed operator support details;
   manual full snapshot rebuild remains outside the frontend and CLI-only for v1.1.
 - Student IDs are the sole runtime profile root. Profile content and revision actions use
@@ -99,7 +167,15 @@ Canonical behavior and current status live in:
   snapshot profile identifiers remain obsolete provenance metadata.
 - Ordinary Learning page profile edits save directly as active revisions. Draft review controls
   remain available for candidate-derived drafts.
-- Approved-candidate draft refresh opens a review-mediated profile draft and shows a standalone
+- Approved-candidate draft refresh opens a review-mediated profile draft with selected approved
+  wording preserved in its mapped fields. Generation shows selected/applied/omitted counts and
+  omission reasons; activation shows actual linked/promoted/omitted counts and reasons. Facts
+  removed or changed during review remain unpromoted. Only IDs reported applied by the backend
+  are represented; draft links alone do not establish promotion. Older activation responses without
+  promotion metadata are explicitly reported as unverified.
+  Candidate details distinguish completed lesson occurrence time from extraction fallback when
+  the lesson date is unknown. Existing historical candidate dates are not relabeled.
+  The draft review also shows a standalone
   deterministic diff table against the active editor baseline. The table uses shared
   current/proposed headers, field-level change pills, and line-level addition/removal highlights;
   model-generated change classification remains intentionally deferred.
@@ -115,6 +191,31 @@ Canonical behavior and current status live in:
   Confirmation flushes the latest safe pending write before advancing. Routine Save, Refresh, and
   Reload controls are absent; bounded transient retries run automatically and contextual Retry is
   reserved for exhausted or ambiguous outcomes.
+- ESL-83 replaces normal JSON editing with a current-format workbook in step 4.
+  `AssignmentEditor` edits the same AssignmentV1 object through the authoring controller.
+  A desktop section rail keeps each part focused. Prompts, answers and explanations edit together
+  on the page; source, speaker and metadata settings open on demand. Assignment teaching notes are separate from
+  step-3 generation guidance and absent from Learner view, including hidden DOM.
+  The editor covers current grammar/mission/rationale shapes and all six pronunciation modes;
+  it does not provide older-format forms, conversions, new speaker sets, new groups or mode pickers.
+  It supports contextual drag/menu list operations, selection-based Highlight and session-local
+  Undo/Redo. Highlight serializes to existing paired backticks; contenteditable DOM is only a text
+  projection, never a stored HTML format. No-op moves do not create history or notifications.
+  Autosave acknowledgements retain history; a new assignment, hydration or regeneration starts a
+  new edit session. Regeneration explicitly asks before replacing the workbook.
+- Incomplete fields stay visible with errors and remain browser-local. Only valid objects may
+  autosave, preview, confirm, correct or share. Reload restores the latest valid saved assignment;
+  there is no crash-recovery promise. Save status describes the current acknowledged canonical
+  object. Autosave, explicit save and reconciliation share one in-flight write, preserve newer
+  typing/Undo and retain working-version CAS. A conflict stays latched through further typing;
+  inspect the saved version and explicitly choose local or saved content against a fresh version
+  check. Failed saves preserve edits and offer Retry. Source identity, supplied URLs and lineage
+  remain constrained by the pinned validation context.
+- Step-4 Learner view uses `learner-handout` for current valid content. It does not confirm Create
+  or satisfy step 5's authoritative preview/share gates. Completed current assignments remain
+  read-only until the existing correction entry. Text edits do not imply regenerated audio.
+  Preview still submits the validated canonical object with its pinned prompt ID; canonical key
+  formatting remains irrelevant to identity. Historical formats retain read-only access.
 - Resume loads the newest durable working values, opens the earliest dirty Source, Context, or
   Create boundary, then falls back to the destination derived from `confirmedStep`. Completed
   post-cutover jobs use their retained assignment-session link to reopen every confirmed step for
@@ -130,6 +231,27 @@ Canonical behavior and current status live in:
 - Source Continue waits for the canonical attachment result, persists a linked lesson through
   ordinary session recovery separately, and confirms the attached recording/transcript through the
   Source confirmation endpoint. Generic recovery never reattaches source IDs.
+- Lesson source offers a saved, default-unchecked native **No homework for this lesson** checkbox.
+  Checked sessions use **Review transcript**, await source text/role/recovery saves and enter
+  **Review & finish** with Teaching context/Create skipped. Review and choice save never confirm
+  Source or claim completion. **Confirm transcript and finish** submits the exact reviewed
+  server version/hash. The result is a read-only transcript with actual lesson/credit status and
+  collapsed **Processing details** for lesson notes, student summary, and profile suggestions,
+  without handout/Share controls. Pending, failed, unavailable, and inapplicable processing remain
+  distinct and never block transcript completion or **Create homework**.
+  **Create homework** explicitly promotes the same owner to Context; reselecting none before
+  downstream work remains unfinished until another finish. Context/prompt/draft/Share work disables
+  opt-out with an explanation. Refresh/resume restores saved intent and completed results. Completed results
+  are discoverable through **Lesson transcripts** on the student's **History** page and
+  **View transcript** on linked lesson rows. Unlinked transcripts remain accessible through History.
+  The student-scoped list filters existing tutor history pages locally and advances by server
+  result counts, including mixed homework/transcript pages. Empty partial pages offer older results;
+  student changes reset the list and ignore stale responses. Completed transcripts remain separate
+  from Step 1's unfinished/resume chooser. Server-side student filtering is deferred unless mixed
+  history volume makes browsing materially inefficient.
+  Schedule/business **View transcript** uses the nullable result-session reference; only current
+  completed no-homework suppresses its lesson follow-up. Linking an elapsed scheduled lesson can
+  already complete/charge it before transcript review; finish does not introduce a billing action.
 - Prompt and draft recovery is lineage-safe: a generated draft is created against the exact prompt
   returned by that generation operation, prompt/draft IDs recover as a compatible pair, and Create
   navigation plus draft editing stays locked while prompt or draft generation is in flight.
@@ -174,6 +296,13 @@ Admins use Administration > Prompts at `/admin/prompts`; `/prompts` redirects th
 Users and viewers see only Workspace navigation and are redirected away from either prompt route.
 Backend admin authorization protects all template management APIs independently of frontend gating.
 
+On entry, the page selects the effective default returned by the API (including the configured
+fallback), then the first visible template if that default is unavailable. Catalog refreshes after
+operator actions prefer the explicitly selected template. The retired DB-only, inactive
+`hw prompt markdown block.md` entry is hidden only on this page; its stored revisions and API access
+are preserved. It remains visible if active, shipped, or selected as the effective default. Other
+historical templates remain available.
+
 The page shows the active DB revision beside the deployed template asset, matched by exact content
 hash rather than the newest DB revision. It highlights updates awaiting explicit activation and
 unimported shipped content. DB-only and archived templates remain inspectable without inventing a
@@ -187,7 +316,20 @@ remains available for explicit activation if only the import completed.
 
 ## Validation
 
+Public legal disclosures live on the unauthenticated landing host at
+`https://eslpipeline.com/privacy/` and `https://eslpipeline.com/terms/`. The sign-in screen,
+authentication dialog, workspace rail and Calendar connection screen link to them. Legal links
+open a separate tab so assignment recovery/navigation state remains intact. The legal pages are approved for the alpha with an effective date of 20 October 2026; see [OAuth/legal readiness](../../docs/operations/google-oauth-legal-readiness.md).
+
 ```bash
 pnpm --filter @esl-pipeline/batch-frontend build
 pnpm --filter @esl-pipeline/batch-frontend test
 ```
+
+## Historical assignment access (ESL-7)
+
+AssignmentV1 is the only editable/executable assignment format. Historical Markdown jobs, drafts,
+and prompt-backed sessions open as read-only evidence with original text and produced output links.
+Correction, regeneration, preview rendering, retry/recovery, rerun and autosave are unavailable for
+these records. The backend rejects legacy processing even when an old client requests it; no
+conversion is attempted. See [AssignmentV1 retirement](../../docs/reference/ASSIGNMENT_V1.md).

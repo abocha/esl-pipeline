@@ -1,4 +1,5 @@
 import type { JobConfigOverrides } from '@esl-pipeline/contracts';
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
@@ -9,6 +10,8 @@ import { type InsertJobParams, insertApprovalJob } from '../domain/job-repositor
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { getDefaultSettings } from '../domain/settings-model.js';
 import { createDefaultSettings, getSettingsByUserId } from '../domain/settings-repository.js';
+import { draftArtifact } from './assignment-artifact.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 import {
   buildLearningPresetProvenance,
   DEFAULT_LEARNING_PRESET_ID,
@@ -90,7 +93,9 @@ export async function resolveApprovalJobConfig(
   }
   const withTts =
     jobOverrides.withTts ??
-    (jobOverrides.ttsProvider === 'google' || jobOverrides.ttsProvider === 'inworld'
+    (jobOverrides.ttsProvider === 'google' ||
+    jobOverrides.ttsProvider === 'inworld' ||
+    jobOverrides.ttsProvider === 'gemini'
       ? true
       : hasTtsKey);
   const learningPresetId =
@@ -121,6 +126,7 @@ export async function createApprovalJobFromDraft(
   params: CreateApprovalJobParams,
   overrides?: Partial<CreateApprovalJobDependencies>,
 ): Promise<JobRecord> {
+  requireTypedAssignment(draftArtifact(params.draft));
   const jobs = overrides?.jobs ?? { insertApprovalJob };
   const publishEvent = overrides?.publishEvent ?? publishJobEvent;
   const jobConfig = await resolveApprovalJobConfig(
@@ -133,6 +139,10 @@ export async function createApprovalJobFromDraft(
     transcriptId: params.promptPackage.transcriptId,
     promptPackageId: params.promptPackage.id,
     draftId: params.draft.id,
+    assignmentArtifact: draftArtifact(params.draft),
+    assignmentRendererVersion: draftArtifact(params.draft)
+      ? ASSIGNMENT_HTML_RENDERER_VERSION
+      : undefined,
     studentId: params.draft.studentId ?? params.promptPackage.studentId ?? null,
     lessonId: params.draft.lessonId ?? params.promptPackage.lessonId ?? null,
     userId: params.draft.createdBy ?? undefined,

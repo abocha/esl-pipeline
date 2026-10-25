@@ -15,10 +15,12 @@ import React from 'react';
 import type { Accept } from 'react-dropzone';
 import { Link, useInRouterContext } from 'react-router-dom';
 
+import type { AssignmentValidationContext } from '@esl-pipeline/contracts';
+
 import type {
+  AssignmentValidationResponse,
   AudioInputTopology,
   JobStatus,
-  MarkdownValidationResponse,
   RecordingListItem,
   RecordingTranscriptResponse,
   SttProvider,
@@ -28,6 +30,7 @@ import { getRecordingProductLabel } from '../../utils/recording-state';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import { ProductButton } from '../system/ProductButton';
+import { AssignmentEditor } from './AssignmentEditor';
 import type { RecentAssignmentItem } from './MinimalAssignment.entry-state';
 import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
@@ -139,6 +142,7 @@ interface SourceStageSectionProps {
   mixedSpeakerRoles: { speaker: number; role: 'teacher' | 'student' | '' }[];
   onMixedSpeakerRoleChange: (speaker: number, role: 'teacher' | 'student' | '') => void;
   hideStudentSelection?: boolean;
+  homeworkChoice?: React.ReactNode;
   readOnly?: boolean;
 }
 
@@ -355,6 +359,15 @@ function ProfileDossier({
 }
 
 interface AssignmentStageSectionProps {
+  onEditorContinue?: () => void;
+  editorContinueDisabled?: boolean;
+  editorSessionKey?: number;
+  editorValidationContext?: AssignmentValidationContext;
+  savingDraft?: boolean;
+  draftConflict?: boolean;
+  savedDraftText?: string;
+  onRetrySave?: () => void;
+  onReconcileDraft?: (choice: 'local' | 'saved') => void;
   stage: WorkflowStage;
   sectionRef?: React.Ref<HTMLElement>;
   headingRef?: React.Ref<HTMLHeadingElement>;
@@ -374,9 +387,10 @@ interface AssignmentStageSectionProps {
   generationSuccess: string | null;
   draftText: string;
   onDraftTextChange: (value: string) => void;
-  validation: MarkdownValidationResponse | null;
+  validation: AssignmentValidationResponse | null;
   validationError: string | null;
   draftError: string | null;
+  structuredDraft?: boolean;
   readOnly?: boolean;
   allowGenerate?: boolean;
 }
@@ -406,6 +420,7 @@ interface ReviewStageSectionProps {
   jobReady: boolean;
   publishUrl: string | null | undefined;
   completedReferenceMode?: boolean;
+  historicalReadOnly?: boolean;
   correctionAvailable?: boolean;
   publicationRecoveryAvailable?: boolean;
   correctionMode?: boolean;
@@ -771,6 +786,7 @@ export function SourceStageSection({
   mixedSpeakerRoles,
   onMixedSpeakerRoleChange,
   hideStudentSelection = false,
+  homeworkChoice,
   readOnly = false,
 }: SourceStageSectionProps) {
   const recordingProductLabel = getRecordingProductLabel(recording, uploading, uploadProgress);
@@ -1083,6 +1099,7 @@ export function SourceStageSection({
                 </span>
               </div>
               {transcriptError ? <p className="minimal-error">{transcriptError}</p> : null}
+              {homeworkChoice}
             </div>
           ) : null}
         </div>
@@ -1229,6 +1246,15 @@ export function ContextStageSection({
 }
 
 export function AssignmentStageSection({
+  onEditorContinue,
+  editorContinueDisabled,
+  editorSessionKey,
+  editorValidationContext,
+  savingDraft = false,
+  draftConflict = false,
+  savedDraftText,
+  onRetrySave,
+  onReconcileDraft,
   stage,
   sectionRef,
   headingRef,
@@ -1251,6 +1277,7 @@ export function AssignmentStageSection({
   validation,
   validationError,
   draftError,
+  structuredDraft,
   readOnly = false,
   allowGenerate = true,
 }: AssignmentStageSectionProps) {
@@ -1261,40 +1288,55 @@ export function AssignmentStageSection({
     promptOptionsReady &&
     generationOptionsAvailable &&
     !assignmentBusy &&
+    !savingDraft &&
+    !draftConflict &&
     !generationBlockedByQuota;
+  const regenerateAction =
+    !readOnly && allowGenerate && hasDraft ? (
+      <button
+        ref={generateDraftButtonRef}
+        type="button"
+        className="minimal-secondary"
+        onClick={() => {
+          if (
+            globalThis.confirm(
+              'Replace this assignment with a newly generated assignment? Local edits and undo history will be replaced.',
+            )
+          )
+            onGenerateAssignment();
+        }}
+        disabled={!canGenerateAssignment}
+      >
+        {assignmentBusy ? '✨ Generating assignment…' : 'Regenerate'}
+      </button>
+    ) : null;
   return (
     <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-header">
+          <div
+            className={`minimal-stage-panel-header${structuredDraft && hasDraft ? ' assignment-editor-legacy-header' : ''}`}
+          >
             <div className="minimal-stage-panel-title">
               <h3>Assignment draft</h3>
             </div>
             <div className="minimal-inline">
-              {!readOnly && allowGenerate && hasDraft ? (
-                <button
-                  ref={generateDraftButtonRef}
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={onGenerateAssignment}
-                  disabled={!canGenerateAssignment}
+              {!structuredDraft && regenerateAction}
+              {!structuredDraft && (
+                <span
+                  className="minimal-muted assignment-draft-save-status"
+                  role="status"
+                  aria-live="polite"
                 >
-                  {assignmentBusy ? '✨ Generating assignment…' : 'Regenerate'}
-                </button>
-              ) : null}
-              <span
-                className="minimal-muted assignment-draft-save-status"
-                role="status"
-                aria-live="polite"
-              >
-                {readOnly
-                  ? 'Current saved draft (reference only)'
-                  : validating
-                    ? 'Checking draft…'
-                    : draftDirty
-                      ? 'Draft changes waiting to save'
-                      : 'Draft changes saved'}
-              </span>
+                  {readOnly
+                    ? 'Current saved draft (reference only)'
+                    : validating
+                      ? 'Checking draft…'
+                      : draftDirty
+                        ? 'Draft changes waiting to save'
+                        : 'Draft changes saved'}
+                </span>
+              )}
             </div>
           </div>
           {!generationOptionsAvailable ? (
@@ -1328,13 +1370,76 @@ export function AssignmentStageSection({
               </button>
             </div>
           ) : null}
-          <textarea
-            aria-label="Draft markdown"
-            value={draftText}
-            onChange={(event) => onDraftTextChange(event.target.value)}
-            disabled={readOnly || assignmentBusy}
-            rows={14}
-          />
+          {structuredDraft ? (
+            <>
+              {draftConflict && (
+                <div className="minimal-alert" role="alert">
+                  <strong>Newer saved work found. Your local edits are retained below.</strong>
+                  <details>
+                    <summary>Inspect saved version</summary>
+                    <AssignmentEditor
+                      text={savedDraftText ?? ''}
+                      onChange={() => {}}
+                      readOnly
+                      validationContext={editorValidationContext}
+                      saveStatus="Server version"
+                    />
+                  </details>
+                  <div className="minimal-inline">
+                    <button
+                      type="button"
+                      onClick={() => onReconcileDraft?.('local')}
+                      disabled={savingDraft}
+                    >
+                      Save my local version
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onReconcileDraft?.('saved')}
+                      disabled={savingDraft}
+                    >
+                      Use saved version
+                    </button>
+                  </div>
+                </div>
+              )}
+              <AssignmentEditor
+                key={editorSessionKey}
+                toolbarActions={regenerateAction}
+                onContinue={onEditorContinue}
+                continueDisabled={editorContinueDisabled}
+                text={draftText}
+                onChange={onDraftTextChange}
+                validationContext={editorValidationContext}
+                readOnly={readOnly}
+                disabled={assignmentBusy}
+                saveStatus={
+                  readOnly
+                    ? 'Saved reference'
+                    : draftConflict
+                      ? 'Conflict · local edits not saved'
+                      : savingDraft
+                        ? 'Saving…'
+                        : draftDirty
+                          ? draftError
+                            ? 'Changes not saved · retry available'
+                            : 'Changes not saved yet'
+                          : 'All changes saved'
+                }
+              />
+              {draftDirty && draftError && !draftConflict && onRetrySave && (
+                <button
+                  type="button"
+                  onClick={onRetrySave}
+                  disabled={savingDraft || assignmentBusy}
+                >
+                  Retry save
+                </button>
+              )}
+            </>
+          ) : hasDraft ? (
+            <p className="minimal-muted">Historical assignments are read-only.</p>
+          ) : null}
           {validation?.errors?.length ? (
             <div className="minimal-alert">
               <strong>Validation errors</strong>
@@ -1356,7 +1461,7 @@ export function AssignmentStageSection({
             </div>
           ) : null}
           {validationError ? <p className="minimal-error">{validationError}</p> : null}
-          {draftError ? <p className="minimal-error">{draftError}</p> : null}
+          {draftDirty && draftError ? <p className="minimal-error">{draftError}</p> : null}
         </div>
       </div>
     </StageSection>
@@ -1388,6 +1493,7 @@ export function ReviewStageSection({
   jobReady,
   publishUrl,
   completedReferenceMode = false,
+  historicalReadOnly = false,
   correctionAvailable = false,
   publicationRecoveryAvailable = false,
   correctionMode = false,
@@ -1478,11 +1584,17 @@ export function ReviewStageSection({
         </>
       }
     >
+      {historicalReadOnly ? (
+        <p>
+          Read-only historical record. Original sources and already-produced outputs remain
+          available; processing is unsupported.
+        </p>
+      ) : null}
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
-              <h3>Preview before you share</h3>
+              <h3>{historicalReadOnly ? 'Historical assignment' : 'Preview before you share'}</h3>
             </div>
             <div className="minimal-inline">
               <button
@@ -1498,7 +1610,7 @@ export function ReviewStageSection({
                     : ''
                 }`}
                 onClick={onPreviewDraft}
-                disabled={previewing || !draftHasContent}
+                disabled={historicalReadOnly || previewing || !draftHasContent}
               >
                 {previewing
                   ? 'Rendering preview…'

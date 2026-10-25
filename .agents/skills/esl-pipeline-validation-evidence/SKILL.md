@@ -7,33 +7,47 @@ description: Use only when changing ESL Pipeline validation or hosted-CI policy/
 
 This skill governs the validation system itself, not routine validation of feature work.
 
-Current `AGENTS.md` and testing documentation own the normal validation policy and commands.
+Normal evidence selection belongs to the
+[testing guide](../../../docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route);
+validation invariants belong to the
+[SSOT](../../../docs/reference/agents-ssot.md#runtime-and-verification-baseline).
 
-## Preserve the validation model
+## Find the changed mechanism
 
-- Focused local evidence is the normal development path; hosted PR CI owns comprehensive merge regression.
-- Do not make repository-wide local gates an automatic prerequisite for ordinary changes.
-- When diagnosing hosted CI, start from the exact selected job, logs/artifacts, configuration, and prerequisites rather than approximating it with a broader local command.
-- Inspect existing persisted evidence before rerunning unchanged work.
+Follow only the applicable row. Retrieve current commands and prerequisites from its owner.
 
-## When changing validation infrastructure
+| Mechanism                                                | Implementation owner                                                                                                                                                                                                                                              | Existing evidence to inspect                                                                                                                                                                                                                     |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hosted scope or workspace impact                         | [scope model](../../../scripts/check/workspace-change-scope.mjs), [Git entrypoint](../../../scripts/check/run-ci-scope.mjs); [image projection](../../../scripts/release/production-image-scope.mjs) when affected                                                | [scope cases](../../../scripts/check/workspace-change-scope.test.mjs), [Git entrypoint cases](../../../scripts/check/run-ci-scope.test.mjs), [image cases](../../../scripts/release/production-image-scope.test.mjs)                             |
+| Backend prerequisite membership or environment isolation | [project model](../../../packages/batch-backend/vitest.projects.mjs), [setup](../../../packages/batch-backend/tests/setup/project-env.mjs), [pure environment](../../../scripts/test/pure-test-env.mjs)                                                           | [project contracts](../../../scripts/check/backend-test-projects.test.mjs), [pure environment cases](../../../scripts/test/pure-test-env.test.mjs)                                                                                               |
+| Local DB/worker helper                                   | [helper](../../../scripts/test/run-backend-db-worker-check.mjs), [backend execution recipe](../../../packages/batch-backend/README.md#validation)                                                                                                                 | [PG environment cases](../../../packages/batch-backend/tests/bootstrap.pg-test-env.test.ts), [service environment cases](../../../packages/batch-backend/tests/support/test-env.test.ts); these do not cover the helper's child-process behavior |
+| Hosted job, command or evidence artifact                 | [workflow](../../../.github/workflows/ci.yml), its selected job and retained logs/artifacts                                                                                                                                                                       | [workflow contracts](../../../scripts/check/ci-workflow-structure.test.mjs); [hosted reproduction route](../../../docs/reference/TESTING_GUIDELINES.md#hosted-pr-ci-job-reproduction)                                                            |
+| Documentation validation mechanism                       | [configured checks](../../../scripts/docs/docs-check-lib.mjs), [PR entrypoint](../../../scripts/docs/check-pr-docs.mjs), [affected local links](../../../scripts/docs/pr-markdown-links.mjs); [Governance](../../../docs/reference/DOCS_GOVERNANCE.md) for policy | [structural/freshness cases](../../../scripts/docs/docs-check.test.mjs), [Git/link regressions](../../../scripts/docs/pr-markdown-links.test.mjs), [plan lifecycle cases](../../../scripts/docs/plan-lifecycle.test.mjs)                         |
 
-Inspect only the affected validation owners, such as the current testing guidelines, CI workflow, change-scope logic, backend test-project configuration, or service-test helpers.
+## Select evidence for the failure
 
-Preserve these semantic properties where applicable:
+Identify the plausible failure introduced by the change and the existing case that could expose it.
+For example:
 
-- hosted scope selection fails closed for changes it cannot safely classify;
-- workspace/dependency impact includes required transitive dependents;
-- test projects are classified by actual imports, bootstrap, and operational prerequisites rather than filename convention alone;
-- tests intended to be pure are isolated from ambient service/provider/repository environment;
-- service-test helpers remain narrow tools for their real callers rather than becoming a second generalized local CI orchestrator.
+- A scope change could skip required evidence for a renamed file, an indirect dependent or unknown
+  ownership. Exercise those inputs through the classifier; inspect Git entrypoint or independent
+  workflow bootstrap coverage only when that boundary is affected.
+- A membership/setup change could omit a test, assign it twice or let a pure test consume ambient
+  service credentials. Use project-contract and poisoned-environment cases. A changed PostgreSQL,
+  Redis or media interaction needs evidence at that actual boundary.
+- A service-helper change could construct the wrong environment, mishandle a child failure or target
+  an unsafe database. Inspect the environment cases and database safeguard owner; add focused helper
+  coverage for changed behavior they do not exercise. Use a disposable service when the actual
+  service interaction is the behavior under test.
+- A hosted failure could originate in prerequisites rather than the code under test. Inspect the
+  selected job's first relevant failure and retained evidence before reproducing its command.
 
-Treat current scripts, environment values, project names, and command spelling as repository-owned implementation details, not durable skill content.
+Do not infer meaningful coverage from a test filename or a passing neighboring suite. Preserve the
+SSOT's fail-closed scope, transitive impact, prerequisite membership, pure-environment isolation and
+hosted merge requirements; keep local service helpers narrow.
 
-Historical artifacts may document commands that once ran; they are evidence, not current procedure and do not by themselves justify compatibility aliases.
+## Reuse and finish
 
-## Completion
-
-Validate the changed validation machinery with the narrowest reliable evidence that proves its intended behavior.
-
-Report what validation/CI behavior changed, the evidence obtained, and which hosted, manual, or environment-owned requirements remain. Do not convert a focused local pass into a claim of merge readiness.
+Apply the guide's [evidence applicability and completion rules](../../../docs/reference/TESTING_GUIDELINES.md#evidence-and-merge-boundary)
+to existing results before running more checks. Report the changed mechanism, exact evidence and
+remaining requirements. Historical commands are lookup clues; verify them against current owners.

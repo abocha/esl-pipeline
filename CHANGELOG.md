@@ -2,6 +2,276 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.3.0] - 2026-10-25
+
+### Changed
+
+- Automated release from PR #451: feat(frontend): add desktop workbook assignment editor (https://github.com/abocha/esl-pipeline/pull/451)
+
+## [22.2.0] - 2026-10-23
+
+### Changed
+
+- Automated release from PR #449: feat(students): keep student pages in a persistent directory workspace (ESL-82) (https://github.com/abocha/esl-pipeline/pull/449)
+
+## [22.1.5] - 2026-10-22
+
+### Changed
+
+- Automated release from PR #446: fix(deploy): keep Caddy recreation within its planned scope (https://github.com/abocha/esl-pipeline/pull/446)
+
+## [22.1.4] - 2026-10-22
+
+### Changed
+
+- Automated release from PR #444: fix(edge): temporarily restrict public Caddy to HTTP/1.1 (https://github.com/abocha/esl-pipeline/pull/444)
+
+## [22.1.3] - 2026-10-22
+
+### Changed
+
+- Automated release from PR #442: fix(deploy): patch production nginx and caddy images (https://github.com/abocha/esl-pipeline/pull/442)
+
+## [22.1.2] - 2026-10-21
+
+### Changed
+
+- Automated release from PR #440: fix(scripts): preserve truthful failure and recovery evidence (https://github.com/abocha/esl-pipeline/pull/440)
+
+## [22.1.1] - 2026-10-21
+
+### Changed
+
+- Automated release from PR #429: fix(deploy): clarify operator output and preflight failures (https://github.com/abocha/esl-pipeline/pull/429)
+
+## [22.1.0] - 2026-10-21
+
+### Changed
+
+- Automated release from PR #428: feat(tts): adopt Gemini Flash-Lite with Chirp pronunciation chunks (ESL-67) (https://github.com/abocha/esl-pipeline/pull/428)
+
+## [22.0.1] - 2026-10-20
+
+### Changed
+
+- Automated release from PR #424: fix(legal): publish alpha policies and Google OAuth disclosures (ESL-65) (https://github.com/abocha/esl-pipeline/pull/424)
+
+## [22.0.0] - 2026-10-20
+
+### Changed
+
+- Automated release from PR #420: feat(calendar)!: Google Calendar scheduling and scheduler retirement (ESL-62) (https://github.com/abocha/esl-pipeline/pull/420)
+
+## [21.5.1] - 2026-10-18
+
+### Changed
+
+- Automated release from PR #418: fix(prompts): open effective default and hide retired entry (https://github.com/abocha/esl-pipeline/pull/418)
+
+## [21.5.0] - 2026-10-17
+
+### Changed
+
+- Automated release from PR #416: feat(students): record and browse learner activity (https://github.com/abocha/esl-pipeline/pull/416)
+
+## [21.4.2] - 2026-10-17
+
+### Changed
+
+- Automated release from PR #415: fix(students): remove misleading metrics and show unavailable data (https://github.com/abocha/esl-pipeline/pull/415)
+
+## [21.4.1] - 2026-10-17
+
+### Changed
+
+- Automated release from PR #414: fix(business): simplify workspace and preserve payment truth (https://github.com/abocha/esl-pipeline/pull/414)
+
+## [21.4.0] - 2026-10-17
+
+### Changed
+
+- Automated release from PR #409: fix(schedule): use workspace time and align homework entry (https://github.com/abocha/esl-pipeline/pull/409)
+
+## [21.3.7] - 2026-10-16
+
+### Changed
+
+- Automated release from PR #407: fix(frontend): defer pending assignment validation (ESL-19) (https://github.com/abocha/esl-pipeline/pull/407)
+
+## [21.3.6] - 2026-10-16
+
+### Changed
+
+- Automated release from PR #406: test: isolate provider unit tests from ambient credentials (ESL-51) (https://github.com/abocha/esl-pipeline/pull/406)
+
+## [21.3.5] - 2026-10-13
+
+### Changed
+
+- Automated release from PR #405: fix(deploy): protect production configuration and reconcile host ownership (ESL-53) (https://github.com/abocha/esl-pipeline/pull/405)
+
+## [21.3.4] - 2026-10-13
+
+### Changed
+
+- Automated release from PR #402: docs: consolidate agent-facing ownership and current guidance (ESL-54) (https://github.com/abocha/esl-pipeline/pull/402)
+
+## [21.3.3] - 2026-10-12
+
+### Changed
+
+- Automated release from PR #399: docs(dx): streamline agent validation routes (ESL-52) (https://github.com/abocha/esl-pipeline/pull/399)
+
+## [21.3.2] - 2026-10-12
+
+### Changed
+
+- Automated release from PR #396: chore(deps): refresh dependencies and remove convenience packages (https://github.com/abocha/esl-pipeline/pull/396)
+
+## [21.3.1] - 2026-10-11
+
+### Changed
+
+- Automated release from PR #394: fix(landing): polish two English phrases (ESL-49) (https://github.com/abocha/esl-pipeline/pull/394)
+
+## [21.3.0] - 2026-10-11
+
+### Changed
+
+- Automated release from PR #392: feat(landing): publish public ESL Pipeline site at eslpipeline.com (ESL-48) (https://github.com/abocha/esl-pipeline/pull/392)
+
+## [21.2.1] - 2026-10-11
+
+### Changed
+
+- Automated release from PR #390: fix(deploy): support canonical domain migration to app.eslpipeline.com (https://github.com/abocha/esl-pipeline/pull/390)
+
+## [21.2.0] - 2026-10-11
+
+### Changed
+
+- Automated release from PR #389: fix(profile): preserve approved facts and report actual promotions (https://github.com/abocha/esl-pipeline/pull/389)
+
+## [21.1.0] - 2026-10-10
+
+### Changed
+
+- Automated release from PR #386: feat(generation): enforce shared OpenAI model-group daily budgets (https://github.com/abocha/esl-pipeline/pull/386)
+
+## [21.0.1] - 2026-10-10
+
+### Changed
+
+- Automated release from PR #383: docs: present ESL Pipeline publicly and reserve source rights (ABO-50) (https://github.com/abocha/esl-pipeline/pull/383)
+
+## [21.0.0] - 2026-10-10
+
+### Changed
+
+- Automated release from PR #382: feat(generation)!: migrate Google AI Studio LLM workloads to OpenAI (ESL-41) (https://github.com/abocha/esl-pipeline/pull/382)
+
+## [20.2.4] - 2026-10-10
+
+### Changed
+
+- Automated release from PR #381: fix(memory): unify effective generation inputs and retire dead packaging (https://github.com/abocha/esl-pipeline/pull/381)
+
+## [20.2.3] - 2026-10-10
+
+### Changed
+
+- Automated release from PR #375: Migrate workflow linting and parallelize CI policy checks (https://github.com/abocha/esl-pipeline/pull/375)
+
+## [20.2.2] - 2026-10-09
+
+### Changed
+
+- Automated release from PR #373: test: strengthen regression coverage across packages (https://github.com/abocha/esl-pipeline/pull/373)
+
+## [20.2.1] - 2026-10-09
+
+### Changed
+
+- Automated release from PR #374: fix(memory): preserve source-bound candidate review and promotion (https://github.com/abocha/esl-pipeline/pull/374)
+
+## [20.2.0] - 2026-10-09
+
+### Changed
+
+- Automated release from PR #371: feat(memory): rehabilitate evidence authority and availability (https://github.com/abocha/esl-pipeline/pull/371)
+
+## [20.1.0] - 2026-10-08
+
+### Changed
+
+- Automated release from PR #367: feat(mcp): add stable profiles and fix session-bound refresh tokens (https://github.com/abocha/esl-pipeline/pull/367)
+
+## [20.0.2] - 2026-10-08
+
+### Changed
+
+- Automated release from PR #366: fix(oauth): add sanitized MCP connector diagnostics (https://github.com/abocha/esl-pipeline/pull/366)
+
+## [20.0.1] - 2026-10-08
+
+### Changed
+
+- Automated release from PR #359: fix(frontend): polish no-homework transcript flow (ESL-35) (https://github.com/abocha/esl-pipeline/pull/359)
+
+## [20.0.0] - 2026-10-07
+
+### Changed
+
+- Automated release from PR #357: feat!: finish lessons without homework and reopen the same source (https://github.com/abocha/esl-pipeline/pull/357)
+
+## [19.1.0] - 2026-10-07
+
+### Changed
+
+- Automated release from PR #355: feat(handout): polish learner layout, cues and Lucide controls (https://github.com/abocha/esl-pipeline/pull/355)
+
+## [19.0.0] - 2026-10-06
+
+### Changed
+
+- Automated release from PR #353: feat(handout): polish learner experience and require authored emoji (https://github.com/abocha/esl-pipeline/pull/353)
+
+## [18.0.0] - 2026-10-06
+
+### Changed
+
+- Automated release from PR #351: feat(assignment): deliver learner-ready v7 generation and React handouts (https://github.com/abocha/esl-pipeline/pull/351)
+
+## [17.0.0] - 2026-10-04
+
+### Changed
+
+- Automated release from PR #337: feat(assignments)!: retire historical Markdown execution (https://github.com/abocha/esl-pipeline/pull/337)
+
+## [16.0.0] - 2026-10-04
+
+### Changed
+
+- Automated release from PR #336: feat(assignments)!: execute AssignmentV1 natively (ESL-6) (https://github.com/abocha/esl-pipeline/pull/336)
+
+## [15.0.0] - 2026-10-03
+
+### Changed
+
+- Automated release from PR #335: feat(assignments): make AssignmentV1 the durable draft authority (https://github.com/abocha/esl-pipeline/pull/335)
+
+## [14.2.1] - 2026-10-03
+
+### Changed
+
+- Automated release from PR #333: fix(prompts): integrate Candidate-3 homework semantics (ESL-17) (https://github.com/abocha/esl-pipeline/pull/333)
+
+## [14.2.0] - 2026-10-03
+
+### Changed
+
+- Automated release from PR #331: feat(student-memory): make ordinary replay safely resumable (https://github.com/abocha/esl-pipeline/pull/331)
+
 ## [14.1.3] - 2026-10-02
 
 ### Changed

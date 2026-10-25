@@ -107,10 +107,13 @@ export async function runS3StorageSmoke(options: S3SmokeOptions): Promise<S3Smok
   );
 
   let uploaded = false;
-  let deleted = false;
+  let uploadedKey = key;
+  let result: S3SmokeResult | undefined;
+  let smokeError: unknown;
   try {
-    await options.adapter.uploadFile(key, content, 'text/plain', content.length);
+    const upload = await options.adapter.uploadFile(key, content, 'text/plain', content.length);
     uploaded = true;
+    uploadedKey = upload.key;
 
     const metadata = await options.adapter.getFileMetadata(key);
     if (!metadata) {
@@ -127,12 +130,7 @@ export async function runS3StorageSmoke(options: S3SmokeOptions): Promise<S3Smok
       throw new Error('S3 smoke presigned URL was not an HTTP URL.');
     }
 
-    if (!options.keepObject) {
-      await options.adapter.deleteFile(key);
-      deleted = true;
-    }
-
-    return {
+    result = {
       ok: true,
       bucket: options.bucket,
       key: metadata.key,
@@ -140,11 +138,23 @@ export async function runS3StorageSmoke(options: S3SmokeOptions): Promise<S3Smok
       presignedUrlGenerated: true,
       deleted: !options.keepObject,
     };
-  } finally {
-    if (uploaded && !options.keepObject && !deleted) {
-      await options.adapter.deleteFile(key).catch(() => undefined);
+  } catch (error) {
+    smokeError = error;
+  }
+  if (uploaded && !options.keepObject) {
+    try {
+      await options.adapter.deleteFile(key);
+    } catch {
+      const diagnostic = `S3 smoke cleanup failed; the object may remain. Recovery location: ${JSON.stringify({ bucket: options.bucket, key: uploadedKey })}. Inspect and remove it through the authorized S3 cleanup workflow.`;
+      if (!result) {
+        console.error(diagnostic);
+      } else {
+        throw new Error(diagnostic);
+      }
     }
   }
+  if (!result) throw smokeError;
+  return result;
 }
 
 async function main(): Promise<void> {

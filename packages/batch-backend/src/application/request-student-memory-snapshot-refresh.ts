@@ -21,6 +21,7 @@ export interface RequestStudentMemorySnapshotRefreshParams {
   requestCandidateRefresh?: boolean | null;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
+  replayKey?: string;
 }
 
 export interface RequestStudentMemorySnapshotRefreshDependencies {
@@ -31,7 +32,7 @@ export interface RequestStudentMemorySnapshotRefreshDependencies {
     supersedeForOnlineWork: typeof supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork;
   };
   queue: {
-    enqueue: ReturnType<typeof createStudentMemoryQueue>['enqueue'];
+    reconcile: ReturnType<typeof createStudentMemoryQueue>['reconcile'];
   };
   now: () => Date;
 }
@@ -52,6 +53,8 @@ export async function requestStudentMemorySnapshotRefresh(args: {
   const sourceEntryId = args.params.sourceEntryId?.trim() || null;
 
   if (args.params.trigger === 'manual-replay') {
+    if (!args.params.replayKey?.trim())
+      throw new Error('Manual snapshot replay requires replayKey');
     if (!args.params.strategy) {
       throw new Error('Manual student-memory snapshot replay requires --strategy');
     }
@@ -77,7 +80,9 @@ export async function requestStudentMemorySnapshotRefresh(args: {
 
   const requestedAt = now();
   const isAutomaticHomeworkRefresh = args.params.trigger === 'homework-memory-ready';
+  const isAutomaticRefresh = args.params.trigger !== 'manual-replay';
   const ensureParams = {
+    replayKey: args.params.replayKey?.trim(),
     studentId: args.params.studentId,
     schemaVersion: STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION,
     generatedAt: requestedAt,
@@ -85,6 +90,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     model: target.model,
     sourceEntryId,
     reuseReadyHomeworkSource: isAutomaticHomeworkRefresh,
+    reuseReadyLessonSource: args.params.trigger === 'lesson-memory-ready',
     generationNotes: {
       trigger: args.params.trigger,
       sourceEntryId,
@@ -113,7 +119,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     canonicalScopeKey: args.params.studentId,
   });
 
-  if (isAutomaticHomeworkRefresh) {
+  if (isAutomaticRefresh) {
     pending = await snapshots.ensurePending(ensureParams);
     if (pending.outcome === 'already_reconciled') {
       logger.info('Student-memory snapshot refresh requested', {
@@ -128,13 +134,13 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     }
   }
 
-  await queue.enqueue(
+  await queue.reconcile(
     {
       kind: 'student-memory-snapshot-refresh',
       studentId: args.params.studentId,
       pendingEntryId: pending.entry.id,
-      provider: target.provider,
-      model: target.model,
+      provider: pending.entry.provider as GenerationProvider,
+      model: pending.entry.model,
       trigger: args.params.trigger,
       sourceEntryId,
       strategy: args.params.strategy ?? null,
@@ -143,6 +149,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     },
     {
       jobId: `student-memory-snapshot:${args.params.studentId}:${pending.entry.id}`,
+      requeueCompleted: true,
     },
   );
 

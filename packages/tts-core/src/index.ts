@@ -67,10 +67,19 @@ export async function loadVoicesCatalog(provider?: TtsProviderId): Promise<Voice
 }
 
 export {
+  normalizePlainSpeechText,
+  resolveAssignmentMetadata,
+  resolveAssignmentPronunciation,
+  resolveAssignmentShadowFocus,
+  resolveAssignmentStudyText,
+} from './assignment-input.js';
+export {
   buildDefaultTtsModelByProvider,
   buildTtsModelOptionsByProvider,
   ELEVENLABS_TTS_DESCRIPTOR,
   ELEVENLABS_TTS_MODELS,
+  GEMINI_TTS_DESCRIPTOR,
+  GEMINI_TTS_MODELS,
   GOOGLE_TTS_DESCRIPTOR,
   GOOGLE_TTS_MODELS,
   getTtsModelCapabilities,
@@ -126,6 +135,7 @@ export {
   normalizeSpeechCueText,
 } from './speech-plan-analysis.js';
 export type {
+  AssignmentExecutionInput,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
@@ -136,6 +146,7 @@ export type {
   BuildStudyTextOptions,
   BuildStudyTextResult,
   ElevenLabsTtsModelId,
+  GeminiTtsModelId,
   GoogleTtsModel,
   InworldTtsModel,
   PreparedStudyTextSynthesis,

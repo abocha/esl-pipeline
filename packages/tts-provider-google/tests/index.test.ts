@@ -1,10 +1,12 @@
+import { readFileSync as readAssignmentFixture } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
 
+import * as ffmpeg from '../src/ffmpeg.js';
 import type { GoogleVoiceListEntry } from '../src/google.js';
 import * as googleApi from '../src/google.js';
 import {
@@ -15,6 +17,7 @@ import {
   resolveGoogleSpeakerAssignments,
   resolveGoogleTtsModel,
 } from '../src/index.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 
 function mockGoogleVoiceList(voices: GoogleVoiceListEntry[]) {
   process.env.ESL_TTS_PROVIDER_GOOGLE_API_ENDPOINT = 'test-texttospeech.googleapis.com';
@@ -58,6 +61,8 @@ function createNoBritishNoIrishVoices(): GoogleVoiceListEntry[] {
 
 beforeEach(() => {
   process.env.ESL_TTS_PROVIDER_GOOGLE_SILENCE_TAIL_SECONDS = '0';
+  vi.spyOn(ffmpeg, 'setMp3TitleMetadata').mockResolvedValue();
+  vi.spyOn(ffmpeg, 'resolveFfmpegPath').mockResolvedValue('ffmpeg');
   resetGoogleVoiceCatalogCacheForTests();
 });
 
@@ -126,40 +131,54 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, ['auto: true'].join('\n'), 'utf8');
 
-    const md = [
-      '---',
-      'student: Example',
-      'speaker_labels: [Narrator, Alex, Yulia]',
-      'speaker_profiles:',
-      '  - id: Narrator',
-      '    role: narrator',
-      '    gender: female',
-      '    accent: british',
-      '    style: narration',
-      '  - id: Alex',
-      '    role: student',
-      '    gender: male',
-      '    accent: american',
-      '    style: conversational',
-      '  - id: Yulia',
-      '    role: student',
-      '    gender: female',
-      '    accent: american',
-      '    style: conversational',
-      '---',
-      '',
-      '## A) Study Text',
-      '',
-      ':::study-text Transcript',
-      'Narrator: The class is starting.',
-      'Alex: Hi Yulia!',
-      'Yulia: Hi Alex!',
-      ':::',
-      '',
-    ].join('\n');
-
     const result = await buildStudyTextMp3Google(
-      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'narrator',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: 'british',
+              },
+              {
+                id: 's1',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'male',
+                age: null,
+                accent: 'american',
+              },
+              {
+                id: 's2',
+                displayName: 'Yulia',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: 'american',
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'The class is starting.' },
+              { speakerId: 's1', text: 'Hi Yulia!' },
+              { speakerId: 's2', text: 'Hi Alex!' },
+            ],
+          },
+          pronunciation: null,
+        }),
+        mdPath: join(workdir, 'assignment.json'),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
@@ -179,26 +198,30 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, ['auto: true'].join('\n'), 'utf8');
 
-    const md = [
-      '---',
-      'student: Example',
-      'speaker_profiles:',
-      '  - id: Narrator',
-      '    role: narrator',
-      '    gender: female',
-      '    accent: british',
-      '---',
-      '',
-      '## A) Study Text',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Exact accent match should win.',
-      ':::',
-      '',
-    ].join('\n');
-
     const result = await buildStudyTextMp3Google(
-      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'narrator',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: 'british',
+              },
+            ],
+            turns: [{ speakerId: 's0', text: 'Exact accent match should win.' }],
+          },
+          pronunciation: null,
+        }),
+        mdPath: join(workdir, 'assignment.json'),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
@@ -212,26 +235,30 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, ['auto: true'].join('\n'), 'utf8');
 
-    const md = [
-      '---',
-      'student: Example',
-      'speaker_profiles:',
-      '  - id: Narrator',
-      '    role: narrator',
-      '    gender: male',
-      '    accent: british',
-      '---',
-      '',
-      '## A) Study Text',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Regional close fallback should pick Irish.',
-      ':::',
-      '',
-    ].join('\n');
-
     const result = await buildStudyTextMp3Google(
-      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'narrator',
+                persona: null,
+                voiceDirection: null,
+                gender: 'male',
+                age: null,
+                accent: 'british',
+              },
+            ],
+            turns: [{ speakerId: 's0', text: 'Regional close fallback should pick Irish.' }],
+          },
+          pronunciation: null,
+        }),
+        mdPath: join(workdir, 'assignment.json'),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
@@ -245,26 +272,30 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, ['auto: true'].join('\n'), 'utf8');
 
-    const md = [
-      '---',
-      'student: Example',
-      'speaker_profiles:',
-      '  - id: Narrator',
-      '    role: narrator',
-      '    gender: female',
-      '    accent: british',
-      '---',
-      '',
-      '## A) Study Text',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Final fallback should prefer en-US.',
-      ':::',
-      '',
-    ].join('\n');
-
     const result = await buildStudyTextMp3Google(
-      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'narrator',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: 'british',
+              },
+            ],
+            turns: [{ speakerId: 's0', text: 'Final fallback should prefer en-US.' }],
+          },
+          pronunciation: null,
+        }),
+        mdPath: join(workdir, 'assignment.json'),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
@@ -278,30 +309,60 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, ['auto: true'].join('\n'), 'utf8');
 
-    const md = [
-      '---',
-      'student: Example',
-      'speaker_profiles:',
-      '  - id: Narrator',
-      '    role: narrator',
-      '    gender: female',
-      '    accent: martian',
-      '---',
-      '',
-      '## A) Study Text',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Unknown accent should still resolve deterministically.',
-      ':::',
-      '',
-    ].join('\n');
-
     const first = await buildStudyTextMp3Google(
-      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'narrator',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: 'martian',
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Unknown accent should still resolve deterministically.' },
+            ],
+          },
+          pronunciation: null,
+        }),
+        mdPath: join(workdir, 'assignment.json'),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
     const second = await buildStudyTextMp3Google(
-      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'narrator',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: 'martian',
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Unknown accent should still resolve deterministically.' },
+            ],
+          },
+          pronunciation: null,
+        }),
+        mdPath: join(workdir, 'assignment.json'),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
@@ -319,22 +380,42 @@ describe('google provider adapter basics', () => {
       'utf8',
     );
 
-    const md = [
-      '---',
-      'student: Example',
-      '---',
-      '',
-      '## A) Study Text',
-      '',
-      ':::study-text Transcript',
-      'Alex: Hello there.',
-      'Yulia: Nice to meet you.',
-      ':::',
-      '',
-    ].join('\n');
-
     const assignments = await resolveGoogleSpeakerAssignments(
-      { context: parseMarkdownContext(md) },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+              {
+                id: 's1',
+                displayName: 'Yulia',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Hello there.' },
+              { speakerId: 's1', text: 'Nice to meet you.' },
+            ],
+          },
+          pronunciation: null,
+        }),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd' },
     );
 
@@ -358,22 +439,30 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, ['default: en-US-Studio-O'].join('\n'), 'utf8');
 
-    const md = [
-      '---',
-      'student: Example',
-      '---',
-      '',
-      '## A) Study Text',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Cross-family validation.',
-      ':::',
-      '',
-    ].join('\n');
-
     await expect(
       resolveGoogleSpeakerAssignments(
-        { context: parseMarkdownContext(md) },
+        {
+          assignment: createTtsAssignment({
+            metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+            studyText: {
+              type: 'monologue',
+              speakers: [
+                {
+                  id: 's0',
+                  displayName: 'Narrator',
+                  role: 'student',
+                  persona: null,
+                  voiceDirection: null,
+                  gender: 'neutral',
+                  age: null,
+                  accent: null,
+                },
+              ],
+              turns: [{ speakerId: 's0', text: 'Cross-family validation.' }],
+            },
+            pronunciation: null,
+          }),
+        },
         { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd' },
       ),
     ).rejects.toThrow(/selected model family is chirp3_hd/i);
@@ -389,30 +478,43 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, 'auto: true\n', 'utf8');
 
-    const md = [
-      '---',
-      'student: Example',
-      'speaker_labels: [Narrator, Alex]',
-      'speaker_profiles:',
-      '  - id: Narrator',
-      '    role: narrator',
-      '    gender: female',
-      '  - id: Alex',
-      '    role: student',
-      '    gender: male',
-      '---',
-      '',
-      '## A) Study Text',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Model test line one.',
-      'Alex: Model test line two.',
-      ':::',
-      '',
-    ].join('\n');
-
     const result = await buildStudyTextMp3Google(
-      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'narrator',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: null,
+              },
+              {
+                id: 's1',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'male',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Model test line one.' },
+              { speakerId: 's1', text: 'Model test line two.' },
+            ],
+          },
+          pronunciation: null,
+        }),
+        mdPath: join(workdir, 'assignment.json'),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: model, preview: true },
     );
 
@@ -427,39 +529,102 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, 'auto: true\n', 'utf8');
 
-    const md = [
-      '---',
-      'student: Example',
-      'speaker_labels: [Narrator, Alex, Yulia]',
-      'speaker_profiles:',
-      '  - id: Narrator',
-      '    role: narrator',
-      '    gender: female',
-      '    accent: british',
-      '  - id: Alex',
-      '    role: student',
-      '    gender: male',
-      '  - id: Yulia',
-      '    role: student',
-      '    gender: female',
-      '---',
-      '',
-      '## A) Study Text',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Determinism one.',
-      'Alex: Determinism two.',
-      'Yulia: Determinism three.',
-      ':::',
-      '',
-    ].join('\n');
-
     const first = await resolveGoogleSpeakerAssignments(
-      { context: parseMarkdownContext(md) },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'narrator',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: 'british',
+              },
+              {
+                id: 's1',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'male',
+                age: null,
+                accent: null,
+              },
+              {
+                id: 's2',
+                displayName: 'Yulia',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Determinism one.' },
+              { speakerId: 's1', text: 'Determinism two.' },
+              { speakerId: 's2', text: 'Determinism three.' },
+            ],
+          },
+          pronunciation: null,
+        }),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd' },
     );
     const second = await resolveGoogleSpeakerAssignments(
-      { context: parseMarkdownContext(md) },
+      {
+        assignment: createTtsAssignment({
+          metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'narrator',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: 'british',
+              },
+              {
+                id: 's1',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'male',
+                age: null,
+                accent: null,
+              },
+              {
+                id: 's2',
+                displayName: 'Yulia',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Determinism one.' },
+              { speakerId: 's1', text: 'Determinism two.' },
+              { speakerId: 's2', text: 'Determinism three.' },
+            ],
+          },
+          pronunciation: null,
+        }),
+      },
       { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd' },
     );
 
@@ -475,18 +640,26 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, ['default: en-GB-Chirp3-HD-Gacrux'].join('\n'), 'utf8');
 
-    const context = parseMarkdownContext(
-      [
-        '---',
-        'student: Example',
-        '---',
-        '',
-        ':::study-text Transcript',
-        'Narrator: Locale should follow voice.',
-        ':::',
-        '',
-      ].join('\n'),
-    );
+    const context = createTtsAssignment({
+      metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+      studyText: {
+        type: 'monologue',
+        speakers: [
+          {
+            id: 's0',
+            displayName: 'Narrator',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+        ],
+        turns: [{ speakerId: 's0', text: 'Locale should follow voice.' }],
+      },
+      pronunciation: null,
+    });
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')
@@ -494,7 +667,7 @@ describe('google provider adapter basics', () => {
 
     try {
       await buildStudyTextMp3Google(
-        { context, mdPath: join(workdir, 'lesson.md') },
+        { assignment: context, mdPath: join(workdir, 'assignment.json') },
         { voiceMapPath, outPath: workdir },
       );
 
@@ -515,18 +688,34 @@ describe('google provider adapter basics', () => {
     process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE = 'en-US';
 
     const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-language-locale-shadow-'));
-    const context = parseMarkdownContext(
-      [
-        '---',
-        'student: Example',
-        '---',
-        '',
-        '### B. Pronunciation Micro-Focus',
-        '- **Mode:** shadow_sentence',
-        '- **Shadow sentence:** Locale should follow voice.',
-        '',
-      ].join('\n'),
-    );
+    const context = createTtsAssignment({
+      metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+      studyText: {
+        type: 'monologue',
+        speakers: [
+          {
+            id: 's0',
+            displayName: 'Narrator',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+        ],
+        turns: [],
+      },
+      pronunciation: {
+        mode: 'shadow_sentence',
+        target: '',
+        focus: '',
+        action: '',
+        deliverable: '',
+        shadowSentence: 'Locale should follow voice.',
+        words: [],
+      },
+    });
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')
@@ -534,7 +723,11 @@ describe('google provider adapter basics', () => {
 
     try {
       await buildPronunciationShadowSentenceMp3Google(
-        { context, mdPath: join(workdir, 'lesson.md'), voiceId: 'en-GB-Chirp3-HD-Gacrux' },
+        {
+          assignment: context,
+          mdPath: join(workdir, 'assignment.json'),
+          voiceId: 'en-GB-Chirp3-HD-Gacrux',
+        },
         { outPath: workdir },
       );
 
@@ -558,29 +751,37 @@ describe('google cache-key regression coverage', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, 'default: en-US-Chirp3-HD-Charon\n', 'utf8');
 
-    const context = parseMarkdownContext(
-      [
-        '---',
-        'student: Example',
-        '---',
-        '',
-        ':::study-text Transcript',
-        'Narrator: Cache key language regression test.',
-        ':::',
-        '',
-      ].join('\n'),
-    );
+    const context = createTtsAssignment({
+      metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+      studyText: {
+        type: 'monologue',
+        speakers: [
+          {
+            id: 's0',
+            displayName: 'Narrator',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+        ],
+        turns: [{ speakerId: 's0', text: 'Cache key language regression test.' }],
+      },
+      pronunciation: null,
+    });
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')
       .mockResolvedValue(Buffer.from('mock-audio'));
 
     const first = await buildStudyTextMp3Google(
-      { context, mdPath: join(workdir, 'lesson.md') },
+      { assignment: context, mdPath: join(workdir, 'assignment.json') },
       { voiceMapPath, outPath: workdir, googleLanguageCode: 'en-US' },
     );
     const second = await buildStudyTextMp3Google(
-      { context, mdPath: join(workdir, 'lesson.md') },
+      { assignment: context, mdPath: join(workdir, 'assignment.json') },
       { voiceMapPath, outPath: workdir, googleLanguageCode: 'es-ES' },
     );
 
@@ -595,29 +796,37 @@ describe('google cache-key regression coverage', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, 'default: en-US-Chirp3-HD-Charon\n', 'utf8');
 
-    const context = parseMarkdownContext(
-      [
-        '---',
-        'student: Example',
-        '---',
-        '',
-        ':::study-text Transcript',
-        'Narrator: Cache key model regression test.',
-        ':::',
-        '',
-      ].join('\n'),
-    );
+    const context = createTtsAssignment({
+      metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+      studyText: {
+        type: 'monologue',
+        speakers: [
+          {
+            id: 's0',
+            displayName: 'Narrator',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+        ],
+        turns: [{ speakerId: 's0', text: 'Cache key model regression test.' }],
+      },
+      pronunciation: null,
+    });
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')
       .mockResolvedValue(Buffer.from('mock-audio'));
 
     const first = await buildStudyTextMp3Google(
-      { context, mdPath: join(workdir, 'lesson.md') },
+      { assignment: context, mdPath: join(workdir, 'assignment.json') },
       { voiceMapPath, outPath: workdir, googleModelName: 'model-A' },
     );
     const second = await buildStudyTextMp3Google(
-      { context, mdPath: join(workdir, 'lesson.md') },
+      { assignment: context, mdPath: join(workdir, 'assignment.json') },
       { voiceMapPath, outPath: workdir, googleModelName: 'model-B' },
     );
 
@@ -628,29 +837,53 @@ describe('google cache-key regression coverage', () => {
 
   it('regenerates shadow sentence when googleLanguageCode changes with force=false', async () => {
     const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-cache-shadow-'));
-    const context = parseMarkdownContext(
-      [
-        '---',
-        'student: Example',
-        '---',
-        '',
-        '### B. Pronunciation Micro-Focus',
-        '- **Mode:** shadow_sentence',
-        '- **Shadow sentence:** Language-sensitive pronunciation sample.',
-        '',
-      ].join('\n'),
-    );
+    const context = createTtsAssignment({
+      metadata: { title: 'Test', student: 'Example', level: 'B1', topic: 'test' },
+      studyText: {
+        type: 'monologue',
+        speakers: [
+          {
+            id: 's0',
+            displayName: 'Narrator',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+        ],
+        turns: [],
+      },
+      pronunciation: {
+        mode: 'shadow_sentence',
+        target: '',
+        focus: '',
+        action: '',
+        deliverable: '',
+        shadowSentence: 'Language-sensitive pronunciation sample.',
+        words: [],
+      },
+    });
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')
       .mockResolvedValue(Buffer.from('mock-audio'));
 
     const first = await buildPronunciationShadowSentenceMp3Google(
-      { context, mdPath: join(workdir, 'lesson.md'), voiceId: 'en-US-Chirp3-HD-Charon' },
+      {
+        assignment: context,
+        mdPath: join(workdir, 'assignment.json'),
+        voiceId: 'en-US-Chirp3-HD-Charon',
+      },
       { outPath: workdir, googleLanguageCode: 'en-US' },
     );
     const second = await buildPronunciationShadowSentenceMp3Google(
-      { context, mdPath: join(workdir, 'lesson.md'), voiceId: 'en-US-Chirp3-HD-Charon' },
+      {
+        assignment: context,
+        mdPath: join(workdir, 'assignment.json'),
+        voiceId: 'en-US-Chirp3-HD-Charon',
+      },
       { outPath: workdir, googleLanguageCode: 'es-ES' },
     );
 
@@ -659,3 +892,25 @@ describe('google cache-key regression coverage', () => {
     expect(synthSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+it('changes cache identity when typed speech content changes', async () => {
+  mockGoogleVoiceList(createRichEnglishMockVoices());
+  const assignment = assignmentFixture();
+  const dir = await mkdtemp(join(tmpdir(), 'typed-google-'));
+  const voiceMapPath = join(dir, 'voices.yml');
+  await writeFile(voiceMapPath, 'default: en-US-Chirp3-HD-Charon');
+  const options = { outPath: dir, voiceMapPath, preview: true };
+  const original = await buildStudyTextMp3Google({ assignment }, options);
+  assignment.input.studyText.turns[0]!.text = '**First**, open the app.';
+  const changed = await buildStudyTextMp3Google({ assignment }, options);
+  expect(changed.hash).not.toBe(original.hash);
+});
+
+function assignmentFixture(): FixtureAssignmentV1 {
+  return JSON.parse(
+    readAssignmentFixture(
+      new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+      'utf8',
+    ),
+  ) as FixtureAssignmentV1;
+}

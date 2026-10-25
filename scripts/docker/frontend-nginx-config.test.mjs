@@ -25,6 +25,6 @@ test('frontend nginx caches content-hashed assets immutably without SPA fallback
 test('frontend nginx requires SPA entry HTML to revalidate', () => {
   assert.match(
     nginxConfig,
-    /location = \/index\.html \{\s+add_header Cache-Control "no-cache" always;\s+\}/u,
+    /location = \/index\.html \{\s+add_header Cache-Control "no-cache" always;[^}]*\}/u,
   );
 });

@@ -8,10 +8,10 @@ import type {
 } from '@esl-pipeline/contracts';
 import {
   ASSIGNMENT_RESPONSE_SCHEMA,
+  ASSIGNMENT_TEMPLATE_CONTRACT,
   ASSIGNMENT_TEMPLATE_ID,
-  validateAssignmentV1,
+  validateFreshAssignmentV1,
 } from '@esl-pipeline/contracts';
-import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
 import {
   classifyProviderRuntimeFailure,
   type ProviderRuntimeClassificationRules,
@@ -50,12 +50,6 @@ const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRule
       rateLimitCodes: ['rate_limit_exceeded'],
       timeoutStatusMin: 500,
       timeoutCodes: ['server_error'],
-    },
-    google_ai_studio: {
-      timeoutStatusMin: 500,
-    },
-    openrouter: {
-      timeoutStatuses: [500, 502, 503],
     },
   },
 };
@@ -150,11 +144,12 @@ export async function generateDraft(
     envelope.promptVersion !== 'assignment_v1' ||
     !envelope.assignmentContext ||
     promptPackage.templateSnapshot?.resolvedTemplateId !== ASSIGNMENT_TEMPLATE_ID ||
+    envelope.instructions.split(/\r?\n/, 1)[0] !== ASSIGNMENT_TEMPLATE_CONTRACT ||
     !isDeepStrictEqual(envelope.responseSchema, ASSIGNMENT_RESPONSE_SCHEMA)
   ) {
     throw new PromptPackageAssignmentError(
       'PROMPT_PACKAGE_OUTPUT_CONTRACT_UNSUPPORTED',
-      'This prompt package does not pin AssignmentV1. Activate the structured homework template and recreate the prompt package before generation.',
+      'This prompt package does not pin the supported AssignmentV1 generation contract. Activate a compatible homework template revision and recreate the prompt package before generation.',
     );
   }
 
@@ -235,6 +230,7 @@ export async function generateDraft(
   }
 
   let text: string;
+  let assignment;
   try {
     if (execution.result.contractError) throw new Error(execution.result.contractError);
     let output: unknown;
@@ -243,7 +239,8 @@ export async function generateDraft(
     } catch {
       throw new Error('AssignmentV1 response must contain direct JSON without wrappers or fences');
     }
-    text = renderAssignmentToPmd(validateAssignmentV1(output, envelope.assignmentContext));
+    assignment = validateFreshAssignmentV1(output, envelope.assignmentContext);
+    text = JSON.stringify(assignment, null, 2);
   } catch (error) {
     throw new GenerateDraftProviderError({
       category: 'provider_contract_error',
@@ -257,6 +254,9 @@ export async function generateDraft(
 
   return {
     text,
+    format: 'assignment_v1',
+    assignment,
+    validationContext: envelope.assignmentContext,
     provider: execution.target.provider,
     model: execution.target.model,
     quota: buildQuotaSnapshot({

@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { beforeEach } from 'vitest';
 
+import { AssignmentArtifactValidationError } from '../src/application/assignment-artifact.js';
+import * as draftRepository from '../src/domain/draft-repository.js';
+import * as promptRepository from '../src/domain/prompt-package-repository.js';
 import type { InsertRecordingParams } from '../src/domain/recording-repository.js';
 import * as recordingUploadOperationRepositoryModule from '../src/domain/recording-upload-operation-repository.js';
 import type { InsertTranscriptParams } from '../src/domain/transcript-repository.js';
@@ -28,6 +32,13 @@ describeHttpServerIntegrationSuite(
     updateRecordingTranscriptModule,
     vi,
   }) => {
+    beforeEach(() => {
+      vi.spyOn(promptRepository, 'isPromptPackageAccessibleForUser').mockResolvedValue(true);
+      vi.spyOn(draftRepository, 'getDraftById').mockResolvedValue({
+        id: 'draft-1',
+        promptPackageId: 'prompt-1',
+      } as never);
+    });
     vi.spyOn(
       recordingUploadOperationRepositoryModule,
       'beginRecordingUploadOperation',
@@ -2075,6 +2086,34 @@ describeHttpServerIntegrationSuite(
       expect(response.json()).toEqual({
         code: 'artifact_working_conflict',
         artifact: { workingVersion: 4, contentHash: 'draft-winner-hash' },
+      });
+    });
+
+    it('rejects unauthorized draft writes before loading or persisting content', async () => {
+      vi.spyOn(promptRepository, 'isPromptPackageAccessibleForUser').mockResolvedValue(false);
+      const update = vi.spyOn(updateDraftModule, 'updateDraft').mockClear();
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/drafts/draft-1',
+        payload: { text: '{}', expectedWorkingVersion: 1 },
+      });
+      expect(response.statusCode).toBe(404);
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('returns actionable typed admission errors through autosave transport', async () => {
+      vi.spyOn(updateDraftModule, 'updateDraft').mockRejectedValue(
+        new AssignmentArtifactValidationError('metadata.title: expected string'),
+      );
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/drafts/draft-1',
+        payload: { text: '{}', expectedWorkingVersion: 1 },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        code: 'assignment_validation_failed',
+        message: 'metadata.title: expected string',
       });
     });
   },

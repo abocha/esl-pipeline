@@ -5,7 +5,7 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 import type { BatchBackendConfig } from '../config/env.js';
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import {
-  getHomeworkMemoryEntryById,
+  getVerifiedReadyHomeworkMemoryEntryById,
   listHomeworkMemoryEntries,
   listRecentReadyHomeworkMemoryByStudentId,
 } from '../domain/homework-memory-repository.js';
@@ -15,19 +15,31 @@ import {
   listLessonMemoryEntries,
   listRecentReadyLessonMemoryByStudentId,
 } from '../domain/lesson-memory-repository.js';
+import {
+  captureStudentMemoryCurrentness,
+  type StudentMemoryCurrentness,
+} from '../domain/student-memory-currentness.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
 import {
-  getLatestReadyStudentMemorySnapshotByStudentId,
+  admitStudentMemorySnapshotIntent,
   getStudentMemorySnapshotById,
+  getStudentMemorySnapshotSelection,
   markStudentMemorySnapshotFailed,
+  markStudentMemorySnapshotRepairRequired,
+  StudentMemorySnapshotIntentObsoleteError,
   StudentMemorySnapshotParentChangedError,
+  StudentMemorySnapshotRepairRequiredError,
   StudentMemorySnapshotSourcesChangedError,
   supersedePendingStudentMemorySnapshotsForStudent,
   updateStudentMemorySnapshotGenerationNotes,
 } from '../domain/student-memory-snapshot-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { estimateGenerationTokens } from './generation-budget-guard.js';
-import { requestStudentProfileCandidateRefresh } from './request-student-profile-candidate-refresh.js';
+import { flattenGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  reconcileStudentProfileCandidateRefresh,
+  type requestStudentProfileCandidateRefresh,
+} from './request-student-profile-candidate-refresh.js';
 import {
   createStudentMemoryGenerationPacer,
   isStudentMemoryPacingDeferredError,
@@ -55,9 +67,7 @@ import {
 } from './student-memory-snapshot-hashes.js';
 import {
   buildIncrementalStudentMemorySnapshotEnvelope,
-  buildIncrementalStudentMemorySnapshotPrompt,
   buildStudentMemorySnapshotEnvelope,
-  buildStudentMemorySnapshotPrompt,
   type IncrementalStudentMemorySnapshotTriggerSource,
 } from './student-memory-snapshot-prompt.js';
 import { isProfileWorthyStudentFact } from './student-profile-candidate-facts.js';
@@ -109,12 +119,15 @@ export interface ProcessStudentMemorySnapshotJobDependencies {
   };
   homeworkMemory: {
     list: typeof listHomeworkMemoryEntries;
-    getById: typeof getHomeworkMemoryEntryById;
+    getById: typeof getVerifiedReadyHomeworkMemoryEntryById;
     listRecentReadyByStudentId: typeof listRecentReadyHomeworkMemoryByStudentId;
   };
   snapshots: {
+    admitIntent?: typeof admitStudentMemorySnapshotIntent;
+    captureCurrentness?: typeof captureStudentMemoryCurrentness;
     getById: typeof getStudentMemorySnapshotById;
-    getLatestReadyByStudentId: typeof getLatestReadyStudentMemorySnapshotByStudentId;
+    getSelection: typeof getStudentMemorySnapshotSelection;
+    markRepairRequired: typeof markStudentMemorySnapshotRepairRequired;
     markFailed: typeof markStudentMemorySnapshotFailed;
     supersedePendingForStudent: typeof supersedePendingStudentMemorySnapshotsForStudent;
     updateGenerationNotes: typeof updateStudentMemorySnapshotGenerationNotes;
@@ -143,12 +156,15 @@ export async function processStudentMemorySnapshotJob(args: {
   };
   const homeworkMemory = args.overrides?.homeworkMemory ?? {
     list: listHomeworkMemoryEntries,
-    getById: getHomeworkMemoryEntryById,
+    getById: getVerifiedReadyHomeworkMemoryEntryById,
     listRecentReadyByStudentId: listRecentReadyHomeworkMemoryByStudentId,
   };
   const defaultSnapshots = {
+    admitIntent: admitStudentMemorySnapshotIntent,
+    captureCurrentness: captureStudentMemoryCurrentness,
     getById: getStudentMemorySnapshotById,
-    getLatestReadyByStudentId: getLatestReadyStudentMemorySnapshotByStudentId,
+    getSelection: getStudentMemorySnapshotSelection,
+    markRepairRequired: markStudentMemorySnapshotRepairRequired,
     markFailed: markStudentMemorySnapshotFailed,
     supersedePendingForStudent: supersedePendingStudentMemorySnapshotsForStudent,
     updateGenerationNotes: updateStudentMemorySnapshotGenerationNotes,
@@ -161,7 +177,8 @@ export async function processStudentMemorySnapshotJob(args: {
       : {}),
   };
   const profileCandidates = args.overrides?.profileCandidates ?? {
-    requestRefresh: requestStudentProfileCandidateRefresh,
+    requestRefresh: ({ params }: Parameters<typeof requestStudentProfileCandidateRefresh>[0]) =>
+      reconcileStudentProfileCandidateRefresh({ params }),
   };
   const generator = args.overrides?.generator ?? generateStudentMemorySnapshot;
   const pacer = args.overrides?.pacer ?? createStudentMemoryGenerationPacer(args.config);
@@ -170,12 +187,50 @@ export async function processStudentMemorySnapshotJob(args: {
 
   const pendingEntry = await snapshots.getById(args.payload.pendingEntryId);
   if (!pendingEntry || pendingEntry.status !== 'pending') {
+    if (pendingEntry?.studentId === args.payload.studentId && pendingEntry.supersededById) {
+      const completed = await snapshots.getById(pendingEntry.supersededById);
+      if (
+        completed?.status === 'ready' &&
+        completed.studentId === pendingEntry.studentId &&
+        completed.generationNotes?.pendingEntryId === pendingEntry.id
+      ) {
+        await deliverSnapshotCandidateRefresh(completed, snapshots, profileCandidates);
+      }
+    }
     return;
+  }
+  if (pendingEntry.studentId !== args.payload.studentId)
+    throw new Error('Snapshot intent student mismatch');
+  args = {
+    ...args,
+    payload: {
+      ...args.payload,
+      provider: pendingEntry.provider as GenerationProvider,
+      model: pendingEntry.model,
+    },
+  };
+  const notes = pendingEntry.generationNotes;
+  if (
+    notes?.trigger === 'manual-replay' ||
+    notes?.trigger === 'homework-memory-ready' ||
+    notes?.trigger === 'lesson-memory-ready'
+  ) {
+    args.payload = {
+      ...args.payload,
+      trigger: notes.trigger,
+      sourceEntryId: typeof notes.sourceEntryId === 'string' ? notes.sourceEntryId : null,
+      strategy: notes.strategy as StudentMemorySnapshotRefreshStrategy | null,
+      operatorReason: typeof notes.operatorReason === 'string' ? notes.operatorReason : null,
+      requestCandidateRefresh: notes.requestCandidateRefresh === true,
+    };
   }
 
   let generationNotes: StudentMemorySnapshotV11GenerationNotes | null = null;
 
   try {
+    const expectedCurrentness =
+      (pendingEntry.generationNotes?.currentness as StudentMemoryCurrentness | undefined) ??
+      (await snapshots.captureCurrentness?.(pendingEntry.studentId));
     const buildResult = await buildSnapshotRefreshRequest({
       payload: args.payload,
       pendingGenerationNotes: pendingEntry.generationNotes ?? null,
@@ -250,22 +305,31 @@ export async function processStudentMemorySnapshotJob(args: {
       });
     }
 
-    const candidateRefreshState: {
-      decision: ReturnType<typeof buildCandidateRefreshDecision> | null;
-    } = { decision: null };
     const result = await pacer.run({
       workload: 'student_memory_snapshot',
       provider: args.payload.provider,
       model: args.payload.model,
       prompt,
-      execute: () =>
-        generator({
+      execute: async () => {
+        const current = await snapshots.getById(pendingEntry.id);
+        if (current?.status !== 'pending') throw new StudentMemorySnapshotIntentObsoleteError();
+        if (
+          expectedCurrentness &&
+          !(await snapshots.admitIntent?.({
+            studentId: pendingEntry.studentId,
+            pendingEntryId: pendingEntry.id,
+            expectedCurrentness,
+          }))
+        )
+          throw new StudentMemorySnapshotIntentObsoleteError();
+        return generator({
           config: args.config.generation,
           request: {
             studentId: args.payload.studentId,
             lessonMemoryEntryIds,
             homeworkMemoryEntryIds,
             pendingEntryId: pendingEntry.id,
+            expectedCurrentness,
             pendingGenerationNotes: generationNotes,
             provider: args.payload.provider,
             model: args.payload.model,
@@ -280,33 +344,28 @@ export async function processStudentMemorySnapshotJob(args: {
                 triggerProfileWorthyStudentFactCount:
                   buildResult.triggerProfileWorthyStudentFactCount,
               });
-              candidateRefreshState.decision = decision;
               return {
                 materialChange: decision.materialChange,
                 candidateRefresh: decision.metadata,
               };
             },
-            ...(isGuardedSnapshotRefreshStrategy(buildResult.strategy)
-              ? { expectedLatestReadySnapshotId: buildResult.parentSnapshotId }
-              : {}),
+            expectedLatestReadySnapshotId: buildResult.parentSnapshotId,
           },
           overrides: args.overrides,
-        }),
+        });
+      },
     });
 
-    const candidateRefreshDecision = candidateRefreshState.decision;
-    if (!candidateRefreshDecision) {
+    const metadata = result.snapshot.generationNotes
+      ?.candidateRefresh as StudentMemorySnapshotV11GenerationNotes['candidateRefresh'];
+    if (!metadata) {
       throw new Error('Snapshot generator did not finalize candidate refresh intent');
     }
+    const candidateRefreshDecision = { requested: metadata.requested, metadata };
     generationNotes = (result.snapshot.generationNotes ??
       generationNotes) as StudentMemorySnapshotV11GenerationNotes;
 
-    await snapshots.supersedePendingForStudent({
-      studentId: args.payload.studentId,
-      supersededById: result.snapshot.id,
-      supersededAt: result.snapshot.generatedAt,
-      maxGeneratedAt: pendingEntry.generatedAt,
-    });
+    if (result.snapshot.status !== 'ready') return;
 
     if (!candidateRefreshDecision.requested) {
       logger.info('Student profile candidate refresh skipped after snapshot generation', {
@@ -348,6 +407,11 @@ export async function processStudentMemorySnapshotJob(args: {
       });
     }
   } catch (error) {
+    if (error instanceof StudentMemorySnapshotIntentObsoleteError) return;
+    if (error instanceof StudentMemorySnapshotRepairRequiredError) {
+      await snapshots.markRepairRequired(args.payload.studentId, args.payload.pendingEntryId);
+      return;
+    }
     if (isStudentMemoryPacingDeferredError(error)) {
       throw error;
     }
@@ -393,6 +457,9 @@ export async function processStudentMemorySnapshotJob(args: {
           studentId: args.payload.studentId,
           pendingEntryId: args.payload.pendingEntryId,
           unavailableLessonMemoryEntryIds: error.unavailableLessonMemoryEntryIds,
+          ...(error.unavailableHomeworkMemoryEntryIds.length > 0
+            ? { unavailableHomeworkMemoryEntryIds: error.unavailableHomeworkMemoryEntryIds }
+            : {}),
         });
       }
       await markFailureIfFinalAttempt({
@@ -417,8 +484,35 @@ export async function processStudentMemorySnapshotJob(args: {
   }
 }
 
-function isGuardedSnapshotRefreshStrategy(strategy: StudentMemorySnapshotRefreshStrategy): boolean {
-  return strategy === 'incremental_v1_1' || strategy === 'bootstrap_incremental_v1_1';
+async function deliverSnapshotCandidateRefresh(
+  snapshot: StudentMemorySnapshotRecord,
+  snapshots: Pick<
+    ProcessStudentMemorySnapshotJobDependencies['snapshots'],
+    'updateGenerationNotes'
+  >,
+  profileCandidates: ProcessStudentMemorySnapshotJobDependencies['profileCandidates'],
+) {
+  const decision = snapshot.generationNotes?.candidateRefresh as
+    | { requested?: boolean; enqueueStatus?: string }
+    | undefined;
+  if (!decision?.requested || decision.enqueueStatus === 'enqueued') return;
+  await profileCandidates.requestRefresh({
+    params: {
+      studentId: snapshot.studentId,
+      sourceSnapshotId: snapshot.id,
+      trigger:
+        snapshot.generationNotes?.trigger === 'manual-replay'
+          ? 'manual-replay'
+          : 'student-memory-snapshot-ready',
+    },
+  });
+  await snapshots.updateGenerationNotes({
+    id: snapshot.id,
+    generationNotes: {
+      ...snapshot.generationNotes,
+      candidateRefresh: { ...decision, enqueueStatus: 'enqueued' },
+    },
+  });
 }
 
 function addParentChangedFailureDetails(args: {
@@ -454,6 +548,9 @@ function addSourcesChangedFailureDetails(args: {
       stage: 'snapshot_ready_finalization',
       message: args.error.message,
       unavailableLessonMemoryEntryIds: args.error.unavailableLessonMemoryEntryIds,
+      ...(args.error.unavailableHomeworkMemoryEntryIds.length > 0
+        ? { unavailableHomeworkMemoryEntryIds: args.error.unavailableHomeworkMemoryEntryIds }
+        : {}),
     },
   };
 }
@@ -463,10 +560,7 @@ async function buildSnapshotRefreshRequest(args: {
   pendingGenerationNotes: Record<string, unknown> | null;
   lessonMemory: ProcessStudentMemorySnapshotJobDependencies['lessonMemory'];
   homeworkMemory: ProcessStudentMemorySnapshotJobDependencies['homeworkMemory'];
-  snapshots: Pick<
-    ProcessStudentMemorySnapshotJobDependencies['snapshots'],
-    'getLatestReadyByStudentId'
-  >;
+  snapshots: Pick<ProcessStudentMemorySnapshotJobDependencies['snapshots'], 'getSelection'>;
   snapshotPromptBudget: StudentMemorySnapshotPromptBudget;
 }): Promise<{
   strategy: StudentMemorySnapshotRefreshStrategy;
@@ -484,6 +578,7 @@ async function buildSnapshotRefreshRequest(args: {
   triggerProfileWorthyStudentFactCount: number;
 }> {
   if (args.payload.trigger === 'manual-replay') {
+    const parentSnapshot = (await args.snapshots.getSelection(args.payload.studentId)).snapshot;
     const strategy = resolveManualSnapshotRefreshStrategy({
       payload: args.payload,
       pendingGenerationNotes: args.pendingGenerationNotes,
@@ -501,14 +596,11 @@ async function buildSnapshotRefreshRequest(args: {
       throw new Error('No canonical lesson/homework memory available for student-memory snapshot');
     }
 
-    const prompt = buildStudentMemorySnapshotPrompt({
-      lessonMemoryEntries: readyLessonMemory,
-      homeworkMemoryEntries: readyHomeworkMemory,
-    });
     const envelope = buildStudentMemorySnapshotEnvelope({
       lessonMemoryEntries: readyLessonMemory,
       homeworkMemoryEntries: readyHomeworkMemory,
     });
+    const prompt = flattenGenerationRequestEnvelope(envelope);
     const lessonMemoryEntryIds = readyLessonMemory.map((entry: LessonMemoryRecord) => entry.id);
     const homeworkMemoryEntryIds = readyHomeworkMemory.map(
       (entry: HomeworkMemoryRecord) => entry.id,
@@ -520,7 +612,7 @@ async function buildSnapshotRefreshRequest(args: {
     });
     return {
       strategy,
-      parentSnapshotId: null,
+      parentSnapshotId: parentSnapshot?.id ?? null,
       prompt,
       envelope,
       lessonMemoryEntryIds,
@@ -530,14 +622,15 @@ async function buildSnapshotRefreshRequest(args: {
       promptMetrics,
       budgetDecision,
       failureDetails: null,
-      parentSnapshot: null,
+      parentSnapshot,
       triggerProfileWorthyStudentFactCount: 0,
     };
   }
 
-  const latestReadySnapshot = await args.snapshots.getLatestReadyByStudentId(
-    args.payload.studentId,
-  );
+  const selection = await args.snapshots.getSelection(args.payload.studentId);
+  if (selection.availability.state === 'repair_required')
+    throw new StudentMemorySnapshotRepairRequiredError();
+  const latestReadySnapshot = selection.snapshot;
   const contextLimits = resolveIncrementalContextLimits({
     trigger: args.payload.trigger,
     hasParentSnapshot: Boolean(latestReadySnapshot),
@@ -844,18 +937,13 @@ function buildIncrementalSnapshotRequestFromContext(args: {
   includedHomeworkMemoryEntryIds: string[];
   promptMetrics: StudentMemorySnapshotPromptMetrics;
 } {
-  const prompt = buildIncrementalStudentMemorySnapshotPrompt({
-    previousSnapshot: args.previousSnapshot,
-    triggerSource: args.triggerSource,
-    supportingLessonMemoryEntries: args.supportingLessonMemoryEntries,
-    supportingHomeworkMemoryEntries: args.supportingHomeworkMemoryEntries,
-  });
   const envelope = buildIncrementalStudentMemorySnapshotEnvelope({
     previousSnapshot: args.previousSnapshot,
     triggerSource: args.triggerSource,
     supportingLessonMemoryEntries: args.supportingLessonMemoryEntries,
     supportingHomeworkMemoryEntries: args.supportingHomeworkMemoryEntries,
   });
+  const prompt = flattenGenerationRequestEnvelope(envelope);
   const includedLessonMemoryEntryIds = uniqueIds([
     ...(args.triggerSource.kind === 'lesson_memory' ? [args.triggerSource.entry.id] : []),
     ...args.supportingLessonMemoryEntries.map((entry) => entry.id),
@@ -1101,6 +1189,7 @@ async function listAllReadyHomeworkMemory(
     list({
       studentId,
       statuses: ['ready'],
+      canonicalOnly: true,
       limit,
       offset,
     }),

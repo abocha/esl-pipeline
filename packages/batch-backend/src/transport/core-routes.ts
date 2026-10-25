@@ -6,6 +6,7 @@ import type { JobEventMessage, RecordingEventMessage } from '@esl-pipeline/contr
 import { approveJobForPipeline } from '../application/approve-job.js';
 import { getJobProvenance } from '../application/get-job-provenance.js';
 import { getJobStatus } from '../application/get-job-status.js';
+import { HistoricalAssignmentReadOnlyError } from '../application/historical-assignment.js';
 import { jobRecordToDto } from '../application/job-dto.js';
 import {
   publishTtsModelSchema,
@@ -161,6 +162,10 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
       return reply.code(202).send(dto);
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           error: 'validation_failed',
@@ -207,6 +212,10 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
       return reply.send(status);
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: routePath,
@@ -245,6 +254,10 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
       return reply.send(provenance);
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: routePath,
@@ -327,6 +340,10 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       try {
         reply.raw.write(':\n\n');
       } catch (error) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.warn('Failed to write SSE heartbeat', {
           event: 'job_events_sse_heartbeat_failed',
           route: routePath,
@@ -352,6 +369,10 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
           }
         }
       } catch (error) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.warn('Failed to resolve recording IDs for job SSE subscription', {
           event: 'recording_events_sse_resolve_failed',
           route: routePath,
@@ -464,6 +485,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
                         learningPresetId: dto.learningPresetId,
                         md: dto.md,
                         mdStorageUri: dto.mdStorageUri,
+                        assignmentArtifact: dto.assignmentArtifact,
+                        assignmentRendererVersion: dto.assignmentRendererVersion,
                         htmlUrl: dto.htmlUrl,
                         publishTarget: dto.publishTarget,
                         recordingId: dto.recordingId,
@@ -481,6 +504,10 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
                     });
                   });
               } catch (error: unknown) {
+                if (error instanceof HistoricalAssignmentReadOnlyError)
+                  return reply
+                    .code(410)
+                    .send({ error: error.code, code: error.code, message: error.message });
                 logger.warn('Failed to publish SSE job event', {
                   event: 'job_events_sse_publish_failed',
                   route: routePath,

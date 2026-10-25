@@ -24,6 +24,162 @@ function requestConfig(
 }
 
 describe('frontend sandbox API adapter', () => {
+  it('persists editor-sandbox Context and Create confirmations without losing the draft', async () => {
+    const adapter = createFrontendSandboxApiAdapter({ scenario: 'assignment-editor' });
+    const initial = await adapter(requestConfig('get', '/api/assignment-sessions/session-editor'));
+    const draft = await adapter(requestConfig('get', '/api/drafts/draft-editor'));
+    const context = await adapter(
+      requestConfig('post', '/api/assignment-sessions/session-editor/confirm', {
+        step: 'context',
+        expectedRevision: initial.data.revision,
+        teacherNotes: 'Keep the existing assignment.',
+        profileRevisionId: 'profile-revision-sandbox',
+        profileRevisionHash: 'profile-hash-sandbox',
+      }),
+    );
+    expect(context.data).toMatchObject({
+      session: {
+        id: 'session-editor',
+        confirmedStep: 'context',
+        revision: initial.data.revision + 1,
+        draftId: 'draft-editor',
+        teacherNotes: 'Keep the existing assignment.',
+        selectedProfileRevisionId: 'profile-revision-sandbox',
+        confirmed: {
+          context: {
+            teacherNotes: 'Keep the existing assignment.',
+            profileRevisionHash: 'profile-hash-sandbox',
+          },
+        },
+      },
+      invalidated: [],
+    });
+    const created = await adapter(
+      requestConfig('post', '/api/assignment-sessions/session-editor/confirm', {
+        step: 'create',
+        expectedRevision: context.data.session.revision,
+        promptPackageId: 'prompt-sandbox',
+        draftId: 'draft-editor',
+        draftWorkingVersion: draft.data.workingVersion,
+      }),
+    );
+    expect(created.data.session).toMatchObject({
+      confirmedStep: 'create',
+      revision: context.data.session.revision + 1,
+      confirmed: {
+        context: context.data.session.confirmed.context,
+        create: {
+          draftId: 'draft-editor',
+          draftWorkingVersion: draft.data.workingVersion,
+          draftHash: draft.data.contentHash,
+        },
+      },
+    });
+    const resumed = await adapter(requestConfig('get', '/api/assignment-sessions/session-editor'));
+    expect(resumed.data).toEqual(created.data.session);
+    expect((await adapter(requestConfig('get', '/api/drafts/draft-editor'))).data).toEqual(
+      draft.data,
+    );
+  });
+
+  it('keeps directory previews scoped to the requested status, name and page', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+    const matched = await adapter(
+      requestConfig('get', '/api/students', undefined, { q: 'Cora', limit: 1, offset: 0 }),
+    );
+    expect(matched.data.total).toBe(1);
+    expect(matched.data.items[0].id).toBe('student-cora');
+    const next = await adapter(
+      requestConfig('get', '/api/students', undefined, { limit: 1, offset: 1 }),
+    );
+    expect(next.data.total).toBe(2);
+    expect(next.data.items).toHaveLength(1);
+    expect(next.data.items[0].id).toBe('student-cora');
+    const archived = await adapter(
+      requestConfig('get', '/api/students', undefined, { status: 'archived' }),
+    );
+    expect(archived.data.items).toEqual([]);
+    expect(archived.data.total).toBe(0);
+  });
+  it('serves a populated student activity preview with filters and older parent pages', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+    const first = await adapter(
+      requestConfig('get', '/api/students/student-alex/activity', undefined, { limit: 30 }),
+    );
+    expect(first.data.items).toHaveLength(30);
+    expect(first.data.items[0].subject).toBe('Homework published · Travel plans');
+    const older = await adapter(
+      requestConfig('get', '/api/students/student-alex/activity', undefined, {
+        limit: 30,
+        cursor: first.data.nextCursor,
+      }),
+    );
+    expect(older.data.items.length).toBeGreaterThan(0);
+    expect(older.data.nextCursor).toBeNull();
+    const firstIds = new Set(first.data.items.map((item: { id: string }) => item.id));
+    expect(older.data.items.some((item: { id: string }) => firstIds.has(item.id))).toBe(false);
+    const billing = await adapter(
+      requestConfig('get', '/api/students/student-alex/activity', undefined, {
+        category: 'billing',
+        from: '2026-10-15',
+        to: '2026-10-15',
+      }),
+    );
+    expect(billing.data.items.map((item: { subject: string }) => item.subject)).toEqual([
+      'Payment recorded · USD 120.00',
+      'Lesson credits added',
+    ]);
+    const other = await adapter(requestConfig('get', '/api/students/student-cora/activity'));
+    expect(other.data.items).toEqual([]);
+  });
+
+  it('keeps the activity availability preview unavailable rather than falling through to seeded facts', async () => {
+    const adapter = createFrontendSandboxApiAdapter({ scenario: 'student-availability' });
+    await expect(
+      adapter(requestConfig('get', '/api/students/student-alex/activity')),
+    ).rejects.toThrow('Student data is unavailable');
+  });
+
+  it('serves the Business preview and persists hide/undo and status changes within one sandbox', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+    const initial = await adapter(requestConfig('get', '/api/business/schedule'));
+    const lesson = initial.data.lessons[0];
+    await adapter(
+      requestConfig('patch', `/api/students/${lesson.studentId}/lessons/${lesson.id}`, {
+        status: 'completed',
+        consumesCredit: true,
+      }),
+    );
+    const reminder = initial.data.reminders[0];
+    await adapter(
+      requestConfig(
+        'put',
+        `/api/students/${reminder.studentId}/operations/reminders/lesson-followup/${reminder.lessonId}/hide`,
+      ),
+    );
+    const hidden = await adapter(requestConfig('get', '/api/business/schedule'));
+    expect(hidden.data.lessons[0].status).toBe('completed');
+    expect(
+      hidden.data.reminders.some(
+        (item: { lessonId?: string }) => item.lessonId === reminder.lessonId,
+      ),
+    ).toBe(false);
+    expect(hidden.data.latestHiddenReminder.lessonId).toBe(reminder.lessonId);
+    await adapter(
+      requestConfig(
+        'put',
+        `/api/students/${reminder.studentId}/operations/reminders/latest-hidden/undo`,
+      ),
+    );
+    const restored = await adapter(requestConfig('get', '/api/business/schedule'));
+    expect(
+      restored.data.reminders.some(
+        (item: { lessonId?: string }) => item.lessonId === reminder.lessonId,
+      ),
+    ).toBe(true);
+    expect(restored.data.latestHiddenReminder).toBeNull();
+  });
+
   it('creates and serves a manual transcript source', async () => {
     const adapter = createFrontendSandboxApiAdapter();
 
@@ -375,7 +531,8 @@ describe('frontend sandbox API adapter', () => {
       draftId: 'draft-sandbox',
     });
     expect(prompt.data.text).toContain('[STUDENT_MEMORY_SNAPSHOT]');
-    expect(draft.data.text).toContain('Workplace Update Practice');
+    expect(draft.data.format).toBe('assignment_v1');
+    expect(JSON.parse(draft.data.text).schemaVersion).toBe(1);
     expect(provenance.data).toMatchObject({
       job: expect.objectContaining({ id: 'job-sandbox', state: 'succeeded' }),
       promptPackage: expect.objectContaining({ id: 'prompt-sandbox' }),

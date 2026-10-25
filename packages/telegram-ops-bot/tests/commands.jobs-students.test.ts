@@ -217,6 +217,14 @@ describe('telegram commands - jobs and students', () => {
           jobId: 'job-student-1',
           studentId: '72444fdf-4abe-43ce-9166-5a1529c2e6cb',
           studentName: 'Margarita',
+          publication: {
+            schemaVersion: 1,
+            rendererVersion: 1,
+            title: 'Homework Assignment: The Cafe & The Adjective Trap',
+            icon: '',
+            studyTextAudioUrl: null,
+            pronunciationAudioUrl: null,
+          },
           md: '# Homework Assignment: The Cafe & The Adjective Trap',
           recordingId: null,
           transcriptId: null,
@@ -283,7 +291,7 @@ describe('telegram commands - jobs and students', () => {
     );
   });
 
-  it('renders /student latest homework from markdown file paths', async () => {
+  it('renders /student latest homework from persisted publication metadata', async () => {
     const registry = createCommandRegistry();
     const studentCommand = registry.resolve('student');
     expect(studentCommand).toBeDefined();
@@ -320,6 +328,14 @@ describe('telegram commands - jobs and students', () => {
           studentId: '72444fdf-4abe-43ce-9166-5a1529c2e6cb',
           studentName: 'Margarita',
           md: markdownPath,
+          publication: {
+            schemaVersion: 1,
+            rendererVersion: 1,
+            title: 'Persisted Title',
+            icon: '',
+            studyTextAudioUrl: null,
+            pronunciationAudioUrl: null,
+          },
           recordingId: null,
           transcriptId: null,
           promptPackageId: null,
@@ -356,7 +372,8 @@ describe('telegram commands - jobs and students', () => {
     }
 
     const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
-    expect(String(sendMock.mock.calls[0]?.[0].html)).toContain('File Path Title');
+    expect(String(sendMock.mock.calls[0]?.[0].html)).toContain('Persisted Title');
+    expect(String(sendMock.mock.calls[0]?.[0].html)).not.toContain('File Path Title');
   });
 
   it('parses /jobs filters, resolves the student, and renders job buttons', async () => {

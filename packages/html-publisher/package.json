@@ -17,11 +17,6 @@
       "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     },
-    "./rendering": {
-      "types": "./dist/src/rendering.d.ts",
-      "import": "./dist/src/rendering.js",
-      "default": "./dist/src/rendering.js"
-    },
     "./package.json": "./package.json"
   },
   "main": "./dist/src/index.js",
@@ -34,27 +29,25 @@
     "build": "tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "test": "pnpm run test:unit",
-    "test:unit": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit": "pnpm test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:unit:prebuilt": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:setup": "pnpm --filter @esl-pipeline/html-publisher... build",
     "test:unit:timings": "vitest run --config ../../vitest.config.ts --dir . --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\" --reporter=json --outputFile=../../tmp/test-timings/html-publisher/vitest.json",
     "test:watch": "vitest --config ../../vitest.config.ts --dir .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
+    "@esl-pipeline/learner-handout": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
-    "@esl-pipeline/storage-uploader": "workspace:*",
-    "markdown-it": "^15.0.2",
-    "markdown-it-anchor": "^9.2.1",
-    "markdown-it-container": "^4.0.0",
-    "markdown-it-toc-done-right": "^4.2.0"
+    "@esl-pipeline/storage-uploader": "workspace:*"
   },
   "devDependencies": {
-    "@types/markdown-it-container": "^4.0.1",
-    "@types/node": "^24.13.4",
-    "jsdom": "^30.0.1",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^24.19.2",
+    "jsdom": "^30.1.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": ">=24.15.0"

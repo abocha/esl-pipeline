@@ -1,5 +1,8 @@
+import { readFileSync as readAssignmentFixture } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AssignmentV1 as FixtureAssignmentV1 } from '@esl-pipeline/contracts';
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
 import {
   SPEECH_ANNOTATION_OPEN,
   SpeechPerformancePlannerInvalidOutputError,
@@ -17,29 +20,14 @@ import {
 import { loadConfig } from '../src/config/env.js';
 
 function createPrepared() {
-  const assignmentMarkdown = `---
-title: Deadline conversation
-study_text_type: dialogue
-speaker_profiles:
-  - id: Maya
-    role: project manager
-    persona: warm, practical, and direct
-    voice_direction: calm conversational voice
-  - id: Leo
-    role: colleague
----
-
-:::study-text
-Maya: We need a clearer deadline.
-Leo: I can revise the plan today.
-:::`;
+  const assignment = assignmentFixture();
   return {
     selection: { provider: 'inworld' as const, model: 'inworld-tts-2' as const },
     sourceHash: 'source-hash',
     segments: [{ id: 'segment-1', speaker: 'Maya', text: 'We need a clearer deadline.' }],
     voices: [],
     voiceAssignments: {},
-    enhancementContext: { assignmentMarkdown },
+    enhancementContext: { assignment },
     voicePlan: {
       schemaVersion: 1 as const,
       mode: 'deterministic' as const,
@@ -75,6 +63,24 @@ function createDialoguePrepared() {
 }
 
 describe('application/speech-performance-planner', () => {
+  it('provides complete typed context deterministically without Markdown', () => {
+    const assignment = assignmentFixture();
+    const prepared = { ...createPrepared(), enhancementContext: { assignment } };
+    const first = buildSpeechPlannerRequest(
+      prepared,
+      'contextual-bracket-annotation-v1',
+      'gpt-5.6-luna',
+    );
+    const next = buildSpeechPlannerRequest(
+      prepared,
+      'contextual-bracket-annotation-v1',
+      'gpt-5.6-luna',
+    );
+    expect(first).toEqual(next);
+    expect(first.prompt).toContain(serializeAssignmentV1(assignment));
+    expect(first.prompt).not.toContain(':::study-text');
+    expect(first.prompt).toContain(assignment.toolkit.grammar[0]!.name);
+  });
   it('builds the immutable contextual-annotation request from complete assignment context', () => {
     const prepared = createDialoguePrepared();
     const request = buildSpeechPlannerRequest(
@@ -87,7 +93,7 @@ describe('application/speech-performance-planner', () => {
       'id',
       'synthesisText',
     ]);
-    expect(request.prompt).toContain(prepared.enhancementContext.assignmentMarkdown);
+    expect(request.prompt).toContain(serializeAssignmentV1(prepared.enhancementContext.assignment));
     expect(request.prompt).toContain(SPEECH_ANNOTATION_OPEN);
     expect(request.prompt).not.toContain('speakerEnvelopes');
     expect(request.prompt).not.toContain('turnAdjustment');
@@ -209,7 +215,7 @@ describe('application/speech-performance-planner', () => {
       buildSpeechPlannerRequest(
         createPrepared(),
         'speech-performance-v1-restrained-natural',
-        'gemini-3.1-flash-lite',
+        'gpt-5.6-luna',
       ),
     ).toMatchObject({
       prompt: expectedPrompt,
@@ -221,7 +227,7 @@ describe('application/speech-performance-planner', () => {
       buildSpeechPlannerRequest(
         createPrepared(),
         'speech-performance-v1-restrained-natural',
-        'gemini-3.1-flash-lite',
+        'gpt-5.6-luna',
       ).responseSchema.schema.properties.segments.items.properties,
     ).toMatchObject({
       pauseBeforeMs: { maximum: 3000 },
@@ -263,16 +269,16 @@ describe('application/speech-performance-planner', () => {
           ...config.generation,
           providers: {
             ...config.generation.providers,
-            googleAiStudio: {
-              ...config.generation.providers.googleAiStudio,
+            openai: {
+              ...config.generation.providers.openai,
               apiKey: undefined,
             },
           },
         },
         speechPlanner: {
           enabled: true,
-          provider: 'google_ai_studio' as const,
-          model: 'gemini-3.1-flash-lite',
+          provider: 'openai' as const,
+          model: 'gpt-5.6-luna',
           maxOutputTokens: 2400,
           rpmBudget: 4,
           dailyRequestBudget: 120,
@@ -365,7 +371,7 @@ describe('application/speech-performance-planner', () => {
       }),
     );
     const prompt = executor.mock.calls[0]?.[0].request.prompt;
-    expect(prompt).toContain(createPrepared().enhancementContext.assignmentMarkdown);
+    expect(prompt).toContain(serializeAssignmentV1(createPrepared().enhancementContext.assignment));
     expect(prompt).toContain('Unchanged synthesisText is completely valid.');
   });
 
@@ -427,7 +433,7 @@ describe('application/speech-performance-planner', () => {
       prepared: createPrepared(),
       promptPolicyVersion: 'speech-performance-v2-inworld-tts2' as const,
       promptHash: 'a'.repeat(64),
-      plannerModel: 'gemini-3.5-flash-lite',
+      plannerModel: 'gpt-5.6-luna',
       generatedAt: '2026-07-29T00:00:00.000Z',
       latencyMs: 0,
     };
@@ -509,4 +515,13 @@ function createEnabledConfig() {
       debugLogPlan: false,
     },
   };
+}
+
+function assignmentFixture(): FixtureAssignmentV1 {
+  return JSON.parse(
+    readAssignmentFixture(
+      new URL('../../contracts/tests/assignment-fixture.json', import.meta.url),
+      'utf8',
+    ),
+  ) as FixtureAssignmentV1;
 }

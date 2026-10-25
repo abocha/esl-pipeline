@@ -88,7 +88,20 @@ describe('infrastructure/job-event-redis-bridge', () => {
 
     await new Promise((resolve) => setImmediate(resolve));
 
-    const job = makeJob('queued');
+    const job = {
+      ...makeJob('queued'),
+      ttsProvider: 'gemini',
+      ttsModel: 'gemini-3.8-flash-lite-tts',
+      assignmentArtifact: {
+        format: 'assignment_v1',
+        schemaVersion: 1,
+        serializationVersion: 1,
+        workingVersion: 2,
+        storageUri: `local://drafts/draft-1/content/${'a'.repeat(64)}.json`,
+        contentHash: 'a'.repeat(64),
+      },
+      assignmentRendererVersion: 1,
+    };
     jobEvents.publishJobEvent({ type: 'job_created', job: job as any });
 
     expect(subscriber.subscribe).toHaveBeenCalledWith('batch_job_events:job-1');
@@ -101,6 +114,10 @@ describe('infrastructure/job-event-redis-bridge', () => {
     const payloadJson = JSON.parse(payloadStr);
     expect(payloadJson.type).toBe('job_created');
     expect(payloadJson.job.id).toBe(job.id);
+    expect(payloadJson.job.assignmentArtifact).toEqual(job.assignmentArtifact);
+    expect(payloadJson.job.assignmentRendererVersion).toBe(1);
+    expect(payloadJson.job.ttsProvider).toBe('gemini');
+    expect(payloadJson.job.ttsModel).toBe('gemini-3.8-flash-lite-tts');
 
     const remotePayload = JSON.stringify({
       sourceId: 'remote-instance',
@@ -119,6 +136,8 @@ describe('infrastructure/job-event-redis-bridge', () => {
     expect(received[0]).toEqual({ type: 'job_created', job });
     expect(received[1]?.type).toBe('job_state_changed');
     expect(received[1]?.job.state).toBe('running');
+    expect(received[1]?.job.ttsProvider).toBe('gemini');
+    expect(received[1]?.job.ttsModel).toBe('gemini-3.8-flash-lite-tts');
     expect(received[1]?.job.startedAt).toEqual(new Date('2024-01-01T00:01:00.000Z'));
 
     dispose();

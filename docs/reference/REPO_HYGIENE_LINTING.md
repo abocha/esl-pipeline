@@ -5,7 +5,7 @@ Purpose: record which non-code lint tools are promoted in this repo, which are a
 ## Current State
 
 - Blocking in CI:
-  - `actionlint`
+  - `jactionlint --profile correctness`
   - `ShellCheck`
   - `dclint`
   - `Hadolint`
@@ -17,7 +17,7 @@ Purpose: record which non-code lint tools are promoted in this repo, which are a
 
 ## Why
 
-- `actionlint`: high-signal for GitHub Actions mistakes; low noise.
+- `jactionlint --profile correctness`: preserves Actionlint's workflow checks and adds jactionlint's correctness detectors without enabling its separate security and policy rules.
 - `ShellCheck`: high-signal for shell scripts already maintained in-repo.
 - `dclint`: validates development and production Compose configuration.
 - `Hadolint`: validates every tracked `Dockerfile*` through the official v2.14.0 image pinned by
@@ -37,7 +37,7 @@ Purpose: record which non-code lint tools are promoted in this repo, which are a
   - Core Prettier formats Markdown, YAML, and YML only.
 - Repo hygiene lane:
   - `pnpm run lint:repo-hygiene`
-  - Runs `actionlint` + `ShellCheck`.
+  - Runs `jactionlint --profile correctness` + `ShellCheck`.
 - Docker configuration lane:
   - `pnpm docker:lint` runs both Compose and Dockerfile linting.
   - `pnpm docker:lint:compose` checks both Compose files.
@@ -48,7 +48,7 @@ Purpose: record which non-code lint tools are promoted in this repo, which are a
 
 ## CI Behavior
 
-- GitHub Actions verifies the runner-provided ShellCheck, downloads checksum-verified Actionlint,
+- GitHub Actions verifies the runner-provided ShellCheck, downloads checksum-verified jactionlint v2.0.2,
   and runs both in the always-selected repository-policy job.
 - Repository policy runs `pnpm docker:lint`, covering dclint and Hadolint.
 - Biome is part of the runtime-selected build-and-code-quality job through `pnpm lint`.

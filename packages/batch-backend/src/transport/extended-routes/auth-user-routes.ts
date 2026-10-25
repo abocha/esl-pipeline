@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import type { AssignmentSessionDto, JobState } from '@esl-pipeline/contracts';
+import { AssignmentArtifactReferenceSchema } from '@esl-pipeline/contracts';
 
 import { AlphaInviteError, registerInvitedUser } from '../../application/alpha-invites.js';
 import { getAssignmentLearnerContext } from '../../application/assignment-learner-context.js';
@@ -13,6 +14,11 @@ import {
   updateAssignmentSessionRecoveryForUser,
 } from '../../application/assignment-sessions.js';
 import { confirmAssignmentSessionStep } from '../../application/confirm-assignment-session-step.js';
+import {
+  finishTranscriptAssignmentSession,
+  startHomeworkAssignmentSession,
+} from '../../application/finish-transcript-assignment-session.js';
+import { HistoricalAssignmentReadOnlyError } from '../../application/historical-assignment.js';
 import { getJobSummaryWithDefaults } from '../../application/job-summary.js';
 import { listJobsWithDefaults } from '../../application/list-jobs.js';
 import { publishAssignmentCorrection } from '../../application/publish-assignment-correction.js';
@@ -47,6 +53,7 @@ import {
 } from '../../domain/user-repository.js';
 import { logger } from '../../infrastructure/logger.js';
 import { getAuthenticatedUser, requireRole } from '../auth-middleware.js';
+import { invalidateCalendarAttemptCookie } from '../calendar-attempt-cookie.js';
 import { resolveRoutePath } from '../route-helpers.js';
 import type { ExtendedRoutesContext } from './context.js';
 
@@ -112,6 +119,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         });
 
         const tokens = authService.generateTokens(user.id, user.email, user.role);
+        await invalidateCalendarAttemptCookie(request, reply, config);
         setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
 
         const sanitizedUser = sanitizeUser(user);
@@ -123,6 +131,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           expiresIn: tokens.expiresIn,
         });
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof AlphaInviteError) {
           return reply.code(error.status).send({
             error: error.status === 409 ? 'conflict' : 'validation_failed',
@@ -184,6 +196,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         role: user.role,
       });
 
+      await invalidateCalendarAttemptCookie(request, reply, config);
       setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
 
       return reply.code(200).send({
@@ -198,6 +211,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         expiresIn: tokens.expiresIn,
       });
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: 'POST /auth/login',
@@ -229,6 +246,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       try {
         refreshPayload = authService.verifyRefreshToken(refreshToken);
       } catch (error) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.warn('Invalid refresh token presented', {
           error: error instanceof Error ? error.message : String(error),
         });
@@ -268,6 +289,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         expiresIn: tokens.expiresIn,
       });
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: 'POST /auth/refresh',
@@ -283,7 +308,8 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     }
   });
 
-  app.post('/auth/logout', { preHandler: [uploadRateLimitMiddleware] }, async (_request, reply) => {
+  app.post('/auth/logout', { preHandler: [uploadRateLimitMiddleware] }, async (request, reply) => {
+    await invalidateCalendarAttemptCookie(request, reply, config);
     clearRefreshCookie(reply, config);
     return reply.code(200).send({ message: 'Logout successful' });
   });
@@ -306,6 +332,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           total: users.length,
         });
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'admin_list_users_failed',
           userId: getAuthenticatedUser(request)?.id,
@@ -357,6 +387,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
         return reply.code(200).send(jobs);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -404,6 +438,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
         return reply.code(200).send(summary);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -449,6 +487,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           message: 'Job deleted successfully',
         });
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'admin_delete_job_failed',
           userId: getAuthenticatedUser(request)?.id,
@@ -479,6 +521,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
         return reply.code(200).send(stats);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         logger.error(error instanceof Error ? error : String(error), {
           event: 'admin_stats_failed',
           userId: getAuthenticatedUser(request)?.id,
@@ -513,6 +559,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         user: sanitizeUser(user),
       });
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'get_user_profile_failed',
         userId: getAuthenticatedUser(request)?.id,
@@ -552,6 +602,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         message: 'Profile update not yet implemented',
       });
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'update_user_profile_failed',
         userId: authenticatedUser.id,
@@ -582,6 +636,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         settings: sanitizeSettings(settings),
       });
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'get_user_settings_failed',
         userId: authenticatedUser.id,
@@ -616,7 +674,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       if (body.ttsProvider !== undefined && !isValidTtsProvider(body.ttsProvider)) {
         return reply.code(400).send({
           error: 'validation_failed',
-          message: 'Invalid TTS provider. Must be one of: elevenlabs, google, inworld',
+          message: 'Invalid TTS provider. Must be one of: elevenlabs, google, inworld, gemini',
           code: 'invalid_tts_provider',
         });
       }
@@ -655,6 +713,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         settings: sanitizeSettings(updatedSettings),
       });
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'update_user_settings_failed',
         userId: authenticatedUser.id,
@@ -698,6 +760,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
       return reply.code(200).send(summary);
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           error: 'validation_failed',
@@ -760,6 +826,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
       return reply.code(200).send(jobs);
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           error: 'validation_failed',
@@ -781,6 +851,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
   const assignmentRecoveryPatchSchema = z
     .object({
+      homeworkIntent: z.enum(['create', 'none']).optional(),
       lessonId: z.string().uuid().nullable().optional(),
       recordingId: z.string().uuid().nullable().optional(),
       transcriptId: z.string().uuid().nullable().optional(),
@@ -791,10 +862,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       selectedTtsStrategy: publishTtsStrategySchema.nullable().optional(),
       selectedTtsModel: z.string().nullable().optional(),
       selectedPreset: z.string().nullable().optional(),
-      selectedGenerationProvider: z
-        .enum(['openai', 'google_ai_studio', 'openrouter'])
-        .nullable()
-        .optional(),
+      selectedGenerationProvider: z.enum(['openai']).nullable().optional(),
       selectedGenerationModel: z.string().nullable().optional(),
       teacherNotes: z.string().max(20_000).nullable().optional(),
       selectedProfileRevisionId: postgresUuidSchema.nullable().optional(),
@@ -874,6 +942,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       draftId: z.string().uuid(),
       draftWorkingVersion: z.number().int().positive(),
       draftHash: z.string().regex(/^[0-9a-f]{64}$/),
+      artifact: AssignmentArtifactReferenceSchema.optional(),
     })
     .strict();
 
@@ -887,15 +956,24 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     }
 
     const routePath = resolveRoutePath(request, 'GET /user/assignment-sessions');
-    const querySchema = z.object({
-      limit: z.coerce.number().int().min(1).max(50).optional(),
-    });
+    const querySchema = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(50).optional(),
+        scope: z.enum(['active', 'history']).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+      })
+      .refine((query) => !query.offset || query.scope === 'history', {
+        path: ['offset'],
+        message: 'Offset pagination is available for history only',
+      });
 
     try {
       const query = querySchema.parse(request.query ?? {});
       const sessions = await listAssignmentSessionsForUserDto(
         authenticatedUser.id,
         query.limit ?? 20,
+        query.scope ?? 'active',
+        query.offset ?? 0,
       );
 
       logger.info('HTTP request handled', {
@@ -907,6 +985,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
       return reply.code(200).send(sessions);
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           error: 'validation_failed',
@@ -954,6 +1036,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
         return reply.code(200).send(session);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (getErrorCode(error) === 'ASSIGNMENT_SESSION_NOT_FOUND') {
           return reply.code(404).send({ error: 'not_found' });
         }
@@ -995,6 +1081,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         if (!context) return reply.code(404).send({ error: 'not_found' });
         return reply.code(200).send(context);
       } catch (error) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError)
           return reply.code(400).send({ error: 'validation_failed' });
         logger.error(error instanceof Error ? error : String(error), {
@@ -1035,6 +1125,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
       return reply.code(200).send(session);
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           error: 'validation_failed',
@@ -1053,6 +1147,84 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       });
     }
   });
+
+  for (const command of ['finish-transcript', 'start-homework'] as const) {
+    app.post(
+      `/assignment-sessions/:id/${command}`,
+      { preHandler: authenticate },
+      async (request, reply) => {
+        const user = getAuthenticatedUser(request);
+        if (!user) return reply.code(401).send({ error: 'unauthorized' });
+        try {
+          const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+          const revisionSchema = z
+            .object({ expectedRevision: z.number().int().positive() })
+            .strict();
+          if (command === 'start-homework') {
+            const body = revisionSchema.parse(request.body);
+            return reply.send(
+              await startHomeworkAssignmentSession({
+                userId: user.id,
+                sessionId: id,
+                request: body,
+              }),
+            );
+          }
+          const body = revisionSchema
+            .extend({
+              lessonId: z.string().uuid().nullable(),
+              recordingId: z.string().uuid(),
+              transcriptId: z.string().uuid(),
+              transcriptWorkingVersion: z.number().int().positive(),
+              transcriptHash: z.string().regex(/^[0-9a-f]{64}$/),
+            })
+            .parse(request.body);
+          return reply.send(
+            await finishTranscriptAssignmentSession({
+              config,
+              userId: user.id,
+              sessionId: id,
+              request: body,
+            }),
+          );
+        } catch (error) {
+          if (error instanceof HistoricalAssignmentReadOnlyError)
+            return reply.code(410).send({ code: error.code });
+          if (error instanceof z.ZodError)
+            return reply.code(400).send({ error: 'validation_failed', details: error.issues });
+          const code = getErrorCode(error);
+          if (code === 'ASSIGNMENT_SESSION_NOT_FOUND')
+            return reply.code(404).send({ error: 'not_found' });
+          if (code === 'ASSIGNMENT_SESSION_REVISION_CONFLICT')
+            return reply.code(409).send({
+              code: 'assignment_session_revision_conflict',
+              session: getConflictSession(error),
+            });
+          if (code === 'ASSIGNMENT_SOURCE_ALREADY_OWNED')
+            return reply.code(409).send({
+              code: 'assignment_source_already_owned',
+              session: getConflictSession(error),
+            });
+          if (isArtifactWorkingConflict(error))
+            return reply.code(409).send({
+              code: 'artifact_working_conflict',
+              artifact: {
+                workingVersion: error.latest.workingVersion,
+                contentHash: error.latest.contentHash,
+              },
+            });
+          if (code?.startsWith('ASSIGNMENT_') || code === 'SOURCE_IDENTITY_REQUIRED')
+            return reply.code(409).send({ code: code.toLowerCase() });
+          logger.error(error instanceof Error ? error : String(error), {
+            event: 'transcript_session_command_failed',
+            command,
+            userId: user.id,
+          });
+          return reply.code(500).send({ error: 'internal_error' });
+        }
+      },
+    );
+  }
 
   app.post(
     '/assignment-sessions/:id/confirm',
@@ -1073,6 +1245,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         });
         return reply.code(200).send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         const code = getErrorCode(error);
         if (code === 'ASSIGNMENT_SESSION_REVISION_CONFLICT') {
           return reply.code(409).send({
@@ -1108,7 +1284,8 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           return reply.code(404).send({ error: 'not_found' });
         if (
           code === 'ASSIGNMENT_SESSION_COMPLETED' ||
-          code === 'ASSIGNMENT_SESSION_SHARE_IN_PROGRESS'
+          code === 'ASSIGNMENT_SESSION_SHARE_IN_PROGRESS' ||
+          code === 'ASSIGNMENT_HOMEWORK_INTENT_CONFLICT'
         ) {
           return reply.code(409).send({ code: code.toLowerCase() });
         }
@@ -1155,6 +1332,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         });
         return reply.code(200).send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         const code = getErrorCode(error);
         if (code === 'ASSIGNMENT_SESSION_REVISION_CONFLICT') {
           return reply.code(409).send({
@@ -1207,6 +1388,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         });
         return reply.code(202).send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         const code = getErrorCode(error);
         if (code === 'ASSIGNMENT_CORRECTION_NOT_FOUND') {
           return reply.code(404).send({ error: 'not_found' });
@@ -1262,6 +1447,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         });
         return reply.code(200).send(result);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         const errorCode = getErrorCode(error);
         if (errorCode === 'ASSIGNMENT_SESSION_REVISION_CONFLICT') {
           return reply.code(409).send({
@@ -1334,6 +1523,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
         return reply.code(200).send(session);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         const errorCode = getErrorCode(error);
         if (errorCode === 'ASSIGNMENT_SESSION_REVISION_CONFLICT') {
           return reply.code(409).send({
@@ -1407,6 +1600,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
         return reply.code(200).send(readiness);
       } catch (error: unknown) {
+        if (error instanceof HistoricalAssignmentReadOnlyError)
+          return reply
+            .code(410)
+            .send({ error: error.code, code: error.code, message: error.message });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1474,6 +1671,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
       return reply.code(202).send(result);
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           error: 'validation_failed',
@@ -1517,6 +1718,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         total: files.length,
       });
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'get_user_files_failed',
         userId: authenticatedUser.id,
@@ -1558,6 +1763,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         user: sanitizeUser(user),
       });
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: 'GET /auth/me',
@@ -1647,6 +1856,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         timestamp: result.timestamp.toISOString(),
       });
     } catch (error: unknown) {
+      if (error instanceof HistoricalAssignmentReadOnlyError)
+        return reply
+          .code(410)
+          .send({ error: error.code, code: error.code, message: error.message });
       logger.error(error instanceof Error ? error : String(error), {
         event: 'job_action_failed',
         userId: getAuthenticatedUser(request)?.id,

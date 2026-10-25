@@ -58,7 +58,14 @@ Main entrypoints:
 
 Env reference: [`docs/reference/env.md`](../reference/env.md)
 
-## Canonical API Surface (Active)
+## Selected API Examples
+
+The routes below illustrate principal API areas; this list is intentionally not exhaustive. For a
+generated lookup of direct route registrations, including assignment-session routes, use the
+[backend route index](../generated/backend-route-index.md). It scans `app.<method>(...)` calls and
+may omit plugin or dynamically registered routes. For those surfaces, inspect the current route
+registration code (including `registerExtendedRoutes` and MCP registrations). Route registrations
+remain the source of truth.
 
 - Auth: `/auth/*`
 - Recordings/transcripts:
@@ -117,6 +124,11 @@ Runbook: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
 ## Data and Workflow Invariants
 
 - Artifacts are ID-based (`recording`, `transcript`, `prompt package`, `draft`, `job`), not user-managed filesystem paths.
+- New structured assignments persist only validated AssignmentV1 JSON. API/durable references name
+  format, schema/serialization version, working version, canonical hash and immutable JSON URI.
+  Invalid textarea state remains local; frozen AssignmentV1 is the native execution input. Historical
+  Markdown is read through explicit legacy dispatch. See [AssignmentV1 authority](../reference/ASSIGNMENT_V1.md)
+  for confirmation, correction, memory and migration rollback boundaries.
 - Approval boundary is explicit: draft materialization precedes publish execution.
 - Worker processing is queue-driven and stateful; transitions are persisted.
 - Cancellation is cooperative for in-flight jobs.
@@ -174,3 +186,14 @@ When modifying backend behavior:
 - Update `docs/reference/env.md` when env contracts change.
 
 If this doc and code conflict, code plus tests are the immediate truth; then update docs in the same change.
+
+### AssignmentV1 native execution (ESL-6)
+
+Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
+HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
+is created. Native React renderer 3 / manifest schema 6 carry canonical assignment and publication
+metadata; API 9 / validator 3 retire Markdown processing while manifest contract 4 keeps historical
+read semantics. Historical Markdown and renderer-1 manifests are read-only evidence under ABO-30.
+No correction, retry, rerun, resume, rendering, TTS, publication, memory processing or conversion is supported. Editable JSON authority, source authorization, CAS,
+lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
+[AssignmentV1](../reference/ASSIGNMENT_V1.md) for the canonical execution contract.

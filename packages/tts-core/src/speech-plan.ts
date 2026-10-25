@@ -1,6 +1,6 @@
-import { ConfigurationError } from '@esl-pipeline/contracts';
-import { extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
+import { assignmentStudySegments, ConfigurationError } from '@esl-pipeline/contracts';
 
+import { resolveAssignmentMetadata } from './assignment-input.js';
 import { resolveTtsSelection } from './descriptors.js';
 import { hashStudyText } from './hash.js';
 import {
@@ -54,21 +54,8 @@ export function createPreparedStudyTextSynthesis(
   options: BuildStudyTextOptions,
 ): PreparedStudyTextSynthesis {
   const selection = resolveTtsSelection({ provider: options.ttsProvider, model: options.ttsModel });
-  const frontmatter = extractFrontmatter(input.context);
-  let activeSpeaker: string | undefined;
-  const segments = extractStudyText(input.context)
-    .lines.map((line, index) => {
-      const separator = line.indexOf(':');
-      const explicitSpeaker =
-        separator > 0 && separator < 40
-          ? normalizeStudyTextSpeakerToken(line.slice(0, separator))
-          : undefined;
-      const speaker = explicitSpeaker ?? activeSpeaker;
-      if (speaker) activeSpeaker = speaker;
-      const text = (explicitSpeaker ? line.slice(separator + 1) : line).trim();
-      return { id: `segment-${index + 1}`, ...(speaker ? { speaker } : {}), text };
-    })
-    .filter((segment) => segment.text.length > 0);
+  const frontmatter = resolveAssignmentMetadata(input);
+  const segments = assignmentStudySegments(input.assignment);
   const speakerLabels = collectSpeakerLabels(
     frontmatter.speaker_labels,
     frontmatter.speaker_profiles,
@@ -81,7 +68,7 @@ export function createPreparedStudyTextSynthesis(
     speakerLabels,
     voices: [],
     voiceAssignments: {},
-    enhancementContext: { assignmentMarkdown: input.context.rawMarkdown },
+    enhancementContext: { assignment: input.assignment },
   };
 }
 

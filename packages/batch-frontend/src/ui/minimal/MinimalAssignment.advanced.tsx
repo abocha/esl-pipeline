@@ -39,7 +39,9 @@ function createDefaultCustomRerunInput(
     rerunStudyTextDialogueSeed: '',
     rerunPronunciationMainProvider: selectedTtsProvider,
     rerunPronunciationMainModel:
-      selectedTtsProvider === 'google' || selectedTtsProvider === 'inworld'
+      selectedTtsProvider === 'google' ||
+      selectedTtsProvider === 'inworld' ||
+      selectedTtsProvider === 'gemini'
         ? persistedStudyTextModel
         : '',
     rerunPronunciationMainVoiceId: '',
@@ -159,7 +161,8 @@ export function useAdvancedActionsController({
   const cancelImplemented =
     actionCapabilities.find((capability) => capability.type === 'cancel')?.implemented ?? false;
   const cancelAllowedState = jobStatus?.state === 'queued' || jobStatus?.state === 'running';
-  const rerunEnabled = Boolean(jobStatus?.jobId) && rerunImplemented && actionBusy === null;
+  const rerunEnabled =
+    Boolean(jobStatus?.assignmentArtifact) && rerunImplemented && actionBusy === null;
   const cancelEnabled =
     Boolean(jobStatus?.jobId) && cancelImplemented && cancelAllowedState && actionBusy === null;
   const customRerunHasSelection =
@@ -232,7 +235,8 @@ export function useAdvancedActionsController({
     if (
       form.rerunPronunciationChunkProvider !== 'elevenlabs' &&
       form.rerunPronunciationChunkProvider !== 'google' &&
-      form.rerunPronunciationChunkProvider !== 'inworld'
+      form.rerunPronunciationChunkProvider !== 'inworld' &&
+      form.rerunPronunciationChunkProvider !== 'gemini'
     ) {
       setForm((current) => ({
         ...current,
@@ -652,7 +656,7 @@ export function AdvancedActionsStage({
                         >
                           {ttsProviders.map((provider) => (
                             <option key={provider} value={provider}>
-                              {provider}
+                              {provider === 'gemini' ? 'Gemini Cloud TTS' : provider}
                             </option>
                           ))}
                         </select>
@@ -795,7 +799,7 @@ export function AdvancedActionsStage({
                         >
                           {ttsProviders.map((provider) => (
                             <option key={provider} value={provider}>
-                              {provider}
+                              {provider === 'gemini' ? 'Gemini Cloud TTS' : provider}
                             </option>
                           ))}
                         </select>
@@ -811,15 +815,11 @@ export function AdvancedActionsStage({
                             )
                           }
                         >
-                          {(controller.form.rerunPronunciationMainProvider === 'google'
+                          {(controller.form.rerunPronunciationMainProvider !== 'elevenlabs'
                             ? modelOptionsForProvider(
                                 controller.form.rerunPronunciationMainProvider,
                               )
-                            : controller.form.rerunPronunciationMainProvider === 'inworld'
-                              ? modelOptionsForProvider(
-                                  controller.form.rerunPronunciationMainProvider,
-                                )
-                              : elevenlabsStandardModelOptions
+                            : elevenlabsStandardModelOptions
                           ).map((model) => (
                             <option key={model} value={model}>
                               {model}
@@ -875,7 +875,7 @@ export function AdvancedActionsStage({
                         >
                           {pronunciationChunkProviders.map((provider) => (
                             <option key={provider} value={provider}>
-                              {provider}
+                              {provider === 'gemini' ? 'Gemini Cloud TTS' : provider}
                             </option>
                           ))}
                         </select>
@@ -891,15 +891,11 @@ export function AdvancedActionsStage({
                             )
                           }
                         >
-                          {(controller.form.rerunPronunciationChunkProvider === 'google'
+                          {(controller.form.rerunPronunciationChunkProvider !== 'elevenlabs'
                             ? modelOptionsForProvider(
                                 controller.form.rerunPronunciationChunkProvider,
                               )
-                            : controller.form.rerunPronunciationChunkProvider === 'inworld'
-                              ? modelOptionsForProvider(
-                                  controller.form.rerunPronunciationChunkProvider,
-                                )
-                              : elevenlabsStandardModelOptions
+                            : elevenlabsStandardModelOptions
                           ).map((model) => (
                             <option key={model} value={model}>
                               {model}

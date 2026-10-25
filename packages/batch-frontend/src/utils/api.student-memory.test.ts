@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   approveStudentProfileCandidate,
   archiveStudentProfile,
-  getStudentHistorySurface,
+  getStudentActivity,
   getStudentLearningSurface,
   getStudentMemoryHealth,
   getStudentMemoryOverview,
@@ -116,22 +116,29 @@ describe('utils/api student memory fetchers', () => {
           bindings: { items: [], total: 0, limit: 20, offset: 0, order: 'desc' },
           candidates: { items: [], total: 0, limit: 50, offset: 0, order: 'desc' },
         },
-      } as never)
-      .mockResolvedValueOnce({
-        data: {
-          timeline: { items: [], total: 0, limit: 80, offset: 0, order: 'desc' },
-          lessonMemory: { items: [], limit: 50, offset: 0, order: 'desc', statuses: ['ready'] },
-          homeworkMemory: { items: [], limit: 50, offset: 0, order: 'desc', statuses: ['ready'] },
-        },
       } as never);
 
     await getStudentOverviewSurface('student-1');
     await getStudentLearningSurface('student-1');
-    await getStudentHistorySurface('student-1');
 
     expect(buildApiProxyPath).toHaveBeenNthCalledWith(1, '/students/student-1/surfaces/overview');
     expect(buildApiProxyPath).toHaveBeenNthCalledWith(2, '/students/student-1/surfaces/learning');
-    expect(buildApiProxyPath).toHaveBeenNthCalledWith(3, '/students/student-1/surfaces/history');
+  });
+
+  it('requests a student-scoped activity page with filters and its opaque cursor', async () => {
+    const response = { items: [], nextCursor: null, timezone: 'UTC' };
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: response } as never);
+    const params = {
+      category: 'lessons' as const,
+      from: '2026-10-01',
+      to: '2026-10-17',
+      cursor: 'opaque',
+      limit: 30,
+    };
+    expect(await getStudentActivity('student / 1', params)).toEqual(response);
+    expect(apiClient.get).toHaveBeenCalledWith('/api/students/student%20%2F%201/activity', {
+      params,
+    });
   });
 
   it('builds student lesson-memory list URLs with status filters', async () => {
@@ -217,7 +224,7 @@ describe('utils/api student memory fetchers', () => {
       proposedFact: 'Uses English in sprint planning and client calls.',
       approvedFactText: 'Uses English with product, engineering, and client teams.',
       targetSection: 'work_communication_context',
-      sourceSummary: 'Latest student-memory snapshot + 2 lesson memory entries',
+      sourceSummary: 'Source student-memory snapshot + 2 lesson memory entries',
     });
   });
 

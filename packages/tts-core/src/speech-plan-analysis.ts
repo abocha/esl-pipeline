@@ -78,10 +78,6 @@ function isUnsafeControlCharacter(character: string): boolean {
   );
 }
 
-function containsUnsafeMarkupDelimiter(value: string): boolean {
-  return [...value].some((character) => UNSAFE_MARKUP_DELIMITERS.has(character));
-}
-
 export function analyzeSpeechPlanCandidate(
   prepared: PreparedStudyTextSynthesis,
   candidate: unknown,
@@ -220,9 +216,6 @@ export function analyzeValidatedSpeechPlan(
     if (!source || segment.id !== source.id || segment.text !== source.text) {
       hardFailures.push(issue('authored_words_changed', segment.id));
     }
-    if (source && containsUnsafeMarkupDelimiter(source.text)) {
-      hardFailures.push(issue('authored_markup_delimiter', segment.id));
-    }
     for (const field of ['emotion', 'intonation', 'freeFormDirection'] as const) {
       const value = segment[field];
       if (!value) continue;
@@ -295,12 +288,9 @@ export function analyzeValidatedSpeechPlan(
       if (!rendered) {
         hardFailures.push(issue('segment_not_rendered', segment.id));
       } else {
-        if (containsUnsafeMarkupDelimiter(rendered.lexicalText)) {
-          hardFailures.push(issue('rendered_markup_delimiter', segment.id));
-        }
         if (
           renderedLexicalSignature(rendered.lexicalText) !==
-          authoredLexicalSignature(source?.text ?? '')
+          renderedLexicalSignature(source?.text ?? '')
         ) {
           hardFailures.push(issue('rendered_words_changed', segment.id));
         }
@@ -436,25 +426,6 @@ function countLeadingInstructionTags(text: string): number {
     remaining = remaining.slice(end + 1).trimStart();
   }
   return count;
-}
-
-function authoredLexicalSignature(text: string): string {
-  const withoutMarkdownStructure = text
-    .normalize('NFC')
-    .replace(/^\s*#{1,6}\s+/u, '')
-    .replace(/^\s*>\s?/u, '')
-    .replace(/^\s*[-*+]\s+/u, '')
-    .replace(/^\s*\d+[.)]\s+/u, '')
-    .replace(/!\[(.*?)\]\([^)]*\)/gu, '$1')
-    .replace(/\[(.+?)\]\((.+?)\)/gu, '$1')
-    .replace(/<[^>]+>/gu, '')
-    .replace(/\*\*(.+?)\*\*/gu, '$1')
-    .replace(/__(.+?)__/gu, '$1')
-    .replace(/\*(.+?)\*/gu, '$1')
-    .replace(/_([^_]+)_/gu, '$1')
-    .replace(/~~(.+?)~~/gu, '$1')
-    .replace(/`{1,3}([^`]+)`{1,3}/gu, '$1');
-  return renderedLexicalSignature(withoutMarkdownStructure);
 }
 
 function renderedLexicalSignature(text: string): string {

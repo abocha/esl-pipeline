@@ -61,10 +61,16 @@ page model, ownership boundaries, or profile authority rules.
 8. Scheduling and accounting are future first-class surfaces, not sidebar appendices.
 9. Future reminder delivery is Telegram-first because the bot ecosystem already exists, but the
    domain model should remain able to add email later.
-10. Calendar planning is designed for hybrid bidirectional sync; the app should not assume calendar
-    data is export-only forever.
+10. [ESL-62 Calendar scheduling](../../operations/google-calendar-cutover.md) supersedes independent
+    scheduling: ESL creates linked events, Google owns later timing/recurrence, and background sync
+    preserves the ESL lesson ledger. Provider and production acceptance remain separately evidenced.
 
 ## Topic Map
+
+The [Student activity contract](../../../packages/batch-backend/README.md#student-activity) and
+frontend README own the current flat History feed, recording and availability behavior. It
+supersedes the ornamental History design lock below. Other Student surfaces retain their separate
+scope; [ESL-60](https://linear.app/abocha/issue/ESL-60) tracks delivery and the manual deployment handoff.
 
 The active product map lives in this README:
 
@@ -75,6 +81,9 @@ The active product map lives in this README:
 5. Shared student-area shell: masthead, density variants, route canvas, and visual primitives.
 
 ## Historical Trace
+
+The [2026-10 History overhaul](../../archive/plans/2026-10/student-history-overhaul.md) preserves
+its reviewed implementation contract and links to the canonical Linear decision.
 
 Archived phase and design-lock details remain available for rationale, but this README is the active
 edit surface.

@@ -3,22 +3,26 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PipelineLogEvent, PipelineLogger } from '@esl-pipeline/contracts';
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import type {
+  AssignmentV1 as FixtureAssignmentV1,
+  PipelineLogEvent,
+  PipelineLogger,
+} from '@esl-pipeline/contracts';
 
 import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
 import { buildStudyTextMp3 } from '../src/index.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 
 const buildStudyTextMp3FromPath = async (
   mdPath: string,
   ...args: Parameters<typeof buildStudyTextMp3> extends [any, ...infer Rest] ? Rest : never
 ) => {
-  const markdown = await readFile(mdPath, 'utf8');
-  const context = parseMarkdownContext(markdown);
-  return buildStudyTextMp3({ context, mdPath }, ...args);
+  const source = await readFile(mdPath, 'utf8');
+  const context = JSON.parse(source) as FixtureAssignmentV1;
+  return buildStudyTextMp3({ assignment: context, mdPath }, ...args);
 };
 
 const encoder = new TextEncoder();
@@ -65,29 +69,46 @@ afterEach(() => {
 describe('TTS strategy selection', () => {
   it('auto -> dialogue for multi-speaker content', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tts-strategy-'));
-    const md = join(dir, 'lesson.md');
+    const md = join(dir, 'assignment.json');
     const voiceMap = join(dir, 'voices.yml');
 
     await writeFixture(
       md,
-      `
----
-title: Dialogue
-student: Anna
-input_type: dialogue
-speaker_labels: [Alex, Mara]
-speaker_profiles:
-  - id: Alex
-    gender: male
-  - id: Mara
-    gender: female
----
-
-:::study-text
-Alex: Hi!
-Mara: Hello!
-:::
-      `,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Dialogue', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'male',
+                age: null,
+                accent: null,
+              },
+              {
+                id: 's1',
+                displayName: 'Mara',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'female',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Hi!' },
+              { speakerId: 's1', text: 'Hello!' },
+            ],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
     await writeFixture(voiceMap, 'auto: true');
 
@@ -118,24 +139,42 @@ Mara: Hello!
 
   it('auto -> dialogue for short/simple single-speaker text (many short sentences)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tts-strategy-'));
-    const md = join(dir, 'lesson.md');
+    const md = join(dir, 'assignment.json');
     const voiceMap = join(dir, 'voices.yml');
 
     await writeFixture(
       md,
-      `
----
-title: A Busy Monday
-student: Anna
-input_type: monologue
----
-
-:::study-text
-On Monday, I woke up early. I slept well, so I felt good. I went to work by bus.
-
-At work, I did many tasks. I met my colleagues. We said hello.
-:::
-      `,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'A Busy Monday', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              {
+                speakerId: 's0',
+                text: 'On Monday, I woke up early. I slept well, so I felt good. I went to work by bus.',
+              },
+              {
+                speakerId: 's0',
+                text: 'At work, I did many tasks. I met my colleagues. We said hello.',
+              },
+            ],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
     await writeFixture(voiceMap, 'auto: true');
 
@@ -166,23 +205,42 @@ At work, I did many tasks. I met my colleagues. We said hello.
 
   it('auto -> tts for longer single-speaker text (longer sentences)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tts-strategy-'));
-    const md = join(dir, 'lesson.md');
+    const md = join(dir, 'assignment.json');
     const voiceMap = join(dir, 'voices.yml');
 
     await writeFixture(
       md,
-      `
----
-title: Apartment
-student: Anna
-input_type: monologue
----
-
-:::study-text
-I’ve been living here for two years, and while the building has charm, the logistics are a nightmare.
-Last month, I tried to organize a petition to collect signatures from the neighbors to install a video intercom at the back.
-:::
-      `,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Apartment', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              {
+                speakerId: 's0',
+                text: 'I’ve been living here for two years, and while the building has charm, the logistics are a nightmare.',
+              },
+              {
+                speakerId: 's0',
+                text: 'Last month, I tried to organize a petition to collect signatures from the neighbors to install a video intercom at the back.',
+              },
+            ],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
     await writeFixture(voiceMap, 'default: voice_a');
 
@@ -208,23 +266,46 @@ Last month, I tried to organize a petition to collect signatures from the neighb
 
   it('explicit override and env var: ttsStrategy wins', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tts-strategy-'));
-    const md = join(dir, 'lesson.md');
+    const md = join(dir, 'assignment.json');
     const voiceMap = join(dir, 'voices.yml');
 
     await writeFixture(
       md,
-      `
----
-title: Dialogue
-student: Anna
-input_type: dialogue
----
-
-:::study-text
-Alex: Hi!
-Mara: Hello!
-:::
-      `,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Dialogue', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+              {
+                id: 's1',
+                displayName: 'Mara',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Hi!' },
+              { speakerId: 's1', text: 'Hello!' },
+            ],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
     await writeFixture(voiceMap, 'default: voice_a');
 

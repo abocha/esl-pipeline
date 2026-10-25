@@ -1,8 +1,6 @@
 import { access, readdir, readFile, stat } from 'node:fs/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import { extractFrontmatter, parseMarkdownContext } from '@esl-pipeline/pmd';
 
 export interface StudentProfile {
   student: string;
@@ -132,8 +130,6 @@ export function createFilesystemConfigProvider(
 
 const defaultConfigProvider = createFilesystemConfigProvider();
 
-const IGNORED_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.rush', '.turbo']);
-
 export async function loadPresets(presetsPath = DEFAULT_PRESETS_PATH): Promise<PresetMap> {
   return defaultConfigProvider.loadPresets(presetsPath);
 }
@@ -158,69 +154,6 @@ export async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-export interface MarkdownSummary {
-  path: string;
-  title?: string;
-  student?: string;
-}
-
-export async function summarizeMarkdown(mdPath: string): Promise<MarkdownSummary> {
-  const summary: MarkdownSummary = { path: mdPath };
-  try {
-    const content = await readFile(mdPath, 'utf8');
-    const frontmatter = extractFrontmatter(parseMarkdownContext(content));
-    if (frontmatter && typeof frontmatter === 'object') {
-      const { title: maybeTitle, student: maybeStudent } = frontmatter as Record<string, unknown>;
-      if (typeof maybeTitle === 'string') summary.title = maybeTitle;
-      if (typeof maybeStudent === 'string') summary.student = maybeStudent;
-    }
-  } catch {
-    // ignore
-  }
-  return summary;
-}
-
-export async function findMarkdownCandidates(
-  cwd: string,
-  limit = 10,
-  maxDepth = 3,
-): Promise<string[]> {
-  const results: { path: string; mtimeMs: number }[] = [];
-  const queue: { dir: string; depth: number }[] = [{ dir: resolve(cwd), depth: 0 }];
-
-  while (queue.length > 0) {
-    const { dir, depth } = queue.shift()!;
-    let entries: { name: string; isFile: boolean; isDir: boolean }[] = [];
-    try {
-      const raw = await readdir(dir, { withFileTypes: true });
-      entries = raw.map((d) => ({ name: d.name, isFile: d.isFile(), isDir: d.isDirectory() }));
-    } catch {
-      continue;
-    }
-
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isFile && entry.name.toLowerCase().endsWith('.md')) {
-        let mtimeMs = 0;
-        try {
-          const stats = await stat(fullPath);
-          mtimeMs = stats.mtimeMs;
-        } catch {
-          // ignore
-        }
-        results.push({ path: relative(cwd, fullPath), mtimeMs });
-      } else if (entry.isDir && depth < maxDepth && !IGNORED_DIRS.has(entry.name)) {
-        queue.push({ dir: fullPath, depth: depth + 1 });
-      }
-    }
-  }
-
-  return results
-    .sort((a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path))
-    .slice(0, limit)
-    .map((entry) => entry.path);
 }
 
 export async function getDefaultOutputDir(mdPath: string): Promise<string> {

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import {
   addStudentPackage,
-  createStudentLesson,
+  getBusinessSettings,
   getStudentScheduleBillingSurface,
   hideStudentLessonFollowupReminder,
   recordStudentPayment,
@@ -11,9 +11,8 @@ import {
   undoLatestHiddenStudentReminder,
   updateStudentLesson,
   updateStudentLessonPlan,
-  upsertPrimaryStudentLessonRecurrence,
 } from '../../utils/api';
-import { TIMEZONE_OPTIONS } from '../../utils/timezones';
+import { CalendarSchedulingPanel } from '../calendar/CalendarSchedulingPanel';
 import { useStudentAreaContext } from './StudentAreaContext';
 import {
   StudentAreaActionLink,
@@ -25,47 +24,23 @@ import {
 } from './StudentAreaDesignSystem';
 import './StudentScheduleBillingPage.css';
 
-const WEEKDAYS = [
-  { value: 1, label: 'Mon' },
-  { value: 2, label: 'Tue' },
-  { value: 3, label: 'Wed' },
-  { value: 4, label: 'Thu' },
-  { value: 5, label: 'Fri' },
-  { value: 6, label: 'Sat' },
-  { value: 7, label: 'Sun' },
-];
-interface RecurrenceSlotForm {
-  isoWeekday: number;
-  localStartTime: string;
-  durationMinutes: string;
-}
-
-interface RecurrenceFormState {
-  timezone: string;
-  startsOn: string;
-  status: 'active' | 'paused';
-  generationHorizonDays: string;
-  localStartTime: string;
-  durationMinutes: string;
-  slots: RecurrenceSlotForm[];
-}
-
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
 });
 
-function formatDateTime(value?: string | null): string {
+function formatDateTime(value: string | null | undefined, timezone: string): string {
   if (!value) return 'Not scheduled yet';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Not scheduled yet' : DATE_TIME_FORMATTER.format(date);
+  return Number.isNaN(date.getTime())
+    ? 'Not scheduled yet'
+    : date.toLocaleString('en-US', {
+        timeZone: timezone,
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
 }
 
 function formatDate(value?: string | null): string {
@@ -86,39 +61,13 @@ function formatCredits(value: number): string {
 }
 
 function formatReminderLessonDetail(
-  summary?: StudentScheduleBillingSurface['reminders'][number]['lessonSummary'] | null,
+  summary: StudentScheduleBillingSurface['reminders'][number]['lessonSummary'] | null | undefined,
+  timezone: string,
 ): string {
   if (!summary) return 'Lesson no longer available';
   const topic = summary.title?.trim() ? summary.title.trim() : 'Untitled lesson';
-  const date = formatDateTime(summary.startsAt);
+  const date = formatDateTime(summary.startsAt, timezone);
   return `${date} · ${topic} · Lesson ${summary.lessonId}`;
-}
-
-function toIsoFromDateTimeLocal(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
-}
-
-function todayInput(): string {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate(),
-  ).padStart(2, '0')}`;
-}
-
-function defaultLessonStartInput(): string {
-  return `${todayInput()}T10:00`;
-}
-
-function toDateTimeLocal(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return defaultLessonStartInput();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 export const StudentScheduleBillingPage: React.FC = () => {
@@ -126,38 +75,21 @@ export const StudentScheduleBillingPage: React.FC = () => {
   const navigate = useNavigate();
   const studentName = student?.student ?? 'this student';
   const [surface, setSurface] = useState<StudentScheduleBillingSurface | null>(null);
+  const [workspaceTimezone, setWorkspaceTimezone] = useState('UTC');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [planForm, setPlanForm] = useState({
     timezone: 'UTC',
     defaultDurationMinutes: '60',
-    cadence: '',
-    preferredTimes: '',
     schedulingNotes: '',
   });
-  const [recurrenceForm, setRecurrenceForm] = useState({
-    timezone: 'UTC',
-    startsOn: todayInput(),
-    status: 'active' as 'active' | 'paused',
-    generationHorizonDays: '56',
-    localStartTime: '11:00',
-    durationMinutes: '60',
-    slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: '60' }],
-  } satisfies RecurrenceFormState);
   const [packageForm, setPackageForm] = useState({
     lessons: '8',
     amountMajor: '',
     currency: 'USD',
     method: '',
     note: '',
-  });
-  const [lessonForm, setLessonForm] = useState({
-    startsAt: defaultLessonStartInput(),
-    durationMinutes: '60',
-    timezone: 'UTC',
-    title: '',
-    notes: '',
   });
   const [paymentForm, setPaymentForm] = useState({
     amountMajor: '',
@@ -167,10 +99,6 @@ export const StudentScheduleBillingPage: React.FC = () => {
   });
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [lessonEditForm, setLessonEditForm] = useState({
-    startsAt: defaultLessonStartInput(),
-    durationMinutes: '60',
-    timezone: 'UTC',
-    title: '',
     notes: '',
     consumesCredit: true,
   });
@@ -182,22 +110,18 @@ export const StudentScheduleBillingPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const nextSurface = await getStudentScheduleBillingSurface(studentId);
+        const [nextSurface, settings] = await Promise.all([
+          getStudentScheduleBillingSurface(studentId),
+          getBusinessSettings(),
+        ]);
         if (!active) return;
         setSurface(nextSurface);
+        setWorkspaceTimezone(settings.timezone);
         setPlanForm({
-          timezone: nextSurface.lessonPlan.timezone,
+          timezone: settings.timezone,
           defaultDurationMinutes: String(nextSurface.lessonPlan.defaultDurationMinutes),
-          cadence: nextSurface.lessonPlan.cadence ?? '',
-          preferredTimes: nextSurface.lessonPlan.preferredTimes ?? '',
           schedulingNotes: nextSurface.lessonPlan.schedulingNotes ?? '',
         });
-        setLessonForm((current) => ({
-          ...current,
-          timezone: nextSurface.lessonPlan.timezone,
-          durationMinutes: String(nextSurface.lessonPlan.defaultDurationMinutes),
-        }));
-        setRecurrenceFormFromSurface(nextSurface, setRecurrenceForm);
       } catch (loadError: unknown) {
         if (!active) return;
         setError(loadError instanceof Error ? loadError.message : 'Schedule and billing failed.');
@@ -243,7 +167,6 @@ export const StudentScheduleBillingPage: React.FC = () => {
 
   const startHomeworkForLesson = async (
     lessonId: string,
-    lessonStatus?: StudentScheduleBillingSurface['lessons'][number]['status'] | null,
   ): Promise<StudentScheduleBillingSurface> => {
     if (!lessonId) {
       throw new Error('Lesson follow-up is missing lesson context.');
@@ -251,21 +174,14 @@ export const StudentScheduleBillingPage: React.FC = () => {
     if (!surface) {
       throw new Error('Schedule surface is not loaded.');
     }
-    const nextSurface =
-      lessonStatus === 'scheduled'
-        ? await updateStudentLesson(studentId, lessonId, {
-            status: 'completed',
-            consumesCredit: true,
-          })
-        : surface;
     navigateToLessonAssignment(lessonId);
-    return nextSurface;
+    return surface;
   };
 
   const startHomeworkFromReminder = async (
     reminder: StudentScheduleBillingSurface['reminders'][number],
   ): Promise<StudentScheduleBillingSurface> => {
-    return startHomeworkForLesson(reminder.lessonId ?? '', reminder.lessonStatus);
+    return startHomeworkForLesson(reminder.lessonId ?? '');
   };
 
   const hideReminder = async (
@@ -312,9 +228,15 @@ export const StudentScheduleBillingPage: React.FC = () => {
       <div className="student-schedule-billing-grid">
         <StudentAreaMetricCard
           eyebrow="Next lesson"
-          value={surface.nextLesson ? formatDateTime(surface.nextLesson.startsAt) : 'Not scheduled'}
+          value={
+            surface.nextLesson
+              ? formatDateTime(surface.nextLesson.startsAt, workspaceTimezone)
+              : 'Not scheduled'
+          }
           detail={
-            surface.nextLesson ? `${surface.nextLesson.durationMinutes} min` : 'Add a lesson below.'
+            surface.nextLesson
+              ? `${surface.nextLesson.durationMinutes} min`
+              : 'Check Google Calendar setup and sync below.'
           }
         />
         <StudentAreaMetricCard
@@ -322,12 +244,6 @@ export const StudentScheduleBillingPage: React.FC = () => {
           value={formatCredits(surface.creditSummary.remaining)}
           detail={`${surface.creditSummary.purchased} purchased, ${surface.creditSummary.consumed} used`}
           tone={creditTone}
-        />
-        <StudentAreaMetricCard
-          eyebrow="Reminders"
-          value={surface.reminders.length === 0 ? 'Clear' : `${surface.reminders.length} ready`}
-          detail="Manual follow-ups; some include actions."
-          tone={surface.reminders.length === 0 ? 'success' : 'attention'}
         />
         <StudentAreaMetricCard
           eyebrow="Latest payment"
@@ -344,222 +260,50 @@ export const StudentScheduleBillingPage: React.FC = () => {
         />
       </div>
 
+      {surface.workspaceId ? (
+        <CalendarSchedulingPanel
+          key={studentId}
+          workspaceId={surface.workspaceId}
+          studentId={studentId}
+          studentName={studentName}
+          email={student?.email ?? null}
+          timezone={workspaceTimezone}
+          defaultDurationMinutes={surface.lessonPlan.defaultDurationMinutes}
+          onLedgerRefresh={async () =>
+            setSurface(await getStudentScheduleBillingSurface(studentId))
+          }
+        />
+      ) : null}
       <div className="student-schedule-billing-columns">
         <StudentAreaPanel className="student-schedule-billing-panel">
-          <header>
-            <StudentAreaSectionLabel>Lesson Planning</StudentAreaSectionLabel>
-            <p>Keep the next lesson and recurring preferences separate from the learner profile.</p>
-          </header>
+          <StudentAreaSectionLabel>Lesson defaults and notes</StudentAreaSectionLabel>
           <form
             className="student-schedule-billing-form"
             onSubmit={(event) => {
               event.preventDefault();
               void runAction('plan', () =>
                 updateStudentLessonPlan(studentId, {
-                  timezone: planForm.timezone,
+                  timezone: workspaceTimezone,
                   defaultDurationMinutes: Number(planForm.defaultDurationMinutes),
-                  cadence: null,
-                  preferredTimes: null,
                   schedulingNotes: planForm.schedulingNotes || null,
-                }).then(() =>
-                  upsertPrimaryStudentLessonRecurrence(studentId, {
-                    timezone: recurrenceForm.timezone,
-                    startsOn: recurrenceForm.startsOn,
-                    status: recurrenceForm.status,
-                    generationHorizonDays: Number(recurrenceForm.generationHorizonDays),
-                    slots: recurrenceForm.slots.map((slot) => ({
-                      isoWeekday: slot.isoWeekday,
-                      localStartTime: slot.localStartTime,
-                      durationMinutes: Number(slot.durationMinutes),
-                    })),
-                  }),
-                ),
+                }),
               );
             }}
           >
             <label>
-              Timezone
-              <select
-                value={recurrenceForm.timezone}
-                onChange={(event) => {
-                  setRecurrenceForm({ ...recurrenceForm, timezone: event.target.value });
-                  setPlanForm({ ...planForm, timezone: event.target.value });
-                }}
-              >
-                {TIMEZONE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
               Default duration
               <input
+                type="number"
                 min="1"
-                type="number"
-                value={recurrenceForm.durationMinutes}
-                onChange={(event) => {
-                  setRecurrenceForm({
-                    ...recurrenceForm,
-                    durationMinutes: event.target.value,
-                    slots: recurrenceForm.slots.map((slot) => ({
-                      ...slot,
-                      durationMinutes: event.target.value,
-                    })),
-                  });
-                  setPlanForm({ ...planForm, defaultDurationMinutes: event.target.value });
-                }}
-              />
-            </label>
-            <label>
-              Starts on
-              <input
-                type="date"
-                value={recurrenceForm.startsOn}
+                max="1440"
+                value={planForm.defaultDurationMinutes}
                 onChange={(event) =>
-                  setRecurrenceForm({ ...recurrenceForm, startsOn: event.target.value })
+                  setPlanForm({ ...planForm, defaultDurationMinutes: event.target.value })
                 }
               />
             </label>
             <label>
-              Time
-              <input
-                type="time"
-                value={recurrenceForm.localStartTime}
-                onChange={(event) =>
-                  setRecurrenceForm({
-                    ...recurrenceForm,
-                    localStartTime: event.target.value,
-                    slots: recurrenceForm.slots.map((slot) => ({
-                      ...slot,
-                      localStartTime: event.target.value,
-                    })),
-                  })
-                }
-              />
-            </label>
-            <label>
-              Generate ahead
-              <input
-                min="7"
-                max="366"
-                type="number"
-                value={recurrenceForm.generationHorizonDays}
-                onChange={(event) =>
-                  setRecurrenceForm({
-                    ...recurrenceForm,
-                    generationHorizonDays: event.target.value,
-                  })
-                }
-              />
-            </label>
-            <label>
-              Rule status
-              <select
-                value={recurrenceForm.status}
-                onChange={(event) =>
-                  setRecurrenceForm({
-                    ...recurrenceForm,
-                    status: event.target.value as 'active' | 'paused',
-                  })
-                }
-              >
-                <option value="active">Active</option>
-                <option value="paused">Paused</option>
-              </select>
-            </label>
-            <fieldset className="student-schedule-billing-weekdays">
-              <legend>Repeats weekly</legend>
-              {WEEKDAYS.map((weekday) => {
-                const selected = recurrenceForm.slots.some(
-                  (slot) => slot.isoWeekday === weekday.value,
-                );
-                return (
-                  <button
-                    key={weekday.value}
-                    type="button"
-                    className={selected ? 'selected' : ''}
-                    onClick={() => {
-                      const slots = selected
-                        ? recurrenceForm.slots.filter((slot) => slot.isoWeekday !== weekday.value)
-                        : [
-                            ...recurrenceForm.slots,
-                            {
-                              isoWeekday: weekday.value,
-                              localStartTime: recurrenceForm.localStartTime,
-                              durationMinutes: recurrenceForm.durationMinutes,
-                            },
-                          ].sort((left, right) => left.isoWeekday - right.isoWeekday);
-                      setRecurrenceForm({
-                        ...recurrenceForm,
-                        slots: slots.length
-                          ? slots
-                          : [
-                              {
-                                isoWeekday: weekday.value,
-                                localStartTime: recurrenceForm.localStartTime,
-                                durationMinutes: recurrenceForm.durationMinutes,
-                              },
-                            ],
-                      });
-                    }}
-                  >
-                    {weekday.label}
-                  </button>
-                );
-              })}
-            </fieldset>
-            <div className="student-schedule-billing-slot-grid student-schedule-billing-wide">
-              {recurrenceForm.slots.map((slot) => {
-                const weekday = WEEKDAYS.find((item) => item.value === slot.isoWeekday);
-                const label = weekday?.label ?? `Day ${slot.isoWeekday}`;
-                return (
-                  <div className="student-schedule-billing-slot-row" key={slot.isoWeekday}>
-                    <strong>{label}</strong>
-                    <label>
-                      Time
-                      <input
-                        aria-label={`${label} time`}
-                        type="time"
-                        value={slot.localStartTime}
-                        onChange={(event) =>
-                          setRecurrenceForm({
-                            ...recurrenceForm,
-                            slots: recurrenceForm.slots.map((current) =>
-                              current.isoWeekday === slot.isoWeekday
-                                ? { ...current, localStartTime: event.target.value }
-                                : current,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Duration
-                      <input
-                        aria-label={`${label} duration`}
-                        min="1"
-                        type="number"
-                        value={slot.durationMinutes}
-                        onChange={(event) =>
-                          setRecurrenceForm({
-                            ...recurrenceForm,
-                            slots: recurrenceForm.slots.map((current) =>
-                              current.isoWeekday === slot.isoWeekday
-                                ? { ...current, durationMinutes: event.target.value }
-                                : current,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-            <label className="student-schedule-billing-wide">
-              Scheduling notes
+              Operational notes
               <textarea
                 value={planForm.schedulingNotes}
                 onChange={(event) =>
@@ -568,7 +312,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
               />
             </label>
             <button type="submit" disabled={saving === 'plan'}>
-              Save plan
+              Save defaults
             </button>
           </form>
         </StudentAreaPanel>
@@ -657,67 +401,8 @@ export const StudentScheduleBillingPage: React.FC = () => {
         <header>
           <StudentAreaSectionLabel>Lessons</StudentAreaSectionLabel>
           <p>Credits are consumed only when a completed lesson is marked chargeable.</p>
+          <p>Lesson times: {workspaceTimezone}. Change the timezone in Business settings.</p>
         </header>
-        <form
-          className="student-schedule-billing-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void runAction('lesson', () =>
-              createStudentLesson(studentId, {
-                startsAt: toIsoFromDateTimeLocal(lessonForm.startsAt),
-                timezone: lessonForm.timezone,
-                durationMinutes: Number(lessonForm.durationMinutes),
-                title: lessonForm.title || null,
-                notes: lessonForm.notes || null,
-              }),
-            );
-          }}
-        >
-          <label>
-            Starts
-            <input
-              type="datetime-local"
-              value={lessonForm.startsAt}
-              onChange={(event) => setLessonForm({ ...lessonForm, startsAt: event.target.value })}
-            />
-          </label>
-          <label>
-            Duration
-            <input
-              min="1"
-              type="number"
-              value={lessonForm.durationMinutes}
-              onChange={(event) =>
-                setLessonForm({ ...lessonForm, durationMinutes: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            Timezone
-            <input
-              value={lessonForm.timezone}
-              onChange={(event) => setLessonForm({ ...lessonForm, timezone: event.target.value })}
-            />
-          </label>
-          <label>
-            Title
-            <input
-              value={lessonForm.title}
-              onChange={(event) => setLessonForm({ ...lessonForm, title: event.target.value })}
-            />
-          </label>
-          <label className="student-schedule-billing-wide">
-            Notes
-            <textarea
-              value={lessonForm.notes}
-              onChange={(event) => setLessonForm({ ...lessonForm, notes: event.target.value })}
-            />
-          </label>
-          <button type="submit" disabled={saving === 'lesson'}>
-            Add lesson
-          </button>
-        </form>
-
         {surface.lessons.length === 0 ? (
           <StudentAreaEmptyState>No lessons tracked for {studentName} yet.</StudentAreaEmptyState>
         ) : (
@@ -725,9 +410,12 @@ export const StudentScheduleBillingPage: React.FC = () => {
             {surface.lessons.map((lesson) => (
               <article key={lesson.id} className="student-schedule-billing-list-row">
                 <span>
-                  <strong>{lesson.title || formatDateTime(lesson.startsAt)}</strong>
+                  <strong>
+                    {lesson.title || formatDateTime(lesson.startsAt, workspaceTimezone)}
+                  </strong>
                   <small>
-                    {formatDateTime(lesson.startsAt)} · {lesson.durationMinutes} min
+                    {formatDateTime(lesson.startsAt, workspaceTimezone)} · {lesson.durationMinutes}{' '}
+                    min
                   </small>
                 </span>
                 <StudentAreaStatusPill
@@ -741,22 +429,34 @@ export const StudentScheduleBillingPage: React.FC = () => {
                 >
                   {lesson.status.replace('_', ' ')}
                 </StudentAreaStatusPill>
-                {lesson.recurrenceOrigin === 'generated' ? (
-                  <StudentAreaStatusPill tone="quiet">generated</StudentAreaStatusPill>
-                ) : null}
+                <StudentAreaStatusPill tone="quiet">
+                  {lesson.schedulingSource === 'calendar'
+                    ? 'Google Calendar'
+                    : 'Historical / unmanaged'}
+                </StudentAreaStatusPill>
                 <StudentAreaStatusPill
                   tone={
                     lesson.homework.status === 'published' ||
                     lesson.homework.status === 'memory_ready'
                       ? 'success'
-                      : lesson.homework.status === 'not_started'
+                      : lesson.homework.status === 'not_started' ||
+                          lesson.homework.status === 'not_planned'
                         ? 'quiet'
                         : 'attention'
                   }
                 >
-                  homework {lesson.homework.status.replaceAll('_', ' ')}
+                  {lesson.homework.status === 'not_planned'
+                    ? 'No homework planned'
+                    : `homework ${lesson.homework.status.replaceAll('_', ' ')}`}
                 </StudentAreaStatusPill>
                 <div className="student-schedule-billing-actions">
+                  {lesson.homework.transcriptResultSessionId ? (
+                    <Link
+                      to={`/?sessionId=${encodeURIComponent(lesson.homework.transcriptResultSessionId)}`}
+                    >
+                      View transcript
+                    </Link>
+                  ) : null}
                   {lesson.homework.htmlUrl ? (
                     <a href={lesson.homework.htmlUrl} target="_blank" rel="noreferrer">
                       Open homework
@@ -767,9 +467,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
                       type="button"
                       disabled={saving === lesson.id}
                       onClick={() => {
-                        void runAction(lesson.id, () =>
-                          startHomeworkForLesson(lesson.id, lesson.status),
-                        );
+                        void runAction(lesson.id, () => startHomeworkForLesson(lesson.id));
                       }}
                     >
                       Add homework
@@ -805,47 +503,19 @@ export const StudentScheduleBillingPage: React.FC = () => {
                       >
                         No-show
                       </button>
-                      <button
-                        type="button"
-                        disabled={saving === lesson.id}
-                        onClick={() => {
-                          void runAction(lesson.id, () =>
-                            updateStudentLesson(studentId, lesson.id, {
-                              status: 'canceled',
-                              consumesCredit: false,
-                            }),
-                          );
-                        }}
-                      >
-                        Cancel
-                      </button>
                     </>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={saving === lesson.id}
-                      onClick={() => {
-                        void runAction(lesson.id, () =>
-                          updateStudentLesson(studentId, lesson.id, {
-                            status: 'scheduled',
-                            consumesCredit: false,
-                          }),
-                        );
-                      }}
-                    >
-                      Restore
-                    </button>
-                  )}
+                  ) : null}
+                  {lesson.calendarEventUrl ? (
+                    <a href={lesson.calendarEventUrl} target="_blank" rel="noreferrer">
+                      Open in Google
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     disabled={saving === lesson.id}
                     onClick={() => {
                       setEditingLessonId(lesson.id);
                       setLessonEditForm({
-                        startsAt: toDateTimeLocal(lesson.startsAt),
-                        durationMinutes: String(lesson.durationMinutes),
-                        timezone: lesson.timezone,
-                        title: lesson.title ?? '',
                         notes: lesson.notes ?? '',
                         consumesCredit: lesson.consumesCredit,
                       });
@@ -861,10 +531,6 @@ export const StudentScheduleBillingPage: React.FC = () => {
                       event.preventDefault();
                       void runAction(lesson.id, () =>
                         updateStudentLesson(studentId, lesson.id, {
-                          startsAt: toIsoFromDateTimeLocal(lessonEditForm.startsAt),
-                          timezone: lessonEditForm.timezone,
-                          durationMinutes: Number(lessonEditForm.durationMinutes),
-                          title: lessonEditForm.title || null,
                           notes: lessonEditForm.notes || null,
                           consumesCredit: lessonEditForm.consumesCredit,
                         }).then((nextSurface) => {
@@ -875,26 +541,11 @@ export const StudentScheduleBillingPage: React.FC = () => {
                     }}
                   >
                     <label>
-                      Starts
-                      <input
-                        type="datetime-local"
-                        value={lessonEditForm.startsAt}
+                      Operational notes
+                      <textarea
+                        value={lessonEditForm.notes}
                         onChange={(event) =>
-                          setLessonEditForm({ ...lessonEditForm, startsAt: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Duration
-                      <input
-                        min="1"
-                        type="number"
-                        value={lessonEditForm.durationMinutes}
-                        onChange={(event) =>
-                          setLessonEditForm({
-                            ...lessonEditForm,
-                            durationMinutes: event.target.value,
-                          })
+                          setLessonEditForm({ ...lessonEditForm, notes: event.target.value })
                         }
                       />
                     </label>
@@ -1022,7 +673,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
                   <small>{reminder.message}</small>
                   {reminder.lessonSummary ? (
                     <small className="student-schedule-billing-reminder-detail">
-                      {formatReminderLessonDetail(reminder.lessonSummary)}
+                      {formatReminderLessonDetail(reminder.lessonSummary, workspaceTimezone)}
                     </small>
                   ) : null}
                 </span>
@@ -1065,7 +716,11 @@ export const StudentScheduleBillingPage: React.FC = () => {
         {surface.latestHiddenReminder ? (
           <div className="student-schedule-billing-hidden-reminder">
             <span>
-              Hidden: {formatReminderLessonDetail(surface.latestHiddenReminder.lessonSummary)}
+              Hidden:{' '}
+              {formatReminderLessonDetail(
+                surface.latestHiddenReminder.lessonSummary,
+                workspaceTimezone,
+              )}
             </span>
             <button
               type="button"
@@ -1087,34 +742,3 @@ export const StudentScheduleBillingPage: React.FC = () => {
     </section>
   );
 };
-
-function setRecurrenceFormFromSurface(
-  surface: StudentScheduleBillingSurface,
-  setRecurrenceForm: React.Dispatch<React.SetStateAction<RecurrenceFormState>>,
-) {
-  const firstSlot = surface.recurrenceRule?.slots[0];
-  const slots = surface.recurrenceRule?.slots.length
-    ? surface.recurrenceRule.slots.map((slot) => ({
-        isoWeekday: slot.isoWeekday,
-        localStartTime: slot.localStartTime,
-        durationMinutes: String(slot.durationMinutes),
-      }))
-    : [
-        {
-          isoWeekday: 1,
-          localStartTime: '11:00',
-          durationMinutes: String(surface.lessonPlan.defaultDurationMinutes),
-        },
-      ];
-  setRecurrenceForm({
-    timezone: surface.recurrenceRule?.timezone ?? surface.lessonPlan.timezone,
-    startsOn: surface.recurrenceRule?.startsOn ?? todayInput(),
-    status: surface.recurrenceRule?.status === 'paused' ? 'paused' : 'active',
-    generationHorizonDays: String(surface.recurrenceRule?.generationHorizonDays ?? 56),
-    localStartTime: firstSlot?.localStartTime ?? '11:00',
-    durationMinutes: String(
-      firstSlot?.durationMinutes ?? surface.lessonPlan.defaultDurationMinutes,
-    ),
-    slots,
-  });
-}

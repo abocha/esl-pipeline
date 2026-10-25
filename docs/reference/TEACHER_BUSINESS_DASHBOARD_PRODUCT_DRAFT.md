@@ -15,6 +15,10 @@
 This document captures the core product direction for the future teacher-wide schedule and stats
 surfaces before implementation planning starts.
 
+The original scheduling proposal is superseded by ESL-62's
+[Google Calendar cutover](../operations/google-calendar-cutover.md). Google owns timing/recurrence;
+ESL keeps the operational ledger. Remaining forecast/product ideas here are draft context.
+
 The dashboard is for a self-employed teaching professional. It should answer:
 
 1. how much have I made this month?
@@ -202,14 +206,13 @@ Future settings:
    warnings so the teacher can see what the reported total omits.
 4. If the default lesson rate is zero, money forecasts show a setup-needed state while lesson counts
    and hours still render.
-5. Inline schedule status actions are allowed on `My Schedule`, but detailed edits remain on student
-   Schedule & Billing pages.
+5. Explicit completion/no-show actions remain in ESL. Timing, recurrence and ordinary future
+   cancellations open Google after creation.
 6. Business timezone settings should be selected from a minimal city-based picker that submits
    canonical IANA timezone identifiers. Offset-like legacy values such as `UTC+7` are normalized
    before schedule and stats calculations.
-7. Student recurrence rules materialize generated lessons before business schedule and stats reads,
-   so recurring plans contribute to teacher-wide agenda, workload, and income forecasts without a
-   separate calendar engine.
+7. Business schedule/stats read the durable lesson ledger. Calendar projection happens in the
+   background; reads never generate recurrence or contact Google.
 
 ## Architecture Direction
 
@@ -245,7 +248,7 @@ and role constraints.
 2. invoice generation
 3. payment collection
 4. full double-entry accounting
-5. external calendar sync
+5. calendar providers beyond Google and student self-booking
 6. drag-and-drop rescheduling
 7. learned forecasting without enough history
 
@@ -258,17 +261,16 @@ The first implementation slice intentionally leaves these areas unfinished:
    learned no-show/cancellation behavior.
 3. Reminder output is manual copy text and dashboard prioritization; Telegram/email delivery is not
    wired to this surface.
-4. Calendar operations are still record/status operations plus generated weekly recurrence. They do
-   not include drag-and-drop rescheduling or external calendar sync.
+4. Calendar creation/synchronization follows ESL-62; recurring-series identity and live activation
+   retain the runbook's separate provider/operator gates. There is no ESL drag-and-drop editor.
 5. Billing is still operational tracking. It does not create invoices, collect payments, reconcile
    bank transfers, calculate tax, or export accounting reports.
 6. The `/business/*` backend uses the default-workspace bridge while preserving workspace-owned data
    boundaries for the future account model.
-7. Schedule and stats use the business timezone for aggregate day/month boundaries, while generated
-   student lessons use each recurrence rule's IANA timezone. There is no calendar-conflict handling
-   yet.
-8. The dashboard links to student Schedule & Billing for detailed edits; teacher-wide edit flows
-   beyond lesson status actions remain future work.
+7. Schedule/stats use the business timezone for day/month boundaries. Google expands instances in
+   each series' IANA timezone. Booking conflict/availability rules remain deferred.
+8. Student Schedule & Billing owns creation, invitations and accounting; later timing edits open
+   Google. Teacher-wide completion and homework entrypoints remain available.
 
 ## Related
 

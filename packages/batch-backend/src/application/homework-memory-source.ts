@@ -1,24 +1,25 @@
 import { createHash } from 'node:crypto';
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import type { PoolClient } from 'pg';
 
 import type { PublishTarget } from '@esl-pipeline/contracts';
+import {
+  type AssignmentArtifactReference,
+  AssignmentArtifactReferenceSchema,
+  type AssignmentV1,
+} from '@esl-pipeline/contracts';
 
 import type { HomeworkMemoryPublishTarget } from '../domain/homework-memory-model.js';
 import { getLatestReadyHomeworkMemoryByAssignmentLineageKey } from '../domain/homework-memory-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
-import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
-import {
-  type NormalizedHomeworkMarkdown,
-  normalizeHomeworkMarkdown,
-} from './homework-memory-normalization.js';
+import { readAssignmentArtifact } from './assignment-artifact.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 
 interface HomeworkSourceJobRow {
   id: string;
   student_id: string | null;
   md: string | null;
   md_storage_uri: string | null;
+  assignment_artifact?: unknown;
   published_content_hash: string | null;
   prompt_package_id: string | null;
   draft_id: string | null;
@@ -43,10 +44,11 @@ export interface HomeworkMemorySourceBundle {
   recordingId?: string | null;
   transcriptId?: string | null;
   publishedAt: Date;
-  publishedMarkdown: string;
+  format: 'assignment_v1';
+  assignment?: AssignmentV1;
+  artifact?: AssignmentArtifactReference;
   contentHash: string;
   publishTargets: HomeworkMemoryPublishTarget[];
-  normalizedMarkdown: NormalizedHomeworkMarkdown;
 }
 
 export interface HomeworkMemoryGenerationDecision {
@@ -67,9 +69,13 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
     throw new Error(`Succeeded publish job ${jobId} is missing student_id`);
   }
 
+  requireTypedAssignment(currentJob.assignment_artifact);
   const assignmentLineageKey = await resolveAssignmentLineageKey(jobId, options?.client);
-  const publishedMarkdown = await readPublishedMarkdownFromJob(currentJob);
-  const contentHash = sha256(publishedMarkdown);
+  const artifact = AssignmentArtifactReferenceSchema.parse(currentJob.assignment_artifact);
+  if (!currentJob.prompt_package_id)
+    throw new Error('Typed homework source missing prompt identity');
+  const assignment = await readAssignmentArtifact(artifact, currentJob.prompt_package_id);
+  const contentHash = sha256(`assignment_v1:1:${artifact.contentHash}`);
   const lineageJobs = await listSucceededLineageJobs(assignmentLineageKey, options?.client);
 
   const sameContentJobs: HomeworkSourceJobRow[] = [currentJob];
@@ -77,19 +83,9 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
     if (lineageJob.id === currentJob.id) {
       continue;
     }
-    if (lineageJob.published_content_hash) {
-      if (lineageJob.published_content_hash === contentHash) {
-        sameContentJobs.push(lineageJob);
-      }
-      continue;
-    }
-    try {
-      if (sha256(await readPublishedMarkdownFromJob(lineageJob)) === contentHash) {
-        sameContentJobs.push(lineageJob);
-      }
-    } catch {
-      // Ignore unreadable historical lineage rows; the triggering job remains authoritative.
-    }
+    if (!lineageJob.assignment_artifact) continue;
+    const other = AssignmentArtifactReferenceSchema.parse(lineageJob.assignment_artifact);
+    if (artifact.contentHash === other.contentHash) sameContentJobs.push(lineageJob);
   }
 
   return {
@@ -102,10 +98,11 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
     recordingId: currentJob.recording_id ?? null,
     transcriptId: currentJob.transcript_id ?? null,
     publishedAt: currentJob.finished_at ?? currentJob.updated_at,
-    publishedMarkdown,
     contentHash,
     publishTargets: mergePublishTargets(sameContentJobs),
-    normalizedMarkdown: normalizeHomeworkMarkdown(publishedMarkdown),
+    format: 'assignment_v1',
+    assignment,
+    artifact,
   };
 }
 
@@ -149,6 +146,7 @@ async function loadSucceededJob(
         student_id,
         md,
         md_storage_uri,
+        assignment_artifact,
         published_content_hash,
         prompt_package_id,
         draft_id,
@@ -215,6 +213,7 @@ async function listSucceededLineageJobs(
           student_id,
           md,
           md_storage_uri,
+          assignment_artifact,
           published_content_hash,
           prompt_package_id,
           draft_id,
@@ -237,6 +236,7 @@ async function listSucceededLineageJobs(
           j.student_id,
           j.md,
           j.md_storage_uri,
+          j.assignment_artifact,
           j.published_content_hash,
           j.prompt_package_id,
           j.draft_id,
@@ -261,20 +261,6 @@ async function listSucceededLineageJobs(
     return result.rows;
   };
   return providedClient ? load(providedClient) : withPgClient(load);
-}
-
-async function readPublishedMarkdownFromJob(job: HomeworkSourceJobRow): Promise<string> {
-  if (job.md_storage_uri) {
-    const storage = createTranscriptionStorageForUri(job.md_storage_uri);
-    return storage.getText(job.md_storage_uri);
-  }
-
-  if (job.md) {
-    const resolvedPath = await resolveMarkdownPath(job.md);
-    return fs.readFile(resolvedPath, 'utf8');
-  }
-
-  throw new Error(`Succeeded publish job ${job.id} is missing markdown source`);
 }
 
 function mergePublishTargets(rows: HomeworkSourceJobRow[]): HomeworkMemoryPublishTarget[] {
@@ -315,27 +301,4 @@ function resolvePublishUrl(row: HomeworkSourceJobRow, target: PublishTarget): st
 
 function sha256(input: string): string {
   return createHash('sha256').update(input).digest('hex');
-}
-
-async function resolveMarkdownPath(mdPath: string): Promise<string> {
-  const sanitized = mdPath.trim();
-  const candidates = new Set<string>();
-
-  if (path.isAbsolute(sanitized)) {
-    candidates.add(sanitized);
-  } else {
-    candidates.add(path.resolve(process.cwd(), sanitized));
-    candidates.add(path.resolve(process.cwd(), 'uploads', sanitized.replace(/^uploads[\\/]/, '')));
-  }
-
-  for (const candidate of candidates) {
-    try {
-      await fs.access(candidate);
-      return candidate;
-    } catch {
-      // continue
-    }
-  }
-
-  throw new Error(`Markdown file not found: ${mdPath}`);
 }

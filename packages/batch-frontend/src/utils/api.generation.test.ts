@@ -1,7 +1,11 @@
 import type { AxiosError } from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GenerationDraftApiError, generateDraft } from './api';
+import {
+  GenerationDraftApiError,
+  generateDraft,
+  refreshProfileDraftFromApprovedCandidates,
+} from './api';
 import apiClient, { buildApiProxyPath, handleApiError, isAuthError } from './api-client';
 
 vi.mock('./api-client', () => ({
@@ -233,4 +237,21 @@ describe('utils/api generateDraft', () => {
     expect(thrown).not.toBeInstanceOf(GenerationDraftApiError);
     expect((thrown as Error).message).toBe('Upstream unavailable');
   });
+});
+
+it('shows the actionable profile quota message without a successful result', async () => {
+  const actual = await vi.importActual<typeof import('./api-client')>('./api-client');
+  vi.mocked(handleApiError).mockImplementationOnce(actual.handleApiError);
+  vi.mocked(apiClient.post).mockRejectedValueOnce(
+    makeAxiosError({
+      status: 429,
+      data: {
+        code: 'budget_exceeded',
+        message: 'The efficient group reserved-token budget is exhausted. Wait for 00:00 UTC.',
+      },
+    }),
+  );
+  await expect(
+    refreshProfileDraftFromApprovedCandidates('student-1', { candidateIds: ['candidate-1'] }),
+  ).rejects.toThrow('reserved-token budget is exhausted. Wait for 00:00 UTC.');
 });

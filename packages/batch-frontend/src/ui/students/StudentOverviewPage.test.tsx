@@ -7,6 +7,7 @@ import { StudentOverviewPage } from './StudentOverviewPage';
 
 const apiMocks = vi.hoisted(() => ({
   getStudentOverviewSurface: vi.fn(),
+  getBusinessSettings: vi.fn(),
 }));
 
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
@@ -36,6 +37,7 @@ function createDeferred<T>(): Deferred<T> {
 }
 
 function seedOverviewMocks() {
+  apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'Asia/Bangkok' });
   useStudentAreaContextMock.mockReturnValue({
     student: {
       id: 'student-alex',
@@ -239,7 +241,7 @@ describe('StudentOverviewPage', () => {
     expect(screen.getByText(/Memory-generated suggestion/)).toBeTruthy();
     expect(screen.getByText(/Snapshot generated/)).toBeTruthy();
     expect(screen.getByText('5 lesson credits')).toBeTruthy();
-    expect(screen.getByText('No reminders ready')).toBeTruthy();
+    expect(screen.queryByText('No reminders ready')).toBeNull();
     expect(screen.getByText(/USD 120.00/)).toBeTruthy();
     expect(screen.getByText('Profile revision activated')).toBeTruthy();
     expect(screen.getByText('Profile record updated Apr 23')).toBeTruthy();
@@ -271,10 +273,10 @@ describe('StudentOverviewPage', () => {
     expect(screen.getByRole('region', { name: /Recent Activity/i })).toBeTruthy();
 
     const operations = screen.getByRole('region', { name: /Operations/i });
+    expect(operations.textContent).toContain('May 7, 5:00 PM · Asia/Bangkok');
     const operationLinks = Array.from(operations.querySelectorAll('a'));
-    expect(operationLinks).toHaveLength(4);
+    expect(operationLinks).toHaveLength(3);
     expect(operationLinks.map((link) => link.getAttribute('href'))).toEqual([
-      '/students/student-alex/schedule-billing',
       '/students/student-alex/schedule-billing',
       '/students/student-alex/schedule-billing',
       '/students/student-alex/schedule-billing',
@@ -488,12 +490,12 @@ describe('StudentOverviewPage', () => {
     renderOverview();
 
     expect(await screen.findByText('No suggested focus yet')).toBeTruthy();
-    expect(screen.getByText('Waiting for memory')).toBeTruthy();
+    expect(screen.getByText('No memory snapshot')).toBeTruthy();
     expect(screen.queryByText('Unbounded issue')).toBeNull();
     expect(screen.queryByText('This issue is not tied to a ready snapshot.')).toBeNull();
   });
 
-  it('shows factual memory-pending attention routing to Learning', async () => {
+  it('shows absent memory without claiming a rollup is pending', async () => {
     apiMocks.getStudentOverviewSurface.mockResolvedValue(
       makeOverviewSurface({
         memory: {
@@ -505,9 +507,42 @@ describe('StudentOverviewPage', () => {
 
     renderOverview();
 
-    const attention = await screen.findByRole('link', { name: /Memory snapshot pending/i });
+    const attention = await screen.findByRole('link', { name: /No memory snapshot yet/i });
     expect(attention.getAttribute('href')).toBe('/students/student-alex/learning');
+    expect(screen.queryByText(/after the next rollup/i)).toBeNull();
   });
+
+  it.each(['repair_required', 'repository_unavailable'] as const)(
+    'respects %s instead of promising a pending memory snapshot',
+    async (state) => {
+      const surface = makeOverviewSurface();
+      apiMocks.getStudentOverviewSurface.mockResolvedValue({
+        ...surface,
+        memory: {
+          ...surface.memory,
+          latestReadyStudentMemorySnapshot: null,
+          availability: {
+            state,
+            reason:
+              state === 'repair_required'
+                ? 'established_history_ineligible'
+                : 'repository_unavailable',
+            lessonReferenceCount: 19,
+            homeworkReferenceCount: 3,
+          },
+        },
+      });
+      renderOverview();
+      expect(
+        await screen.findByRole('link', {
+          name: state === 'repair_required' ? /Memory repair required/i : /Memory unavailable/i,
+        }),
+      ).toBeTruthy();
+      expect(screen.getByText('Suggested focus unavailable')).toBeTruthy();
+      expect(screen.queryByText('Waiting for memory')).toBeNull();
+      expect(screen.queryByText(/after the next rollup/i)).toBeNull();
+    },
+  );
 
   it('keeps the overview unavailable after a failed load until Retry succeeds', async () => {
     const user = userEvent.setup();

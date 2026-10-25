@@ -9,6 +9,7 @@ import { Client as PgClient } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAuthService } from '../src/infrastructure/auth-service.js';
+import { type BoundOAuthGrant, bindOAuthGrant, getMcpProfile } from '../src/domain/mcp-oauth-grants.js';
 import { insertStudent } from '../src/domain/student-repository.js';
 import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
 import { logger } from '../src/infrastructure/logger.js';
@@ -279,6 +280,39 @@ async function refresh(refreshToken: string, options: Record<string, string> = {
   });
 }
 
+async function callProfile(token?: string, args: Record<string, unknown> = {}) {
+  return testApp.app.inject({
+    method: 'POST',
+    url: '/mcp',
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    payload: {
+      jsonrpc: '2.0',
+      id: 67,
+      method: 'tools/call',
+      params: { name: 'get_profile', arguments: args },
+    },
+  });
+}
+
+function rpcBody(response: Injection) {
+  return JSON.parse(
+    response.body.startsWith('{') ? response.body : /^data: (.+)$/m.exec(response.body)![1]!,
+  );
+}
+
+async function readProfile(token: string) {
+  const response = await callProfile(token);
+  expect(response.statusCode).toBe(200);
+  const result = rpcBody(response).result;
+  expect(result.isError).toBe(false);
+  expect(JSON.parse(result.content[0].text)).toEqual(result.structuredContent);
+  return result.structuredContent as { id: string; email?: string; nickname?: string };
+}
+
 describe('MCP OAuth foundation with PostgreSQL', () => {
   beforeAll(async () => {
     await runMigrations();
@@ -289,6 +323,617 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     await testApp?.app.close();
     await reset();
     await closePgPool();
+  });
+
+  it('keeps MCP profile identity across grants, refresh, metadata changes and membership recreation', async () => {
+    const user = await seedUser(2);
+    const issueWorkspace = async (workspaceId: string) => {
+      const { callback } = await authorize(
+        new Browser(testApp.app, user.refreshCookie),
+        workspaceId,
+      );
+      expect(callback?.statusCode).toBe(303);
+      const code = new URL(callback!.headers.location!).searchParams.get('code')!;
+      const response = await exchange(testApp.app, code);
+      expect(response.statusCode).toBe(200);
+      return response.json() as { access_token: string; refresh_token: string };
+    };
+    const first = await issueWorkspace(user.workspaceIds[0]!);
+    const profile = await readProfile(first.access_token);
+    expect(profile.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect([user.userId, ...user.workspaceIds]).not.toContain(profile.id);
+    expect(profile.nickname).toBe(`${user.userId}@example.test — Workspace 1`);
+    expect((await readProfile(first.access_token)).id).toBe(profile.id);
+    const rotated = await refresh(first.refresh_token);
+    expect(rotated.statusCode).toBe(200);
+    expect((await readProfile(rotated.json().access_token)).id).toBe(profile.id);
+    const reconnected = await issueWorkspace(user.workspaceIds[0]!);
+    expect((await readProfile(reconnected.access_token)).id).toBe(profile.id);
+    expect(
+      (await readProfile((await issueWorkspace(user.workspaceIds[1]!)).access_token)).id,
+    ).not.toBe(profile.id);
+    const other = await seedUser();
+    await withPgClient(async (db) =>
+      db.query(
+        "INSERT INTO workspace_memberships (user_id, workspace_id, role) VALUES ($1, $2, 'member')",
+        [other.userId, user.workspaceIds[0]],
+      ),
+    );
+    const { callback } = await authorize(
+      new Browser(testApp.app, other.refreshCookie),
+      user.workspaceIds[0],
+    );
+    const otherToken = (
+      await exchange(testApp.app, new URL(callback!.headers.location!).searchParams.get('code')!)
+    ).json().access_token;
+    expect((await readProfile(otherToken)).id).not.toBe(profile.id);
+
+    await withPgClient(async (db) => {
+      await db.query('UPDATE users SET email = $2 WHERE id = $1', [
+        user.userId,
+        'renamed@example.test',
+      ]);
+      await db.query('UPDATE workspaces SET name = $2 WHERE id = $1', [
+        user.workspaceIds[0],
+        'Renamed workspace',
+      ]);
+    });
+    expect(await readProfile(reconnected.access_token)).toEqual({
+      id: profile.id,
+      email: 'renamed@example.test',
+      nickname: 'renamed@example.test — Renamed workspace',
+    });
+    await withPgClient(async (db) =>
+      db.query('DELETE FROM workspace_memberships WHERE user_id = $1 AND workspace_id = $2', [
+        user.userId,
+        user.workspaceIds[0],
+      ]),
+    );
+    expect((await callProfile(reconnected.access_token)).statusCode).toBe(401);
+    expect((await refresh(rotated.json().refresh_token)).statusCode).toBe(400);
+    await withPgClient(async (db) => {
+      const stored = await db.query(
+        'SELECT id FROM mcp_profile_identities WHERE user_id = $1 AND workspace_id = $2',
+        [user.userId, user.workspaceIds[0]],
+      );
+      expect(stored.rows).toEqual([{ id: profile.id }]);
+      await db.query(
+        "INSERT INTO workspace_memberships (user_id, workspace_id, role) VALUES ($1, $2, 'owner')",
+        [user.userId, user.workspaceIds[0]],
+      );
+    });
+    const restored = await issueWorkspace(user.workspaceIds[0]!);
+    expect((await readProfile(restored.access_token)).id).toBe(profile.id);
+    await withPgClient(async (db) =>
+      db.query('UPDATE users SET is_active = FALSE WHERE id = $1', [user.userId]),
+    );
+    expect((await callProfile(restored.access_token)).statusCode).toBe(401);
+  });
+
+  it('provisions one immutable MCP identity under concurrent grant binding and rolls back on failure', async () => {
+    const user = await seedUser(2);
+    const grant = (id: string, workspaceId = user.workspaceIds[0]!): BoundOAuthGrant => ({
+      id,
+      userId: user.userId,
+      workspaceId,
+      clientId,
+      resource,
+      scope: 'teaching_context.read',
+    });
+    const grants = Array.from({ length: 8 }, () => grant(randomUUID()));
+    expect(await Promise.all(grants.map((bound) => bindOAuthGrant(bound, 3600)))).toEqual(
+      Array(8).fill(true),
+    );
+    const profiles = await Promise.all(grants.map(getMcpProfile));
+    expect(new Set(profiles.map((profile) => profile?.id)).size).toBe(1);
+    expect(profiles[0]?.id).toBeTruthy();
+    const duplicate = grant(randomUUID());
+    expect(
+      (await Promise.all(Array.from({ length: 4 }, () => bindOAuthGrant(duplicate, 3600)))).filter(
+        Boolean,
+      ),
+    ).toHaveLength(1);
+    expect((await getMcpProfile(duplicate))?.id).toBe(profiles[0]!.id);
+    const failed = grant(randomUUID(), user.workspaceIds[1]);
+    await withPgClient(async (db) => {
+      expect((await db.query('SELECT id FROM mcp_profile_identities')).rows).toEqual([
+        { id: profiles[0]!.id },
+      ]);
+      // Force a real provisioning constraint failure after the grant INSERT.
+      await db.query(
+        `ALTER TABLE mcp_profile_identities ALTER COLUMN id SET DEFAULT '${profiles[0]!.id}'::uuid`,
+      );
+    });
+    try {
+      await expect(bindOAuthGrant(failed, 3600)).rejects.toMatchObject({ code: '23505' });
+      await withPgClient(async (db) => {
+        expect(
+          (await db.query('SELECT id FROM mcp_oauth_grants WHERE id = $1', [failed.id])).rows,
+        ).toEqual([]);
+      });
+    } finally {
+      await withPgClient(async (db) =>
+        db.query(
+          'ALTER TABLE mcp_profile_identities ALTER COLUMN id SET DEFAULT gen_random_uuid()',
+        ),
+      );
+    }
+    await withPgClient(async (db) =>
+      db.query('DELETE FROM workspace_memberships WHERE user_id = $1', [user.userId]),
+    );
+    expect(await bindOAuthGrant(grant(randomUUID()), 3600)).toBe(false);
+    expect(await getMcpProfile(grants[0]!)).toBeNull();
+  });
+
+  it('fails closed for missing MCP profile identity without writing or accepting account selectors', async () => {
+    const user = await seedUser();
+    const token = (await issue(new Browser(testApp.app, user.refreshCookie))).access_token;
+    await withPgClient(async (db) => db.query('DELETE FROM mcp_profile_identities'));
+    const missing = rpcBody(await callProfile(token)).result;
+    expect(missing.isError).toBe(true);
+    expect(missing.structuredContent).toBeUndefined();
+    expect(missing.content).toEqual([{ type: 'text', text: 'Profile identity unavailable.' }]);
+    await withPgClient(async (db) =>
+      expect((await db.query('SELECT id FROM mcp_profile_identities')).rows).toEqual([]),
+    );
+    expect(rpcBody(await callProfile(token, { userId: user.userId })).result.isError).toBe(true);
+    const anonymous = rpcBody(await callProfile()).result;
+    expect(anonymous.isError).toBe(true);
+    expect(anonymous.structuredContent).toBeUndefined();
+    expect(anonymous._meta['mcp/www_authenticate'][0]).toContain(canonicalResourceMetadataUrl);
+    for (const credential of [user.restToken, 'invalid']) {
+      const denied = await callProfile(credential);
+      expect(denied.statusCode).toBe(401);
+      expect(denied.headers['www-authenticate']).toContain('scope="teaching_context.read"');
+    }
+  });
+
+  it.each(['expired', 'missing', 'replaced authorization'] as const)(
+    'refreshes a matching stored token after its browser session is %s',
+    async (sessionState) => {
+      const user = await seedUser();
+      const browser = new Browser(testApp.app, user.refreshCookie);
+      const info = vi.spyOn(logger, 'info');
+      const warn = vi.spyOn(logger, 'warn');
+      try {
+        const issued = await issue(browser);
+        const profile = await readProfile(issued.access_token);
+        const adapter = new McpOAuthAdapter('RefreshToken');
+        const stored = await adapter.find(issued.refresh_token);
+        expect(!!stored).toBe(true);
+        expect(stored?.jti === issued.refresh_token).toBe(true);
+        const issuedDiagnostic = info.mock.calls
+          .map((call) => call[1])
+          .find(
+            (fields) => fields?.event === 'mcp_oauth_diagnostic' && fields?.operation === 'token',
+          );
+        await withPgClient(async (client) => {
+          const result = await client.query<{ matches: boolean; plaintext_absent: boolean }>(
+            `SELECT id_hash = $1 AS matches, NOT (payload ? 'jti') AS plaintext_absent
+             FROM mcp_oauth_artifacts WHERE kind = 'RefreshToken' AND grant_id = $2`,
+            [createHash('sha256').update(issued.refresh_token).digest('hex'), stored!.grantId],
+          );
+          expect(result.rows).toEqual([{ matches: true, plaintext_absent: true }]);
+          if (sessionState === 'expired') {
+            await client.query(
+              "UPDATE mcp_oauth_artifacts SET expires_at = NOW() - INTERVAL '1 second' WHERE kind = 'Session' AND uid = $1",
+              [stored!.sessionUid],
+            );
+          } else if (sessionState === 'missing') {
+            await client.query(
+              "DELETE FROM mcp_oauth_artifacts WHERE kind = 'Session' AND uid = $1",
+              [stored!.sessionUid],
+            );
+          }
+        });
+        if (sessionState === 'replaced authorization') await issue(browser);
+        // The same issued value still resolves through the real PostgreSQL adapter.
+        expect(!!(await adapter.find(issued.refresh_token))).toBe(true);
+        const response = await refresh(issued.refresh_token);
+        const diagnostic = [...info.mock.calls, ...warn.mock.calls]
+          .map((call) => call[1])
+          .find(
+            (fields) =>
+              fields?.event === 'mcp_oauth_diagnostic' && fields?.grantType === 'refresh_token',
+          );
+        expect(diagnostic?.grantRef === issuedDiagnostic?.grantRef).toBe(true);
+        expect(response.statusCode).toBe(200);
+        expect(diagnostic).toMatchObject({
+          refreshConsumed: true,
+          refreshSaved: true,
+          refreshRotated: true,
+          familyRevoked: false,
+        });
+        expect(
+          (await verifyMcpOAuthCredential(
+            testApp.provider,
+            response.json().access_token,
+            oauthConfig,
+          )) !== null,
+        ).toBe(true);
+        expect((await readProfile(response.json().access_token)).id === profile.id).toBe(true);
+        await withPgClient(async (client) => {
+          const identities = await client.query('SELECT id FROM mcp_profile_identities');
+          expect(identities.rows).toEqual([{ id: profile.id }]);
+        });
+        const logs = JSON.stringify([...info.mock.calls, ...warn.mock.calls]);
+        for (const secret of [
+          issued.access_token,
+          issued.refresh_token,
+          response.json().access_token,
+          response.json().refresh_token,
+        ]) {
+          expect(logs.includes(secret)).toBe(false);
+        }
+      } finally {
+        info.mockRestore();
+        warn.mockRestore();
+      }
+    },
+  );
+
+  it.each([
+    'revoked grant',
+    'expired grant',
+    'expired refresh',
+    'removed membership',
+    'inactive user',
+  ] as const)('rejects refresh with %s after the browser session ends', async (invalidState) => {
+    const user = await seedUser();
+    const issued = await issue(new Browser(testApp.app, user.refreshCookie));
+    const stored = await new McpOAuthAdapter('RefreshToken').find(issued.refresh_token);
+    await withPgClient(async (client) => {
+      await client.query("DELETE FROM mcp_oauth_artifacts WHERE kind = 'Session' AND uid = $1", [
+        stored!.sessionUid,
+      ]);
+      switch (invalidState) {
+        case 'revoked grant':
+          await client.query('UPDATE mcp_oauth_grants SET revoked_at = NOW() WHERE id = $1', [
+            stored!.grantId,
+          ]);
+          break;
+        case 'expired grant':
+          await client.query(
+            "UPDATE mcp_oauth_grants SET expires_at = NOW() - INTERVAL '1 second' WHERE id = $1",
+            [stored!.grantId],
+          );
+          break;
+        case 'expired refresh':
+          await client.query(
+            "UPDATE mcp_oauth_artifacts SET expires_at = NOW() - INTERVAL '1 second' WHERE kind = 'RefreshToken' AND grant_id = $1",
+            [stored!.grantId],
+          );
+          break;
+        case 'removed membership':
+          await client.query('DELETE FROM workspace_memberships WHERE user_id = $1', [user.userId]);
+          break;
+        case 'inactive user':
+          await client.query('UPDATE users SET is_active = FALSE WHERE id = $1', [user.userId]);
+          break;
+      }
+    });
+    const response = await refresh(issued.refresh_token);
+    expect(response.statusCode >= 400 && response.statusCode < 500).toBe(true);
+    expect(response.json().access_token === undefined).toBe(true);
+    expect((await callProfile(issued.access_token)).statusCode).toBe(
+      invalidState === 'expired refresh' ? 200 : 401,
+    );
+  });
+
+  it('distinguishes unknown credentials from a matching legacy token rejected by session binding', async () => {
+    const user = await seedUser();
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    try {
+      const issued = await issue(new Browser(testApp.app, user.refreshCookie));
+      const token = await testApp.provider.RefreshToken.find(issued.refresh_token);
+      expect(!!token).toBe(true);
+      // Recreate the persisted binding on credentials issued before the correction.
+      token!.expiresWithSession = true;
+      await token!.save();
+      await withPgClient(async (client) => {
+        await client.query(
+          "UPDATE mcp_oauth_artifacts SET expires_at = NOW() - INTERVAL '1 second' WHERE kind = 'Session' AND uid = $1",
+          [token!.sessionUid],
+        );
+      });
+      const stored = await new McpOAuthAdapter('RefreshToken').find(issued.refresh_token);
+      expect(!!stored && stored.jti === issued.refresh_token && !stored.consumed).toBe(true);
+      expect((await refresh(issued.refresh_token)).statusCode).toBe(400);
+      const known = warn.mock.calls
+        .map((call) => call[1])
+        .find(
+          (fields) =>
+            fields?.event === 'mcp_oauth_diagnostic' && fields?.grantType === 'refresh_token',
+        );
+      expect(known).toMatchObject({
+        oauthError: 'invalid_grant',
+        reason: 'refresh_not_found',
+        refreshConsumed: false,
+        refreshSaved: false,
+        refreshRotated: false,
+        familyRevoked: false,
+      });
+      const issuedDiagnostic = info.mock.calls
+        .map((call) => call[1])
+        .find(
+          (fields) => fields?.event === 'mcp_oauth_diagnostic' && fields?.operation === 'token',
+        );
+      expect(!!known?.grantRef && known.grantRef === issuedDiagnostic?.grantRef).toBe(true);
+      warn.mockClear();
+      const unknown = randomUUID();
+      expect((await refresh(unknown)).statusCode).toBe(400);
+      const missed = warn.mock.calls
+        .map((call) => call[1])
+        .find((fields) => fields?.event === 'mcp_oauth_diagnostic');
+      expect(missed).toMatchObject({
+        oauthError: 'invalid_grant',
+        reason: 'refresh_not_found',
+        refreshConsumed: false,
+        refreshSaved: false,
+        familyRevoked: false,
+      });
+      expect(missed?.grantRef === undefined).toBe(true);
+      expect(!!(await new McpOAuthAdapter('RefreshToken').find(issued.refresh_token))).toBe(true);
+      const logs = JSON.stringify([...info.mock.calls, ...warn.mock.calls]);
+      for (const secret of [issued.access_token, issued.refresh_token, unknown])
+        expect(logs.includes(secret)).toBe(false);
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it('logs sanitized, correlated code/refresh outcomes, replay revocation and new authorization', async () => {
+    const user = await seedUser();
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    try {
+      const browser = new Browser(testApp.app, user.refreshCookie);
+      const { callback } = await authorize(browser);
+      const code = new URL(callback!.headers.location!).searchParams.get('code')!;
+      const issued = (await exchange(testApp.app, code)).json();
+      const rotated = await refresh(issued.refresh_token);
+      expect(rotated.statusCode).toBe(200);
+      expect((await refresh(issued.refresh_token)).statusCode).toBe(400);
+      expect((await refresh(rotated.json().refresh_token)).statusCode).toBe(400);
+      const next = await authorize(browser);
+      const nextCode = new URL(next.callback!.headers.location!).searchParams.get('code')!;
+      const wrongPkce = await exchange(testApp.app, nextCode, 'b'.repeat(43));
+      expect(wrongPkce.statusCode).toBe(400);
+      // Authorization codes are consumed before later validation; use a fresh one.
+      const third = await authorize(browser);
+      const thirdCode = new URL(third.callback!.headers.location!).searchParams.get('code')!;
+      expect((await exchange(testApp.app, thirdCode, verifier, { resource: '' })).statusCode).toBe(
+        400,
+      );
+      const fourth = await authorize(browser);
+      const fourthCode = new URL(fourth.callback!.headers.location!).searchParams.get('code')!;
+      expect(
+        (
+          await exchange(testApp.app, fourthCode, verifier, {
+            resource: 'https://sensitive.test/private',
+          })
+        ).statusCode,
+      ).toBe(400);
+
+      const fields = [...info.mock.calls, ...warn.mock.calls].map((call) => call[1]);
+      const events = fields.filter((field) => field?.event === 'mcp_oauth_diagnostic');
+      const tokens = events.filter((field) => field?.operation === 'token');
+      expect(tokens).toHaveLength(7);
+      expect(tokens).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            grantType: 'authorization_code',
+            status: 200,
+            resourceState: 'expected',
+          }),
+          expect.objectContaining({
+            grantType: 'refresh_token',
+            status: 200,
+            refreshConsumed: true,
+            refreshSaved: true,
+            refreshRotated: true,
+          }),
+          expect.objectContaining({
+            oauthError: 'invalid_grant',
+            reason: 'refresh_replayed',
+            familyRevoked: true,
+          }),
+          expect.objectContaining({ oauthError: 'invalid_grant', reason: 'refresh_not_found' }),
+          expect.objectContaining({
+            oauthError: 'invalid_grant',
+            reason: 'pkce_verification_failed',
+          }),
+          expect.objectContaining({ oauthError: 'invalid_target', resourceState: 'absent' }),
+          expect.objectContaining({ oauthError: 'invalid_target', resourceState: 'unexpected' }),
+        ]),
+      );
+      const family = tokens.find((field) => field?.refreshRotated)?.grantRef;
+      expect(family).toMatch(/^[a-f0-9]{24}$/);
+      expect(tokens.find((field) => field?.reason === 'refresh_replayed')?.grantRef).toBe(family);
+      expect(events.filter((field) => field?.operation === 'authorization')).toHaveLength(4);
+      for (const event of events) {
+        expect(event?.requestId).toMatch(/^[a-f0-9-]{36}$/);
+        expect(event?.timestamp).toMatch(/^\d{4}-\d\d-\d\dT/);
+        expect(event?.durationMs).toBeGreaterThanOrEqual(0);
+        expect(event?.clientClass).toBe('other');
+      }
+      expect(new Set(events.map((event) => event?.requestId)).size).toBe(events.length);
+      const serialized = JSON.stringify([...info.mock.calls, ...warn.mock.calls]);
+      for (const secret of [
+        code,
+        nextCode,
+        thirdCode,
+        fourthCode,
+        issued.access_token,
+        issued.refresh_token,
+        rotated.json().access_token,
+        rotated.json().refresh_token,
+        user.restToken,
+        user.refreshCookie,
+        user.userId,
+        ...user.workspaceIds,
+        'https://sensitive.test/private',
+        verifier,
+        'b'.repeat(43),
+      ]) {
+        expect(serialized).not.toContain(secret);
+      }
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it('logs early protocol rejections and server failures without request or exception contents', async () => {
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    const error = vi.spyOn(logger, 'error');
+    const secret = 'private-credential-header-cookie-body-student-data';
+    let find: ReturnType<typeof vi.spyOn> | undefined;
+    try {
+      const post = (payload: string, contentType = 'application/x-www-form-urlencoded') =>
+        testApp.app.inject({
+          method: 'POST',
+          url: '/oauth/token',
+          headers: {
+            'content-type': contentType,
+            cookie: `private=${secret}`,
+            'x-private': secret,
+          },
+          payload,
+        });
+      expect((await post(`client_id=${clientId}&refresh_token=${secret}`)).statusCode).toBe(400);
+      expect(
+        (
+          await post(
+            `grant_type=refresh_token&grant_type=authorization_code&client_id=${clientId}&refresh_token=${secret}`,
+          )
+        ).statusCode,
+      ).toBe(400);
+      expect(
+        (
+          await post(
+            new URLSearchParams({
+              grant_type: 'refresh_token',
+              client_id: secret,
+              refresh_token: secret,
+            }).toString(),
+          )
+        ).statusCode,
+      ).toBe(401);
+      expect((await post(secret, 'application/json')).statusCode).toBe(400);
+      find = vi
+        .spyOn(testApp.provider.RefreshToken, 'find')
+        .mockRejectedValueOnce(new Error(secret));
+      expect((await refresh(secret)).statusCode).toBe(500);
+      const rejected = warn.mock.calls
+        .map((call) => call[1])
+        .filter((field) => field?.event === 'mcp_oauth_diagnostic');
+      expect(rejected).toHaveLength(5);
+      expect(rejected).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            status: 400,
+            oauthError: 'invalid_request',
+            reason: 'grant_type_missing',
+          }),
+          expect.objectContaining({
+            status: 400,
+            oauthError: 'invalid_request',
+            reason: 'duplicate_grant_type',
+          }),
+          expect.objectContaining({ status: 401, oauthError: 'invalid_client' }),
+          expect.objectContaining({
+            status: 400,
+            oauthError: 'invalid_request',
+            reason: 'unsupported_content_type',
+            resourceState: 'unavailable',
+          }),
+          expect.objectContaining({
+            status: 500,
+            oauthError: 'server_error',
+            reason: 'server_failure',
+          }),
+        ]),
+      );
+      expect(
+        JSON.stringify([...info.mock.calls, ...warn.mock.calls, ...error.mock.calls]),
+      ).not.toContain(secret);
+    } finally {
+      find?.mockRestore();
+      info.mockRestore();
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  });
+
+  it('logs provider-supported endpoint aliases without changing their OAuth responses', async () => {
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    try {
+      for (const path of ['/token', '/TOKEN', '/token/', '/TOKEN/',
+        '/token/revocation', '/TOKEN/REVOCATION', '/token/revocation/']) {
+        const before = warn.mock.calls.length;
+        const response = await testApp.app.inject({
+          method: 'POST', url: `/oauth${path}`,
+          headers: { 'content-type': 'application/x-www-form-urlencoded' }, payload: '',
+        });
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error).toBe('invalid_request');
+        const events = warn.mock.calls.slice(before).map((call) => call[1]);
+        expect(events).toEqual([expect.objectContaining({
+          event: 'mcp_oauth_diagnostic', status: 400, oauthError: 'invalid_request',
+          operation: path.toLowerCase().includes('revocation') ? 'revocation' : 'token',
+        })]);
+      }
+      for (const path of ['/auth', '/AUTH', '/auth/']) {
+        const before = warn.mock.calls.length;
+        const response = await testApp.app.inject({ method: 'GET', url: `/oauth${path}` });
+        expect(response.statusCode).toBe(400);
+        expect(warn.mock.calls.slice(before).map((call) => call[1])).toEqual([
+          expect.objectContaining({ event: 'mcp_oauth_diagnostic', operation: 'authorization', status: 400 }),
+        ]);
+      }
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it('preserves server-failure diagnostics when session persistence fails again during cleanup', async () => {
+    const user = await seedUser();
+    const browser = new Browser(testApp.app, user.refreshCookie);
+    await issue(browser);
+    const secret = 'session-persistence-private-credential-student-payload';
+    const save = vi.spyOn(testApp.provider.Session.adapter, 'upsert').mockRejectedValue(new Error(secret));
+    const info = vi.spyOn(logger, 'info');
+    const warn = vi.spyOn(logger, 'warn');
+    const error = vi.spyOn(logger, 'error');
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await browser.request('GET', authorizeUrl());
+      expect(response.statusCode).toBe(500);
+      expect(save.mock.calls.length).toBeGreaterThanOrEqual(2);
+      const events = warn.mock.calls.map((call) => call[1]).filter((fields) => fields?.event === 'mcp_oauth_diagnostic');
+      expect(events).toEqual([expect.objectContaining({
+        operation: 'authorization', status: 500, oauthError: 'server_error', reason: 'server_failure',
+      })]);
+      expect(JSON.stringify([...info.mock.calls, ...warn.mock.calls, ...error.mock.calls])).not.toContain(secret);
+      expect(error).toHaveBeenCalledWith('MCP OAuth provider request failed', {
+        event: 'mcp_oauth_provider_error', oauthError: 'server_error', reason: 'server_failure',
+      });
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      save.mockRestore();
+      info.mockRestore();
+      warn.mockRestore();
+      error.mockRestore();
+      stderr.mockRestore();
+    }
   });
 
   it('authorizes an existing user with one workspace and exchanges a single-use PKCE code', async () => {
@@ -470,7 +1115,7 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     ).toBeNull();
   });
 
-  it('serves two read-only tools through stateless Streamable HTTP with workspace-bound OAuth', async () => {
+  it('serves three read-only tools through stateless Streamable HTTP with workspace-bound OAuth', async () => {
     const user = await seedUser();
     const otherUser = await seedUser();
     const tokenOne = (await issue(new Browser(testApp.app, user.refreshCookie))).access_token;
@@ -515,15 +1160,49 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     );
     expect(
       wireDiscovery.result.tools.map((tool: { securitySchemes: unknown }) => tool.securitySchemes),
-    ).toEqual(Array(2).fill([{ type: 'oauth2', scopes: ['teaching_context.read'] }]));
+    ).toEqual(Array(3).fill([{ type: 'oauth2', scopes: ['teaching_context.read'] }]));
     expect(rawDiscovery.body).not.toContain('Anna 1');
     const tools = (await client.listTools()).tools;
     expect(tools.map((tool) => tool.name)).toEqual([
       'find_student',
       'get_student_teaching_context',
+      'get_profile',
     ]);
     expect(Object.keys(tools[0]!.inputSchema.properties ?? {})).toEqual(['name']);
     expect(Object.keys(tools[1]!.inputSchema.properties ?? {})).toEqual(['studentId']);
+    expect(Object.keys(tools[1]!.outputSchema!.properties ?? {})).toEqual(['context', 'availability']);
+    expect(tools[1]!.outputSchema!.required).toEqual(['context', 'availability']);
+    const profileTool = wireDiscovery.result.tools[2];
+    expect(profileTool.inputSchema).toEqual({
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    });
+    expect(profileTool._meta['openai/profile']).toBe(true);
+    expect(profileTool.outputSchema).toEqual({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          minLength: 1,
+          pattern: '\\S',
+          description:
+            'Opaque profile identifier, unique within this app and unchanged across token refresh, reconnection, and display-metadata changes. Never reassigned to another profile.',
+        },
+        name: { type: 'string', description: 'Display name for the authenticated profile.' },
+        email: {
+          type: 'string',
+          description: 'Email address for display; not used as the profile identity.',
+        },
+        nickname: {
+          type: 'string',
+          description: 'A useful label that helps users distinguish connected profiles.',
+        },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    });
     for (const tool of tools) {
       expect(tool.annotations).toMatchObject({
         readOnlyHint: true,
@@ -547,6 +1226,10 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
       arguments: { studentId: students[0]!.id },
     });
     expect(context.structuredContent).toMatchObject({
+      availability: {
+        state: 'absent', reason: 'no_established_snapshot',
+        lessonReferenceCount: 0, homeworkReferenceCount: 0,
+      },
       context: {
         contractVersion: 'mcp_teaching_context.v1',
         student: { studentId: students[0]!.id, name: 'Anna 1' },
@@ -603,7 +1286,7 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     ).toBe(true);
 
     const anonymous = await connect();
-    expect((await anonymous.listTools()).tools).toHaveLength(2);
+    expect((await anonymous.listTools()).tools).toHaveLength(3);
     const linking = await anonymous.callTool({ name: 'find_student', arguments: { name: 'Anna' } });
     expect(linking.isError).toBe(true);
     expect(linking._meta?.['mcp/www_authenticate']).toEqual([
@@ -831,6 +1514,111 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
         expect(JSON.stringify(row.payload)).not.toContain(issued.refresh_token);
       }
     });
+  });
+
+  it('cuts OAuth over and back without accepting credentials from the other resource', async () => {
+    const oldConfig = {
+      ...oauthConfig,
+      issuer: 'https://esl-pipeline.run.place/api/oauth',
+      resource: 'https://esl-pipeline.run.place/api/mcp',
+      allowHttpForTests: false,
+    };
+    const newConfig = {
+      ...oldConfig,
+      issuer: 'https://app.eslpipeline.com/api/oauth',
+      resource: 'https://app.eslpipeline.com/api/mcp',
+    };
+    const oldApp = await makeApp(oldConfig);
+    const newApp = await makeApp(newConfig);
+    try {
+      const user = await seedUser();
+      const issueAt = async (target: TestApp, config: McpOAuthConfig) => {
+        const browser = new Browser(target.app, user.refreshCookie, new URL(config.issuer).origin);
+        const { callback } = await authorize(
+          browser,
+          user.workspaceIds[0],
+          config.issuer,
+          config.resource,
+        );
+        expect(callback?.statusCode).toBe(303);
+        const callbackUrl = new URL(callback!.headers.location!);
+        expect(callbackUrl.searchParams.get('iss')).toBe(config.issuer);
+        const response = await browser.request(
+          'POST',
+          `${config.issuer}/token`,
+          new URLSearchParams({
+            grant_type: 'authorization_code',
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            code: callbackUrl.searchParams.get('code')!,
+            code_verifier: verifier,
+            resource: config.resource,
+          }).toString(),
+        );
+        expect(response.statusCode).toBe(200);
+        return response.json() as { access_token: string; refresh_token: string };
+      };
+      const oldTokens = await issueAt(oldApp, oldConfig);
+      const newTokens = await issueAt(newApp, newConfig);
+      const oldGrant = await verifyMcpOAuthCredential(
+        oldApp.provider,
+        oldTokens.access_token,
+        oldConfig,
+      );
+      const newGrant = await verifyMcpOAuthCredential(
+        newApp.provider,
+        newTokens.access_token,
+        newConfig,
+      );
+      expect(oldGrant).not.toBeNull();
+      expect(newGrant).not.toBeNull();
+      expect((await getMcpProfile(oldGrant!))?.id).toBe((await getMcpProfile(newGrant!))?.id);
+      expect(
+        await verifyMcpOAuthCredential(newApp.provider, oldTokens.access_token, newConfig),
+      ).toBeNull();
+      expect(
+        await verifyMcpOAuthCredential(oldApp.provider, newTokens.access_token, oldConfig),
+      ).toBeNull();
+      for (const [target, config, foreignTokens, foreignResource] of [
+        [newApp, newConfig, oldTokens, oldConfig.resource],
+        [oldApp, oldConfig, newTokens, newConfig.resource],
+      ] as const) {
+        const metadata = await target.app.inject('/.well-known/oauth-protected-resource/api/mcp');
+        expect(metadata.json()).toMatchObject({
+          resource: config.resource,
+          authorization_servers: [config.issuer],
+        });
+        const browser = new Browser(target.app, undefined, new URL(config.issuer).origin);
+        for (const requestedResource of [foreignResource, config.resource]) {
+          const response = await browser.request(
+            'POST',
+            `${config.issuer}/token`,
+            new URLSearchParams({
+              grant_type: 'refresh_token',
+              client_id: clientId,
+              refresh_token: foreignTokens.refresh_token,
+              resource: requestedResource,
+            }).toString(),
+          );
+          expect(response.statusCode).toBe(400);
+          expect(response.json()).not.toHaveProperty('access_token');
+        }
+        const rpc = await target.app.inject({
+          method: 'POST',
+          url: '/mcp',
+          headers: {
+            origin: new URL(foreignResource).origin,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          payload: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+        });
+        expect(rpc.statusCode).toBe(403);
+      }
+    } finally {
+      await oldApp.app.close();
+      await newApp.app.close();
+    }
   });
 
   it('accepts ChatGPT CIMD metadata without registering another user identity', async () => {
@@ -1073,12 +1861,16 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     const issued = await issue(new Browser(testApp.app, user.refreshCookie));
     const bound = await verifyMcpOAuthCredential(testApp.provider, issued.access_token, oauthConfig);
     expect(bound).not.toBeNull();
+    const info = vi.spyOn(logger, 'info');
     const response = await testApp.app.inject({
       method: 'POST',
       url: '/oauth/token/revocation',
       headers: { host: '127.0.0.1:3000', 'content-type': 'application/x-www-form-urlencoded' },
       payload: new URLSearchParams({ client_id: clientId, token: issued.refresh_token }).toString(),
     });
+    const diagnostic = info.mock.calls.map((call) => call[1]).find((fields) => fields?.event === 'mcp_oauth_diagnostic');
+    info.mockRestore();
+    expect(diagnostic).toMatchObject({ operation: 'revocation', status: 200, familyRevoked: true });
     expect(response.statusCode).toBe(200);
     const rows = await withPgClient(async (client) => client.query<{ revoked_at: Date | null }>(
       'SELECT revoked_at FROM mcp_oauth_grants WHERE id = $1', [bound!.id],
@@ -1171,14 +1963,14 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
     expect(nginx).toContain('https https;');
     expect(nginx).toContain('proxy_set_header X-Forwarded-Host $host;');
     expect(nginx).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
-    const httpsIssuer = 'https://pipeline.example.test/api/oauth';
-    const httpsResource = 'https://pipeline.example.test/api/mcp';
+    const httpsIssuer = 'https://app.eslpipeline.com/api/oauth';
+    const httpsResource = 'https://app.eslpipeline.com/api/mcp';
     const config: McpOAuthConfig = { ...oauthConfig, issuer: httpsIssuer, resource: httpsResource,
       allowHttpForTests: false };
     const httpsApp = await makeApp(config);
     try {
       const user = await seedUser();
-      const browser = new Browser(httpsApp.app, user.refreshCookie, 'https://pipeline.example.test');
+      const browser = new Browser(httpsApp.app, user.refreshCookie, 'https://app.eslpipeline.com');
       const discovery = await browser.request('GET', `${httpsIssuer}/.well-known/openid-configuration`);
       expect(discovery.statusCode).toBe(200);
       expect(discovery.json()).toMatchObject({
@@ -1193,8 +1985,9 @@ describe('MCP OAuth foundation with PostgreSQL', () => {
       const setCookie = initial.headers['set-cookie'];
       expect(JSON.stringify(setCookie)).toMatch(/; secure(?:;|\")/i);
       expect(browser.cookieHeaderFor(initial.headers.location!)).toContain('mcp_oauth_interaction=');
-      expect(browser.cookieHeaderFor('http://pipeline.example.test/api/oauth/interaction/x'))
+      expect(browser.cookieHeaderFor('http://app.eslpipeline.com/api/oauth/interaction/x'))
         .not.toContain('mcp_oauth_interaction=');
+      expect(browser.cookieHeaderFor('https://esl-pipeline.run.place/api/oauth/interaction/x')).toBe('');
       const consent = await follow(browser, initial);
       expect(consent.statusCode).toBe(200);
     } finally {

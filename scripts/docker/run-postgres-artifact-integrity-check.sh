@@ -9,7 +9,8 @@ BACKUP_S3_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-backup-s3.sh"
 # shellcheck source=scripts/docker/postgres-ops-common.sh
 . "$COMMON_SCRIPT"
 
-ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
+ENV_FILE="$(pg_backup_select_env_file "$ROOT_DIR" "${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}")"
+[[ "$ENV_FILE" != /etc/esl-pipeline/production.env ]] || umask 0077
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck source=/dev/null
@@ -54,7 +55,8 @@ json_escape() {
 
 write_report() {
   local tmp_report="${report_file}.tmp.$$"
-  cat >"$tmp_report" <<EOF
+  local tmp_latest="${latest_report_file}.tmp.$$"
+  cat >"$tmp_report" <<EOF || return 1
 {
   "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "status": "$(json_escape "$status")",
@@ -68,20 +70,27 @@ write_report() {
   "local_dump_path": "$(json_escape "$local_dump_path")"
 }
 EOF
-  mv "$tmp_report" "$report_file"
-  cp "$report_file" "$latest_report_file"
+  mv "$tmp_report" "$report_file" || return 1
   if [[ -n "${PG_BACKUP_ARTIFACT_RESULT_FILE:-}" ]]; then
-    printf '%s\n' "$local_dump_path" >"$PG_BACKUP_ARTIFACT_RESULT_FILE"
+    printf '%s\n' "$local_dump_path" >"$PG_BACKUP_ARTIFACT_RESULT_FILE" || return 1
   fi
+  cp "$report_file" "$tmp_latest" || return 1
+  mv -T "$tmp_latest" "$latest_report_file" || return 1
 }
 
 on_exit() {
   local rc="$1"
+  trap - EXIT
   set +e
   if [[ "$rc" -eq 0 ]]; then
     status="ok"
   fi
-  write_report
+  if ! write_report; then
+    echo "ERROR: evidence publication failed (operation exit=${rc}, status=${status}, result=${result}). Expected report: ${report_file}; latest report was not replaced and must not be treated as this run: ${latest_report_file}" | tee -a "$log_file" >&2
+    rm -f "${report_file}.tmp.$$" "${latest_report_file}.tmp.$$"
+    if [[ "$rc" -eq 0 ]]; then rc=1; fi
+  fi
+  exit "$rc"
 }
 trap 'on_exit "$?"' EXIT
 

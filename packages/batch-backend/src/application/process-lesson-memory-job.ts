@@ -8,6 +8,7 @@ import {
   markLessonMemoryEntryFailed,
   supersedePendingLessonMemoryEntriesForTranscript,
 } from '../domain/lesson-memory-repository.js';
+import { deliverCanonicalPendingLessonMemory } from '../domain/memory-replay-delivery.js';
 import { logger } from '../infrastructure/logger.js';
 import {
   createTranscriptionStorageForUri,
@@ -17,7 +18,9 @@ import {
   type GenerateLessonMemoryEntryDependencies,
   generateLessonMemoryEntry,
 } from './generate-lesson-memory-entry.js';
-import { buildLessonMemoryEnvelope, buildLessonMemoryPrompt } from './lesson-memory-prompt.js';
+import { flattenGenerationRequestEnvelope } from './generation-request-envelope.js';
+import { isHistoricalAssignmentSessionId } from './historical-assignment.js';
+import { buildLessonMemoryEnvelope } from './lesson-memory-prompt.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 import {
   createStudentMemoryGenerationPacer,
@@ -47,6 +50,7 @@ export interface ProcessLessonMemoryJobDependencies {
     getById: typeof getLessonMemoryEntryById;
     markFailed: typeof markLessonMemoryEntryFailed;
     supersedePendingForTranscript: typeof supersedePendingLessonMemoryEntriesForTranscript;
+    admitPending?: (payload: ProcessLessonMemoryJobPayload) => Promise<boolean>;
   };
   snapshots: {
     requestRefresh: typeof requestStudentMemorySnapshotRefresh;
@@ -70,6 +74,8 @@ export async function processLessonMemoryJob(args: {
     getById: getLessonMemoryEntryById,
     markFailed: markLessonMemoryEntryFailed,
     supersedePendingForTranscript: supersedePendingLessonMemoryEntriesForTranscript,
+    admitPending: (payload: ProcessLessonMemoryJobPayload) =>
+      deliverCanonicalPendingLessonMemory(payload, async () => {}),
   };
   const snapshots = args.overrides?.snapshots ?? {
     requestRefresh: requestStudentMemorySnapshotRefresh,
@@ -80,7 +86,7 @@ export async function processLessonMemoryJob(args: {
   const pacer = args.overrides?.pacer ?? createStudentMemoryGenerationPacer(args.config);
 
   const pendingEntry = await lessonMemory.getById(args.payload.pendingEntryId);
-  if (!pendingEntry || pendingEntry.status !== 'pending') {
+  if (!pendingEntry || !['pending', 'ready'].includes(pendingEntry.status)) {
     return;
   }
 
@@ -92,6 +98,28 @@ export async function processLessonMemoryJob(args: {
     return;
   }
 
+  if (
+    pendingEntry.assignmentSessionId &&
+    (await isHistoricalAssignmentSessionId(pendingEntry.assignmentSessionId))
+  )
+    return;
+
+  // Canonical publication and snapshot intent are separate durable commits.
+  // A ready delivery resumes only that handoff, never extraction or its budget.
+  if (pendingEntry.status === 'ready') {
+    await snapshots.requestRefresh({
+      config: args.config,
+      params: {
+        studentId: pendingEntry.studentId,
+        trigger: 'lesson-memory-ready',
+        sourceEntryId: pendingEntry.id,
+      },
+    });
+    return;
+  }
+
+  let published = false;
+  if (lessonMemory.admitPending && !(await lessonMemory.admitPending(args.payload))) return;
   try {
     const storage = storageFactory(args.payload.sourceStorageUri);
     const transcriptText = await storage.getText(args.payload.sourceStorageUri);
@@ -99,15 +127,12 @@ export async function processLessonMemoryJob(args: {
     if (actualHash !== args.payload.sourceContentHash) {
       throw new Error('Confirmed lesson-memory source hash mismatch');
     }
-    const prompt = buildLessonMemoryPrompt({
-      transcriptText,
-      teacherNotes: null,
-    });
     const envelope = buildLessonMemoryEnvelope({
       transcriptId: args.payload.transcriptId,
       transcriptText,
       teacherNotes: null,
     });
+    const prompt = flattenGenerationRequestEnvelope(envelope);
 
     const result = await pacer.run({
       workload: 'lesson_memory',
@@ -133,6 +158,7 @@ export async function processLessonMemoryJob(args: {
         }),
     });
 
+    published = true;
     if (args.payload.lessonId && result.entry.lessonTitle) {
       try {
         await lessons.applyGeneratedTitleIfPlaceholder({
@@ -161,13 +187,14 @@ export async function processLessonMemoryJob(args: {
     if (isStudentMemoryPacingDeferredError(error)) {
       throw error;
     }
-    await markFailureIfFinalAttempt({
-      payload: args.payload,
-      attemptsMade: args.attemptsMade,
-      maxAttempts: args.maxAttempts,
-      lessonMemory,
-      error,
-    });
+    if (!published)
+      await markFailureIfFinalAttempt({
+        payload: args.payload,
+        attemptsMade: args.attemptsMade,
+        maxAttempts: args.maxAttempts,
+        lessonMemory,
+        error,
+      });
     throw error;
   }
 }

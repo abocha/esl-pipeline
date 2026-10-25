@@ -1,5 +1,7 @@
 import type {
+  AssignmentV1,
   ElevenLabsTtsModelId,
+  GeminiTtsModelId,
   GoogleTtsModel,
   InworldTtsModel,
   PipelineLogger,
@@ -9,12 +11,18 @@ import type {
   VoiceProviderErrorCategory,
   VoiceSelectionDiagnostics,
 } from '@esl-pipeline/contracts';
-import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 
 import type { TtsRequestControl } from './errors.js';
 
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
-export type { ElevenLabsTtsModelId, GoogleTtsModel, InworldTtsModel, TtsModelId, TtsProviderId };
+export type {
+  ElevenLabsTtsModelId,
+  GeminiTtsModelId,
+  GoogleTtsModel,
+  InworldTtsModel,
+  TtsModelId,
+  TtsProviderId,
+};
 
 export type TtsCapabilitySnapshotMode = 'static' | 'credentialed' | 'none';
 export type TtsSpeechPlanningMode = 'identity' | 'prompted';
@@ -59,10 +67,11 @@ export interface TtsSelection<
   model: ModelId;
 }
 
-export interface BuildStudyTextInput {
-  context: ParsedMarkdownContext;
-  mdPath?: string;
+export interface AssignmentExecutionInput {
+  assignment: AssignmentV1;
 }
+
+export type BuildStudyTextInput = AssignmentExecutionInput & { mdPath?: string };
 
 export interface SpeechPerformancePlanSegment {
   id: string;
@@ -129,7 +138,7 @@ export interface PreparedStudyTextSynthesis {
   voices: VoiceSelectionSummary[];
   voiceAssignments: Record<string, string>;
   voicePlan?: VoicePlan;
-  enhancementContext?: { assignmentMarkdown: string };
+  enhancementContext?: { assignment: AssignmentV1 };
 }
 
 export interface VoiceAssignmentCapabilities {
@@ -219,11 +228,10 @@ export interface SpeechPerformancePlannerBinding {
   >;
 }
 
-export interface BuildPronunciationShadowSentenceInput {
-  context: ParsedMarkdownContext;
+export type BuildPronunciationShadowSentenceInput = AssignmentExecutionInput & {
   voiceId: string;
   mdPath?: string;
-}
+};
 
 export interface BuildPronunciationTextInput {
   text: string;

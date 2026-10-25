@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { RenderAndPublishOptions } from '@esl-pipeline/html-publisher';
+import type { renderAndPublishAssignmentToS3 } from '@esl-pipeline/html-publisher';
+
+import { assignmentFixture } from './assignment-fixture.js';
+
+type RenderAndPublishAssignmentOptions = Parameters<typeof renderAndPublishAssignmentToS3>[0];
 
 import type { PronunciationAudioArtifactClip } from '../src/runtime/audio-artifacts.js';
 
@@ -36,8 +40,8 @@ vi.mock('@esl-pipeline/html-publisher', async () => {
   );
   return {
     ...actual,
-    renderAndPublishMarkdownToS3: vi.fn(async (options: RenderAndPublishOptions) => {
-      const html = await actual.renderToHtml(options.markdown, options.title, options);
+    renderAndPublishAssignmentToS3: vi.fn(async (options: RenderAndPublishAssignmentOptions) => {
+      const html = await actual.renderAssignmentToHtml(options.assignment, options);
       publishedHtml.push(html);
       return {
         url: 'https://example.com/materials/html/rerun.html',
@@ -68,7 +72,7 @@ vi.mock('../src/runtime/pronunciation-audio.js', () => ({
   })),
 }));
 
-describe('rerun publish student frontmatter', () => {
+describe('rerun publish typed student metadata', () => {
   it('renders the real student name into published HTML during an audio rerun', async () => {
     publishedHtml.length = 0;
 
@@ -97,7 +101,8 @@ describe('rerun publish student frontmatter', () => {
       manifestPathFor(mdPath),
       JSON.stringify(
         {
-          schemaVersion: 3,
+          schemaVersion: 6,
+          assignmentHash: 'original-hash',
           mdHash: 'original-hash',
           publishTarget: 'html',
           audioArtifacts: {
@@ -115,7 +120,10 @@ describe('rerun publish student frontmatter', () => {
       'utf8',
     );
 
+    const assignment = assignmentFixture();
+    assignment.metadata.student = 'Alice Nguyen';
     await rerunAssignment({
+      assignment,
       md: mdPath,
       manifestMd: mdPath,
       regeneratePronunciationChunkAudio: true,
@@ -123,8 +131,8 @@ describe('rerun publish student frontmatter', () => {
     });
 
     expect(publishedHtml).toHaveLength(1);
-    expect(publishedHtml[0]).toContain('<span class="tag">Alice Nguyen</span>');
-    expect(publishedHtml[0]).not.toContain('<span class="tag">student</span>');
+    expect(publishedHtml[0]).toContain('<p class="page-tags">Alice Nguyen ·');
+    expect(publishedHtml[0]).not.toContain('<p class="page-tags">student ·');
   }, 90000);
 
   it('preserves the normal yellow heading theme when a rerun receives the persisted preset', async () => {
@@ -155,7 +163,8 @@ describe('rerun publish student frontmatter', () => {
       manifestPathFor(mdPath),
       JSON.stringify(
         {
-          schemaVersion: 3,
+          schemaVersion: 6,
+          assignmentHash: 'original-hash',
           mdHash: 'original-hash',
           publishTarget: 'html',
           audioArtifacts: {
@@ -173,7 +182,10 @@ describe('rerun publish student frontmatter', () => {
       'utf8',
     );
 
+    const assignment = assignmentFixture();
+    assignment.metadata.student = 'Alice Nguyen';
     await rerunAssignment({
+      assignment,
       md: mdPath,
       manifestMd: mdPath,
       preset: 'b1-default',
@@ -182,7 +194,7 @@ describe('rerun publish student frontmatter', () => {
     });
 
     expect(publishedHtml).toHaveLength(1);
-    expect(publishedHtml[0]).toContain('--theme-h2: #f2c94c;');
-    expect(publishedHtml[0]).toContain('--theme-h3: #9b51e0;');
+    expect(publishedHtml[0]).toContain('--theme-h2:#f2c94c');
+    expect(publishedHtml[0]).toContain('--theme-h3:#9b51e0');
   }, 90000);
 });

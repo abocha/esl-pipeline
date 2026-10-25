@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
-
 import {
   type BuildStudyTextOptions,
   createTtsEngine,
   type TtsProviderAdapter,
   type TtsProviderId,
 } from '../src/index.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 
 function createProvider(
   id: TtsProviderId,
@@ -58,17 +57,21 @@ function createProvider(
 }
 
 describe('DefaultTtsEngine provider selection', () => {
-  it('prefers elevenlabs by default when registered', async () => {
+  it('prefers Gemini by default even when another provider is registered first', async () => {
     delete process.env.ESL_TTS_DEFAULT_PROVIDER;
     delete process.env.ESL_TTS_PROVIDER_ORDER;
 
-    const engine = createTtsEngine([createProvider('elevenlabs'), createProvider('google')]);
+    const engine = createTtsEngine([
+      createProvider('elevenlabs'),
+      createProvider('google'),
+      createProvider('gemini'),
+    ]);
     const result = await engine.buildStudyTextMp3(
-      { context: {} as never },
+      { assignment: {} as never },
       { voiceMapPath: 'voices.yml', outPath: '/tmp' },
     );
 
-    expect(result.provider).toBe('elevenlabs');
+    expect(result.provider).toBe('gemini');
   });
 
   it('falls back to registered provider order when default is unavailable', async () => {
@@ -77,7 +80,7 @@ describe('DefaultTtsEngine provider selection', () => {
 
     const engine = createTtsEngine([createProvider('elevenlabs')]);
     const result = await engine.buildStudyTextMp3(
-      { context: {} as never },
+      { assignment: {} as never },
       { voiceMapPath: 'voices.yml', outPath: '/tmp' },
     );
 
@@ -90,7 +93,7 @@ describe('DefaultTtsEngine provider selection', () => {
 
     const engine = createTtsEngine([createProvider('elevenlabs'), createProvider('google')]);
     const result = await engine.buildStudyTextMp3(
-      { context: {} as never },
+      { assignment: {} as never },
       { voiceMapPath: 'voices.yml', outPath: '/tmp', ttsProvider: 'google' },
     );
 
@@ -107,7 +110,7 @@ describe('DefaultTtsEngine provider selection', () => {
       createProvider('inworld'),
     ]);
     const result = await engine.buildStudyTextMp3(
-      { context: {} as never },
+      { assignment: {} as never },
       { voiceMapPath: 'voices.yml', outPath: '/tmp' },
     );
 
@@ -127,7 +130,7 @@ describe('DefaultTtsEngine provider selection', () => {
     ]);
 
     await engine.buildStudyTextMp3(
-      { context: {} as never },
+      { assignment: {} as never },
       { voiceMapPath: 'voices.yml', outPath: '/tmp' },
     );
 
@@ -139,7 +142,7 @@ describe('DefaultTtsEngine provider selection', () => {
 
     await expect(
       engine.buildStudyTextMp3(
-        { context: {} as never },
+        { assignment: {} as never },
         {
           voiceMapPath: 'voices.yml',
           outPath: '/tmp',
@@ -175,12 +178,29 @@ describe('DefaultTtsEngine provider selection', () => {
         },
       }),
     ]);
-    const context = parseMarkdownContext(
-      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: We need a clearer deadline.\n:::',
-    );
+    const context = createTtsAssignment({
+      metadata: { title: 'Test', student: 'Alex', level: 'B1', topic: 'work' },
+      studyText: {
+        type: 'dialogue',
+        speakers: [
+          {
+            id: 's0',
+            displayName: 'Maya',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+        ],
+        turns: [{ speakerId: 's0', text: 'We need a clearer deadline.' }],
+      },
+      pronunciation: null,
+    });
 
     const prepared = await engine.prepareStudyTextSynthesis(
-      { context },
+      { assignment: context },
       {
         voiceMapPath: 'voices.yml',
         outPath: '/tmp',
@@ -220,12 +240,29 @@ describe('DefaultTtsEngine provider selection', () => {
         },
       }),
     ]);
-    const context = parseMarkdownContext(
-      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\nMaya: Hello.\n:::',
-    );
+    const context = createTtsAssignment({
+      metadata: { title: 'Test', student: 'Alex', level: 'B1', topic: 'work' },
+      studyText: {
+        type: 'dialogue',
+        speakers: [
+          {
+            id: 's0',
+            displayName: 'Maya',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+        ],
+        turns: [{ speakerId: 's0', text: 'Hello.' }],
+      },
+      pronunciation: null,
+    });
 
     const prepared = await engine.prepareStudyTextSynthesis(
-      { context },
+      { assignment: context },
       {
         voiceMapPath: 'voices.yml',
         outPath: '/tmp',
@@ -254,12 +291,29 @@ describe('DefaultTtsEngine provider selection', () => {
         },
       }),
     ]);
-    const context = parseMarkdownContext(
-      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\nMaya: Hello.\n:::',
-    );
+    const context = createTtsAssignment({
+      metadata: { title: 'Test', student: 'Alex', level: 'B1', topic: 'work' },
+      studyText: {
+        type: 'dialogue',
+        speakers: [
+          {
+            id: 's0',
+            displayName: 'Maya',
+            role: 'student',
+            persona: null,
+            voiceDirection: null,
+            gender: 'neutral',
+            age: null,
+            accent: null,
+          },
+        ],
+        turns: [{ speakerId: 's0', text: 'Hello.' }],
+      },
+      pronunciation: null,
+    });
 
     const prepared = await engine.prepareStudyTextSynthesis(
-      { context },
+      { assignment: context },
       {
         voiceMapPath: 'voices.yml',
         outPath: '/tmp',
@@ -274,4 +328,34 @@ describe('DefaultTtsEngine provider selection', () => {
     });
     expect(prepared.voicePlan).not.toHaveProperty('ranker');
   });
+});
+
+it('rejects historical Markdown before invoking a TTS provider', async () => {
+  let calls = 0;
+  const provider = createProvider('elevenlabs', {
+    onStudyTextOptions: () => {
+      calls += 1;
+    },
+  });
+  provider.synthesizeShadowSentence = async () => {
+    calls += 1;
+    return { path: 'unused', hash: 'unused', voiceId: 'unused' };
+  };
+  provider.voice.resolveSpeakerAssignments = async () => {
+    calls += 1;
+    return [];
+  };
+  const engine = createTtsEngine([provider]);
+  const historical = { context: { rawMarkdown: '# History' } } as never;
+  const options = { voiceMapPath: 'unused', outPath: 'unused' };
+  await expect(engine.buildStudyTextMp3(historical, options)).rejects.toThrow(
+    'Historical Markdown assignments are read-only',
+  );
+  await expect(engine.prepareStudyTextSynthesis(historical, options)).rejects.toThrow(
+    'Historical Markdown assignments are read-only',
+  );
+  await expect(engine.buildPronunciationShadowSentenceMp3(historical, options)).rejects.toThrow(
+    'Historical Markdown assignments are read-only',
+  );
+  expect(calls).toBe(0);
 });

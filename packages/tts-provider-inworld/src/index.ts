@@ -4,17 +4,13 @@ import { dirname, resolve } from 'node:path';
 import * as yaml from 'js-yaml';
 
 import {
+  assignmentStudySegments,
   ConfigurationError,
+  type Frontmatter,
   noopLogger,
   type PipelineLogger,
   ValidationError,
 } from '@esl-pipeline/contracts';
-import {
-  extractFrontmatter,
-  extractPronunciationShadowFocus,
-  extractStudyText,
-  type Frontmatter,
-} from '@esl-pipeline/pmd';
 import {
   analyzeValidatedSpeechPlan,
   assertSpeechPlanSafeForSynthesis,
@@ -30,7 +26,10 @@ import {
   hashStudyText,
   INWORLD_TTS_MODELS,
   type InworldTtsModel,
+  normalizePlainSpeechText,
   normalizeStudyTextSpeakerToken,
+  resolveAssignmentMetadata,
+  resolveAssignmentShadowFocus,
   resolveTtsSelection,
   type SpeakerVoiceAssignment,
   type TtsProviderAdapter,
@@ -52,7 +51,7 @@ import {
   type InworldClientFactory,
   type InworldClientProvider,
 } from './client.js';
-import { cleanSpeechText, renderInworldSpeechSegment } from './rendering.js';
+import { renderInworldSpeechSegment } from './rendering.js';
 import {
   classifyInworldTtsProviderError,
   resolveInworldSampleRateHertz,
@@ -103,40 +102,6 @@ function resolveInworldVoiceId(explicit?: string): string {
 
 function cleanSpeakerName(name: string): string {
   return normalizeStudyTextSpeakerToken(name) ?? '';
-}
-
-function parseSpeaker(line: string): { speaker?: string; text: string } {
-  const idx = line.indexOf(':');
-  if (idx > 0 && idx < 40) {
-    return { speaker: cleanSpeakerName(line.slice(0, idx)), text: line.slice(idx + 1).trim() };
-  }
-  return { text: line.trim() };
-}
-
-function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): StudyTextSegment[] {
-  const labelOrder = Array.isArray(frontmatter.speaker_labels)
-    ? frontmatter.speaker_labels
-        .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
-        .filter(Boolean)
-    : [];
-  const nonNarratorFallback = labelOrder.find((label) => label.toLowerCase() !== 'narrator');
-  const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;
-  const segments: StudyTextSegment[] = [];
-  let lastSpeaker: string | undefined;
-
-  for (const raw of lines) {
-    const { speaker, text } = parseSpeaker(raw);
-    let resolvedSpeaker = speaker || undefined;
-    if (!resolvedSpeaker && lastSpeaker) {
-      resolvedSpeaker = lastSpeaker;
-    } else if (!resolvedSpeaker && !lastSpeaker) {
-      resolvedSpeaker = nonNarratorFallback ?? singleFallback;
-    }
-    if (resolvedSpeaker) lastSpeaker = resolvedSpeaker;
-    segments.push({ speaker: resolvedSpeaker, text, raw });
-  }
-
-  return segments;
 }
 
 function collectSpeakers(segments: StudyTextSegment[], frontmatter: Frontmatter): string[] {
@@ -268,11 +233,14 @@ async function resolveAssignmentsForStudyText(
   assignments: InworldSpeakerAssignment[];
   voiceSummaries: BuildStudyTextResult['voices'];
 }> {
-  const frontmatter = extractFrontmatter(input.context);
-  const studyText = extractStudyText(input.context);
-  const segments = resolveStudyTextSegments(studyText.lines, frontmatter);
+  const frontmatter = resolveAssignmentMetadata(input);
+  const segments = assignmentStudySegments(input.assignment).map((s) => ({
+    speaker: s.speaker,
+    text: s.text,
+    raw: `${s.speaker}: ${s.text}`,
+  }));
   const sanitizedSegments = segments
-    .map((segment) => cleanSpeechText(segment.text))
+    .map((segment) => normalizePlainSpeechText(segment.text))
     .filter((segment) => segment.length > 0);
   const normalizedText = sanitizedSegments.join('\n');
   const model = resolveInworldTtsModel(opts.ttsModel);
@@ -383,6 +351,7 @@ export async function buildStudyTextMp3Inworld(
     text: segment.text,
   }));
   const preparedSpeechPlan = {
+    enhancementContext: { assignment: input.assignment },
     selection: { provider: 'inworld' as const, model },
     sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
     segments: sourceSegments,
@@ -601,14 +570,12 @@ export async function buildPronunciationShadowSentenceMp3Inworld(
   dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<BuildPronunciationShadowSentenceResult> {
   const logger = opts.logger ?? noopLogger;
-  const frontmatter = extractFrontmatter(input.context);
-  const shadowFocus = extractPronunciationShadowFocus(input.context);
+  const frontmatter = resolveAssignmentMetadata(input);
+  const shadowFocus = resolveAssignmentShadowFocus(input);
   if (!shadowFocus?.shadowSentence) {
-    throw new ValidationError(
-      'Pronunciation shadow sentence mode not found. Add "**Mode:** shadow_sentence" and a shadow sentence under section C.',
-    );
+    throw new ValidationError('AssignmentV1 pronunciation shadow sentence mode is required.');
   }
-  const sentence = cleanSpeechText(shadowFocus.shadowSentence);
+  const sentence = normalizePlainSpeechText(shadowFocus.shadowSentence);
   if (!sentence) throw new ValidationError('Pronunciation shadow sentence is empty.');
   const model = resolveInworldTtsModel(opts.ttsModel);
   const voiceId = resolveInworldVoiceId(input.voiceId);
@@ -685,7 +652,7 @@ export async function buildPronunciationTextMp3Inworld(
   dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<BuildPronunciationTextResult> {
   const logger = opts.logger ?? noopLogger;
-  const sentence = cleanSpeechText(input.text ?? '');
+  const sentence = normalizePlainSpeechText(input.text ?? '');
   if (!sentence) throw new ValidationError('Pronunciation synthesis text is empty.');
   const frontmatter: Frontmatter = {
     title: input.title?.trim() || 'Pronunciation Practice',
@@ -773,8 +740,12 @@ export async function resolveInworldSpeakerAssignments(
   options: BuildStudyTextOptions,
   dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<VoiceAssignmentResolution> {
-  const frontmatter = extractFrontmatter(input.context);
-  const segments = resolveStudyTextSegments(extractStudyText(input.context).lines, frontmatter);
+  const frontmatter = resolveAssignmentMetadata(input);
+  const segments = assignmentStudySegments(input.assignment).map((s) => ({
+    speaker: s.speaker,
+    text: s.text,
+    raw: `${s.speaker}: ${s.text}`,
+  }));
   const resolution = await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
     collectSpeakers(segments, frontmatter),
     await loadVoiceMap(options.voiceMapPath),

@@ -1,12 +1,21 @@
 import './support/bootstrap-pg-test-env.js';
 
 import { randomUUID } from 'node:crypto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
+
+import { assignmentHash } from '../src/application/assignment-artifact.js';
+import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 
 const { resolveGenerationTargetMock } = vi.hoisted(() => ({
   resolveGenerationTargetMock: vi.fn(),
 }));
-vi.mock('../src/application/generation-policy.js', () => ({
+vi.mock(import('../src/application/generation-policy.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
   resolveGenerationTarget: resolveGenerationTargetMock,
 }));
 
@@ -25,6 +34,12 @@ import { withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 requirePgTestEnv();
+
+const storageDirs: string[] = [];
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  for (const dir of storageDirs.splice(0)) await fs.rm(dir, { recursive: true, force: true });
+});
 
 describe('application/confirm-assignment-session-step', () => {
   beforeEach(() => {
@@ -276,7 +291,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
         [snapshotId, studentId, [confirmedA.lessonMemoryIntent!.entryId]],
       );
       await client.query(
-        `INSERT INTO jobs (id, state, student_id, user_id) VALUES ($1, 'succeeded', $2, $3)`,
+        `INSERT INTO jobs (id, state, student_id, user_id, assignment_artifact, assignment_renderer_version, prompt_package_id, draft_id) VALUES ($1, 'succeeded', $2, $3, '{"format":"assignment_v1","schemaVersion":1,"serializationVersion":1,"workingVersion":1,"contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","storageUri":"local://drafts/content/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"}'::jsonb, 2, uuid_generate_v4(), uuid_generate_v4())`,
         [completedJobId, studentId, userId],
       );
       await client.query(
@@ -414,7 +429,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
     const replay = await confirmAssignmentSessionStepPersistence({
       id: student.id,
       userId,
-      request: sourceRequest,
+      request: { ...sourceRequest, expectedRevision: confirmedA.session.revision },
       lessonMemory: memory,
     });
     expect(replay.session.revision).toBe(3);
@@ -444,7 +459,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
       confirmAssignmentSessionStepPersistence({
         id: student.id,
         userId,
-        request: sourceRequest,
+        request: { ...sourceRequest, expectedRevision: confirmedA.session.revision },
         lessonMemory: memory,
       }),
     ).rejects.toMatchObject({ code: 'ARTIFACT_WORKING_CONFLICT' });
@@ -818,7 +833,23 @@ describe('application/confirm-assignment-session-step transactional persistence'
       },
       lessonMemory: memory,
     });
+    const assignment = assignmentFixture();
+    assignment.metadata.student = 'Alpha';
+    const contentHash = assignmentHash(assignment);
+    const storageUri = `local://drafts/content/${contentHash}.json`;
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl7-create-confirm-'));
+    storageDirs.push(dir);
+    vi.stubEnv('FILESYSTEM_UPLOAD_DIR', dir);
+    vi.stubEnv('STORAGE_PROVIDER', 'filesystem');
+    await fs.mkdir(path.join(dir, 'drafts/content'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, `drafts/content/${contentHash}.json`),
+      serializeAssignmentV1(assignment),
+    );
+    const requestEnvelope = promptPackageFixture().requestEnvelope;
+    requestEnvelope.assignmentContext!.studentName = 'Alpha';
     const prompt = await insertPromptPackage({
+      requestEnvelope,
       recordingId,
       transcriptId,
       studentId,
@@ -834,9 +865,10 @@ describe('application/confirm-assignment-session-step transactional persistence'
       promptPackageId: prompt.id,
       studentId,
       lessonId: null,
-      storageUri: 's3://drafts/content/a.md',
+      storageUri,
+      format: 'assignment_v1',
       workingVersion: 1,
-      contentHash: 'b'.repeat(64),
+      contentHash,
       createdBy: userId,
     });
     const recoveredLineage = await updateAssignmentSessionRecovery({
@@ -846,6 +878,7 @@ describe('application/confirm-assignment-session-step transactional persistence'
       patch: { promptPackageId: prompt.id, draftId: draft.id },
     });
     const replacementPrompt = await insertPromptPackage({
+      requestEnvelope,
       recordingId,
       transcriptId,
       studentId,
@@ -886,8 +919,8 @@ describe('application/confirm-assignment-session-step transactional persistence'
             promptPackageId: prompt.id,
             draftId: draft.id,
             draftWorkingVersion: 1,
-            draftStorageUri: 's3://drafts/content/a.md',
-            draftHash: 'b'.repeat(64),
+            draftStorageUri: storageUri,
+            draftHash: contentHash,
           },
         },
       },

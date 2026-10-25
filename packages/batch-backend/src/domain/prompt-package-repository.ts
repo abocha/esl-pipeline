@@ -226,7 +226,7 @@ export async function isPromptPackageSourceCanonical(id: string): Promise<boolea
            SELECT 1 FROM assignment_source_bindings b
            JOIN assignment_sessions s ON s.id = b.assignment_session_id
            WHERE b.assignment_session_id = p.assignment_session_id
-             AND b.binding_role = 'confirmed'
+             AND b.binding_role = 'confirmed' AND s.homework_intent = 'create'
              AND b.recording_id = p.recording_id
              AND b.transcript_id = p.transcript_id
              AND s.confirmed_snapshot #>> '{source,sourceIdentityKind}' = b.source_identity_kind
@@ -275,4 +275,20 @@ function mapRowToPromptPackage(row: PromptPackageRow): PromptPackageRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+export async function isPromptPackageAccessibleForUser(
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  return withPgClient(async (client) => {
+    const result = await client.query(
+      `SELECT 1 FROM prompt_packages pp
+      JOIN recordings r ON r.id = pp.recording_id
+      JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id
+      WHERE pp.id = $1 AND wm.user_id = $2`,
+      [id, userId],
+    );
+    return Boolean(result.rows[0]);
+  });
 }

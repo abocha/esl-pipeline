@@ -8,20 +8,23 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import * as yaml from 'js-yaml';
 
 import {
+  assignmentStudySegments,
   ConfigurationError,
+  type Frontmatter,
   InfrastructureError,
   noopLogger,
   ValidationError,
   type VoiceProviderErrorCategory,
 } from '@esl-pipeline/contracts';
-import {
-  extractFrontmatter,
-  extractPronunciationShadowFocus,
-  extractStudyText,
-  type Frontmatter,
-} from '@esl-pipeline/pmd';
 import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
-import { type ElevenLabsTtsModelId, resolveTtsSelection } from '@esl-pipeline/tts-core';
+import {
+  type ElevenLabsTtsModelId,
+  normalizePlainSpeechText,
+  resolveAssignmentMetadata,
+  resolveAssignmentShadowFocus,
+  resolveAssignmentStudyText,
+  resolveTtsSelection,
+} from '@esl-pipeline/tts-core';
 
 import { loadVoicesCatalog } from './assign.js';
 import { estimateDurationFromFileSize } from './audioDuration.js';
@@ -164,7 +167,7 @@ function selectTtsStrategy(
   if (uniqueSpeakers >= 2) return 'dialogue';
 
   const statsText = segments
-    .map((s) => cleanSpeechText(s.text))
+    .map((s) => normalizePlainSpeechText(s.text))
     .map((t) => (t.length > 0 ? t : '\n\n'))
     .join('\n')
     .replaceAll(/\n{3,}/g, '\n\n')
@@ -306,7 +309,7 @@ function toDialogueInputs(
           `Available speakers: ${[...voiceAssignments.keys()].join(', ') || '(none)'}`,
       );
     }
-    const sanitizedText = cleanSpeechText(seg.text);
+    const sanitizedText = normalizePlainSpeechText(seg.text);
     if (!sanitizedText) continue;
     inputs.push({ text: sanitizedText, voiceId });
   }
@@ -382,11 +385,15 @@ export async function buildStudyTextMp3(
 ): Promise<BuildStudyTextResult> {
   const logger = opts.logger ?? noopLogger;
   resolveTtsProvider(opts.ttsProvider);
-  const frontmatter = extractFrontmatter(input.context);
-  const studyText = extractStudyText(input.context);
-  const segments = resolveStudyTextSegments(studyText.lines, frontmatter);
+  const frontmatter = resolveAssignmentMetadata(input);
+  const studyText = resolveAssignmentStudyText(input);
+  const segments = assignmentStudySegments(input.assignment).map((s) => ({
+    speaker: s.speaker,
+    text: s.text,
+    raw: `${s.speaker}: ${s.text}`,
+  }));
   const sanitizedSegments = segments
-    .map((segment) => cleanSpeechText(segment.text))
+    .map((segment) => normalizePlainSpeechText(segment.text))
     .filter((segment) => segment.length > 0);
   const normalizedText = sanitizedSegments.join('\n');
 
@@ -615,7 +622,7 @@ export async function buildStudyTextMp3(
       voiceId = fallbackVoiceId ?? catalog.voices[0]?.id;
     }
 
-    const speechText = cleanSpeechText(segment.text);
+    const speechText = normalizePlainSpeechText(segment.text);
     if (!speechText) {
       pendingParagraphBreak = true;
       continue;
@@ -743,14 +750,14 @@ export async function buildPronunciationShadowSentenceMp3(
     throw new ValidationError('voiceId is required for pronunciation shadow sentence synthesis.');
   }
   const logger = opts.logger ?? noopLogger;
-  const frontmatter = extractFrontmatter(input.context);
-  const shadowFocus = extractPronunciationShadowFocus(input.context);
+  const frontmatter = resolveAssignmentMetadata(input);
+  const shadowFocus = resolveAssignmentShadowFocus(input);
   if (!shadowFocus) {
     throw new ValidationError(
       'Pronunciation shadow sentence mode not found. Add "**Mode:** shadow_sentence" under section C.',
     );
   }
-  const sentence = cleanSpeechText(shadowFocus.shadowSentence ?? '');
+  const sentence = normalizePlainSpeechText(shadowFocus.shadowSentence ?? '');
   if (!sentence) {
     throw new ValidationError(
       'Pronunciation shadow sentence is empty. Add "**Shadow sentence:** <sentence>" under section C.',
@@ -845,7 +852,7 @@ export async function buildPronunciationTextMp3(
   }
 
   const logger = opts.logger ?? noopLogger;
-  const sentence = cleanSpeechText(input.text ?? '');
+  const sentence = normalizePlainSpeechText(input.text ?? '');
   if (!sentence) {
     throw new ValidationError('Pronunciation synthesis text is empty.');
   }
@@ -941,41 +948,8 @@ export async function buildPronunciationTextMp3(
   };
 }
 
-export function parseSpeaker(line: string): { speaker?: string; text: string } {
-  const idx = line.indexOf(':');
-  if (idx > 0 && idx < 40) {
-    return { speaker: line.slice(0, idx).trim(), text: line.slice(idx + 1).trim() };
-  }
-  return { text: line.trim() };
-}
-
-const MARKDOWN_STRIPPERS: [RegExp, string][] = [
-  [/\r?\n/g, ' '], // single line
-  [/^\s*[-*+]\s+/, ''], // bullet prefixes
-  [/^\s*\d+[.)]\s+/, ''], // numbered lists
-  [/\*\*(.+?)\*\*/g, '$1'],
-  [/__(.+?)__/g, '$1'],
-  [/\*(.+?)\*/g, '$1'],
-  [/_([^_]+)_/g, '$1'],
-  [/~~(.+?)~~/g, '$1'],
-  [/`{1,3}([^`]+)`{1,3}/g, '$1'],
-  [/!\[(.*?)\]\([^)]*\)/g, '$1'], // image alt text
-  [/\[(.+?)\]\((.+?)\)/g, '$1'], // links
-  [/<[^>]+>/g, ''], // html tags
-] as const;
-
-export function cleanSpeechText(text: string): string {
-  let sanitized = text;
-  for (const [pattern, replacement] of MARKDOWN_STRIPPERS) {
-    sanitized = sanitized.replace(pattern, replacement);
-  }
-  sanitized = sanitized.replaceAll(/[*_`~>#]/g, ''); // stray md chars
-  sanitized = sanitized.replaceAll(/\s+/g, ' ').trim();
-  return sanitized;
-}
-
 function cleanSpeakerName(name: string): string {
-  return cleanSpeechText(name);
+  return normalizePlainSpeechText(name);
 }
 
 interface StudyTextSegment {
@@ -1027,34 +1001,6 @@ function collectSpeakers(segments: StudyTextSegment[], frontmatter: Frontmatter)
   }
 
   return ordered;
-}
-
-function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): StudyTextSegment[] {
-  const segments: StudyTextSegment[] = [];
-  const labelOrder = Array.isArray(frontmatter.speaker_labels)
-    ? frontmatter.speaker_labels
-        .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
-        .filter(Boolean)
-    : [];
-  const nonNarratorFallback = labelOrder.find((label) => label.toLowerCase() !== 'narrator');
-  const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;
-  let lastSpeaker: string | undefined;
-
-  for (const raw of lines) {
-    const { speaker, text } = parseSpeaker(raw);
-    let resolvedSpeaker = speaker ? cleanSpeakerName(speaker) : undefined;
-    if (!resolvedSpeaker && lastSpeaker) {
-      resolvedSpeaker = lastSpeaker;
-    } else if (!resolvedSpeaker && !lastSpeaker) {
-      resolvedSpeaker = nonNarratorFallback ?? singleFallback;
-    }
-    if (resolvedSpeaker) {
-      lastSpeaker = resolvedSpeaker;
-    }
-    segments.push({ speaker: resolvedSpeaker, text, raw });
-  }
-
-  return segments;
 }
 
 async function synthesizeLineWithRetry(

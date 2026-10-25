@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 
+import {
+  type AssignmentFormat,
+  type AssignmentValidationContext,
+  parseAssignmentV1,
+  serializeAssignmentV1,
+} from '@esl-pipeline/contracts';
+
 import type {
+  AssignmentValidationResponse,
   DraftResponse,
   GenerateDraftRequest,
   GenerateDraftResponse,
   JobOptionsResponse,
   JobStatus,
-  MarkdownValidationResponse,
   PromptPackageResponse,
 } from '../../utils/api';
 import {
@@ -21,7 +28,6 @@ import {
   materializeDraft,
   renderHtmlPreview,
   updateDraft,
-  validateMarkdown,
 } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/clipboard';
 import {
@@ -33,7 +39,7 @@ import {
 } from './MinimalAssignment.logic';
 import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-window';
 
-type UiTtsProvider = 'elevenlabs' | 'google' | 'inworld';
+type UiTtsProvider = 'elevenlabs' | 'google' | 'inworld' | 'gemini';
 type UiPublishTtsStrategy = 'auto' | 'dialogue' | 'tts';
 type TranscriptUiStatus = 'idle' | 'loading' | 'processing' | 'ready' | 'failed';
 type PronunciationMode =
@@ -99,27 +105,15 @@ function formatAbsoluteTimestamp(timestamp: string): string {
   return parsed.toLocaleString();
 }
 
-function detectPronunciationModeFromDraft(text: string): PronunciationMode | null {
-  const match = text.match(/\*\*Mode:\*\*\s*([a-z_]+)/i);
-  if (!match) return null;
-  const mode = match[1]?.trim().toLowerCase();
-  return mode === 'shadow_sentence' ||
-    mode === 'connected_speech' ||
-    mode === 'intonation' ||
-    mode === 'rhythm_chunking' ||
-    mode === 'sentence_stress' ||
-    mode === 'minimal_pair'
-    ? mode
-    : null;
-}
-
-const DEFAULT_TTS_PROVIDER: UiTtsProvider = 'inworld';
+const DEFAULT_TTS_PROVIDER: UiTtsProvider = 'gemini';
 const DEFAULT_TTS_STRATEGY: UiPublishTtsStrategy = 'auto';
 const DEFAULT_PUBLISH_TARGET: MinimalPublishTarget = 'html';
 const DRAFT_AUTOSAVE_DEBOUNCE_MS = 1500;
 const DRAFT_AUTOSAVE_MIN_INTERVAL_MS = 5000;
 
 export interface AuthoringHydrationSnapshot {
+  draftFormat?: AssignmentFormat;
+  generatedValidationContext?: AssignmentValidationContext;
   publishTarget: MinimalPublishTarget;
   selectedTtsProvider: UiTtsProvider;
   selectedTtsStrategy: UiPublishTtsStrategy;
@@ -137,11 +131,13 @@ export interface AuthoringHydrationSnapshot {
   previewHtml: string | null;
   previewError: string | null;
   lastPreviewedDraftHash: string | null;
-  validation: MarkdownValidationResponse | null;
+  validation: AssignmentValidationResponse | null;
   validationError: string | null;
 }
 
 export interface AuthoringState extends AuthoringHydrationSnapshot {
+  savingDraft: boolean;
+  ttsSelectionExplicit: boolean;
   promptLoading: boolean;
   promptCopyState: 'idle' | 'copied' | 'error';
   generatingDraft: boolean;
@@ -181,6 +177,8 @@ export type AuthoringAction =
       type: 'draft_generate_succeeded';
       payload: {
         draftText: string;
+        draftFormat?: AssignmentFormat;
+        generatedValidationContext?: AssignmentValidationContext;
         quota: GenerateDraftResponse['quota'] | null;
         runtimeSelection: { provider: string; model: string };
         successMessage: string;
@@ -195,7 +193,7 @@ export type AuthoringAction =
     }
   | { type: 'draft_save_failed'; payload: { error: string } }
   | { type: 'validation_started' }
-  | { type: 'validation_succeeded'; payload: { validation: MarkdownValidationResponse } }
+  | { type: 'validation_succeeded'; payload: { validation: AssignmentValidationResponse } }
   | { type: 'validation_failed'; payload: { error: string } }
   | { type: 'validation_cleared' }
   | { type: 'preview_started' }
@@ -214,6 +212,7 @@ export type AuthoringAction =
           | 'selectedTtsProvider'
           | 'selectedTtsStrategy'
           | 'selectedTtsModel'
+          | 'ttsSelectionExplicit'
           | 'selectedPreset'
           | 'selectedGenerationProvider'
           | 'selectedGenerationModel'
@@ -236,6 +235,7 @@ function createInitialAuthoringState(
     promptPackage: null,
     promptText: '',
     promptLoading: false,
+    savingDraft: false,
     promptError: null,
     promptCopyState: 'idle',
     draft: null,
@@ -258,6 +258,7 @@ function createInitialAuthoringState(
     lastPreviewedDraftHash: null,
     publishTarget: overrides.publishTarget ?? DEFAULT_PUBLISH_TARGET,
     selectedTtsProvider: overrides.selectedTtsProvider ?? DEFAULT_TTS_PROVIDER,
+    ttsSelectionExplicit: false,
     selectedTtsStrategy: DEFAULT_TTS_STRATEGY,
     selectedTtsModel: '',
     selectedPreset: overrides.selectedPreset ?? '',
@@ -281,6 +282,7 @@ function authoringReducer(state: AuthoringState, action: AuthoringAction): Autho
           selectedTtsProvider: action.payload.selectedTtsProvider,
         }),
         ...action.payload,
+        ttsSelectionExplicit: true,
       };
     case 'prompt_generate_started':
       return {
@@ -325,6 +327,9 @@ function authoringReducer(state: AuthoringState, action: AuthoringAction): Autho
       return {
         ...state,
         draftText: action.payload.value,
+        draftError: null,
+        validation: null,
+        validationError: null,
       };
     }
     case 'draft_generate_started':
@@ -340,6 +345,8 @@ function authoringReducer(state: AuthoringState, action: AuthoringAction): Autho
         generatingDraft: false,
         draft: null,
         draftText: action.payload.draftText,
+        draftFormat: action.payload.draftFormat,
+        generatedValidationContext: action.payload.generatedValidationContext,
         draftError: null,
         validation: null,
         validationError: null,
@@ -363,11 +370,13 @@ function authoringReducer(state: AuthoringState, action: AuthoringAction): Autho
     case 'draft_save_started':
       return {
         ...state,
+        savingDraft: true,
         draftError: null,
       };
     case 'draft_save_succeeded':
       return {
         ...state,
+        savingDraft: false,
         draft: action.payload.draft,
         draftText: action.payload.preserveCurrentText
           ? state.draftText
@@ -377,6 +386,7 @@ function authoringReducer(state: AuthoringState, action: AuthoringAction): Autho
     case 'draft_save_failed':
       return {
         ...state,
+        savingDraft: false,
         draftError: action.payload.error,
       };
     case 'validation_started':
@@ -521,6 +531,7 @@ interface UseMinimalAssignmentAuthoringControllerParams {
     elevenlabs: readonly string[];
     google: readonly string[];
     inworld: readonly string[];
+    gemini?: readonly string[];
   };
   elevenlabsModelOptions: readonly string[];
   elevenlabsStandardModelOptions: readonly string[];
@@ -532,10 +543,18 @@ interface UseMinimalAssignmentAuthoringControllerParams {
 }
 
 export interface AuthoringController extends AuthoringState {
+  editorSessionKey: number;
+  editorValidationContext: AssignmentValidationContext | undefined;
+  reconcileDraft: (choice: 'local' | 'saved') => Promise<void>;
   generationProviders: readonly string[];
   generationModelsForProvider: GenerationModelOption[];
   promptReady: boolean;
   draftDirty: boolean;
+  draftValid: boolean;
+  structuredDraft: boolean;
+  assignmentValidationError: string | null;
+  isCurrentDraftValid: () => boolean;
+  isCurrentDraftSaved: (draft: DraftResponse | null | undefined) => boolean;
   draftRecoveryConflict: boolean;
   draftPreviewGate: ReturnType<typeof getDraftPreviewGate>;
   previewReadyForCurrentDraft: boolean;
@@ -569,7 +588,7 @@ export interface AuthoringController extends AuthoringState {
     forceFreshPrompt?: boolean;
   }) => Promise<GenerateDraftResponse | null>;
   generateDraft: () => Promise<GenerateDraftResponse | null>;
-  runValidation: () => Promise<MarkdownValidationResponse>;
+  runValidation: () => Promise<AssignmentValidationResponse>;
   saveDraft: () => Promise<DraftResponse | null>;
   flushDraftAutosave: () => Promise<DraftResponse | null>;
   refreshDraftPreservingLocal: (options?: { forcePreserveLocal?: boolean }) => Promise<void>;
@@ -617,6 +636,10 @@ export function useMinimalAssignmentAuthoringController({
   const draftAutosaveInFlightPromiseRef = useRef<Promise<DraftResponse | null> | null>(null);
   const draftAutosavePendingRef = useRef(false);
   const draftConflictTextRef = useRef<string | null>(null);
+  const draftLocalEditRevisionRef = useRef(0);
+  const acknowledgedDraftRef = useRef<DraftResponse | null>(null);
+  const draftReconciliationInFlightRef = useRef(false);
+  const [editorSessionKey, resetEditorSession] = useReducer((value: number) => value + 1, 0);
   const [draftAutosaveRescheduleToken, requestDraftAutosaveReschedule] = useReducer(
     (value: number) => value + 1,
     0,
@@ -666,32 +689,114 @@ export function useMinimalAssignmentAuthoringController({
   const publishModelSelectionDisabled =
     state.selectedTtsProvider === 'elevenlabs' && state.selectedTtsStrategy === 'auto';
   const promptReady = Boolean(state.promptPackage?.id && state.promptText.trim().length > 0);
+  const structuredDraft = state.draft
+    ? state.draft.format === 'assignment_v1'
+    : state.draftFormat === 'assignment_v1' ||
+      !state.promptPackage ||
+      state.promptPackage.requestEnvelope?.promptVersion === 'assignment_v1';
+  const validationContext =
+    state.draft?.validationContext ??
+    state.promptPackage?.requestEnvelope?.assignmentContext ??
+    state.generatedValidationContext;
+  const editableDraftAvailable = Boolean(
+    state.draft || state.draftFormat || state.draftText.trim(),
+  );
+  const typedDraft = useMemo(() => {
+    if (!structuredDraft)
+      return {
+        assignment: null,
+        canonical: state.draftText.trim(),
+        error: 'Historical Markdown assignments are read-only.',
+      };
+    if (state.generatingDraft || !editableDraftAvailable)
+      return { assignment: null, canonical: null, error: null };
+    try {
+      if (!validationContext)
+        throw new Error('Assignment validation context is missing. Reload the saved draft.');
+      const assignment = parseAssignmentV1(state.draftText, validationContext);
+      return { assignment, canonical: serializeAssignmentV1(assignment), error: null };
+    } catch (error) {
+      return {
+        assignment: null,
+        canonical: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }, [
+    structuredDraft,
+    state.generatingDraft,
+    editableDraftAvailable,
+    state.draftText,
+    validationContext,
+  ]);
+  const draftValid = Boolean(typedDraft.assignment);
+  const isCurrentDraftValid = useCallback(() => {
+    if (!structuredDraft) return false;
+    if (!validationContext) return false;
+    try {
+      parseAssignmentV1(draftTextRef.current, validationContext);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [structuredDraft, validationContext]);
+  const isCurrentDraftSaved = useCallback(
+    (draft: DraftResponse | null | undefined) => {
+      if (!structuredDraft) return false;
+      if (!draft?.assignment || !validationContext) return false;
+      try {
+        return (
+          serializeAssignmentV1(parseAssignmentV1(draftTextRef.current, validationContext)) ===
+          serializeAssignmentV1(draft.assignment)
+        );
+      } catch {
+        return false;
+      }
+    },
+    [structuredDraft, validationContext],
+  );
   const draftDirty = useMemo(() => {
-    const original = state.draft?.text ?? '';
     const lineageChanged = Boolean(
       state.draft?.id &&
         state.promptPackage?.id &&
         state.draft.promptPackageId !== state.promptPackage.id,
     );
-    return lineageChanged || state.draftText.trim() !== original.trim();
+    if (structuredDraft) {
+      if (!state.draftText.trim() && !state.draft?.id) return false;
+      if (!typedDraft.assignment) return true;
+      if (!state.draft?.assignment) return true;
+      return (
+        lineageChanged || typedDraft.canonical !== serializeAssignmentV1(state.draft.assignment)
+      );
+    }
+    return false;
   }, [
+    structuredDraft,
+    typedDraft,
+    state.draft?.assignment,
     state.draft?.id,
     state.draft?.promptPackageId,
-    state.draft?.text,
     state.draftText,
     state.promptPackage?.id,
   ]);
   const draftPreviewGate = useMemo(
     () =>
       getDraftPreviewGate({
-        draftText: state.draftText,
-        previewHtml: state.previewHtml,
+        draftText: typedDraft.canonical ?? state.draftText,
+        previewHtml: draftValid ? state.previewHtml : null,
         lastPreviewedDraftHash: state.lastPreviewedDraftHash,
       }),
-    [state.draftText, state.lastPreviewedDraftHash, state.previewHtml],
+    [
+      typedDraft.canonical,
+      draftValid,
+      state.draftText,
+      state.lastPreviewedDraftHash,
+      state.previewHtml,
+    ],
   );
   const previewReadyForCurrentDraft = draftPreviewGate.previewReady;
-  const canPublish = promptReady && state.draftText.trim().length > 0 && !state.publishing;
+  const canPublish =
+    draftValid && promptReady && state.draftText.trim().length > 0 && !state.publishing;
   const canPublishWithPreview = canPublish && previewReadyForCurrentDraft;
   const activeGenerationQuota =
     state.generationRuntimeQuotaSnapshot ?? generationOptions?.quota ?? null;
@@ -753,6 +858,11 @@ export function useMinimalAssignmentAuthoringController({
   }, []);
 
   const invalidateDraftPersistence = useCallback(() => {
+    resetEditorSession();
+    draftConflictTextRef.current = null;
+    acknowledgedDraftRef.current = null;
+    draftReconciliationInFlightRef.current = false;
+    draftLocalEditRevisionRef.current += 1;
     authoringPersistenceVersionRef.current += 1;
     draftAutosaveInFlightRef.current = false;
     draftAutosaveInFlightPromiseRef.current = null;
@@ -787,6 +897,7 @@ export function useMinimalAssignmentAuthoringController({
   const applyHydrationSnapshot = useCallback(
     (snapshot: AuthoringHydrationSnapshot) => {
       invalidateDraftPersistence();
+      acknowledgedDraftRef.current = snapshot.draft;
       if (promptCopyResetTimeoutRef.current) {
         clearTimeout(promptCopyResetTimeoutRef.current);
         promptCopyResetTimeoutRef.current = null;
@@ -801,6 +912,8 @@ export function useMinimalAssignmentAuthoringController({
   }, []);
 
   const setDraftText = useCallback((value: string) => {
+    draftLocalEditRevisionRef.current += 1;
+    draftTextRef.current = value;
     dispatch({ type: 'draft_text_changed', payload: { value } });
   }, []);
 
@@ -817,7 +930,10 @@ export function useMinimalAssignmentAuthoringController({
   }, []);
 
   const setSelectedTtsProvider = useCallback((value: UiTtsProvider) => {
-    dispatch({ type: 'publish_config_updated', payload: { selectedTtsProvider: value } });
+    dispatch({
+      type: 'publish_config_updated',
+      payload: { selectedTtsProvider: value, ttsSelectionExplicit: true },
+    });
   }, []);
 
   const setSelectedTtsStrategy = useCallback((value: UiPublishTtsStrategy) => {
@@ -825,7 +941,10 @@ export function useMinimalAssignmentAuthoringController({
   }, []);
 
   const setSelectedTtsModel = useCallback((value: string) => {
-    dispatch({ type: 'publish_config_updated', payload: { selectedTtsModel: value } });
+    dispatch({
+      type: 'publish_config_updated',
+      payload: { selectedTtsModel: value, ttsSelectionExplicit: true },
+    });
   }, []);
 
   const setSelectedPreset = useCallback((value: string) => {
@@ -840,61 +959,72 @@ export function useMinimalAssignmentAuthoringController({
     dispatch({ type: 'prompt_error_set', payload: { error: value } });
   }, []);
 
-  const runValidation = useCallback(async (): Promise<MarkdownValidationResponse> => {
-    if (!state.draftText.trim()) {
-      dispatch({ type: 'validation_cleared' });
-      return { ok: false, errors: [], warnings: [] } as MarkdownValidationResponse;
-    }
-    dispatch({ type: 'validation_started' });
-    try {
-      const selectedValidationPreset =
-        state.selectedPreset && presetOptionIds.includes(state.selectedPreset)
-          ? state.selectedPreset
-          : null;
-      const response = await validateMarkdown(
-        state.draftText.trim(),
-        true,
-        learningPresetCatalogEnabled ? { learningPresetId: selectedValidationPreset } : undefined,
-      );
+  const runValidation = useCallback(async (): Promise<AssignmentValidationResponse> => {
+    if (structuredDraft) {
+      const response = {
+        ok: draftValid,
+        errors: typedDraft.error ? [typedDraft.error] : [],
+        warnings: [],
+        meta: typedDraft.assignment?.metadata,
+      } as AssignmentValidationResponse;
       dispatch({ type: 'validation_succeeded', payload: { validation: response } });
       return response;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to validate markdown.';
-      dispatch({ type: 'validation_failed', payload: { error: message } });
-      return { ok: false, errors: [message], warnings: [] } as MarkdownValidationResponse;
     }
-  }, [learningPresetCatalogEnabled, presetOptionIds, state.draftText, state.selectedPreset]);
+    const response = {
+      ok: false,
+      errors: ['Historical Markdown assignments are read-only.'],
+      warnings: [],
+    };
+    dispatch({ type: 'validation_succeeded', payload: { validation: response } });
+    return response;
+  }, [structuredDraft, draftValid, typedDraft]);
 
   useEffect(() => {
     draftTextRef.current = state.draftText;
   }, [state.draftText]);
 
-  const persistDraftText = useCallback(
+  const writeDraftText = useCallback(
     async (
       text: string,
       options: {
         preserveCurrentText?: boolean;
         promptPackageId?: string;
+        format?: AssignmentFormat;
+        validationContext?: AssignmentValidationContext;
       } = {},
     ): Promise<DraftResponse | null> => {
+      const typed = options.format ? options.format === 'assignment_v1' : structuredDraft;
+      if (!typed) throw new Error('Historical Markdown assignments are read-only.');
+      if (typed) {
+        const context = options.validationContext ?? validationContext;
+        if (!context) throw new Error('Assignment validation context is missing');
+        parseAssignmentV1(text, context);
+      }
       const normalizedText = text.trim();
       const promptPackageId = options.promptPackageId ?? state.promptPackage?.id;
       if (!promptPackageId || !normalizedText) {
         return null;
       }
-      const reusableDraft = state.draft?.promptPackageId === promptPackageId ? state.draft : null;
+      const acknowledged = acknowledgedDraftRef.current ?? state.draft;
+      const reusableDraft = acknowledged?.promptPackageId === promptPackageId ? acknowledged : null;
       const persistenceVersion = authoringPersistenceVersionRef.current;
+      if (draftConflictTextRef.current !== null)
+        throw new Error('Resolve the saved draft conflict before saving.');
+      dispatch({ type: 'draft_save_started' });
       let response: DraftResponse;
       try {
         response = reusableDraft?.id
           ? await updateDraft(reusableDraft.id, normalizedText, reusableDraft.workingVersion)
           : await createDraft(promptPackageId, normalizedText);
       } catch (error) {
+        if (authoringPersistenceVersionRef.current !== persistenceVersion) return null;
         if (error instanceof ArtifactWorkingConflictApiError && reusableDraft?.id) {
+          draftConflictTextRef.current = normalizedText;
           try {
             const latest = await fetchDraft(reusableDraft.id);
             if (authoringPersistenceVersionRef.current === persistenceVersion) {
               draftConflictTextRef.current = normalizedText;
+              acknowledgedDraftRef.current = latest;
               dispatch({
                 type: 'draft_save_succeeded',
                 payload: { draft: latest, preserveCurrentText: true },
@@ -910,25 +1040,67 @@ export function useMinimalAssignmentAuthoringController({
         return null;
       }
       draftConflictTextRef.current = null;
+      acknowledgedDraftRef.current = response;
       const preserveCurrentText =
         options.preserveCurrentText || draftTextRef.current.trim() !== normalizedText;
       dispatch({
         type: 'draft_save_succeeded',
         payload: { draft: response, preserveCurrentText },
       });
-      onDraftPronunciationModeDetected(detectPronunciationModeFromDraft(response.text ?? text));
+      onDraftPronunciationModeDetected(response.assignment?.pronunciation?.mode ?? null);
       return response;
     },
     [
       onDraftPronunciationModeDetected,
+      structuredDraft,
+      validationContext,
       state.draft?.id,
       state.draft?.promptPackageId,
       state.draft?.workingVersion,
       state.promptPackage?.id,
+      state.draft,
     ],
   );
 
+  // Every save entry (autosave, explicit save, correction/reconciliation) shares one flight.
+  const persistDraftText = useCallback(
+    (text: string, options: Parameters<typeof writeDraftText>[1] = {}) => {
+      const existing = draftAutosaveInFlightPromiseRef.current;
+      if (existing) return existing;
+      const persistenceVersion = authoringPersistenceVersionRef.current;
+      draftAutosaveInFlightRef.current = true;
+      const tracked = writeDraftText(text, options)
+        .then((saved) => {
+          if (saved && persistenceVersion === authoringPersistenceVersionRef.current)
+            draftAutosaveLastSavedAtRef.current = Date.now();
+          return saved;
+        })
+        .catch((error) => {
+          if (persistenceVersion === authoringPersistenceVersionRef.current)
+            dispatch({
+              type: 'draft_save_failed',
+              payload: { error: error instanceof Error ? error.message : 'Unable to save draft.' },
+            });
+          return null;
+        })
+        .finally(() => {
+          if (persistenceVersion !== authoringPersistenceVersionRef.current) return;
+          if (draftAutosaveInFlightPromiseRef.current === tracked)
+            draftAutosaveInFlightPromiseRef.current = null;
+          draftAutosaveInFlightRef.current = false;
+          if (draftAutosavePendingRef.current || draftTextRef.current.trim() !== text.trim()) {
+            draftAutosavePendingRef.current = false;
+            requestDraftAutosaveReschedule();
+          }
+        });
+      draftAutosaveInFlightPromiseRef.current = tracked;
+      return tracked;
+    },
+    [writeDraftText],
+  );
+
   const saveDraft = useCallback(async (): Promise<DraftResponse | null> => {
+    if (draftConflictTextRef.current !== null) return null;
     if (!state.promptPackage?.id) {
       dispatch({
         type: 'draft_save_failed',
@@ -956,15 +1128,16 @@ export function useMinimalAssignmentAuthoringController({
     dispatch({ type: 'draft_save_started' });
     try {
       const response = await persistDraftText(state.draftText);
-      return response;
+      return isCurrentDraftSaved(response) ? response : null;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save draft.';
       dispatch({ type: 'draft_save_failed', payload: { error: message } });
       return null;
     }
-  }, [persistDraftText, runValidation, state.draftText, state.promptPackage]);
+  }, [isCurrentDraftSaved, persistDraftText, runValidation, state.draftText, state.promptPackage]);
 
   const flushDraftAutosave = useCallback(async (): Promise<DraftResponse | null> => {
+    if (draftConflictTextRef.current !== null) return null;
     if (draftAutosaveTimeoutRef.current) {
       clearTimeout(draftAutosaveTimeoutRef.current);
       draftAutosaveTimeoutRef.current = null;
@@ -973,6 +1146,8 @@ export function useMinimalAssignmentAuthoringController({
     let inFlightDraft: DraftResponse | null | undefined;
     if (inFlight) {
       inFlightDraft = await inFlight;
+      if (!isCurrentDraftValid()) return null;
+      if (structuredDraft) return isCurrentDraftSaved(inFlightDraft) ? inFlightDraft : null;
       if (inFlightDraft && draftTextRef.current.trim() === (inFlightDraft.text ?? '').trim()) {
         return inFlightDraft;
       }
@@ -980,27 +1155,48 @@ export function useMinimalAssignmentAuthoringController({
     if (draftDirty) {
       return saveDraft();
     }
-    return inFlightDraft ?? state.draft;
-  }, [draftDirty, saveDraft, state.draft]);
+    const saved = inFlightDraft ?? state.draft;
+    return isCurrentDraftSaved(saved) ? saved : null;
+  }, [
+    isCurrentDraftSaved,
+    isCurrentDraftValid,
+    structuredDraft,
+    draftDirty,
+    saveDraft,
+    state.draft,
+  ]);
 
   const refreshDraftPreservingLocal = useCallback(
     async (options?: { forcePreserveLocal?: boolean }) => {
       if (!state.draft?.id) return;
-      const localText = draftTextRef.current.trim();
+      const persistenceVersion = authoringPersistenceVersionRef.current;
+      const localEditRevision = draftLocalEditRevisionRef.current;
       const durableText = (state.draft.text ?? '').trim();
-      const preserveCurrentText = options?.forcePreserveLocal === true || localText !== durableText;
       try {
         const latest = await fetchDraft(state.draft.id);
+        if (persistenceVersion !== authoringPersistenceVersionRef.current) return;
+        // A read started before/during a write must not replace that write's acknowledgement.
+        if (draftAutosaveInFlightRef.current || draftReconciliationInFlightRef.current) return;
+        const acknowledged = acknowledgedDraftRef.current ?? state.draft;
+        if (
+          latest.id === acknowledged.id &&
+          (latest.workingVersion ?? 0) < (acknowledged.workingVersion ?? 0)
+        )
+          return;
+        const localText = draftTextRef.current.trim();
+        const preserveCurrentText =
+          options?.forcePreserveLocal === true ||
+          draftLocalEditRevisionRef.current !== localEditRevision ||
+          localText !== durableText;
         const remoteText = (latest.text ?? '').trim();
         const remoteChanged =
-          latest.workingVersion !== state.draft.workingVersion ||
-          latest.contentHash !== state.draft.contentHash;
+          latest.workingVersion !== acknowledged.workingVersion ||
+          latest.contentHash !== acknowledged.contentHash;
         const overlapsRemote = preserveCurrentText && remoteChanged && localText !== remoteText;
         if (overlapsRemote) {
           draftConflictTextRef.current = localText;
-        } else {
-          draftConflictTextRef.current = null;
         }
+        acknowledgedDraftRef.current = latest;
         dispatch({
           type: 'draft_save_succeeded',
           payload: { draft: latest, preserveCurrentText },
@@ -1014,6 +1210,7 @@ export function useMinimalAssignmentAuthoringController({
           });
         }
       } catch (error) {
+        if (persistenceVersion !== authoringPersistenceVersionRef.current) return;
         dispatch({
           type: 'draft_save_failed',
           payload: {
@@ -1022,10 +1219,75 @@ export function useMinimalAssignmentAuthoringController({
         });
       }
     },
-    [state.draft?.contentHash, state.draft?.id, state.draft?.text, state.draft?.workingVersion],
+    [state.draft],
   );
 
-  const draftRecoveryConflict = draftConflictTextRef.current === state.draftText.trim();
+  const draftRecoveryConflict = draftConflictTextRef.current !== null;
+
+  const reconcileDraft = useCallback(
+    async (choice: 'local' | 'saved') => {
+      if (
+        !state.draft?.id ||
+        draftAutosaveInFlightRef.current ||
+        draftReconciliationInFlightRef.current
+      )
+        return;
+      draftReconciliationInFlightRef.current = true;
+      dispatch({ type: 'draft_save_started' });
+      const persistenceVersion = authoringPersistenceVersionRef.current;
+      const localAtChoice = draftTextRef.current;
+      try {
+        const latest = await fetchDraft(state.draft.id);
+        if (persistenceVersion !== authoringPersistenceVersionRef.current) return;
+        if (
+          latest.workingVersion !== state.draft.workingVersion ||
+          latest.contentHash !== state.draft.contentHash
+        ) {
+          draftConflictTextRef.current = draftTextRef.current;
+          acknowledgedDraftRef.current = latest;
+          dispatch({
+            type: 'draft_save_succeeded',
+            payload: { draft: latest, preserveCurrentText: true },
+          });
+          dispatch({
+            type: 'draft_save_failed',
+            payload: { error: 'The saved version changed again. Inspect it and choose again.' },
+          });
+          return;
+        }
+        if (choice === 'saved') {
+          if (draftTextRef.current !== localAtChoice) {
+            dispatch({
+              type: 'draft_save_failed',
+              payload: { error: 'You made more local edits. Review them and choose again.' },
+            });
+            return;
+          }
+          draftConflictTextRef.current = null;
+          setDraftText(latest.text);
+          dispatch({
+            type: 'draft_save_succeeded',
+            payload: { draft: latest, preserveCurrentText: true },
+          });
+        } else {
+          if (!isCurrentDraftValid())
+            throw new Error('Fix local fields before saving your version.');
+          draftConflictTextRef.current = null;
+          await persistDraftText(draftTextRef.current, { preserveCurrentText: true });
+        }
+      } catch (error) {
+        if (persistenceVersion !== authoringPersistenceVersionRef.current) return;
+        dispatch({
+          type: 'draft_save_failed',
+          payload: { error: error instanceof Error ? error.message : 'Unable to reconcile draft.' },
+        });
+      } finally {
+        if (persistenceVersion === authoringPersistenceVersionRef.current)
+          draftReconciliationInFlightRef.current = false;
+      }
+    },
+    [state.draft, isCurrentDraftValid, persistDraftText, setDraftText],
+  );
 
   const generatePrompt = useCallback(async (): Promise<PromptPackageResponse | null> => {
     if (!recordingId) {
@@ -1145,17 +1407,20 @@ export function useMinimalAssignmentAuthoringController({
           return null;
         }
         const generatedText = generated.text ?? '';
+        resetEditorSession();
         draftTextRef.current = generatedText;
         dispatch({
           type: 'draft_generate_succeeded',
           payload: {
             draftText: generatedText,
+            draftFormat: generated.format,
+            generatedValidationContext: generated.validationContext,
             quota: generated.quota ?? null,
             runtimeSelection: {
               provider: generated.provider,
               model: generated.model,
             },
-            successMessage: 'Assignment draft ready. Saved automatically.',
+            successMessage: 'Assignment draft ready. Review and edit below.',
             quotaWindowTickMs: Date.now(),
           },
         });
@@ -1163,6 +1428,8 @@ export function useMinimalAssignmentAuthoringController({
           try {
             await persistDraftText(generated.text, {
               promptPackageId,
+              format: generated.format,
+              validationContext: generated.validationContext,
             });
             draftAutosaveLastSavedAtRef.current = Date.now();
           } catch (error) {
@@ -1201,11 +1468,13 @@ export function useMinimalAssignmentAuthoringController({
       });
       return null;
     }
+    if (!structuredDraft) return null;
     return generateDraftForPromptPackageId(state.promptPackage.id);
-  }, [generateDraftForPromptPackageId, state.promptPackage?.id]);
+  }, [generateDraftForPromptPackageId, state.promptPackage?.id, structuredDraft]);
 
   const generateAssignment = useCallback(
     async (options?: { forceFreshPrompt?: boolean }): Promise<GenerateDraftResponse | null> => {
+      if (!structuredDraft) return null;
       const promptPackage =
         !options?.forceFreshPrompt && state.promptPackage?.id
           ? state.promptPackage
@@ -1213,7 +1482,7 @@ export function useMinimalAssignmentAuthoringController({
       if (!promptPackage?.id) return null;
       return generateDraftForPromptPackageId(promptPackage.id);
     },
-    [generateDraftForPromptPackageId, generatePrompt, state.promptPackage],
+    [generateDraftForPromptPackageId, generatePrompt, state.promptPackage, structuredDraft],
   );
 
   const previewDraft = useCallback(async () => {
@@ -1221,7 +1490,7 @@ export function useMinimalAssignmentAuthoringController({
     if (!normalizedDraft) {
       dispatch({
         type: 'preview_failed',
-        payload: { error: 'Paste the assignment markdown first.' },
+        payload: { error: 'Create the assignment first.' },
       });
       return;
     }
@@ -1239,8 +1508,10 @@ export function useMinimalAssignmentAuthoringController({
         state.selectedPreset && presetOptionIds.includes(state.selectedPreset)
           ? state.selectedPreset
           : null;
+      if (!typedDraft.assignment) throw new Error('Historical Markdown assignments are read-only.');
       const htmlResponse = await renderHtmlPreview({
-        text: normalizedDraft,
+        assignment: typedDraft.assignment,
+        promptPackageId: state.promptPackage?.id,
         title: validationResult.meta?.title?.trim() || undefined,
         learningPresetId: learningPresetCatalogEnabled ? validPreset : null,
       });
@@ -1257,6 +1528,8 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [
     draftPreviewGate.draftHash,
+    typedDraft.assignment,
+    state.promptPackage?.id,
     learningPresetCatalogEnabled,
     presetOptionIds,
     runValidation,
@@ -1351,15 +1624,16 @@ export function useMinimalAssignmentAuthoringController({
     };
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the token restarts autosave when a pending write settles without a content change.
   useEffect(() => {
-    if (!state.promptPackage?.id || !state.draftText.trim() || !draftDirty) {
+    if (!draftValid || !state.promptPackage?.id || !state.draftText.trim() || !draftDirty) {
       if (draftAutosaveTimeoutRef.current) {
         clearTimeout(draftAutosaveTimeoutRef.current);
         draftAutosaveTimeoutRef.current = null;
       }
       return;
     }
-    if (draftConflictTextRef.current === state.draftText.trim()) return;
+    if (draftConflictTextRef.current !== null) return;
 
     const elapsedMs = Date.now() - draftAutosaveLastSavedAtRef.current;
     const delayMs = Math.max(
@@ -1377,36 +1651,10 @@ export function useMinimalAssignmentAuthoringController({
         return;
       }
       const textToSave = state.draftText;
-      draftAutosaveInFlightRef.current = true;
-      const autosaveRun = persistDraftText(textToSave, {
-        preserveCurrentText: draftTextRef.current.trim() !== textToSave.trim(),
+      void persistDraftText(textToSave).catch((error) => {
+        const message = error instanceof Error ? error.message : 'Unable to autosave draft.';
+        dispatch({ type: 'draft_save_failed', payload: { error: message } });
       });
-      const trackedAutosave = autosaveRun
-        .then((saved) => {
-          if (saved) {
-            draftAutosaveLastSavedAtRef.current = Date.now();
-          }
-          return saved;
-        })
-        .catch((error) => {
-          const message = error instanceof Error ? error.message : 'Unable to autosave draft.';
-          dispatch({ type: 'draft_save_failed', payload: { error: message } });
-          return null;
-        })
-        .finally(() => {
-          if (draftAutosaveInFlightPromiseRef.current === trackedAutosave) {
-            draftAutosaveInFlightPromiseRef.current = null;
-          }
-          draftAutosaveInFlightRef.current = false;
-          const latestText = draftTextRef.current.trim();
-          const savedText = textToSave.trim();
-          if (draftAutosavePendingRef.current || (latestText && latestText !== savedText)) {
-            draftAutosavePendingRef.current = false;
-            requestDraftAutosaveReschedule();
-          }
-        });
-      draftAutosaveInFlightPromiseRef.current = trackedAutosave;
-      void trackedAutosave;
     }, delayMs);
 
     return () => {
@@ -1417,8 +1665,9 @@ export function useMinimalAssignmentAuthoringController({
     };
   }, [
     draftAutosaveRescheduleToken,
-    draftDirty,
     draftRecoveryConflict,
+    draftValid,
+    draftDirty,
     persistDraftText,
     state.draftText,
     state.promptPackage?.id,
@@ -1438,18 +1687,21 @@ export function useMinimalAssignmentAuthoringController({
   useEffect(() => {
     if (ttsProviders.length === 0) return;
     const preferredProvider =
-      ttsProviders.find((provider) => provider === DEFAULT_TTS_PROVIDER) ??
       (defaultTtsProvider && ttsProviders.includes(defaultTtsProvider)
         ? defaultTtsProvider
-        : ttsProviders[0]) ??
+        : ttsProviders.find((provider) => provider === DEFAULT_TTS_PROVIDER)) ??
+      ttsProviders[0] ??
       DEFAULT_TTS_PROVIDER;
-    if (!ttsProviders.includes(state.selectedTtsProvider)) {
+    if (
+      !ttsProviders.includes(state.selectedTtsProvider) ||
+      (!state.ttsSelectionExplicit && state.selectedTtsProvider !== preferredProvider)
+    ) {
       dispatch({
         type: 'publish_config_updated',
         payload: { selectedTtsProvider: preferredProvider },
       });
     }
-  }, [defaultTtsProvider, state.selectedTtsProvider, ttsProviders]);
+  }, [defaultTtsProvider, state.selectedTtsProvider, state.ttsSelectionExplicit, ttsProviders]);
 
   useEffect(() => {
     const fallbackStrategy = availablePublishTtsStrategies[0];
@@ -1464,20 +1716,24 @@ export function useMinimalAssignmentAuthoringController({
 
   useEffect(() => {
     const modelOptions = ttsModelOptionsByProvider[state.selectedTtsProvider] ?? [];
-    if (state.selectedTtsProvider === 'inworld') {
+    if (state.selectedTtsProvider === 'inworld' || state.selectedTtsProvider === 'gemini') {
       if (modelOptions.length === 0) {
         if (state.selectedTtsModel) {
           dispatch({ type: 'publish_config_updated', payload: { selectedTtsModel: '' } });
         }
         return;
       }
-      const configuredDefault = defaultTtsModelByProvider?.inworld;
+      const configuredDefault = defaultTtsModelByProvider?.[state.selectedTtsProvider];
       const preferredModel =
         configuredDefault && modelOptions.includes(configuredDefault)
           ? configuredDefault
           : modelOptions[0];
       if (!preferredModel) return;
-      if (!state.selectedTtsModel || !modelOptions.includes(state.selectedTtsModel)) {
+      if (
+        !state.selectedTtsModel ||
+        !modelOptions.includes(state.selectedTtsModel) ||
+        (!state.ttsSelectionExplicit && state.selectedTtsModel !== preferredModel)
+      ) {
         dispatch({
           type: 'publish_config_updated',
           payload: { selectedTtsModel: preferredModel },
@@ -1499,7 +1755,11 @@ export function useMinimalAssignmentAuthoringController({
           ? configuredDefault
           : modelOptions[0];
       if (!preferredModel) return;
-      if (!state.selectedTtsModel || !modelOptions.includes(state.selectedTtsModel)) {
+      if (
+        !state.selectedTtsModel ||
+        !modelOptions.includes(state.selectedTtsModel) ||
+        (!state.ttsSelectionExplicit && state.selectedTtsModel !== preferredModel)
+      ) {
         dispatch({
           type: 'publish_config_updated',
           payload: { selectedTtsModel: preferredModel },
@@ -1554,6 +1814,7 @@ export function useMinimalAssignmentAuthoringController({
     publishElevenlabsModelOptions,
     state.selectedTtsModel,
     state.selectedTtsProvider,
+    state.ttsSelectionExplicit,
     state.selectedTtsStrategy,
     ttsModelOptionsByProvider,
   ]);
@@ -1639,6 +1900,15 @@ export function useMinimalAssignmentAuthoringController({
 
   return {
     ...state,
+    editorSessionKey,
+    editorValidationContext: validationContext,
+    reconcileDraft,
+    previewHtml: draftValid ? state.previewHtml : null,
+    draftValid,
+    structuredDraft,
+    isCurrentDraftValid,
+    isCurrentDraftSaved,
+    assignmentValidationError: typedDraft.error,
     generationProviders,
     generationModelsForProvider,
     promptReady,

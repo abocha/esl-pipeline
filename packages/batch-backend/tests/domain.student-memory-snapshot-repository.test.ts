@@ -4,16 +4,25 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { listStudentMemorySnapshotBackfillTargets } from '../src/application/student-memory-snapshot-backfill.js';
+import type { StudentMemoryCurrentness } from '../src/domain/student-memory-currentness.js';
 import {
   ensurePendingStudentMemorySnapshot,
   getEligibleReadyStudentMemorySnapshotById,
   getLatestReadyStudentMemorySnapshotByStudentId,
+  getStudentMemorySnapshotById,
+  getStudentMemorySnapshotSelection,
   insertCanonicalReadyStudentMemorySnapshot,
   listStudentMemorySnapshots,
+  markStudentMemorySnapshotRepairRequired,
+  StudentMemorySnapshotIntentObsoleteError,
   StudentMemorySnapshotParentChangedError,
   StudentMemorySnapshotSourcesChangedError,
 } from '../src/domain/student-memory-snapshot-repository.js';
 import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
+import {
+  insertLessonMemory,
+  makeLessonMemorySourcesHistorical,
+} from './support/student-memory-fixture.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 const hasPgTestEnv = Boolean(process.env.BATCH_BACKEND_TEST_PG?.trim());
@@ -46,113 +55,6 @@ async function insertStudent(studentId = randomUUID()) {
     ),
   );
   return studentId;
-}
-
-async function insertLessonMemory(args: {
-  studentId: string;
-  status: 'ready' | 'superseded';
-  withConfirmedSource: boolean;
-}) {
-  const recordingId = randomUUID();
-  const transcriptId = randomUUID();
-  const lessonMemoryId = randomUUID();
-  const assignmentSessionId = args.withConfirmedSource ? randomUUID() : null;
-  const userId = randomUUID();
-  const sourceStorageUri = args.withConfirmedSource
-    ? `local://confirmed/${transcriptId}.txt`
-    : `local://transcripts/${transcriptId}.txt`;
-  await withPgClient(async (client) => {
-    await client.query(
-      `INSERT INTO users (id, email, password_hash, role)
-       VALUES ($1, $2, 'hash', 'user')`,
-      [userId, `${userId}@example.test`],
-    );
-    await client.query(
-      `INSERT INTO workspace_memberships (workspace_id, user_id, role)
-       SELECT workspace_id, $2, 'owner' FROM students WHERE id = $1`,
-      [args.studentId, userId],
-    );
-    await client.query(
-      `INSERT INTO recordings
-         (id, source, student_id, source_path, storage_uri, bytes, status,
-          source_identity_kind, source_fingerprint_scheme, source_fingerprint,
-          created_at, updated_at)
-       VALUES ($1::uuid, 'upload', $2, 'lesson.wav', $3, 100, 'ingested',
-         'audio', 'prepared-media-sha256-v1',
-         replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''),
-         NOW(), NOW())`,
-      [recordingId, args.studentId, `local://recordings/${recordingId}.wav`],
-    );
-    await client.query(
-      `INSERT INTO transcripts
-         (id, recording_id, storage_uri, mode, model, language, stt_provider,
-          fallback_used, working_version, content_hash, created_at, updated_at)
-       VALUES ($1, $2, $3, 'timeline', 'nova-3', 'multi', 'deepgram', FALSE,
-         1, $4, NOW(), NOW())`,
-      [transcriptId, recordingId, sourceStorageUri, 'a'.repeat(64)],
-    );
-    if (assignmentSessionId) {
-      await client.query(
-        `INSERT INTO assignment_sessions (
-           id, user_id, student_id, recording_id, transcript_id, revision,
-           confirmed_step, confirmed_snapshot
-         ) VALUES ($1, $2, $3, $4, $5, 2, 'source', $6::jsonb)`,
-        [
-          assignmentSessionId,
-          userId,
-          args.studentId,
-          recordingId,
-          transcriptId,
-          JSON.stringify({
-            student: { studentId: args.studentId },
-            source: {
-              lessonId: null,
-              recordingId,
-              transcriptId,
-              transcriptWorkingVersion: 1,
-              transcriptStorageUri: sourceStorageUri,
-              transcriptHash: 'a'.repeat(64),
-              sourceIdentityKind: 'audio',
-              sourceFingerprintScheme: 'prepared-media-sha256-v1',
-              sourceFingerprint: recordingId.replaceAll('-', '').repeat(2),
-            },
-            context: null,
-            create: null,
-          }),
-        ],
-      );
-      await client.query(
-        `INSERT INTO assignment_source_bindings (
-           id, workspace_id, user_id, student_id, assignment_session_id,
-           source_identity_kind, source_fingerprint_scheme, source_fingerprint,
-           binding_role, recording_id, transcript_id
-         ) SELECT $1, s.workspace_id, $2, $3, $4, 'audio', 'prepared-media-sha256-v1',
-                  replace(($5::uuid)::text, '-', '') || replace(($5::uuid)::text, '-', ''),
-                  'confirmed', $5, $6
-           FROM students s WHERE s.id = $3`,
-        [randomUUID(), userId, args.studentId, assignmentSessionId, recordingId, transcriptId],
-      );
-    }
-    await client.query(
-      `INSERT INTO lesson_memory_entries
-         (id, student_id, transcript_id, recording_id, schema_version, generated_at,
-           provider, model, status, source_kind, source_storage_uri, source_content_hash,
-           assignment_session_id)
-       VALUES ($1, $2, $3, $4, 'lesson-memory.v1', NOW(), 'openai', 'gpt-5.2', $5,
-               'lesson_transcript', $6, $7, $8)`,
-      [
-        lessonMemoryId,
-        args.studentId,
-        transcriptId,
-        recordingId,
-        args.status,
-        args.withConfirmedSource ? sourceStorageUri : null,
-        args.withConfirmedSource ? 'a'.repeat(64) : null,
-        assignmentSessionId,
-      ],
-    );
-  });
-  return lessonMemoryId;
 }
 
 async function insertStoredSnapshot(args: {
@@ -212,7 +114,373 @@ async function insertReadySnapshot(args: {
   });
 }
 
+async function insertRetainedHomework(
+  studentId: string,
+  options: { jobStudentId?: string; state?: string; lineage?: string; status?: string } = {},
+) {
+  const jobId = randomUUID();
+  const id = randomUUID();
+  // Seed retained pre-cutover evidence only in this disposable database. Runtime fences stay enabled.
+  await withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      await client.query('ALTER TABLE jobs DISABLE TRIGGER historical_jobs_read_only');
+      await client.query(
+        'ALTER TABLE homework_memory_entries DISABLE TRIGGER historical_homework_memory_read_only',
+      );
+      await client.query(
+        `INSERT INTO jobs (id, student_id, state, md) VALUES ($1, $2, $3, '# Retained historical homework')`,
+        [jobId, options.jobStudentId ?? studentId, options.state ?? 'succeeded'],
+      );
+      if (options.lineage)
+        await client.query(
+          "INSERT INTO jobs (id, student_id, state, md) VALUES ($1, $2, 'succeeded', '# Other publication')",
+          [options.lineage, studentId],
+        );
+      await client.query(
+        `INSERT INTO homework_memory_entries
+        (id, student_id, job_id, assignment_lineage_key, schema_version, provider, model, status, published_at, generated_at, content_hash, homework_summary)
+        VALUES ($1, $2, $3, $4, 'homework-memory.v1', 'openai', 'fixture', $5, NOW(), NOW(), 'retained-publication-hash', 'Retained practice')`,
+        [id, studentId, jobId, options.lineage ?? jobId, options.status ?? 'ready'],
+      );
+      await client.query('ALTER TABLE jobs ENABLE TRIGGER historical_jobs_read_only');
+      await client.query(
+        'ALTER TABLE homework_memory_entries ENABLE TRIGGER historical_homework_memory_read_only',
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+  return { id, jobId };
+}
+
 describeIfPg('domain/student-memory-snapshot-repository', () => {
+  it('accepts retained historical homework publication evidence without executing or rewriting it', async () => {
+    const studentId = await insertStudent();
+    const homework = await insertRetainedHomework(studentId);
+    const frozen = await withPgClient((client) =>
+      client.query('SELECT * FROM homework_memory_entries WHERE id = $1', [homework.id]),
+    );
+    const snapshot = await insertCanonicalReadyStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'openai',
+      model: 'fixture',
+      homeworkMemoryEntryIds: [homework.id],
+      snapshotSummary: 'Established history',
+    });
+    await expect(getStudentMemorySnapshotSelection(studentId)).resolves.toMatchObject({
+      snapshot: { id: snapshot.id },
+      availability: { state: 'available', reason: 'verified_lineage', homeworkReferenceCount: 1 },
+    });
+    expect(
+      (
+        await withPgClient((client) =>
+          client.query('SELECT * FROM homework_memory_entries WHERE id = $1', [homework.id]),
+        )
+      ).rows,
+    ).toEqual(frozen.rows);
+    await expect(
+      withPgClient((client) =>
+        client.query("UPDATE jobs SET state = 'queued' WHERE id = $1", [homework.jobId]),
+      ),
+    ).rejects.toThrow('legacy_assignment_read_only');
+    await expect(
+      withPgClient((client) =>
+        client.query(
+          "UPDATE homework_memory_entries SET homework_summary = 'Regenerated' WHERE id = $1",
+          [homework.id],
+        ),
+      ),
+    ).rejects.toThrow('legacy_assignment_read_only');
+  });
+
+  it.each([
+    'missing',
+    'wrong_student',
+    'wrong_job_student',
+    'wrong_lineage',
+    'unpublished',
+    'superseded',
+    'deleted',
+  ])(
+    'rejects %s homework at publication and marks retained aggregate lineage repair-required',
+    async (kind) => {
+      const studentId = await insertStudent();
+      const otherStudentId = await insertStudent();
+      let id: string = randomUUID();
+      if (kind !== 'missing') {
+        const homework = await insertRetainedHomework(
+          kind === 'wrong_student' ? otherStudentId : studentId,
+          {
+            ...(kind === 'wrong_job_student' ? { jobStudentId: otherStudentId } : {}),
+            ...(kind === 'wrong_lineage' ? { lineage: randomUUID() } : {}),
+            ...(kind === 'unpublished' ? { state: 'failed' } : {}),
+            ...(kind === 'superseded' ? { status: 'superseded' } : {}),
+          },
+        );
+        id = homework.id;
+        if (kind === 'deleted')
+          await withPgClient((client) =>
+            client.query('DELETE FROM homework_memory_entries WHERE id = $1', [id]),
+          );
+      }
+      await expect(
+        insertCanonicalReadyStudentMemorySnapshot({
+          studentId,
+          schemaVersion: 'student-memory-snapshot.v1',
+          provider: 'openai',
+          model: 'fixture',
+          homeworkMemoryEntryIds: [id],
+        }),
+      ).rejects.toMatchObject({
+        name: 'StudentMemorySnapshotSourcesChangedError',
+        unavailableLessonMemoryEntryIds: [],
+        unavailableHomeworkMemoryEntryIds: [id],
+      });
+      const snapshotId = await insertStoredSnapshot({
+        studentId,
+        generatedAt: '2026-10-05T00:00:00Z',
+        lessonMemoryEntryIds: [],
+        homeworkMemoryEntryIds: [id],
+      });
+      await expect(getStudentMemorySnapshotSelection(studentId)).resolves.toMatchObject({
+        snapshot: null,
+        availability: {
+          state: 'repair_required',
+          reason: 'established_history_ineligible',
+          homeworkReferenceCount: 1,
+        },
+      });
+      await expect(getEligibleReadyStudentMemorySnapshotById(snapshotId)).resolves.toBeNull();
+      await expect(
+        ensurePendingStudentMemorySnapshot({
+          studentId,
+          schemaVersion: 'student-memory-snapshot.v1',
+          provider: 'openai',
+          model: 'fixture',
+          sourceEntryId: id,
+          reuseReadyHomeworkSource: true,
+        }),
+      ).rejects.toBeInstanceOf(StudentMemorySnapshotIntentObsoleteError);
+    },
+  );
+
+  it('retains confirmed immutable evidence when the transcript working copy is autosaved', async () => {
+    const studentId = await insertStudent();
+    const lessonId = await insertLessonMemory({
+      studentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    const snapshotId = await insertStoredSnapshot({
+      studentId,
+      generatedAt: '2026-10-05T00:00:00Z',
+      lessonMemoryEntryIds: [lessonId],
+    });
+    const frozen = await getStudentMemorySnapshotById(snapshotId);
+    await withPgClient((client) =>
+      client.query(
+        "UPDATE transcripts SET storage_uri = 'local://working/new-copy', content_hash = $2, working_version = working_version + 1 WHERE id = (SELECT transcript_id FROM lesson_memory_entries WHERE id = $1)",
+        [lessonId, 'b'.repeat(64)],
+      ),
+    );
+    await expect(getStudentMemorySnapshotSelection(studentId)).resolves.toMatchObject({
+      snapshot: { id: snapshotId },
+      availability: { state: 'available' },
+    });
+    expect(await getStudentMemorySnapshotById(snapshotId)).toEqual(frozen);
+  });
+  it('selects frozen 19-episode lineage including 18 verified historical observations without rewriting evidence', async () => {
+    const studentId = await insertStudent();
+    const lessons: string[] = [];
+    for (let i = 0; i < 19; i++)
+      lessons.push(
+        await insertLessonMemory({ studentId, status: 'ready', withConfirmedSource: true }),
+      );
+    await makeLessonMemorySourcesHistorical(lessons.slice(0, 18));
+    const snapshotId = await insertStoredSnapshot({
+      studentId,
+      generatedAt: '2026-10-05T00:00:00Z',
+      lessonMemoryEntryIds: lessons,
+    });
+    const frozen = await withPgClient(
+      async (client) =>
+        (
+          await client.query(
+            `SELECT to_jsonb(s) AS bytes FROM student_memory_snapshots s WHERE id = $1
+      UNION ALL SELECT to_jsonb(l) FROM lesson_memory_entries l WHERE id = ANY($2::uuid[])`,
+            [snapshotId, lessons],
+          )
+        ).rows,
+    );
+    await expect(getStudentMemorySnapshotSelection(studentId)).resolves.toMatchObject({
+      snapshot: { id: snapshotId },
+      availability: { state: 'available', lessonReferenceCount: 19 },
+    });
+    // Publication uses exactly the same verified-evidence rule as readers.
+    await insertCanonicalReadyStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'openai',
+      model: 'fixture',
+      lessonMemoryEntryIds: lessons,
+      expectedLatestReadySnapshotId: snapshotId,
+    });
+    const after = await withPgClient(
+      async (client) =>
+        (
+          await client.query(
+            'SELECT to_jsonb(l) AS bytes FROM lesson_memory_entries l WHERE id = ANY($1::uuid[])',
+            [lessons],
+          )
+        ).rows,
+    );
+    expect(after).toEqual(frozen.slice(1));
+    // Reading itself leaves the frozen aggregate untouched; canonical child publication only supersedes its metadata.
+    const old = await getStudentMemorySnapshotById(snapshotId);
+    expect(old?.lessonMemoryEntryIds).toEqual(lessons);
+  });
+
+  it.each(['hash', 'uri', 'identity', 'binding', 'owner', 'workspace', 'superseded'] as const)(
+    'rejects genuinely invalid %s evidence in historical lineage',
+    async (reason) => {
+      const studentId = await insertStudent();
+      const lessonId = await insertLessonMemory({
+        studentId,
+        status: 'ready',
+        withConfirmedSource: true,
+      });
+      await makeLessonMemorySourcesHistorical([lessonId]);
+      await insertStoredSnapshot({
+        studentId,
+        generatedAt: '2026-10-05T00:00:00Z',
+        lessonMemoryEntryIds: [lessonId],
+      });
+      await withPgClient(async (client) => {
+        if (reason === 'hash')
+          await client.query(
+            'UPDATE lesson_memory_entries SET source_content_hash = $2 WHERE id = $1',
+            [lessonId, 'b'.repeat(64)],
+          );
+        if (reason === 'uri')
+          await client.query(
+            "UPDATE lesson_memory_entries SET source_storage_uri = 'local://changed' WHERE id = $1",
+            [lessonId],
+          );
+        if (reason === 'identity')
+          await client.query(
+            'UPDATE recordings SET source_fingerprint = $2 WHERE id = (SELECT recording_id FROM lesson_memory_entries WHERE id = $1)',
+            [lessonId, 'b'.repeat(64)],
+          );
+        if (reason === 'binding')
+          await client.query(
+            'DELETE FROM assignment_source_bindings WHERE assignment_session_id = (SELECT assignment_session_id FROM lesson_memory_entries WHERE id = $1)',
+            [lessonId],
+          );
+        if (reason === 'superseded')
+          await client.query(
+            "UPDATE lesson_memory_entries SET status = 'superseded' WHERE id = $1",
+            [lessonId],
+          );
+        if (reason === 'owner') {
+          const other = await insertStudent();
+          await client.query('UPDATE lesson_memory_entries SET student_id = $2 WHERE id = $1', [
+            lessonId,
+            other,
+          ]);
+        }
+        if (reason === 'workspace') {
+          const otherWorkspace = randomUUID();
+          await client.query(
+            "INSERT INTO workspaces (id, name) VALUES ($1, 'Other fixture workspace')",
+            [otherWorkspace],
+          );
+          await client.query(
+            'UPDATE assignment_source_bindings SET workspace_id = $2 WHERE assignment_session_id = (SELECT assignment_session_id FROM lesson_memory_entries WHERE id = $1)',
+            [lessonId, otherWorkspace],
+          );
+        }
+      });
+      await expect(getStudentMemorySnapshotSelection(studentId)).resolves.toMatchObject({
+        snapshot: null,
+        availability: { state: 'repair_required' },
+      });
+    },
+  );
+
+  it('persists repair-required across restarts and rejects recent-only publication after source invalidation', async () => {
+    const studentId = await insertStudent();
+    const lessons: string[] = [];
+    for (let i = 0; i < 9; i++)
+      lessons.push(
+        await insertLessonMemory({ studentId, status: 'ready', withConfirmedSource: true }),
+      );
+    const aggregateId = await insertCanonicalReadyStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'openai',
+      model: 'fixture',
+      lessonMemoryEntryIds: lessons,
+      snapshotSummary: 'Established older teaching history',
+    });
+    await withPgClient((client) =>
+      client.query("UPDATE lesson_memory_entries SET status = 'superseded' WHERE id = $1", [
+        lessons[0],
+      ]),
+    );
+    const intent = await ensurePendingStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'openai',
+      model: 'fixture',
+      generationNotes: { trigger: 'lesson-memory-ready' },
+    });
+    await markStudentMemorySnapshotRepairRequired(studentId, intent.entry.id);
+    await closePgPool();
+    await expect(getStudentMemorySnapshotSelection(studentId)).resolves.toMatchObject({
+      snapshot: null,
+      availability: { state: 'repair_required', lessonReferenceCount: 9 },
+    });
+    await expect(getStudentMemorySnapshotById(intent.entry.id)).resolves.toMatchObject({
+      status: 'failed',
+      generationNotes: { continuityReason: 'repair_required' },
+    });
+    await expect(
+      insertCanonicalReadyStudentMemorySnapshot({
+        studentId,
+        schemaVersion: 'student-memory-snapshot.v1',
+        provider: 'openai',
+        model: 'fixture',
+        lessonMemoryEntryIds: lessons.slice(-5),
+        expectedLatestReadySnapshotId: null,
+      }),
+    ).rejects.toMatchObject({ name: 'StudentMemorySnapshotRepairRequiredError' });
+    expect((await getStudentMemorySnapshotById(aggregateId.id))?.lessonMemoryEntryIds).toEqual(
+      lessons,
+    );
+  });
+
+  it('does not infer established history from failed or cancelled first intent coverage', async () => {
+    const studentId = await insertStudent();
+    const intent = await ensurePendingStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'openai',
+      model: 'fixture',
+    });
+    await withPgClient((client) =>
+      client.query(
+        'UPDATE student_memory_snapshots SET status = \'superseded\', lesson_memory_entry_ids = $2, generation_notes = \'{"cancelledAt":"fixture"}\' WHERE id = $1',
+        [intent.entry.id, [randomUUID()]],
+      ),
+    );
+    await expect(getStudentMemorySnapshotSelection(studentId)).resolves.toMatchObject({
+      availability: { state: 'absent' },
+    });
+  });
   beforeAll(async () => {
     await truncateStudentMemorySnapshotTables();
   });
@@ -250,7 +518,7 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
 
   it('supersedes matching pending homework refreshes when eligible ready coverage already exists', async () => {
     const studentId = await insertStudent();
-    const homeworkMemoryEntryId = randomUUID();
+    const homeworkMemoryEntryId = (await insertRetainedHomework(studentId)).id;
     const pending = await ensurePendingStudentMemorySnapshot({
       studentId,
       schemaVersion: 'student-memory.v1',
@@ -294,7 +562,7 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
 
   it('does not reconcile an automatic homework refresh through ineligible ready coverage', async () => {
     const studentId = await insertStudent();
-    const homeworkMemoryEntryId = randomUUID();
+    const homeworkMemoryEntryId = (await insertRetainedHomework(studentId)).id;
     const ineligibleLessonMemoryEntryId = await insertLessonMemory({
       studentId,
       status: 'superseded',
@@ -402,22 +670,31 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
     expect(snapshots.map((snapshot) => snapshot.id)).not.toContain(staleBootstrapId);
   });
 
-  it('keeps unguarded ready inserts authoritative', async () => {
+  it('guards ordinary manual replay against a newer authoritative snapshot', async () => {
     const studentId = await insertStudent();
-    const parentId = randomUUID();
-    const authoritativeId = randomUUID();
-    await insertReadySnapshot({
+    const pending = await ensurePendingStudentMemorySnapshot({
       studentId,
-      id: parentId,
-      generatedAt: '2026-07-01T10:00:00.000Z',
+      schemaVersion: 'student-memory-snapshot.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      replayKey: 'manual-replay',
+      generationNotes: { trigger: 'manual-replay' },
     });
-
     const authoritative = await insertReadySnapshot({
       studentId,
-      id: authoritativeId,
+      id: randomUUID(),
       generatedAt: '2026-07-01T11:00:00.000Z',
     });
-
+    await expect(
+      insertCanonicalReadyStudentMemorySnapshot({
+        studentId,
+        pendingEntryId: pending.entry.id,
+        schemaVersion: pending.entry.schemaVersion,
+        provider: pending.entry.provider,
+        model: pending.entry.model,
+        expectedCurrentness: pending.entry.generationNotes?.currentness as StudentMemoryCurrentness,
+      }),
+    ).rejects.toBeInstanceOf(StudentMemorySnapshotIntentObsoleteError);
     await expect(getLatestReadyStudentMemorySnapshotByStudentId(studentId)).resolves.toMatchObject({
       id: authoritative.id,
     });

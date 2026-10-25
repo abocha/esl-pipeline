@@ -14,7 +14,7 @@ test('production deploy resolves remote digests and locally aliases unchanged im
 test('production deploy persists Caddy configuration state and uses the pure planner', () => {
   assert.match(deployScript, /deploy-prod-images-plan\.sh/);
   assert.match(deployScript, /CADDY_CONFIG_DIGEST/);
-  assert.match(deployScript, /sha256sum "\$\{APP_DIR\}\/deploy\/caddy\/Caddyfile"/);
+  assert.match(deployScript, /application_config_digest\(\)/);
   assert.match(deployScript, /build_deployment_plan/);
 });
 
@@ -36,7 +36,7 @@ test('production deploy force-recreates caddy-edge only when the plan requires i
   assert.match(deployScript, /EDGE_RESTART_REQUIRED/);
   assert.match(
     deployScript,
-    /compose_with_env "\$PENDING_ENV" up -d --no-build --force-recreate caddy-edge/,
+    /compose_with_env "\$PENDING_ENV" up -d --no-build --no-deps --force-recreate caddy-edge/,
   );
 });
 
@@ -49,7 +49,7 @@ test('production deploy asserts the running Caddy upstream points at the fronten
 test('production deploy requires the canonical server-local application env file for Caddy edge values', () => {
   assert.match(deployScript, /load_edge_env_from_application_env_file\(\)/);
   assert.match(deployScript, /read_env_file_value\(\)/);
-  assert.match(deployScript, /\$\{APP_DIR\}\/\.env/);
+  assert.match(deployScript, /\/etc\/esl-pipeline\/production\.env/);
   assert.doesNotMatch(deployScript, /\.env\.batch-backend/);
   assert.match(deployScript, /CADDY_PUBLIC_HOSTNAME/);
   assert.match(deployScript, /CADDY_ACME_EMAIL/);
@@ -71,6 +71,6 @@ test('production deploy requires the canonical server-local application env file
   );
   assert.match(
     deployScript,
-    /\[\[ -f "\$\{APP_DIR\}\/\.env" \]\][\s\S]*load_edge_env_from_application_env_file[\s\S]*validate_edge_configuration/,
+    /\[\[ -f "\$\{ESL_PRODUCTION_ENV_FILE\}" \]\][\s\S]*load_edge_env_from_application_env_file[\s\S]*validate_edge_configuration/,
   );
 });

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as eleven from '../src/eleven.js';
+import { createTtsAssignment } from './assignment-fixture.js';
 import {
   buildStudyTextMp3FromPath,
   createTempDir,
@@ -19,7 +20,7 @@ setupTtsTestSuite();
 describe('tts elevenlabs integration', () => {
   it('retries retryable provider statuses before failing with provider_rate_limit', async () => {
     const dir = await createTempDir('tts-');
-    const { tempMdPath, tempVoiceMapPath } = await writeBasicMonologueFixture(dir);
+    const { assignmentPath, tempVoiceMapPath } = await writeBasicMonologueFixture(dir);
     const rateLimitError = Object.assign(new Error('too many requests'), { status: 429 });
     const convertMock = vi.fn().mockRejectedValue(rateLimitError);
     vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
@@ -28,7 +29,7 @@ describe('tts elevenlabs integration', () => {
     mockConcat();
 
     await expect(
-      buildStudyTextMp3FromPath(tempMdPath, {
+      buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'tts',
@@ -41,7 +42,7 @@ describe('tts elevenlabs integration', () => {
 
   it('keeps provider_contract_error category for 5xx while preserving retry ladder behavior', async () => {
     const dir = await createTempDir('tts-');
-    const { tempMdPath, tempVoiceMapPath } = await writeBasicMonologueFixture(dir);
+    const { assignmentPath, tempVoiceMapPath } = await writeBasicMonologueFixture(dir);
     const serverError = Object.assign(new Error('upstream server issue'), { status: 500 });
     const convertMock = vi.fn().mockRejectedValue(serverError);
     vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
@@ -50,7 +51,7 @@ describe('tts elevenlabs integration', () => {
     mockConcat();
 
     await expect(
-      buildStudyTextMp3FromPath(tempMdPath, {
+      buildStudyTextMp3FromPath(assignmentPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsStrategy: 'tts',
@@ -63,26 +64,32 @@ describe('tts elevenlabs integration', () => {
 
   it('reuses generated audio when file already exists', async () => {
     const dir = await createTempDir('tts-');
-    const tempMdPath = join(dir, 'lesson.md');
+    const assignmentPath = join(dir, 'assignment.json');
     const tempVoiceMapPath = join(dir, 'voices.yml');
     await writeFixture(
-      tempMdPath,
-      `
----
-title: Test Lesson
-student: Anna
-level: A1
-topic: greetings
-input_type: monologue
-
----
-
-# Warm-up
-
-:::study-text
-This is a monologue line.
-:::
-    `,
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Test Lesson', student: 'Anna', level: 'A1', topic: 'greetings' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [{ speakerId: 's0', text: 'This is a monologue line.' }],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
     await writeFixture(
       tempVoiceMapPath,
@@ -93,7 +100,7 @@ default: voice_id_default
 
     const convertMock = setupClientMock();
     const concatSpy = mockConcat();
-    await buildStudyTextMp3FromPath(tempMdPath, {
+    await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -101,7 +108,7 @@ default: voice_id_default
     expect(convertMock).toHaveBeenCalledTimes(1);
 
     convertMock.mockClear();
-    const result = await buildStudyTextMp3FromPath(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -109,25 +116,51 @@ default: voice_id_default
     expect(result.hash).toHaveLength(64);
     expect(convertMock).not.toHaveBeenCalled();
     expect(concatSpy).toHaveBeenCalled();
+
+    convertMock.mockClear();
+    const forcedResult = await buildStudyTextMp3FromPath(assignmentPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'tts',
+      force: true,
+    });
+    expect(forcedResult.path).toBe(result.path);
+    expect(convertMock).toHaveBeenCalledTimes(1);
   });
 
   it('reuses monologue chunk cache when final file is missing', async () => {
     const dir = await createTempDir('tts-');
-    const tempMdPath = join(dir, 'lesson-chunk-cache.md');
+    const assignmentPath = join(dir, 'lesson-chunk-cache.md');
     const tempVoiceMapPath = join(dir, 'voices.yml');
     await writeFixture(
-      tempMdPath,
-      `
----
-title: Chunk Cache
-student: Anna
-input_type: monologue
----
-
-:::study-text
-This is a monologue line that should be chunk-cached and reused across runs.
-:::
-    `,
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Chunk Cache', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'monologue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Narrator',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              {
+                speakerId: 's0',
+                text: 'This is a monologue line that should be chunk-cached and reused across runs.',
+              },
+            ],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
     await writeFixture(
       tempVoiceMapPath,
@@ -138,7 +171,7 @@ default: voice_id_default
 
     const convertMock = setupClientMock();
     mockConcat();
-    const first = await buildStudyTextMp3FromPath(tempMdPath, {
+    const first = await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -148,7 +181,7 @@ default: voice_id_default
     await unlink(first.path);
     convertMock.mockClear();
 
-    await buildStudyTextMp3FromPath(tempMdPath, {
+    await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -158,23 +191,45 @@ default: voice_id_default
 
   it('reuses generated dialogue audio when file already exists and force=false', async () => {
     const dir = await createTempDir('tts-');
-    const tempMdPath = join(dir, 'dialogue-cache.md');
+    const assignmentPath = join(dir, 'dialogue-cache.md');
     const tempVoiceMapPath = join(dir, 'voices.yml');
     await writeFixture(
-      tempMdPath,
-      `
----
-title: Dialogue Cache
-student: Anna
-input_type: dialogue
-
----
-
-:::study-text
-Alex: Hi there.
-Mara: Hello.
-:::
-    `,
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Dialogue Cache', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+              {
+                id: 's1',
+                displayName: 'Mara',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Hi there.' },
+              { speakerId: 's1', text: 'Hello.' },
+            ],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
     await writeFixture(
       tempVoiceMapPath,
@@ -186,7 +241,7 @@ default: voice_id_default
     );
 
     const dialogueSpy = mockDialogue();
-    const first = await buildStudyTextMp3FromPath(tempMdPath, {
+    const first = await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -195,7 +250,7 @@ default: voice_id_default
     expect(dialogueSpy).toHaveBeenCalledTimes(1);
 
     dialogueSpy.mockClear();
-    const second = await buildStudyTextMp3FromPath(tempMdPath, {
+    const second = await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -207,23 +262,45 @@ default: voice_id_default
 
   it('regenerates dialogue audio when force=true', async () => {
     const dir = await createTempDir('tts-');
-    const tempMdPath = join(dir, 'dialogue-force.md');
+    const assignmentPath = join(dir, 'dialogue-force.md');
     const tempVoiceMapPath = join(dir, 'voices.yml');
     await writeFixture(
-      tempMdPath,
-      `
----
-title: Dialogue Force
-student: Anna
-input_type: dialogue
-
----
-
-:::study-text
-Alex: Hi there.
-Mara: Hello.
-:::
-    `,
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Dialogue Force', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+              {
+                id: 's1',
+                displayName: 'Mara',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Hi there.' },
+              { speakerId: 's1', text: 'Hello.' },
+            ],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
     await writeFixture(
       tempVoiceMapPath,
@@ -235,7 +312,7 @@ default: voice_id_default
     );
 
     const dialogueSpy = mockDialogue();
-    await buildStudyTextMp3FromPath(tempMdPath, {
+    await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -243,7 +320,7 @@ default: voice_id_default
     expect(dialogueSpy).toHaveBeenCalledTimes(1);
 
     dialogueSpy.mockClear();
-    await buildStudyTextMp3FromPath(tempMdPath, {
+    await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -254,23 +331,45 @@ default: voice_id_default
 
   it('does not reuse dialogue cache when outputFormat changes', async () => {
     const dir = await createTempDir('tts-');
-    const tempMdPath = join(dir, 'dialogue-format-cache.md');
+    const assignmentPath = join(dir, 'dialogue-format-cache.md');
     const tempVoiceMapPath = join(dir, 'voices.yml');
     await writeFixture(
-      tempMdPath,
-      `
----
-title: Dialogue Format Cache
-student: Anna
-input_type: dialogue
-
----
-
-:::study-text
-Alex: Hi there.
-Mara: Hello.
-:::
-    `,
+      assignmentPath,
+      JSON.stringify(
+        createTtsAssignment({
+          metadata: { title: 'Dialogue Format Cache', student: 'Anna', level: 'B1', topic: 'test' },
+          studyText: {
+            type: 'dialogue',
+            speakers: [
+              {
+                id: 's0',
+                displayName: 'Alex',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+              {
+                id: 's1',
+                displayName: 'Mara',
+                role: 'student',
+                persona: null,
+                voiceDirection: null,
+                gender: 'neutral',
+                age: null,
+                accent: null,
+              },
+            ],
+            turns: [
+              { speakerId: 's0', text: 'Hi there.' },
+              { speakerId: 's1', text: 'Hello.' },
+            ],
+          },
+          pronunciation: null,
+        }),
+      ),
     );
     await writeFixture(
       tempVoiceMapPath,
@@ -282,7 +381,7 @@ default: voice_id_default
     );
 
     const dialogueSpy = mockDialogue();
-    await buildStudyTextMp3FromPath(tempMdPath, {
+    await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -291,7 +390,7 @@ default: voice_id_default
     expect(dialogueSpy).toHaveBeenCalledTimes(1);
 
     dialogueSpy.mockClear();
-    await buildStudyTextMp3FromPath(tempMdPath, {
+    await buildStudyTextMp3FromPath(assignmentPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',

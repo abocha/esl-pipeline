@@ -1,7 +1,19 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    setupFiles: [fileURLToPath(new URL('./scripts/test/provider-unit-setup.mjs', import.meta.url))],
+    // Publication and orchestration must resolve the same uploader module for mocks.
+    // pnpm's injected workspace copies otherwise create separate module identities.
+    alias: {
+      '@esl-pipeline/html-publisher': fileURLToPath(
+        new URL('./packages/html-publisher/dist/src/index.js', import.meta.url),
+      ),
+      '@esl-pipeline/storage-uploader': fileURLToPath(
+        new URL('./packages/storage-uploader/dist/src/index.js', import.meta.url),
+      ),
+    },
     env: {
       PIPELINE_CWD: import.meta.dirname,
     },

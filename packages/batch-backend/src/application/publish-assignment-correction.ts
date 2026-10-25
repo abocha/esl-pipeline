@@ -9,6 +9,7 @@ import {
 } from '../domain/assignment-session-repository.js';
 import { publishJobEvent } from '../domain/job-events.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
+import { requireTypedAssignment } from './historical-assignment.js';
 import { jobRecordToDto } from './job-dto.js';
 
 export interface PublishAssignmentCorrectionDependencies {
@@ -36,6 +37,7 @@ export async function publishAssignmentCorrection(args: {
     publishedJobId: args.publishedJobId,
     request: args.request,
   });
+  requireTypedAssignment(reserved.job.assignmentArtifact);
   if (reserved.created) publishEvent({ type: 'job_created', job: reserved.job });
 
   if (reserved.job.state === 'queued') {
@@ -44,7 +46,7 @@ export async function publishAssignmentCorrection(args: {
       executionMode: 'correction',
       sourceJobId: args.publishedJobId,
       correction: {
-        expectedMarkdownHash: args.request.draftHash,
+        expectedAssignmentHash: reserved.job.assignmentArtifact.contentHash,
         manifestMd: `corrections/${reserved.job.id}.md`,
       },
     });

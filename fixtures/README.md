@@ -4,14 +4,18 @@ This directory intentionally stays at the repo root.
 
 ## Purpose
 
-- Shared sample markdown used by multiple packages and integration tests.
-- Manual playground inputs for local smoke runs.
+- Historical Markdown samples retained for persistence/DTO tests and legacy-input rejection tests.
+- Anytype preview examples that explicitly accept historical Markdown.
+
+These files are not fresh assignment inputs. Fresh generation, submission and publication use
+[AssignmentV1](../docs/reference/ASSIGNMENT_V1.md); use the typed fixture in the
+[local product smoke recipe](../docs/operations/local-product-smoke.md) for a current smoke run.
 
 ## Canonical Fixtures
 
-- `ok.md`: baseline valid assignment fixture used by backend/orchestrator tests.
-- `job.md`: minimal valid fixture for generic job-path literals.
-- `actual_file.md`: richer manual fixture used by Anytype preview examples.
+- `ok.md`: historical assignment sample/path used by backend tests, including legacy rejection.
+- `job.md`: historical sample/path for generic job test literals.
+- `actual_file.md`: retained manual Markdown sample for Anytype preview examples.
 
 ## Policy
 

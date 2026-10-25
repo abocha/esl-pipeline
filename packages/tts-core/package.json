@@ -27,13 +27,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@esl-pipeline/contracts": "workspace:*",
-    "@esl-pipeline/pmd": "workspace:*"
+    "@esl-pipeline/contracts": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^24.13.4",
+    "@types/node": "^24.19.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": ">=24.15.0"

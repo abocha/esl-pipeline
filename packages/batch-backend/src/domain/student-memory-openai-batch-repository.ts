@@ -283,6 +283,7 @@ export async function updateStudentMemoryOpenAiBatchRunRemoteStatus(params: {
   remoteErrorFileId?: string | null;
   requestCounts?: Record<string, unknown>;
   remoteError?: Record<string, unknown>;
+  remoteStatusConfirmation?: { batchId: string; status: string };
 }): Promise<void> {
   const timestampColumn: Record<typeof params.state, string> = {
     in_progress: 'in_progress_at',
@@ -297,14 +298,19 @@ export async function updateStudentMemoryOpenAiBatchRunRemoteStatus(params: {
       `
         UPDATE student_memory_openai_batch_runs
         SET
-          state = $2,
+          state = CASE WHEN state = 'reconciled' AND $2 IN ('completed','failed','expired','cancelled') THEN state ELSE $2 END,
           remote_output_file_id = COALESCE($3, remote_output_file_id),
           remote_error_file_id = COALESCE($4, remote_error_file_id),
           remote_request_counts = COALESCE($5::jsonb, remote_request_counts),
           remote_error = COALESCE($6::jsonb, remote_error),
+          operator_audit = CASE WHEN $7::text IS NULL
+            THEN operator_audit - 'remoteStatusConfirmation'
+            ELSE COALESCE(operator_audit, '{}'::jsonb) || jsonb_build_object(
+              'remoteStatusConfirmation', jsonb_build_object('batchId', $8::text,
+                'status', $7::text, 'checkedAt', NOW())) END,
           ${timestampColumn[params.state]} = NOW()
         WHERE id = $1
-          AND state NOT IN ('reconciled')
+          AND ($8::text IS NULL OR remote_batch_id = $8)
       `,
       [
         params.runId,
@@ -313,6 +319,8 @@ export async function updateStudentMemoryOpenAiBatchRunRemoteStatus(params: {
         params.remoteErrorFileId ?? null,
         params.requestCounts ? JSON.stringify(params.requestCounts) : null,
         params.remoteError ? JSON.stringify(params.remoteError) : null,
+        params.remoteStatusConfirmation?.status ?? null,
+        params.remoteStatusConfirmation?.batchId ?? null,
       ],
     );
     if (result.rowCount !== 1)
@@ -617,12 +625,19 @@ export async function recordStudentMemoryOpenAiBatchReconciliationAudit(params: 
   });
 }
 
-export async function supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork(params: {
-  workload: StudentMemoryOpenAiBatchWorkload;
-  canonicalScopeKey: string;
-}): Promise<string[]> {
-  return withPgClient(async (client: PoolClient) => {
-    await client.query('BEGIN');
+export async function supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork(
+  params: {
+    workload: StudentMemoryOpenAiBatchWorkload;
+    canonicalScopeKey: string;
+    pendingSnapshotIntentId?: string;
+  },
+  options?: { client?: PoolClient },
+): Promise<string[]> {
+  if (params.pendingSnapshotIntentId && params.workload !== 'student_memory_snapshot') {
+    throw new Error('Pending snapshot ownership fencing requires the snapshot workload');
+  }
+  const write = async (client: PoolClient) => {
+    if (!options?.client) await client.query('BEGIN');
     try {
       const result = await client.query<{ id: string }>(
         `
@@ -647,13 +662,32 @@ export async function supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork(param
         `,
         [params.workload, params.canonicalScopeKey],
       );
-      await client.query('COMMIT');
+      if (params.pendingSnapshotIntentId) {
+        // Transitional recovery guard: retain Batch import's item/claim → student
+        // order, then finalization's student → intent order. The tentative fence
+        // is invisible outside this transaction and rolls back for terminal work.
+        await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [
+          params.canonicalScopeKey,
+        ]);
+        const intent = await client.query<{ status: string }>(
+          `SELECT status FROM student_memory_snapshots
+           WHERE id = $1 AND student_id = $2 FOR UPDATE`,
+          [params.pendingSnapshotIntentId, params.canonicalScopeKey],
+        );
+        if (intent.rows[0]?.status !== 'pending') {
+          if (options?.client) throw new Error('Pending snapshot intent is no longer runnable');
+          await client.query('ROLLBACK');
+          return [];
+        }
+      }
+      if (!options?.client) await client.query('COMMIT');
       return result.rows.map((row) => row.id);
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (!options?.client) await client.query('ROLLBACK');
       throw error;
     }
-  });
+  };
+  return options?.client ? write(options.client) : withPgClient(write);
 }
 
 function mapRun(row: RunRow): StudentMemoryOpenAiBatchRun {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { processHomeworkMemoryJob } from '../src/application/process-homework-memory-job.js';
 import { StudentMemoryPacingDeferredError } from '../src/application/student-memory-generation-pacing.js';
 import { loadConfig } from '../src/config/env.js';
+import { assignmentFixture } from './assignment-v1.test-harness.js';
 
 function createTestConfig() {
   const base = loadConfig();
@@ -18,7 +19,7 @@ function createTestConfig() {
 
 describe('application/process-homework-memory-job', () => {
   it('returns early when the pending homework-memory entry is no longer pending', async () => {
-    const sourceResolver = vi.fn();
+    const sourceResolver = vi.fn().mockResolvedValue({ format: 'assignment_v1' });
     const generator = vi.fn();
     const requestRefresh = vi.fn();
 
@@ -50,7 +51,7 @@ describe('application/process-homework-memory-job', () => {
       },
     });
 
-    expect(sourceResolver).not.toHaveBeenCalled();
+    expect(sourceResolver).toHaveBeenCalledWith('job-1');
     expect(generator).not.toHaveBeenCalled();
     expect(requestRefresh).not.toHaveBeenCalled();
   });
@@ -59,6 +60,8 @@ describe('application/process-homework-memory-job', () => {
     const sourcePending = {
       id: 'pending-1',
       status: 'pending',
+      provider: 'openai',
+      model: 'gpt-5.2',
       jobId: 'correction-1',
       studentId: 'student-1',
       assignmentLineageKey: 'root-1',
@@ -78,6 +81,7 @@ describe('application/process-homework-memory-job', () => {
     };
     const getById = vi
       .fn()
+      .mockResolvedValueOnce(sourcePending)
       .mockResolvedValueOnce(sourcePending)
       .mockResolvedValueOnce({ ...sourcePending, status: 'superseded', supersededById: 'ready-1' })
       .mockResolvedValueOnce(canonicalEntry);
@@ -103,14 +107,11 @@ describe('application/process-homework-memory-job', () => {
           assignmentLineageKey: 'root-1',
           studentId: 'student-1',
           publishedAt: new Date('2026-03-20T00:00:00.000Z'),
-          publishedMarkdown: '# Corrected homework',
+
           contentHash: 'hash-1',
           publishTargets: [],
-          normalizedMarkdown: {
-            frontmatter: null,
-            sections: [],
-            plainText: '# Corrected homework',
-          },
+          format: 'assignment_v1' as const,
+          assignment: assignmentFixture(),
         }),
         generator,
         homeworkMemory: {
@@ -163,6 +164,11 @@ describe('application/process-homework-memory-job', () => {
             getById: vi.fn().mockResolvedValue({
               id: 'pending-1',
               status: 'pending',
+              jobId: 'job-1',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.2',
+              contentHash: 'hash-1',
               generatedAt: new Date('2026-03-20T00:00:00.000Z'),
               generationNotes: { trigger: 'publish-succeeded' },
             }),
@@ -188,6 +194,7 @@ describe('application/process-homework-memory-job', () => {
       outcome: 'canonical_committed',
       entry: {
         id: 'homework-memory-1',
+        status: 'ready',
         generatedAt: new Date('2026-03-20T00:00:00.000Z'),
       },
     });
@@ -214,7 +221,7 @@ describe('application/process-homework-memory-job', () => {
           recordingId: 'recording-1',
           transcriptId: 'transcript-1',
           publishedAt: new Date('2026-03-20T00:00:00.000Z'),
-          publishedMarkdown: '# Assignment',
+
           contentHash: 'hash-1',
           publishTargets: [
             {
@@ -224,17 +231,19 @@ describe('application/process-homework-memory-job', () => {
               publishedAt: '2026-03-20T00:00:00.000Z',
             },
           ],
-          normalizedMarkdown: {
-            frontmatter: 'student: Test',
-            sections: [{ heading: 'Mission', content: 'Explain the problem and give advice.' }],
-            plainText: 'Mission Explain the problem and give advice.',
-          },
+          format: 'assignment_v1' as const,
+          assignment: assignmentFixture(),
         }),
         generator,
         homeworkMemory: {
           getById: vi.fn().mockResolvedValue({
             id: 'pending-1',
             status: 'pending',
+            jobId: 'job-1',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
+            contentHash: 'hash-1',
             generatedAt: new Date('2026-03-20T00:00:00.000Z'),
             generationNotes: {
               trigger: 'publish-succeeded',
@@ -265,7 +274,7 @@ describe('application/process-homework-memory-job', () => {
           },
           provider: 'openai',
           model: 'gpt-5.2',
-          prompt: expect.stringContaining('[PUBLISH_METADATA]'),
+          prompt: expect.stringContaining('https://example.com/homework'),
         }),
       }),
     );
@@ -297,14 +306,11 @@ describe('application/process-homework-memory-job', () => {
       assignmentLineageKey: 'lineage-1',
       studentId: 'student-1',
       publishedAt: new Date('2026-03-20T00:00:00.000Z'),
-      publishedMarkdown: '# Assignment',
+
       contentHash: 'hash-1',
       publishTargets: [],
-      normalizedMarkdown: {
-        frontmatter: null,
-        sections: [],
-        plainText: '# Assignment',
-      },
+      format: 'assignment_v1' as const,
+      assignment: assignmentFixture(),
     });
     const generator = vi.fn();
     const supersedePendingForAssignmentLineage = vi.fn().mockResolvedValue([]);
@@ -327,6 +333,11 @@ describe('application/process-homework-memory-job', () => {
           getById: vi.fn().mockResolvedValue({
             id: 'pending-1',
             status: 'pending',
+            jobId: 'job-1',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
+            contentHash: 'hash-1',
             generatedAt: new Date('2026-03-20T00:30:00.000Z'),
             generationNotes: { trigger: 'publish-succeeded' },
           }),
@@ -378,19 +389,21 @@ describe('application/process-homework-memory-job', () => {
           assignmentLineageKey: 'root-job',
           studentId: 'student-1',
           publishedAt: new Date('2026-03-20T10:00:00.000Z'),
-          publishedMarkdown: '# Earlier correction',
+
           contentHash: 'hash-a',
           publishTargets: [],
-          normalizedMarkdown: {
-            frontmatter: null,
-            sections: [],
-            plainText: '# Earlier correction',
-          },
+          format: 'assignment_v1' as const,
+          assignment: assignmentFixture(),
         }),
         generator,
         homeworkMemory: {
           getById: vi.fn().mockResolvedValue({
             id: 'pending-a',
+            jobId: 'correction-a',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
+            contentHash: 'hash-a',
             status: 'pending',
             generatedAt: new Date('2026-03-20T10:00:00.000Z'),
             generationNotes: { trigger: 'publish-correction-succeeded' },
@@ -412,6 +425,7 @@ describe('application/process-homework-memory-job', () => {
       outcome: 'canonical_committed',
       entry: {
         id: 'homework-memory-replay-1',
+        status: 'ready',
         generatedAt: new Date('2026-03-20T02:00:00.000Z'),
       },
     });
@@ -434,20 +448,22 @@ describe('application/process-homework-memory-job', () => {
           assignmentLineageKey: 'lineage-1',
           studentId: 'student-1',
           publishedAt: new Date('2026-03-20T00:00:00.000Z'),
-          publishedMarkdown: '# Assignment',
+
           contentHash: 'hash-1',
           publishTargets: [],
-          normalizedMarkdown: {
-            frontmatter: null,
-            sections: [],
-            plainText: '# Assignment',
-          },
+          format: 'assignment_v1' as const,
+          assignment: assignmentFixture(),
         }),
         generator,
         homeworkMemory: {
           getById: vi.fn().mockResolvedValue({
             id: 'pending-1',
             status: 'pending',
+            jobId: 'job-1',
+            studentId: 'student-1',
+            provider: 'openai',
+            model: 'gpt-5.2',
+            contentHash: 'hash-1',
             generatedAt: new Date('2026-03-20T01:30:00.000Z'),
             generationNotes: {
               trigger: 'publish-succeeded',
@@ -520,16 +536,22 @@ describe('application/process-homework-memory-job', () => {
             assignmentLineageKey: 'lineage-1',
             studentId: 'student-1',
             publishedAt: new Date('2026-06-21T10:00:00.000Z'),
-            publishedMarkdown: '# Assignment',
+
             contentHash: 'hash-1',
             publishTargets: [],
-            normalizedMarkdown: { frontmatter: null, sections: [], plainText: '# Assignment' },
+            format: 'assignment_v1' as const,
+            assignment: assignmentFixture(),
           }),
           generator: vi.fn(),
           homeworkMemory: {
             getById: vi.fn().mockResolvedValue({
               id: 'pending-1',
               status: 'pending',
+              jobId: 'job-1',
+              studentId: 'student-1',
+              provider: 'openai',
+              model: 'gpt-5.4-mini',
+              contentHash: 'hash-1',
               generatedAt: new Date('2026-06-21T10:00:00.000Z'),
               generationNotes: null,
             }),

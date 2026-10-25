@@ -31,24 +31,23 @@
     "test:integration": "vitest run --config ../../vitest.config.ts --dir . \"tests/integration.test.ts\"",
     "test:unit": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --exclude \"tests/integration.test.ts\"",
     "test:unit:prebuilt": "vitest run --config ../../vitest.config.ts --dir . --exclude \"tests/integration.test.ts\"",
-    "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/pmd build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/tts-core build",
+    "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/tts-core build",
     "test:unit:timings": "pnpm run test:unit:setup && vitest run --config ../../vitest.config.ts --dir . --exclude \"tests/integration.test.ts\" --reporter=json --outputFile=../../tmp/test-timings/tts-provider-elevenlabs/vitest.json",
     "test:watch": "vitest --config ../../vitest.config.ts --dir .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elevenlabs/elevenlabs-js": "^2.67.0",
+    "@elevenlabs/elevenlabs-js": "^2.71.0",
     "@esl-pipeline/contracts": "workspace:*",
-    "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@esl-pipeline/tts-core": "workspace:*",
-    "js-yaml": "^5.4.1"
+    "js-yaml": "^5.4.3"
   },
   "devDependencies": {
-    "@types/node": "^24.13.4",
+    "@types/node": "^24.19.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": ">=24.15.0"

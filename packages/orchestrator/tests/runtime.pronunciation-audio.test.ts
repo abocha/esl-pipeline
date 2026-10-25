@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@esl-pipeline/pmd', () => ({
-  extractPronunciationFocus: vi.fn(),
-}));
+import { assignmentFixture } from './assignment-fixture.js';
 
 vi.mock('@esl-pipeline/tts-core', async () => ({
   ...(await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core')),
+  resolveAssignmentPronunciation: vi.fn(),
   buildPronunciationShadowSentenceMp3: vi.fn(),
   buildPronunciationTextMp3: vi.fn(),
   isTtsModelForProvider: (provider: string, model: string) =>
@@ -17,17 +16,19 @@ vi.mock('@esl-pipeline/tts-core', async () => ({
           )
         : ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'].includes(model),
   resolveDefaultTtsModel: (provider: string) =>
-    provider === 'google'
-      ? 'chirp3_hd'
-      : provider === 'inworld'
-        ? 'inworld-tts-2'
-        : 'eleven_multilingual_v2',
+    provider === 'gemini'
+      ? 'gemini-3.8-flash-lite-tts'
+      : provider === 'google'
+        ? 'chirp3_hd'
+        : provider === 'inworld'
+          ? 'inworld-tts-2'
+          : 'eleven_multilingual_v2',
 }));
 
-import { extractPronunciationFocus } from '@esl-pipeline/pmd';
 import {
   buildPronunciationShadowSentenceMp3,
   buildPronunciationTextMp3,
+  resolveAssignmentPronunciation,
   TtsSynthesisCancelledError,
 } from '@esl-pipeline/tts-core';
 
@@ -38,8 +39,47 @@ describe('runtime/pronunciation-audio', () => {
     vi.clearAllMocks();
   });
 
+  it('keeps pronunciation items on Chirp when the primary provider is Gemini', async () => {
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
+      mode: 'minimal_pair',
+      pairs: [
+        {
+          line: 1,
+          left: { text: 'ship', transcription: '/ʃɪp/', line: 1 },
+          right: { text: 'sheep', transcription: '/ʃiːp/', line: 1 },
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async (input, options) => ({
+      path: '/tmp/gemini-item.mp3',
+      hash: input.text,
+      voiceId: input.voiceId,
+      provider: options.ttsProvider,
+      modelId: options.ttsModel,
+    }));
+    const result = await synthesizePronunciationAudio({
+      assignment: assignmentFixture(),
+      mdPath: '/tmp/typed.json',
+      outPath: '/tmp',
+      regeneratePrimary: false,
+      primaryTtsProvider: 'gemini',
+      primaryVoiceId: 'Kore',
+    });
+    expect(buildPronunciationTextMp3).toHaveBeenCalledTimes(2);
+    for (const call of vi.mocked(buildPronunciationTextMp3).mock.calls) {
+      expect(call[0].voiceId).toBe('en-US-Chirp3-HD-Charon');
+      expect(call[1]).toMatchObject({
+        ttsProvider: 'google',
+        ttsModel: 'chirp3_hd',
+      });
+    }
+    expect(result?.itemClips?.map((clip) => clip.tts?.provider)).toEqual(['google', 'google']);
+  });
+
   it('propagates one request control to shadow primary and item synthesis', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'shadow_sentence',
       shadowSentence: 'Use one shared request control.',
       words: [{ line: 1, text: 'shared request', transcription: '/shared request/' }],
@@ -60,7 +100,7 @@ describe('runtime/pronunciation-audio', () => {
     const deadlineAtMs = Date.now() + 60_000;
 
     await synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       primaryTtsProvider: 'inworld',
@@ -80,7 +120,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('starts no pronunciation worker when the caller is already cancelled', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'minimal_pair',
       pairs: [
         {
@@ -97,7 +137,7 @@ describe('runtime/pronunciation-audio', () => {
 
     await expect(
       synthesizePronunciationAudio({
-        context: {} as never,
+        assignment: assignmentFixture(),
         mdPath: '/tmp/example.md',
         outPath: '/tmp',
         primaryVoiceId: 'voice-primary',
@@ -108,7 +148,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('lets started pronunciation calls settle but launches no more after cancellation', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'sentence_stress',
       naturalSentence: 'One two three four five.',
       drills: [
@@ -136,7 +176,7 @@ describe('runtime/pronunciation-audio', () => {
     );
     const controller = new AbortController();
     const result = synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       regeneratePrimary: false,
@@ -155,7 +195,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('reports cancellation when mixed in-flight pronunciation items reject and resolve after abort', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'sentence_stress',
       naturalSentence: 'One two three four five.',
       drills: [
@@ -180,7 +220,7 @@ describe('runtime/pronunciation-audio', () => {
     );
     const controller = new AbortController();
     const result = synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       regeneratePrimary: false,
@@ -199,7 +239,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('reports cancellation when an in-flight shadow primary rejects after abort', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'shadow_sentence',
       shadowSentence: 'Use one shared request control.',
       words: [],
@@ -215,7 +255,7 @@ describe('runtime/pronunciation-audio', () => {
     );
     const controller = new AbortController();
     const result = synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       primaryVoiceId: 'voice-primary',
@@ -231,7 +271,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('synthesizes one Word clip per shadow drill without duplicate Natural clips', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'shadow_sentence',
       shadowSentence: 'She asks me to use a natural workplace phrase.',
       words: [
@@ -256,7 +296,7 @@ describe('runtime/pronunciation-audio', () => {
     }));
 
     const result = await synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
@@ -276,7 +316,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('defaults pronunciation chunk clips to google provider synthesis', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'minimal_pair',
       pairs: [
         {
@@ -299,7 +339,7 @@ describe('runtime/pronunciation-audio', () => {
     }));
 
     const result = await synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
@@ -324,7 +364,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('uses careful connected-speech text when the connected target is IPA-only', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'connected_speech',
       naturalSentence: 'The device is as heavy as the old one.',
       lines: [
@@ -348,7 +388,7 @@ describe('runtime/pronunciation-audio', () => {
 
     const logs: unknown[] = [];
     const result = await synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
@@ -388,7 +428,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('uses the normal written connected-speech phrase for item audio', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'connected_speech',
       naturalSentence: 'I saw a tuft of feathers on the path.',
       lines: [
@@ -412,7 +452,7 @@ describe('runtime/pronunciation-audio', () => {
     }));
 
     const result = await synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
@@ -435,7 +475,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('reuses unchanged pronunciation item clips while synthesizing changed clips', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'connected_speech',
       naturalSentence: 'I saw a tuft of feathers and a cup of tea.',
       lines: [
@@ -464,7 +504,7 @@ describe('runtime/pronunciation-audio', () => {
     }));
 
     const result = await synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
@@ -535,7 +575,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('uses the Google chunk default voice for sentence-level item clips when no chunk voice override is provided', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'sentence_stress',
       naturalSentence: 'We really need to leave now before traffic gets worse.',
       drills: [
@@ -560,7 +600,7 @@ describe('runtime/pronunciation-audio', () => {
     );
 
     const result = await synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
@@ -592,7 +632,7 @@ describe('runtime/pronunciation-audio', () => {
   });
 
   it('synthesizes independent item clips with bounded concurrency while preserving order', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
+    vi.mocked(resolveAssignmentPronunciation).mockReturnValue({
       mode: 'sentence_stress',
       naturalSentence: 'One two three four five.',
       drills: [
@@ -632,7 +672,7 @@ describe('runtime/pronunciation-audio', () => {
     });
 
     const result = await synthesizePronunciationAudio({
-      context: {} as never,
+      assignment: assignmentFixture(),
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',

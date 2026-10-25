@@ -19,11 +19,12 @@ template ID and declaration. The existing immutable package stores the actual re
 preview text and request envelope with the pinned strict AssignmentV1 schema/name/version.
 
 OpenAI GPT-6.1 Sol receives trusted instructions separately from labeled source data, with medium
-reasoning and medium verbosity. Completed non-refusal direct JSON is validated locally and rendered
-deterministically into the existing PMD response. Old packages require recreation. Saved drafts,
-editing, confirmation, correction, publication and memory continue using Markdown. No model-driven
-serialization repair remains. See [AssignmentV1](ASSIGNMENT_V1.md) for admission, compatibility,
-offline evidence boundaries and later authorized activation/rollback.
+reasoning and medium verbosity. Completed non-refusal direct JSON is validated locally and returned
+as AssignmentV1. The orchestrator publishes the typed assignment as native HTML. Old packages
+require recreation. Historical Markdown remains read-only under the explicit compatibility
+boundaries in [AssignmentV1](ASSIGNMENT_V1.md); it is not the current draft, publication, or memory
+execution path. No model-driven serialization repair remains. See that reference for admission,
+compatibility, offline evidence boundaries and later authorized activation/rollback.
 
 ## Assembly and source authority
 

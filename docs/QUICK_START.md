@@ -49,8 +49,11 @@ full Docker dev stack as a fidelity/debug fallback.
 
 ```bash
 pnpm --filter @esl-pipeline/<package> test
-pnpm docs:check
 ```
+
+For documentation-only changes, use the [docs-only recipe](reference/TESTING_GUIDELINES.md#docs-only-changes),
+which selects PR-mode structural checks. The full `pnpm docs:check` audit retains repository-wide
+freshness enforcement and is required before advancing a document's `Last Verified Against` date.
 
 Run the smallest relevant package test, typecheck, lint, or build while editing and before pushing.
 Hosted PR CI is the comprehensive merge gate. If a hosted job fails, inspect its logs/artifacts and
@@ -59,15 +62,20 @@ reproduce that job's actual command, configuration, and prerequisites. Use
 
 ## Operational Entry Point (Backend-First)
 
+Start each core service in its own terminal:
+
 ```bash
-pnpm dev:batch
+pnpm --filter @esl-pipeline/batch-backend dev:api
+pnpm --filter @esl-pipeline/batch-backend dev:worker
+pnpm --filter @esl-pipeline/batch-backend dev:student-memory-worker
+pnpm --filter @esl-pipeline/batch-frontend dev
 ```
 
-This starts the API, batch worker, student-memory worker, and frontend on the host. For frontend-only
-iteration without a backend, use the mock-auth sandbox documented in
+These start the API, batch worker, student-memory worker, and frontend on the host. For frontend-only iteration without a backend,
+use the mock-auth sandbox documented in
 [`packages/batch-frontend/README.md`](../packages/batch-frontend/README.md).
 
-The root command does not start the separate transcription worker. When testing OPUS transcription,
+The commands above do not start the separate transcription worker. When testing OPUS transcription,
 start it in another shell:
 
 ```bash

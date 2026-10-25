@@ -1,58 +1,43 @@
-import { describe, expect, it, vi } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { describe, expect, it } from 'vitest';
 
-import { resolveLoggerTransport } from '../src/infrastructure/logger.js';
-
-describe('resolveLoggerTransport', () => {
-  it('returns pino-pretty transport in development when module is resolvable', () => {
-    const resolveModule = vi.fn(() => '/tmp/pino-pretty');
-    const warn = vi.fn();
-
-    const transport = resolveLoggerTransport({
-      nodeEnv: 'development',
-      resolveModule,
-      warn,
+describe('JSON logger', () => {
+  it.each(['development', 'production'])('writes structured fields and errors in %s', (nodeEnv) => {
+    const moduleUrl = new URL('../src/infrastructure/logger.ts', import.meta.url).href;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--import',
+        'tsx',
+        '--input-type=module',
+        '-e',
+        `
+      const { createJobLogger } = await import(${JSON.stringify(moduleUrl)});
+      const log = createJobLogger('job-1', 'run-1');
+      log.info('upload started', { backend: 's3' });
+      log.error(new Error('upload failed'));
+    `,
+      ],
+      { encoding: 'utf8', env: { ...process.env, NODE_ENV: nodeEnv, LOG_LEVEL: 'info' } },
+    );
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    const entries = result.stdout
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      level: 30,
+      msg: 'upload started',
+      jobId: 'job-1',
+      runId: 'run-1',
+      backend: 's3',
     });
-
-    expect(resolveModule).toHaveBeenCalledWith('pino-pretty');
-    expect(transport).toMatchObject({
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-      },
+    expect(entries[1]).toMatchObject({
+      level: 50,
+      msg: 'upload failed',
+      err: { name: 'Error', message: 'upload failed' },
     });
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it('falls back to JSON transport when pino-pretty cannot be resolved', () => {
-    const resolveModule = vi.fn(() => {
-      throw new Error('module missing');
-    });
-    const warn = vi.fn();
-
-    const transport = resolveLoggerTransport({
-      nodeEnv: 'development',
-      resolveModule,
-      warn,
-    });
-
-    expect(resolveModule).toHaveBeenCalledWith('pino-pretty');
-    expect(transport).toBeUndefined();
-    expect(warn).toHaveBeenCalledWith('pino-pretty is unavailable; falling back to JSON logs.');
-  });
-
-  it('skips pretty transport outside development', () => {
-    const resolveModule = vi.fn(() => '/tmp/pino-pretty');
-    const warn = vi.fn();
-
-    const transport = resolveLoggerTransport({
-      nodeEnv: 'production',
-      resolveModule,
-      warn,
-    });
-
-    expect(transport).toBeUndefined();
-    expect(resolveModule).not.toHaveBeenCalled();
-    expect(warn).not.toHaveBeenCalled();
   });
 });

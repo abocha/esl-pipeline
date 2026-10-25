@@ -14,6 +14,7 @@ import {
   createJobWorker,
   recoverAssignmentShareQueue,
 } from '../src/infrastructure/queue-bullmq.js';
+import { assignmentArtifactFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 import { requirePgTestEnv, requireRedisTestEnv, resolveTestTimeout } from './support/test-env.js';
 
 requirePgTestEnv();
@@ -63,7 +64,12 @@ describe('assignment Share recovery (requires PostgreSQL and Redis)', () => {
       const draftId = randomUUID();
       const sessionId = randomUUID();
       const jobId = randomUUID();
-      const draftUri = `local://drafts/${draftId}/content/confirmed.md`;
+      const draftUri = `local://drafts/content/${'b'.repeat(64)}.json`;
+      const assignmentArtifact = {
+        ...assignmentArtifactFixture(),
+        contentHash: 'b'.repeat(64),
+        storageUri: draftUri,
+      };
       const transcriptUri = `local://transcripts/${transcriptId}.txt`;
       const snapshot = {
         student: { studentId },
@@ -87,6 +93,7 @@ describe('assignment Share recovery (requires PostgreSQL and Redis)', () => {
           draftWorkingVersion: 1,
           draftStorageUri: draftUri,
           draftHash: 'b'.repeat(64),
+          artifact: assignmentArtifact,
         },
       };
       await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
@@ -122,22 +129,36 @@ describe('assignment Share recovery (requires PostgreSQL and Redis)', () => {
         );
         await client.query(
           `INSERT INTO prompt_packages
-             (id, recording_id, transcript_id, student_id, template_version, storage_uri)
-           VALUES ($1, $2, $3, $4, 'template-v1', 'local://prompt.txt')`,
-          [promptPackageId, recordingId, transcriptId, studentId],
+             (id, recording_id, transcript_id, student_id, template_version, storage_uri, request_envelope)
+           VALUES ($1, $2, $3, $4, 'template-v1', 'local://prompt.txt', $5::jsonb)`,
+          [
+            promptPackageId,
+            recordingId,
+            transcriptId,
+            studentId,
+            JSON.stringify(promptPackageFixture().requestEnvelope),
+          ],
         );
         await client.query(
-          `INSERT INTO drafts
-             (id, prompt_package_id, student_id, storage_uri, working_version, content_hash, created_by)
-           VALUES ($1, $2, $3, $4, 1, $5, $6)`,
+          `INSERT INTO drafts (id, prompt_package_id, student_id, storage_uri, working_version, content_hash, created_by, format)
+           VALUES ($1, $2, $3, $4, 1, $5, $6, 'assignment_v1')`,
           [draftId, promptPackageId, studentId, draftUri, 'b'.repeat(64), userId],
         );
         await client.query(
-          `INSERT INTO jobs
-             (id, state, md_storage_uri, recording_id, transcript_id, prompt_package_id, draft_id,
-              publish_target, user_id, student_id)
-           VALUES ($1, 'queued', $2, $3, $4, $5, $6, 'html', $7, $8)`,
-          [jobId, draftUri, recordingId, transcriptId, promptPackageId, draftId, userId, studentId],
+          `INSERT INTO jobs (id, state, md_storage_uri, recording_id, transcript_id, prompt_package_id, draft_id,
+              publish_target, user_id, student_id, assignment_artifact, assignment_renderer_version)
+           VALUES ($1, 'queued', $2, $3, $4, $5, $6, 'html', $7, $8, $9::jsonb, 2)`,
+          [
+            jobId,
+            draftUri,
+            recordingId,
+            transcriptId,
+            promptPackageId,
+            draftId,
+            userId,
+            studentId,
+            JSON.stringify(assignmentArtifact),
+          ],
         );
         await client.query(
           `INSERT INTO assignment_sessions

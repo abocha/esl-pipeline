@@ -37,8 +37,8 @@ is `${XDG_STATE_HOME:-$HOME/.local/state}/esl-pipeline/ops`. Production must use
 PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops
 ```
 
-Create that directory during host provisioning and grant the production operator account read/write
-access. The production S3 wrapper defaults to this location. `PG_BACKUP_DIR`, `PG_BACKUP_LOG_DIR`, and
+Create that directory during host provisioning as root:root `0750`; run production operations
+through the privileged operator workflow. The production S3 wrapper defaults to this location. `PG_BACKUP_DIR`, `PG_BACKUP_LOG_DIR`, and
 `PG_BACKUP_ALERT_STATE_FILE` remain optional host-path overrides for their narrower existing uses.
 
 The resulting layout is:
@@ -100,7 +100,7 @@ and database/application readiness remain separately authorized deployment/recov
 
 The canonical production unit files are under [`deploy/systemd`](../../deploy/systemd/). They
 capture the existing backup, weekly artifact-integrity, and monthly restore-drill services and add
-the missing six-hour ops-alert service/timer. The host scripts source `/opt/esl-pipeline/.env`; keep
+the missing six-hour ops-alert service/timer. The host scripts source `/etc/esl-pipeline/production.env`; keep
 the Telegram token/chat settings and S3 settings there, with `PG_BACKUP_HOST_STATE_DIR` set to
 `/var/lib/esl-pipeline/ops` and `PG_BACKUP_ALERT_TELEGRAM_DISABLE=false`.
 
@@ -121,7 +121,7 @@ systemctl list-timers --all 'esl-postgres-*' --no-pager
 ```
 
 The alert timer runs at 00:00, 06:00, 12:00, and 18:00 UTC. `Persistent=true` allows a missed
-calendar activation to run after the host returns. The alert service checks that `/opt/esl-pipeline/.env`
+calendar activation to run after the host returns. The alert service checks that `/etc/esl-pipeline/production.env`
 exists before running; absence causes an explicit service failure rather than a skipped unit. The
 oneshot service exit status reflects PostgreSQL ops health: it exits non-zero when health is degraded
 or critical, even if Telegram delivery succeeds. Conversely, a healthy recovery run exits zero even
@@ -157,6 +157,14 @@ project's `postgres18_data` volume.
 
 Reports contain object keys, version/verification metadata, count-only probes, and cleanup status.
 They do not contain table rows, credentials, URLs with credentials, or application payloads.
+
+Both evidence runners exit nonzero if report publication fails, even when verification succeeded.
+They publish `latest` by an atomic rename only after the new report is complete; publication failure
+preserves the prior latest report, which is not evidence for the failed run. Inspect the runner's
+log for the operation outcome and expected report path, repair host-state write access, and rerun
+the intended check. The restore drill also checks for its exact invocation-owned container after a
+failed start, attempts disposable cleanup, and reports any cleanup failure separately from the
+original operation failure. A failed cleanup requires operator inspection of the named resources.
 
 ## Recommended Production Cadence
 

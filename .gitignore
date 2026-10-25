@@ -32,16 +32,11 @@ skills-lock.json
 .agents/*
 !.agents/skills/
 .agents/skills/*
-!.agents/skills/esl-pipeline-pr-ci-babysit/
-!.agents/skills/esl-pipeline-pr-ci-babysit/SKILL.md
 !.agents/skills/esl-pipeline-validation-evidence/
 !.agents/skills/esl-pipeline-validation-evidence/SKILL.md
 !.agents/skills/esl-pipeline-deployment-change-checklist/
 !.agents/skills/esl-pipeline-deployment-change-checklist/SKILL.md
 .codex/**
-!.codex/ORCHESTRATION.md
-!.codex/WORKFLOW_MODES.md
-!.codex/PLANNING_HANDOFF.md
 !.codex/PROJECT.md
 !.codex/agents/
 .codex/agents/**

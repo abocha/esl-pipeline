@@ -19,6 +19,7 @@ import {
 import {
   copyStudentProfileCandidateDraftRevisionLinks,
   markStudentProfileCandidatesPromotedByRevision,
+  type StudentProfileCandidatePromotionResult,
 } from '../domain/student-profile-candidate-repository.js';
 import { getStudentById } from '../domain/student-repository.js';
 import {
@@ -53,6 +54,7 @@ export interface ProfileRevisionSummaryResponse {
 export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryResponse {
   content: string;
   structuredContent?: FoundationalProfile | null;
+  candidatePromotion?: StudentProfileCandidatePromotionResult;
 }
 
 export interface ProfileRevisionListResponse {
@@ -250,7 +252,9 @@ async function saveProfileRevision(
   }
 
   if (status === 'active' && existingRevision) {
-    revision = (await dependencies.revisions.activate(studentId, revision.id)) ?? revision;
+    revision =
+      (await dependencies.revisions.activate(studentId, revision.id, options.createdBy)) ??
+      revision;
   }
 
   return {
@@ -366,17 +370,27 @@ export async function restoreProfileRevision(
 export async function activateProfileRevisionForStudent(
   studentId: string,
   revisionId: string,
-  overrides?: Partial<ProfileContentDependencies>,
+  overrides?: Partial<ProfileContentDependencies> & { actorUserId?: string | null },
 ): Promise<ProfileRevisionDetailResponse | null> {
   const dependencies = getDependencies(overrides);
 
-  const activated = await dependencies.revisions.activate(studentId, revisionId);
+  const activated = await dependencies.revisions.activate(
+    studentId,
+    revisionId,
+    overrides?.actorUserId,
+  );
   if (!activated) return null;
 
-  await dependencies.candidates.markPromotedByRevision(activated.id);
+  const candidatePromotion = await dependencies.candidates.markPromotedByRevision(activated.id, {
+    studentId: activated.studentId,
+    contentHash: activated.contentHash,
+    structuredContent: resolveStructuredContent(activated.structuredContent, activated.content),
+    actorUserId: overrides?.actorUserId,
+  });
 
   return {
     ...toProfileRevisionSummary(activated),
+    candidatePromotion,
     content: activated.content,
     structuredContent: resolveStructuredContent(activated.structuredContent, activated.content),
   };

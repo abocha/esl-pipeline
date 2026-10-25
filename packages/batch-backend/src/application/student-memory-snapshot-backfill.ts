@@ -49,6 +49,7 @@ export async function requestStudentMemorySnapshotBackfill(args: {
     'manual_rebuild_v1_1' | 'full_rebuild_v1'
   >;
   operatorReason: string;
+  replayKey: string;
   requestCandidateRefresh?: boolean;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
@@ -56,20 +57,33 @@ export async function requestStudentMemorySnapshotBackfill(args: {
   requested: number;
 }> {
   let requested = 0;
+  let confirmedTargets = 0;
 
   for (const target of args.targets) {
-    await requestStudentMemorySnapshotRefresh({
-      config: args.config,
-      params: {
-        studentId: target.studentId,
-        trigger: 'manual-replay',
-        strategy: args.strategy,
-        operatorReason: args.operatorReason,
-        requestCandidateRefresh: args.requestCandidateRefresh === true,
-        providerOverride: args.providerOverride,
-        modelOverride: args.modelOverride,
-      },
-    });
+    try {
+      await requestStudentMemorySnapshotRefresh({
+        config: args.config,
+        params: {
+          studentId: target.studentId,
+          trigger: 'manual-replay',
+          strategy: args.strategy,
+          operatorReason: args.operatorReason,
+          replayKey: args.replayKey,
+          requestCandidateRefresh: args.requestCandidateRefresh === true,
+          providerOverride: args.providerOverride,
+          modelOverride: args.modelOverride,
+        },
+      });
+    } catch (error) {
+      throw new Error(
+        `request_failed: confirmedTargets=${confirmedTargets}/${args.targets.length} confirmedRequested=${requested}. ` +
+          'The failing target outcome is unknown and may include persisted intent or queued work. ' +
+          'Confirmed request responses do not establish asynchronous worker completion. ' +
+          'Inspect persisted intent and worker outcomes; reuse the same replay key for the same intent when resuming.',
+        { cause: error },
+      );
+    }
+    confirmedTargets += 1;
     requested += 1;
   }
 

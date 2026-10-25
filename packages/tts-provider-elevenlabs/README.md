@@ -32,3 +32,8 @@ registerTtsProvider(createElevenLabsTtsProvider());
 
 - Local dialogue synthesis inputs use canonical camelCase `voiceId`.
 - Legacy snake_case `voice_id` is retired from local request payloads.
+
+Assignment synthesis accepts typed AssignmentV1 only. Historical Markdown execution and cleanup
+are retired. Derived speech fields and pronunciation text remove paired single-backtick linguistic
+highlight markers; other literal punctuation and unmatched backticks remain unchanged. Stored
+assignment strings are never rewritten.

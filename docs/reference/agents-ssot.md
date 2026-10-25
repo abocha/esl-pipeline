@@ -38,7 +38,9 @@ For deep system maps, prefer the linked docs rather than growing this file again
   - operator control-panel adapter over authenticated `batch-backend` operations
   - no independent pipeline, persistence, or deployment semantics
 - supporting implementation packages
-  - validation/parsing: `md-validator`, `pmd`
+  - learner presentation: `learner-handout` (sole native React renderer, deterministic Node static
+    documents and local Vite fixtures; html-publisher owns publication identity)
+  - domain validation: `contracts` (AssignmentV1)
   - adapters/providers: `html-publisher`, `tts-*`, `stt-*`, `storage-uploader`
   - shared runtime utilities: `provider-runtime`, `shared-infrastructure`, `contracts`
 
@@ -61,7 +63,7 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Manifest behavior is contract-level; changes must be coordinated with tests and docs.
 - New schema-5 study-text voice plans emit `ranked`, `deterministic`, or `fallback` resolution modes.
   Manifests containing the older `resolved` token normalize it to `deterministic` when read.
-- Authored lesson Markdown stays provider-neutral. Provider capability resolution and expressive
+- Authored AssignmentV1 lesson text stays provider-neutral. Provider capability resolution and expressive
   speech rendering happen after TTS provider/model selection.
 - Study-text performance mode is orchestrator-owned: authored `dialogue` stays dialogue, authored
   `tts` stays monologue, and `auto` resolves dialogue only for two or more distinct authored
@@ -74,8 +76,23 @@ For deep system maps, prefer the linked docs rather than growing this file again
     proves the clip-level audio identity is unchanged; changed clips in a selected family still
     require replacement upload semantics
 - `batch-backend` may orchestrate and persist work, but it must not invent alternate pipeline semantics.
+  Its worker entry maps new-assignment and rerun payloads into orchestrator v2 flags, forwarding
+  persisted voice/learning-preset options and the selected rerun theme.
 
 ### Contracts and compatibility
+
+- Learner-memory and affected profile generation use one effective request envelope for instructions
+  and input. Provider diagnostic text and budget estimation derive from that content; transport
+  differences do not own separate teaching policies. Prompt-only initial enrichment stays supported.
+  Preserve stored historical request evidence and the separately gated Batch retirement boundary.
+  See [generation policy](GENERATION_PROVIDER_POLICY.md#effective-learner-memory-inputs-esl-40).
+- ESL-45 OpenAI daily admission shares reserved-token caps across explicit reviewed model groups;
+  unknown mappings fail closed. Preserve per-model attribution and UTC-day counters. All writers
+  must use compatible group locking at cutover; never erase pre-upgrade same-day reservations.
+  See [group quota policy](GENERATION_PROVIDER_POLICY.md#openai-model-group-daily-budgets-esl-45).
+- ESL-41 admits only OpenAI for fresh LLM work and maintenance. Retired Google AI Studio/OpenRouter
+  targets fail before dispatch; frozen jobs and historical provenance are never silently retargeted.
+  Independent STT/TTS and the separately default-off OpenAI Batch lane remain unchanged.
 
 - Public request/response DTO changes must go through `@esl-pipeline/contracts`.
 - Do not silently rename or repurpose manifest/config fields.
@@ -83,6 +100,21 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Legacy compatibility paths should be retired deliberately, never by drift.
 
 ### Schema and persistence
+
+- ESL-62 scheduling uses one selected Google Calendar per workspace. Google owns event timing and
+  recurrence; ESL owns lesson identity, completion/no-show/charge decisions, credits and
+  homework/history lineage. Google is required only for scheduling. Optional student operational
+  email is not an identity key. Durable per-series operations retain event identity across retries;
+  recovery cannot resend invitations. Exact provider identities retain lesson IDs. Unused future
+  projections may be replaced atomically when Google replaces identities, preserving the visible
+  schedule without duplicate/canceled replacement noise; completed, charged, elapsed and linked
+  history stays protected. Registered association plus durable create-request provenance establishes
+  student ownership, never an inferred old-to-new occurrence mapping. New references cannot attach
+  to hidden superseded projections. Sync and completion use the same lesson locks. Retire local
+  recurrence generation and materializing reads, preserve historical snapshots and use reviewed
+  hide-only cleanup for unused placeholders. See the
+  [Calendar cutover runbook](../operations/google-calendar-cutover.md), including external provider
+  continuity and separately authorized production acceptance gates.
 
 - Student is the sole foundational learner-profile ownership root. Profile revisions belong to
   `student_profile_revisions.student_id`; active status plus the partial unique index is canonical.
@@ -96,9 +128,27 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Database changes belong in versioned migrations.
 - Runtime legacy schema patching is emergency-only and must not become the normal change path.
 - Durable workflow state, action history, and lineage are backend responsibilities, not frontend inventions.
+- Assignment completion has two backend-owned outcomes: confirmed Share for homework, or saved
+  `homeworkIntent = 'none'` with a current `transcriptCompletedAt` marker for transcript-only lessons.
+  Only explicit finish sets the marker after exact-source confirmation; choice saves remain
+  unfinished. Immutable source-bound finish history is separate and never confers current completion.
+  Promotion to homework clears the current marker, retains the same canonical owner and finish
+  evidence, and requires another explicit finish if no-homework is reselected before downstream work.
+  Saved none intent rejects ordinary confirmation and session-bound generation under the same locks
+  as mutation. Completed transcript sources are read-only until explicit promotion.
+- Transcript-only completion preserves canonical lesson-memory, snapshot and eligible initial
+  enrichment processing. Durable delivery reconciliation covers pending extraction and a ready
+  extraction with a missing source-linked snapshot obligation; repair reuses extraction and respects
+  terminal intent states. Lesson linking retains the existing elapsed-lesson credit boundary;
+  transcript finish and promotion have no billing effects.
 
 ### Security and config
 
+- MCP connection profiles identify one authenticated user/workspace pair using an immutable random
+  UUID in `mcp_profile_identities`, independent of OAuth grants, tokens and display metadata.
+  Successful grant binding provisions the identity atomically. Membership removal must deny access
+  without deleting the identity; reconnecting after membership restoration reuses it. `get_profile`
+  only reads the validated grant's profile and fails closed when its identity is missing.
 - Never hardcode secrets.
 - Prefer canonical namespaced env vars over legacy aliases.
 - Fail-safe defaults matter more than convenience defaults for auth, quotas, and mutating operations.
@@ -183,9 +233,9 @@ Update together:
 - pnpm
 - system ffmpeg where provider flows require it
 
-Required repo checks for behavior changes:
+Validation contracts (execution and evidence selection are owned by the
+[testing guide](TESTING_GUIDELINES.md#choose-the-evidence-route) and package execution recipes):
 
-- During editing, run the narrowest relevant package, file, or `vitest related --run` lane first.
 - Focused local checks are the default. Broad local aggregation requires a concrete plausible wider
   failure to catch before CI, local environment behavior under test, unavailable equivalent hosted
   evidence, or a specific CI failure being reproduced or diagnosed. Diff breadth alone is not a
@@ -223,10 +273,8 @@ Required repo checks for behavior changes:
   gate only after relevant source, configuration, toolchain, or a diagnosed prerequisite condition
   changed. Stop and report a stable infrastructure or prerequisite failure instead of assembling a
   green cache through reruns.
-- Use the smallest relevant package test, typecheck, lint, or build command while editing and before
-  pushing. Use `pnpm test:backend:db:worker` only for a concrete local PostgreSQL/Redis diagnostic.
-  It is a narrow reachability, environment-construction, and Windows-compatible invocation helper,
-  not a comprehensive local CI wrapper.
+- Local DB/worker helpers remain narrow reachability, environment-construction and invocation tools
+  for concrete diagnostics, not comprehensive local CI wrappers.
 
 Canonical blocking PR check names are `CI gate`, `repository policy (node 24.x)`,
 `build + code quality (node 24.x)`, `unit + component (node 24.x)`,
@@ -236,11 +284,8 @@ Canonical blocking PR check names are `CI gate`, `repository policy (node 24.x)`
 single branch-protection requirement when repository plan capabilities permit. Every selected job
 must succeed; a required job that is missing, cancelled, or unexpectedly skipped fails the gate.
 
-Docs-heavy changes also require:
-
-- `pnpm docs:generate:indexes`
-- `pnpm format`
-- `pnpm docs:check`
+Docs changes require synchronized generated references, formatting and the applicable documentation
+checks from the [docs-only recipe](TESTING_GUIDELINES.md#docs-only-changes).
 
 ## Environment and Entrypoints
 
@@ -281,3 +326,56 @@ Docs-heavy changes also require:
 - [`docs/README.md`](../README.md)
 - [`docs/backend-frontend/backend-frontend-alignment.md`](../backend-frontend/backend-frontend-alignment.md)
 - [`docs/reference/env.md`](env.md)
+
+### AssignmentV1 native execution (ESL-6)
+
+AssignmentV1 runtime/read admission accepts exactly the closed legacy root `rationale` shape or
+the new required `learnerRationale` plus required nullable `teacherRationale` shape. Mixed, missing
+and partial shapes fail. Fresh generation admits only the new shape after provider receipt; the
+provider schema and template marker identify `assignment_v1_generation_v8`. Stored prompt pins and
+old active template markers fail the existing unsupported-contract path before dispatch. Reads
+never normalize old assignments or add fields; canonical serialization 1 and frozen hashes remain
+unchanged. Native learner HTML renders only learner rationale; ambiguous legacy rationale omits
+section 6 entirely and teacher rationale is never emitted anywhere in the document.
+
+Output-task runtime admission independently accepts either the closed legacy task/extension/sample
+shape or the complete structured mission: task text, preparation/requirements/selfCheck text lists,
+nullable delivery text and unchanged extension/sampleResponse fields. Partial mission roles fail.
+Fresh generation requires all structured role fields, permitting empty lists and null delivery
+when unnecessary. Reads insert no defaults. Learner HTML emphasizes the task first, then displays
+only populated supporting roles; the sample remains in the answer key.
+
+Grammar read admission independently accepts each closed legacy scalar-form item or complete
+structured item with required nonempty formBlocks (label/pattern/nonempty examples) and required
+comparisons (possibly empty). Each comparison contains a label and exactly two labeled alternatives,
+each with example/explanation. Mixed or partial item shapes fail. Fresh generation requires every
+grammar item to be structured; reads never convert legacy grammar or insert fields. General examples,
+uses and original/improved/explanation traps retain their distinct roles without array padding.
+Schema/serialization version 1 and frozen legacy identities remain unchanged.
+
+Fresh metadata requires `instructionLanguage` as a language tag; runtime reads accept absence
+without inserting fields into older objects. The generation policy selects current tutor guidance,
+durable learner preference/profile, strong current/recent learner-level evidence, then English.
+Support-language scaffolding stays separate from target English. Economy is the smallest complete
+teaching sequence, with no fixed vocabulary/exercise quotas or omission of useful scaffolding for
+JSON brevity. The existing prompt context sources own this evidence; no second profile system is
+introduced. See [AssignmentV1 policy](ASSIGNMENT_V1.md#fresh-teaching-policy-and-support-language-esl-27).
+
+Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
+HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source
+is created. Native React renderer 3 / manifest schema 6 carry canonical assignment and publication
+metadata; API 9 / validator 3 retire Markdown processing while manifest contract 4 keeps historical
+read semantics. Historical Markdown and renderer-1 manifests are read-only evidence under ABO-30.
+No historical correction, retry, rerun, resume, rendering, TTS, publication, fresh memory extraction or conversion is supported. Previously materialized, verified lesson/homework observations may be read and used in student-memory snapshot derivation under the existing exact ownership, confirmed-binding, identity/URI/hash and replacement checks (ESL-38). This evidence exception never admits historical extraction, regeneration, enrichment recovery or Batch legacy import. Editable JSON authority, source authorization, CAS,
+lineage, cast/speech provenance and selected audio-family reuse remain unchanged. See
+[AssignmentV1](ASSIGNMENT_V1.md) for the canonical execution contract.
+Migration 0065 admits renderer-3 job writes with existing artifact checks and the frozen-identity
+trigger unchanged. It must precede new native execution writes and blocks previous-image recovery
+that cannot truthfully execute renderer 3. No v1/v2 executable renderer is retained.
+
+ESL-32 fresh metadata requires one authored `icon` emoji; missing-icon reads have only a display
+fallback. Paired-backtick linguistic highlighting stays an escaped string convention and is stripped
+only in derived speech/drill projections. Teacher follow-up, teacher rationale and ambiguous legacy
+rationale are absent from whole learner HTML. Independent grammar reveals are one-way per page;
+source/transcript and consolidated answer-key organization remain shared in Preview/publication.
+See [the handout contract](ASSIGNMENT_V1.md#learner-handout-convention-and-authored-emoji-esl-32).

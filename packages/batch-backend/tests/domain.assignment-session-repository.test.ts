@@ -1,9 +1,16 @@
 import './support/bootstrap-pg-test-env.js';
 
 import { createHash, randomUUID } from 'node:crypto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { serializeAssignmentV1 } from '@esl-pipeline/contracts';
+
+import { assignmentHash } from '../src/application/assignment-artifact.js';
 import { withPgClientSessionContext } from '../src/infrastructure/db.js';
+import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 requirePgTestEnv();
@@ -151,13 +158,14 @@ async function confirmMixedSource(
     'confirmAssignmentSessionStepPersistence'
   >,
   fixture: Awaited<ReturnType<typeof createMixedSourceConfirmationFixture>>,
+  expectedRevision = 2,
 ) {
   return repository.confirmAssignmentSessionStepPersistence({
     id: fixture.sessionId,
     userId: fixture.userId,
     request: {
       step: 'source',
-      expectedRevision: 2,
+      expectedRevision,
       lessonId: null,
       recordingId: fixture.recordingId,
       transcriptId: fixture.transcriptId,
@@ -195,9 +203,521 @@ async function createInitialEnrichmentWithEvidence(status: 'ready' | 'failed') {
   return { fixture, confirmed, operationId };
 }
 
+// Model an existing pre-cutover snapshot while retaining canonical confirmed Source and evidence.
+async function makeEnrichmentSessionHistorical(sessionId: string) {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      'ALTER TABLE assignment_sessions DISABLE TRIGGER historical_sessions_read_only',
+    );
+    await client.query(
+      `UPDATE assignment_sessions SET confirmed_snapshot = jsonb_set(confirmed_snapshot,
+      '{create}', '{"draftId":"historical-draft"}'::jsonb) WHERE id=$1`,
+      [sessionId],
+    );
+    await client.query(
+      'ALTER TABLE assignment_sessions ENABLE TRIGGER historical_sessions_read_only',
+    );
+  });
+}
+
+const artifactDirs: string[] = [];
+async function storedAssignment(workingVersion = 1) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl7-native-pg-'));
+  artifactDirs.push(dir);
+  vi.stubEnv('FILESYSTEM_UPLOAD_DIR', dir);
+  vi.stubEnv('STORAGE_PROVIDER', 'filesystem');
+  const assignment = assignmentFixture();
+  assignment.metadata.student = 'Alpha Tester';
+  const contentHash = assignmentHash(assignment);
+  const storageUri = `local://drafts/content/${contentHash}.json`;
+  await fs.mkdir(path.join(dir, 'drafts/content'), { recursive: true });
+  await fs.writeFile(
+    path.join(dir, `drafts/content/${contentHash}.json`),
+    serializeAssignmentV1(assignment),
+  );
+  return {
+    format: 'assignment_v1' as const,
+    schemaVersion: 1 as const,
+    serializationVersion: 1 as const,
+    workingVersion,
+    contentHash,
+    storageUri,
+  };
+}
+
+async function insertNativeHistoryJob(
+  client: import('pg').PoolClient,
+  jobId: string,
+  userId: string,
+  studentId: string,
+  recordingId: string,
+) {
+  const transcriptId = randomUUID(),
+    promptId = randomUUID(),
+    draftId = randomUUID();
+  const artifact = await storedAssignment();
+  await client.query(
+    `INSERT INTO transcripts(id,recording_id,storage_uri,stt_provider,mode,model,language,fallback_used) VALUES($1,$2,'local://transcripts/native.json','manual','timeline','manual','en',false)`,
+    [transcriptId, recordingId],
+  );
+  await client.query(
+    `INSERT INTO prompt_packages(id,recording_id,transcript_id,student_id,template_version,storage_uri,request_envelope) VALUES($1,$2,$3,$4,'assignment_v1','local://prompts/native.txt',$5::jsonb)`,
+    [
+      promptId,
+      recordingId,
+      transcriptId,
+      studentId,
+      JSON.stringify(promptPackageFixture().requestEnvelope),
+    ],
+  );
+  await client.query(
+    `INSERT INTO drafts(id,prompt_package_id,student_id,format,storage_uri,working_version,content_hash) VALUES($1,$2,$3,'assignment_v1',$4,1,$5)`,
+    [draftId, promptId, studentId, artifact.storageUri, artifact.contentHash],
+  );
+  await client.query(
+    `INSERT INTO jobs(id,state,student_id,user_id,prompt_package_id,draft_id,assignment_artifact,assignment_renderer_version) VALUES($1,'succeeded',$2,$3,$4,$5,$6::jsonb,2)`,
+    [jobId, studentId, userId, promptId, draftId, JSON.stringify(artifact)],
+  );
+}
+
 describe('domain/assignment-session-repository persistence contract', () => {
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    for (const dir of artifactDirs.splice(0)) await fs.rm(dir, { recursive: true, force: true });
+  });
   beforeEach(async () => {
     await resetTables();
+  });
+
+  it('freezes validated typed confirmation and correction input with exact replay and direct mixed-format memory', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-typed-pg-'));
+    vi.stubEnv('FILESYSTEM_UPLOAD_DIR', dir);
+    vi.stubEnv('STORAGE_PROVIDER', 'filesystem');
+    try {
+      const f = await createMixedSourceConfirmationFixture({
+        workingVersion: 1,
+        contentHash: 'a'.repeat(64),
+        mappingWorkingVersion: 1,
+        mappingContentHash: 'a'.repeat(64),
+      });
+      const repo = await import('../src/domain/assignment-session-repository.js');
+      await confirmMixedSource(repo, f);
+      const promptId = randomUUID();
+      const envelope = promptPackageFixture().requestEnvelope;
+      envelope.assignmentContext!.studentName = 'Alpha Tester';
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        await client.query(
+          `UPDATE assignment_sessions SET confirmed_step = 'context', revision = 4,
+          confirmed_snapshot = jsonb_set(confirmed_snapshot, '{context}', $2::jsonb) WHERE id = $1`,
+          [
+            f.sessionId,
+            JSON.stringify({
+              teacherNotes: null,
+              profileRevisionId: null,
+              profileRevisionHash: null,
+            }),
+          ],
+        );
+        await client.query(
+          `INSERT INTO prompt_packages (id, recording_id, transcript_id, student_id, template_version, storage_uri, assignment_session_id, request_envelope)
+          VALUES ($1, $2, $3, $4, 'assignment_v1', 'local://prompts/test.txt', $5, $6::jsonb)`,
+          [
+            promptId,
+            f.recordingId,
+            f.transcriptId,
+            f.studentId,
+            f.sessionId,
+            JSON.stringify(envelope),
+          ],
+        );
+      });
+      const { isPromptPackageAccessibleForUser } = await import(
+        '../src/domain/prompt-package-repository.js'
+      );
+      expect(await isPromptPackageAccessibleForUser(promptId, f.userId)).toBe(true);
+      expect(await isPromptPackageAccessibleForUser(promptId, randomUUID())).toBe(false);
+      const { createDraft } = await import('../src/application/create-draft.js');
+      const { updateDraft } = await import('../src/application/update-draft.js');
+      const { getDraft } = await import('../src/application/get-draft.js');
+      const original = assignmentFixture();
+      original.metadata.student = 'Alpha Tester';
+      const draft = (await createDraft({
+        promptPackageId: promptId,
+        text: JSON.stringify(original),
+        createdBy: f.userId,
+      }))!;
+      expect(draft.format).toBe('assignment_v1');
+      await expect(
+        updateDraft({ id: draft.id, text: '{', expectedWorkingVersion: 1 }),
+      ).rejects.toThrow('syntax');
+      expect((await getDraft(draft.id))?.artifact).toEqual(draft.artifact);
+      const confirmed = await repo.confirmAssignmentSessionStepPersistence({
+        id: f.sessionId,
+        userId: f.userId,
+        request: {
+          step: 'create',
+          expectedRevision: 4,
+          promptPackageId: promptId,
+          draftId: draft.id,
+          draftWorkingVersion: 1,
+        },
+      });
+      expect(confirmed.session.confirmed.create?.artifact).toEqual(draft.artifact);
+      await expect(
+        repo.confirmAssignmentSessionStepPersistence({
+          id: f.sessionId,
+          userId: randomUUID(),
+          request: {
+            step: 'create',
+            expectedRevision: 4,
+            promptPackageId: promptId,
+            draftId: draft.id,
+            draftWorkingVersion: 1,
+          },
+        }),
+      ).rejects.toThrow();
+      const requestId = randomUUID();
+      const reserve = {
+        sessionId: f.sessionId,
+        userId: f.userId,
+        expectedRevision: confirmed.session.revision,
+        requestId,
+        jobConfig: { publishTarget: 'html' as const, upload: 'auto' as const },
+      };
+      const reserved = await repo.reserveAssignmentShare(reserve);
+      expect(reserved.job.assignmentArtifact).toEqual(draft.artifact);
+      expect(reserved.job.assignmentRendererVersion).toBe(3);
+      expect(reserved.job.mdStorageUri).toBeNull();
+      const edited = structuredClone(original);
+      edited.metadata.title = 'Correction title';
+      const corrected = (await updateDraft({
+        id: draft.id,
+        text: JSON.stringify(edited, null, 4),
+        expectedWorkingVersion: 1,
+      }))!;
+      await expect(
+        updateDraft({ id: draft.id, text: JSON.stringify(original), expectedWorkingVersion: 1 }),
+      ).rejects.toMatchObject({ code: 'ARTIFACT_WORKING_CONFLICT' });
+      const { materializeDraft } = await import('../src/application/materialize-draft.js');
+      const materialized = (await materializeDraft(
+        {
+          draftId: draft.id,
+          jobId: requestId,
+          sourceStorageUri: draft.storageUri,
+          expectedContentHash: draft.contentHash!,
+          assignmentShare: { sessionId: f.sessionId, userId: f.userId },
+        },
+        { localExport: false },
+      ))!;
+      expect(materialized.mdStorageUri).toBe(draft.artifact!.storageUri);
+      expect(materialized.mdStorageUri).not.toBe(corrected.artifact!.storageUri);
+      expect(materialized.mdPath).toBeNull();
+      const jobs = await import('../src/domain/job-repository.js');
+      await jobs.approveAssignmentShareJob({
+        id: requestId,
+        sessionId: f.sessionId,
+        userId: f.userId,
+        expectedState: 'awaiting_approval',
+        mdStorageUri: materialized.mdStorageUri,
+      });
+      expect((await jobs.getJobById(requestId))?.assignmentRendererVersion).toBe(3);
+      await repo.completeAssignmentShare({
+        sessionId: f.sessionId,
+        userId: f.userId,
+        jobId: requestId,
+        enqueueSatisfied: true,
+      });
+      await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+        client.query(
+          `UPDATE jobs SET state = 'succeeded', html_url = 'https://test/typed', finished_at = NOW(), published_content_hash = $2 WHERE id = $1`,
+          [requestId, 'f'.repeat(64)],
+        ),
+      );
+      const correction = {
+        publishedJobId: requestId,
+        userId: f.userId,
+        request: {
+          requestId: randomUUID(),
+          draftId: draft.id,
+          draftWorkingVersion: corrected.workingVersion!,
+          draftHash: corrected.contentHash!,
+          artifact: corrected.artifact,
+        },
+      };
+      await expect(
+        repo.publishAssignmentCorrectionJob({
+          ...correction,
+          request: { ...correction.request, artifact: undefined },
+        }),
+      ).rejects.toMatchObject({ code: 'ASSIGNMENT_CORRECTION_DRAFT_CONFLICT' });
+      const child = await repo.publishAssignmentCorrectionJob(correction);
+      expect(child.job.assignmentArtifact).toEqual(corrected.artifact);
+      expect(child.job.assignmentRendererVersion).toBe(3);
+      const later = structuredClone(edited);
+      later.metadata.title = 'Unpublished later draft';
+      await updateDraft({ id: draft.id, text: JSON.stringify(later), expectedWorkingVersion: 2 });
+      await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+        client.query(`UPDATE jobs SET state = 'failed' WHERE id = $1`, [child.job.id]),
+      );
+      const replay = await repo.publishAssignmentCorrectionJob(correction);
+      expect(replay.job.assignmentRendererVersion).toBe(3);
+      expect(replay).toMatchObject({
+        created: false,
+        job: { state: 'queued', assignmentArtifact: corrected.artifact },
+      });
+      await expect(
+        repo.publishAssignmentCorrectionJob({
+          ...correction,
+          request: {
+            ...correction.request,
+            artifact: { ...corrected.artifact!, workingVersion: 3 },
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'ASSIGNMENT_CORRECTION_REQUEST_CONFLICT' });
+      await expect(
+        withPgClientSessionContext({ rlsBypass: true }, (client) =>
+          client.query(`UPDATE jobs SET assignment_artifact = $2::jsonb WHERE id = $1`, [
+            child.job.id,
+            JSON.stringify(draft.artifact),
+          ]),
+        ),
+      ).rejects.toThrow('Frozen assignment');
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        await client.query(
+          `UPDATE jobs SET state = 'succeeded', html_url = 'https://test/corrected', finished_at = NOW(), md_storage_uri = 'local://missing-projection.md' WHERE id = $1`,
+          [child.job.id],
+        );
+      });
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        await expect(
+          client.query(
+            `INSERT INTO jobs (id, state, student_id, source_job_id, md_storage_uri, publish_target, html_url, published_content_hash) VALUES ($1, 'succeeded', $2, $3, 'local://missing-legacy.md', 'html', 'https://test/legacy', $4)`,
+            [randomUUID(), f.studentId, requestId, draft.contentHash],
+          ),
+        ).rejects.toThrow('legacy_assignment_read_only');
+      });
+      const { resolveHomeworkMemorySourceFromSucceededJob } = await import(
+        '../src/application/homework-memory-source.js'
+      );
+      const source = await resolveHomeworkMemorySourceFromSucceededJob(child.job.id);
+      expect(source).toMatchObject({
+        format: 'assignment_v1',
+        assignment: edited,
+        artifact: corrected.artifact,
+        assignmentLineageKey: requestId,
+      });
+      expect(source).not.toHaveProperty('normalizedMarkdown');
+      expect(source.contentHash).toBe(
+        createHash('sha256').update(`assignment_v1:1:${corrected.contentHash}`).digest('hex'),
+      );
+      const { buildHomeworkMemoryEnvelope } = await import(
+        '../src/application/homework-memory-prompt.js'
+      );
+      expect(JSON.stringify(buildHomeworkMemoryEnvelope({ source }))).toContain('Correction title');
+      const sameContent = await jobs.insertJob({
+        studentId: f.studentId,
+        promptPackageId: promptId,
+        draftId: draft.id,
+        sourceJobId: requestId,
+        assignmentArtifact: draft.artifact,
+        assignmentRendererVersion: 1,
+        publishTarget: 'html',
+      });
+      await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+        client.query(
+          `UPDATE jobs SET state = 'succeeded', html_url = 'https://test/same-content', finished_at = NOW() WHERE id = $1`,
+          [sameContent.id],
+        ),
+      );
+      const initialSource = await resolveHomeworkMemorySourceFromSucceededJob(requestId);
+      expect(initialSource.assignment).toEqual(original);
+      expect(initialSource.contentHash).not.toBe(source.contentHash);
+      expect(initialSource.publishTargets.map((target) => target.jobId)).toEqual([sameContent.id]);
+      const { insertCanonicalReadyHomeworkMemoryEntry } = await import(
+        '../src/domain/homework-memory-repository.js'
+      );
+      await insertCanonicalReadyHomeworkMemoryEntry({
+        studentId: f.studentId,
+        jobId: requestId,
+        assignmentLineageKey: requestId,
+        schemaVersion: 'homework-memory.v1',
+        provider: 'openai',
+        model: 'offline-test',
+        contentHash: initialSource.contentHash,
+        homeworkSummary: 'Frozen typed memory',
+        topic: 'Demos',
+        grammarTargets: [],
+        vocabularyTargets: [],
+        reviewTargets: [],
+        taskList: [],
+        pronunciationFocus: [],
+        studyTextType: 'dialogue',
+        inputType: 'generate',
+        communicativeOutcome: 'Explain a product',
+        teacherFollowUpCues: [],
+        publishedAt: initialSource.publishedAt,
+        publishTargets: initialSource.publishTargets,
+      });
+      const { evaluateHomeworkMemoryGenerationForSucceededJob } = await import(
+        '../src/application/homework-memory-source.js'
+      );
+      expect(await evaluateHomeworkMemoryGenerationForSucceededJob(sameContent.id)).toMatchObject({
+        shouldGenerate: false,
+        reason: 'no_material_change',
+      });
+      expect(await evaluateHomeworkMemoryGenerationForSucceededJob(child.job.id)).toMatchObject({
+        shouldGenerate: true,
+        reason: 'published_content_changed',
+      });
+      // Displacing the confirmed source prevents future writes, without changing frozen jobs.
+      await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+        client.query(
+          `UPDATE assignment_source_bindings SET binding_role = 'working' WHERE assignment_session_id = $1`,
+          [f.sessionId],
+        ),
+      );
+      await expect(
+        updateDraft({ id: draft.id, text: JSON.stringify(original), expectedWorkingVersion: 3 }),
+      ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_SOURCE_NOT_CANONICAL' });
+      expect((await jobs.getJobById(child.job.id))?.assignmentArtifact).toEqual(corrected.artifact);
+    } finally {
+      vi.unstubAllEnvs();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it.each(['waiting_evidence', 'queued', 'submitting', 'uncertain', 'result_ready'])(
+    'blocks historical enrichment %s admission, recovery and publication while preserving evidence',
+    async (state) => {
+      const { fixture, confirmed, operationId } =
+        await createInitialEnrichmentWithEvidence('ready');
+      await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+        client.query(
+          `UPDATE profile_initial_enrichment_operations
+        SET state=$2, updated_at=NOW()-INTERVAL '2 minutes', generation_input='{"prompt":"retained input"}',
+        validated_result='{"schemaVersion":"foundational_profile_v1"}',result_hash=$3 WHERE id=$1`,
+          [operationId, state, 'b'.repeat(64)],
+        ),
+      );
+      await makeEnrichmentSessionHistorical(fixture.sessionId);
+      const {
+        enqueuePendingProfileInitialEnrichments,
+        reconcileProfileInitialEnrichmentOperation,
+      } = await import('../src/application/profile-initial-enrichment.js');
+      const { reconcileInitialEnrichmentIntent } = await import(
+        '../src/domain/profile-initial-enrichment-repository.js'
+      );
+      const { loadConfig } = await import('../src/config/env.js');
+      const reconcile = vi.fn(),
+        generate = vi.fn();
+      await enqueuePendingProfileInitialEnrichments({ reconcile });
+      expect(reconcile).not.toHaveBeenCalled();
+      await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+        reconcileInitialEnrichmentIntent(client, confirmed.session),
+      );
+      await reconcileProfileInitialEnrichmentOperation(operationId, loadConfig(), generate);
+      expect(generate).not.toHaveBeenCalled();
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        expect(
+          (
+            await client.query(
+              'SELECT state,failure_code,generation_input,validated_result FROM profile_initial_enrichment_operations WHERE id=$1',
+              [operationId],
+            )
+          ).rows[0],
+        ).toMatchObject({
+          state: 'superseded',
+          failure_code: 'legacy_assignment_read_only',
+          generation_input: { prompt: 'retained input' },
+          validated_result: { schemaVersion: 'foundational_profile_v1' },
+        });
+        expect(
+          (
+            await client.query(
+              'SELECT COUNT(*)::int AS count FROM profile_initial_enrichment_operations WHERE assignment_session_id=$1',
+              [fixture.sessionId],
+            )
+          ).rows[0].count,
+        ).toBe(1);
+        expect(
+          (
+            await client.query('SELECT profile_provenance FROM students WHERE id=$1', [
+              fixture.studentId,
+            ])
+          ).rows[0].profile_provenance,
+        ).toBe('tutor_only');
+      });
+    },
+  );
+
+  it('rechecks historical authority after deferred pacing before provider dispatch', async () => {
+    const { fixture, operationId } = await createInitialEnrichmentWithEvidence('ready');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    const { loadConfig } = await import('../src/config/env.js');
+    const generate = vi.fn();
+    const pacer = {
+      run: async (args: { execute: () => Promise<unknown> }) => {
+        await makeEnrichmentSessionHistorical(fixture.sessionId);
+        return args.execute();
+      },
+    };
+    await reconcileProfileInitialEnrichmentOperation(
+      operationId,
+      loadConfig(),
+      generate,
+      pacer as never,
+    );
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a late validated profile response after its session becomes historical', async () => {
+    const { fixture, operationId } = await createInitialEnrichmentWithEvidence('ready');
+    const { reconcileProfileInitialEnrichmentOperation } = await import(
+      '../src/application/profile-initial-enrichment.js'
+    );
+    const { loadConfig } = await import('../src/config/env.js');
+    const generate = vi.fn(async () => {
+      await makeEnrichmentSessionHistorical(fixture.sessionId);
+      return {
+        structuredProfile: {
+          schemaVersion: 'foundational_profile_v1' as const,
+          overallLevel: 'B1',
+          primaryGoals: [],
+          communicationContexts: [],
+          interestsAndUsefulThemes: [],
+          stableStrengths: [],
+          persistentChallenges: [],
+          studyPreferences: [],
+          durableConstraints: [],
+          teacherNotes: null,
+        },
+        rawOutput: {},
+        rawText: '{}',
+        provider: 'openai' as const,
+        model: 'test-model',
+      };
+    });
+    await reconcileProfileInitialEnrichmentOperation(operationId, loadConfig(), generate);
+    expect(generate).toHaveBeenCalledTimes(1);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      expect(
+        (
+          await client.query(
+            'SELECT state,result_revision_id FROM profile_initial_enrichment_operations WHERE id=$1',
+            [operationId],
+          )
+        ).rows[0],
+      ).toEqual({ state: 'superseded', result_revision_id: null });
+      expect(
+        (
+          await client.query('SELECT profile_provenance FROM students WHERE id=$1', [
+            fixture.studentId,
+          ])
+        ).rows[0].profile_provenance,
+      ).toBe('tutor_only');
+    });
   });
 
   it('creates one source-bound onboarding intent and atomically activates one evidence revision', async () => {
@@ -209,7 +729,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
     const repository = await import('../src/domain/assignment-session-repository.js');
     const first = await confirmMixedSource(repository, fixture);
-    await confirmMixedSource(repository, fixture);
+    await confirmMixedSource(repository, fixture, first.session.revision);
     const before = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       const operations = await client.query<{ id: string; student_id: string; state: string }>(
         `SELECT id, student_id, state FROM profile_initial_enrichment_operations
@@ -1271,6 +1791,87 @@ describe('domain/assignment-session-repository persistence contract', () => {
     expect(row.rows[0]).toEqual({ state: 'queued', submission_id: null });
   });
 
+  it.each([
+    { provider: 'google_ai_studio', model: 'gemma-4-31b-it', claimed: false },
+    { provider: 'openrouter', model: 'historical-openrouter', claimed: false },
+    { provider: 'openai', model: 'gemma-4-31b-it', claimed: false },
+    { provider: 'google_ai_studio', model: 'gemma-4-31b-it', claimed: true },
+  ] as const)(
+    'terminalizes frozen $provider/$model before reservation without overwriting a competing claim ($claimed)',
+    async ({ provider, model, claimed }) => {
+      const { operationId } = await createInitialEnrichmentWithEvidence('ready');
+      const { loadConfig } = await import('../src/config/env.js');
+      const { reconcileProfileInitialEnrichmentOperation } = await import(
+        '../src/application/profile-initial-enrichment.js'
+      );
+      const { createStudentMemoryGenerationPacer } = await import(
+        '../src/application/student-memory-generation-pacing.js'
+      );
+      const config = loadConfig();
+      const generator = vi.fn();
+      // Freeze a real evidence-derived input without dispatch, then model a pre-migration target.
+      await reconcileProfileInitialEnrichmentOperation(operationId, config, generator, {
+        run: vi.fn().mockResolvedValue({ skipped: true }),
+      } as never);
+      const frozen = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        const row = await client.query(
+          'UPDATE profile_initial_enrichment_operations SET generation_provider=$2, generation_model=$3 WHERE id=$1 RETURNING generation_input',
+          [operationId, provider, model],
+        );
+        return row.rows[0]!.generation_input;
+      });
+      const reserve = vi.fn();
+      const recordActual = vi.fn();
+      const fetch = vi.fn();
+      vi.stubGlobal('fetch', fetch);
+      const realPacer = createStudentMemoryGenerationPacer(config, {
+        repository: { reserve, recordActual, getUsage: vi.fn() },
+      });
+      const submissionId = randomUUID();
+      const pacer = claimed
+        ? {
+            run: async (args: Parameters<typeof realPacer.run>[0]) => {
+              await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+                client.query(
+                  "UPDATE profile_initial_enrichment_operations SET state='submitting', submission_id=$2, submission_reserved_at=NOW() WHERE id=$1",
+                  [operationId, submissionId],
+                ),
+              );
+              return realPacer.run(args);
+            },
+          }
+        : realPacer;
+      try {
+        await reconcileProfileInitialEnrichmentOperation(
+          operationId,
+          config,
+          generator,
+          pacer as never,
+        );
+        const row = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+          client.query(
+            'SELECT state, failure_code, submission_id, generation_provider, generation_model, generation_input FROM profile_initial_enrichment_operations WHERE id=$1',
+            [operationId],
+          ),
+        );
+        expect(row.rows[0]).toMatchObject({
+          state: claimed ? 'submitting' : 'failed',
+          ...(claimed ? {} : { failure_code: 'provider_rejected' }),
+          submission_id: claimed ? submissionId : null,
+          generation_provider: provider,
+          generation_model: model,
+          generation_input: frozen,
+        });
+        expect(generator).not.toHaveBeenCalled();
+        expect(reserve).not.toHaveBeenCalled();
+        expect(recordActual).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
   it('terminalizes a non-minute budget preflight without reserving provider submission', async () => {
     const { operationId } = await createInitialEnrichmentWithEvidence('ready');
     const { loadConfig } = await import('../src/config/env.js');
@@ -1401,7 +2002,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       mappingContentHash: 'a'.repeat(64),
     });
     const repository = await import('../src/domain/assignment-session-repository.js');
-    await confirmMixedSource(repository, fixture);
+    const first = await confirmMixedSource(repository, fixture);
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `UPDATE profile_initial_enrichment_operations SET state = 'failed',
@@ -1409,7 +2010,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
         [fixture.sessionId],
       );
     });
-    await confirmMixedSource(repository, fixture);
+    await confirmMixedSource(repository, fixture, first.session.revision);
     const rows = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
       client.query<{ state: string }>(
         'SELECT state FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
@@ -1916,7 +2517,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const draftId = randomUUID();
     const sessionId = randomUUID();
     const requestId = randomUUID();
-    const draftUri = `local://drafts/${draftId}/content/confirmed.md`;
+    const artifact = await storedAssignment();
+    const draftUri = artifact.storageUri;
     await insertUserAndStudent(userId, studentId);
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
@@ -1938,15 +2540,27 @@ describe('domain/assignment-session-repository persistence contract', () => {
       );
       await client.query(
         `INSERT INTO prompt_packages
-           (id, recording_id, transcript_id, student_id, template_version, storage_uri)
-         VALUES ($1, $2, $3, $4, 'template-v1', 'local://prompts/a.txt')`,
-        [promptPackageId, recordingId, transcriptId, studentId],
+           (id, recording_id, transcript_id, student_id, template_version, storage_uri, request_envelope)
+         VALUES ($1, $2, $3, $4, 'assignment_v1', 'local://prompts/a.txt', $5::jsonb)`,
+        [
+          promptPackageId,
+          recordingId,
+          transcriptId,
+          studentId,
+          JSON.stringify({
+            ...promptPackageFixture().requestEnvelope,
+            assignmentContext: {
+              ...promptPackageFixture().requestEnvelope.assignmentContext,
+              studentName: 'Alpha Tester',
+            },
+          }),
+        ],
       );
       await client.query(
         `INSERT INTO drafts
-           (id, prompt_package_id, student_id, storage_uri, working_version, content_hash, created_by)
-         VALUES ($1, $2, $3, $4, 1, $5, $6)`,
-        [draftId, promptPackageId, studentId, draftUri, 'b'.repeat(64), userId],
+           (id, prompt_package_id, student_id, storage_uri, working_version, content_hash, created_by, format)
+         VALUES ($1, $2, $3, $4, 1, $5, $6, 'assignment_v1')`,
+        [draftId, promptPackageId, studentId, draftUri, artifact.contentHash, userId],
       );
       await client.query(
         `INSERT INTO assignment_sessions
@@ -1981,11 +2595,12 @@ describe('domain/assignment-session-repository persistence contract', () => {
               profileRevisionHash: null,
             },
             create: {
+              artifact,
               promptPackageId,
               draftId,
               draftWorkingVersion: 1,
               draftStorageUri: draftUri,
-              draftHash: 'b'.repeat(64),
+              draftHash: artifact.contentHash,
             },
           }),
         ],
@@ -2046,7 +2661,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     );
     await withPgClientSessionContext({ rlsBypass: true }, (client) =>
       client.query(
-        `UPDATE drafts SET storage_uri = 'local://drafts/working-b.md', working_version = 2,
+        `UPDATE drafts SET storage_uri = 'local://drafts/content/' || $2 || '.json', working_version = 2,
          content_hash = $2 WHERE id = $1`,
         [draftId, 'd'.repeat(64)],
       ),
@@ -2064,7 +2679,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       client.query(
         `UPDATE drafts SET storage_uri = $2, working_version = 1,
          content_hash = $3 WHERE id = $1`,
-        [draftId, draftUri, 'b'.repeat(64)],
+        [draftId, draftUri, artifact.contentHash],
       ),
     );
     const [first, second] = await Promise.all([
@@ -2089,7 +2704,12 @@ describe('domain/assignment-session-repository persistence contract', () => {
     expect(reserved).toMatchObject({
       created: true,
       session: { shareJobId: requestId, revision: 5, confirmedStep: 'create' },
-      job: { id: requestId, mdStorageUri: draftUri, state: 'awaiting_approval' },
+      job: {
+        id: requestId,
+        assignmentArtifact: artifact,
+        mdStorageUri: null,
+        state: 'awaiting_approval',
+      },
     });
     expect(replay).toMatchObject({ created: false, job: { id: requestId } });
     const {
@@ -2169,10 +2789,11 @@ describe('domain/assignment-session-repository persistence contract', () => {
 
     for (const correctionFirst of [false, true]) {
       const correctionRequest = {
+        artifact,
         requestId: randomUUID(),
         draftId,
         draftWorkingVersion: 1,
-        draftHash: 'b'.repeat(64),
+        draftHash: artifact.contentHash,
       };
       const shareReplay = () =>
         reserveAssignmentShare({
@@ -2212,8 +2833,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const draftId = randomUUID();
     const parentId = randomUUID();
     const requestId = randomUUID();
-    const draftHash = 'b'.repeat(64);
-    const draftUri = `local://drafts/${draftId}/content/${draftHash}.md`;
+    const artifact = await storedAssignment(3);
+    const draftHash = artifact.contentHash;
+    const draftUri = artifact.storageUri;
     await insertUserAndStudent(userId, studentId);
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
@@ -2231,22 +2853,34 @@ describe('domain/assignment-session-repository persistence contract', () => {
       );
       await client.query(
         `INSERT INTO prompt_packages
-           (id, recording_id, transcript_id, student_id, template_version, storage_uri)
-         VALUES ($1, $2, $3, $4, 'template-v1', 'local://prompts/a.txt')`,
-        [promptPackageId, recordingId, transcriptId, studentId],
+           (id, recording_id, transcript_id, student_id, template_version, storage_uri, request_envelope)
+         VALUES ($1, $2, $3, $4, 'assignment_v1', 'local://prompts/a.txt', $5::jsonb)`,
+        [
+          promptPackageId,
+          recordingId,
+          transcriptId,
+          studentId,
+          JSON.stringify({
+            ...promptPackageFixture().requestEnvelope,
+            assignmentContext: {
+              ...promptPackageFixture().requestEnvelope.assignmentContext,
+              studentName: 'Alpha Tester',
+            },
+          }),
+        ],
       );
       await client.query(
         `INSERT INTO drafts
-           (id, prompt_package_id, student_id, storage_uri, working_version, content_hash, created_by)
-         VALUES ($1, $2, $3, $4, 3, $5, $6)`,
+           (id, prompt_package_id, student_id, storage_uri, working_version, content_hash, created_by, format)
+         VALUES ($1, $2, $3, $4, 3, $5, $6, 'assignment_v1')`,
         [draftId, promptPackageId, studentId, draftUri, draftHash, userId],
       );
       await client.query(
         `INSERT INTO jobs
            (id, state, md_storage_uri, recording_id, transcript_id, prompt_package_id, draft_id,
-            student_id, user_id, preset, with_tts, upload, publish_target, html_url, manifest_path)
+            student_id, user_id, preset, with_tts, upload, publish_target, html_url, manifest_path, assignment_artifact, assignment_renderer_version)
          VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, $8, 'b1-default', true,
-                 's3', 'html', 'https://example.test/parent', 's3://manifests/parent.json')`,
+                 's3', 'html', 'https://example.test/parent', 's3://manifests/parent.json', $9::jsonb, 2)`,
         [
           parentId,
           draftUri,
@@ -2256,6 +2890,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
           draftId,
           studentId,
           userId,
+          JSON.stringify(artifact),
         ],
       );
       await client.query(
@@ -2288,11 +2923,12 @@ describe('domain/assignment-session-repository persistence contract', () => {
               profileRevisionHash: null,
             },
             create: {
+              artifact,
               promptPackageId,
               draftId,
-              draftWorkingVersion: 1,
-              draftStorageUri: 'local://drafts/original/content/original.md',
-              draftHash: 'c'.repeat(64),
+              draftWorkingVersion: 3,
+              draftStorageUri: draftUri,
+              draftHash,
             },
           }),
           parentId,
@@ -2302,7 +2938,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const { publishAssignmentCorrectionJob } = await import(
       '../src/domain/assignment-session-repository.js'
     );
-    const request = { requestId, draftId, draftWorkingVersion: 3, draftHash };
+    const request = { requestId, draftId, draftWorkingVersion: 3, draftHash, artifact };
 
     const [first, second] = await Promise.all([
       publishAssignmentCorrectionJob({ userId, publishedJobId: parentId, request }),
@@ -2319,7 +2955,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
         sourceJobId: parentId,
         draftId,
         md: null,
-        mdStorageUri: draftUri,
+        mdStorageUri: null,
         htmlUrl: null,
         manifestPath: null,
       },
@@ -2375,7 +3011,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
           state: 'queued',
           sourceJobId: parentId,
           draftId,
-          mdStorageUri: draftUri,
+          mdStorageUri: null,
           error: null,
           startedAt: null,
           finishedAt: null,
@@ -2432,10 +3068,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
            'prepared-media-sha256-v1', replace(($1::uuid)::text, '-', '') || replace(($1::uuid)::text, '-', ''))`,
         [recordingId, studentId, `s3://recordings/${recordingId}.mp3`],
       );
-      await client.query(
-        `INSERT INTO jobs (id, state, student_id, user_id) VALUES ($1, 'succeeded', $2, $3)`,
-        [shareJobId, studentId, userId],
-      );
+      await insertNativeHistoryJob(client, shareJobId, userId, studentId, recordingId);
       await client.query(
         `UPDATE assignment_sessions
          SET recording_id = $2, confirmed_step = 'share', share_job_id = $3, revision = revision + 1
@@ -2525,10 +3158,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     ).resolves.toBeDefined();
 
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      await client.query(
-        `INSERT INTO jobs (id, state, student_id, user_id) VALUES ($1, 'succeeded', $2, $3)`,
-        [shareJobId, studentId, userId],
-      );
+      await insertNativeHistoryJob(client, shareJobId, userId, studentId, recordingId);
       await client.query(
         `
         UPDATE assignment_sessions
@@ -3048,7 +3678,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       mappingContentHash: 'd'.repeat(64),
     });
     const repository = await import('../src/domain/assignment-session-repository.js');
-    await confirmMixedSource(repository, fixture);
+    const first = await confirmMixedSource(repository, fixture);
     const nextAttemptAt = new Date('2026-09-07T02:02:03.000Z');
     await withPgClientSessionContext({ rlsBypass: true }, (client) =>
       client.query(
@@ -3063,7 +3693,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
       ),
     );
 
-    await expect(confirmMixedSource(repository, fixture)).resolves.toMatchObject({
+    await expect(
+      confirmMixedSource(repository, fixture, first.session.revision),
+    ).resolves.toMatchObject({
       session: { confirmedStep: 'source' },
     });
     const replayed = await withPgClientSessionContext({ rlsBypass: true }, (client) =>

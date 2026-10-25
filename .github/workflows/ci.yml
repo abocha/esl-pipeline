@@ -139,19 +139,34 @@ jobs:
       - name: Initialize repository policy logs
         run: mkdir -p tmp/ci-logs/repository-policy
 
-      - name: Validate environment template
-        id: env_template
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm env:validate:example 2>&1 | tee tmp/ci-logs/repository-policy/env-validate-example.log
+      - parallel:
+          - name: Validate environment template
+            id: env_template
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm env:validate:example 2>&1 | tee tmp/ci-logs/repository-policy/env-validate-example.log
 
-      - name: Tooling tests
-        id: tooling_tests
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm test:tooling 2>&1 | tee tmp/ci-logs/repository-policy/test-tooling.log
+          - name: Tooling tests
+            id: tooling_tests
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm test:tooling 2>&1 | tee tmp/ci-logs/repository-policy/test-tooling.log
+
+          - name: Contract version consistency
+            id: contract_versions
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm release:verify:contracts 2>&1 | tee tmp/ci-logs/repository-policy/release-verify-contracts.log
+
+          - name: Orchestrator boundary guardrails
+            id: orchestrator_boundary
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm guard:orchestrator:boundary 2>&1 | tee tmp/ci-logs/repository-policy/guard-orchestrator-boundary.log
 
       - name: Verify repo hygiene tools
         shell: bash
@@ -159,58 +174,46 @@ jobs:
           set -euo pipefail
           command -v shellcheck
           shellcheck --version
-          actionlint_version=1.7.11
-          actionlint_archive="actionlint_${actionlint_version}_linux_amd64.tar.gz"
-          actionlint_sha256=900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a
-          mkdir -p "$RUNNER_TEMP/actionlint-bin"
+          jactionlint_version=2.0.2
+          jactionlint_archive="jactionlint_${jactionlint_version}_linux_amd64.tar.gz"
+          jactionlint_sha256=026bce6d0ef196f5b22bf43acb1348d47c5d0a5ae61d6ec3bdba1229a823161b
+          mkdir -p "$RUNNER_TEMP/jactionlint-bin"
           curl --fail --silent --show-error --location \
-            "https://github.com/rhysd/actionlint/releases/download/v${actionlint_version}/${actionlint_archive}" \
-            --output "$RUNNER_TEMP/${actionlint_archive}"
-          echo "${actionlint_sha256}  $RUNNER_TEMP/${actionlint_archive}" | sha256sum --check
-          tar -xzf "$RUNNER_TEMP/${actionlint_archive}" -C "$RUNNER_TEMP/actionlint-bin"
-          echo "$RUNNER_TEMP/actionlint-bin" >> "$GITHUB_PATH"
+            "https://github.com/jdx/jactionlint/releases/download/v${jactionlint_version}/${jactionlint_archive}" \
+            --output "$RUNNER_TEMP/${jactionlint_archive}"
+          echo "${jactionlint_sha256}  $RUNNER_TEMP/${jactionlint_archive}" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/${jactionlint_archive}" -C "$RUNNER_TEMP/jactionlint-bin" jactionlint
+          "$RUNNER_TEMP/jactionlint-bin/jactionlint" --version | grep -F "${jactionlint_version}"
+          echo "$RUNNER_TEMP/jactionlint-bin" >> "$GITHUB_PATH"
 
-      - name: Lint GitHub workflows
-        id: lint_workflows
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm run lint:workflows 2>&1 | tee tmp/ci-logs/repository-policy/lint-workflows.log
+      - parallel:
+          - name: Lint GitHub workflows
+            id: lint_workflows
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm run lint:workflows 2>&1 | tee tmp/ci-logs/repository-policy/lint-workflows.log
 
-      - name: Lint shell scripts
-        id: lint_shell
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm run lint:shell 2>&1 | tee tmp/ci-logs/repository-policy/lint-shell.log
+          - name: Lint shell scripts
+            id: lint_shell
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm run lint:shell 2>&1 | tee tmp/ci-logs/repository-policy/lint-shell.log
 
-      - name: Lint Docker configuration
-        id: docker_lint
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm docker:lint 2>&1 | tee tmp/ci-logs/repository-policy/docker-lint.log
+          - name: Lint Docker configuration
+            id: docker_lint
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm docker:lint 2>&1 | tee tmp/ci-logs/repository-policy/docker-lint.log
 
-      - name: Dependency audit
-        id: dependency_audit
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm deps:audit:strict 2>&1 | tee tmp/ci-logs/repository-policy/deps-audit-strict.log
-
-      - name: Contract version consistency
-        id: contract_versions
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm release:verify:contracts 2>&1 | tee tmp/ci-logs/repository-policy/release-verify-contracts.log
-
-      - name: Orchestrator boundary guardrails
-        id: orchestrator_boundary
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm guard:orchestrator:boundary 2>&1 | tee tmp/ci-logs/repository-policy/guard-orchestrator-boundary.log
+          - name: Dependency audit
+            id: dependency_audit
+            shell: bash
+            run: |
+              set -o pipefail
+              pnpm deps:audit:strict 2>&1 | tee tmp/ci-logs/repository-policy/deps-audit-strict.log
 
       - name: Docs sanity checks
         id: docs_sanity
@@ -498,23 +501,41 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install deps
-        run: pnpm install --frozen-lockfile
-
       - name: Initialize recording-media logs
         run: mkdir -p tmp/ci-logs/recording-media
 
-      - name: Build media test prerequisites
+      - name: Install media prerequisites and build
         id: build
         shell: bash
         run: |
-          set -o pipefail
-          pnpm --filter @esl-pipeline/batch-backend... run build 2>&1 | tee tmp/ci-logs/recording-media/build.log
+          set -Eeuo pipefail
 
-      - name: Install FFmpeg for recording media tests
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ffmpeg
+          apt_pid=''
+          cleanup() {
+            if [[ -n "$apt_pid" ]]; then
+              wait "$apt_pid" || true
+            fi
+          }
+          trap cleanup EXIT
+
+          sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg &
+          apt_pid=$!
+
+          install_status=0
+          pnpm install --frozen-lockfile || install_status=$?
+
+          build_status=0
+          if (( install_status == 0 )); then
+            pnpm --filter @esl-pipeline/batch-backend... run build 2>&1 | tee tmp/ci-logs/recording-media/build.log || build_status=$?
+          fi
+
+          apt_status=0
+          wait "$apt_pid" || apt_status=$?
+          apt_pid=''
+
+          if (( install_status != 0 )); then exit "$install_status"; fi
+          if (( build_status != 0 )); then exit "$build_status"; fi
+          if (( apt_status != 0 )); then exit "$apt_status"; fi
 
       - name: Backend recording media tests
         id: media_tests
@@ -729,8 +750,6 @@ jobs:
           push: false
           provenance: false
           sbom: false
-          cache-from: type=gha,scope=pr-batch-backend
-          cache-to: type=gha,mode=max,scope=pr-batch-backend,ignore-error=true
 
   ci-gate:
     name: CI gate

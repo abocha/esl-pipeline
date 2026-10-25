@@ -11,7 +11,7 @@ import type {
   VoicePlan,
 } from '@esl-pipeline/tts-core';
 
-export const CURRENT_MANIFEST_SCHEMA_VERSION = 5;
+export const CURRENT_MANIFEST_SCHEMA_VERSION = 6;
 const LEGACY_MANIFEST_SCHEMA_VERSION = 1;
 
 export interface AudioArtifactManifest {
@@ -44,6 +44,8 @@ export interface PronunciationAudioWarning {
 type PronunciationAudioArtifactManifest = PronunciationAudioClip & AudioArtifactManifest;
 
 export interface AssignmentManifest {
+  assignmentHash?: string;
+  publication?: import('@esl-pipeline/contracts').AssignmentPublicationMetadata;
   schemaVersion?: number;
   mdHash: string;
   publishTarget?: 'html';
@@ -204,6 +206,8 @@ export function sanitizeAssignmentManifest(manifest: AssignmentManifest): Assign
   return {
     ...(manifest.schemaVersion !== undefined ? { schemaVersion: manifest.schemaVersion } : {}),
     mdHash: manifest.mdHash,
+    ...(manifest.assignmentHash !== undefined ? { assignmentHash: manifest.assignmentHash } : {}),
+    ...(manifest.publication !== undefined ? { publication: manifest.publication } : {}),
     publishTarget: normalizeManifestPublishTarget(manifest.publishTarget),
     ...(manifest.htmlUrl !== undefined ? { htmlUrl: manifest.htmlUrl } : {}),
     ...(manifest.htmlHash !== undefined ? { htmlHash: manifest.htmlHash } : {}),

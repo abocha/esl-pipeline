@@ -1,23 +1,28 @@
 import { randomUUID } from 'node:crypto';
 import { constants as FS } from 'node:fs';
-import { access } from 'node:fs/promises';
-import { basename, dirname } from 'node:path';
+import { access, readFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 import {
   FfmpegNotFoundError,
   InfrastructureError,
   ManifestError,
+  serializeAssignmentV1,
   ValidationError,
+  validateAssignmentV1,
 } from '@esl-pipeline/contracts';
-import { renderAndPublishMarkdownToS3 } from '@esl-pipeline/html-publisher';
-import { validateMarkdown } from '@esl-pipeline/md-validator';
-import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
+import {
+  ASSIGNMENT_HTML_RENDERER_VERSION,
+  renderAndPublishAssignmentToS3,
+} from '@esl-pipeline/html-publisher';
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
 import {
   buildStudyTextMp3,
+  getTtsProviderDescriptor,
   hashStudyText,
   isTtsModelForProvider,
   parseTtsModelId,
+  parseTtsProviderId,
   prepareStudyTextSynthesis,
   type SpeechPerformancePlan,
   type TtsModelId,
@@ -41,7 +46,7 @@ import {
   normalizeManifestPublishTarget,
 } from './manifest.js';
 import { noopLogger, noopMetrics } from './observability.js';
-import { computeRerunPlan } from './rerun-planner.js';
+import { assertExecutableManifest, computeRerunPlan } from './rerun-planner.js';
 import {
   type AudioArtifact,
   type AudioArtifactKind,
@@ -52,13 +57,8 @@ import {
   resolveAudioArtifactsFromManifest,
   resolveStudentFacingAudioMetadata,
 } from './runtime/audio-artifacts.js';
-import { readMarkdownCached } from './runtime/markdown-cache.js';
 import { synthesizePronunciationAudio } from './runtime/pronunciation-audio.js';
-import {
-  insertGeneratedAudioLinks,
-  resolveHeadingTheme,
-  resolveMarkdownTitle,
-} from './runtime/publish-utils.js';
+import { resolveHeadingTheme } from './runtime/publish-utils.js';
 import { resolveSpeechPerformancePlan } from './runtime/speech-performance.js';
 import { createStageReporter } from './runtime/stage-reporter.js';
 import {
@@ -149,23 +149,34 @@ function normalizeCancellationReason(reason: unknown): string | undefined {
 
 function normalizePronunciationProviderFromManifest(
   provider?: string | null,
-): 'elevenlabs' | 'google' | 'inworld' | undefined {
+): 'elevenlabs' | 'google' | 'inworld' | 'gemini' | undefined {
   if (!provider) return undefined;
-  if (provider === 'elevenlabs' || provider === 'google' || provider === 'inworld') return provider;
+  if (
+    provider === 'elevenlabs' ||
+    provider === 'google' ||
+    provider === 'inworld' ||
+    provider === 'gemini'
+  )
+    return provider;
   return undefined;
 }
 
 function normalizePrimaryPronunciationProviderFromManifest(
   provider?: string | null,
-): 'elevenlabs' | 'google' | 'inworld' | undefined {
-  if (provider === 'elevenlabs' || provider === 'google' || provider === 'inworld') {
+): 'elevenlabs' | 'google' | 'inworld' | 'gemini' | undefined {
+  if (
+    provider === 'elevenlabs' ||
+    provider === 'google' ||
+    provider === 'inworld' ||
+    provider === 'gemini'
+  ) {
     return provider;
   }
   return undefined;
 }
 
 function resolvePronunciationTtsModelFromManifest(args: {
-  provider?: 'elevenlabs' | 'google' | 'inworld';
+  provider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   modelId?: string | null;
 }): TtsModelId | undefined {
   if (!args.provider || !args.modelId || !isTtsModelForProvider(args.provider, args.modelId)) {
@@ -176,9 +187,9 @@ function resolvePronunciationTtsModelFromManifest(args: {
 
 function resolveProviderCompatibleVoiceId(args: {
   explicitVoiceId?: string;
-  effectiveProvider?: 'elevenlabs' | 'google' | 'inworld';
+  effectiveProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   previousVoiceId?: string;
-  previousProvider?: 'elevenlabs' | 'google' | 'inworld';
+  previousProvider?: 'elevenlabs' | 'google' | 'inworld' | 'gemini';
   fallbackCandidates?: Array<{
     voiceId?: string;
     provider?: string | null;
@@ -200,9 +211,14 @@ function resolveProviderCompatibleVoiceId(args: {
     return args.fallbackCandidates?.find((candidate) => candidate.voiceId)?.voiceId;
   }
 
-  return args.fallbackCandidates?.find(
-    (candidate) => candidate.voiceId && candidate.provider === args.effectiveProvider,
-  )?.voiceId;
+  return (
+    args.fallbackCandidates?.find(
+      (candidate) => candidate.voiceId && candidate.provider === args.effectiveProvider,
+    )?.voiceId ??
+    (args.effectiveProvider === 'gemini'
+      ? getTtsProviderDescriptor('gemini')?.defaultVoiceId
+      : undefined)
+  );
 }
 
 interface RerunTtsWarning {
@@ -372,17 +388,14 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
     provider:
       flags.pronunciationChunkTtsProvider === 'elevenlabs' ||
       flags.pronunciationChunkTtsProvider === 'google' ||
-      flags.pronunciationChunkTtsProvider === 'inworld'
+      flags.pronunciationChunkTtsProvider === 'inworld' ||
+      flags.pronunciationChunkTtsProvider === 'gemini'
         ? flags.pronunciationChunkTtsProvider
         : undefined,
   };
   await applyVoicePreferences(pronunciationChunkPreferences);
   flags.pronunciationChunkVoiceId = pronunciationChunkPreferences.voiceId;
   flags.pronunciationChunkVoiceAccent = pronunciationChunkPreferences.accentPreference;
-}
-
-function resolveDefaultChunkProvider(_mode?: string | null): 'elevenlabs' | 'google' {
-  return 'google';
 }
 
 export {
@@ -503,11 +516,21 @@ export async function executePlanRerunAssignmentV2(
   }
 }
 
+function requireExecutableAssignment(flags: NewAssignmentFlags | RerunFlags) {
+  if (!flags.assignment) {
+    throw new ValidationError(
+      'Historical Markdown assignments are read-only; AssignmentV1 is required for execution.',
+    );
+  }
+  return validateAssignmentV1(flags.assignment, flags.validationContext);
+}
+
 export async function newAssignment(
   flags: NewAssignmentFlags,
   callbacks: AssignmentProgressCallbacks = {},
   dependencies: OrchestratorDependencies = {},
 ): Promise<NewAssignmentResult> {
+  const assignment = requireExecutableAssignment(flags);
   const manifestStore = dependencies.manifestStore ?? fallbackManifestStore;
   const logger = dependencies.logger ?? fallbackLogger;
   const metrics = dependencies.metrics ?? fallbackMetrics;
@@ -515,6 +538,8 @@ export async function newAssignment(
   const signal = dependencies.signal;
   const pipelineStartedAt = Date.now();
   throwIfCancelled(signal, 'validate');
+  const previousManifest = await manifestStore.readManifest(flags.md);
+  if (previousManifest) assertExecutableManifest(previousManifest);
   await applyVoicePreferences(flags, { resolveAccentToVoiceId: false });
   throwIfCancelled(signal, 'validate');
   const { emitStage, recordSkip } = createStageReporter({
@@ -525,9 +550,8 @@ export async function newAssignment(
   });
 
   const steps: string[] = [];
-  const mdContents = await readMarkdownCached(flags.md);
-  const markdownHash = hashStudyText(mdContents);
-  const previousManifest = await manifestStore.readManifest(flags.md);
+  const assignmentContents = serializeAssignmentV1(assignment);
+  const assignmentHash = hashStudyText(assignmentContents);
   const publishTarget = normalizeManifestPublishTarget(
     flags.publishTarget ?? previousManifest?.publishTarget,
   );
@@ -552,29 +576,7 @@ export async function newAssignment(
     throwIfCancelled(signal, 'validate');
     emitStage('validate', 'start');
     steps.push('validate');
-    const markdownContext = parseMarkdownContext(mdContents);
-    const validation = await validateMarkdown({
-      context: markdownContext,
-      path: flags.md,
-      strict: false,
-      learningPresetId: flags.learningPresetId,
-      learningPresetVersion: flags.learningPresetVersion,
-      preset: flags.preset,
-    });
-    throwIfCancelled(signal, 'validate');
-    if (!validation.ok) {
-      const msg = ['Validation failed:', ...validation.errors.map((e) => `- ${e}`)].join('\n');
-      throw new ValidationError(msg);
-    }
-    if (validation.warnings.length > 0) {
-      logger.log({
-        level: 'warn',
-        message: 'validation.warnings',
-        runId,
-        stage: 'validate',
-        detail: { warnings: validation.warnings },
-      });
-    }
+    const executionInput = { assignment };
     emitStage('validate', 'success');
 
     if (flags.skipImport) {
@@ -614,7 +616,7 @@ export async function newAssignment(
         steps.push('voice-plan');
         throwIfCancelled(signal, 'voice-plan');
         const prepared = await prepareStudyTextSynthesis(
-          { context: markdownContext, mdPath: flags.md },
+          { ...executionInput, mdPath: flags.md },
           {
             voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
             outPath: flags.out ?? dirname(flags.md),
@@ -683,7 +685,7 @@ export async function newAssignment(
         try {
           ttsResult = await buildStudyTextMp3(
             {
-              context: markdownContext,
+              ...executionInput,
               mdPath: flags.md,
             },
             {
@@ -775,24 +777,26 @@ export async function newAssignment(
           await access(audioPath, FS.F_OK).catch(() => {
             throw new InfrastructureError(
               `No audio file produced at ${audioPath}. ` +
-                `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`,
+                `Check that the assignment study text has lines and voices.yml has 'default' or 'auto: true'.`,
             );
           });
         }
 
         const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
         const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
-        const detectedPronunciationFocus = extractPronunciationFocus(markdownContext);
-        const defaultChunkProvider = resolveDefaultChunkProvider(detectedPronunciationFocus?.mode);
+        const synthesizedProvider =
+          parseTtsProviderId(ttsResult.provider) ?? prepared.selection.provider;
+        const synthesizedModel = parseTtsModelId(ttsResult.modelId) ?? prepared.selection.model;
+        const defaultChunkProvider = 'google';
         audioArtifacts.pronunciation = await synthesizePronunciationAudio({
-          context: markdownContext,
+          ...executionInput,
           mdPath: flags.md,
           outPath: flags.out ?? dirname(flags.md),
-          title: validation.meta?.title ?? basename(flags.md).replace(/\.[^.]+$/, ''),
+          title: assignment.metadata.title,
           preview: flags.dryRun,
           force: flags.force || flags.redoTts,
-          primaryTtsProvider: flags.ttsProvider,
-          primaryTtsModel: flags.ttsModel,
+          primaryTtsProvider: synthesizedProvider,
+          primaryTtsModel: synthesizedProvider === 'gemini' ? synthesizedModel : flags.ttsModel,
           logger,
           primaryVoiceId: fallbackVoiceId,
           chunkTtsProvider: defaultChunkProvider,
@@ -820,12 +824,7 @@ export async function newAssignment(
         artifact,
       })),
     ];
-    const studentFacingAudioTitle = resolveMarkdownTitle(
-      mdContents,
-      basename(flags.md).replace(/\.[^.]+$/, ''),
-      validation.meta?.title ?? null,
-      true,
-    );
+    const studentFacingAudioTitle = assignment.metadata.title;
     const uploadableArtifacts = artifactEntries.filter((entry) => entry.artifact?.path);
     if (flags.upload === 's3' && uploadableArtifacts.length > 0) {
       if (flags.skipUpload) {
@@ -910,20 +909,11 @@ export async function newAssignment(
           );
         }
 
-        const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
-          studyTextUrl: studyTextAudioUrl,
-          pronunciationAudioUrl,
-          pronunciationAudio: audioArtifacts.pronunciation,
-        });
-        const publishTitle = resolveMarkdownTitle(
-          mdContents,
-          basename(flags.md).replace(/\.[^.]+$/, ''),
-          validation.meta?.title ?? null,
-        );
-        const publishResult = await renderAndPublishMarkdownToS3({
+        const publishResult = await renderAndPublishAssignmentToS3({
+          assignment,
           headingTheme,
-          title: publishTitle,
-          markdown: publishMarkdown,
+          studyTextAudioUrl,
+          pronunciationAudioUrl,
           pronunciationAudio: audioArtifacts.pronunciation,
         });
         throwIfCancelled(signal, 'add-audio');
@@ -947,7 +937,19 @@ export async function newAssignment(
 
     const manifest: AssignmentManifest = {
       schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
-      mdHash: markdownHash,
+
+      assignmentHash: hashStudyText(serializeAssignmentV1(assignment)),
+      publication: {
+        schemaVersion: 1 as const,
+        rendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
+        title: assignment.metadata.title,
+        icon: assignment.metadata.icon ?? '🎧',
+        studyTextAudioUrl: audioArtifacts.studyText?.url ?? null,
+        pronunciationAudioUrl: assignment.pronunciation
+          ? (audioArtifacts.pronunciation?.primaryClip?.url ?? null)
+          : null,
+      },
+      mdHash: assignmentHash,
       publishTarget,
       htmlUrl,
       htmlHash,
@@ -1059,7 +1061,7 @@ export async function getAssignmentStatus(
 
     let currentHash: string | null = null;
     try {
-      currentHash = hashStudyText(await readMarkdownCached(mdPath));
+      currentHash = hashStudyText(await readFile(mdPath, 'utf8'));
     } catch {
       currentHash = null;
     }
@@ -1122,6 +1124,7 @@ export async function rerunAssignment(
   flags: RerunFlags,
   dependencies: OrchestratorDependencies = {},
 ): Promise<RerunAssignmentResult> {
+  const assignment = requireExecutableAssignment(flags);
   const manifestStore = dependencies.manifestStore ?? fallbackManifestStore;
   const logger = dependencies.logger ?? fallbackLogger;
   const metrics = dependencies.metrics ?? fallbackMetrics;
@@ -1129,8 +1132,6 @@ export async function rerunAssignment(
   const signal = dependencies.signal;
   const manifestMd = flags.manifestMd?.trim() || flags.md;
   const pipelineStartedAt = Date.now();
-  throwIfCancelled(signal, 'tts');
-  await applyRerunVoicePreferences(flags);
   throwIfCancelled(signal, 'tts');
   const { emitStage } = createStageReporter({
     logger,
@@ -1169,6 +1170,8 @@ export async function rerunAssignment(
     if (rerunPlan.errors.length > 0) {
       throw new ValidationError(rerunPlan.errors.join('\n'));
     }
+    await applyRerunVoicePreferences(flags);
+    throwIfCancelled(signal, 'tts');
 
     const stepsToRun = new Set(rerunPlan.executable);
     const skipReasonByStage = new Map<RerunTargetStage, string>(
@@ -1181,14 +1184,9 @@ export async function rerunAssignment(
       throw new ValidationError(`No manifest found for ${manifestMd}. Run the pipeline first.`);
     }
 
-    const mdContents = await readMarkdownCached(flags.md);
-    const markdownContext = rerunPlan.executable.includes('tts')
-      ? parseMarkdownContext(mdContents)
-      : null;
-    const detectedPronunciationMode =
-      (markdownContext ? extractPronunciationFocus(markdownContext)?.mode : null) ??
-      rerunPlan.detectedPronunciationMode ??
-      null;
+    const assignmentContents = serializeAssignmentV1(assignment);
+    const executionInput = { assignment };
+    const detectedPronunciationMode = assignment.pronunciation?.mode ?? null;
     const audioArtifacts = resolveAudioArtifactsFromManifest(manifest);
     const previousPronunciationAudio = audioArtifacts.pronunciation;
     const previousPrimaryClip = audioArtifacts.pronunciation?.primaryClip;
@@ -1200,13 +1198,7 @@ export async function rerunAssignment(
       flags.studyTextDialogueStability ?? manifest.dialogueStability;
     const effectiveStudyTextDialogueSeed = flags.studyTextDialogueSeed ?? manifest.dialogueSeed;
     const effectivePreset = flags.preset ?? manifest.preset;
-    const effectiveStudyTextTitleFallback = basename(manifestMd).replace(/\.[^.]+$/, '');
-    const studentFacingAudioTitle = resolveMarkdownTitle(
-      mdContents,
-      effectiveStudyTextTitleFallback,
-      null,
-      true,
-    );
+    const studentFacingAudioTitle = assignment.metadata.title;
     const previousPrimaryProvider = normalizePrimaryPronunciationProviderFromManifest(
       previousPrimaryClip?.tts?.provider,
     );
@@ -1236,14 +1228,11 @@ export async function rerunAssignment(
     let htmlReused = manifest.htmlReused;
 
     if (stepsToRun.has('tts')) {
-      if (!markdownContext) {
-        throw new ValidationError('Cannot regenerate audio without parseable markdown context.');
-      }
       if (flags.regenerateStudyTextAudio) {
         emitStage('voice-plan', 'start');
         throwIfCancelled(signal, 'voice-plan');
         const prepared = await prepareStudyTextSynthesis(
-          { context: markdownContext, mdPath: flags.md },
+          { ...executionInput, mdPath: flags.md },
           {
             voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
             outPath: flags.out ?? dirname(flags.md),
@@ -1315,7 +1304,7 @@ export async function rerunAssignment(
         try {
           ttsResult = await buildStudyTextMp3(
             {
-              context: markdownContext,
+              ...executionInput,
               mdPath: flags.md,
             },
             {
@@ -1421,18 +1410,11 @@ export async function rerunAssignment(
             provider: audioArtifacts.pronunciation?.primaryClip?.tts?.provider,
           },
         ];
-        const pronunciationTitle = resolveMarkdownTitle(
-          mdContents,
-          effectiveStudyTextTitleFallback,
-          null,
-          true,
-        );
+        const pronunciationTitle = assignment.metadata.title;
         const effectivePrimaryProvider =
           flags.pronunciationMainTtsProvider ?? previousPrimaryProvider;
         const effectiveChunkProvider =
-          flags.pronunciationChunkTtsProvider ??
-          previousChunkProvider ??
-          resolveDefaultChunkProvider(detectedPronunciationMode);
+          flags.pronunciationChunkTtsProvider ?? previousChunkProvider ?? 'google';
         const rerunTtsWarnings: RerunTtsWarning[] = [];
         const resolvedPrimaryVoiceId = resolveProviderCompatibleVoiceId({
           explicitVoiceId: flags.pronunciationMainVoiceId,
@@ -1446,7 +1428,10 @@ export async function rerunAssignment(
           effectiveProvider: effectiveChunkProvider,
           previousVoiceId: previousChunkClip?.voiceId,
           previousProvider:
-            previousChunkProvider === 'elevenlabs' || previousChunkProvider === 'google'
+            previousChunkProvider === 'elevenlabs' ||
+            previousChunkProvider === 'google' ||
+            previousChunkProvider === 'inworld' ||
+            previousChunkProvider === 'gemini'
               ? previousChunkProvider
               : undefined,
           fallbackCandidates: fallbackVoiceCandidates,
@@ -1509,7 +1494,7 @@ export async function rerunAssignment(
           );
         }
         const generatedPronunciation = await synthesizePronunciationAudio({
-          context: markdownContext,
+          ...executionInput,
           mdPath: flags.md,
           outPath: flags.out ?? dirname(flags.md),
           title: pronunciationTitle,
@@ -1521,7 +1506,7 @@ export async function rerunAssignment(
           primaryTtsModel:
             flags.pronunciationMainTtsModel ??
             resolvePronunciationTtsModelFromManifest({
-              provider: previousPrimaryProvider,
+              provider: effectivePrimaryProvider,
               modelId: previousPrimaryModelId,
             }),
           primaryVoiceId: resolvedPrimaryVoiceId,
@@ -1529,12 +1514,7 @@ export async function rerunAssignment(
           chunkTtsModel:
             flags.pronunciationChunkTtsModel ??
             resolvePronunciationTtsModelFromManifest({
-              provider:
-                previousChunkProvider === 'elevenlabs' ||
-                previousChunkProvider === 'google' ||
-                previousChunkProvider === 'inworld'
-                  ? previousChunkProvider
-                  : undefined,
+              provider: effectiveChunkProvider,
               modelId: previousChunkModelId,
             }),
           chunkVoiceId: resolvedChunkVoiceId,
@@ -1720,21 +1700,11 @@ export async function rerunAssignment(
           headingTheme = await loadHeadingThemeForPreset(effectivePreset, DEFAULT_PRESETS_PATH);
         }
 
-        const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
-          studyTextUrl: studyTextAudioUrl,
-          pronunciationAudioUrl,
-          pronunciationAudio: audioArtifacts.pronunciation,
-        });
-        const publishTitle = resolveMarkdownTitle(
-          mdContents,
-          effectiveStudyTextTitleFallback,
-          null,
-          true,
-        );
-        const publishResult = await renderAndPublishMarkdownToS3({
+        const publishResult = await renderAndPublishAssignmentToS3({
+          assignment,
           headingTheme,
-          title: publishTitle,
-          markdown: publishMarkdown,
+          studyTextAudioUrl,
+          pronunciationAudioUrl,
           pronunciationAudio: audioArtifacts.pronunciation,
         });
         throwIfCancelled(signal, 'add-audio');
@@ -1769,7 +1739,19 @@ export async function rerunAssignment(
     const updatedManifest: AssignmentManifest = {
       ...manifestWithoutLegacyAudio,
       schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
-      mdHash: hashStudyText(mdContents),
+
+      assignmentHash: hashStudyText(serializeAssignmentV1(assignment)),
+      publication: {
+        schemaVersion: 1 as const,
+        rendererVersion: ASSIGNMENT_HTML_RENDERER_VERSION,
+        title: assignment.metadata.title,
+        icon: assignment.metadata.icon ?? '🎧',
+        studyTextAudioUrl: audioArtifacts.studyText?.url ?? null,
+        pronunciationAudioUrl: assignment.pronunciation
+          ? (audioArtifacts.pronunciation?.primaryClip?.url ?? null)
+          : null,
+      },
+      mdHash: hashStudyText(assignmentContents),
       publishTarget,
       htmlUrl,
       htmlHash,

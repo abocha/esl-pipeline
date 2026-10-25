@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAssignmentToPmd } from '@esl-pipeline/html-publisher';
-
 import { GenerateDraftProviderError, generateDraft } from '../src/application/generate-draft.js';
 import { ProviderExecutionError } from '../src/application/generation-providers.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
-import { assignmentFixture, promptPackageFixture } from './assignment-v1.test-harness.js';
+import {
+  freshAssignmentFixture as assignmentFixture,
+  promptPackageFixture,
+} from './assignment-v1.test-harness.js';
 
 function createConfig(
   overrides: Partial<BatchBackendConfig['generation']> = {},
@@ -31,21 +32,6 @@ function createConfig(
 
           allowed: ['gpt-6.1-sol', 'gpt-5-mini'],
         },
-        googleAiStudio: {
-          model: 'gemini-3-flash-preview',
-
-          allowed: [
-            'gemini-3-flash-preview',
-            'gemini-2.5-flash-lite',
-            'gemini-2.5-pro',
-            'gemini-custom-001',
-          ],
-        },
-        openrouter: {
-          model: 'openrouter/test-primary',
-
-          allowed: ['openrouter/test-primary', 'openrouter/test-fallback'],
-        },
       },
       providers: {
         openai: {
@@ -54,25 +40,7 @@ function createConfig(
           requestTimeoutMs: 5_000,
           retryMax: 1,
           retryBackoffMs: 0,
-          dailyTokenBudget: 1_000_000,
-          dailyRequestBudget: 1_000,
-          rpmBudget: 1_000,
-        },
-        googleAiStudio: {
-          ...base.generation.providers.googleAiStudio,
-          apiKey: 'google-key',
-          requestTimeoutMs: 5_000,
-          retryMax: 1,
-          retryBackoffMs: 0,
-          dailyRequestBudget: 1_000,
-          rpmBudget: 1_000,
-        },
-        openrouter: {
-          ...base.generation.providers.openrouter,
-          apiKey: 'openrouter-key',
-          requestTimeoutMs: 5_000,
-
-          dailyTokenBudget: 1_000_000,
+          dailyTokenBudgets: { efficient: 1_000_000, larger: 1_000_000 },
           dailyRequestBudget: 1_000,
           rpmBudget: 1_000,
         },
@@ -107,7 +75,7 @@ describe('application/generate-draft', () => {
     canonical = true;
     await expect(
       generateDraft({ promptPackageId: 'old-assignment-package' }, dependencies),
-    ).resolves.toMatchObject({ text: renderAssignmentToPmd(assignmentFixture()) });
+    ).resolves.toMatchObject({ assignment: assignmentFixture(), format: 'assignment_v1' });
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
@@ -139,7 +107,8 @@ describe('application/generate-draft', () => {
     );
 
     expect(result).toMatchObject({
-      text: renderAssignmentToPmd(assignmentFixture()),
+      assignment: assignmentFixture(),
+      format: 'assignment_v1',
       provider: 'openai',
       model: 'gpt-6.1-sol',
       providerRequestId: 'resp-1',

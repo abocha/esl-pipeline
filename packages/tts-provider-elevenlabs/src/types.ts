@@ -6,7 +6,7 @@ import type {
   PipelineLogger,
   VoiceSelectionDiagnostics,
 } from '@esl-pipeline/contracts';
-import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
+import type { AssignmentExecutionInput } from '@esl-pipeline/tts-core';
 
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
 export type TtsProvider = 'elevenlabs';
@@ -78,10 +78,9 @@ export interface BuildStudyTextOptions {
   ttsProvider?: TtsProvider;
 }
 
-export interface BuildStudyTextInput {
-  context: ParsedMarkdownContext;
+export type BuildStudyTextInput = AssignmentExecutionInput & {
   mdPath?: string;
-}
+};
 
 export interface BuildStudyTextResult {
   path: string;
@@ -107,11 +106,10 @@ export interface BuildStudyTextResult {
   cachedCharacters?: number;
 }
 
-export interface BuildPronunciationShadowSentenceInput {
-  context: ParsedMarkdownContext;
+export type BuildPronunciationShadowSentenceInput = AssignmentExecutionInput & {
   voiceId: string;
   mdPath?: string;
-}
+};
 
 export interface BuildPronunciationTextInput {
   text: string;

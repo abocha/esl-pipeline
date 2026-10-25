@@ -3,9 +3,18 @@ import { describe, expect, it } from 'vitest';
 import {
   createGenerationRequestEnvelope,
   flattenGenerationRequestEnvelope,
+  resolveGenerationRequestText,
 } from '../src/application/generation-request-envelope.js';
 
 describe('generation request envelope', () => {
+  it('retains prompt-only requests and requires usable input', () => {
+    expect(resolveGenerationRequestText({ prompt: '  Initial enrichment prompt\n' })).toBe(
+      '  Initial enrichment prompt\n',
+    );
+    expect(() => resolveGenerationRequestText({ prompt: ' ' })).toThrow(
+      'requires prompt or envelope',
+    );
+  });
   it('keeps trusted instructions separate from labelled source data', () => {
     const envelope = createGenerationRequestEnvelope({
       workload: 'lesson_memory',

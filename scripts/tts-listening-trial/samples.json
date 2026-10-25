@@ -1,0 +1,102 @@
+[
+  {
+    "id": "dialogue",
+    "title": "The wrong platform",
+    "focus": "Natural questions, contrast, reassurance, two stable speakers and turn transitions.",
+    "turns": [
+      { "speaker": "Alex", "text": "You look worried. Did we miss the train?" },
+      {
+        "speaker": "Maya",
+        "text": "I don't think so. The screen says platform thirteen, but my ticket says thirty. That can't be right, can it?"
+      },
+      {
+        "speaker": "Alex",
+        "text": "Let me see. Oh, that's the seat number. We're in carriage two, seats thirty and thirty-one."
+      },
+      {
+        "speaker": "Maya",
+        "text": "Right. So we need platform thirteen, not platform thirty. I was about to run to the other end of the station."
+      },
+      { "speaker": "Alex", "text": "We've still got twelve minutes. Shall I carry your bag?" },
+      {
+        "speaker": "Maya",
+        "text": "Would you? Thanks. It's heavier than it looks. I packed a few books."
+      },
+      { "speaker": "Alex", "text": "A few? Are we going away for a weekend or opening a library?" },
+      {
+        "speaker": "Maya",
+        "text": "Very funny. Come on, then. We can argue about my books on the train."
+      }
+    ]
+  },
+  {
+    "id": "monologue",
+    "title": "A small change to my mornings",
+    "focus": "Clear learner-friendly narration, connected speech, sentence stress and pacing without a style prompt.",
+    "turns": [
+      {
+        "speaker": "Maya",
+        "text": "Last month, I decided to stop checking my phone before breakfast. At first, it felt strange. What if I missed an important message? What if something happened at work? But most mornings, nothing urgent had happened at all. I was simply reading the news and making myself anxious. Now I leave my phone in the kitchen overnight. When I wake up, I open the curtains, make some tea, and sit by the window for ten minutes. Sometimes I read a page of a book. Sometimes I just watch the street. It hasn't changed my whole life. I still get tired, and I still spend too much time online. But my mornings feel a little quieter. The surprising part is that I don't need more time. I just need to choose what gets my attention first."
+      }
+    ]
+  },
+  {
+    "id": "pronunciation",
+    "title": "Numbers, word stress and difficult sounds",
+    "focus": "Thirteen versus thirty, word-class stress, consonant clusters, dates and natural punctuation. Listen for omissions or altered words.",
+    "turns": [
+      {
+        "speaker": "Maya",
+        "text": "Thirteen tickets. Thirty tickets. I ordered thirteen, not thirty. Please record the meeting. Keep a record of the meeting. I present the results. It's a birthday present. She thought the three thin threads were thicker than these. The sixth guest left her clothes beside the desk. We used to work together, but we're used to working alone now. The appointment is on Thursday, the twenty-first of January, at a quarter past three. Does that work for you? Actually, could we make it half past three instead?"
+      }
+    ]
+  },
+  {
+    "id": "long-dialogue",
+    "title": "The repair cafe",
+    "focus": "Longer two-speaker consistency, a developing story, pauses and meaning-driven prosody.",
+    "turns": [
+      {
+        "speaker": "Maya",
+        "text": "Do you remember that little radio I found at my grandmother's house? The green one with the broken handle? I finally took it to the repair cafe on Saturday."
+      },
+      {
+        "speaker": "Alex",
+        "text": "A repair cafe? I thought that was just a place to get coffee while someone fixed your bike."
+      },
+      {
+        "speaker": "Maya",
+        "text": "That's what I thought too. But it's a room in the community centre. People bring things that don't work, and volunteers help them repair them. You don't just leave your things at the door. You sit down and help."
+      },
+      { "speaker": "Alex", "text": "That sounds useful. Did they manage to fix the radio?" },
+      {
+        "speaker": "Maya",
+        "text": "Not immediately. A man called Peter asked me when it had last worked. I said I had no idea. Then he asked whether I'd tried new batteries. I felt a bit silly, because I hadn't."
+      },
+      { "speaker": "Alex", "text": "Don't tell me it only needed batteries." },
+      {
+        "speaker": "Maya",
+        "text": "No, the batteries weren't the problem. One of the small metal parts inside was loose. Peter showed me how to clean it and put it back. He could have done it in two minutes, but he let me do it myself."
+      },
+      { "speaker": "Alex", "text": "Were you nervous? I'd be afraid of breaking something else." },
+      {
+        "speaker": "Maya",
+        "text": "A little. My hands were shaking when I picked up the tiny screwdriver. But Peter said, 'It's already broken. Let's see what we can learn.' That made me relax."
+      },
+      { "speaker": "Alex", "text": "And then it worked?" },
+      {
+        "speaker": "Maya",
+        "text": "Yes! First there was a horrible noise, and then we heard a weather forecast. Everyone at our table stopped talking. I don't think anyone has ever been so pleased to hear that rain was expected on Sunday."
+      },
+      { "speaker": "Alex", "text": "I love that. How much did they charge you?" },
+      {
+        "speaker": "Maya",
+        "text": "Nothing. There was a box for donations, so I put some money in. They asked me to come back next month, even if I didn't have anything to repair."
+      },
+      {
+        "speaker": "Alex",
+        "text": "Maybe I'll come with you. I've got a lamp that hasn't worked for years. And yes, before you ask, I've already changed the bulb."
+      }
+    ]
+  }
+]

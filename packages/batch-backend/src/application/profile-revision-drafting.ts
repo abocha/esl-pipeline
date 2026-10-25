@@ -23,14 +23,15 @@ import {
 } from './generation-budget-guard.js';
 import { resolveGenerationTarget } from './generation-policy.js';
 import {
-  executeGoogleStructuredGeneration,
   executeOpenAiStructuredGeneration,
-  executeOpenRouterStructuredGeneration,
   ProviderExecutionError,
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
-import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
+import {
+  type GenerationRequestEnvelopeV1,
+  resolveGenerationRequestText,
+} from './generation-request-envelope.js';
 import type { ProfileCandidatePatch } from './profile-candidate-patch.js';
 
 type ProviderExecutor = (args: {
@@ -38,10 +39,8 @@ type ProviderExecutor = (args: {
   request: ProviderStructuredExecutionRequest;
 }) => Promise<ProviderStructuredExecutionResult>;
 
-const DEFAULT_EXECUTORS: Record<GenerationProvider, ProviderExecutor> = {
+const DEFAULT_EXECUTORS: Partial<Record<GenerationProvider, ProviderExecutor>> = {
   openai: executeOpenAiStructuredGeneration,
-  google_ai_studio: executeGoogleStructuredGeneration,
-  openrouter: executeOpenRouterStructuredGeneration,
 };
 
 const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRules = {
@@ -50,12 +49,6 @@ const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRule
       rateLimitCodes: ['rate_limit_exceeded'],
       timeoutStatusMin: 500,
       timeoutCodes: ['server_error'],
-    },
-    google_ai_studio: {
-      timeoutStatusMin: 500,
-    },
-    openrouter: {
-      timeoutStatuses: [500, 502, 503],
     },
   },
 };
@@ -176,7 +169,7 @@ export async function generateProfileRevisionDraft(args: {
         config,
         provider: target.provider,
         model: target.model,
-        prompt: args.request.prompt,
+        prompt: resolveGenerationRequestText(args.request),
         maxOutputTokens: args.request.maxOutputTokens,
         now: now(),
         repository: budgetRepository,
@@ -198,7 +191,7 @@ export async function generateProfileRevisionDraft(args: {
       config: config.generation,
       request: {
         model: target.model,
-        prompt: args.request.prompt,
+        prompt: resolveGenerationRequestText(args.request),
         ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
         maxOutputTokens: args.request.maxOutputTokens,
         responseSchema: args.request.responseSchema ?? {

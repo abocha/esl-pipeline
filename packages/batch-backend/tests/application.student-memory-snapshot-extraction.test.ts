@@ -109,12 +109,12 @@ describe('application/student-memory-snapshot-extraction', () => {
     const result = await extractStudentMemorySnapshotContent({
       config: createGenerationConfig(),
       request: {
-        provider: 'openrouter',
-        model: 'qwen/qwen3.5',
+        provider: 'openai',
+        model: 'gpt-5.6-luna',
         prompt: 'Extract student memory snapshot',
       },
       executors: {
-        openrouter: executor,
+        openai: executor,
       },
     });
 
@@ -125,7 +125,7 @@ describe('application/student-memory-snapshot-extraction', () => {
     expect(executor).toHaveBeenCalledWith({
       config: createGenerationConfig(),
       request: {
-        model: 'qwen/qwen3.5',
+        model: 'gpt-5.6-luna',
         prompt: 'Extract student memory snapshot',
         maxOutputTokens: undefined,
         responseSchema: {

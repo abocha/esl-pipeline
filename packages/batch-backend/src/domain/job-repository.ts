@@ -7,8 +7,11 @@ import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 
 import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
+import { AssignmentArtifactReferenceSchema } from '@esl-pipeline/contracts';
+import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
 import { parseTtsModelId } from '@esl-pipeline/tts-core';
 
+import { requireTypedAssignment } from '../application/historical-assignment.js';
 import { buildLearningPresetProvenance } from '../application/learning-preset.js';
 import { createPgPool, withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
@@ -35,6 +38,8 @@ interface JobRow {
   state: string;
   md: string | null;
   md_storage_uri: string | null;
+  assignment_artifact?: unknown;
+  assignment_renderer_version?: number | null;
   recording_id: string | null;
   transcript_id: string | null;
   prompt_package_id: string | null;
@@ -93,6 +98,8 @@ export interface InsertJobParams {
   id?: string;
   md?: string | null;
   mdStorageUri?: string | null;
+  assignmentArtifact?: import('@esl-pipeline/contracts').AssignmentArtifactReference | null;
+  assignmentRendererVersion?: number | null;
   studentId?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
@@ -363,6 +370,7 @@ async function insertJobWithState(
   state: JobState,
   options?: { client?: PoolClient },
 ): Promise<JobRecord> {
+  requireTypedAssignment(params.assignmentArtifact);
   const id = params.id ?? randomUUID();
   const now = new Date();
 
@@ -374,6 +382,8 @@ async function insertJobWithState(
         state,
         md,
         md_storage_uri,
+        assignment_artifact,
+        assignment_renderer_version,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -401,7 +411,7 @@ async function insertJobWithState(
         student_id
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+        $1, $2, $3, $4, $30::jsonb, $31, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
         $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
       )
       RETURNING
@@ -411,6 +421,8 @@ async function insertJobWithState(
         state,
         md,
         md_storage_uri,
+        assignment_artifact,
+        assignment_renderer_version,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -471,6 +483,8 @@ async function insertJobWithState(
         now,
         params.userId ?? null,
         params.studentId ?? null,
+        params.assignmentArtifact ? JSON.stringify(params.assignmentArtifact) : null,
+        params.assignmentRendererVersion ?? ASSIGNMENT_HTML_RENDERER_VERSION,
       ],
     );
     return result.rows[0];
@@ -498,6 +512,8 @@ export async function getJobById(
         j.state,
         j.md,
         j.md_storage_uri,
+        j.assignment_artifact,
+        j.assignment_renderer_version,
         j.recording_id,
         j.transcript_id,
         j.prompt_package_id,
@@ -638,7 +654,7 @@ export async function resetFailedAssignmentCorrectionJob(
   params: {
     jobId: string;
     sourceJobId: string;
-    expectedMarkdownHash: string;
+    expectedAssignmentHash: string;
   },
   options?: { client?: PoolClient },
 ): Promise<JobRecord | null> {
@@ -652,7 +668,7 @@ export async function resetFailedAssignmentCorrectionJob(
         AND j.state = 'failed'
         AND j.source_job_id = $2
         AND j.md IS NULL
-        AND right(j.md_storage_uri, length('/content/' || $3 || '.md')) = '/content/' || $3 || '.md'
+        AND j.assignment_artifact IS NOT NULL AND j.assignment_artifact ->> 'contentHash' = $3
         AND EXISTS (
           SELECT 1
           FROM job_action_history h
@@ -669,7 +685,7 @@ export async function resetFailedAssignmentCorrectionJob(
         )
       RETURNING j.id
       `,
-      [params.jobId, params.sourceJobId, params.expectedMarkdownHash, JobActionType.RERUN],
+      [params.jobId, params.sourceJobId, params.expectedAssignmentHash, JobActionType.RERUN],
     );
     if (!result.rows[0]) return null;
     return getJobById(params.jobId, { client });
@@ -699,6 +715,8 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.state,
         j.md,
         j.md_storage_uri,
+        j.assignment_artifact,
+        j.assignment_renderer_version,
         j.recording_id,
         j.transcript_id,
         j.prompt_package_id,
@@ -1039,6 +1057,8 @@ export async function updateJobStateAndResult(args: {
         state,
         md,
         md_storage_uri,
+        assignment_artifact,
+        assignment_renderer_version,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -1167,7 +1187,7 @@ function assignmentShareJobIntegritySql(jobAlias: string, sessionAlias: string):
     AND to_jsonb(${jobAlias}.prompt_package_id) = ${sessionAlias}.confirmed_snapshot #> '{create,promptPackageId}'
     AND to_jsonb(${jobAlias}.draft_id) = ${sessionAlias}.confirmed_snapshot #> '{create,draftId}'
     AND COALESCE(to_jsonb(${jobAlias}.lesson_id), 'null'::jsonb) = ${sessionAlias}.confirmed_snapshot #> '{source,lessonId}'
-    AND ${jobAlias}.md_storage_uri = ${sessionAlias}.confirmed_snapshot #>> '{create,draftStorageUri}'
+    AND ((${jobAlias}.assignment_artifact IS NOT NULL AND ${jobAlias}.assignment_artifact = ${sessionAlias}.confirmed_snapshot #> '{create,artifact}') OR (${jobAlias}.assignment_artifact IS NULL AND NOT (${sessionAlias}.confirmed_snapshot #> '{create}') ? 'artifact' AND ${jobAlias}.md_storage_uri = ${sessionAlias}.confirmed_snapshot #>> '{create,draftStorageUri}'))
     AND ${jobAlias}.source_job_id IS NULL`;
 }
 
@@ -1213,7 +1233,7 @@ async function updateJobDraftLinkGuarded(
          WHERE s.id = $6 AND s.user_id = $7 AND s.share_job_id = jobs.id
            AND s.confirmed_step = 'create'
            AND s.confirmed_snapshot #>> '{create,draftId}' = $3::text
-           AND s.confirmed_snapshot #>> '{create,draftStorageUri}' = $2
+           AND (jobs.assignment_artifact IS NOT NULL OR s.confirmed_snapshot #>> '{create,draftStorageUri}' = $2)
            AND ${assignmentShareJobIntegritySql('jobs', 's')}
        )`
     : `AND NOT EXISTS (
@@ -1250,6 +1270,8 @@ async function updateJobDraftLinkGuarded(
         state,
         md,
         md_storage_uri,
+        assignment_artifact,
+        assignment_renderer_version,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -1394,6 +1416,8 @@ export async function updateJobMetadata(
         state,
         md,
         md_storage_uri,
+        assignment_artifact,
+        assignment_renderer_version,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -1479,7 +1503,7 @@ async function approveJobGuarded(
          SELECT 1 FROM assignment_sessions s
          WHERE s.id = $5 AND s.user_id = $6 AND s.share_job_id = jobs.id
            AND s.confirmed_step = 'create'
-           AND s.confirmed_snapshot #>> '{create,draftStorageUri}' = $2
+           AND (jobs.assignment_artifact IS NOT NULL OR s.confirmed_snapshot #>> '{create,draftStorageUri}' = $2)
            AND ${assignmentShareJobIntegritySql('jobs', 's')}
        )`
     : `AND NOT EXISTS (
@@ -1514,6 +1538,8 @@ async function approveJobGuarded(
         state,
         md,
         md_storage_uri,
+        assignment_artifact,
+        assignment_renderer_version,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -1595,6 +1621,10 @@ function mapRowToJob(row: JobRow): JobRecord {
     state: row.state as JobState,
     md: row.md,
     mdStorageUri: row.md_storage_uri ?? null,
+    assignmentArtifact: row.assignment_artifact
+      ? AssignmentArtifactReferenceSchema.parse(row.assignment_artifact)
+      : null,
+    assignmentRendererVersion: row.assignment_renderer_version ?? null,
     recordingId: row.recording_id ?? null,
     transcriptId: row.transcript_id ?? null,
     promptPackageId: row.prompt_package_id ?? null,
@@ -1683,7 +1713,8 @@ function normalizeTtsStrategy(value: unknown, ctx: { jobId: string }): TtsStrate
 
 function normalizeTtsProvider(value: unknown, ctx: { jobId: string }): TtsProviderId | null {
   if (value == null) return null;
-  if (value === 'elevenlabs' || value === 'google' || value === 'inworld') return value;
+  if (value === 'elevenlabs' || value === 'google' || value === 'inworld' || value === 'gemini')
+    return value;
   if (typeof value === 'string') {
     throw new TypeError(
       `Unsupported jobs.tts_provider value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,

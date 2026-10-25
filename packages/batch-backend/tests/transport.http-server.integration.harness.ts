@@ -3,7 +3,6 @@ import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { CONTRACT_VERSIONS } from '@esl-pipeline/contracts';
-import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as assignmentLearnerContextModule from '../src/application/assignment-learner-context.js';
@@ -11,6 +10,7 @@ import * as assignmentSessionsModule from '../src/application/assignment-session
 import * as confirmAssignmentSessionStepModule from '../src/application/confirm-assignment-session-step.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
+import * as finishTranscriptAssignmentSessionModule from '../src/application/finish-transcript-assignment-session.js';
 import * as generateDraftModule from '../src/application/generate-draft.js';
 import { getJobOptions } from '../src/application/get-job-options.js';
 import * as getJobProvenanceModule from '../src/application/get-job-provenance.js';
@@ -195,12 +195,6 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
   };
 });
 
-vi.mock('@esl-pipeline/md-validator', () => {
-  return {
-    validateMarkdown: vi.fn(),
-  };
-});
-
 vi.mock('../src/application/student-profiles-store', async () => {
   const actual = await vi.importActual<
     typeof import('../src/application/student-profiles-store.js')
@@ -373,9 +367,7 @@ vi.mock('../src/application/student-schedule-billing', () => {
     hideStudentLessonFollowupReminder: vi.fn(),
     undoLatestHiddenStudentReminder: vi.fn(),
     updateStudentLessonPlan: vi.fn(),
-    createStudentLesson: vi.fn(),
     updateStudentLesson: vi.fn(),
-    upsertPrimaryStudentLessonRecurrence: vi.fn(),
     addStudentPackage: vi.fn(),
     adjustStudentCredits: vi.fn(),
     recordStudentPayment: vi.fn(),
@@ -520,11 +512,7 @@ export function describeHttpServerIntegrationSuite(
     const mockUpdateStudentLessonPlan = vi.mocked(
       studentScheduleBillingModule.updateStudentLessonPlan,
     );
-    const mockCreateStudentLesson = vi.mocked(studentScheduleBillingModule.createStudentLesson);
     const mockUpdateStudentLesson = vi.mocked(studentScheduleBillingModule.updateStudentLesson);
-    const mockUpsertPrimaryStudentLessonRecurrence = vi.mocked(
-      studentScheduleBillingModule.upsertPrimaryStudentLessonRecurrence,
-    );
     const mockAddStudentPackage = vi.mocked(studentScheduleBillingModule.addStudentPackage);
     const mockAdjustStudentCredits = vi.mocked(studentScheduleBillingModule.adjustStudentCredits);
     const mockRecordStudentPayment = vi.mocked(studentScheduleBillingModule.recordStudentPayment);
@@ -879,6 +867,12 @@ export function describeHttpServerIntegrationSuite(
         order: 'desc',
       });
       mockGetStudentMemoryOverview.mockResolvedValue({
+        availability: {
+          state: 'absent',
+          reason: 'no_established_snapshot',
+          lessonReferenceCount: 0,
+          homeworkReferenceCount: 0,
+        },
         studentId: deriveStudentId('Anna'),
         latestReadyStudentMemorySnapshot: null,
         recentReadyLessonMemory: [],
@@ -886,6 +880,12 @@ export function describeHttpServerIntegrationSuite(
         unresolvedIssues: [],
       });
       mockGetStudentMemoryHealth.mockResolvedValue({
+        availability: {
+          state: 'absent',
+          reason: 'no_established_snapshot',
+          lessonReferenceCount: 0,
+          homeworkReferenceCount: 0,
+        },
         studentId: deriveStudentId('Anna'),
         latestSnapshot: null,
         memoryCounts: {
@@ -1039,6 +1039,7 @@ export function describeHttpServerIntegrationSuite(
           content: '# Draft profile',
         },
         includedCandidateIds: ['candidate-1'],
+        omittedCandidates: [],
         provider: 'google_ai_studio',
         model: 'gemini-3-flash-preview',
       });
@@ -1061,6 +1062,7 @@ export function describeHttpServerIntegrationSuite(
           content: '# Refreshed foundational profile',
         },
         includedCandidateIds: ['candidate-1'],
+        omittedCandidates: [],
         provider: 'google_ai_studio',
         model: 'gemini-3-flash-preview',
       });
@@ -1113,12 +1115,9 @@ export function describeHttpServerIntegrationSuite(
           workspaceId: '00000000-0000-4000-8000-000000000001',
           timezone: 'UTC',
           defaultDurationMinutes: 60,
-          cadence: null,
-          preferredTimes: null,
           schedulingNotes: null,
           updatedAt: null,
         },
-        recurrenceRule: null,
         nextLesson: null,
         lessons: [],
         creditSummary: {
@@ -1146,63 +1145,10 @@ export function describeHttpServerIntegrationSuite(
       mockHideStudentLessonFollowupReminder.mockResolvedValue(scheduleBillingSurface);
       mockUndoLatestHiddenStudentReminder.mockResolvedValue(scheduleBillingSurface);
       mockUpdateStudentLessonPlan.mockResolvedValue(scheduleBillingSurface);
-      mockCreateStudentLesson.mockResolvedValue(scheduleBillingSurface);
       mockUpdateStudentLesson.mockResolvedValue(scheduleBillingSurface);
       mockAddStudentPackage.mockResolvedValue(scheduleBillingSurface);
       mockAdjustStudentCredits.mockResolvedValue(scheduleBillingSurface);
       mockRecordStudentPayment.mockResolvedValue(scheduleBillingSurface);
-      mockUpsertPrimaryStudentLessonRecurrence.mockResolvedValue({
-        studentId: deriveStudentId('Anna'),
-        workspaceId: '00000000-0000-4000-8000-000000000001',
-        lessonPlan: {
-          studentId: deriveStudentId('Anna'),
-          workspaceId: '00000000-0000-4000-8000-000000000001',
-          timezone: 'UTC',
-          defaultDurationMinutes: 60,
-          cadence: null,
-          preferredTimes: null,
-          schedulingNotes: null,
-          updatedAt: null,
-        },
-        recurrenceRule: {
-          id: 'rule-1',
-          studentId: deriveStudentId('Anna'),
-          workspaceId: '00000000-0000-4000-8000-000000000001',
-          timezone: 'Asia/Bangkok',
-          frequency: 'weekly',
-          startsOn: '2026-05-11',
-          endsOn: null,
-          status: 'active',
-          generationHorizonDays: 56,
-          materializedThrough: '2026-07-06',
-          slots: [
-            {
-              id: 'slot-1',
-              ruleId: 'rule-1',
-              isoWeekday: 1,
-              localStartTime: '11:00',
-              durationMinutes: 50,
-              sortOrder: 0,
-            },
-          ],
-          updatedAt: '2026-05-08T00:00:00.000Z',
-        },
-        nextLesson: null,
-        lessons: [],
-        creditSummary: {
-          purchased: 0,
-          consumed: 0,
-          adjustments: 0,
-          remaining: 0,
-          lowBalanceThreshold: 2,
-          isLow: true,
-          isNegative: false,
-        },
-        creditEvents: [],
-        payments: [],
-        reminders: [],
-        latestHiddenReminder: null,
-      });
       mockGetBusinessSettings.mockResolvedValue({
         workspaceId: '00000000-0000-4000-8000-000000000001',
         defaultCurrency: 'USD',
@@ -1285,12 +1231,12 @@ export function describeHttpServerIntegrationSuite(
       vi,
       httpRequest,
       Readable,
-      validateMarkdown,
       CONTRACT_VERSIONS,
       assignmentSessionsModule,
       assignmentLearnerContextModule,
       assignmentSessionRepositoryModule,
       confirmAssignmentSessionStepModule,
+      finishTranscriptAssignmentSessionModule,
       shareAssignmentSessionModule,
       publishAssignmentCorrectionModule,
       authMiddlewareModule,
@@ -1369,9 +1315,7 @@ export function describeHttpServerIntegrationSuite(
       mockHideStudentLessonFollowupReminder,
       mockUndoLatestHiddenStudentReminder,
       mockUpdateStudentLessonPlan,
-      mockCreateStudentLesson,
       mockUpdateStudentLesson,
-      mockUpsertPrimaryStudentLessonRecurrence,
       mockAddStudentPackage,
       mockAdjustStudentCredits,
       mockRecordStudentPayment,

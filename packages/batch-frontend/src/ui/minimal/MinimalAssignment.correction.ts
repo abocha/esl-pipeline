@@ -21,6 +21,7 @@ export function isValidAssignmentPublicationParent(
     isCompletedAssignmentSession(session) &&
       job &&
       job.assignmentSessionId === session?.id &&
+      job.assignmentArtifact &&
       job.state === 'succeeded' &&
       job.publishTarget === 'html' &&
       job.htmlUrl?.trim(),
@@ -35,6 +36,7 @@ export function canRetryAssignmentPublication(
     isCompletedAssignmentSession(session) &&
       job &&
       job.assignmentSessionId === session?.id &&
+      job.assignmentArtifact &&
       job.jobId === session?.shareJobId &&
       (job.state === 'failed' || job.state === 'queued') &&
       !isValidAssignmentPublicationParent(session, job),
@@ -43,7 +45,10 @@ export function canRetryAssignmentPublication(
 
 export function hasSavedUnpublishedDraft(
   confirmedCreate: ConfirmedCreateSnapshot | null | undefined,
-  draft: Pick<DraftResponse, 'id' | 'workingVersion' | 'contentHash'> | null | undefined,
+  draft:
+    | Pick<DraftResponse, 'id' | 'workingVersion' | 'contentHash' | 'artifact'>
+    | null
+    | undefined,
   draftDirty: boolean,
 ): boolean {
   if (!confirmedCreate || !draft || draftDirty) return false;
@@ -60,14 +65,19 @@ export function buildAssignmentCorrectionRequest({
   confirmedCreate,
 }: {
   requestId: string;
-  draft: Pick<DraftResponse, 'id' | 'workingVersion' | 'contentHash'> | null | undefined;
+  draft:
+    | Pick<DraftResponse, 'id' | 'workingVersion' | 'contentHash' | 'artifact'>
+    | null
+    | undefined;
   confirmedCreate: ConfirmedCreateSnapshot | null | undefined;
 }): PublishAssignmentCorrectionRequest | null {
-  if (!draft || !confirmedCreate || draft.id !== confirmedCreate.draftId) return null;
+  if (!draft?.artifact || !confirmedCreate?.artifact || draft.id !== confirmedCreate.draftId)
+    return null;
   return {
     requestId,
     draftId: draft.id,
     draftWorkingVersion: draft.workingVersion,
     draftHash: draft.contentHash,
+    ...(draft.artifact ? { artifact: draft.artifact } : {}),
   };
 }

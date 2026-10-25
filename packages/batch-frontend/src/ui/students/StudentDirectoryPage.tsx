@@ -1,78 +1,212 @@
+import { ChevronRight, Search } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 
 import {
-  archiveStudentProfile,
   createStudentProfile,
   listStudents,
   restoreStudentProfile,
   type StudentProfile,
 } from '../../utils/api';
 import { CreateStudentDialog } from './CreateStudentDialog';
-import { StudentAreaDesignSystemStyles } from './StudentAreaDesignSystem';
 import {
   buildCreateStudentPayload,
   type CreateStudentFormState,
   INITIAL_CREATE_STUDENT_FORM,
 } from './StudentProfileUi.logic';
-import { formatStudentShortId, getStudentInitials } from './studentIdentity';
-import './StudentDirectoryPage.css';
+import { useStudentDirectoryRefresh } from './StudentWorkspaceContext';
+import { getStudentInitials } from './studentIdentity';
 
 type StudentDirectoryStatus = 'active' | 'archived';
 
+const PAGE_SIZE = 200;
+
 export const StudentDirectoryPage: React.FC = () => {
   const navigate = useNavigate();
-  const [students, setStudents] = useState<StudentProfile[]>([]);
+
+  const [params, setParams] = useSearchParams();
+
+  const selectedMatch = useMatch('/students/:studentId/*');
+
+  const selectedId = selectedMatch?.params.studentId;
+
+  const { version, confirmLeave } = useStudentDirectoryRefresh();
+
+  const section = selectedMatch?.params['*'] || params.get('section') || 'overview';
+
+  const studentStatus: StudentDirectoryStatus =
+    params.get('status') === 'archived' ? 'archived' : 'active';
+
+  const search = params.get('q')?.trim() ?? '';
+
+  const rawOffset = Number(params.get('offset') ?? 0);
+
+  const offset =
+    Number.isSafeInteger(rawOffset) && rawOffset >= 0
+      ? Math.floor(rawOffset / PAGE_SIZE) * PAGE_SIZE
+      : 0;
+
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
+
+  const setOffset = useCallback(
+    (value: number) => {
+      const next = new URLSearchParams(paramsRef.current);
+
+      if (value) next.set('offset', String(value));
+      else next.delete('offset');
+
+      setParams(next, { replace: true });
+    },
+    [setParams],
+  );
+
+  const studentHref = (id: string) => {
+    const next = new URLSearchParams(params);
+    next.delete('status');
+    next.delete('section');
+
+    return `/students/${encodeURIComponent(id)}/${section}?${next}`;
+  };
+
+  const [studentPage, setStudentPage] = useState<{
+    items: StudentProfile[];
+
+    total: number;
+
+    status: StudentDirectoryStatus;
+
+    search: string;
+
+    offset: number;
+  } | null>(null);
+
   const [studentsLoading, setStudentsLoading] = useState(true);
+
   const [studentsError, setStudentsError] = useState<string | null>(null);
+
   const [studentActionError, setStudentActionError] = useState<string | null>(null);
-  const [studentStatus, setStudentStatus] = useState<StudentDirectoryStatus>('active');
+
   const [busyStudentId, setBusyStudentId] = useState<string | null>(null);
-  const [openActionsStudentId, setOpenActionsStudentId] = useState<string | null>(null);
+
   const [createOpen, setCreateOpen] = useState(false);
+
   const [createBusy, setCreateBusy] = useState(false);
+
   const [createError, setCreateError] = useState<string | null>(null);
+
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+
   const [createStudentForm, setCreateStudentForm] = useState<CreateStudentFormState>(
     INITIAL_CREATE_STUDENT_FORM,
   );
+
   const latestStudentsRequestRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const currentPage =
+    studentPage?.status === studentStatus &&
+    studentPage.search === search &&
+    studentPage.offset === offset
+      ? studentPage
+      : null;
+
+  const students = currentPage?.items ?? [];
+
+  const changeStatus = (status: StudentDirectoryStatus) => {
+    const next = new URLSearchParams(params);
+    next.set('section', section);
+
+    next.delete('offset');
+    next.delete('focus');
+
+    if (status === 'archived') next.set('status', status);
+    else next.delete('status');
+
+    setStudentActionError(null);
+
+    navigate(`/students?${next}`);
+  };
 
   const updateCreateStudentForm = useCallback<
     React.Dispatch<React.SetStateAction<CreateStudentFormState>>
   >((update) => {
     setCreateStudentForm(update);
+
     setCreateError(null);
+
     setCreateSuccess(null);
   }, []);
 
   const loadStudents = useCallback(async () => {
     const requestId = latestStudentsRequestRef.current + 1;
+
     latestStudentsRequestRef.current = requestId;
+
     setStudentsLoading(true);
+
     setStudentsError(null);
+
     try {
       const response = await listStudents({
-        limit: 200,
-        offset: 0,
+        ...(search ? { q: search } : {}),
+
+        limit: PAGE_SIZE,
+
+        offset,
+
         order: 'asc',
+
         status: studentStatus,
       });
+
       if (latestStudentsRequestRef.current !== requestId) return;
-      setStudents(response.items ?? []);
+
+      if (offset > 0 && offset >= response.total) {
+        setOffset(Math.max(0, Math.floor((response.total - 1) / PAGE_SIZE) * PAGE_SIZE));
+
+        return;
+      }
+
+      setStudentPage({
+        items: response.items ?? [],
+
+        total: response.total,
+
+        status: studentStatus,
+
+        search,
+
+        offset,
+      });
     } catch (error) {
       if (latestStudentsRequestRef.current !== requestId) return;
+
       const message = error instanceof Error ? error.message : 'Unable to load students.';
+
       setStudentsError(message);
     } finally {
       if (latestStudentsRequestRef.current === requestId) {
         setStudentsLoading(false);
       }
     }
-  }, [studentStatus]);
+  }, [studentStatus, search, offset, version, setOffset]);
+
+  const refreshCurrentPageRef = useRef(loadStudents);
+
+  useEffect(() => {
+    refreshCurrentPageRef.current = loadStudents;
+  }, [loadStudents]);
 
   useEffect(() => {
     void loadStudents();
+
     return () => {
       latestStudentsRequestRef.current += 1;
     };
@@ -80,226 +214,215 @@ export const StudentDirectoryPage: React.FC = () => {
 
   const handleCreateStudent = useCallback(async () => {
     const built = buildCreateStudentPayload(createStudentForm);
+
     if (!built.payload) {
       setCreateError(built.validationError ?? 'Unable to create student.');
+
       setCreateSuccess(null);
+
       return;
     }
 
     setCreateBusy(true);
+
     setCreateError(null);
+
     setCreateSuccess(null);
+
     try {
       const created = await createStudentProfile(built.payload);
+
+      if (!mountedRef.current) return;
       setCreateSuccess(`Created ${created.student}. Redirecting to Learning...`);
+
       setCreateStudentForm(INITIAL_CREATE_STUDENT_FORM);
+
       setCreateOpen(false);
-      await loadStudents();
+
+      await refreshCurrentPageRef.current();
+
       navigate(`/students/${encodeURIComponent(created.id)}/learning`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create student.';
+
       setCreateError(message);
     } finally {
       setCreateBusy(false);
     }
-  }, [createStudentForm, loadStudents, navigate]);
+  }, [createStudentForm, navigate]);
 
-  const handleArchiveStudent = useCallback(
-    async (student: StudentProfile) => {
-      setOpenActionsStudentId(null);
-      const confirmed = window.confirm(
-        `Are you sure you want to archive ${student.student}? Lesson history and profile audit records will be preserved.`,
-      );
-      if (!confirmed) return;
+  const handleRestoreStudent = useCallback(async (student: StudentProfile) => {
+    setBusyStudentId(student.id);
 
-      setBusyStudentId(student.id);
-      setStudentActionError(null);
-      try {
-        await archiveStudentProfile(student.id, {
-          reason: 'Archived from the student directory.',
-        });
-        await loadStudents();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to archive student.';
-        setStudentActionError(message);
-      } finally {
-        setBusyStudentId(null);
-      }
-    },
-    [loadStudents],
-  );
+    setStudentActionError(null);
 
-  const handleRestoreStudent = useCallback(
-    async (student: StudentProfile) => {
-      setBusyStudentId(student.id);
-      setStudentActionError(null);
-      try {
-        await restoreStudentProfile(student.id);
-        await loadStudents();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to restore student.';
-        setStudentActionError(message);
-      } finally {
-        setBusyStudentId(null);
-      }
-    },
-    [loadStudents],
-  );
+    try {
+      await restoreStudentProfile(student.id);
 
-  const emptyMessage =
-    studentStatus === 'active'
+      await refreshCurrentPageRef.current();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to restore student.';
+
+      setStudentActionError(message);
+    } finally {
+      setBusyStudentId(null);
+    }
+  }, []);
+
+  const emptyMessage = search
+    ? `No students match “${search}”. Try another name or clear the search.`
+    : studentStatus === 'active'
       ? 'No students yet. Create the first learner to begin.'
       : 'No archived students.';
 
   return (
-    <section className="student-directory-layout student-area-theme">
-      <StudentAreaDesignSystemStyles />
-      <article className="student-area-panel">
+    <aside className="student-roster" aria-label="Student directory">
+      <header className="roster-heading">
+        <h1>Students</h1>
         <CreateStudentDialog
           isOpen={createOpen}
           isBusy={createBusy}
           error={createError}
           success={createSuccess}
           createStudentForm={createStudentForm}
-          onToggleOpen={() => {
-            setCreateOpen((current) => !current);
+          onToggleOpen={async () => {
+            if (!(await confirmLeave())) return;
+            setCreateStudentForm(INITIAL_CREATE_STUDENT_FORM);
+            setCreateOpen(true);
             setCreateError(null);
             setCreateSuccess(null);
           }}
           onCancel={() => {
-            setCreateOpen(false);
-            setCreateError(null);
+            if (!createBusy) {
+              setCreateOpen(false);
+              setCreateError(null);
+            }
           }}
           onSubmit={() => void handleCreateStudent()}
           setCreateStudentForm={updateCreateStudentForm}
         />
-      </article>
+      </header>
+      <label className="roster-search">
+        <Search size={19} aria-hidden="true" />
+        <input
+          type="search"
+          aria-label="Search students"
+          placeholder="Search students by name"
+          value={params.get('q') ?? ''}
+          onChange={(event) => {
+            const next = new URLSearchParams(params);
+            next.delete('offset');
 
-      <article className="student-area-panel student-directory-list">
-        <header className="student-directory-list-header">
-          <div>
-            <h2>Students</h2>
-            <p>
-              {studentStatus === 'active'
-                ? 'Choose a student to continue in Overview or jump straight into Learning.'
-                : 'Restore paused learners when they return.'}
-            </p>
-          </div>
-          <div className="student-directory-list-tools">
-            <div className="student-directory-status-tabs" aria-label="Student list">
-              <button
-                type="button"
-                className={studentStatus === 'active' ? 'is-active' : ''}
-                onClick={() => setStudentStatus('active')}
-              >
-                Active
-              </button>
-              <button
-                type="button"
-                className={studentStatus === 'archived' ? 'is-active' : ''}
-                onClick={() => setStudentStatus('archived')}
-              >
-                Archived
-              </button>
-            </div>
-            <button
-              type="button"
-              className="workspace-secondary-btn"
-              onClick={() => void loadStudents()}
-              disabled={studentsLoading}
-            >
-              {studentsLoading ? 'Refreshing...' : 'Refresh'}
+            if (event.target.value) next.set('q', event.target.value);
+            else next.delete('q');
+
+            setParams(next, { replace: true });
+          }}
+        />
+      </label>
+      <div className="roster-toolbar">
+        <div className="status-switch" role="group" aria-label="Student list">
+          <button
+            type="button"
+            aria-pressed={studentStatus === 'active'}
+            onClick={() => changeStatus('active')}
+          >
+            Active
+          </button>
+          <button
+            type="button"
+            aria-pressed={studentStatus === 'archived'}
+            onClick={() => changeStatus('archived')}
+          >
+            Archived
+          </button>
+        </div>
+      </div>
+      <div className="roster-scroll" aria-busy={studentsLoading}>
+        {studentsError && (
+          <div role="alert" className="roster-message">
+            {studentsError}
+            <button type="button" onClick={() => void loadStudents()}>
+              Retry
             </button>
           </div>
-        </header>
-
-        {studentsError ? <p className="workspace-error">{studentsError}</p> : null}
-        {studentActionError ? <p className="workspace-error">{studentActionError}</p> : null}
-        {studentsLoading ? <p className="workspace-muted">Loading students...</p> : null}
-        {!studentsLoading && !studentsError && students.length === 0 ? (
-          <p className="workspace-muted">{emptyMessage}</p>
-        ) : null}
-
-        <div className="student-directory-grid">
-          {students.map((student) => (
-            <article key={student.id} className="student-area-panel student-directory-card">
-              <div className="student-directory-identity">
-                <div className="student-directory-avatar" aria-hidden="true">
+        )}
+        {studentActionError && (
+          <p role="alert" className="roster-message">
+            {studentActionError}
+          </p>
+        )}
+        {studentsLoading && (
+          <p role="status" className="roster-message">
+            Loading students…
+          </p>
+        )}
+        {!studentsLoading && !studentsError && students.length === 0 && (
+          <p role="status" className="roster-message">
+            {emptyMessage}
+          </p>
+        )}
+        {students.map((student) => (
+          <div
+            className={`roster-row${selectedId === student.id ? ' selected' : ''}`}
+            key={student.id}
+          >
+            {student.archivedAt ? (
+              <div className="roster-archived">
+                <span className="student-monogram" aria-hidden="true">
                   {getStudentInitials(student.student)}
-                </div>
+                </span>
                 <div>
-                  <h3>{student.student}</h3>
-                  <p>{formatStudentShortId(student.id)}</p>
-                  {student.archivedAt ? (
-                    <p className="student-directory-archive-note">
-                      Archived {new Date(student.archivedAt).toLocaleDateString()}
-                      {student.archiveReason ? ` · ${student.archiveReason}` : ''}
-                    </p>
-                  ) : null}
-                </div>
-                {studentStatus === 'active' ? (
-                  <div className="student-directory-card-menu">
-                    <button
-                      type="button"
-                      className="student-directory-menu-trigger"
-                      aria-label={`Student actions for ${student.student}`}
-                      aria-haspopup="menu"
-                      aria-expanded={openActionsStudentId === student.id}
-                      disabled={busyStudentId === student.id}
-                      onClick={() =>
-                        setOpenActionsStudentId((current) =>
-                          current === student.id ? null : student.id,
-                        )
-                      }
-                    >
-                      ...
-                    </button>
-                    {openActionsStudentId === student.id ? (
-                      <div className="student-directory-menu" role="menu">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={busyStudentId === student.id}
-                          onClick={() => void handleArchiveStudent(student)}
-                        >
-                          {busyStudentId === student.id ? 'Archiving...' : 'Archive student'}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              <div className="student-directory-actions">
-                {studentStatus === 'active' ? (
-                  <>
-                    <Link
-                      className="student-directory-primary-action"
-                      to={`/students/${encodeURIComponent(student.id)}/overview`}
-                    >
-                      Open student
-                    </Link>
-                    <Link
-                      className="student-directory-secondary-action"
-                      to={`/students/${encodeURIComponent(student.id)}/learning`}
-                    >
-                      Open Learning
-                    </Link>
-                  </>
-                ) : (
+                  <strong>{student.student}</strong>
+                  {student.archiveReason && <p>{student.archiveReason}</p>}
                   <button
                     type="button"
-                    className="student-directory-primary-action"
                     disabled={busyStudentId === student.id}
                     onClick={() => void handleRestoreStudent(student)}
                   >
-                    {busyStudentId === student.id ? 'Restoring...' : 'Restore student'}
+                    {busyStudentId === student.id ? 'Restoring…' : 'Restore student'}
                   </button>
-                )}
+                </div>
               </div>
-            </article>
-          ))}
-        </div>
-      </article>
-    </section>
+            ) : (
+              <Link
+                to={studentHref(student.id)}
+                aria-label={student.student}
+                aria-current={selectedId === student.id ? 'page' : undefined}
+              >
+                <span className="student-monogram" aria-hidden="true">
+                  {getStudentInitials(student.student)}
+                </span>
+                <span>{student.student}</span>
+                <ChevronRight size={18} aria-hidden="true" />
+              </Link>
+            )}
+          </div>
+        ))}
+      </div>
+      {currentPage && currentPage.total > PAGE_SIZE && (
+        <nav className="roster-pagination" aria-label="Student pages">
+          <span role="status">
+            {offset + 1}–{offset + students.length} of {currentPage.total}
+          </span>
+          <button
+            type="button"
+            aria-label="Previous page"
+            disabled={studentsLoading || offset === 0}
+            onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            aria-label="Next page"
+            disabled={studentsLoading || offset + PAGE_SIZE >= currentPage.total}
+            onClick={() => setOffset(offset + PAGE_SIZE)}
+          >
+            Next
+          </button>
+        </nav>
+      )}
+    </aside>
   );
 };

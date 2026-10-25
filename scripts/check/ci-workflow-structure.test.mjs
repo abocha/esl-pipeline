@@ -307,12 +307,21 @@ test('unit/component lane keeps a conservative worker budget and measurement evi
   assert.match(unit, /unit-resource-usage\.txt/u);
 });
 
-test('media is independently selectable and integration does not install FFmpeg', () => {
+test('media prerequisites overlap and complete before the independently selected media tests', () => {
   const media = jobBlock('recording-media');
-  assert.match(media, /apt-get install --yes --no-install-recommends ffmpeg/u);
+  const prerequisiteStart = media.indexOf('- name: Install media prerequisites and build');
+  const mediaTestsStart = media.indexOf('- name: Backend recording media tests');
+  assert.ok(prerequisiteStart >= 0 && mediaTestsStart > prerequisiteStart);
+  const prerequisites = media.slice(prerequisiteStart, mediaTestsStart);
+  assert.match(prerequisites, /shell:\s*bash/u);
+  assert.match(prerequisites, /apt-get update/u);
+  assert.match(prerequisites, /apt-get install --yes --no-install-recommends ffmpeg/u);
+  assert.match(prerequisites, /&\s*$/mu);
+  assert.match(prerequisites, /pnpm install --frozen-lockfile/u);
+  assert.match(prerequisites, /pnpm --filter @esl-pipeline\/batch-backend\.\.\. run build/u);
+  assert.match(prerequisites, /\bwait\b/u);
   assert.match(media, /pnpm --filter @esl-pipeline\/batch-backend test:media/u);
   assert.doesNotMatch(media, /pnpm test:integration/u);
-  assert.match(media, /pnpm --filter @esl-pipeline\/batch-backend\.\.\. run build/u);
   assert.match(jobBlock('deterministic-integration'), /pnpm test:integration/u);
   assert.doesNotMatch(jobBlock('deterministic-integration'), /ffmpeg|test:media/u);
 });
@@ -325,6 +334,7 @@ test('production backend packaging matches the release build path', () => {
   assert.match(packaging, /platforms: linux\/amd64/u);
   assert.match(packaging, /pull: true/u);
   assert.match(packaging, /push: false/u);
+  assert.doesNotMatch(packaging, /cache-from:|cache-to:/u);
 });
 
 test('build_unit lanes keep duplicated builds without sharding or matrix fanout', () => {
@@ -369,42 +379,92 @@ test('diagnostics run weekly or manually and preserve producer failures', () => 
   }
 });
 
-test('static tooling bootstrap verifies bundled shellcheck before extracting verified actionlint', () => {
+test('static tooling bootstrap verifies bundled shellcheck before extracting verified jactionlint', () => {
   const bootstrap = namedStep(jobBlock('repository-policy'), 'Verify repo hygiene tools');
   assert.doesNotMatch(bootstrap, /apt-get (?:update|install)/u);
   assert.match(bootstrap, /command -v shellcheck/u);
   assert.match(bootstrap, /shellcheck --version/u);
-  assert.match(bootstrap, /actionlint_version=1\.7\.11/u);
+  assert.equal(
+    JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).scripts[
+      'lint:workflows'
+    ],
+    'jactionlint --profile correctness',
+  );
+  assert.match(bootstrap, /jactionlint_version=2\.0\.2/u);
   assert.match(
     bootstrap,
-    /actionlint_archive="actionlint_\$\{actionlint_version\}_linux_amd64\.tar\.gz"/u,
+    /jactionlint_archive="jactionlint_\$\{jactionlint_version\}_linux_amd64\.tar\.gz"/u,
   );
   assert.match(
     bootstrap,
-    /https:\/\/github\.com\/rhysd\/actionlint\/releases\/download\/v\$\{actionlint_version\}\/\$\{actionlint_archive\}/u,
+    /https:\/\/github\.com\/jdx\/jactionlint\/releases\/download\/v\$\{jactionlint_version\}\/\$\{jactionlint_archive\}/u,
   );
   assert.match(
     bootstrap,
-    /actionlint_sha256=900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a/u,
+    /jactionlint_sha256=026bce6d0ef196f5b22bf43acb1348d47c5d0a5ae61d6ec3bdba1229a823161b/u,
   );
 
   const dollar = '$';
-  const archiveVariable = `${dollar}{actionlint_archive}`;
-  const checksumVariable = `${dollar}{actionlint_sha256}`;
+  const archiveVariable = `${dollar}{jactionlint_archive}`;
+  const checksumVariable = `${dollar}{jactionlint_sha256}`;
   const download = bootstrap.indexOf(`--output "$RUNNER_TEMP/${archiveVariable}"`);
   const verify = bootstrap.indexOf(
     `echo "${checksumVariable}  $RUNNER_TEMP/${archiveVariable}" | sha256sum --check`,
   );
   const extract = bootstrap.indexOf(
-    `tar -xzf "$RUNNER_TEMP/${archiveVariable}" -C "$RUNNER_TEMP/actionlint-bin"`,
+    `tar -xzf "$RUNNER_TEMP/${archiveVariable}" -C "$RUNNER_TEMP/jactionlint-bin" jactionlint`,
   );
   assert.ok(download >= 0 && download < verify && verify < extract);
+  assert.match(
+    bootstrap.slice(extract),
+    /\/jactionlint-bin\/jactionlint" --version \| grep -F "\$\{jactionlint_version\}"/u,
+  );
 });
 
 test('tooling tests remain an unconditional static guard', () => {
   const step = namedStep(jobBlock('repository-policy'), 'Tooling tests');
   assert.match(step, /run: \|[\s\S]*pnpm test:tooling 2>&1 \| tee/u);
   assert.doesNotMatch(step, /^\s+if:/mu);
+});
+
+test('parallel repository policy checks fail closed and retain per-check evidence', () => {
+  const policy = jobBlock('repository-policy');
+  const parallelStarts = [...policy.matchAll(/^ {6}- parallel:$/gmu)].map((match) => match.index);
+  assert.equal(parallelStarts.length, 2);
+  const verifyTools = policy.indexOf('      - name: Verify repo hygiene tools');
+  const docsSanity = policy.indexOf('      - name: Docs sanity checks');
+  assert.ok(parallelStarts[0] < verifyTools && verifyTools < parallelStarts[1]);
+  assert.ok(docsSanity > parallelStarts[1]);
+
+  const parallelGroups = [
+    policy.slice(parallelStarts[0], parallelStarts[1]),
+    policy.slice(parallelStarts[1], docsSanity),
+  ];
+  for (const group of parallelGroups) assert.doesNotMatch(group, /continue-on-error:/u);
+
+  for (const [groupIndex, name, id, logPath] of [
+    [0, 'Validate environment template', 'env_template', 'env-validate-example.log'],
+    [0, 'Tooling tests', 'tooling_tests', 'test-tooling.log'],
+    [0, 'Contract version consistency', 'contract_versions', 'release-verify-contracts.log'],
+    [
+      0,
+      'Orchestrator boundary guardrails',
+      'orchestrator_boundary',
+      'guard-orchestrator-boundary.log',
+    ],
+    [1, 'Lint GitHub workflows', 'lint_workflows', 'lint-workflows.log'],
+    [1, 'Lint shell scripts', 'lint_shell', 'lint-shell.log'],
+    [1, 'Lint Docker configuration', 'docker_lint', 'docker-lint.log'],
+    [1, 'Dependency audit', 'dependency_audit', 'deps-audit-strict.log'],
+  ]) {
+    const step = namedStep(parallelGroups[groupIndex], name);
+    assert.match(step, new RegExp(`id: ${id}\\n`, 'u'));
+    assert.match(step, new RegExp(`tee tmp/ci-logs/repository-policy/${logPath}`, 'u'));
+    assert.match(policy, new RegExp(`steps\\.${id}\\.outcome`, 'u'));
+    assert.ok(policy.includes(`logPath":"tmp/ci-logs/repository-policy/${logPath}`));
+  }
+
+  assert.match(policy, /if: always\(\)[\s\S]*name: Upload repository policy logs/u);
 });
 
 test('diagnostic workflows use explicit concurrency and bounded artifact retention', () => {

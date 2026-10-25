@@ -1,49 +1,52 @@
 #!/usr/bin/env node
-import { Command } from 'commander';
+import { parseArgs } from 'node:util';
 
 import { loadApplicationEnv } from '@esl-pipeline/shared-infrastructure';
 
 import { uploadFile } from '../src/index.js';
-
-interface StorageUploaderCliOptions {
-  file: string;
-  prefix?: string;
-  publicRead?: boolean;
-  presign?: number;
-}
 
 loadApplicationEnv({
   moduleUrl: import.meta.url,
   memoizeKey: 'storage-uploader-cli',
 });
 
-const program = new Command()
-  .name('storage-uploader')
-  .description('Upload files to storage backends')
-  .requiredOption('--file <path>', 'Local file to upload')
-  .option('--prefix <prefix>', 'Key prefix for uploaded file')
-  .option('--public-read', 'Make the uploaded file publicly readable')
-  .option(
-    '--presign <seconds>',
-    'Generate presigned URL with specified expiration in seconds',
-    Number.parseInt,
-  )
-  .action(async (opts: StorageUploaderCliOptions) => {
-    try {
-      const result = await uploadFile(opts.file, {
-        backend: 's3',
-        public: Boolean(opts.publicRead),
-        presignExpiresIn: opts.presign,
-        prefix: opts.prefix,
-      });
-      console.log(JSON.stringify(result, null, 2));
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
-      console.error(message);
-      process.exit(1);
-    }
+try {
+  const { values } = parseArgs({
+    options: {
+      file: { type: 'string' },
+      prefix: { type: 'string' },
+      'public-read': { type: 'boolean' },
+      presign: { type: 'string' },
+      help: { type: 'boolean', short: 'h' },
+    },
   });
+  if (values.help) {
+    console.log(`Usage: storage-uploader [options]
 
-// In ESM you can top-level await:
-await program.parseAsync();
+Upload files to storage backends
+
+Options:
+  --file <path>        Local file to upload (required)
+  --prefix <prefix>    Key prefix for uploaded file
+  --public-read       Make the uploaded file publicly readable
+  --presign <seconds>  Generate presigned URL with specified expiration in seconds
+  -h, --help          Display help`);
+  } else {
+    if (!values.file) throw new Error("required option '--file <path>' not specified");
+    const presign = values.presign === undefined ? undefined : Number(values.presign);
+    if (presign !== undefined && (!Number.isSafeInteger(presign) || presign <= 0)) {
+      throw new Error('--presign must be a positive integer number of seconds');
+    }
+    const result = await uploadFile(values.file, {
+      backend: 's3',
+      public: Boolean(values['public-read']),
+      presignExpiresIn: presign,
+      prefix: values.prefix,
+    });
+    console.log(JSON.stringify(result, null, 2));
+  }
+} catch (error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+  process.exitCode = 1;
+}

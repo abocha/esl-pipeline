@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 
 import { loadConfig } from '../config/env.js';
+import { loadMcpOAuthConfig } from '../transport/mcp-oauth.js';
 
 type EnvProfile = 'development' | 'production';
 
@@ -13,6 +14,7 @@ export interface ValidateEnvironmentOptions {
   cwd?: string;
   profile?: EnvProfile;
   example?: boolean;
+  runtime?: boolean;
   shellEnv?: NodeJS.ProcessEnv;
 }
 
@@ -83,11 +85,10 @@ function addEnabledFeatureRequirements(env: NodeJS.ProcessEnv, errors: string[])
         'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider openai requires OPENAI_API_KEY.',
       );
     }
-    if (provider === 'google_ai_studio' && !hasValue(env.GEMINI_API_KEY)) {
-      errors.push(
-        'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider google_ai_studio requires GEMINI_API_KEY.',
-      );
-    }
+  }
+
+  if (isEnabled(env.ESL_TTS_VOICE_RANKER_ENABLED) && !hasValue(env.OPENAI_API_KEY)) {
+    errors.push('ESL_TTS_VOICE_RANKER_ENABLED=true requires OPENAI_API_KEY.');
   }
 
   if (
@@ -120,13 +121,43 @@ function addProductionRequirements(env: NodeJS.ProcessEnv, errors: string[]): vo
   if (!isEnabled(env.REFRESH_COOKIE_SECURE)) {
     errors.push('Production profile requires REFRESH_COOKIE_SECURE=true.');
   }
+  if (hasValue(env.CADDY_PUBLIC_HOSTNAME)) {
+    if (hasValue(env.REFRESH_COOKIE_DOMAIN)) {
+      errors.push(
+        'Same-origin Caddy production requires host-only cookies: unset REFRESH_COOKIE_DOMAIN.',
+      );
+    }
+    if (isEnabled(env.ENABLE_CORS)) {
+      errors.push('Same-origin Caddy production requires ENABLE_CORS=false.');
+    }
+    if (hasValue(env.REFRESH_COOKIE_PATH) && env.REFRESH_COOKIE_PATH !== '/') {
+      errors.push('Same-origin Caddy production requires REFRESH_COOKIE_PATH=/.');
+    }
+    if (env.MCP_OAUTH_ENABLED === 'true') {
+      const origin = `https://${env.CADDY_PUBLIC_HOSTNAME}`;
+      if (
+        env.MCP_OAUTH_ISSUER !== `${origin}/api/oauth` ||
+        env.MCP_OAUTH_RESOURCE !== `${origin}/api/mcp`
+      ) {
+        errors.push(
+          'MCP OAuth issuer/resource must use the CADDY_PUBLIC_HOSTNAME canonical HTTPS origin.',
+        );
+      }
+    }
+  }
 }
 
 function validateBackendConfig(env: NodeJS.ProcessEnv, errors: string[]): void {
   const previousEnv = process.env;
   process.env = { ...env };
   try {
-    loadConfig();
+    const config = loadConfig();
+    if (
+      loadMcpOAuthConfig(config.auth.refreshCookieName) &&
+      !config.experimental.extendedApiEnabled
+    ) {
+      errors.push('MCP_OAUTH_ENABLED=true requires BATCH_BACKEND_ENABLE_EXTENDED_API=true.');
+    }
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   } finally {
@@ -145,6 +176,18 @@ export function validateEnvironment(
   const warnings: string[] = [];
   const errors: string[] = [];
   const filePath = options.example ? exampleFile : canonicalFile;
+
+  if (options.runtime) {
+    if (options.example) {
+      errors.push('--runtime cannot be combined with --example.');
+    } else {
+      const env = { ...(options.shellEnv ?? process.env) };
+      validateBackendConfig(env, errors);
+      addEnabledFeatureRequirements(env, errors);
+      if (profile === 'production') addProductionRequirements(env, errors);
+    }
+    return { errors, warnings, filePath: 'runtime environment' };
+  }
 
   if (!options.example && existsSync(canonicalFile) && existsSync(legacyFile)) {
     errors.push('Found both .env and .env.batch-backend. Rename or remove the legacy file.');
@@ -190,6 +233,7 @@ export function validateEnvironment(
 function parseCliOptions(argv: string[]): ValidateEnvironmentOptions {
   let profile: EnvProfile = 'development';
   let example = false;
+  let runtime = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -198,6 +242,10 @@ function parseCliOptions(argv: string[]): ValidateEnvironmentOptions {
     }
     if (arg === '--example') {
       example = true;
+      continue;
+    }
+    if (arg === '--runtime') {
+      runtime = true;
       continue;
     }
     if (arg === '--profile') {
@@ -212,7 +260,7 @@ function parseCliOptions(argv: string[]): ValidateEnvironmentOptions {
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  return { profile, example };
+  return { profile, example, runtime };
 }
 
 function main(): void {

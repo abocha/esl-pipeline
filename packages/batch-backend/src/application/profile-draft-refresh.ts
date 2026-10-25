@@ -9,6 +9,7 @@ import {
   getActiveProfileRevision,
   getProfileRevisionById,
 } from '../domain/profile-revision-repository.js';
+import { isStudentProfileCandidateRepresented } from '../domain/student-profile-candidate-model.js';
 import {
   linkStudentProfileCandidatesToDraftRevision,
   listStudentProfileCandidatesByIds,
@@ -21,7 +22,11 @@ import {
   type FoundationalProfile,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
-import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  createGenerationRequestEnvelope,
+  flattenGenerationRequestEnvelope,
+} from './generation-request-envelope.js';
+import { applyProfileCandidatePatch } from './profile-candidate-patch.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -65,6 +70,7 @@ export interface RefreshProfileDraftFromApprovedCandidatesResult {
   baseRevisionId: string | null;
   draftRevision: ProfileRevisionDetailResponse;
   includedCandidateIds: string[];
+  omittedCandidates: Array<{ candidateId: string; reason: string }>;
   provider: GenerateProfileRevisionDraftResult['provider'];
   model: GenerateProfileRevisionDraftResult['model'];
   providerRequestId?: string;
@@ -154,13 +160,6 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
   const baseStructuredProfile =
     baseRevision?.structuredContent ??
     deriveFoundationalProfileFromMarkdown(baseRevision?.content ?? '');
-  const prompt = buildRefreshPrompt({
-    studentName: student.student,
-    baseStructuredProfile,
-    selectedCandidates,
-    memoryOverview,
-    reviewerNote: request.reviewerNote ?? null,
-  });
   const envelope = buildRefreshEnvelope({
     studentName: student.student,
     baseStructuredProfile,
@@ -168,6 +167,7 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
     memoryOverview,
     reviewerNote: request.reviewerNote ?? null,
   });
+  const prompt = flattenGenerationRequestEnvelope(envelope);
 
   const drafting = await dependencies.drafting.generate({
     request: {
@@ -197,7 +197,14 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
     );
   }
 
-  const structuredDraft = drafting.structuredProfile;
+  const structuredDraft = applyProfileCandidatePatch({
+    baseProfile: drafting.structuredProfile,
+    patch: { operation: 'apply', candidateIds: request.candidateIds },
+    selectedCandidates,
+  })!;
+  const appliedCandidateIds = selectedCandidates
+    .filter((candidate) => isStudentProfileCandidateRepresented(structuredDraft, candidate))
+    .map((candidate) => candidate.id);
   const draftRevision = await dependencies.profileContent.saveRevision(
     request.studentId,
     renderFoundationalProfileContent(structuredDraft),
@@ -212,7 +219,7 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
 
   await dependencies.candidates.linkToDraft({
     studentId: request.studentId,
-    candidateIds: selectedCandidates.map((candidate) => candidate.id),
+    candidateIds: appliedCandidateIds,
     draftRevisionId: draftRevision.id,
   });
 
@@ -220,7 +227,10 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
     studentId: request.studentId,
     baseRevisionId: baseRevision?.id ?? null,
     draftRevision,
-    includedCandidateIds: selectedCandidates.map((candidate) => candidate.id),
+    includedCandidateIds: appliedCandidateIds,
+    omittedCandidates: selectedCandidates
+      .filter((candidate) => !appliedCandidateIds.includes(candidate.id))
+      .map((candidate) => ({ candidateId: candidate.id, reason: 'empty_approved_fact' })),
     provider: drafting.provider,
     model: drafting.model,
     ...(drafting.providerRequestId ? { providerRequestId: drafting.providerRequestId } : {}),
@@ -263,6 +273,7 @@ function validateCandidateSelection(
   selectedCandidates: ProfileDraftRefreshCandidate[],
 ): void {
   const seen = new Set<string>();
+  const requested = new Set(requestedCandidateIds);
 
   if (selectedCandidates.length !== requestedCandidateIds.length) {
     throw new ProfileDraftRefreshError(
@@ -273,7 +284,7 @@ function validateCandidateSelection(
   }
 
   for (const candidate of selectedCandidates) {
-    if (!candidate.id.trim()) {
+    if (!candidate.id.trim() || !requested.has(candidate.id)) {
       throw new ProfileDraftRefreshError(
         'Candidate selection contains an item without an id',
         'profile_candidate_id_missing',
@@ -340,43 +351,6 @@ function buildMemoryPayload(memoryOverview: StudentMemoryOverview | null) {
   };
 }
 
-function buildRefreshPrompt(args: {
-  studentName: string;
-  baseStructuredProfile: FoundationalProfile | null;
-  selectedCandidates: ProfileDraftRefreshCandidate[];
-  memoryOverview: StudentMemoryOverview | null;
-  reviewerNote: string | null;
-}): string {
-  return [
-    'You are drafting a refreshed foundational student profile for an ESL homework system.',
-    'Return only one JSON object matching the foundational_profile_v1 schema.',
-    'Write a complete refreshed foundational_profile_v1 draft, not a candidate patch.',
-    'Preserve durable teacher-authored truths, integrate selected approved candidates where useful, use memory evidence for context, and favor omission over invention.',
-    'Keep arrays concise and durable. Teacher-only ambiguity belongs in teacherNotes.',
-    '',
-    '[STUDENT_NAME]',
-    args.studentName,
-    '',
-    '[BASE_STRUCTURED_PROFILE]',
-    args.baseStructuredProfile
-      ? JSON.stringify(args.baseStructuredProfile, null, 2)
-      : 'No existing structured profile.',
-    '',
-    '[APPROVED_PROFILE_CANDIDATES]',
-    JSON.stringify(buildCandidatePayload(args.selectedCandidates), null, 2),
-    '',
-    '[STUDENT_MEMORY_OVERVIEW]',
-    args.memoryOverview
-      ? JSON.stringify(buildMemoryPayload(args.memoryOverview), null, 2)
-      : 'No ready student-memory overview available.',
-    '',
-    '[REVIEWER_NOTE]',
-    args.reviewerNote ?? 'No reviewer note provided.',
-    '',
-    'Output only valid JSON.',
-  ].join('\n');
-}
-
 function buildRefreshEnvelope(args: {
   studentName: string;
   baseStructuredProfile: FoundationalProfile | null;
@@ -386,9 +360,13 @@ function buildRefreshEnvelope(args: {
 }) {
   return createGenerationRequestEnvelope({
     workload: 'profile_revision',
+    promptVersion: 'learner_memory_generation_v2',
     instructions: [
+      'You are drafting a refreshed foundational student profile for an ESL homework system.',
+      'Keep arrays concise and durable. Teacher-only ambiguity belongs in teacherNotes.',
       'Write a complete refreshed foundational_profile_v1 draft, not a candidate patch.',
-      'Preserve durable teacher-authored truths, integrate selected approved candidates where useful, use memory evidence for context, and favor omission over invention.',
+      'Preserve durable teacher-authored truths and use memory evidence for context. Do not invent facts.',
+      'Preserve selected approved candidate wording as separate items in their mapped fields. The backend will ensure those approved facts are present verbatim for teacher review.',
       'Return only a closed foundational_profile_v1 JSON object.',
     ].join('\n'),
     sources: [

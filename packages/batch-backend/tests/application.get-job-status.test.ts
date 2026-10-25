@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getJobStatus } from '../src/application/get-job-status.js';
 import * as jobDto from '../src/application/job-dto.js';
-import * as jobPronunciationMode from '../src/application/job-pronunciation-mode.js';
 import * as jobRepository from '../src/domain/job-repository.js';
 
 describe('application/get-job-status', () => {
@@ -15,11 +14,6 @@ describe('application/get-job-status', () => {
 
   const getJobByIdSpy = vi.spyOn(jobRepository, 'getJobById');
   const jobRecordToDtoSpy = vi.spyOn(jobDto, 'jobRecordToDto');
-  const detectJobPronunciationModeSpy = vi.spyOn(
-    jobPronunciationMode,
-    'detectJobPronunciationMode',
-  );
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -58,31 +52,6 @@ describe('application/get-job-status', () => {
     expect(res).toEqual({
       ...dto,
       pronunciationMode: null,
-    });
-  });
-
-  it('adds the detected pronunciation mode from the persisted markdown source', async () => {
-    const jobRecord = {
-      id: 'job-1',
-      state: 'queued',
-      md: 'fixtures/ok.md',
-      mdStorageUri: null,
-    } as any;
-    const dto = { jobId: 'job-1', state: 'queued' } as any;
-
-    getJobByIdSpy.mockResolvedValue(jobRecord);
-    jobRecordToDtoSpy.mockReturnValue(dto);
-    detectJobPronunciationModeSpy.mockResolvedValue('connected_speech');
-
-    const res = await getJobStatus('job-1');
-
-    expect(detectJobPronunciationModeSpy).toHaveBeenCalledWith({
-      md: 'fixtures/ok.md',
-      mdStorageUri: null,
-    });
-    expect(res).toEqual({
-      ...dto,
-      pronunciationMode: 'connected_speech',
     });
   });
 });

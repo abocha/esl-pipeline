@@ -1,18 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  getLatestReadyStudentMemorySnapshotByStudentIdMock,
+  getStudentMemorySnapshotSelectionMock,
   listRecentReadyLessonMemoryByStudentIdMock,
   listRecentReadyHomeworkMemoryByStudentIdMock,
 } = vi.hoisted(() => ({
-  getLatestReadyStudentMemorySnapshotByStudentIdMock: vi.fn(),
+  getStudentMemorySnapshotSelectionMock: vi.fn(),
   listRecentReadyLessonMemoryByStudentIdMock: vi.fn(),
   listRecentReadyHomeworkMemoryByStudentIdMock: vi.fn(),
 }));
 
 vi.mock('../src/domain/student-memory-snapshot-repository.js', () => ({
-  getLatestReadyStudentMemorySnapshotByStudentId:
-    getLatestReadyStudentMemorySnapshotByStudentIdMock,
+  getStudentMemorySnapshotSelection: getStudentMemorySnapshotSelectionMock,
 }));
 
 vi.mock('../src/domain/lesson-memory-repository.js', () => ({
@@ -26,49 +25,73 @@ vi.mock('../src/domain/homework-memory-repository.js', () => ({
 import { buildStudentMemoryPackageContext } from '../src/application/student-memory-package.js';
 
 describe('application/student-memory-package', () => {
+  it('explains repair-required even when recent observations remain available', async () => {
+    getStudentMemorySnapshotSelectionMock.mockResolvedValue({
+      snapshot: null,
+      availability: {
+        state: 'repair_required',
+        reason: 'established_history_ineligible',
+        lessonReferenceCount: 19,
+        homeworkReferenceCount: 3,
+      },
+    });
+    listRecentReadyLessonMemoryByStudentIdMock.mockResolvedValue([]);
+    listRecentReadyHomeworkMemoryByStudentIdMock.mockResolvedValue([]);
+    const result = await buildStudentMemoryPackageContext({
+      studentId: 'student-1',
+      currentTranscriptId: 'current',
+      config: { pg: { enabled: true } } as never,
+    });
+    expect(result.availability?.state).toBe('repair_required');
+    expect(result.studentMemorySnapshotBlock).toContain('requires explicit repair');
+    expect(result.unresolvedIssuesBlock).toContain('requires explicit repair');
+    expect(result.studentMemorySnapshotBlock).not.toContain('available yet');
+  });
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('builds canonical prompt-package memory context from snapshot, lesson memory, and homework memory', async () => {
-    getLatestReadyStudentMemorySnapshotByStudentIdMock.mockResolvedValue({
-      id: 'snapshot-1',
-      contentHash: 'snapshot-hash-1',
-      snapshotSummary: 'Long-term summary',
-      stableStrengths: [{ label: 'Uses advice phrases well', note: 'Stable' }],
-      recurringIssues: [
-        {
-          label: 'Present perfect',
-          issueType: 'grammar',
-          note: 'Still unstable.',
-          confidence: 'high',
-        },
-      ],
-      activeReviewBacklog: [{ label: 'Advice connectors', note: 'Keep reviewing.' }],
-      recentProgress: [{ label: 'Longer answers', note: 'Speaking more.' }],
-      personalFacts: [
-        {
-          fact: 'Likes giving practical advice',
-          category: 'preference',
-          authority: 'model_inferred',
-          confidence: 'medium',
-          sourceArtifactIds: ['lesson-1'],
-        },
-      ],
-      recommendedAssignmentDirections: [
-        {
-          direction: 'Use advice scenarios with short spoken responses',
-          rationale: 'Build on the lesson topic.',
-        },
-      ],
-      unresolvedIssues: [
-        {
-          priority: 'high',
-          label: 'Past simple vs present perfect',
-          note: 'Still unstable in spontaneous speech.',
-        },
-      ],
-    });
+    getStudentMemorySnapshotSelectionMock.mockResolvedValue(
+      memorySelection({
+        id: 'snapshot-1',
+        contentHash: 'snapshot-hash-1',
+        snapshotSummary: 'Long-term summary',
+        stableStrengths: [{ label: 'Uses advice phrases well', note: 'Stable' }],
+        recurringIssues: [
+          {
+            label: 'Present perfect',
+            issueType: 'grammar',
+            note: 'Still unstable.',
+            confidence: 'high',
+          },
+        ],
+        activeReviewBacklog: [{ label: 'Advice connectors', note: 'Keep reviewing.' }],
+        recentProgress: [{ label: 'Longer answers', note: 'Speaking more.' }],
+        personalFacts: [
+          {
+            fact: 'Likes giving practical advice',
+            category: 'preference',
+            authority: 'model_inferred',
+            confidence: 'medium',
+            sourceArtifactIds: ['lesson-1'],
+          },
+        ],
+        recommendedAssignmentDirections: [
+          {
+            direction: 'Use advice scenarios with short spoken responses',
+            rationale: 'Build on the lesson topic.',
+          },
+        ],
+        unresolvedIssues: [
+          {
+            priority: 'high',
+            label: 'Past simple vs present perfect',
+            note: 'Still unstable in spontaneous speech.',
+          },
+        ],
+      }),
+    );
     listRecentReadyLessonMemoryByStudentIdMock.mockResolvedValue([
       {
         id: 'lesson-1',
@@ -136,7 +159,7 @@ describe('application/student-memory-package', () => {
   });
 
   it('returns no runtime memory context when canonical memory is absent', async () => {
-    getLatestReadyStudentMemorySnapshotByStudentIdMock.mockResolvedValue(null);
+    getStudentMemorySnapshotSelectionMock.mockResolvedValue(memorySelection(null));
     listRecentReadyLessonMemoryByStudentIdMock.mockResolvedValue([]);
     listRecentReadyHomeworkMemoryByStudentIdMock.mockResolvedValue([]);
 
@@ -151,7 +174,8 @@ describe('application/student-memory-package', () => {
     });
 
     expect(result).toEqual({
-      studentMemorySnapshotBlock: 'No long-term student-memory snapshot available yet.',
+      availability: memorySelection(null).availability,
+      studentMemorySnapshotBlock: 'No established long-term student-memory snapshot available yet.',
       recentLessonMemoryBlock: 'No recent lesson-memory entries available for retrieval.',
       recentHomeworkMemoryBlock: 'No recent homework-memory entries available for retrieval.',
       unresolvedIssuesBlock:
@@ -166,7 +190,7 @@ describe('application/student-memory-package', () => {
   });
 
   it('marks canonical memory as unavailable when retrieval fails instead of treating it as absent', async () => {
-    getLatestReadyStudentMemorySnapshotByStudentIdMock.mockRejectedValue(
+    getStudentMemorySnapshotSelectionMock.mockRejectedValue(
       new Error('snapshot repository unavailable'),
     );
     listRecentReadyLessonMemoryByStudentIdMock.mockResolvedValue([]);
@@ -193,9 +217,7 @@ describe('application/student-memory-package', () => {
       'Student-memory snapshot retrieval was unavailable',
     );
     expect(result.studentMemorySnapshotBlock).not.toContain('snapshot repository unavailable');
-    expect(result.studentMemorySnapshotBlock).toContain(
-      'Inspect backend logs for repository error details.',
-    );
+    expect(result.availability?.state).toBe('repository_unavailable');
     expect(result.recentLessonMemoryBlock).toBe(
       'No recent lesson-memory entries available for retrieval.',
     );
@@ -204,3 +226,15 @@ describe('application/student-memory-package', () => {
     );
   });
 });
+
+function memorySelection(snapshot: unknown) {
+  return {
+    snapshot,
+    availability: {
+      state: snapshot ? 'available' : 'absent',
+      reason: snapshot ? 'verified_lineage' : 'no_established_snapshot',
+      lessonReferenceCount: 0,
+      homeworkReferenceCount: 0,
+    },
+  };
+}

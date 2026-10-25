@@ -17,8 +17,28 @@ function renderProdComposeConfig() {
   const fixtureDir = mkdtempSync(path.join(tmpdir(), 'esl-pipeline-prod-compose-'));
   const fixtureComposeFile = path.join(fixtureDir, 'docker-compose.prod.yml');
   copyFileSync(productionComposeFile, fixtureComposeFile);
-  writeFileSync(path.join(fixtureDir, '.env'), '');
+  writeFileSync(
+    path.join(fixtureDir, 'production.env'),
+    'PG_DATABASE=fixture_database\nPG_USER=fixture_user\nBATCH_BACKEND_HOST_PORT=18888\n',
+  );
 
+  writeFileSync(
+    path.join(fixtureDir, '.env'),
+    'PG_DATABASE=stale_database\nPG_USER=stale_user\nBATCH_BACKEND_HOST_PORT=19999\n',
+  );
+  writeFileSync(
+    path.join(fixtureDir, 'images.env'),
+    `BATCH_BACKEND_IMAGE=${placeholderBackendImage}\nBATCH_FRONTEND_IMAGE=${placeholderFrontendImage}\n`,
+  );
+  const fixtureEnv = {
+    ...process.env,
+    ESL_PRODUCTION_ENV_FILE: path.join(fixtureDir, 'production.env'),
+  };
+  delete fixtureEnv.PG_DATABASE;
+  delete fixtureEnv.PG_USER;
+  delete fixtureEnv.BATCH_BACKEND_HOST_PORT;
+  delete fixtureEnv.BATCH_BACKEND_IMAGE;
+  delete fixtureEnv.BATCH_FRONTEND_IMAGE;
   try {
     const result = spawnSync(
       'docker',
@@ -28,17 +48,17 @@ function renderProdComposeConfig() {
         'esl-pipeline-prod',
         '-f',
         fixtureComposeFile,
+        '--env-file',
+        path.join(fixtureDir, 'production.env'),
+        '--env-file',
+        path.join(fixtureDir, 'images.env'),
         'config',
         '--format',
         'json',
       ],
       {
         cwd: fixtureDir,
-        env: {
-          ...process.env,
-          BATCH_BACKEND_IMAGE: placeholderBackendImage,
-          BATCH_FRONTEND_IMAGE: placeholderFrontendImage,
-        },
+        env: fixtureEnv,
         encoding: 'utf8',
       },
     );
@@ -112,4 +132,18 @@ test('production batch-worker mounts the dedicated named TTS cache volume', () =
       `${serviceName} should not mount the batch-worker TTS cache volume`,
     );
   }
+});
+
+test('production runtime and interpolation use protected env plus image state, ignoring stale checkout env', () => {
+  const config = renderProdComposeConfig();
+  for (const name of [
+    'batch-backend',
+    'batch-worker',
+    'transcribe-worker',
+    'student-memory-worker',
+  ]) {
+    assert.equal(config.services[name].environment.PG_DATABASE, 'fixture_database', name);
+    assert.equal(config.services[name].environment.PG_USER, 'fixture_user', name);
+  }
+  assert.equal(config.services['batch-backend'].ports[0].published, '18888');
 });

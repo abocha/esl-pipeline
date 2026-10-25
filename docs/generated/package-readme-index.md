@@ -15,9 +15,8 @@
 | `@esl-pipeline/batch-frontend` | @esl-pipeline/batch-frontend | yes | `packages/batch-frontend/README.md` |
 | `@esl-pipeline/contracts` | @esl-pipeline/contracts | no | `packages/contracts/README.md` |
 | `@esl-pipeline/html-publisher` | @esl-pipeline/html-publisher | no | `packages/html-publisher/README.md` |
-| `@esl-pipeline/md-validator` | @esl-pipeline/md-validator | no | `packages/md-validator/README.md` |
+| `@esl-pipeline/learner-handout` | @esl-pipeline/learner-handout | no | `packages/learner-handout/README.md` |
 | `@esl-pipeline/orchestrator` | @esl-pipeline/orchestrator | yes | `packages/orchestrator/README.md` |
-| `@esl-pipeline/pmd` | @esl-pipeline/pmd | no | `packages/pmd/README.md` |
 | `@esl-pipeline/provider-runtime` | @esl-pipeline/provider-runtime | yes | `packages/provider-runtime/README.md` |
 | `@esl-pipeline/shared-infrastructure` | @esl-pipeline/shared-infrastructure | no | `packages/shared-infrastructure/README.md` |
 | `@esl-pipeline/storage-uploader` | @esl-pipeline/storage-uploader | no | `packages/storage-uploader/README.md` |
@@ -28,5 +27,6 @@
 | `@esl-pipeline/telegram-ops-bot` | @esl-pipeline/telegram-ops-bot | yes | `packages/telegram-ops-bot/README.md` |
 | `@esl-pipeline/tts-core` | @esl-pipeline/tts-core | no | `packages/tts-core/README.md` |
 | `@esl-pipeline/tts-provider-elevenlabs` | @esl-pipeline/tts-provider-elevenlabs | no | `packages/tts-provider-elevenlabs/README.md` |
+| `@esl-pipeline/tts-provider-gemini` | @esl-pipeline/tts-provider-gemini | no | `packages/tts-provider-gemini/README.md` |
 | `@esl-pipeline/tts-provider-google` | @esl-pipeline/tts-provider-google | no | `packages/tts-provider-google/README.md` |
 | `@esl-pipeline/tts-provider-inworld` | @esl-pipeline/tts-provider-inworld | no | `packages/tts-provider-inworld/README.md` |

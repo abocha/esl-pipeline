@@ -120,7 +120,7 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
 
   const speechPlannerBinding = createBackendSpeechPerformancePlanner(config);
   const voiceRanker =
-    config.voiceRanker?.enabled && config.generation.providers.googleAiStudio.apiKey
+    config.voiceRanker?.enabled && config.generation.providers.openai.apiKey
       ? createBackendVoicePlanRanker(config)
       : undefined;
   cachedPipeline = createPipeline({
@@ -144,6 +144,8 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
 export interface RunAssignmentPayload {
   jobId: string;
   md: string;
+  assignment: import('@esl-pipeline/contracts').AssignmentV1;
+  validationContext?: import('@esl-pipeline/contracts').AssignmentValidationContext;
   preset?: string;
   learningPresetId?: string;
   learningPresetVersion?: string;
@@ -169,6 +171,8 @@ interface RunJobSettings {
 export interface RunRerunAssignmentPayload {
   jobId: string;
   md: string;
+  assignment: import('@esl-pipeline/contracts').AssignmentV1;
+  validationContext?: import('@esl-pipeline/contracts').AssignmentValidationContext;
   preset?: string;
   manifestMd?: string;
   republishOnly?: boolean;

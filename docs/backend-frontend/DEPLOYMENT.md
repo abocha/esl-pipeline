@@ -60,7 +60,7 @@ sudo bash /opt/esl-pipeline/scripts/deploy/bootstrap-prod-host.sh verify <SSH-po
 `apply` ends with the same read-only JSON verification as `verify`. Exit **0** means bootstrap
 invariants and the limited external-file/firewall checks pass; **2** means bootstrap is complete but
 operator inputs remain; **1** means a failed host invariant or unsafe/unsupported state. Inspect
-`bootstrapComplete`, `externalInputsPresent`, and each check's requirement. Missing `.env` and an
+`bootstrapComplete`, `externalInputsPresent`, and each check's requirement. Missing `production.env` and an
 unconfigured firewall on a fresh host are expected exit-2 results, never fabricated configuration.
 `productionReadiness` always says `not-assessed`; even exit 0 does not validate secret values,
 provider/IAM access, DNS, a database, backups, or application health. No image-state file is invented.
@@ -86,7 +86,8 @@ The shell path uses apt and the existing systemd installer, with no provisioning
   These are the existing deploy and backup/monitoring contracts, not alternate state locations.
 - Creates `uploads/` and `uploads/drafts/` as `1000:1000`, mode `0750`, for the backend image's
   `node` user. Creates `.secrets/` as `root:1000`, mode `0750`, so that runtime can traverse its
-  read-only mount. Root runs deployment and the existing systemd jobs; no host Docker-group user
+  read-only mount. Only the Google credential belongs there; operator env snapshots are never mounted. Root owns tracked checkout files and Git metadata without group/other write permission.
+  Root runs deployment and the existing systemd jobs; no host Docker-group user
   is created (Docker access would grant root-equivalent privileges).
 - Sets Docker daemon defaults to `json-file`, `max-size=10m`, `max-file=5`, preserving unrelated
   daemon settings. Malformed/conflicting configuration fails. If changing settings requires restarting
@@ -113,11 +114,11 @@ also fail explicitly rather than being guessed away.
 
 ### External inputs and verification-only assumptions
 
-Provision `/opt/esl-pipeline/.env` securely as a nonempty **root:root `0600`** file, outside Git.
+Provision `/etc/esl-pipeline/production.env` securely as a nonempty **root:root `0600`** file, outside Git.
 Do not copy `.env.example` unchanged onto a production host. Use it as a variable catalog alongside
 [`production-env-checklist.md`](../operations/production-env-checklist.md) and
 [`env.md`](../reference/env.md); supply actual operator-controlled values through a secure channel.
-The existing host wrappers **source `.env` as shell code**: only trusted operators may write it,
+The existing host wrappers **source `production.env` as shell code**: only trusted operators may write it,
 and assignments must also be valid for Compose. Bootstrap never sources or prints it.
 
 Set the existing host contract `PG_BACKUP_HOST_STATE_DIR=/var/lib/esl-pipeline/ops` and production
@@ -139,7 +140,8 @@ The documented network baseline allows only the approved SSH TCP port and HTTP/H
 The repo does not specify SSH source networks or a safe replacement for arbitrary host firewall
 policy. Bootstrap therefore installs UFW but **never edits, resets, or enables firewall policy**.
 An operator must test SSH access, configure UFW default deny incoming/allow outgoing with routed
-traffic disabled, and allow the approved SSH TCP port and TCP 80/443 (optionally source-restricted).
+traffic denied (UFW reports `deny` or `disabled`) and no forwarding allow rules, and allow the approved
+SSH TCP port and TCP 80/443 (optionally source-restricted).
 Preflight fails if UFW is inactive or has additional inbound allows/unsupported rule shapes; reconcile
 custom policy explicitly. Check IPv4 and IPv6 and keep a recovery console available when changing
 firewall policy. Provider firewalls, DNS, and cloud resources are outside this command.
@@ -163,7 +165,11 @@ The rehearsal builds a fresh Ubuntu 24.04 systemd baseline, then exercises actua
 installation, first apply, second apply, directory/runtime permissions, installed units and inactive
 enabled timers, effective Docker log defaults, missing inputs, malformed/unsupported state, and
 existing Compose/deploy entrypoints. It uses no production access or credentials and removes its
-own container/image on exit; evidence can be retained outside the checkout. Docker data gets tmpfs
+own container/image on exit; evidence can be retained outside the checkout. The ESL-53 fixture also
+reconciles synthetic config/key ownership, rejects mounted env backups and alternate env paths,
+starts a real UID-1000 container with the protected env and read-only Google mount, verifies removal
+of the old env path, and restores the config snapshot. Nested probes have stdin disabled and a final
+completion marker prevents a prematurely consumed script from reporting success. Docker data gets tmpfs
 backing in the disposable container so nested overlay snapshotting does not depend on Cloud's outer
 filesystem. No production application is started. The UFW check runs in the disposable network
 namespace; if the Cloud kernel cannot execute its IPv6/netfilter operations, the runner retains that
@@ -298,6 +304,72 @@ Alpine-slim line; Caddy, PostgreSQL, and Redis remain on controlled official Alp
 the three production Dockerfiles and [`docker-compose.prod.yml`](../../docker-compose.prod.yml) for
 the current lines.
 
+The frontend runtime is pinned to `nginx:1.31.8-alpine3.24-slim`; the edge uses
+`caddy:2.11.7-alpine`. These patch versions include the upstream Nginx fixes through 1.31.7
+and Caddy's 2.11.6 security fixes plus 2.11.7 proxy regression fixes. See the
+[Nginx advisories](https://nginx.org/en/security_advisories.html) and
+[Caddy release notes](https://github.com/caddyserver/caddy/releases/tag/v2.11.7).
+The current Nginx configuration terminates no TLS/HTTP/3 and enables no AIO, alias, slice or SSI;
+version-based CVE matches alone do not establish exploitability. Keep patch selection current
+without treating this dated selection as a permanent security guarantee.
+
+Residual upstream limitation verified on 2026-10-22: the official Caddy 2.11.7 image contains
+Go 1.26.8 and `golang.org/x/net` 0.59.0. Its refreshed Alpine CA bundle addresses the eMudhra
+trust-store issue, but does not replace its compiled HTTP/2 implementation. October Go HTTP/2
+fixes require Go 1.26.9+ and the corresponding fixed `x/net` release; for example,
+[CVE-2026-78669](https://pkg.go.dev/vuln/GO-2026-6611). This upgrade does not claim to fix that
+remaining dependency gap.
+
+The public Caddy servers temporarily allow only `h1` (HTTP/1.1 over HTTPS), disabling HTTP/2,
+cleartext HTTP/2 and HTTP/3 while retaining certificates, redirects, compression and proxy routes.
+This mitigates the reachable HTTP/2 paths without changing the compiled binary. Browser SSE
+connections now share HTTP/1.1 connection limits across tabs; keep concurrent streaming tabs modest.
+Before rollout, validate all transition modes and exercise TLS ALPN, upload, SSE and MCP-style POST
+traffic locally. After rollout, confirm both public hosts negotiate `http/1.1` when offered
+`h2,http/1.1`, and recheck public routes and worker readiness.
+
+Restore HTTP/2 only after inspecting the official image digest and actual `caddy build-info`:
+the embedded Go toolchain and `golang.org/x/net` must address the relevant advisories at that time.
+The known CVE-2026-78669 floors are Go 1.26.9 and `x/net` 0.60.0, but these are not a substitute for
+checking newer advisories and actual binary vulnerability evidence. Refreshing Alpine packages or
+changing the Caddy version string alone is insufficient. Remove the `servers { protocols h1 }`
+restriction through a reviewed PR and the normal release/deployment flow, then verify ALPN and
+upload/SSE/MCP compatibility. Until then, retain HTTP/1.1-only operation; a custom edge image needs
+its own reviewed design. Roll back this mitigation by reverting its Caddyfile change and deploying
+through the same guarded flow. The normal planner should recreate only the edge when image and
+application configuration digests match; review the actual plan before apply.
+The edge recreation command uses `--no-deps`: Compose must not follow the frontend/backend
+dependency graph when new release-SHA aliases point to unchanged images. Planned application
+recreation and initial startup remain owned by their existing deployment steps.
+
+**Refreshing the Caddy image.**
+
+Caddy is an upstream image outside the three SHA-tagged application images. Before deploying a
+release that upgrades its reference, record the running edge image ID and repository digest in
+protected operator evidence, retain that image locally, and explicitly acquire the reviewed image:
+
+```bash
+docker inspect --format '{{.Image}}' esl-pipeline-prod-caddy-edge-1
+docker image inspect caddy:2.11-alpine --format '{{json .RepoDigests}}'
+docker pull caddy:2.11.7-alpine
+docker run --rm --network none caddy:2.11.7-alpine caddy version
+```
+
+The old floating tag above describes the pre-upgrade baseline; on later upgrades inspect the
+actual running image reference. Never infer freshness from that tag or its build date. The exact
+new patch reference prevents reusing the old 2.11.4 image behind `caddy:2.11-alpine`. Follow the
+normal deployment plan/apply flow below: the Compose change selects runtime/edge recreation.
+Afterward verify `nginx -v` in the published frontend container and `caddy version` in the edge,
+then check HTTPS landing/app, SPA/assets, API health and OAuth/MCP discovery/auth routing.
+
+`previous-images.env` records application images, not the old Caddy image. For edge rollback,
+use the recorded old repository digest in a protected Compose override for `caddy-edge`, with
+the intended checkout, production environment and application image state, and recreate only
+that service with `--no-deps --no-build --force-recreate`. Recheck routes and the deployed
+Caddyfile. Preserve Caddy data/config volumes and previous application images; do not prune them
+until verification is complete. Application rollback still follows the compatibility-gated
+procedure below; do not patch a running container or rebuild production images on the VPS.
+
 All three production builders copy `pnpm-workspace.yaml`, root `package.json`, `pnpm-lock.yaml`,
 `tsconfig.base.json`, and the `packages` tree filtered by `.dockerignore`. The root files own pnpm
 resolution/install policy and shared TypeScript compilation; filtered workspace builds select each
@@ -332,8 +404,8 @@ For the Ubuntu 24.04 VPS closed-alpha path, use the optional Caddy edge profile 
 to the host:
 
 ```bash
-# Export these in the same shell where you run local edge validation commands; Compose may read
-# `.env`, but the Node validator invoked by the pnpm scripts reads the current process environment.
+# Export these in the same shell where you run local edge validation commands; Compose reads
+# `/etc/esl-pipeline/production.env`, but the Node validator invoked by the pnpm scripts reads the current process environment.
 export CADDY_PUBLIC_HOSTNAME=alpha.example.com
 export CADDY_ACME_EMAIL=ops@example.com
 pnpm docker:prod:edge:config
@@ -343,7 +415,7 @@ pnpm docker:prod:ps
 ```
 
 TODO for the next deployment tooling rollout: remove this validator/export mismatch by making the
-edge validation commands load the canonical application `.env` with the same precedence as
+edge validation commands load the canonical production `/etc/esl-pipeline/production.env` with the same precedence as
 `scripts/deploy/deploy-prod-images.sh`, or by adding a wrapper that does so. Until then, export
 `CADDY_PUBLIC_HOSTNAME` and `CADDY_ACME_EMAIL` in the shell before running `pnpm docker:prod:edge:*`
 or `pnpm docker:caddy:validate`.
@@ -410,6 +482,16 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
    `packages/batch-backend/prompt-assets/**` is backend runtime content and never qualifies for
    `release:none`.
 
+   Use the successful publication run's **Published release images** summary for the release SHA
+   and three SHA-tagged image references. The workflow event's PR head SHA is not the release SHA.
+   For older runs without this summary, use the publication job's checked-out release commit.
+   The deploy script resolves the requested image digests through its existing preflight.
+
+   If Git history was rewritten after publication, the new tag target may have no published images.
+   Use the original publication evidence and rewrite mapping to identify the original published SHA;
+   a matching source tree alone does not establish image availability. Do not automatically rebuild,
+   retag, or repair historical releases. Such repairs require separate approval.
+
    If publication fails after the release commit and tag exist, do not deploy that release. After
    confirming which images were already published, use the manually dispatched
    `Recover Release Image Bundle` workflow to copy only the unchanged images from the last complete
@@ -433,27 +515,35 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
    bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
    ```
 
-   On the VPS, the deploy script reads `CADDY_PUBLIC_HOSTNAME` and `CADDY_ACME_EMAIL` from
-   server-local `/opt/esl-pipeline/.env` when those values are not already exported.
+   On the VPS, the deploy script reads `CADDY_PUBLIC_HOSTNAME`, `CADDY_ACME_EMAIL`, and the temporary
+   `CADDY_TRANSITION_*` settings from
+   server-local `/etc/esl-pipeline/production.env` when those values are not already exported.
    Explicit shell exports still take precedence for one-off overrides. Do not put these values in
    the generated deploy state files under `/var/lib/esl-pipeline/deploy`.
 
 4. The script resolves all requested manifest digests. If a digest is already the current local
    image, it adds the new SHA tag locally instead of downloading the layers. It records image refs,
-   digests, and the Caddy configuration digest under `/var/lib/esl-pipeline/deploy`, then prints its
+   digests, application configuration digest and Caddy configuration digest under `/var/lib/esl-pipeline/deploy`, then prints its
    plan. Every deploy checks the requested backend's packaged migration inventory and compatibility
    metadata against the read-only PostgreSQL migration ledger. Backend digest changes trigger
    Postgres health, a verified pre-migration backup, migrations,
    backend workers, frontend, and Caddy recreation. Frontend changes recreate frontend and Caddy;
-   bot changes recreate the enabled bot; Caddy configuration changes recreate Caddy. An alias-only
+   bot changes recreate the enabled bot; Caddyfile or effective edge-environment changes recreate Caddy.
+   The requested backend image validates production environment before runtime changes. Changes to
+   `production.env` or production Compose recreate the enabled application services and edge without database
+   work when backend image digests match. An alias-only
    release updates state and runs bounded health checks without backup, migration, or service restart work.
-   The first deploy after this behavior lands recreates Caddy once because older state has no Caddy
-   digest.
+   Older state without the application configuration digest causes one runtime recreation.
 5. If checks fail after services update, follow the script's compatibility-gated recovery guidance.
    It prints a command using `/var/lib/esl-pipeline/deploy/previous-images.env` only when that
    backend runtime supports the planned schema. An incompatible boundary blocks that command.
 
 ### Schema compatibility and recovery
+
+For a canonical origin change, follow [the domain migration runbook](../operations/canonical-domain-migration.md).
+It stages direct Caddy HTTPS on both application hosts, switches the single MCP issuer/resource,
+and pairs environment rollback with explicit connector reconnection. Image state alone cannot
+roll back an issuer change.
 
 `packages/batch-backend/migrations/runtime-compatibility.json` ships inside the backend image.
 Every migration ID must have a declaration; the release contract check rejects missing entries,
@@ -472,6 +562,31 @@ explicitly incompatible: it removed `user_settings.id`, used by v12.0.1. Migrati
 and later cannot use `legacy-unclassified`. Do not edit applied SQL or its checksum to add metadata.
 Compatibility declarations describe schema/runtime behavior, independently of semantic release labels.
 
+`0061_ordinary_memory_replay` is also incompatible with previous writers. Its student-lock
+triggers require publication and confirmed Source transactions to acquire the student lock before
+source/memory rows; previous images use opposing ordering and can deadlock. The same quiescence and
+schema-compatible recovery gates apply even though this migration only adds indexes and triggers.
+
+`0067_mcp_profile_identities` is incompatible with previous grant writers. It backfills one stable,
+immutable profile UUID per retained OAuth user/workspace pair, including expired/revoked grants.
+Old writers must stop before backfill so they cannot create grants without identities. Deploy the
+combined MCP profile/session-binding correction with the standard script: inspect
+`deploy-prod-images.sh <40-char-release-sha> --plan`, then, under separate deployment authorization,
+run `deploy-prod-images.sh <40-char-release-sha>`. Use the complete CI-published release bundle,
+not the PR head SHA. No new environment variables, manual identity backfill, or OAuth artifact
+rewrites are required. The script quiesces writers, verifies the pre-migration backup, applies the
+packaged migrations, recreates application services, and verifies schema/health/worker readiness.
+
+After rollout, verify `/api/meta/version` reports migration head `0067_mcp_profile_identities`
+(or the reviewed later head). Existing session-bound refresh tokens keep their stored flag and need
+reauthorization; the backfilled profile UUID remains stable for the same user/workspace pair.
+Observe a new connection's normal refresh after browser-session expiry and confirm its read-only
+`get_profile` ID is unchanged. Do not log credentials or initiate live OAuth tests without approval.
+Previous-image rollback across `0067` is blocked. Prefer a runtime supporting `0067`, which preserves
+profile identities. Restoring a verified pre-`0067` backup is a separate recovery operation: it loses
+post-backup writes and any newly provisioned profile identities; applying `0067` again generates
+new UUIDs. A backup from a deploy retry after `0067` committed cannot restore pre-`0067` compatibility.
+
 The pre-mutation output lists pending migrations, incompatible/unclassified boundaries, required
 quiescence, and previous-image rollback eligibility. To inspect it without backup, migration, or
 service mutation:
@@ -486,6 +601,34 @@ older current images can supply their SQL inventory without having the new metad
 checksum drift or applied migrations missing from the requested image also block deployment,
 including image downgrade attempts. `PG_MIGRATIONS_DIR` overrides are unsupported in this path:
 the preflight and migrator must both use the image-packaged SQL.
+
+The terminal output groups work into named phases, reports each step as `WAIT` then `OK`, and
+prints one final action plan after schema compatibility and live-bot recovery decisions. That plan
+lists image/configuration changes, pending migrations, writer downtime, service recreation reasons,
+verification work, and previous-runtime rollback restrictions. `PLAN COMPLETE` means the preflight
+passed; review any `WARN` lines before applying. Plan and apply share the incompatible-current-state
+guard and require the AWS CLI when backup/migration processing is planned. Preflight success does
+not guarantee later backup, migration, provider, or runtime operations will succeed.
+
+Routine command output is retained in a unique `run-<short-sha>-<random>` directory under
+`/var/lib/esl-pipeline/deploy` (directory mode `0700`, log files `0600`). Each step log names its
+operation. Warnings from captured commands remain visible in the terminal. On failure, the script
+reports the phase, operation, original exit code, runtime mutation state, and up to 40 lines of
+the failing step's diagnostics, followed by the applicable recovery guidance. Earlier failures
+before log initialization report directly to the terminal. Logs can contain operational details;
+inspect and redact them before sharing. They are retained until an operator removes them.
+
+To print captured command details after each step, add `--verbose` to either mode:
+
+```bash
+bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha> --plan --verbose
+```
+
+Health probes suppress intermediate startup errors in the concise view and report elapsed time
+and attempts on success. Every request has a 3-second connection timeout and a 5-second total
+timeout. Exhausted retries fail deployment with the probe diagnostics. Planning also creates
+detailed logs and runs disposable validation containers; it does not stop/recreate application
+services, invoke migrations, or create a backup.
 
 Before incompatible schema work, the script stops the live API, all three workers, frontend, and
 bot containers belonging to its Compose project, including a live bot whose profile was omitted.
@@ -553,28 +696,23 @@ cp .env.example .env
 Populate required credentials/keys referenced in:
 [`docs/reference/env.md`](../reference/env.md)
 
-### One-time environment migration
+### Production configuration reconciliation (ESL-53)
 
-If this VPS still has `.env.batch-backend`, back it up and rename it before deploying:
+Production uses `/etc/esl-pipeline/production.env` as root:root `0600` under protected,
+root-owned ancestors. Development continues using repository-local `.env`. Do not create a
+compatibility symlink through the checkout or keep operator env backups in `.secrets`.
 
-```bash
-cd /opt/esl-pipeline
-cp .env.batch-backend .env.batch-backend.backup
-mv .env.batch-backend .env
-pnpm env:validate -- --profile=production
-pnpm docker:prod:edge:env # when the Caddy edge profile is enabled
-pnpm docker:prod:images:env # when generated image state is present
-```
-
-Then deploy/recreate services and verify backend health, all workers, and backup tooling. Compose and
-the deploy script require `.env`; the legacy filename is accepted only by direct host tools during
-this release bridge.
+Existing hosts must follow the [reversible operator migration](../operations/production-config-reconciliation.md)
+before deploying this tooling. This repository change prepares that migration; it does not mean
+production has migrated. Root performs checkout updates and deployment through the operator's sudo
+workflow. The deployment guard rejects unsafe configuration/code/state paths and an unclean checkout;
+it deliberately permits a selected published image SHA different from checkout HEAD.
 
 If Google STT/TTS uses a service-account file, create it outside git on the VPS before deployment:
 
 ```bash
-mkdir -p /opt/esl-pipeline/.secrets
-# Place google-service-account.json in /opt/esl-pipeline/.secrets with restricted permissions.
+sudo install -d -o root -g 1000 -m 0750 /opt/esl-pipeline/.secrets
+# Securely provision google-service-account.json as root:1000 0640. No env backups here.
 ```
 
 Production Compose mounts that directory into backend-image services as read-only `/app/secrets`;

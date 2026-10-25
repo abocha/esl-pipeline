@@ -9,10 +9,6 @@ import type { AuthContextType } from '../context/AuthContext';
 import { App } from './App';
 
 const useAuthMock = vi.hoisted(() => vi.fn());
-const toastMock = vi.hoisted(() => ({
-  success: vi.fn(),
-  error: vi.fn(),
-}));
 const sandboxModeMock = vi.hoisted(() => vi.fn(() => false));
 const UI_WAIT_TIMEOUT_MS = 10_000;
 
@@ -80,11 +76,6 @@ vi.mock('./business/BusinessSettingsPage', () => ({
 
 vi.mock('./prompts/PromptTemplatesPage', () => ({
   PromptTemplatesPage: () => <div>Prompt templates content</div>,
-}));
-
-vi.mock('react-hot-toast', () => ({
-  toast: toastMock,
-  default: toastMock,
 }));
 
 function createAuthState(overrides: Partial<AuthContextType> = {}): AuthContextType {
@@ -414,7 +405,28 @@ describe('App', () => {
     expect(await screen.findByText('Student learning content')).toBeTruthy();
   });
 
-  it('logs out and shows a success toast', async () => {
+  it('keeps a failed logout visible and clears the error on retry', async () => {
+    const user = userEvent.setup();
+    const logout = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Session service unavailable'))
+      .mockResolvedValue(undefined);
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: { id: 'user-1', email: 'teacher@example.com', role: 'user', isActive: true },
+        isAuthenticated: true,
+        logout,
+      }),
+    );
+    renderApp();
+    await user.click(screen.getByRole('button', { name: /Logout/i }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Session service unavailable');
+    await user.click(screen.getByRole('button', { name: /Logout/i }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(logout).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs out when requested', async () => {
     const user = userEvent.setup();
     const logout = vi.fn(async () => {});
     useAuthMock.mockReturnValue(
@@ -437,6 +449,5 @@ describe('App', () => {
     await waitFor(() => {
       expect(logout).toHaveBeenCalledTimes(1);
     });
-    expect(toastMock.success).toHaveBeenCalledWith('Logged out successfully');
   });
 });

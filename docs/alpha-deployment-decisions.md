@@ -3,22 +3,30 @@
 ## Meta
 
 - Audience: founder/operator, Codex, implementation agents.
-- Authority level: active decision record for closed-alpha infrastructure and first implementation slices.
-- Status: active until replaced by a later decision record.
+- Authority level: retained deployment/product decisions and dated first-slice context.
+- Status: decision reference; first-slice observations are historical.
 - Related sources of truth: `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md` and
   `docs/plans/2026-06-23-alpha-readiness.md`.
 - Scope: ESL Pipeline closed-alpha preparation.
-- Current phase: pre-alpha tutor evidence with one active tutor.
+- Recorded phase: pre-alpha tutor evidence with one active tutor; not a current cohort census.
 
 ## Purpose
 
-This document records the decisions already made before implementation starts. Codex should use this file to avoid reopening solved questions unless implementation evidence proves a decision is wrong.
+This document preserves the early-alpha decisions and their rationale. Use it when a task depends on
+those decisions, rather than as the default work-selection or deployment procedure. Current work and
+product/cohort decisions belong in Linear, through the
+[work-selection runbook](operations/github-issue-intake-and-codex-work-selection.md).
+Current deployment procedure belongs in [DEPLOYMENT](backend-frontend/DEPLOYMENT.md), environment
+policy in [env](reference/env.md), and runtime invariants in the [SSOT](reference/agents-ssot.md).
+The dated verification notes below do not establish current host state or tutor readiness.
 
-The immediate product goal is not public launch. The immediate goal is a private hosted rehearsal, then a controlled tutor entry path, then the first real tutor dry run.
+The original sequence was a private hosted rehearsal, a controlled tutor entry path, then a real tutor
+dry run. Keep the controlled-expansion safeguards below; establish completed milestones and current
+recruitment readiness from the approved planning record and dated operator/product evidence.
 
 ## Working Order
 
-The order is locked for now:
+The recorded rollout order is:
 
 ```text
 1. Deploy privately.
@@ -361,9 +369,10 @@ follow-up: Add a CI image-publish path with commit-SHA tags when the deployment 
 
 Before coding any slice, Codex should:
 
-1. Read this file.
-2. Read `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`.
-3. Read `docs/plans/2026-06-23-alpha-readiness.md` and the selected slice plan.
+1. Start from the current task and `AGENTS.md`, then the applicable approved execution issue/plan.
+2. Read `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md` when product readiness is involved.
+3. Consult this decision record and the alpha-readiness plan only when the selected task depends on
+   their rollout intent; do not use their dated phase labels as the current backlog.
 4. Inspect existing repo implementation before proposing new architecture.
 5. State non-goals.
 6. Make the smallest vertical change that produces slice evidence.

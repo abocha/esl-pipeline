@@ -60,6 +60,19 @@
     "0057_historical_profile_provenance_timestamp": "legacy-unclassified",
     "0058_mcp_oauth_foundation": "legacy-unclassified",
     "0059_student_owned_profile_revisions": "legacy-unclassified",
-    "0060_user_settings_owner_key": "incompatible"
+    "0060_user_settings_owner_key": "incompatible",
+    "0061_ordinary_memory_replay": "incompatible",
+    "0062_assignment_v1_authority": "incompatible",
+    "0063_assignment_native_renderer": "incompatible",
+    "0064_historical_markdown_read_only": "incompatible",
+    "0065_assignment_react_renderer": "incompatible",
+    "0066_no_homework_lesson": "incompatible",
+    "0067_mcp_profile_identities": "incompatible",
+    "0068_student_activity": "compatible",
+    "0069_google_calendar_connection": "compatible",
+    "0070_calendar_scheduling": "compatible",
+    "0071_scheduler_retirement": "incompatible",
+    "0072_calendar_projection_reference_guard": "compatible",
+    "0073_gemini_tts_provider": "incompatible"
   }
 }

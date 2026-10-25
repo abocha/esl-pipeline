@@ -9,6 +9,41 @@ describe('telegram commands - share and approval', () => {
     resetAdvancedControlApprovalsForTests();
   });
 
+  it('shares typed metadata directly without fetching HTML or scraping contradictory Markdown', async () => {
+    const context = createBaseContext({ command: 'share', args: ['typed-job'] });
+    vi.mocked(context.backend.getJob).mockResolvedValue({
+      jobId: 'typed-job',
+      md: '# Incorrect legacy title\n[Study](https://wrong.test/study.mp3)',
+      htmlUrl: 'https://lesson.test/typed',
+      assignmentArtifact: { format: 'assignment_v1' },
+      publication: {
+        schemaVersion: 1,
+        rendererVersion: 2,
+        title: 'Typed lesson',
+        icon: '🎧',
+        studyTextAudioUrl: 'https://audio.test/study.mp3',
+        pronunciationAudioUrl: null,
+      },
+      state: 'succeeded',
+    } as never);
+    const fetch = vi.spyOn(globalThis, 'fetch');
+    try {
+      await createCommandRegistry().resolve('share')!.execute(context);
+      const html = vi
+        .mocked(context.messenger.sendHtmlMessage)
+        .mock.calls.map((c) => c[0].html)
+        .join('\n');
+      expect(html).toContain('Typed lesson');
+      expect(html).toContain('https://audio.test/study.mp3');
+      expect(html).not.toContain('Incorrect legacy title');
+      expect(html).not.toContain('https://wrong.test');
+      expect(html).not.toContain('Listen 2: Pronunciation');
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
   it('routes /links through the /share flow with deprecation copy', async () => {
     const registry = createCommandRegistry();
     const linksCommand = registry.resolve('links');
@@ -23,6 +58,14 @@ describe('telegram commands - share and approval', () => {
     getJobMock.mockResolvedValue({
       jobId: 'job-42',
       studentId: null,
+      publication: {
+        schemaVersion: 1,
+        rendererVersion: 1,
+        title: 'Homework Assignment',
+        icon: '',
+        studyTextAudioUrl: 'https://bucket.s3.amazonaws.com/audio/final/study.mp3',
+        pronunciationAudioUrl: null,
+      },
       md: '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/study.mp3)',
       recordingId: null,
       transcriptId: null,
@@ -65,11 +108,11 @@ describe('telegram commands - share and approval', () => {
 
   it('does not send a pronunciation attachment when only item clips are present', async () => {
     const registry = createCommandRegistry();
-    const linksCommand = registry.resolve('links');
-    expect(linksCommand).toBeDefined();
+    const shareCommand = registry.resolve('share');
+    expect(shareCommand).toBeDefined();
 
     const context = createBaseContext({
-      command: 'links',
+      command: 'share',
       args: ['job-chunks-only'],
     });
 
@@ -77,6 +120,14 @@ describe('telegram commands - share and approval', () => {
     getJobMock.mockResolvedValue({
       jobId: 'job-chunks-only',
       studentId: null,
+      publication: {
+        schemaVersion: 1,
+        rendererVersion: 1,
+        title: 'Homework Assignment: Chunk Practice',
+        icon: '',
+        studyTextAudioUrl: 'https://bucket.s3.amazonaws.com/audio/final/study.mp3',
+        pronunciationAudioUrl: null,
+      },
       md: [
         '# Homework Assignment: Chunk Practice',
         '[Study](https://bucket.s3.amazonaws.com/audio/final/study.mp3)',
@@ -105,7 +156,7 @@ describe('telegram commands - share and approval', () => {
       manifestPath: null,
     });
 
-    await linksCommand?.execute(context);
+    await shareCommand?.execute(context);
 
     const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
     const sentHtml = sendMock.mock.calls.map((call) => call[0].html).join('\n');
@@ -114,82 +165,10 @@ describe('telegram commands - share and approval', () => {
     expect(sentHtml).not.toContain('Listen 2: Pronunciation');
   });
 
-  it('runs /links and falls back to htmlUrl when md is a file path', async () => {
+  it('shares persisted title and audio links without fetching HTML', async () => {
     const registry = createCommandRegistry();
-    const linksCommand = registry.resolve('links');
-    expect(linksCommand).toBeDefined();
-
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        new Response(
-          [
-            '<html><head><title>Homework Assignment: Office Rules &amp; Modal Verbs</title></head><body>',
-            '<div class="hero-emoji">🏢</div>',
-            'https://bucket.s3.amazonaws.com/audio/final/from-html-study.mp3',
-            'https://bucket.s3.amazonaws.com/audio/pronunciation/from-html-pron.mp3',
-            '</body></html>',
-          ].join('\n'),
-          { status: 200 },
-        ),
-      );
-
-    const context = createBaseContext({
-      command: 'links',
-      args: ['job-77'],
-    });
-
-    const getJobMock = context.backend.getJob as ReturnType<typeof vi.fn>;
-    getJobMock.mockResolvedValue({
-      jobId: 'job-77',
-      studentId: null,
-      md: '/app/uploads/drafts/not-present.md',
-      recordingId: null,
-      transcriptId: null,
-      promptPackageId: null,
-      draftId: null,
-      preset: null,
-      withTts: null,
-      voiceId: null,
-      upload: null,
-      voiceAccent: null,
-      forceTts: null,
-      publishTarget: null,
-      ttsStrategy: null,
-      autoPublish: null,
-      htmlUrl: 'https://example.com/assignment.html',
-      state: 'succeeded',
-      createdAt: '2026-03-11T00:00:00Z',
-      updatedAt: '2026-03-11T00:00:00Z',
-      startedAt: null,
-      finishedAt: null,
-      error: null,
-      manifestPath: null,
-    });
-
-    await linksCommand?.execute(context);
-
-    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
-    expect(sendMock).toHaveBeenCalledTimes(5);
-    expect(sendMock.mock.calls[0]?.[0].html).toContain('Use <code>/share</code> going forward.');
-    expect(sendMock.mock.calls[2]?.[0].disableLinkPreview).toBe(true);
-    expect(sendMock.mock.calls[2]?.[0].html).toContain(
-      '<a href="https://example.com/assignment.html">🏢 Homework Assignment: Office Rules &amp; Modal Verbs</a>',
-    );
-    expect(sendMock.mock.calls[3]?.[0].disableLinkPreview).toBe(false);
-    expect(sendMock.mock.calls[4]?.[0].disableLinkPreview).toBe(false);
-    expect(sendMock.mock.calls[3]?.[0].html).toContain('🎧 Listen 1: Study Text');
-    expect(sendMock.mock.calls[4]?.[0].html).toContain('🗣️ Listen 2: Pronunciation');
-    expect(sendMock.mock.calls[3]?.[0].html).toContain('audio/final/from-html-study.mp3');
-    expect(sendMock.mock.calls[4]?.[0].html).toContain('audio/pronunciation/from-html-pron.mp3');
-
-    fetchSpy.mockRestore();
-  });
-
-  it('runs /links without html fallback when markdown already has title and audio links', async () => {
-    const registry = createCommandRegistry();
-    const linksCommand = registry.resolve('links');
-    expect(linksCommand).toBeDefined();
+    const shareCommand = registry.resolve('share');
+    expect(shareCommand).toBeDefined();
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('<html><head><title>Fallback Title</title></head><body>ignored</body></html>', {
@@ -198,7 +177,7 @@ describe('telegram commands - share and approval', () => {
     );
 
     const context = createBaseContext({
-      command: 'links',
+      command: 'share',
       args: ['job-101'],
     });
 
@@ -206,6 +185,15 @@ describe('telegram commands - share and approval', () => {
     getJobMock.mockResolvedValue({
       jobId: 'job-101',
       studentId: null,
+      publication: {
+        schemaVersion: 1,
+        rendererVersion: 1,
+        title: 'Homework Assignment: Office Rules & Modal Verbs',
+        icon: '',
+        studyTextAudioUrl: 'https://bucket.s3.amazonaws.com/audio/final/from-md-study.mp3',
+        pronunciationAudioUrl:
+          'https://bucket.s3.amazonaws.com/audio/pronunciation/from-md-pron.mp3',
+      },
       md: [
         '---',
         'title: "Homework Assignment: Office Rules & Modal Verbs"',
@@ -236,72 +224,19 @@ describe('telegram commands - share and approval', () => {
       manifestPath: null,
     });
 
-    await linksCommand?.execute(context);
+    await shareCommand?.execute(context);
 
     expect(fetchSpy).not.toHaveBeenCalled();
 
     const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
-    expect(sendMock).toHaveBeenCalledTimes(5);
-    expect(sendMock.mock.calls[2]?.[0].html).toContain(
+    expect(sendMock).toHaveBeenCalledTimes(4);
+    expect(sendMock.mock.calls[1]?.[0].html).toContain(
       '<a href="https://app.example.com/jobs/job-101">Homework Assignment: Office Rules &amp; Modal Verbs</a>',
     );
-    expect(sendMock.mock.calls[3]?.[0].html).toContain('audio/final/from-md-study.mp3');
-    expect(sendMock.mock.calls[4]?.[0].html).toContain('audio/pronunciation/from-md-pron.mp3');
+    expect(sendMock.mock.calls[2]?.[0].html).toContain('audio/final/from-md-study.mp3');
+    expect(sendMock.mock.calls[3]?.[0].html).toContain('audio/pronunciation/from-md-pron.mp3');
 
     fetchSpy.mockRestore();
-  });
-
-  it('runs /links and avoids trailing delimiters in fallback audio URL extraction', async () => {
-    const registry = createCommandRegistry();
-    const linksCommand = registry.resolve('links');
-    expect(linksCommand).toBeDefined();
-
-    const context = createBaseContext({
-      command: 'links',
-      args: ['job-102'],
-    });
-
-    const getJobMock = context.backend.getJob as ReturnType<typeof vi.fn>;
-    getJobMock.mockResolvedValue({
-      jobId: 'job-102',
-      studentId: null,
-      md: [
-        '---',
-        'title: "Homework Assignment: Delimiter Regression"',
-        '---',
-        '[Audio](https://bucket.s3.amazonaws.com/audio/final/delimited-study.mp3?token=abc123)',
-      ].join('\n'),
-      recordingId: null,
-      transcriptId: null,
-      promptPackageId: null,
-      draftId: null,
-      preset: null,
-      withTts: null,
-      voiceId: null,
-      upload: null,
-      voiceAccent: null,
-      forceTts: null,
-      publishTarget: null,
-      ttsStrategy: null,
-      autoPublish: null,
-      htmlUrl: 'https://example.com/assignment-102',
-      state: 'succeeded',
-      createdAt: '2026-03-11T00:00:00Z',
-      updatedAt: '2026-03-11T00:00:00Z',
-      startedAt: null,
-      finishedAt: null,
-      error: null,
-      manifestPath: null,
-    });
-
-    await linksCommand?.execute(context);
-
-    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
-    expect(sendMock).toHaveBeenCalledTimes(4);
-    expect(sendMock.mock.calls[3]?.[0].html).toContain(
-      'href="https://bucket.s3.amazonaws.com/audio/final/delimited-study.mp3?token=abc123"',
-    );
-    expect(sendMock.mock.calls[3]?.[0].html).not.toContain('token=abc123)');
   });
 
   it('runs /share and mirrors student-share output', async () => {
@@ -319,6 +254,14 @@ describe('telegram commands - share and approval', () => {
       jobId: 'job-88',
       studentId: '72444fdf-4abe-43ce-9166-5a1529c2e6cb',
       studentName: 'Margarita',
+      publication: {
+        schemaVersion: 1,
+        rendererVersion: 1,
+        title: 'Homework Assignment',
+        icon: '',
+        studyTextAudioUrl: 'https://bucket.s3.amazonaws.com/audio/final/share-study.mp3',
+        pronunciationAudioUrl: null,
+      },
       md: '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/share-study.mp3)',
       recordingId: null,
       transcriptId: null,
@@ -359,7 +302,7 @@ describe('telegram commands - share and approval', () => {
       expect.objectContaining({
         event: 'share_path_telemetry',
         details: expect.objectContaining({
-          studyAudioSource: 'markdown_label',
+          studyAudioSource: 'publication',
           missingPronunciationAudio: true,
           missingAudioCount: 1,
         }),

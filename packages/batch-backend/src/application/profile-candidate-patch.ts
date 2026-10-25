@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { StudentProfileCandidateTargetSection } from '../domain/student-profile-candidate-model.js';
+import { isStudentProfileCandidateRepresented } from '../domain/student-profile-candidate-model.js';
 import { type FoundationalProfile, normalizeFoundationalProfile } from './foundational-profile.js';
 
 const CandidatePatchOperationSchema = z.enum(['apply', 'no_change']);
@@ -12,6 +12,9 @@ export const ProfileCandidatePatchSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (new Set(value.candidateIds).size !== value.candidateIds.length) {
+      ctx.addIssue({ code: 'custom', message: 'Candidate IDs must be unique' });
+    }
     if (value.operation === 'no_change' && value.candidateIds.length > 0) {
       ctx.addIssue({ code: 'custom', message: 'no_change patches must not include candidate IDs' });
     }
@@ -45,7 +48,7 @@ export function applyProfileCandidatePatch(args: {
   patch: ProfileCandidatePatch;
   selectedCandidates: Array<{
     id: string;
-    targetSection: StudentProfileCandidateTargetSection;
+    targetSection: string;
     fact: string;
     approvedFact?: string | null;
   }>;
@@ -81,7 +84,7 @@ export function applyProfileCandidatePatch(args: {
     const value = (candidate.approvedFact ?? candidate.fact).trim();
     if (!value) continue;
     const field = fieldForTargetSection(candidate.targetSection);
-    if (!profile[field].some((existing) => existing.toLowerCase() === value.toLowerCase())) {
+    if (!isStudentProfileCandidateRepresented(profile, candidate)) {
       profile[field].push(value);
     }
   }
@@ -89,7 +92,7 @@ export function applyProfileCandidatePatch(args: {
 }
 
 function fieldForTargetSection(
-  targetSection: StudentProfileCandidateTargetSection,
+  targetSection: string,
 ): keyof Pick<
   FoundationalProfile,
   | 'primaryGoals'
@@ -113,5 +116,7 @@ function fieldForTargetSection(
       return 'stableStrengths';
     case 'persistent_challenges_constraints':
       return 'persistentChallenges';
+    default:
+      throw new Error(`Unsupported candidate target section: ${targetSection}`);
   }
 }

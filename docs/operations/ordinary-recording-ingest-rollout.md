@@ -1,5 +1,16 @@
 # Ordinary Recording Ingest Rollout
 
+Source review: migrations `0049`-`0053` are a historical recording-ingest feature chain. The current
+packaged migration set and each migration's compatibility must be resolved from
+[`migrations/runtime-compatibility.json`](../../packages/batch-backend/migrations/runtime-compatibility.json)
+and the packaged migration files before planning any apply. The recording ingest/runtime and cleanup
+controls remain owned by the current backend implementation and [env reference](../reference/env.md).
+The runbook's preflight, deletion and rollback gates remain useful only after reconciling the
+deployed image/schema and operation with those current owners. No recording/run data or production
+state was inspected. Migration and command presence proves neither residual work nor rollout
+completion. Require current, separately authorized, record-bound evidence before use; keep cleanup
+disabled until the current deletion safeguards have been rehearsed.
+
 ## Meta
 
 - Audience: production operators and maintainers.
@@ -205,6 +216,12 @@ pnpm --filter @esl-pipeline/batch-backend test -- \
   infrastructure.transcription-storage.test.ts application.sweep-recording-audio.test.ts
 pnpm --filter @esl-pipeline/batch-backend storage:s3:smoke
 ```
+
+`--keep` intentionally retains the object and reports `deleted: false`. A failed default cleanup
+fails the command and reports the bucket and full object key for authorized operator recovery;
+if validation also failed, that original failure remains the primary error. Cleanup diagnostics
+omit raw provider errors and signed URLs. Inspect the reported object before manual cleanup;
+a default rerun creates another object and does not clean a prior retained object.
 
 Then, in a disposable staging workspace, upload synthetic non-user audio, confirm Source, verify the
 API immediately reports audio unavailable while the object still exists, enable cleanup only for the

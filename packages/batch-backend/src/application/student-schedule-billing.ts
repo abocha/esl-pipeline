@@ -3,7 +3,6 @@ import type { PoolClient } from 'pg';
 
 import type {
   AddStudentPackageRequest,
-  CreateStudentLessonRequest,
   RecordStudentPaymentRequest,
   StudentCreditEventDto,
   StudentCreditSummaryDto,
@@ -12,8 +11,6 @@ import type {
   StudentLessonHomeworkDto,
   StudentLessonHomeworkStatus,
   StudentLessonPlanDto,
-  StudentLessonRecurrenceRuleDto,
-  StudentLessonRecurrenceSlotDto,
   StudentLessonStatus,
   StudentPaymentRecordDto,
   StudentReminderLessonSummaryDto,
@@ -21,10 +18,10 @@ import type {
   StudentScheduleBillingSurfaceResponse,
   UpdateStudentLessonPlanRequest,
   UpdateStudentLessonRequest,
-  UpsertStudentLessonRecurrenceRequest,
 } from '@esl-pipeline/contracts';
 
 import { ACTIVE_ASSIGNMENT_SESSION_SQL } from '../domain/assignment-session-repository.js';
+import { setStudentActivityActor } from '../domain/student-activity-recording.js';
 import { withPgClient } from '../infrastructure/db.js';
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
@@ -32,13 +29,6 @@ const DEFAULT_TIMEZONE = 'UTC';
 const DEFAULT_DURATION_MINUTES = 60;
 const AUTOMATIC_UNTITLED_LESSON_TITLE = 'Untitled lesson';
 const DEFAULT_LOW_BALANCE_THRESHOLD = 2;
-const DEFAULT_GENERATION_HORIZON_DAYS = 56;
-const DAY_MS = 24 * 60 * 60 * 1000;
-const TIMEZONE_ALIASES = new Map<string, string>([
-  ['GMT', 'UTC'],
-  ['UTC+7', 'Asia/Bangkok'],
-  ['GMT+7', 'Asia/Bangkok'],
-]);
 
 interface StudentContext {
   id: string;
@@ -58,14 +48,13 @@ interface LessonRow {
   title: string | null;
   notes: string | null;
   credit_event_id: string | null;
-  recurrence_rule_id: string | null;
-  recurrence_slot_id: string | null;
-  recurrence_occurrence_key: string | null;
-  recurrence_origin: 'manual' | 'generated';
-  recurrence_override_kind: 'manual_edit' | 'manual_reschedule' | 'manual_cancel' | null;
+  schedule_origin_history: Record<string, unknown>;
+  calendar_lesson_id: string | null;
+  calendar_event_url: string | null;
   created_at: Date;
   updated_at: Date;
   homework_status: StudentLessonHomeworkStatus;
+  transcript_result_session_id: string | null;
   homework_assignment_session_id: string | null;
   homework_prompt_package_id: string | null;
   homework_draft_id: string | null;
@@ -107,39 +96,8 @@ interface LessonPlanRow {
   workspace_id: string | null;
   timezone: string;
   default_duration_minutes: number;
-  cadence: string | null;
-  preferred_times: string | null;
   scheduling_notes: string | null;
   updated_at: Date;
-}
-
-interface RecurrenceRuleRow {
-  id: string;
-  student_id: string;
-  workspace_id: string | null;
-  timezone: string;
-  frequency: 'weekly';
-  starts_on: string;
-  ends_on: string | null;
-  status: 'active' | 'paused' | 'archived';
-  generation_horizon_days: number;
-  materialized_through: string | null;
-  updated_at: Date;
-}
-
-interface RecurrenceSlotRow {
-  id: string;
-  rule_id: string;
-  iso_weekday: number;
-  local_start_time: string;
-  duration_minutes: number;
-  sort_order: number;
-}
-
-interface NormalizedRecurrenceSlot {
-  isoWeekday: number;
-  localStartTime: string;
-  durationMinutes: number;
 }
 
 interface ReminderPreferences {
@@ -166,15 +124,22 @@ export class StudentScheduleBillingError extends Error {
 
 const LESSON_HOMEWORK_SELECT = `
   student_lessons.*,
+  calendar_lesson_link.lesson_id AS calendar_lesson_id,
+  calendar_lesson_link.event_url AS calendar_event_url,
   CASE
     WHEN lesson_homework_memory.id IS NOT NULL THEN 'memory_ready'
     WHEN lesson_published_job.id IS NOT NULL THEN 'published'
     WHEN lesson_active_job.id IS NOT NULL THEN 'publishing'
     WHEN lesson_assignment_session.draft_id IS NOT NULL THEN 'draft_in_progress'
     WHEN lesson_assignment_session.id IS NOT NULL THEN 'session_in_progress'
+    WHEN lesson_transcript_result.id IS NOT NULL THEN 'not_planned'
     ELSE 'not_started'
   END AS homework_status,
   lesson_assignment_session.id AS homework_assignment_session_id,
+  CASE WHEN lesson_assignment_session.id IS NULL
+    AND lesson_published_job.id IS NULL AND lesson_active_job.id IS NULL
+    AND lesson_homework_memory.id IS NULL THEN lesson_transcript_result.id
+    ELSE NULL END AS transcript_result_session_id,
   COALESCE(
     lesson_homework_memory.prompt_package_id,
     lesson_published_job.prompt_package_id,
@@ -194,11 +159,13 @@ const LESSON_HOMEWORK_SELECT = `
     lesson_homework_memory.generated_at,
     lesson_published_job.updated_at,
     lesson_active_job.updated_at,
-    lesson_assignment_session.updated_at
+    lesson_assignment_session.updated_at,
+    lesson_transcript_result.updated_at
   ) AS homework_updated_at
 `;
 
 const LESSON_HOMEWORK_JOINS = `
+  LEFT JOIN calendar_lesson_bindings calendar_lesson_link ON calendar_lesson_link.lesson_id = student_lessons.id
   LEFT JOIN LATERAL (
     SELECT id, prompt_package_id, draft_id, updated_at
     FROM assignment_sessions
@@ -207,6 +174,14 @@ const LESSON_HOMEWORK_JOINS = `
     ORDER BY updated_at DESC, id DESC
     LIMIT 1
   ) lesson_assignment_session ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT id, updated_at
+    FROM assignment_sessions
+    WHERE lesson_id = student_lessons.id
+      AND homework_intent = 'none' AND transcript_completed_at IS NOT NULL
+    ORDER BY transcript_completed_at DESC, updated_at DESC, id DESC
+    LIMIT 1
+  ) lesson_transcript_result ON TRUE
   LEFT JOIN LATERAL (
     SELECT id, prompt_package_id, draft_id, html_url,
            COALESCE(finished_at, updated_at, created_at) AS updated_at
@@ -253,6 +228,7 @@ export async function hideStudentLessonFollowupReminder(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const lesson = await getLessonRow(client, context, lessonId);
     if (!lesson) {
@@ -273,6 +249,7 @@ export async function undoLatestHiddenStudentReminder(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const prefs = await getReminderPreferences(client, context);
     if (!prefs.latestHiddenLessonFollowupKey) {
@@ -309,6 +286,7 @@ export async function updateStudentLessonPlan(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const result = await client.query(
       `
@@ -317,23 +295,19 @@ export async function updateStudentLessonPlan(
         workspace_id,
         timezone,
         default_duration_minutes,
-        cadence,
-        preferred_times,
         scheduling_notes,
         updated_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (student_id) DO UPDATE
       SET
         workspace_id = EXCLUDED.workspace_id,
         timezone = EXCLUDED.timezone,
         default_duration_minutes = EXCLUDED.default_duration_minutes,
-        cadence = EXCLUDED.cadence,
-        preferred_times = EXCLUDED.preferred_times,
         scheduling_notes = EXCLUDED.scheduling_notes,
         updated_by = EXCLUDED.updated_by,
         updated_at = NOW()
-      WHERE ${workspacePredicate('student_lesson_plans.workspace_id', '$9', '$10')}
+      WHERE ${workspacePredicate('student_lesson_plans.workspace_id', '$7', '$8')}
       RETURNING student_id
       `,
       [
@@ -341,8 +315,6 @@ export async function updateStudentLessonPlan(
         context.workspaceId,
         params.timezone ?? DEFAULT_TIMEZONE,
         params.defaultDurationMinutes ?? DEFAULT_DURATION_MINUTES,
-        params.cadence ?? null,
-        params.preferredTimes ?? null,
         params.schedulingNotes ?? null,
         actorUserId ?? null,
         context.workspaceId,
@@ -356,169 +328,6 @@ export async function updateStudentLessonPlan(
   });
 }
 
-export async function upsertPrimaryStudentLessonRecurrence(
-  workspaceId: string,
-  studentId: string,
-  params: UpsertStudentLessonRecurrenceRequest,
-  actorUserId?: string | null,
-): Promise<StudentScheduleBillingSurfaceResponse> {
-  return withPgTransaction(async (client) => {
-    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
-    const timezone = normalizeTimezone(params.timezone);
-    const startsOn = parseDateInput(params.startsOn, 'Invalid recurrence start date');
-    const endsOn =
-      params.endsOn === null || params.endsOn === undefined
-        ? null
-        : parseDateInput(params.endsOn, 'Invalid recurrence end date');
-    if (endsOn && compareDateInputs(endsOn, startsOn) < 0) {
-      throw new StudentScheduleBillingError(
-        'invalid_request',
-        400,
-        'Recurrence end date must be on or after the start date',
-      );
-    }
-    const slots = normalizeRecurrenceSlots(params.slots);
-    const existing = await getPrimaryRecurrenceRuleRow(client, context);
-    if (!existing && (await hasRecurrenceRuleOutsideWorkspace(client, context))) {
-      throw new StudentScheduleBillingError('not_found', 404, 'Recurrence rule not found');
-    }
-    const ruleId = existing?.id ?? randomUUID();
-    const status = params.status ?? existing?.status ?? 'active';
-    const horizon =
-      params.generationHorizonDays ??
-      existing?.generation_horizon_days ??
-      DEFAULT_GENERATION_HORIZON_DAYS;
-    if (!Number.isInteger(horizon) || horizon < 7 || horizon > 366) {
-      throw new StudentScheduleBillingError(
-        'invalid_request',
-        400,
-        'Recurrence generation horizon must be between 7 and 366 days',
-      );
-    }
-    const existingSlots = existing ? await listRecurrenceSlots(client, existing.id) : [];
-
-    await client.query(
-      `
-      INSERT INTO student_lesson_recurrence_rules (
-        id,
-        student_id,
-        workspace_id,
-        timezone,
-        frequency,
-        starts_on,
-        ends_on,
-        status,
-        generation_horizon_days,
-        updated_by,
-        created_by
-      )
-      VALUES ($1, $2, $3, $4, 'weekly', $5::date, $6::date, $7, $8, $9, $9)
-      ON CONFLICT (id) DO UPDATE
-      SET
-        workspace_id = EXCLUDED.workspace_id,
-        timezone = EXCLUDED.timezone,
-        frequency = EXCLUDED.frequency,
-        starts_on = EXCLUDED.starts_on,
-        ends_on = EXCLUDED.ends_on,
-        status = EXCLUDED.status,
-        generation_horizon_days = EXCLUDED.generation_horizon_days,
-        updated_by = EXCLUDED.updated_by,
-        updated_at = NOW()
-      `,
-      [
-        ruleId,
-        studentId,
-        context.workspaceId,
-        timezone,
-        startsOn,
-        endsOn,
-        status,
-        horizon,
-        actorUserId ?? null,
-      ],
-    );
-
-    const currentSlots = await replaceRecurrenceSlots(client, ruleId, slots, existingSlots);
-    const desiredOccurrenceKeys = buildDesiredOccurrenceKeys({
-      timezone,
-      startsOn,
-      endsOn,
-      status,
-      generationHorizonDays: horizon,
-      slots: currentSlots,
-    });
-    await markFutureGeneratedLessonsObsolete(
-      client,
-      ruleId,
-      actorUserId ?? null,
-      desiredOccurrenceKeys,
-    );
-    if (desiredOccurrenceKeys.size === 0) {
-      await client.query(
-        `
-        UPDATE student_lesson_recurrence_rules
-        SET materialized_through = NULL,
-            updated_at = NOW()
-        WHERE id = $1
-        `,
-        [ruleId],
-      );
-    }
-
-    await materializeStudentRecurrenceForContext(client, context, actorUserId ?? null);
-    return getSurfaceForContext(client, context);
-  });
-}
-
-export async function createStudentLesson(
-  workspaceId: string,
-  studentId: string,
-  params: CreateStudentLessonRequest,
-  actorUserId?: string | null,
-): Promise<StudentScheduleBillingSurfaceResponse> {
-  return withPgTransaction(async (client) => {
-    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
-    const lessonId = randomUUID();
-    await client.query(
-      `
-      INSERT INTO student_lessons (
-        id,
-        student_id,
-        workspace_id,
-        starts_at,
-        timezone,
-        duration_minutes,
-        status,
-        consumes_credit,
-        title,
-        notes,
-        recurrence_origin,
-        created_by,
-        updated_by,
-        completed_by
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'manual', $11, $11, $12)
-      `,
-      [
-        lessonId,
-        studentId,
-        context.workspaceId,
-        params.startsAt,
-        params.timezone ?? DEFAULT_TIMEZONE,
-        params.durationMinutes ?? DEFAULT_DURATION_MINUTES,
-        params.status ?? 'scheduled',
-        params.consumesCredit ?? false,
-        params.title ?? null,
-        params.notes ?? null,
-        actorUserId ?? null,
-        params.status === 'completed' ? (actorUserId ?? null) : null,
-      ],
-    );
-    await reconcileLessonCreditEvent(client, lessonId, actorUserId ?? null);
-    return getSurfaceForContext(client, context);
-  });
-}
-
 export async function completeElapsedScheduledLessonForHomework(
   workspaceId: string,
   studentId: string,
@@ -526,20 +335,19 @@ export async function completeElapsedScheduledLessonForHomework(
   actorUserId?: string | null,
 ): Promise<boolean> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
+    // Read status only after taking the shared lesson lock: a competing completion or
+    // cancellation must not be overwritten using the pre-lock scheduled state.
+    await client.query(
+      'SELECT id FROM student_lessons WHERE id = $1 AND student_id = $2 FOR UPDATE',
+      [lessonId, context.id],
+    );
     const existing = await getLessonRow(client, context, lessonId);
     if (!existing || existing.status !== 'scheduled' || !isLessonHomeworkFollowUpDue(existing)) {
       return false;
     }
 
-    const nextStatus: StudentLessonStatus = 'completed';
-    const nextStartsAt = existing.starts_at.toISOString();
-    const nextOverrideKind = getNextOverrideKind(
-      existing,
-      { status: nextStatus, consumesCredit: true },
-      nextStatus,
-      nextStartsAt,
-    );
     await client.query(
       `
       UPDATE student_lessons
@@ -547,7 +355,6 @@ export async function completeElapsedScheduledLessonForHomework(
         status = 'completed',
         consumes_credit = true,
         updated_by = $3,
-        recurrence_override_kind = $4,
         completed_by = CASE
           WHEN status <> 'completed' THEN $3
           ELSE completed_by
@@ -556,7 +363,7 @@ export async function completeElapsedScheduledLessonForHomework(
       WHERE id = $1
         AND student_id = $2
       `,
-      [lessonId, context.id, actorUserId ?? null, nextOverrideKind],
+      [lessonId, context.id, actorUserId ?? null],
     );
     await reconcileLessonCreditEvent(client, lessonId, actorUserId ?? null);
     return true;
@@ -574,6 +381,7 @@ export async function applyGeneratedLessonTitleIfPlaceholder(params: {
   }
 
   return withPgTransaction(async (client) => {
+    await client.query("SELECT set_config('app.student_activity_origin', 'generated_title', true)");
     const context = await requireTrustedStudentContextById(client, params.studentId);
     const result = await client.query(
       `
@@ -603,32 +411,40 @@ export async function updateStudentLesson(
   params: UpdateStudentLessonRequest,
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
+  if (
+    Object.keys(params).some((key) => !['status', 'consumesCredit', 'notes'].includes(key)) ||
+    (params.status !== undefined && !['completed', 'no_show'].includes(params.status))
+  ) {
+    throw new StudentScheduleBillingError(
+      'invalid_request',
+      400,
+      'Edit lesson timing and cancellations in Google Calendar',
+    );
+  }
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
+    await client.query(
+      'SELECT id FROM student_lessons WHERE id = $1 AND student_id = $2 FOR UPDATE',
+      [lessonId, context.id],
+    );
     const existing = await getLessonRow(client, context, lessonId);
     if (!existing) {
       throw new StudentScheduleBillingError('not_found', 404, 'Lesson not found');
     }
 
     const nextStatus = params.status ?? existing.status;
-    const nextStartsAt = params.startsAt ?? existing.starts_at.toISOString();
-    const nextOverrideKind = getNextOverrideKind(existing, params, nextStatus, nextStartsAt);
     await client.query(
       `
       UPDATE student_lessons
       SET
-        starts_at = $3,
-        timezone = $4,
-        duration_minutes = $5,
-        status = $6,
-        consumes_credit = $7,
-        title = $8,
-        notes = $9,
-        updated_by = $10,
-        recurrence_override_kind = $11,
+        status = $3,
+        consumes_credit = $4,
+        notes = $5,
+        updated_by = $6,
         completed_by = CASE
-          WHEN $6 = 'completed' AND status <> 'completed' THEN $10
-          WHEN $6 <> 'completed' THEN NULL
+          WHEN $3 = 'completed' AND status <> 'completed' THEN $6
+          WHEN $3 <> 'completed' THEN NULL
           ELSE completed_by
         END,
         updated_at = NOW()
@@ -638,15 +454,10 @@ export async function updateStudentLesson(
       [
         lessonId,
         studentId,
-        params.startsAt ?? existing.starts_at.toISOString(),
-        params.timezone ?? existing.timezone,
-        params.durationMinutes ?? existing.duration_minutes,
         nextStatus,
         params.consumesCredit ?? existing.consumes_credit,
-        params.title === undefined ? existing.title : params.title,
         params.notes === undefined ? existing.notes : params.notes,
         actorUserId ?? null,
-        nextOverrideKind,
       ],
     );
     await reconcileLessonCreditEvent(client, lessonId, actorUserId ?? null);
@@ -661,6 +472,7 @@ export async function addStudentPackage(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     let paymentId: string | null = null;
     if (params.payment) {
@@ -687,6 +499,7 @@ export async function adjustStudentCredits(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     await insertCreditEvent(client, {
       context,
@@ -708,6 +521,7 @@ export async function recordStudentPayment(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
+    await setStudentActivityActor(client, actorUserId);
     const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     await insertPayment(client, context, randomUUID(), params, actorUserId ?? null);
     return getSurfaceForContext(client, context);
@@ -718,9 +532,7 @@ async function getSurfaceForContext(
   client: PoolClient,
   context: StudentContext,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
-  await materializeStudentRecurrenceForContext(client, context, null);
   const plan = await getLessonPlan(client, context);
-  const recurrenceRule = await getPrimaryRecurrenceRule(client, context);
   const nextLesson = await getNextLesson(client, context);
   const lessons = await listLessons(client, context);
   const creditEvents = await listCreditEvents(client, context);
@@ -740,7 +552,6 @@ async function getSurfaceForContext(
     studentId: context.id,
     workspaceId: context.workspaceId,
     lessonPlan: plan,
-    recurrenceRule,
     nextLesson: nextLesson ? mapLesson(nextLesson) : null,
     lessons: lessons.map((lesson) => mapLesson(lesson)),
     creditSummary,
@@ -832,8 +643,8 @@ async function getLessonPlan(
 ): Promise<StudentLessonPlanDto> {
   const result = await client.query<LessonPlanRow>(
     `
-    SELECT student_id, workspace_id, timezone, default_duration_minutes, cadence,
-           preferred_times, scheduling_notes, updated_at
+    SELECT student_id, workspace_id, timezone, default_duration_minutes,
+           scheduling_notes, updated_at
     FROM student_lesson_plans
     WHERE student_id = $1
       AND ${workspacePredicate('workspace_id', '$2', '$3')}
@@ -846,333 +657,9 @@ async function getLessonPlan(
     workspaceId: row?.workspace_id ?? context.workspaceId,
     timezone: row?.timezone ?? DEFAULT_TIMEZONE,
     defaultDurationMinutes: row?.default_duration_minutes ?? DEFAULT_DURATION_MINUTES,
-    cadence: row?.cadence ?? null,
-    preferredTimes: row?.preferred_times ?? null,
     schedulingNotes: row?.scheduling_notes ?? null,
     updatedAt: row?.updated_at ? row.updated_at.toISOString() : null,
   };
-}
-
-async function getPrimaryRecurrenceRule(
-  client: PoolClient,
-  context: StudentContext,
-): Promise<StudentLessonRecurrenceRuleDto | null> {
-  const row = await getPrimaryRecurrenceRuleRow(client, context);
-  if (!row) {
-    return null;
-  }
-  const slots = await listRecurrenceSlots(client, row.id);
-  return mapRecurrenceRule(row, slots);
-}
-
-async function getPrimaryRecurrenceRuleRow(
-  client: PoolClient,
-  context: StudentContext,
-): Promise<RecurrenceRuleRow | null> {
-  const result = await client.query<RecurrenceRuleRow>(
-    `
-    SELECT
-      id,
-      student_id,
-      workspace_id,
-      timezone,
-      frequency,
-      starts_on::text AS starts_on,
-      ends_on::text AS ends_on,
-      status,
-      generation_horizon_days,
-      materialized_through::text AS materialized_through,
-      updated_at
-    FROM student_lesson_recurrence_rules
-    WHERE student_id = $1
-      AND ${workspacePredicate('workspace_id', '$2', '$3')}
-      AND status <> 'archived'
-    ORDER BY created_at ASC, id ASC
-    LIMIT 1
-    `,
-    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
-  );
-  return result.rows[0] ?? null;
-}
-
-async function hasRecurrenceRuleOutsideWorkspace(
-  client: PoolClient,
-  context: StudentContext,
-): Promise<boolean> {
-  const result = await client.query(
-    `
-    SELECT 1
-    FROM student_lesson_recurrence_rules
-    WHERE student_id = $1
-      AND (${workspacePredicate('workspace_id', '$2', '$3')}) IS NOT TRUE
-      AND status <> 'archived'
-    LIMIT 1
-    `,
-    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
-  );
-  return (result.rowCount ?? 0) > 0;
-}
-
-async function listRecurrenceSlots(
-  client: PoolClient,
-  ruleId: string,
-): Promise<RecurrenceSlotRow[]> {
-  const result = await client.query<RecurrenceSlotRow>(
-    `
-    SELECT
-      id,
-      rule_id,
-      iso_weekday,
-      local_start_time::text AS local_start_time,
-      duration_minutes,
-      sort_order
-    FROM student_lesson_recurrence_slots
-    WHERE rule_id = $1
-    ORDER BY sort_order ASC, iso_weekday ASC, local_start_time ASC, id ASC
-    `,
-    [ruleId],
-  );
-  return result.rows;
-}
-
-async function replaceRecurrenceSlots(
-  client: PoolClient,
-  ruleId: string,
-  slots: NormalizedRecurrenceSlot[],
-  existingSlots: RecurrenceSlotRow[],
-): Promise<RecurrenceSlotRow[]> {
-  const existingByIdentity = new Map(
-    existingSlots.map((slot) => [recurrenceSlotIdentityFromRow(slot), slot]),
-  );
-  const currentSlotIds: string[] = [];
-
-  for (const [index, slot] of slots.entries()) {
-    const existing = existingByIdentity.get(recurrenceSlotIdentity(slot));
-    const slotId = existing?.id ?? randomUUID();
-    currentSlotIds.push(slotId);
-    await client.query(
-      `
-      INSERT INTO student_lesson_recurrence_slots (
-        id,
-        rule_id,
-        iso_weekday,
-        local_start_time,
-        duration_minutes,
-        sort_order
-      )
-      VALUES ($1, $2, $3, $4::time, $5, $6)
-      ON CONFLICT (id) DO UPDATE
-      SET
-        iso_weekday = EXCLUDED.iso_weekday,
-        local_start_time = EXCLUDED.local_start_time,
-        duration_minutes = EXCLUDED.duration_minutes,
-        sort_order = EXCLUDED.sort_order
-      `,
-      [slotId, ruleId, slot.isoWeekday, slot.localStartTime, slot.durationMinutes, index],
-    );
-  }
-
-  await client.query(
-    `
-    DELETE FROM student_lesson_recurrence_slots
-    WHERE rule_id = $1
-      AND NOT (id = ANY($2::uuid[]))
-    `,
-    [ruleId, currentSlotIds],
-  );
-
-  return listRecurrenceSlots(client, ruleId);
-}
-
-async function materializeStudentRecurrenceForContext(
-  client: PoolClient,
-  context: StudentContext,
-  actorUserId: string | null,
-): Promise<void> {
-  const rule = await getPrimaryRecurrenceRuleRow(client, context);
-  if (!rule || rule.status !== 'active') {
-    return;
-  }
-  const slots = await listRecurrenceSlots(client, rule.id);
-  if (slots.length === 0) {
-    return;
-  }
-
-  const today = toDateInputInTimeZone(new Date(), normalizeTimezone(rule.timezone));
-  const fromDate = compareDateInputs(rule.starts_on, today) > 0 ? rule.starts_on : today;
-  const horizonEnd = addDaysToDateInput(today, rule.generation_horizon_days);
-  const throughDate =
-    rule.ends_on && compareDateInputs(rule.ends_on, horizonEnd) < 0 ? rule.ends_on : horizonEnd;
-  if (compareDateInputs(throughDate, fromDate) < 0) {
-    return;
-  }
-
-  const occurrences = buildWeeklyOccurrences(fromDate, throughDate, slots);
-  for (const occurrence of occurrences) {
-    await client.query(
-      `
-      INSERT INTO student_lessons (
-        id,
-        student_id,
-        workspace_id,
-        starts_at,
-        timezone,
-        duration_minutes,
-        status,
-        consumes_credit,
-        title,
-        notes,
-        recurrence_rule_id,
-        recurrence_slot_id,
-        recurrence_occurrence_key,
-        recurrence_origin,
-        created_by,
-        updated_by
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        ($4::timestamp AT TIME ZONE $5),
-        $5,
-        $6,
-        'scheduled',
-        TRUE,
-        NULL,
-        NULL,
-        $7,
-        $8,
-        $9,
-        'generated',
-        $10,
-        $10
-      )
-      ON CONFLICT DO NOTHING
-      `,
-      [
-        randomUUID(),
-        context.id,
-        context.workspaceId,
-        `${occurrence.localDate} ${occurrence.localStartTime}`,
-        normalizeTimezone(rule.timezone),
-        occurrence.durationMinutes,
-        rule.id,
-        occurrence.slotId,
-        occurrence.occurrenceKey,
-        actorUserId,
-      ],
-    );
-  }
-
-  await client.query(
-    `
-    UPDATE student_lesson_recurrence_rules
-    SET materialized_through = $2::date,
-        updated_at = NOW()
-    WHERE id = $1
-    `,
-    [rule.id, throughDate],
-  );
-}
-
-interface RecurrenceStudentRow {
-  id: string;
-  student: string;
-  workspace_id: string;
-}
-
-export async function materializeAllWorkspaceLessonRecurrences(): Promise<void> {
-  await withPgClient(async (client) => {
-    const result = await client.query<RecurrenceStudentRow>(
-      `
-      SELECT DISTINCT
-        students.id,
-        students.student,
-        COALESCE(students.workspace_id, $1::uuid) AS workspace_id
-      FROM students
-      JOIN student_lesson_recurrence_rules ON student_lesson_recurrence_rules.student_id = students.id
-      WHERE students.archived_at IS NULL
-        AND student_lesson_recurrence_rules.status = 'active'
-      ORDER BY students.id ASC
-      `,
-      [DEFAULT_WORKSPACE_ID],
-    );
-    await materializeLessonRecurrencesForRows(client, result.rows);
-  });
-}
-
-export async function materializeWorkspaceLessonRecurrencesWithClient(
-  client: PoolClient,
-  workspaceId: string,
-): Promise<void> {
-  const result = await client.query<RecurrenceStudentRow>(
-    `
-    SELECT DISTINCT
-      students.id,
-      students.student,
-      COALESCE(students.workspace_id, $2::uuid) AS workspace_id
-    FROM students
-    JOIN student_lesson_recurrence_rules ON student_lesson_recurrence_rules.student_id = students.id
-    WHERE students.archived_at IS NULL
-      AND student_lesson_recurrence_rules.status = 'active'
-      AND (
-        students.workspace_id = $1::uuid
-        OR (students.workspace_id IS NULL AND $1::uuid = $2::uuid)
-      )
-      AND (
-        student_lesson_recurrence_rules.workspace_id = $1::uuid
-        OR (
-          student_lesson_recurrence_rules.workspace_id IS NULL
-          AND $1::uuid = $2::uuid
-        )
-      )
-    ORDER BY students.id ASC
-    `,
-    [workspaceId, DEFAULT_WORKSPACE_ID],
-  );
-  await materializeLessonRecurrencesForRows(client, result.rows);
-}
-
-async function materializeLessonRecurrencesForRows(
-  client: PoolClient,
-  rows: RecurrenceStudentRow[],
-): Promise<void> {
-  for (const row of rows) {
-    await materializeStudentRecurrenceForContext(
-      client,
-      { id: row.id, name: row.student, workspaceId: row.workspace_id },
-      null,
-    );
-  }
-}
-
-async function markFutureGeneratedLessonsObsolete(
-  client: PoolClient,
-  ruleId: string,
-  actorUserId: string | null,
-  desiredOccurrenceKeys: Set<string>,
-): Promise<void> {
-  const desiredKeys = [...desiredOccurrenceKeys];
-  const desiredKeyClause =
-    desiredKeys.length > 0 ? 'AND NOT (recurrence_occurrence_key = ANY($3::text[]))' : '';
-  await client.query(
-    `
-    UPDATE student_lessons
-    SET recurrence_obsolete_at = NOW(),
-        recurrence_obsolete_by = $2,
-        recurrence_obsolete_reason = 'recurrence_rule_changed',
-        updated_by = $2,
-        updated_at = NOW()
-    WHERE recurrence_rule_id = $1
-      AND recurrence_origin = 'generated'
-      AND recurrence_override_kind IS NULL
-      AND status = 'scheduled'
-      AND starts_at >= NOW()
-      AND recurrence_obsolete_at IS NULL
-      ${desiredKeyClause}
-    `,
-    desiredKeys.length > 0 ? [ruleId, actorUserId, desiredKeys] : [ruleId, actorUserId],
-  );
 }
 
 async function getReminderPreferences(
@@ -1266,7 +753,7 @@ async function getNextLesson(
     ${LESSON_HOMEWORK_JOINS}
     WHERE student_id = $1
       AND ${workspacePredicate('workspace_id', '$2', '$3')}
-      AND recurrence_obsolete_at IS NULL
+      AND schedule_hidden_at IS NULL
       AND status = 'scheduled'
       AND starts_at >= NOW()
     ORDER BY starts_at ASC, id ASC
@@ -1285,7 +772,7 @@ async function listLessons(client: PoolClient, context: StudentContext): Promise
     ${LESSON_HOMEWORK_JOINS}
     WHERE student_id = $1
       AND ${workspacePredicate('workspace_id', '$2', '$3')}
-      AND recurrence_obsolete_at IS NULL
+      AND schedule_hidden_at IS NULL
     ORDER BY starts_at DESC, id DESC
     LIMIT 30
     `,
@@ -1305,7 +792,7 @@ async function listOverdueLessonHomeworkFollowups(
     ${LESSON_HOMEWORK_JOINS}
     WHERE student_id = $1
       AND ${workspacePredicate('workspace_id', '$2', '$3')}
-      AND recurrence_obsolete_at IS NULL
+      AND schedule_hidden_at IS NULL
       AND status IN ('scheduled', 'completed')
       AND starts_at + (duration_minutes * INTERVAL '1 minute') <= NOW()
       AND lesson_homework_memory.id IS NULL
@@ -1376,6 +863,7 @@ async function getLessonRow(
     ${LESSON_HOMEWORK_JOINS}
     WHERE student_lessons.id = $1
       AND student_lessons.student_id = $2
+      AND student_lessons.schedule_hidden_at IS NULL
       AND ${workspacePredicate('student_lessons.workspace_id', '$3', '$4')}
     `,
     [lessonId, context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
@@ -1388,9 +876,10 @@ async function reconcileLessonCreditEvent(
   lessonId: string,
   actorUserId: string | null,
 ): Promise<void> {
-  const result = await client.query<LessonRow>('SELECT * FROM student_lessons WHERE id = $1', [
-    lessonId,
-  ]);
+  const result = await client.query<LessonRow>(
+    'SELECT * FROM student_lessons WHERE id = $1 FOR UPDATE',
+    [lessonId],
+  );
   const lesson = result.rows[0];
   if (!lesson) return;
 
@@ -1680,257 +1169,6 @@ async function withPgTransaction<T>(operation: (client: PoolClient) => Promise<T
   });
 }
 
-function normalizeRecurrenceSlots(slots: UpsertStudentLessonRecurrenceRequest['slots']) {
-  if (!Array.isArray(slots) || slots.length === 0) {
-    throw new StudentScheduleBillingError(
-      'invalid_request',
-      400,
-      'At least one recurrence slot is required',
-    );
-  }
-  return slots.map((slot) => {
-    if (!Number.isInteger(slot.isoWeekday) || slot.isoWeekday < 1 || slot.isoWeekday > 7) {
-      throw new StudentScheduleBillingError('invalid_request', 400, 'Invalid recurrence weekday');
-    }
-    if (!/^\d{2}:\d{2}$/.test(slot.localStartTime)) {
-      throw new StudentScheduleBillingError(
-        'invalid_request',
-        400,
-        'Invalid recurrence start time',
-      );
-    }
-    const [hoursText, minutesText] = slot.localStartTime.split(':');
-    const hours = Number(hoursText);
-    const minutes = Number(minutesText);
-    if (hours > 23 || minutes > 59) {
-      throw new StudentScheduleBillingError(
-        'invalid_request',
-        400,
-        'Invalid recurrence start time',
-      );
-    }
-    if (
-      !Number.isInteger(slot.durationMinutes) ||
-      slot.durationMinutes <= 0 ||
-      slot.durationMinutes > 24 * 60
-    ) {
-      throw new StudentScheduleBillingError('invalid_request', 400, 'Invalid recurrence duration');
-    }
-    return {
-      isoWeekday: slot.isoWeekday,
-      localStartTime: slot.localStartTime,
-      durationMinutes: slot.durationMinutes,
-    };
-  });
-}
-
-function recurrenceSlotIdentity(slot: NormalizedRecurrenceSlot): string {
-  return `${slot.isoWeekday}|${slot.localStartTime}|${slot.durationMinutes}`;
-}
-
-function recurrenceSlotIdentityFromRow(slot: RecurrenceSlotRow): string {
-  return recurrenceSlotIdentity({
-    isoWeekday: slot.iso_weekday,
-    localStartTime: slot.local_start_time.slice(0, 5),
-    durationMinutes: slot.duration_minutes,
-  });
-}
-
-function buildDesiredOccurrenceKeys(params: {
-  timezone: string;
-  startsOn: string;
-  endsOn: string | null;
-  status: RecurrenceRuleRow['status'];
-  generationHorizonDays: number;
-  slots: RecurrenceSlotRow[];
-}): Set<string> {
-  if (params.status !== 'active' || params.slots.length === 0) {
-    return new Set();
-  }
-  const today = toDateInputInTimeZone(new Date(), normalizeTimezone(params.timezone));
-  const fromDate = compareDateInputs(params.startsOn, today) > 0 ? params.startsOn : today;
-  const horizonEnd = addDaysToDateInput(today, params.generationHorizonDays);
-  const throughDate =
-    params.endsOn && compareDateInputs(params.endsOn, horizonEnd) < 0 ? params.endsOn : horizonEnd;
-  if (compareDateInputs(throughDate, fromDate) < 0) {
-    return new Set();
-  }
-  return new Set(
-    buildWeeklyOccurrences(fromDate, throughDate, params.slots).map(
-      (occurrence) => occurrence.occurrenceKey,
-    ),
-  );
-}
-
-function buildWeeklyOccurrences(
-  fromDate: string,
-  throughDate: string,
-  slots: RecurrenceSlotRow[],
-): {
-  slotId: string;
-  localDate: string;
-  localStartTime: string;
-  durationMinutes: number;
-  occurrenceKey: string;
-}[] {
-  const occurrences: {
-    slotId: string;
-    localDate: string;
-    localStartTime: string;
-    durationMinutes: number;
-    occurrenceKey: string;
-  }[] = [];
-  for (
-    let date = fromDate;
-    compareDateInputs(date, throughDate) <= 0;
-    date = addDaysToDateInput(date, 1)
-  ) {
-    const weekday = isoWeekdayForDateInput(date);
-    for (const slot of slots) {
-      if (slot.iso_weekday !== weekday) {
-        continue;
-      }
-      const localStartTime = slot.local_start_time.slice(0, 5);
-      occurrences.push({
-        slotId: slot.id,
-        localDate: date,
-        localStartTime,
-        durationMinutes: slot.duration_minutes,
-        occurrenceKey: `${slot.id}:${date}`,
-      });
-    }
-  }
-  return occurrences;
-}
-
-function getNextOverrideKind(
-  existing: LessonRow,
-  params: UpdateStudentLessonRequest,
-  nextStatus: StudentLessonStatus,
-  nextStartsAt: string,
-): LessonRow['recurrence_override_kind'] {
-  if (existing.recurrence_origin !== 'generated') {
-    return existing.recurrence_override_kind;
-  }
-  if (nextStatus === 'canceled' && existing.status !== 'canceled') {
-    return 'manual_cancel';
-  }
-  if (params.startsAt && params.startsAt !== existing.starts_at.toISOString()) {
-    return 'manual_reschedule';
-  }
-  if (
-    nextStartsAt !== existing.starts_at.toISOString() ||
-    params.durationMinutes !== undefined ||
-    params.timezone !== undefined ||
-    params.consumesCredit !== undefined ||
-    params.title !== undefined ||
-    params.notes !== undefined
-  ) {
-    return 'manual_edit';
-  }
-  return existing.recurrence_override_kind;
-}
-
-function parseDateInput(value: string, message: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new StudentScheduleBillingError('invalid_request', 400, message);
-  }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    throw new StudentScheduleBillingError('invalid_request', 400, message);
-  }
-  return value;
-}
-
-function toDateInput(value: Date): string {
-  return value.toISOString().slice(0, 10);
-}
-
-function addDaysToDateInput(value: string, days: number): string {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return toDateInput(new Date(date.getTime() + days * DAY_MS));
-}
-
-function compareDateInputs(left: string, right: string): number {
-  return left.localeCompare(right);
-}
-
-function isoWeekdayForDateInput(value: string): number {
-  const day = new Date(`${value}T00:00:00.000Z`).getUTCDay();
-  return day === 0 ? 7 : day;
-}
-
-function toDateInputInTimeZone(value: Date, timezone: string): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(value);
-  const partMap = new Map(parts.map((part) => [part.type, part.value]));
-  return `${partMap.get('year')}-${partMap.get('month')}-${partMap.get('day')}`;
-}
-
-function normalizeTimezone(timezone: string): string {
-  const trimmed = timezone.trim();
-  const alias = TIMEZONE_ALIASES.get(trimmed.toUpperCase());
-  const normalized = alias ?? normalizeFixedOffsetTimezone(trimmed) ?? trimmed;
-  try {
-    toDateInputInTimeZone(new Date(), normalized);
-    return normalized;
-  } catch {
-    throw new StudentScheduleBillingError('invalid_request', 400, 'Invalid timezone');
-  }
-}
-
-function normalizeFixedOffsetTimezone(timezone: string): string | null {
-  const match = /^(?:UTC|GMT)([+-])(\d{1,2})(?::?00)?$/i.exec(timezone.trim());
-  if (!match) {
-    return null;
-  }
-  const sign = match[1];
-  const hours = Number(match[2]);
-  if (!Number.isInteger(hours) || hours > 14) {
-    return null;
-  }
-  if (hours === 0) {
-    return 'UTC';
-  }
-  const etcSign = sign === '+' ? '-' : '+';
-  return `Etc/GMT${etcSign}${hours}`;
-}
-
-function mapRecurrenceRule(
-  row: RecurrenceRuleRow,
-  slots: RecurrenceSlotRow[],
-): StudentLessonRecurrenceRuleDto {
-  return {
-    id: row.id,
-    studentId: row.student_id,
-    workspaceId: row.workspace_id ?? null,
-    timezone: normalizeTimezone(row.timezone),
-    frequency: row.frequency,
-    startsOn: row.starts_on,
-    endsOn: row.ends_on ?? null,
-    status: row.status,
-    generationHorizonDays: row.generation_horizon_days,
-    materializedThrough: row.materialized_through ?? null,
-    slots: slots.map(mapRecurrenceSlot),
-    updatedAt: row.updated_at.toISOString(),
-  };
-}
-
-function mapRecurrenceSlot(row: RecurrenceSlotRow): StudentLessonRecurrenceSlotDto {
-  return {
-    id: row.id,
-    ruleId: row.rule_id,
-    isoWeekday: row.iso_weekday,
-    localStartTime: row.local_start_time.slice(0, 5),
-    durationMinutes: row.duration_minutes,
-    sortOrder: row.sort_order,
-  };
-}
-
 function mapLesson(row: LessonRow): StudentLessonDto {
   return {
     id: row.id,
@@ -1944,11 +1182,9 @@ function mapLesson(row: LessonRow): StudentLessonDto {
     title: row.title ?? null,
     notes: row.notes ?? null,
     creditEventId: row.credit_event_id ?? null,
-    recurrenceRuleId: row.recurrence_rule_id ?? null,
-    recurrenceSlotId: row.recurrence_slot_id ?? null,
-    recurrenceOccurrenceKey: row.recurrence_occurrence_key ?? null,
-    recurrenceOrigin: row.recurrence_origin ?? 'manual',
-    recurrenceOverrideKind: row.recurrence_override_kind ?? null,
+    historicalScheduleOrigin: row.schedule_origin_history ?? {},
+    schedulingSource: row.calendar_lesson_id ? 'calendar' : 'unmanaged',
+    calendarEventUrl: row.calendar_event_url ?? null,
     homework: mapLessonHomework(row),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
@@ -1958,6 +1194,7 @@ function mapLesson(row: LessonRow): StudentLessonDto {
 function mapLessonHomework(row: LessonRow): StudentLessonHomeworkDto {
   return {
     status: row.homework_status ?? 'not_started',
+    transcriptResultSessionId: row.transcript_result_session_id ?? null,
     assignmentSessionId: row.homework_assignment_session_id ?? null,
     promptPackageId: row.homework_prompt_package_id ?? null,
     draftId: row.homework_draft_id ?? null,
@@ -1970,7 +1207,7 @@ function mapLessonHomework(row: LessonRow): StudentLessonHomeworkDto {
 
 function isLessonHomeworkFollowUpDue(lesson: LessonRow): boolean {
   if (!['scheduled', 'completed'].includes(lesson.status)) return false;
-  if (lesson.homework_status === 'published' || lesson.homework_status === 'memory_ready') {
+  if (['published', 'memory_ready', 'not_planned'].includes(lesson.homework_status)) {
     return false;
   }
   const endsAt = lesson.starts_at.getTime() + lesson.duration_minutes * 60 * 1000;

@@ -1,6 +1,13 @@
-import { validateAssignmentV1 } from '@esl-pipeline/contracts';
+import { validateFreshAssignmentV1 } from '@esl-pipeline/contracts';
 
+import type { BatchBackendConfig } from '../config/env.js';
 import { validateFoundationalProfileOutput } from './foundational-profile.js';
+import {
+  enforceGenerationBudgetBeforeAttempt,
+  type GenerationBudgetGuardDependencies,
+  recordGenerationBudgetUsageAfterSuccess,
+  resolveGenerationBudgetRepository,
+} from './generation-budget-guard.js';
 import type { GenerationEvalFixture } from './generation-eval-fixtures.js';
 import type {
   ProviderExecutionResult,
@@ -11,6 +18,7 @@ import { ProviderExecutionError } from './generation-providers.js';
 import {
   createGenerationRequestEnvelope,
   type GenerationRequestEnvelopeV1,
+  resolveGenerationRequestText,
 } from './generation-request-envelope.js';
 import { validateHomeworkMemoryContent } from './homework-memory-content-schema.js';
 import { validateLessonMemoryContent } from './lesson-memory-content-schema.js';
@@ -68,6 +76,60 @@ export interface GenerationEvalRecord extends GenerationEvalVerdictRecord {
 type StructuredExecutor = (args: {
   request: ProviderStructuredExecutionRequest;
 }) => Promise<ProviderStructuredExecutionResult & { model?: string }>;
+/** The live CLI uses the same ledger as runtime work; fake executors stay local. */
+export function createBudgetedGenerationEvalExecutor(
+  config: BatchBackendConfig,
+  executor: StructuredExecutor,
+  overrides: GenerationBudgetGuardDependencies = {},
+): StructuredExecutor {
+  const repository = resolveGenerationBudgetRepository({ config, overrides });
+  return async ({ request: input }) => {
+    const request = {
+      ...input,
+      maxOutputTokens: input.maxOutputTokens ?? config.generation.maxOutputTokensHard,
+    };
+    if (!overrides.repository && (!config.pg.enabled || config.nodeEnv === 'test')) {
+      throw new Error(
+        'Live generation evaluation requires persistent PostgreSQL budget accounting outside NODE_ENV=test.',
+      );
+    }
+    await enforceGenerationBudgetBeforeAttempt({
+      config,
+      provider: 'openai',
+      model: request.model,
+      prompt: resolveGenerationRequestText(request),
+      maxOutputTokens: request.maxOutputTokens,
+      now: new Date(),
+      repository,
+    });
+    let result;
+    try {
+      result = await executor({ request });
+    } catch (error) {
+      if (error instanceof ProviderExecutionError && error.usage) {
+        await recordGenerationBudgetUsageAfterSuccess({
+          config,
+          provider: 'openai',
+          model: request.model,
+          usageTotalTokens: error.usage.totalTokens,
+          now: new Date(),
+          repository,
+        });
+      }
+      throw error;
+    }
+    await recordGenerationBudgetUsageAfterSuccess({
+      config,
+      provider: 'openai',
+      model: request.model,
+      usageTotalTokens: result.usage?.totalTokens,
+      now: new Date(),
+      repository,
+    });
+    return result;
+  };
+}
+
 export function buildGenerationEvalEnvelope(
   fixture: GenerationEvalFixture,
 ): GenerationRequestEnvelopeV1 {
@@ -301,7 +363,7 @@ function validateStructuredWorkloadOutput(fixture: GenerationEvalFixture, output
       validateProfileCandidatePatch(output);
       return;
     case 'assignment_draft':
-      validateAssignmentV1(output, {
+      validateFreshAssignmentV1(output, {
         studentName: 'Eval Persona One',
         inputKind: 'generate',
         suppliedUrls: [],

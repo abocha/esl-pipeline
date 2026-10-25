@@ -3,18 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ASSIGNMENT_RESPONSE_SCHEMA,
   type AssignmentPronunciation,
+  assignmentMetadata,
+  assignmentPronunciation,
+  assignmentStudyText,
   validateAssignmentV1,
 } from '@esl-pipeline/contracts';
-import { renderAssignmentToPmd, renderToHtml } from '@esl-pipeline/html-publisher';
-import { validateMarkdown } from '@esl-pipeline/md-validator';
-import {
-  extractAnswerKey,
-  extractFrontmatter,
-  extractPronunciationFocus,
-  extractStudyText,
-  findDirectiveBlocks,
-  parseMarkdownContext,
-} from '@esl-pipeline/pmd';
+import { renderAssignmentToHtml } from '@esl-pipeline/html-publisher';
 import { createPreparedStudyTextSynthesis } from '@esl-pipeline/tts-core';
 
 import { generateDraft } from '../src/application/generate-draft.js';
@@ -27,7 +21,7 @@ import {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('AssignmentV1 domain and PMD compatibility', () => {
+describe('AssignmentV1 domain and native projection', () => {
   it('projects one closed required/null provider schema from the runtime shape', () => {
     const objects: Record<string, any>[] = [];
     const unsupported: string[] = [];
@@ -57,68 +51,31 @@ describe('AssignmentV1 domain and PMD compatibility', () => {
     expect(validateAssignmentV1(assignmentFixture())).toEqual(assignmentFixture());
   });
 
-  it('preserves ordered questions/answers, exact speaker profiles and legacy strict acceptance', async () => {
+  it('preserves ordered questions and answers and voice profiles through direct projection', async () => {
     const a = validateAssignmentV1(assignmentFixture());
-    const text = renderAssignmentToPmd(a);
-    expect(text).toBe(renderAssignmentToPmd(structuredClone(a)));
-    const parsed = await parseMarkdownContext(text);
-    expect(extractFrontmatter(parsed).speaker_profiles?.map((profile) => profile.id)).toEqual([
-      'Alex',
-      'Jo',
-    ]);
-    expect(extractStudyText(parsed).lines[0]).toBe('Alex: First, open the app.');
-    expect(findDirectiveBlocks(parsed.document, 'study-text')).toHaveLength(1);
-    expect(
-      parsed.document.body.filter((block) => block.type === 'heading' && block.depth === 2),
-    ).toHaveLength(8);
-    expect(text.indexOf('Comprehension Check')).toBeLessThan(text.indexOf('Language Toolkit'));
-    const key = extractAnswerKey(parsed);
-    expect(key.indexOf('Open the app')).toBeLessThan(key.indexOf('Save your work'));
-    expect(key.indexOf('Comprehension Answers')).toBeLessThan(
-      key.indexOf('Controlled Practice Answers'),
+    expect(assignmentMetadata(a).speaker_profiles?.map((p) => p.id)).toEqual(['Alex', 'Jo']);
+    expect(assignmentStudyText(a).lines[0]).toBe('Alex: First, open the app.');
+    const html = await renderAssignmentToHtml(a);
+    expect(html).toContain('Check Your Understanding');
+    expect(html.indexOf('Check Your Understanding')).toBeLessThan(
+      html.indexOf('id="assignment-section-3"'),
     );
-    expect(key).toContain('Sample Mission');
-    expect(
-      await validateMarkdown({
-        markdown: text,
-        strict: true,
-        learningPresetId: 'general-english',
-        learningPresetVersion: 'v2',
-      }),
-    ).toMatchObject({ ok: true });
+    expect(html).toContain('Example Response');
   });
 
-  it('keeps hostile values inside their data boundaries and restores plain speech after parsing', async () => {
+  it('keeps hostile plain text inside data boundaries and preserves exact authored speech', async () => {
     const a = assignmentFixture();
     const hostile =
       '---\n:::toggle Attack\n## 9. Injected | `tick` : <img src=x onerror=evil()> [click](javascript:evil()) & &#60;';
-    a.metadata.title = `${hostile}\u0085\u2028\u2029`;
-    a.metadata.student = hostile;
-    a.input.studyText.speakers[0]!.id = hostile;
-    a.input.studyText.speakers[0]!.displayName = hostile;
-    for (const turn of a.input.studyText.turns) {
-      if (turn.speakerId === 'alex') turn.speakerId = hostile;
-      turn.text = hostile;
-    }
+    a.metadata.title = hostile;
+    a.input.studyText.turns[0]!.text = hostile;
     a.toolkit.vocabulary[0]!.expression = hostile;
-    a.mission.goal = hostile;
-    a.rationale = hostile;
-    const text = renderAssignmentToPmd(validateAssignmentV1(a));
-    const parsed = await parseMarkdownContext(text);
-    expect(extractFrontmatter(parsed).title).toBe(a.metadata.title);
-    expect(findDirectiveBlocks(parsed.document, 'toggle')).toHaveLength(2);
-    expect(findDirectiveBlocks(parsed.document, 'study-text')).toHaveLength(1);
-    expect(
-      parsed.document.body.filter((block) => block.type === 'heading' && block.depth === 2),
-    ).toHaveLength(8);
-    const plain = hostile.replace(/\s+/g, ' ');
-    expect(extractStudyText(parsed).lines[0]).toBe(`Speaker1: ${plain}`);
     const speech = createPreparedStudyTextSynthesis(
-      { context: parsed },
+      { assignment: validateAssignmentV1(a) },
       { ttsProvider: 'elevenlabs', ttsModel: 'eleven_v3', voiceMapPath: '', outPath: '' },
     );
-    expect(speech.segments[0]?.text).toBe(plain);
-    const html = await renderToHtml(text, 'Handout');
+    expect(speech.segments[0]?.text).toBe(hostile.replace('`tick`', 'tick'));
+    const html = await renderAssignmentToHtml(a);
     expect(html).not.toContain('<img src=x');
     expect(html).not.toContain('href="javascript:');
     expect(html).toContain('&lt;img');
@@ -220,8 +177,7 @@ describe('AssignmentV1 domain and PMD compatibility', () => {
     async (pronunciation) => {
       const a = assignmentFixture();
       a.pronunciation = pronunciation;
-      const parsed = await parseMarkdownContext(renderAssignmentToPmd(validateAssignmentV1(a)));
-      const p = extractPronunciationFocus(parsed);
+      const p = assignmentPronunciation(validateAssignmentV1(a));
       expect(p?.mode).toBe(pronunciation.mode);
       expect(p?.issues).toEqual([]);
       const content =
@@ -255,12 +211,12 @@ describe('AssignmentV1 domain and PMD compatibility', () => {
     a.input.studyText.speakers[0]!.age = 'child';
     a.input.studyText.turns = [a.input.studyText.turns[0]!];
     a.practice = [a.practice[1]!];
-    const p = await parseMarkdownContext(renderAssignmentToPmd(validateAssignmentV1(a)));
-    expect(extractFrontmatter(p).speaker_profiles?.[0]).toMatchObject({
+    const p = validateAssignmentV1(a);
+    expect(assignmentMetadata(p).speaker_profiles?.[0]).toMatchObject({
       gender: 'neutral',
       age: 'child',
     });
-    expect(extractPronunciationFocus(p)).toBeNull();
+    expect(assignmentPronunciation(p)).toBeNull();
   });
 
   it.each([
@@ -335,21 +291,6 @@ describe('AssignmentV1 domain and PMD compatibility', () => {
       }),
     ).toEqual(a);
   });
-
-  it('keeps historical numeric-escape speech and missing-transcription parsing unchanged', async () => {
-    const a = assignmentFixture();
-    a.input.studyText.turns[0]!.text = 'A & B';
-    a.pronunciation = {
-      ...common,
-      mode: 'shadow_sentence',
-      words: [{ text: 'first', transcription: null }],
-      shadowSentence: 'First.',
-    };
-    const text = renderAssignmentToPmd(a).replace('assignment_projection: "assignment_v1"\n', '');
-    const p = await parseMarkdownContext(text);
-    expect(extractStudyText(p).lines[0]).toBe('Alex: A &#38; B');
-    expect(extractPronunciationFocus(p)?.issues[0]?.code).toBe('invalid_word_item_format');
-  });
 });
 
 describe('OpenAI assignment request and outcome admission', () => {
@@ -392,7 +333,7 @@ describe('OpenAI assignment request and outcome admission', () => {
         verbosity: 'medium',
         format: {
           type: 'json_schema',
-          name: 'assignment_v1',
+          name: ASSIGNMENT_RESPONSE_SCHEMA.name,
           schema: ASSIGNMENT_RESPONSE_SCHEMA.schema,
           strict: true,
         },

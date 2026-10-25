@@ -254,7 +254,6 @@ html {
   font-size: 16px;
   color-scheme: light;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
@@ -332,7 +331,7 @@ code {
    Form Elements
    ======================================== */
 
-input,
+input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
   font-family: inherit;
