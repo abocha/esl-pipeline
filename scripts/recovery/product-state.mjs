@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const command = process.argv[2];
@@ -37,42 +37,24 @@ async function seed() {
     student: 'Synthetic Recovery Learner',
     starterProfile: { overallLevel: 'B1', teacherNotes: 'Disposable rehearsal data only.' },
   });
-  const schedule = await request(`/students/${student.id}/lessons`, {
-    startsAt: new Date(Date.now() - 86400000).toISOString(),
-    timezone: 'Etc/UTC',
-    status: 'completed',
-    title: 'Synthetic recovery lesson',
-    notes: 'Persist this lesson across complete host loss.',
-  });
-  const lesson = schedule.lessons.find((row) => row.title === 'Synthetic recovery lesson');
-  assert.ok(lesson?.id);
-  const session = await request('/assignment-sessions/confirm-student', {
-    requestId: randomUUID(),
-    studentId: student.id,
-    lessonId: lesson.id,
-  });
   const fixture = {
     email,
     password,
     userId: account.user.id,
     studentId: student.id,
-    lessonId: lesson.id,
-    sessionId: session.id,
   };
-  assert.ok(fixture.lessonId && fixture.sessionId);
   writeFileSync('/bundle/product.json', JSON.stringify(fixture, null, 2), { mode: 0o600 });
   console.log(
     JSON.stringify({
       seeded: true,
       userId: fixture.userId,
       studentId: student.id,
-      lessonId: lesson.id,
-      sessionId: session.id,
     }),
   );
 }
 async function verify() {
-  const fixture = JSON.parse(readFileSync('/bundle/product.json', 'utf8'));
+  const media = JSON.parse(readFileSync('/bundle/media.json', 'utf8'));
+  const fixture = { ...JSON.parse(readFileSync('/bundle/product.json', 'utf8')), ...media };
   const login = await request('/auth/login', { email: fixture.email, password: fixture.password });
   assert.equal(login.user.id, fixture.userId);
   token = login.accessToken;
@@ -86,7 +68,6 @@ async function verify() {
   assert.equal(lesson.notes, 'Persist this lesson across complete host loss.');
   const sessions = await request('/user/assignment-sessions');
   assert.ok(JSON.stringify(sessions).includes(fixture.sessionId));
-  const media = JSON.parse(readFileSync('/bundle/media.json', 'utf8'));
   const recording = await request(`/recordings/${media.recordingId}`);
   assert.ok(JSON.stringify(recording).includes(fixture.studentId));
   const audio = await fetch(`${base}/recordings/${media.recordingId}/audio`, {

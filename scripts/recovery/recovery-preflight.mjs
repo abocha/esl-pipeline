@@ -30,7 +30,7 @@ export function verifyManifest(directory, file, allowed) {
   if (seen.size !== allowed.length) throw new Error('Missing checksum artifact');
 }
 
-export function recoveryPreflight(bundle, revision, envFile = '/opt/esl-pipeline/.env') {
+export function recoveryPreflight(bundle, revision, envFile = '/etc/esl-pipeline/production.env') {
   if (!/^[a-f0-9]{40}$/u.test(revision)) throw new Error('Full pinned application SHA required');
   if (requireFile(path.join(bundle, 'application-revision')).toString().trim() !== revision)
     throw new Error('Backup application revision mismatch');

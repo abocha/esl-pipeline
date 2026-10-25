@@ -110,10 +110,10 @@ for service in batch-backend batch-frontend; do
   docker image inspect "$run_id/$service:$revision" --format '{{json .}}' > "$evidence/image-$service.json"
 done
 # Exact dependency refs from production Compose; no provider requests.
-for image in postgres:18.6-alpine3.24 redis:8.10.1-alpine3.23 caddy:2.11-alpine registry:2.8.3 motoserver/moto:5.1.15; do
+for image in postgres:18.6-alpine3.24 redis:8.10.1-alpine3.23 caddy:2.11.7-alpine registry:2.8.3 motoserver/moto:5.1.15; do
   docker pull "$image" > "$evidence/pull-${image//[\/:]/-}.log" 2>&1
 done
-docker save "$backend" "$frontend" postgres:18.6-alpine3.24 redis:8.10.1-alpine3.23 caddy:2.11-alpine registry:2.8.3 motoserver/moto:5.1.15 -o "$work/images.tar"
+docker save "$backend" "$frontend" postgres:18.6-alpine3.24 redis:8.10.1-alpine3.23 caddy:2.11.7-alpine registry:2.8.3 motoserver/moto:5.1.15 -o "$work/images.tar"
 cat > "$work/host/Dockerfile" <<'DOCKERFILE'
 FROM ubuntu:24.04
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-sysv dbus ca-certificates && rm -rf /var/lib/apt/lists/*

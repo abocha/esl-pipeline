@@ -38,7 +38,7 @@ bash scripts/deploy/bootstrap-prod-host.sh verify 22 > "/evidence/$phase-bootstr
 jq -e '.bootstrapComplete and (.externalInputsPresent == false) and (.deploymentStatePresent == false)' "/evidence/$phase-bootstrap.json"
 docker info --format '{{json .Driver}}' > "/evidence/$phase-storage-driver.json"
 # Provision exclusively synthetic operator inputs. Never source caller .env or AWS profiles.
-cat > .env <<'ENV'
+cat > /etc/esl-pipeline/production.env <<'ENV'
 NODE_ENV=production
 PG_ENABLED=true
 PG_HOST=postgres
@@ -56,6 +56,7 @@ BATCH_BACKEND_ENABLE_OPS_CONTROL=false
 JWT_SECRET=synthetic-rehearsal-jwt-signing-input-not-a-production-secret
 REFRESH_COOKIE_SECURE=false
 MCP_OAUTH_ENABLED=false
+GOOGLE_CALENDAR_ENABLED=false
 STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false
 ESL_STT_PROVIDER_ELEVENLABS_API_KEY=invalid-rehearsal-no-provider
 ESL_STT_PROVIDER_DEEPGRAM_API_KEY=invalid-rehearsal-no-provider
@@ -81,7 +82,12 @@ PG_BACKUP_S3_ENV=rehearsal
 PG_BACKUP_ALERT_TELEGRAM_DISABLE=true
 PG_BACKUP_NOTIFY_SUPPRESS=true
 ENV
-chmod 0600 .env
+chmod 0600 /etc/esl-pipeline/production.env
+export ESL_PRODUCTION_ENV_FILE=/etc/esl-pipeline/production.env
+# The pinned Git archive is a root-owned clean snapshot, without remote credentials.
+git init -q
+git -c user.name=Rehearsal -c user.email=rehearsal@example.invalid add .
+git -c user.name=Rehearsal -c user.email=rehearsal@example.invalid commit -qm 'Synthetic pinned source snapshot'
 # Retain the normal app network and commands. Guest-only firewall blocks container Internet egress.
 cat > /tmp/rehearsal-overlay.yml <<'YAML'
 services:
@@ -90,6 +96,8 @@ services:
   redis:
     ports: !reset []
   caddy-edge:
+    volumes:
+      - /tmp/rehearsal-Caddyfile:/etc/caddy/Caddyfile:ro
     ports: !override
       - '127.0.0.1:18081:80'
       - '127.0.0.1:18443:443'
@@ -110,15 +118,15 @@ export BATCH_BACKEND_HOST_PORT=18080 BATCH_FRONTEND_HOST_PORT=15173
 export PROJECT_NAME=esl-recovery COMPOSE_PROJECT_NAME=esl-recovery
 export DEPLOY_INCLUDE_EDGE=false DEPLOY_INCLUDE_OPS_BOT=false
 export CADDY_PUBLIC_HOSTNAME='' CADDY_ACME_EMAIL=rehearsal@example.invalid
-export COMPOSE_FILE=/opt/esl-pipeline/rehearsal-compose.yml
+export COMPOSE_FILE=/var/lib/esl-pipeline/rehearsal-compose.yml
 export PG_COMPOSE_FILE="$COMPOSE_FILE" PG_COMPOSE_PROJECT="$PROJECT_NAME"
-export PG_BACKUP_ENV_FILE=/opt/esl-pipeline/.env
+export PG_BACKUP_ENV_FILE="$ESL_PRODUCTION_ENV_FILE"
 export ESL_IMAGE_PREFIX=localhost:15000/esl
 export DEPLOY_STATE_DIR=/var/lib/esl-pipeline/deploy
 export PG_BACKUP_DIR=/bundle/postgres
 set -a
 # shellcheck source=/dev/null
-source .env
+source "$ESL_PRODUCTION_ENV_FILE"
 set +a
 docker load -i /tmp/images.tar > "/evidence/$phase-loaded-images.log"
 rm /tmp/images.tar
@@ -132,6 +140,9 @@ for service in batch-backend batch-frontend; do
   docker pull "localhost:15000/esl/$service:$revision"
   [[ "$(docker inspect "localhost:15000/esl/$service:$revision" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" == "$revision" ]]
 done
+# Preserve current routing while suppressing all automatic certificate acquisition, including
+# the fixed marketing hostname. This guest cannot establish production DNS/TLS evidence.
+sed '1a\  auto_https off' deploy/caddy/Caddyfile > /tmp/rehearsal-Caddyfile
 CADDY_PUBLIC_HOSTNAME=http://recovery.invalid docker compose -f docker-compose.prod.yml -f /tmp/rehearsal-overlay.yml --profile edge config > "$COMPOSE_FILE"
 chmod 0600 "$COMPOSE_FILE"
 compose() { docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"; }
@@ -151,10 +162,12 @@ if [[ "$phase" == source ]]; then
   compose exec -T batch-backend node dist/tools/alpha-invites.js create --email recovery@example.test --app-url http://127.0.0.1:15173 > /tmp/invite.txt
   node scripts/recovery/product-state.mjs seed
   install -o 1000 -g 1000 -m 0600 /bundle/product.json uploads/rehearsal-product.json
+  install -o 1000 -g 1000 -m 0600 packages/contracts/tests/assignment-grammar-fixture.json uploads/rehearsal-assignment.json
   # Repository domain/storage tools provide finished synthetic recording lineage; no paid STT jobs.
-  compose exec -T batch-backend node --input-type=module - < scripts/recovery/seed-media.mjs > /tmp/media.log
-  tail -n 1 /tmp/media.log > /bundle/media.json
-  rm uploads/rehearsal-product.json
+  compose exec -T batch-backend node --input-type=module - < scripts/recovery/seed-media.mjs > /evidence/source-media-seed.log 2>&1
+  compose cp batch-backend:/app/uploads/rehearsal-media.json /bundle/media.json
+  node scripts/recovery/media-fixture.mjs /bundle/media.json > /evidence/source-media.json
+  rm uploads/rehearsal-product.json uploads/rehearsal-assignment.json uploads/rehearsal-media.json
   node scripts/recovery/product-state.mjs verify > /evidence/source-product.json
   # Include nonempty Redis AOF with a durable marker; no runnable provider work is introduced.
   compose exec -T redis redis-cli SET rehearsal:durable-marker "$revision"
@@ -170,7 +183,7 @@ if [[ "$phase" == source ]]; then
 else
   # Nothing boots the application until backup, durable artifacts and compatibility pass.
   [[ -z "$(compose ps -q batch-backend batch-worker transcribe-worker student-memory-worker)" ]]
-  node scripts/recovery/recovery-preflight.mjs /bundle "$revision"
+  node scripts/recovery/recovery-preflight.mjs /bundle "$revision" "$ESL_PRODUCTION_ENV_FILE"
   expect_failure /evidence/missing-input.log node scripts/recovery/recovery-preflight.mjs /bundle "$revision" /tmp/absent.env
   grep -q ENOENT /evidence/missing-input.log
   mv /bundle/uploads.tar /bundle/uploads.missing
