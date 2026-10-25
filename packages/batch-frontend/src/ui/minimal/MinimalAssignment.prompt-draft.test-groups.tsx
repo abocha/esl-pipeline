@@ -148,7 +148,7 @@ export function registerPromptEditorTests() {
       expect(
         screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
       ).toBe('step');
-      expect(screen.getByDisplayValue('Draft markdown')).toBeTruthy();
+      expect(screen.getByText('Draft markdown')).toBeTruthy();
     });
 
     it('does not let a pending settings save restore stale teacher notes after commit', async () => {
@@ -403,9 +403,10 @@ export function registerPromptEditorTests() {
       await screen.findByRole('button', { name: /Generating assignment/i });
 
       expect(
-        (screen.getByRole('textbox', { name: /^Assignment title$/i }) as HTMLTextAreaElement)
-          .disabled,
-      ).toBe(true);
+        screen
+          .getByRole('textbox', { name: /^Assignment title$/i })
+          .getAttribute('contenteditable'),
+      ).toBe('false');
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(screen.getByRole('button', { name: /Create/i }).getAttribute('aria-current')).toBe(
         'step',
@@ -423,9 +424,10 @@ export function registerPromptEditorTests() {
       });
       await waitFor(() =>
         expect(
-          (screen.getByRole('textbox', { name: /^Assignment title$/i }) as HTMLTextAreaElement)
-            .disabled,
-        ).toBe(false),
+          screen
+            .getByRole('textbox', { name: /^Assignment title$/i })
+            .getAttribute('contenteditable'),
+        ).toBe('true'),
       );
     });
 

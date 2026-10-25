@@ -399,7 +399,7 @@ export function registerResumeBasicTests() {
       await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       expect(await screen.findByDisplayValue('Session transcript')).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /Create/i }));
-      expect(await screen.findByDisplayValue('Session draft')).toBeTruthy();
+      expect(await screen.findByText('Session draft')).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(((await screen.findByLabelText(/Teacher notes/i)) as HTMLTextAreaElement).value).toBe(
         'Remember the travel vocab.',
@@ -694,7 +694,7 @@ export function registerResumeBasicTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      await screen.findByDisplayValue('Stale draft');
+      await screen.findByText('Stale draft');
       vi.mocked(api.createDraft).mockClear();
       vi.mocked(api.updateDraft).mockClear();
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
@@ -1177,13 +1177,10 @@ export function registerResumeBasicTests() {
         );
         renderMinimalAssignment();
 
-        const draftTextarea = (await screen.findByDisplayValue(
-          'Original draft',
-        )) as HTMLTextAreaElement;
+        const draftTitle = await screen.findByText('Original draft');
         vi.useFakeTimers();
-        fireEvent.change(draftTextarea, {
-          target: { value: 'Older autosave' },
-        });
+        draftTitle.textContent = 'Older autosave';
+        fireEvent.input(draftTitle);
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
@@ -1199,9 +1196,7 @@ export function registerResumeBasicTests() {
         await user.click(within(resumeList).getByRole('radio', { name: /Bella/i }));
         await user.click(screen.getByRole('button', { name: /Continue assignment/i }));
 
-        const nextDraftTextarea = (await screen.findByDisplayValue(
-          'Next session draft',
-        )) as HTMLTextAreaElement;
+        const nextDraftTitle = await screen.findByText('Next session draft');
 
         await act(async () => {
           resolveOlderAutosave({
@@ -1220,8 +1215,8 @@ export function registerResumeBasicTests() {
           await Promise.resolve();
         });
 
-        expect(nextDraftTextarea.value).toBe('Next session draft');
-        expect(screen.queryByDisplayValue('Older autosave')).toBeNull();
+        expect(nextDraftTitle.textContent).toBe('Next session draft');
+        expect(screen.queryByText('Older autosave')).toBeNull();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

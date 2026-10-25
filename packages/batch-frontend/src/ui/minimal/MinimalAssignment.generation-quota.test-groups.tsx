@@ -184,13 +184,12 @@ export function registerGenerationThrottleTests() {
 
         await renderGenerationReadyAssignment();
         vi.useFakeTimers();
-        const draftTextarea = screen.getByRole('textbox', {
+        const draftTitle = screen.getByRole('textbox', {
           name: /^Assignment title$/i,
-        }) as HTMLTextAreaElement;
+        }) as HTMLElement;
 
-        fireEvent.change(draftTextarea, {
-          target: { value: 'First autosave' },
-        });
+        draftTitle.textContent = 'First autosave';
+        fireEvent.input(draftTitle);
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
@@ -199,9 +198,8 @@ export function registerGenerationThrottleTests() {
           'First autosave',
         );
 
-        fireEvent.change(draftTextarea, {
-          target: { value: 'Final autosave' },
-        });
+        draftTitle.textContent = 'Final autosave';
+        fireEvent.input(draftTitle);
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
@@ -211,7 +209,7 @@ export function registerGenerationThrottleTests() {
           resolveFirstSave(firstSavedDraft);
           await Promise.resolve();
         });
-        expect(draftTextarea.value).toBe('Final autosave');
+        expect(draftTitle.textContent).toBe('Final autosave');
 
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
@@ -220,7 +218,7 @@ export function registerGenerationThrottleTests() {
         expect(JSON.parse(vi.mocked(api.updateDraft).mock.calls[1]![1]).metadata.title).toBe(
           'Final autosave',
         );
-        expect(draftTextarea.value).toBe('Final autosave');
+        expect(draftTitle.textContent).toBe('Final autosave');
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -335,10 +333,9 @@ export function registerGenerationThrottleTests() {
         });
         await renderGenerationReadyAssignment();
 
-        const draftTextarea = screen.getByRole('textbox', { name: /^Assignment title$/i });
-        fireEvent.change(draftTextarea, {
-          target: { value: 'Existing draft' },
-        });
+        const draftTitle = screen.getByRole('textbox', { name: /^Assignment title$/i });
+        draftTitle.textContent = 'Existing draft';
+        fireEvent.input(draftTitle);
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
         await screen.findByRole('heading', { name: /Review and share/i });
         await previewCurrentDraft(user);
@@ -361,7 +358,7 @@ export function registerGenerationThrottleTests() {
             provider: 'openai',
             model: 'gpt-5.2',
           });
-          expect(screen.getByDisplayValue('Generated assignment draft')).toBeTruthy();
+          expect(screen.getByText('Generated assignment draft')).toBeTruthy();
         });
         await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
         await waitFor(() =>
@@ -425,7 +422,7 @@ export function registerGenerationThrottleTests() {
 
         await waitFor(
           () => {
-            expect(screen.queryByDisplayValue('Stale generated draft')).toBeNull();
+            expect(screen.queryByText('Stale generated draft')).toBeNull();
           },
           { timeout: UI_WAIT_TIMEOUT_MS },
         );
