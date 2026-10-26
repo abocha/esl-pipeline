@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.4.2] - 2026-10-26
+
+### Changed
+
+- Automated release from PR #457: fix(ui): isolate learner handout styles from tutor controls (ESL-86) (https://github.com/abocha/esl-pipeline/pull/457)
+
 ## [22.4.1] - 2026-10-26
 
 ### Changed
