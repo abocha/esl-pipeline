@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { LearnerHandout } from '../src/LearnerHandout.js';
+import '../src/document.css';
 import '../src/handout.css';
 import '../src/pronunciation-playback.js';
 import '../src/handout-interactions.js';

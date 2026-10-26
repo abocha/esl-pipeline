@@ -5,7 +5,9 @@ import { LearnerHandout } from './LearnerHandout.js';
 import type { LearnerHandoutProps } from './types.js';
 
 // Package-owned immutable assets, copied once by the package build. No Vite asset loaders.
-const css = readFileSync(new URL('./handout.css', import.meta.url), 'utf8');
+const css = ['document.css', 'handout.css']
+  .map((asset) => readFileSync(new URL(asset, import.meta.url), 'utf8'))
+  .join('\n');
 const playback = readFileSync(new URL('./pronunciation-playback.js', import.meta.url), 'utf8');
 const interactions = readFileSync(new URL('./handout-interactions.js', import.meta.url), 'utf8');
 

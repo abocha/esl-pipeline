@@ -106,6 +106,10 @@ request, random ID or input mutation is involved. A date is omitted unless expli
 ## Styles and static behavior
 
 `src/handout.css` is imported by Vite and copied alongside compiled Node JS during the package build.
+All its selectors stay within `.learner-handout`, including interaction, mobile and print rules;
+embedding the stylesheet must not change tutor controls or the host document. Zero-specificity
+`:where(.learner-handout)` boundaries preserve the internal selector ordering. Full-document defaults
+live in `src/document.css`, loaded only by the standalone renderer and local fixture shell.
 The server inlines that CSS and `src/pronunciation-playback.js` and `src/handout-interactions.js`, producing a standalone document with
 no external style/script dependencies. Only trusted package assets use raw HTML insertion; all render
 inputs pass through React escaping and URL admission.
