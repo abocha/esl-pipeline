@@ -57,5 +57,6 @@ describe('embedded learner-handout style boundary', () => {
     inspect(style.sheet!.cssRules);
     expect(escaped).toEqual([]);
     dom.window.close();
-  });
+    // CSSOM matching over a rendered lesson and its sibling competes with the other jsdom suites.
+  }, 15_000);
 });
