@@ -3181,5 +3181,5 @@ VALUES
   ('0071_scheduler_retirement', '45ee490d0893537325b299c0e6ee161ec72f139fe2c260aa95d3a5a4abf1eb7c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0072_calendar_projection_reference_guard', '50cf12476c3fd513fa328777a12ca2260d2c6a1b99b15b4b8c623a9093b3ef06', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0073_gemini_tts_provider', 'cdaee92f0b9f19241844d93ed34db298c4cf0f6d852de4c21bca555dcd33a169', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0074_assignment_material', 'bae7a2c4d69abb9dde6d297c320f296e368383e5f0e592a0cb8308a4f8a00ccd', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0074_assignment_material', '355e87270ed685ba9cdf82ef8e0a192dc47724fcf8bbe71c4c49de830c7d104c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
