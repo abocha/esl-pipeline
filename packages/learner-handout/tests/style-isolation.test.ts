@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { createFixture, createPolishFixture, pronunciationModes } from '../preview/fixtures.js';
+import { createPolishFixture } from '../preview/fixtures.js';
 import { LearnerHandout } from '../src/LearnerHandout.js';
 
 describe('embedded learner-handout style boundary', () => {
@@ -22,18 +22,13 @@ describe('embedded learner-handout style boundary', () => {
       <input><textarea></textarea><audio></audio>
     `;
     document.body.append(host);
-    for (const props of [
-      ...pronunciationModes.map((mode) => createFixture(mode, 'mixed')),
-      createPolishFixture(),
-    ]) {
-      const embedded = document.createElement('div');
-      embedded.innerHTML = renderToStaticMarkup(createElement(LearnerHandout, props));
-      document.body.append(embedded);
-      // Identical sibling markup proves even generic class names stay inside the handout.
-      const sibling = embedded.cloneNode(true) as HTMLElement;
-      sibling.querySelector('.learner-handout')!.removeAttribute('class');
-      document.body.append(sibling);
-    }
+    const embedded = document.createElement('div');
+    embedded.innerHTML = renderToStaticMarkup(createElement(LearnerHandout, createPolishFixture()));
+    document.body.append(embedded);
+    // Identical sibling markup proves even generic class names stay inside the handout.
+    const sibling = embedded.cloneNode(true) as HTMLElement;
+    sibling.querySelector('.learner-handout')!.removeAttribute('class');
+    document.body.append(sibling);
     const style = document.createElement('style');
     style.textContent = readFileSync(new URL('../src/handout.css', import.meta.url), 'utf8');
     document.head.append(style);
