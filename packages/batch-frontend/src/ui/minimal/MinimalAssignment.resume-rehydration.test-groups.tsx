@@ -398,12 +398,12 @@ export function registerResumeBasicTests() {
 
       await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       expect(await screen.findByDisplayValue('Session transcript')).toBeTruthy();
-      await user.click(screen.getByRole('button', { name: /Create/i }));
+      await user.click(screen.getByRole('button', { name: /^Step 4Create$/i }));
       expect(await screen.findByText('Session draft')).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
-      expect(((await screen.findByLabelText(/Teacher notes/i)) as HTMLTextAreaElement).value).toBe(
-        'Remember the travel vocab.',
-      );
+      expect(
+        ((await screen.findByLabelText(/Lesson guidance/i)) as HTMLTextAreaElement).value,
+      ).toBe('Remember the travel vocab.');
       expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
       vi.useFakeTimers();
       await act(async () => {
@@ -414,7 +414,7 @@ export function registerResumeBasicTests() {
       vi.useRealTimers();
 
       vi.useFakeTimers();
-      const teacherNotesInput = screen.getByRole('textbox', { name: /Teacher notes/i });
+      const teacherNotesInput = screen.getByRole('textbox', { name: /Lesson guidance/i });
       fireEvent.change(teacherNotesInput, {
         target: { value: 'Remember the travel vocab. Add pronunciation contrast.' },
       });
@@ -644,7 +644,7 @@ export function registerResumeBasicTests() {
         ),
       );
       expect(api.fetchAssignmentSession).toHaveBeenCalledWith('session-duplicate');
-      expect(await screen.findByRole('heading', { name: /Add teaching context/i })).toBeTruthy();
+      expect(await screen.findByRole('heading', { name: /Material & guidance/i })).toBeTruthy();
     });
 
     it('replaces a resumed draft whose prompt lineage is stale before Create confirmation', async () => {
@@ -697,7 +697,9 @@ export function registerResumeBasicTests() {
       await screen.findByText('Stale draft');
       vi.mocked(api.createDraft).mockClear();
       vi.mocked(api.updateDraft).mockClear();
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
 
       await waitFor(() =>
         expect(api.createDraft).toHaveBeenCalledWith(
@@ -752,8 +754,10 @@ export function registerResumeBasicTests() {
       globalThis.history.replaceState(null, '', '/?sessionId=session-partial-profile');
       renderMinimalAssignment();
 
-      await screen.findByRole('heading', { name: /Add teaching context/i });
-      const continueButton = screen.getByRole('button', { name: /Confirm and continue/i });
+      await screen.findByRole('heading', { name: /Material & guidance/i });
+      const continueButton = screen.getByRole('button', {
+        name: /Confirm and continue|Continue to Create/i,
+      });
       await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(true));
       vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
 
@@ -867,7 +871,7 @@ export function registerResumeBasicTests() {
       globalThis.history.replaceState(null, '', '/?sessionId=session-confirmed-profile-refresh');
       renderMinimalAssignment();
 
-      await screen.findByRole('heading', { name: /Add teaching context/i });
+      await screen.findByRole('heading', { name: /Material & guidance/i });
       await waitFor(() =>
         expect(api.getProfileContent).toHaveBeenCalledWith(resumedSession.studentId),
       );
@@ -876,13 +880,16 @@ export function registerResumeBasicTests() {
       ).toBeNull();
       expect(screen.queryByText(/^First profile setup$/i)).toBeNull();
       expect(
-        (screen.getByRole('button', { name: /Confirm and continue/i }) as HTMLButtonElement)
-          .disabled,
+        (
+          screen.getByRole('button', {
+            name: /Confirm and continue|Continue to Create/i,
+          }) as HTMLButtonElement
+        ).disabled,
       ).toBe(false);
 
       vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
       vi.useFakeTimers();
-      fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      fireEvent.change(screen.getByRole('textbox', { name: /Lesson guidance/i }), {
         target: { value: 'Keep the examples practical and add a pronunciation contrast.' },
       });
       await act(async () => {
@@ -893,6 +900,7 @@ export function registerResumeBasicTests() {
         expect.objectContaining({
           patch: {
             teacherNotes: 'Keep the examples practical and add a pronunciation contrast.',
+            material: { mode: 'generated', sourceUrl: '', sourceText: '', sourceTextUrl: '' },
             selectedProfileRevisionId: confirmedProfile.profileRevisionId,
             selectedProfileRevisionHash: confirmedProfile.profileRevisionHash,
           },
@@ -1389,9 +1397,9 @@ export function registerResumeBasicTests() {
       expect(
         (screen.getByRole('button', { name: /Lesson source/i }) as HTMLButtonElement).disabled,
       ).toBe(true);
-      expect((screen.getByRole('button', { name: /Create/i }) as HTMLButtonElement).disabled).toBe(
-        true,
-      );
+      expect(
+        (screen.getByRole('button', { name: /^Step 4Create$/i }) as HTMLButtonElement).disabled,
+      ).toBe(true);
       expect(api.confirmStudentAssignmentSession).not.toHaveBeenCalled();
       expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
       expect(screen.getAllByText(/fetch failed/i).length).toBeGreaterThan(0);
@@ -1684,7 +1692,7 @@ export function registerResumePresetRaceTests() {
           expect(api.getJobStatus).toHaveBeenCalledWith('job-race-preset');
         });
         expect(
-          (screen.getByRole('button', { name: /Create/i }) as HTMLButtonElement).disabled,
+          (screen.getByRole('button', { name: /^Step 4Create$/i }) as HTMLButtonElement).disabled,
         ).toBe(true);
         expect(screen.queryByRole('button', { name: /Share assignment/i })).toBeNull();
         expect(api.materializeDraft).not.toHaveBeenCalled();

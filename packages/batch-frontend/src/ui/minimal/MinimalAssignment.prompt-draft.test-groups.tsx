@@ -79,11 +79,13 @@ export function registerPromptEditorTests() {
         ).toBe('step'),
       );
 
-      const notes = screen.getByRole('textbox', { name: /Teacher notes/i });
+      const notes = screen.getByRole('textbox', { name: /Lesson guidance/i });
       await user.clear(notes);
       await user.type(notes, 'Focus on articles.');
 
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
 
       await waitFor(() => {
         expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
@@ -112,12 +114,14 @@ export function registerPromptEditorTests() {
         ).toBe('step'),
       );
 
-      const notes = screen.getByRole('textbox', { name: /Teacher notes/i });
+      const notes = screen.getByRole('textbox', { name: /Lesson guidance/i });
       await user.type(notes, 'Focus on articles.');
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
 
       expect(
-        (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
+        (screen.getByRole('textbox', { name: /Lesson guidance/i }) as HTMLTextAreaElement).value,
       ).toBe('Focus on articles.');
       expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
       expect(api.confirmAssignmentSessionStep).toHaveBeenCalled();
@@ -139,10 +143,12 @@ export function registerPromptEditorTests() {
       );
 
       await user.type(
-        screen.getByRole('textbox', { name: /Teacher notes/i }),
+        screen.getByRole('textbox', { name: /Lesson guidance/i }),
         'Focus on articles.',
       );
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
 
       await waitFor(() => expect(api.updateAssignmentSessionRecovery).toHaveBeenCalled());
       expect(
@@ -156,13 +162,15 @@ export function registerPromptEditorTests() {
       const user = createTimerAwareMinimalUser();
       await renderPromptReadyAssignment({ user });
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
-      await screen.findByRole('textbox', { name: /Teacher notes/i });
+      await screen.findByRole('textbox', { name: /Lesson guidance/i });
       vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
       vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
-      fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      fireEvent.change(screen.getByRole('textbox', { name: /Lesson guidance/i }), {
         target: { value: 'Focus on articles.' },
       });
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
       await waitFor(() =>
         expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
           'session-1',
@@ -194,7 +202,7 @@ export function registerPromptEditorTests() {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = await renderResumedDraftSession(createTimerAwareMinimalUser());
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
-      const notes = await screen.findByRole('textbox', { name: /Teacher notes/i });
+      const notes = await screen.findByRole('textbox', { name: /Lesson guidance/i });
       fireEvent.change(notes, { target: { value: 'Committed note' } });
 
       let resolveConfirmation!: (
@@ -208,7 +216,9 @@ export function registerPromptEditorTests() {
           }),
       );
 
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
       await waitFor(() => expect(api.confirmAssignmentSessionStep).toHaveBeenCalledTimes(1));
       fireEvent.change(notes, { target: { value: 'Newer note' } });
 
@@ -228,7 +238,13 @@ export function registerPromptEditorTests() {
         });
         await Promise.resolve();
       });
-      await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
+      expect(
+        screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+      ).toBe('step');
+      expect((notes as HTMLTextAreaElement).value).toBe('Newer note');
+      expect(
+        screen.queryByRole('button', { name: /^(Generate assignment|Regenerate)$/i }),
+      ).toBeNull();
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1_500);
@@ -279,6 +295,7 @@ export function registerPromptEditorTests() {
             ...savedSession.confirmed,
             context: {
               teacherNotes: request.step === 'context' ? request.teacherNotes : null,
+              material: request.step === 'context' ? request.material : undefined,
               profileRevisionId: request.step === 'context' ? request.profileRevisionId : null,
               profileRevisionHash: request.step === 'context' ? request.profileRevisionHash : null,
             },
@@ -298,10 +315,12 @@ export function registerPromptEditorTests() {
         ).toBe('step'),
       );
       await user.type(
-        screen.getByRole('textbox', { name: /Teacher notes/i }),
+        screen.getByRole('textbox', { name: /Lesson guidance/i }),
         'Focus on articles.',
       );
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
 
       await waitFor(() =>
         expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
@@ -332,7 +351,7 @@ export function registerPromptEditorTests() {
         ).toBe('step'),
       );
       await user.type(
-        screen.getByRole('textbox', { name: /Teacher notes/i }),
+        screen.getByRole('textbox', { name: /Lesson guidance/i }),
         'Focus on articles.',
       );
       vi.mocked(api.createPromptPackage).mockClear();
@@ -355,7 +374,9 @@ export function registerPromptEditorTests() {
       vi.mocked(api.createDraft).mockClear();
       vi.mocked(api.updateDraft).mockClear();
 
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
       await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
       await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
@@ -408,9 +429,9 @@ export function registerPromptEditorTests() {
           .getAttribute('contenteditable'),
       ).toBe('false');
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
-      expect(screen.getByRole('button', { name: /Create/i }).getAttribute('aria-current')).toBe(
-        'step',
-      );
+      expect(
+        screen.getByRole('button', { name: /^Step 4Create$/i }).getAttribute('aria-current'),
+      ).toBe('step');
 
       const completeGeneration = resolveGeneration as unknown as (
         value: Awaited<ReturnType<typeof api.generateDraft>>,
@@ -622,8 +643,9 @@ export function registerPromptEditorTests() {
       expect(screen.queryByRole('textbox', { name: /Profile content/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /Save profile/i })).toBeNull();
       expect(screen.queryByText(/profiles\/alex\.md/i)).toBeNull();
-      expect(screen.getAllByText(/^Edit learner profile$/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/^Current$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^Edit in Learning$/i).length).toBeGreaterThan(0);
+      expect(screen.getByText(/Alex.*B1/)).toBeTruthy();
+      await user.click(screen.getByText('More learner context'));
       expect(screen.getAllByText(/^Goals$/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/^Communication contexts$/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/^Strengths$/i).length).toBeGreaterThan(0);
@@ -632,7 +654,7 @@ export function registerPromptEditorTests() {
       expect(screen.getAllByText(/Lead project updates clearly\./i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/Strong listening comprehension\./i).length).toBeGreaterThan(0);
       expect(
-        screen.getAllByRole('link', { name: /Edit learner profile/i })[0]?.getAttribute('href'),
+        screen.getAllByRole('link', { name: /Edit in Learning/i })[0]?.getAttribute('href'),
       ).toBe('/students/student-alex/learning');
     });
 
@@ -681,7 +703,9 @@ export function registerPromptEditorTests() {
       expect(screen.queryByText(/^not_found$/i)).toBeNull();
       expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
 
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
       await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
       await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 
@@ -783,11 +807,13 @@ export function registerPromptEditorTests() {
       await screen.findByDisplayValue('Student transcript text');
       await advanceSourceToTeachingContext(user);
 
-      const teacherNotesInput = screen.getByRole('textbox', { name: /Teacher notes/i });
+      const teacherNotesInput = screen.getByRole('textbox', { name: /Lesson guidance/i });
       fireEvent.change(teacherNotesInput, {
         target: { value: ' Focus on article usage and stress patterns. ' },
       });
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
       await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
       await user.click(screen.getByRole('button', { name: /^(Generate assignment|Regenerate)$/i }));
 

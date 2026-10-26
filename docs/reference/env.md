@@ -304,3 +304,17 @@ For full key-by-key lookup, ownership, and next-hop docs, use:
 API contract 6 and DB contract 1 retire `PROMPT_PROFILE_PATH`. Prompt bootstrap imports templates
 only; student onboarding and Learning own profile revisions. `PG_ENABLE_LEGACY_SCHEMA_PATCHES`
 cannot enable runtime DDL. Remove both obsolete settings when reconciling environment files.
+
+## Assignment material transcript retrieval (ESL-84)
+
+- `ESL_MATERIAL_TRANSCRIPT_API_KEY` is an optional backend-only TranscriptAPI.com Bearer key.
+  Never expose it through `VITE_*`. With no key, Step 3 retains manual source-text entry.
+- `ESL_MATERIAL_TRANSCRIPT_TIMEOUT_MS` defaults to 20000 and is bounded to 1000-60000 ms.
+  Retrieval is explicit, uses a fixed TranscriptAPI origin and a normalized YouTube video ID,
+  and sends no learner data. There is no automatic retry, paid fallback or automatic top-up.
+- The adapter rejects responses above 1 MB and source text above the shared assignment limit;
+  oversized material requires a pasted excerpt. An in-flight fetch for the same session/video
+  is shared within the API process. Existing saved source text is reused without refetching.
+- Configure the key in the API environment and verify a real captioned video separately before
+  claiming live provider evidence. Mock tests do not verify account credit or provider availability.
+  Protocol: [TranscriptAPI reference](https://transcriptapi.com/docs/api/).

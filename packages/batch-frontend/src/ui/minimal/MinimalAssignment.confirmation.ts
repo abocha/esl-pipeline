@@ -1,7 +1,17 @@
-import type { ArtifactWorkingContentDto } from '@esl-pipeline/contracts';
+import {
+  type ArtifactWorkingContentDto,
+  effectiveAssignmentMaterial,
+} from '@esl-pipeline/contracts';
 
 import type { AssignmentSession, ConfirmAssignmentSessionStepRequest } from '../../utils/api';
 import { isTranscriptOnlyCompleted } from './MinimalAssignment.no-homework';
+
+function sameMaterial(a: AssignmentSession['material'], b: AssignmentSession['material']): boolean {
+  return (
+    JSON.stringify(a ? effectiveAssignmentMaterial(a) : undefined) ===
+    JSON.stringify(b ? effectiveAssignmentMaterial(b) : undefined)
+  );
+}
 
 export type AssignmentWorkflowStep = 'student' | 'source' | 'context' | 'assignment' | 'review';
 
@@ -54,6 +64,7 @@ export function deriveAssignmentDirtyState(
               session.selectedProfileRevisionHash,
           )
         : normalizeText(session.teacherNotes) !== normalizeText(context.teacherNotes) ||
+          !sameMaterial(session.material, context.material) ||
           session.selectedProfileRevisionId !== context.profileRevisionId ||
           session.selectedProfileRevisionHash !== context.profileRevisionHash,
     create:
@@ -177,6 +188,7 @@ export function isAssignmentConfirmationApplied(
       return Boolean(
         context &&
           normalizeText(context.teacherNotes) === normalizeText(request.teacherNotes) &&
+          sameMaterial(context.material, request.material) &&
           context.profileRevisionId === request.profileRevisionId &&
           context.profileRevisionHash === request.profileRevisionHash,
       );

@@ -2,7 +2,11 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import type { AssignmentSessionDto, JobState } from '@esl-pipeline/contracts';
-import { AssignmentArtifactReferenceSchema } from '@esl-pipeline/contracts';
+import {
+  AssignmentArtifactReferenceSchema,
+  AssignmentMaterialSchema,
+  ConfirmedAssignmentMaterialSchema,
+} from '@esl-pipeline/contracts';
 
 import { AlphaInviteError, registerInvitedUser } from '../../application/alpha-invites.js';
 import { getAssignmentLearnerContext } from '../../application/assignment-learner-context.js';
@@ -14,6 +18,7 @@ import {
   updateAssignmentSessionRecoveryForUser,
 } from '../../application/assignment-sessions.js';
 import { confirmAssignmentSessionStep } from '../../application/confirm-assignment-session-step.js';
+import { fetchAssignmentMaterialTranscript } from '../../application/fetch-assignment-material-transcript.js';
 import {
   finishTranscriptAssignmentSession,
   startHomeworkAssignmentSession,
@@ -30,6 +35,7 @@ import {
 import { getReadinessMetricsWithDefaults } from '../../application/readiness-metrics.js';
 import { shareAssignmentSession } from '../../application/share-assignment-session.js';
 import { SubmitJobRequest, submitJob, ValidationError } from '../../application/submit-job.js';
+import { WorkspaceContextError } from '../../application/workspace-context.js';
 import type { BatchBackendConfig } from '../../config/env.js';
 import { postgresUuidSchema } from '../../domain/postgres-uuid.js';
 import {
@@ -52,6 +58,7 @@ import {
   updateUserLastLogin,
 } from '../../domain/user-repository.js';
 import { logger } from '../../infrastructure/logger.js';
+import { MaterialTranscriptError } from '../../infrastructure/material-transcript.js';
 import { getAuthenticatedUser, requireRole } from '../auth-middleware.js';
 import { invalidateCalendarAttemptCookie } from '../calendar-attempt-cookie.js';
 import { resolveRoutePath } from '../route-helpers.js';
@@ -865,6 +872,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       selectedGenerationProvider: z.enum(['openai']).nullable().optional(),
       selectedGenerationModel: z.string().nullable().optional(),
       teacherNotes: z.string().max(20_000).nullable().optional(),
+      material: AssignmentMaterialSchema.optional(),
       selectedProfileRevisionId: postgresUuidSchema.nullable().optional(),
       selectedProfileRevisionHash: z
         .string()
@@ -913,6 +921,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         step: z.literal('context'),
         expectedRevision: z.number().int().positive(),
         teacherNotes: z.string().max(20_000).nullable(),
+        material: ConfirmedAssignmentMaterialSchema.optional(),
         profileRevisionId: postgresUuidSchema.nullable(),
         profileRevisionHash: z
           .string()
@@ -1064,6 +1073,52 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
         return reply.code(500).send({
           error: 'internal_error',
+        });
+      }
+    },
+  );
+
+  app.post(
+    '/assignment-sessions/:id/material-transcript',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const user = getAuthenticatedUser(request);
+      if (!user) return reply.code(401).send({ error: 'unauthorized' });
+      try {
+        const params = z.object({ id: z.string().uuid() }).strict().parse(request.params);
+        const body = z
+          .object({ sourceUrl: z.string().max(2048) })
+          .strict()
+          .parse(request.body);
+        const result = await fetchAssignmentMaterialTranscript(
+          user.id,
+          params.id,
+          body.sourceUrl,
+          config,
+        );
+        if (!result) return reply.code(404).send({ error: 'not_found' });
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof z.ZodError)
+          return reply
+            .code(400)
+            .send({ error: 'validation_failed', message: 'Enter a supported YouTube video link.' });
+        if (error instanceof WorkspaceContextError)
+          return reply.code(404).send({ error: 'not_found' });
+        if (
+          error instanceof MaterialTranscriptError ||
+          error instanceof HistoricalAssignmentReadOnlyError
+        )
+          return reply
+            .code(error.statusCode)
+            .send({ error: error.code, code: error.code, message: error.message });
+        logger.error('Assignment material transcript retrieval failed', {
+          event: 'material_transcript_failed',
+          userId: user.id,
+        });
+        return reply.code(500).send({
+          error: 'internal_error',
+          message: 'We could not fetch a transcript. Paste source text below or get it manually.',
         });
       }
     },

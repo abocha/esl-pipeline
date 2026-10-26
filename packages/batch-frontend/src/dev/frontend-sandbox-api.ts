@@ -4,6 +4,8 @@ import { AxiosError } from 'axios';
 import {
   type AssignmentConfirmedSnapshot,
   type ConfirmAssignmentSessionStepRequest,
+  effectiveAssignmentMaterial,
+  emptyAssignmentMaterial,
   parseAssignmentV1,
   serializeAssignmentV1,
 } from '@esl-pipeline/contracts';
@@ -181,6 +183,9 @@ function assignmentSession(overrides: Record<string, unknown> = {}) {
     selectedGenerationProvider: 'openai',
     selectedGenerationModel: 'gpt-5.2',
     teacherNotes: null,
+
+    material: emptyAssignmentMaterial(),
+
     selectedProfileId: null,
     selectedProfileRevisionId: null,
     selectedProfileRevisionHash: null,
@@ -246,8 +251,11 @@ function profileContent() {
       interestsAndUsefulThemes: ['Travel', 'Films'],
       stableStrengths: ['Strong listening comprehension.'],
       persistentChallenges: ['Needs smoother transitions and article accuracy.'],
-      studyPreferences: [],
-      durableConstraints: [],
+
+      studyPreferences: [] as string[],
+
+      durableConstraints: [] as string[],
+
       teacherNotes: 'Keep examples grounded in real workplace situations.',
     },
     currentRevisionId: 'profile-revision-sandbox',
@@ -1084,6 +1092,20 @@ export function createFrontendSandboxApiAdapter(
   sandboxFirstProfileLessonMemoryConfirmed = false;
   sandboxFirstProfileLessonMemoryHealthPolls = 0;
   const businessSandbox = createBusinessSandbox();
+
+  // New students belong to this sandbox instance, never to a seeded learner.
+
+  const createdStudents = new Map<
+    string,
+    {
+      student: ReturnType<typeof studentProfile>;
+
+      profile: ReturnType<typeof profileContent> | null;
+    }
+  >();
+
+  const createdSessions = new Map<string, Record<string, unknown>>();
+
   let manualTranscriptText = '';
   let manualTranscriptStudentId = 'student-alex';
   let manualTranscriptDisplayName = 'Pasted lesson transcript';
@@ -1115,6 +1137,352 @@ export function createFrontendSandboxApiAdapter(
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const method = (config.method ?? 'get').toLowerCase();
     const path = normalizePath(config.url);
+
+    if (method === 'post' && path === '/students') {
+      const body = readRequestBody(config.data);
+
+      const id = `student-local-${createdStudents.size + 1}`;
+
+      const student = { ...studentProfile(), id, student: String(body.student).trim() };
+
+      const starter = readRequestBody(body.starterProfile);
+
+      const text = (key: string) => (typeof starter[key] === 'string' ? starter[key].trim() : '');
+
+      const items = (key: string) =>
+        text(key)
+          .split('\n')
+
+          .map((line) => line.trim())
+
+          .filter(Boolean);
+
+      const profile = Object.keys(starter).length
+        ? {
+            studentId: id,
+
+            currentRevisionId: `profile-${id}-v1`,
+
+            updatedAt: now,
+
+            content: Object.entries(starter)
+
+              .map(([key, value]) => `${key}: ${value}`)
+
+              .join('\n'),
+
+            structuredContent: {
+              schemaVersion: 'foundational_profile_v1',
+
+              overallLevel: text('overallLevel'),
+
+              primaryGoals: items('primaryGoals'),
+
+              communicationContexts: items('communicationContexts'),
+
+              interestsAndUsefulThemes: items('interestsAndUsefulThemes'),
+
+              stableStrengths: items('stableStrengths'),
+
+              persistentChallenges: items('persistentChallenges'),
+
+              studyPreferences: items('studyPreferences'),
+
+              durableConstraints: items('durableConstraints'),
+
+              teacherNotes: text('teacherNotes'),
+            },
+          }
+        : null;
+
+      createdStudents.set(id, { student, profile });
+
+      return responseFor(config, student);
+    }
+
+    const studentRoute = path.match(/^\/students\/([^/]+)(.*)$/);
+
+    const createdStudent = studentRoute && createdStudents.get(studentRoute[1]!);
+
+    if (createdStudent && method === 'get') {
+      const { student, profile } = createdStudent;
+
+      const revision = profile
+        ? {
+            ...profileRevisionSummary(),
+
+            id: profile.currentRevisionId,
+
+            studentId: student.id,
+
+            contentHash: `hash-${profile.currentRevisionId}`,
+
+            source: 'create',
+
+            versionNumber: 1,
+
+            versionLabel: 'v1',
+
+            content: profile.content,
+
+            structuredContent: profile.structuredContent,
+          }
+        : null;
+
+      const revisions = {
+        items: revision ? [revision] : [],
+
+        total: revision ? 1 : 0,
+
+        limit: 25,
+
+        offset: 0,
+
+        order: 'desc',
+      };
+
+      const memory = {
+        studentId: student.id,
+
+        latestReadyStudentMemorySnapshot: null,
+
+        recentReadyLessonMemory: [],
+
+        recentReadyHomeworkMemory: [],
+
+        unresolvedIssues: [],
+      };
+
+      if (studentRoute[2] === '') return responseFor(config, student);
+
+      if (studentRoute[2] === '/profile') return responseFor(config, profile);
+
+      if (studentRoute[2] === '/profile/revisions') return responseFor(config, revisions);
+
+      if (revision && studentRoute[2] === `/profile/revisions/${revision.id}`)
+        return responseFor(config, revision);
+
+      if (studentRoute[2] === '/surfaces/learning')
+        return responseFor(config, {
+          profile,
+
+          revisions,
+
+          memory,
+
+          memoryHealth: null,
+
+          candidates: emptyCandidateList(),
+        });
+
+      if (studentRoute[2] === '/memory') return responseFor(config, memory);
+    }
+
+    if (method === 'post' && path === '/assignment-sessions/confirm-student') {
+      const body = readRequestBody(config.data);
+
+      if (typeof body.studentId === 'string' && createdStudents.has(body.studentId)) {
+        const session = assignmentSession({
+          id: `session-local-${createdSessions.size + 1}`,
+
+          studentId: body.studentId,
+
+          recordingId: null,
+
+          transcriptId: null,
+
+          revision: 1,
+
+          confirmedStep: 'student',
+
+          confirmed: {
+            student: { studentId: body.studentId },
+
+            source: null,
+
+            context: null,
+
+            create: null,
+          },
+        });
+
+        createdSessions.set(session.id, structuredClone(session));
+
+        return responseFor(config, session);
+      }
+    }
+
+    const sessionRoute = path.match(/^\/assignment-sessions\/([^/]+)(.*)$/);
+
+    const createdSession = sessionRoute && createdSessions.get(sessionRoute[1]!);
+
+    if (sessionRoute && method === 'post' && sessionRoute[2] === '/material-transcript') {
+      const body = readRequestBody(config.data);
+
+      const sourceUrl = String(body.sourceUrl ?? '');
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      if (sourceUrl.includes('ESL84fail01')) {
+        throw new AxiosError(
+          'Transcript unavailable',
+          AxiosError.ERR_BAD_REQUEST,
+          config,
+          {},
+          {
+            ...responseFor(config, {
+              error: 'transcript_unavailable',
+              message: 'We couldn’t fetch a transcript. Paste it below, or get it manually.',
+            }),
+            status: 503,
+          },
+        );
+      }
+
+      return responseFor(config, {
+        sourceUrl,
+        sourceText:
+          'Start your update with the most important change. Explain what happened, why it matters, and what the team needs to do next. Keep the details relevant to your audience. Finish with a clear question or next step.',
+      });
+    }
+
+    if (createdSession) {
+      const suffix = sessionRoute[2];
+
+      const body = readRequestBody(config.data);
+
+      const confirmed = createdSession.confirmed as AssignmentConfirmedSnapshot;
+
+      if (method === 'get' && suffix === '')
+        return responseFor(config, structuredClone(createdSession));
+
+      if (method === 'patch' && suffix === '/recovery') {
+        Object.assign(createdSession, body.patch, {
+          revision: Number(createdSession.revision) + 1,
+        });
+
+        return responseFor(config, structuredClone(createdSession));
+      }
+
+      if (method === 'post' && suffix === '/source-attachment') {
+        Object.assign(createdSession, {
+          recordingId: body.recordingId,
+
+          transcriptId: body.transcriptId,
+
+          revision: Number(createdSession.revision) + 1,
+        });
+
+        return responseFor(config, {
+          outcome: 'source_attached',
+
+          session: structuredClone(createdSession),
+        });
+      }
+
+      if (method === 'post' && suffix === '/confirm') {
+        if (body.step === 'source') {
+          createdSession.confirmed = {
+            ...confirmed,
+
+            source: {
+              lessonId: body.lessonId,
+
+              recordingId: body.recordingId,
+
+              transcriptId: body.transcriptId,
+
+              transcriptWorkingVersion: body.transcriptWorkingVersion,
+
+              transcriptStorageUri: 'memory://sandbox/manual-transcript.txt',
+
+              transcriptHash: 'd'.repeat(64),
+            },
+
+            context: null,
+
+            create: null,
+          };
+        } else if (body.step === 'context') {
+          Object.assign(createdSession, {
+            teacherNotes: body.teacherNotes,
+
+            material: body.material,
+
+            selectedProfileRevisionId: body.profileRevisionId,
+
+            selectedProfileRevisionHash: body.profileRevisionHash,
+
+            confirmed: {
+              ...confirmed,
+
+              context: {
+                teacherNotes: body.teacherNotes,
+
+                material: body.material
+                  ? effectiveAssignmentMaterial(
+                      body.material as Parameters<typeof effectiveAssignmentMaterial>[0],
+                    )
+                  : undefined,
+
+                profileRevisionId: body.profileRevisionId,
+
+                profileRevisionHash: body.profileRevisionHash,
+              },
+            },
+          });
+        } else throw notFoundFor(config);
+
+        Object.assign(createdSession, {
+          confirmedStep: body.step,
+
+          revision: Number(createdSession.revision) + 1,
+        });
+
+        return responseFor(config, { session: structuredClone(createdSession), invalidated: [] });
+      }
+
+      if (method === 'get' && suffix === '/learner-context') {
+        const profile = createdStudents.get(String(createdSession.studentId))!.profile;
+
+        return responseFor(config, {
+          assignmentSessionId: createdSession.id,
+
+          studentId: createdSession.studentId,
+
+          source: {
+            recordingId: createdSession.recordingId,
+
+            transcriptId: createdSession.transcriptId,
+
+            transcriptHash: 'd'.repeat(64),
+          },
+
+          eligibility: 'unknown_provenance',
+
+          state: 'not_applicable',
+
+          operationState: null,
+
+          profile: profile
+            ? {
+                ...profile,
+
+                revisionId: profile.currentRevisionId,
+
+                revisionHash: `hash-${profile.currentRevisionId}`,
+              }
+            : null,
+
+          pinned: null,
+
+          confirmationAvailable: true,
+
+          warning: null,
+        });
+      }
+    }
+
     // Focused current editor entry; bypasses no application hooks or final preview gates.
     if (scenario === 'assignment-editor') {
       if (method === 'get' && path === '/assignment-sessions/session-editor')
@@ -1134,12 +1502,22 @@ export function createFrontendSandboxApiAdapter(
           editorSession = {
             ...editorSession,
             teacherNotes: body.teacherNotes,
+
+            material: body.material,
+
             selectedProfileRevisionId: body.profileRevisionId,
             selectedProfileRevisionHash: body.profileRevisionHash,
             confirmed: {
               ...confirmed,
               context: {
                 teacherNotes: body.teacherNotes,
+
+                material: body.material
+                  ? effectiveAssignmentMaterial(
+                      body.material as Parameters<typeof effectiveAssignmentMaterial>[0],
+                    )
+                  : undefined,
+
                 profileRevisionId: body.profileRevisionId,
                 profileRevisionHash: body.profileRevisionHash,
               },
@@ -1265,6 +1643,12 @@ export function createFrontendSandboxApiAdapter(
                 { id: 'student-alex', name: 'Alex' },
                 { id: 'student-bella', name: 'Bella' },
                 { id: sandboxFirstProfileStudentId, name: 'Cora Preview' },
+
+                ...Array.from(createdStudents.values(), ({ student }) => ({
+                  id: student.id,
+
+                  name: student.student,
+                })),
               ],
       });
     }
@@ -1281,7 +1665,14 @@ export function createFrontendSandboxApiAdapter(
       const items =
         params.get('status') === 'archived'
           ? []
-          : [studentProfile(), firstProfileStudentProfile()]
+          : [
+              studentProfile(),
+
+              firstProfileStudentProfile(),
+
+              ...Array.from(createdStudents.values(), ({ student }) => student),
+            ]
+
               .filter((student) => student.student.toLowerCase().includes(query))
               .sort((a, b) =>
                 order === 'asc'
@@ -1620,6 +2011,13 @@ export function createFrontendSandboxApiAdapter(
                   ...base.confirmed,
                   context: {
                     teacherNotes: typeof body.teacherNotes === 'string' ? body.teacherNotes : null,
+
+                    material: body.material
+                      ? effectiveAssignmentMaterial(
+                          body.material as Parameters<typeof effectiveAssignmentMaterial>[0],
+                        )
+                      : undefined,
+
                     profileRevisionId:
                       typeof body.profileRevisionId === 'string' ? body.profileRevisionId : null,
                     profileRevisionHash:

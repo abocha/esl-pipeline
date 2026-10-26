@@ -20,6 +20,7 @@
 | POST | `/assignment-sessions/:id/${command}` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/assignment-sessions/:id/confirm` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/assignment-sessions/:id/learner-context` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
+| POST | `/assignment-sessions/:id/material-transcript` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | PATCH | `/assignment-sessions/:id/recovery` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/assignment-sessions/:id/share` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/assignment-sessions/:id/source-attachment` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |

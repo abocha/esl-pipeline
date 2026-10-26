@@ -21,6 +21,7 @@ export interface AssignmentWorkflowProps {
   onStepRequest: (step: AssignmentStepId) => void;
   onBack: () => void;
   onContinue?: () => void;
+  onRetrySave?: () => void;
   continueLabel?: string;
   continueDisabled?: boolean;
   continueFeedback?: React.ReactNode;
@@ -38,7 +39,7 @@ const stepIcons = {
 } as const;
 
 const saveLabels = {
-  idle: 'Changes save as you work',
+  idle: 'Unsaved changes',
   saving: 'Saving…',
   saved: 'All changes saved',
   error: 'Saving needs attention',
@@ -59,6 +60,7 @@ export function AssignmentWorkflow({
   onStepRequest,
   onBack,
   onContinue,
+  onRetrySave,
   continueLabel,
   continueDisabled = false,
   continueFeedback,
@@ -106,6 +108,11 @@ export function AssignmentWorkflow({
           >
             {saveState === 'saved' ? <Check aria-hidden="true" /> : null}
             {saveLabels[saveState]}
+            {saveState === 'error' && onRetrySave ? (
+              <button type="button" className="minimal-secondary" onClick={onRetrySave}>
+                Retry save
+              </button>
+            ) : null}
           </span>
         </div>
       )}

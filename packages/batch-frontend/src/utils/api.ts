@@ -3346,6 +3346,25 @@ export async function fetchAssignmentLearnerContext(
   }
 }
 
+/** Explicit paid retrieval: do not use recovery retries for this request. */
+export async function fetchAssignmentMaterialTranscript(
+  sessionId: string,
+  sourceUrl: string,
+): Promise<{ sourceUrl: string; sourceText: string }> {
+  try {
+    const response = await apiClient.post<{ sourceUrl: string; sourceText: string }>(
+      buildApiProxyPath(
+        `/assignment-sessions/${encodeURIComponent(sessionId)}/material-transcript`,
+      ),
+      { sourceUrl },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function updateAssignmentSessionRecovery(
   sessionId: string,
   request: UpdateAssignmentSessionRecoveryRequest,

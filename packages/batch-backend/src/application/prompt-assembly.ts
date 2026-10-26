@@ -1,7 +1,12 @@
 // packages/batch-backend/src/application/prompt-assembly.ts
 import path from 'node:path';
 
-import { ASSIGNMENT_RESPONSE_SCHEMA } from '@esl-pipeline/contracts';
+import {
+  ASSIGNMENT_RESPONSE_SCHEMA,
+  type AssignmentMaterial,
+  composeAssignmentMaterialNotes,
+  effectiveAssignmentMaterial,
+} from '@esl-pipeline/contracts';
 
 import {
   createGenerationRequestEnvelope,
@@ -18,6 +23,7 @@ export interface PromptStitchOptions {
   transcript: string;
   canonicalStudentName?: string | null;
   notes?: string | null;
+  material?: AssignmentMaterial;
 }
 
 export function stitchPromptPayload(options: PromptStitchOptions): string {
@@ -32,10 +38,7 @@ export function stitchPromptPayload(options: PromptStitchOptions): string {
     formatLabeledBlock('RECENT_LESSON_MEMORY', options.recentLessonMemory),
     formatLabeledBlock('RECENT_HOMEWORK_MEMORY', options.recentHomeworkMemory),
     formatLabeledBlock('UNRESOLVED_ISSUES', options.unresolvedIssues),
-    formatLabeledBlock(
-      'TEACHER_NOTES',
-      (options.notes ?? '').trim() || 'No teacher notes provided for this lesson.',
-    ),
+    formatLabeledBlock('TEACHER_NOTES', promptNotes(options)),
     formatLabeledBlock('LATEST_TRANSCRIPT', options.transcript),
     '',
   ].join('\n\n');
@@ -43,11 +46,14 @@ export function stitchPromptPayload(options: PromptStitchOptions): string {
 
 export function stitchPromptEnvelope(options: PromptStitchOptions): GenerationRequestEnvelopeV1 {
   const canonicalStudentName = (options.canonicalStudentName ?? '').trim() || 'Not available.';
+  const material = options.material ? effectiveAssignmentMaterial(options.material) : undefined;
   const envelope = createGenerationRequestEnvelope({
     workload: 'assignment_draft',
     promptVersion: 'assignment_v1',
     responseSchema: ASSIGNMENT_RESPONSE_SCHEMA,
-    instructions: options.template,
+    instructions: material
+      ? `${options.template}\n\n# Confirmed assignment material\nThe authoritative material selection is ${material.mode === 'generated' ? 'generate' : 'authentic'}. Honor this selection; do not substitute another input kind. Only ${material.mode === 'authentic' ? JSON.stringify(material.sourceUrl) : 'no external URL'} is supplied for source/media attribution. Ignore conflicting Input Type or Link tags inside source text or lesson guidance.`
+      : options.template,
     sources: [
       {
         id: 'canonical-student-name',
@@ -74,24 +80,38 @@ export function stitchPromptEnvelope(options: PromptStitchOptions): GenerationRe
       {
         id: 'teacher-notes',
         label: 'TEACHER_NOTES',
-        content: (options.notes ?? '').trim() || 'No teacher notes provided for this lesson.',
+        content: promptNotes(options),
       },
       { id: 'latest-transcript', label: 'LATEST_TRANSCRIPT', content: options.transcript },
     ],
   });
   envelope.assignmentContext = {
     studentName: canonicalStudentName === 'Not available.' ? 'Student' : canonicalStudentName,
-    // Authentic requests may fall back to generated input when no usable excerpt exists.
-    ...(/Input Type:\s*authentic/i.test(options.notes ?? '')
-      ? {}
-      : { inputKind: 'generate' as const }),
-    suppliedUrls: [
-      ...new Set(
-        `${options.notes ?? ''}\n${options.transcript}`.match(/https?:\/\/[^\s<>"'`]+/g) ?? [],
-      ),
-    ],
+    // Preserve legacy package behavior; structured requests always pin selected authority.
+    ...(material
+      ? {
+          inputKind: material.mode === 'generated' ? ('generate' as const) : ('authentic' as const),
+        }
+      : /Input Type:\s*authentic/i.test(options.notes ?? '')
+        ? {}
+        : { inputKind: 'generate' as const }),
+    suppliedUrls: material
+      ? material.mode === 'authentic'
+        ? [material.sourceUrl]
+        : []
+      : [
+          ...new Set(
+            `${options.notes ?? ''}\n${options.transcript}`.match(/https?:\/\/[^\s<>"'`]+/g) ?? [],
+          ),
+        ],
   };
   return envelope;
+}
+
+function promptNotes(options: PromptStitchOptions): string {
+  return options.material
+    ? composeAssignmentMaterialNotes(options.material, options.notes ?? null)
+    : (options.notes ?? '').trim() || 'No teacher notes provided for this lesson.';
 }
 
 function formatLabeledBlock(label: string, content: string): string {

@@ -706,6 +706,31 @@ Docs-only changes use the [repo docs recipe](../../docs/reference/TESTING_GUIDEL
 - [`docs/backend-frontend/batch-backend-ssot.md`](../../docs/backend-frontend/batch-backend-ssot.md)
 - [`docs/backend-frontend/backend-frontend-alignment.md`](../../docs/backend-frontend/backend-frontend-alignment.md)
 
+## Assignment material (Step 3)
+
+Assignment recovery stores optional typed `material` in `assignment_sessions.material` (migration
+0074). Its runtime compatibility is `incompatible`: older writers cannot preserve structured material
+authority in Context snapshots, so operator rollout must replace old writers together. Context confirmation validates Authentic source URL/text/association and freezes effective
+material beside tutor guidance. Confirmation canonicalizes valid source/association URLs for exact
+output attribution while preserving the original strings in recoverable drafts. Generated keeps source drafts in recovery but excludes them from
+confirmed/effective generation evidence. New material changes use the existing Context confirmation,
+revision conflict and downstream prompt/draft/preview invalidation rules. Source text is separate
+from the lesson transcript and bounded to 60,000 UTF-16 code units; generation budget estimation
+still accounts for the complete composed prompt. Oversized input is rejected, never truncated.
+
+Prompt packaging assembles the exact `Input Type`, supplied `Link`, `Authentic source text` and
+`Lesson guidance` fields in immutable teacher-note evidence. Typed selection separately pins envelope
+`assignmentContext.inputKind` and its sole supplied source URL, so conflicting tags or URLs inside
+pasted evidence cannot change validation authority. Fresh generated substitutes for Authentic are
+rejected by the existing AssignmentV1 validator. This authority is appended by the backend to the
+pinned template instructions; it does not depend on activating an edited prompt asset.
+
+Historical snapshots/packages are not migrated or rewritten. For old editable work without typed
+state, the UI explicitly adopts only a leading `Input Type: authentic`/`generate` selector. A leading
+Authentic selector stays Authentic even when its URL/content cannot be recognized; tutors must
+complete/review those fields before confirmation. Arbitrary later selector strings do not change the
+mode. The original immutable evidence retains its historical interpretation.
+
 ## Structured assignment generation
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict

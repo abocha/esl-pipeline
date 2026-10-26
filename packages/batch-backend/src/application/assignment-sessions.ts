@@ -161,6 +161,7 @@ export function toAssignmentSessionDto(session: AssignmentSessionRecord): Assign
     selectedGenerationProvider: session.selectedGenerationProvider,
     selectedGenerationModel: session.selectedGenerationModel,
     teacherNotes: session.teacherNotes,
+    ...(session.material ? { material: session.material } : {}),
     selectedProfileId: session.selectedProfileId,
     selectedProfileRevisionId: session.selectedProfileRevisionId,
     selectedProfileRevisionHash: session.selectedProfileRevisionHash,

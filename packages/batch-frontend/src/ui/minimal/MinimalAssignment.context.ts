@@ -37,6 +37,8 @@ export interface LearnerProfilePreview {
   stableStrengths: string[];
   persistentChallenges: string[];
   studyPreferences: string[];
+  interests: string[];
+  durableConstraints: string[];
   goalsAndContexts: string[];
   strengthsAndChallenges: string[];
   teacherNoteSnippet: string | null;
@@ -44,10 +46,7 @@ export interface LearnerProfilePreview {
 }
 
 function compactPreviewList(values: readonly string[]): string[] {
-  return values
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .slice(0, 3);
+  return values.map((value) => value.trim()).filter(Boolean);
 }
 
 function compactPreviewGoals(profile: FoundationalProfile): string[] {
@@ -79,6 +78,8 @@ export function buildProfilePreview(
     stableStrengths: compactPreviewList(structured.stableStrengths),
     persistentChallenges: compactPreviewList(structured.persistentChallenges),
     studyPreferences: compactPreviewList(structured.studyPreferences),
+    interests: compactPreviewList(structured.interestsAndUsefulThemes),
+    durableConstraints: compactPreviewList(structured.durableConstraints),
     goalsAndContexts: compactPreviewGoals(structured),
     strengthsAndChallenges: compactPreviewStrengths(structured),
     teacherNoteSnippet: compactTeacherNote(structured.teacherNotes),

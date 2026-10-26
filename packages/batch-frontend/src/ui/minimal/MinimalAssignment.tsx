@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Accept } from 'react-dropzone';
 
+import {
+  type AssignmentMaterial,
+  effectiveAssignmentMaterial,
+  emptyAssignmentMaterial,
+} from '@esl-pipeline/contracts';
+
 import type {
   AssignmentLearnerContext,
   AssignmentSession,
@@ -53,6 +59,7 @@ import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
 import { ReviewShareStep } from '../assignments/steps/ReviewShareStep';
 import { TeachingContextStep } from '../assignments/steps/TeachingContextStep';
 import { useAssignmentNavigationGuard } from '../shell/assignment-navigation-guard';
+import { assignmentMaterialErrors } from './AssignmentMaterialForm.validation';
 import {
   AdvancedActionsStage,
   AssignmentDiagnostics,
@@ -345,6 +352,13 @@ export const MinimalAssignment: React.FC = () => {
   );
   const [scheduleSurfaceError, setScheduleSurfaceError] = useState<string | null>(null);
   const [teacherNotes, setTeacherNotes] = useState('');
+  const [material, setMaterial] = useState<AssignmentMaterial>(emptyAssignmentMaterial);
+  const [materialAttempted, setMaterialAttempted] = useState(false);
+  const [materialFetchEpoch, setMaterialFetchEpoch] = useState(0);
+  const materialRef = useRef(material);
+  materialRef.current = material;
+  const teacherNotesRef = useRef(teacherNotes);
+  teacherNotesRef.current = teacherNotes;
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [publicationParentJob, setPublicationParentJob] = useState<JobStatus | null>(null);
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
@@ -378,6 +392,7 @@ export const MinimalAssignment: React.FC = () => {
   const [assignmentShareError, setAssignmentShareError] = useState<string | null>(null);
   const [learnerContext, setLearnerContext] = useState<AssignmentLearnerContext | null>(null);
   const [learnerContextError, setLearnerContextError] = useState<string | null>(null);
+  const [learnerContextRetry, setLearnerContextRetry] = useState(0);
 
   const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
     useState<PronunciationMode | null>(null);
@@ -523,6 +538,8 @@ export const MinimalAssignment: React.FC = () => {
   const resetJobShell = useCallback(() => {
     clearAssignmentResumeQuery();
     setTeacherNotes('');
+    setMaterial(emptyAssignmentMaterial());
+    setMaterialAttempted(false);
     setJobStatusState(null);
     setRerunTargetPronunciationMode(null);
   }, []);
@@ -633,7 +650,9 @@ export const MinimalAssignment: React.FC = () => {
     defaultTtsModelByProvider: jobOptions?.defaultTtsModelByProvider,
     configuredTtsStrategies: (jobOptions?.ttsStrategies ?? []).filter(isUiPublishTtsStrategy),
     onDraftPronunciationModeDetected: setRerunTargetPronunciationMode,
-    onTeacherNotesResolved: setTeacherNotes,
+    onTeacherNotesResolved: (value) => {
+      if (!activeAssignmentSessionRef.current?.confirmed.context?.material) setTeacherNotes(value);
+    },
   });
   const {
     invalidatePendingGeneration: invalidateAuthoringGeneration,
@@ -650,6 +669,7 @@ export const MinimalAssignment: React.FC = () => {
     if (correctionModeRef.current) return;
     assignmentSessionUserEditedRef.current = true;
     assignmentSessionPersistenceSuppressedRef.current = false;
+    setAssignmentSaveState('idle');
   }, []);
   const createManualTranscript = source.createManualTranscript;
 
@@ -773,6 +793,8 @@ export const MinimalAssignment: React.FC = () => {
         uploadCacheNotice: snapshot.uploadCacheNotice,
       });
       setTeacherNotes(snapshot.teacherNotes);
+      setMaterial(snapshot.material ?? emptyAssignmentMaterial());
+      setMaterialAttempted(false);
       committedTeacherNotesRef.current = snapshot.teacherNotes.trim();
       setRerunTargetPronunciationMode(snapshot.rerunTargetPronunciationMode);
       applyContextHydration({
@@ -919,7 +941,8 @@ export const MinimalAssignment: React.FC = () => {
             setActiveAssignmentSession(latest);
             const overlapsRemote = Object.keys(cleaned).some(
               (key) =>
-                latest[key as keyof AssignmentSession] !== current[key as keyof AssignmentSession],
+                JSON.stringify(latest[key as keyof AssignmentSession]) !==
+                JSON.stringify(current[key as keyof AssignmentSession]),
             );
             if (overlapsRemote) throw error;
             saved = await updateAssignmentSessionRecovery(latest.id, {
@@ -1035,6 +1058,11 @@ export const MinimalAssignment: React.FC = () => {
     async (
       buildRequest: (session: AssignmentSession) => ConfirmAssignmentSessionStepRequest,
     ): Promise<AssignmentSession | null> => {
+      const mutationHydrationId = hydrationIdRef.current;
+      const mutationSessionId = activeAssignmentSessionRef.current?.id ?? null;
+      const isCurrentMutation = () =>
+        hydrationIdRef.current === mutationHydrationId &&
+        (activeAssignmentSessionRef.current?.id ?? null) === mutationSessionId;
       const mutationSequence = assignmentSessionMutationSequenceRef.current + 1;
       assignmentSessionMutationSequenceRef.current = mutationSequence;
       setAssignmentConfirmationError(null);
@@ -1042,6 +1070,7 @@ export const MinimalAssignment: React.FC = () => {
       const run = assignmentSessionMutationQueueRef.current
         .catch(() => null)
         .then(async (latest) => {
+          if (!isCurrentMutation()) return null;
           const current = latest ?? activeAssignmentSessionRef.current;
           if (!current) return null;
           const request = buildRequest(current);
@@ -1049,6 +1078,7 @@ export const MinimalAssignment: React.FC = () => {
           try {
             response = await confirmAssignmentSessionStep(current.id, request);
           } catch (error) {
+            if (!isCurrentMutation()) return null;
             if (error instanceof AssignmentSpeakerRoleMappingRequiredApiError) {
               await reconcileRecordingAndTranscript();
               throw error;
@@ -1065,6 +1095,7 @@ export const MinimalAssignment: React.FC = () => {
               error instanceof AssignmentSessionConflictApiError
                 ? error.latestSession
                 : await fetchAssignmentSession(current.id).catch(() => null);
+            if (!isCurrentMutation()) return null;
             if (!serverSession) {
               throw new AssignmentMutationAmbiguousError(
                 'The confirmation response was lost and its outcome could not be checked.',
@@ -1075,6 +1106,7 @@ export const MinimalAssignment: React.FC = () => {
             if (!isAssignmentConfirmationApplied(serverSession, request)) throw error;
             response = { session: serverSession, invalidated: [] };
           }
+          if (!isCurrentMutation()) return null;
           activeAssignmentSessionRef.current = response.session;
           setActiveAssignmentSession(response.session);
           if (response.invalidated.includes('prompt') || response.invalidated.includes('draft')) {
@@ -1087,12 +1119,14 @@ export const MinimalAssignment: React.FC = () => {
       assignmentSessionMutationQueueRef.current = run;
       try {
         const confirmed = await run;
+        if (!isCurrentMutation()) return null;
         if (confirmed && assignmentSessionMutationSequenceRef.current === mutationSequence) {
           setAssignmentConfirmationError(null);
           setAssignmentSaveState('saved');
         }
         return confirmed;
       } catch (error) {
+        if (!isCurrentMutation()) return null;
         console.warn('Unable to confirm assignment step', error);
         if (assignmentSessionMutationSequenceRef.current === mutationSequence) {
           const message = error instanceof Error ? error.message : 'Please try again.';
@@ -1239,6 +1273,7 @@ export const MinimalAssignment: React.FC = () => {
     if (!assignmentSessionWritesAllowed() && !repairingPartialProfileLineage) return;
     const recovery: UpdateAssignmentSessionRecoveryRequest['patch'] = {
       teacherNotes: teacherNotes.trim() || null,
+      material,
       ...(learnerContext?.confirmationAvailable ? durableProfileLineage : {}),
     };
     const recoveryKey = JSON.stringify(recovery);
@@ -1249,7 +1284,8 @@ export const MinimalAssignment: React.FC = () => {
     }
     if (
       Object.entries(recovery).every(
-        ([key, value]) => session[key as keyof AssignmentSession] === value,
+        ([key, value]) =>
+          JSON.stringify(session[key as keyof AssignmentSession]) === JSON.stringify(value),
       )
     ) {
       pendingContextRecoveryRef.current = null;
@@ -1278,6 +1314,7 @@ export const MinimalAssignment: React.FC = () => {
     flushPendingSessionRecovery,
     refreshDebouncedRecoveryPendingState,
     teacherNotes,
+    material,
   ]);
 
   const ensureAssignmentSourceAttached = useCallback(
@@ -1420,6 +1457,7 @@ export const MinimalAssignment: React.FC = () => {
       draftId: authoring.draft?.promptPackageId === promptPackageId ? authoring.draft.id : null,
       ...(linkedLessonId ? { lessonId: linkedLessonId } : {}),
       teacherNotes: teacherNotes.trim() || null,
+      material,
       selectedGenerationProvider: isGenerationProvider(authoring.selectedGenerationProvider)
         ? authoring.selectedGenerationProvider
         : null,
@@ -1434,6 +1472,7 @@ export const MinimalAssignment: React.FC = () => {
     saveAssignmentSessionProgress,
     linkedLessonId,
     teacherNotes,
+    material,
     assignmentSessionWritesAllowed,
   ]);
 
@@ -1766,12 +1805,15 @@ export const MinimalAssignment: React.FC = () => {
           activeAssignmentSession?.confirmed.source?.recordingId,
           activeAssignmentSession?.confirmed.source?.transcriptId,
         );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit retry restarts the authorized learner-context read.
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let refreshSequence = 0;
     let successfulRead = false;
     let preparing = false;
+    setLearnerContext(null);
+    setLearnerContextError(null);
     if (!learnerContextSourceKey || !activeAssignmentSession?.id) return;
     const sessionId = activeAssignmentSession.id;
     const refresh = async () => {
@@ -1811,7 +1853,7 @@ export const MinimalAssignment: React.FC = () => {
       if (timer) clearTimeout(timer);
       window.removeEventListener('focus', onFocus);
     };
-  }, [learnerContextSourceKey, activeAssignmentSession?.id]);
+  }, [learnerContextSourceKey, activeAssignmentSession?.id, learnerContextRetry]);
   useEffect(() => {
     setLearnerContext(null);
     setLearnerContextError(null);
@@ -2035,9 +2077,26 @@ export const MinimalAssignment: React.FC = () => {
   const authoringOperationBusy = authoring.promptLoading || authoring.generatingDraft;
   const commitTeacherNotes = useCallback(async (): Promise<TeacherNotesCommitResult> => {
     if (!learnerContext?.confirmationAvailable) return null;
+    const contextHydrationId = hydrationIdRef.current;
+    const contextSessionId = activeAssignmentSessionRef.current?.id;
+    const isCurrentContext = () =>
+      hydrationIdRef.current === contextHydrationId &&
+      activeAssignmentSessionRef.current?.id === contextSessionId;
+    setMaterialAttempted(true);
+    const materialErrors = assignmentMaterialErrors(material);
+    if (Object.keys(materialErrors).length) {
+      document
+        .getElementById(
+          materialErrors.sourceUrl ? 'assignment-material-url' : 'assignment-material-text',
+        )
+        ?.focus();
+      return null;
+    }
+    setMaterialFetchEpoch((value) => value + 1);
     const normalizedTeacherNotes = teacherNotes.trim();
     const committedRecovery = {
       teacherNotes: normalizedTeacherNotes || null,
+      material,
       ...durableProfileLineage,
     };
     const committedRecoveryKey = JSON.stringify(committedRecovery);
@@ -2051,17 +2110,23 @@ export const MinimalAssignment: React.FC = () => {
     refreshDebouncedRecoveryPendingState();
 
     const saved = await saveAssignmentSessionProgress(committedRecovery);
-    if (!saved) return null;
+    if (!saved || !isCurrentContext()) return null;
 
     const hadDownstream = Boolean(saved.confirmed.create || saved.promptPackageId || saved.draftId);
     const confirmed = await confirmAssignmentStep((session) => ({
       step: 'context',
       expectedRevision: session.revision,
       teacherNotes: normalizedTeacherNotes || null,
+      material,
       profileRevisionId: durableProfileLineage.selectedProfileRevisionId,
       profileRevisionHash: durableProfileLineage.selectedProfileRevisionHash,
     }));
-    if (!confirmed) return null;
+    if (!confirmed || !isCurrentContext()) return null;
+    if (
+      JSON.stringify(materialRef.current) !== JSON.stringify(material) ||
+      teacherNotesRef.current.trim() !== normalizedTeacherNotes
+    )
+      return null;
     const pendingAfterConfirmation = pendingContextRecoveryRef.current as {
       key: string;
       patch: UpdateAssignmentSessionRecoveryRequest['patch'];
@@ -2079,6 +2144,7 @@ export const MinimalAssignment: React.FC = () => {
     refreshDebouncedRecoveryPendingState,
     saveAssignmentSessionProgress,
     teacherNotes,
+    material,
   ]);
   const handleGenerateAssignment = useCallback(async () => {
     if (completedReferenceMode) return;
@@ -2106,6 +2172,8 @@ export const MinimalAssignment: React.FC = () => {
         (activeStep === 'context' &&
           (!confirmedContext ||
             teacherNotes.trim() !== (confirmedContext.teacherNotes ?? '').trim() ||
+            JSON.stringify(effectiveAssignmentMaterial(material)) !==
+              JSON.stringify(confirmedContext.material ?? emptyAssignmentMaterial()) ||
             context.selectedProfileRevisionId !== confirmedContext.profileRevisionId ||
             context.selectedProfileRevisionHash !== confirmedContext.profileRevisionHash)) ||
         (activeStep === 'assignment' && authoring.draftDirty && !correctionMode);
@@ -2132,6 +2200,7 @@ export const MinimalAssignment: React.FC = () => {
       focusedWorkflowSteps,
       source.transcriptDirty,
       teacherNotes,
+      material,
     ],
   );
   const handleFocusedBack = useCallback(() => {
@@ -2779,31 +2848,49 @@ export const MinimalAssignment: React.FC = () => {
       void (async () => {
         let preserveContextLineage = false;
         const current = activeAssignmentSessionRef.current;
+        const focusHydrationId = hydrationIdRef.current;
+        const focusSessionId = current?.id ?? null;
+        const isCurrentFocus = () =>
+          hydrationIdRef.current === focusHydrationId &&
+          (activeAssignmentSessionRef.current?.id ?? null) === focusSessionId;
         if (current) {
           try {
             const latest = await fetchAssignmentSession(current.id);
+            if (
+              !isCurrentFocus() ||
+              activeAssignmentSessionRef.current?.revision !== current.revision
+            )
+              return;
             if (latest.confirmedStep === 'share' && latest.shareJobId) {
               const historicalJobId = resumeSelectedResumeJobId.startsWith('session:')
                 ? latest.shareJobId
                 : resumeSelectedResumeJobId || latest.shareJobId;
               const linkedJob = await getJobStatusWithRecoveryRetry(historicalJobId);
+              if (
+                !isCurrentFocus() ||
+                activeAssignmentSessionRef.current?.revision !== current.revision
+              )
+                return;
               activeAssignmentSessionRef.current = latest;
               setActiveAssignmentSession(latest);
               setJobStatusState(linkedJob);
               applyJobStatusTransition(linkedJob);
             } else {
               const localContextKey = JSON.stringify({
-                teacherNotes: teacherNotes.trim() || null,
+                teacherNotes: teacherNotesRef.current.trim() || null,
+                material: materialRef.current,
                 selectedProfileRevisionId: context.selectedProfileRevisionId,
                 selectedProfileRevisionHash: context.selectedProfileRevisionHash,
               });
               const durableContextKey = JSON.stringify({
                 teacherNotes: current.teacherNotes,
+                material: current.material ?? emptyAssignmentMaterial(),
                 selectedProfileRevisionId: current.selectedProfileRevisionId,
                 selectedProfileRevisionHash: current.selectedProfileRevisionHash,
               });
               const remoteContextKey = JSON.stringify({
                 teacherNotes: latest.teacherNotes,
+                material: latest.material ?? emptyAssignmentMaterial(),
                 selectedProfileRevisionId: latest.selectedProfileRevisionId,
                 selectedProfileRevisionHash: latest.selectedProfileRevisionHash,
               });
@@ -2813,6 +2900,7 @@ export const MinimalAssignment: React.FC = () => {
               if (localContextIsClean && remoteContextChanged) {
                 assignmentContextConflictKeyRef.current = null;
                 setTeacherNotes(latest.teacherNotes ?? '');
+                setMaterial(latest.material ?? emptyAssignmentMaterial());
                 applyContextHydration({
                   selectedStudentId: source.selectedStudentId,
                   selectedProfileId: latest.studentId,
@@ -2849,7 +2937,9 @@ export const MinimalAssignment: React.FC = () => {
             // Preserve the visible aggregate and let the next mutation surface a conflict.
           }
         }
+        if (!isCurrentFocus()) return;
         await Promise.all([refreshTranscriptPreservingLocal(), refreshDraftPreservingLocal()]);
+        if (!isCurrentFocus()) return;
         if (!preserveContextLineage) {
           refreshSelectedProfile();
         }
@@ -2871,7 +2961,6 @@ export const MinimalAssignment: React.FC = () => {
     source.selectedStudentId,
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
-    teacherNotes,
   ]);
   const linkedLesson = useMemo(() => {
     if (!linkedLessonId || !scheduleSurface) return null;
@@ -2954,7 +3043,7 @@ export const MinimalAssignment: React.FC = () => {
       },
       {
         id: 'context',
-        title: 'Add teaching context',
+        title: 'Material & guidance',
         description: authoring.promptReady
           ? 'Learner context is ready for the assignment.'
           : transcriptReady
@@ -3029,7 +3118,22 @@ export const MinimalAssignment: React.FC = () => {
           [...focusedWorkflowSteps].reverse().find((step) => step.status !== 'locked')?.id ??
           'student'
         }
-        saveState={assignmentSaveState}
+        saveState={
+          assignmentSaveState === 'saved' && assignmentDebouncedRecoveryPending
+            ? 'idle'
+            : assignmentSaveState
+        }
+        onRetrySave={
+          activeStep === 'context'
+            ? () => {
+                void saveAssignmentSessionProgress({
+                  teacherNotes: teacherNotes.trim() || null,
+                  material,
+                  ...durableProfileLineage,
+                });
+              }
+            : undefined
+        }
         studentName={selectedStudentName}
         lessonOnly={noHomework}
         onStepRequest={handleFocusedStepRequest}
@@ -3044,11 +3148,17 @@ export const MinimalAssignment: React.FC = () => {
               continueLabel:
                 noHomework && activeStep === 'source'
                   ? 'Review transcript'
-                  : 'Confirm and continue',
+                  : activeStep === 'context'
+                    ? 'Continue to Create'
+                    : 'Confirm and continue',
               continueDisabled,
               continueFeedback:
                 activeStep === 'context' && !learnerContext?.confirmationAvailable ? (
-                  <span role="status">Preparing learner context…</span>
+                  <span role="status">
+                    {learnerContextError
+                      ? 'Learner context is unavailable.'
+                      : 'Preparing learner context\u2026'}
+                  </span>
                 ) : assignmentConfirmationError ? (
                   <span role="alert">{assignmentConfirmationError}</span>
                 ) : assignmentRecoveryError ? (
@@ -3286,6 +3396,16 @@ export const MinimalAssignment: React.FC = () => {
               profileRevisionError={learnerContextError}
               learnerContext={learnerContext}
               teacherNotes={teacherNotes}
+              material={material}
+              sessionId={activeAssignmentSession?.id ?? null}
+              active={activeStep === 'context'}
+              materialAttempted={materialAttempted}
+              materialFetchEpoch={materialFetchEpoch}
+              onRetryContext={() => setLearnerContextRetry((value) => value + 1)}
+              onMaterialChange={(value) => {
+                markAssignmentUserEdit();
+                setMaterial(value);
+              }}
               readOnly={completedReferenceMode}
               onTeacherNotesChange={(value) => {
                 markAssignmentUserEdit();

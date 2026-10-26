@@ -28,6 +28,30 @@ describe('config/env - core defaults', () => {
     vi.resetModules();
   });
 
+  it('keeps material retrieval optional and bounds its backend timeout', async () => {
+    await withEnv(
+      { ESL_MATERIAL_TRANSCRIPT_API_KEY: undefined, ESL_MATERIAL_TRANSCRIPT_TIMEOUT_MS: undefined },
+      async () => {
+        expect((await loadConfigFresh()).materialTranscript).toEqual({
+          apiKey: undefined,
+          timeoutMs: 20000,
+        });
+      },
+    );
+    await withEnv(
+      {
+        ESL_MATERIAL_TRANSCRIPT_API_KEY: ' test-only ',
+        ESL_MATERIAL_TRANSCRIPT_TIMEOUT_MS: '999999',
+      },
+      async () => {
+        expect((await loadConfigFresh()).materialTranscript).toEqual({
+          apiKey: 'test-only',
+          timeoutMs: 60000,
+        });
+      },
+    );
+  });
+
   it('provides sane defaults for queue and orchestrator when minimal env is set', async () => {
     await withEnv(
       {

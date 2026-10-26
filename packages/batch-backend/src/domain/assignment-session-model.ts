@@ -3,13 +3,17 @@ import { z } from 'zod';
 import type {
   AssignmentConfirmedSnapshot,
   AssignmentConfirmedStep,
+  AssignmentMaterial,
   GenerationProvider,
   PublishTarget,
   TranscriptCompletionEvent,
   TtsProviderId,
   TtsStrategy,
 } from '@esl-pipeline/contracts';
-import { AssignmentArtifactReferenceSchema } from '@esl-pipeline/contracts';
+import {
+  AssignmentArtifactReferenceSchema,
+  AssignmentMaterialSchema,
+} from '@esl-pipeline/contracts';
 
 import { postgresUuidSchema } from './postgres-uuid.js';
 
@@ -41,6 +45,7 @@ export const AssignmentConfirmedSnapshotSchema = z
     context: z
       .object({
         teacherNotes: z.string().nullable(),
+        material: AssignmentMaterialSchema.optional(),
         // Accepted only when reading immutable legacy snapshots.
         profileId: z.string().nullable().optional(),
         profileRevisionId: postgresUuidSchema.nullable(),
@@ -87,6 +92,7 @@ export interface AssignmentSessionRecord {
   selectedGenerationProvider: GenerationProvider | null;
   selectedGenerationModel: string | null;
   teacherNotes: string | null;
+  material?: AssignmentMaterial;
   selectedProfileId: string | null;
   selectedProfileRevisionId: string | null;
   selectedProfileRevisionHash: string | null;

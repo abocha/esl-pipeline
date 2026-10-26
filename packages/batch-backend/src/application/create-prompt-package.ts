@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { ASSIGNMENT_TEMPLATE_CONTRACT, ASSIGNMENT_TEMPLATE_ID } from '@esl-pipeline/contracts';
+import {
+  ASSIGNMENT_TEMPLATE_CONTRACT,
+  ASSIGNMENT_TEMPLATE_ID,
+  composeAssignmentMaterialNotes,
+} from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
@@ -282,8 +286,10 @@ export async function createPromptPackage(
   const recording =
     confirmedInputs?.recording ??
     (await recordings.getById(transcript.recordingId, params.workspaceId));
-  const lessonId = confirmedInputs?.source.lessonId ?? params.lessonId ?? null;
-  const notes = confirmedInputs?.context.teacherNotes ?? params.notes ?? null;
+  const lessonId = confirmedInputs ? confirmedInputs.source.lessonId : (params.lessonId ?? null);
+  const material = confirmedInputs?.context.material;
+  const guidance = confirmedInputs ? confirmedInputs.context.teacherNotes : (params.notes ?? null);
+  const notes = material ? composeAssignmentMaterialNotes(material, guidance) : guidance;
   if (!confirmedInputs && lessonId && recording?.studentId) {
     await validateLessonStudentPair(lessonId, recording.studentId);
   }
@@ -345,7 +351,8 @@ export async function createPromptPackage(
     unresolvedIssues: memoryContext.unresolvedIssuesBlock,
     transcript: transcriptText,
     canonicalStudentName,
-    notes,
+    notes: guidance,
+    material,
   });
   const requestEnvelope = stitchPromptEnvelope({
     template: artifacts.template.content,
@@ -356,7 +363,8 @@ export async function createPromptPackage(
     unresolvedIssues: memoryContext.unresolvedIssuesBlock,
     transcript: transcriptText,
     canonicalStudentName,
-    notes,
+    notes: guidance,
+    material,
   });
 
   const promptPackageId = randomUUID();

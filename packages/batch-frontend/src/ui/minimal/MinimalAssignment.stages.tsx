@@ -2,9 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
   BookOpenText,
-  CheckCircle2,
-  Database,
-  GraduationCap,
+  Heart,
   MessageSquareText,
   NotebookText,
   Star,
@@ -15,7 +13,11 @@ import React from 'react';
 import type { Accept } from 'react-dropzone';
 import { Link, useInRouterContext } from 'react-router-dom';
 
-import type { AssignmentValidationContext } from '@esl-pipeline/contracts';
+import {
+  type AssignmentMaterial,
+  type AssignmentValidationContext,
+  emptyAssignmentMaterial,
+} from '@esl-pipeline/contracts';
 
 import type {
   AssignmentValidationResponse,
@@ -31,6 +33,7 @@ import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import { ProductButton } from '../system/ProductButton';
 import { AssignmentEditor } from './AssignmentEditor';
+import { AssignmentMaterialForm } from './AssignmentMaterialForm';
 import type { RecentAssignmentItem } from './MinimalAssignment.entry-state';
 import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
@@ -161,6 +164,11 @@ interface ContextStageSectionProps {
     stableStrengths: string[];
     persistentChallenges: string[];
     studyPreferences: string[];
+
+    interests?: string[];
+
+    durableConstraints?: string[];
+
     goalsAndContexts: string[];
     strengthsAndChallenges: string[];
     teacherNoteSnippet: string | null;
@@ -168,6 +176,21 @@ interface ContextStageSectionProps {
   } | null;
   profileRevisionError: string | null;
   learnerContext: import('../../utils/api').AssignmentLearnerContext | null;
+
+  material?: AssignmentMaterial;
+
+  onMaterialChange?: (value: AssignmentMaterial) => void;
+
+  sessionId?: string | null;
+
+  active?: boolean;
+
+  materialAttempted?: boolean;
+
+  materialFetchEpoch?: number;
+
+  onRetryContext?: () => void;
+
   teacherNotes: string;
   onTeacherNotesChange: (value: string) => void;
   readOnly?: boolean;
@@ -182,30 +205,8 @@ interface ProfileDossierSection {
   badge?: string | null;
 }
 
-interface ProfileDossierProvenanceItem {
-  icon: LucideIcon;
-  label: string;
-}
-
-interface ProfileDossierProps {
-  title: string;
-  description: string;
-  statusLabel: string;
-  studentName: string | null;
-  studentDetail: string;
-  sections: ProfileDossierSection[];
-  provenance?: ProfileDossierProvenanceItem[];
-  actions?: React.ReactNode;
-}
-
 function compactDossierItems(items: readonly string[]): string[] {
   return items.map((item) => item.trim()).filter(Boolean);
-}
-
-function formatDossierDate(value: string | null): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
 }
 
 function getProfileInitials(name: string | null): string {
@@ -258,6 +259,21 @@ function buildCurrentProfileDossierSections(
       icon: BookOpenText,
       items: compactDossierItems(profilePreview.studyPreferences),
     },
+
+    {
+      id: 'interests',
+      title: 'Interests',
+      icon: Heart,
+      items: compactDossierItems(profilePreview.interests ?? []),
+    },
+
+    {
+      id: 'constraints',
+      title: 'Durable constraints',
+      icon: BookOpenText,
+      items: compactDossierItems(profilePreview.durableConstraints ?? []),
+    },
+
     {
       id: 'teacher-note',
       title: 'Teacher note',
@@ -265,97 +281,6 @@ function buildCurrentProfileDossierSections(
       body: profilePreview.teacherNoteSnippet,
     },
   ];
-}
-
-function ProfileDossier({
-  title,
-  description,
-  statusLabel,
-  studentName,
-  studentDetail,
-  sections,
-  provenance = [],
-  actions,
-}: ProfileDossierProps) {
-  const visibleSections = sections.filter(
-    (section) =>
-      section.badge ||
-      (section.body && section.body.trim()) ||
-      (section.items && section.items.length > 0),
-  );
-
-  return (
-    <div className="minimal-profile-dossier">
-      <div className="minimal-profile-dossier-header">
-        <div className="minimal-profile-dossier-student">
-          <span className="minimal-profile-dossier-avatar" aria-hidden="true">
-            {getProfileInitials(studentName)}
-          </span>
-          <div>
-            <h4>{studentName?.trim() || 'Learner profile'}</h4>
-            <p>{studentDetail}</p>
-          </div>
-        </div>
-        <div className="minimal-profile-dossier-state">
-          <div className="minimal-profile-dossier-title-row">
-            <span className="minimal-profile-dossier-title">
-              <GraduationCap aria-hidden="true" />
-              {title}
-            </span>
-            <span className="minimal-profile-dossier-pill">{statusLabel}</span>
-          </div>
-          <p>{description}</p>
-        </div>
-      </div>
-
-      <div className="minimal-profile-dossier-grid">
-        {visibleSections.map((section) => {
-          const SectionIcon = section.icon;
-          return (
-            <section className="minimal-profile-dossier-section" key={section.id}>
-              <div className="minimal-profile-dossier-section-heading">
-                <span className="minimal-profile-dossier-section-icon" aria-hidden="true">
-                  <SectionIcon />
-                </span>
-                <h5>{section.title}</h5>
-                {section.badge ? (
-                  <span className="minimal-profile-dossier-section-badge">{section.badge}</span>
-                ) : null}
-              </div>
-              {section.items && section.items.length > 0 ? (
-                <ul>
-                  {section.items.map((item) => (
-                    <li key={`${section.id}-${item}`}>{item}</li>
-                  ))}
-                </ul>
-              ) : section.body ? (
-                <p>{section.body}</p>
-              ) : null}
-            </section>
-          );
-        })}
-      </div>
-
-      {provenance.length > 0 || actions ? (
-        <div className="minimal-profile-dossier-footer">
-          {provenance.length > 0 ? (
-            <div className="minimal-profile-dossier-provenance">
-              {provenance.map((item) => {
-                const ItemIcon = item.icon;
-                return (
-                  <span key={item.label}>
-                    <ItemIcon aria-hidden="true" />
-                    {item.label}
-                  </span>
-                );
-              })}
-            </div>
-          ) : null}
-          {actions ? <div className="minimal-profile-dossier-actions">{actions}</div> : null}
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 interface AssignmentStageSectionProps {
@@ -1114,132 +1039,162 @@ export function ContextStageSection({
   headingRef,
   studentId,
   studentName,
-  selectedProfileId,
   profilePreview,
   profileRevisionError,
   learnerContext,
   teacherNotes,
   onTeacherNotesChange,
+
+  material = emptyAssignmentMaterial(),
+  onMaterialChange = () => {},
+  sessionId = null,
+
+  active = true,
+  materialAttempted = false,
+  materialFetchEpoch = 0,
+  onRetryContext,
   readOnly = false,
 }: ContextStageSectionProps) {
   const isInRouterContext = useInRouterContext();
-  const learnerContextSections = profilePreview
-    ? buildCurrentProfileDossierSections(profilePreview)
+
+  const sections = profilePreview
+    ? buildCurrentProfileDossierSections(profilePreview).filter(
+        (section) => section.items?.length || section.body,
+      )
     : [];
-  const renderLearningPageLink = (
-    label: string,
-    className = 'minimal-secondary minimal-link-button',
-    options: { draftRevisionId?: string | null } = {},
-  ) => {
-    if (!studentId) return null;
-    const search = new URLSearchParams();
-    if (options.draftRevisionId) {
-      search.set('draftRevisionId', options.draftRevisionId);
-    }
-    const query = search.toString();
-    const path = `/students/${encodeURIComponent(studentId)}/learning${query ? `?${query}` : ''}`;
-    return isInRouterContext ? (
-      <Link className={className} to={path}>
-        {label}
-      </Link>
-    ) : (
-      <a className={className} href={path}>
-        {label}
-      </a>
-    );
-  };
+
+  const additional = sections.filter((section) =>
+    [
+      'communication-contexts',
+      'strengths',
+      'study-preferences',
+      'constraints',
+      'teacher-note',
+    ].includes(section.id),
+  );
+
+  const renderSection = (section: ProfileDossierSection) => (
+    <section className="assignment-learner-section" key={section.id}>
+      <h4>
+        <section.icon aria-hidden="true" />
+        {section.title}
+      </h4>
+
+      {section.items?.length ? (
+        <ul>
+          {section.items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>{section.body}</p>
+      )}
+    </section>
+  );
+
+  const path = `/students/${encodeURIComponent(studentId)}/learning`;
 
   return (
-    <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
-      <div className="minimal-stage-layout">
-        <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-title">
-            <h3>Lesson guidance</h3>
+    <StageSection
+      stage={{ ...stage, title: 'Material & guidance', description: '' }}
+      sectionRef={sectionRef}
+      headingRef={headingRef}
+    >
+      <div className="assignment-context-layout">
+        <div className="assignment-context-main">
+          <AssignmentMaterialForm
+            material={material}
+            onChange={onMaterialChange}
+            sessionId={sessionId}
+            active={active}
+            attempted={materialAttempted}
+            fetchEpoch={materialFetchEpoch}
+            readOnly={readOnly}
+          />
+
+          <div className="assignment-guidance-label">
+            <label htmlFor="assignment-lesson-guidance">Lesson guidance</label>
+            <span className="minimal-muted">Optional · This assignment only</span>
           </div>
           <textarea
-            aria-label="Teacher notes"
+            id="assignment-lesson-guidance"
             value={teacherNotes}
             onChange={(event) => onTeacherNotesChange(event.target.value)}
             readOnly={readOnly}
-            rows={8}
-            placeholder="Add lesson-specific context, corrections, or priorities for this assignment..."
+            rows={3}
           />
         </div>
-        <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-header">
-            <div className="minimal-stage-panel-title">
-              <h3>Learner context</h3>
+
+        <aside className="assignment-learner-context" aria-label="Learner context">
+          <h3>Learner context</h3>
+
+          {profileRevisionError ? (
+            <div role="alert">
+              <p className="minimal-error">{profileRevisionError}</p>
+              {onRetryContext ? (
+                <button type="button" className="minimal-secondary" onClick={onRetryContext}>
+                  Retry learner context
+                </button>
+              ) : null}
             </div>
-          </div>
-          {profileRevisionError ? <p className="minimal-error">{profileRevisionError}</p> : null}
-          {selectedProfileId && profilePreview ? (
+          ) : !learnerContext ? (
+            <p role="status" className="minimal-muted">
+              Loading learner context…
+            </p>
+          ) : profilePreview ? (
             <>
-              <ProfileDossier
-                title="Learner context"
-                description="From the student's Learning page."
-                statusLabel="Current"
-                studentName={studentName}
-                studentDetail="Structured learner profile"
-                sections={learnerContextSections.filter((section) =>
-                  ['level', 'goals', 'challenges'].includes(section.id),
-                )}
-                provenance={[
-                  { icon: Database, label: 'Student Learning page' },
-                  ...(formatDossierDate(profilePreview.updatedAt)
-                    ? [
-                        {
-                          icon: CheckCircle2,
-                          label: `Updated ${formatDossierDate(profilePreview.updatedAt)}`,
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-              <details className="minimal-details">
-                <summary>More learner context</summary>
-                <ProfileDossier
-                  title="Full learner context"
-                  description="Use this only when the lesson needs more detail."
-                  statusLabel="Current"
-                  studentName={studentName}
-                  studentDetail="Structured learner profile"
-                  sections={learnerContextSections}
-                />
-              </details>
+              <div className="assignment-learner-identity">
+                <span className="minimal-profile-dossier-avatar" aria-hidden="true">
+                  {getProfileInitials(studentName)}
+                </span>
+                <strong>
+                  {studentName || 'Learner'}
+                  {profilePreview.overallLevel ? ` · ${profilePreview.overallLevel}` : ''}
+                </strong>
+              </div>
+
+              {sections
+                .filter((section) => ['goals', 'challenges', 'interests'].includes(section.id))
+                .map(renderSection)}
+
+              {additional.length ? (
+                <details className="minimal-details">
+                  <summary>More learner context</summary>
+                  {additional.map(renderSection)}
+                </details>
+              ) : null}
             </>
-          ) : selectedProfileId ? (
-            <p className="minimal-muted">
-              This student's Learning page context has not been structured yet. Add lesson guidance
-              here or update the Learning page before creating the assignment.
-            </p>
+          ) : learnerContext.state !== 'preparing' ? (
+            <p className="minimal-muted">No structured Learning page context is available yet.</p>
           ) : null}
-          {!selectedProfileId ? (
-            <p className="minimal-muted">
-              No structured Learning page context is available yet. You can still create the
-              assignment, add lesson guidance here, or update the student's Learning page later.
-            </p>
-          ) : null}
+
           {learnerContext?.state === 'preparing' ? (
             <p className="minimal-muted" role="status">
-              Preparing learner context from this lesson...
+              Preparing learner context from this lesson…
             </p>
           ) : null}
+
           {learnerContext?.state === 'completed' ? (
             <p className="minimal-success" role="status">
-              Learner context updated from this lesson. Review it below, or continue if everything
-              looks right.
+              Learner context updated from this lesson.
             </p>
           ) : null}
+
           {learnerContext?.state === 'failed' ? (
             <p className="minimal-error" role="status">
               Learner context could not be prepared from this lesson. You can continue with the
               available context.
             </p>
           ) : null}
-          <div className="minimal-inline">
-            {studentId ? renderLearningPageLink('Edit learner profile') : null}
-          </div>
-        </div>
+
+          {studentId ? (
+            isInRouterContext ? (
+              <Link to={path}>Edit in Learning</Link>
+            ) : (
+              <a href={path}>Edit in Learning</a>
+            )
+          ) : null}
+        </aside>
       </div>
     </StageSection>
   );

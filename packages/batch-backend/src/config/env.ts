@@ -37,6 +37,7 @@ export interface GoogleCalendarConfig {
 }
 
 export interface BatchBackendConfig {
+  materialTranscript?: { apiKey?: string; timeoutMs: number };
   googleCalendar?: GoogleCalendarConfig;
   nodeEnv: NodeEnv;
   httpPort: number;
@@ -833,6 +834,13 @@ export function loadConfig(): BatchBackendConfig {
   }
 
   return {
+    materialTranscript: {
+      apiKey: readString('ESL_MATERIAL_TRANSCRIPT_API_KEY')?.trim() || undefined,
+      timeoutMs: Math.min(
+        60_000,
+        Math.max(1_000, readInt('ESL_MATERIAL_TRANSCRIPT_TIMEOUT_MS', 20_000)),
+      ),
+    },
     nodeEnv,
     httpPort,
     pg: {
