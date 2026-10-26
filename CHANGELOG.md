@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.4.1] - 2026-10-26
+
+### Changed
+
+- Automated release from PR #455: fix(mcp): allow OAuth callback redirects and recover stale interactions (https://github.com/abocha/esl-pipeline/pull/455)
+
 ## [22.4.0] - 2026-10-26
 
 ### Changed
