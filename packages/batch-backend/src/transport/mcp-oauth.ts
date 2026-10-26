@@ -194,8 +194,29 @@ function escapeHtml(value: string): string {
   );
 }
 
+function sendInteractionRecovery(reply: FastifyReply): FastifyReply {
+  return reply
+    .code(400)
+    .type('text/html; charset=utf-8')
+    .header('cache-control', 'no-store')
+    .header('referrer-policy', 'no-referrer')
+    .header(
+      'content-security-policy',
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
+    )
+    .send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Restart ChatGPT connection</title>
+      <style>body{font:16px system-ui;max-width:34rem;margin:8vh auto;padding:1rem;line-height:1.5}</style>
+      <h1>Start a new connection</h1>
+      <p>This authorization attempt has expired, already completed, or belongs to another browser session.</p>
+      <p>Return to ChatGPT and start Connect again. Complete the new authorization in the same browser profile; do not reuse this link.</p></html>`);
+}
+
 function consentCsrf(
-  key: string, uid: string, refreshToken: string, userId: string, offeredWorkspaceIds: string,
+  key: string,
+  uid: string,
+  refreshToken: string,
+  userId: string,
+  offeredWorkspaceIds: string,
 ): string {
   return createHmac('sha256', key)
     .update(`${uid}\0${refreshToken}\0${userId}\0${offeredWorkspaceIds}`)
@@ -503,26 +524,100 @@ export function registerMcpOAuthRoutes(
     return id && refreshToken ? { id, refreshToken } : null;
   };
 
-  app.get<{ Params: { uid: string } }>('/oauth/interaction/:uid', async (request, reply) => {
+  const interactionOptions = {
+    errorHandler(error: Error, request: FastifyRequest, reply: FastifyReply) {
+      if (!(error instanceof errors.SessionNotFound)) throw error;
+      logger.warn('MCP OAuth interaction unavailable', {
+        event: 'mcp_oauth_interaction_unavailable',
+        requestId: request.id,
+        method: request.method,
+      });
+      return sendInteractionRecovery(reply);
+    },
+  };
+
+  app.get<{ Params: { uid: string } }>(
+    '/oauth/interaction/:uid',
+    interactionOptions,
+    async (request, reply) => {
+      reply.header('cache-control', 'no-store');
+      const details = await provider.interactionDetails(request.raw, reply.raw);
+      if (details.uid !== request.params.uid) return sendInteractionRecovery(reply);
+      const user = await requirePipelineUser(request);
+      if (!user) {
+        const continuePath = `/api/oauth/interaction/${encodeURIComponent(details.uid)}`;
+        return reply.redirect(`/?oauth_continue=${encodeURIComponent(continuePath)}`);
+      }
+      if (details.prompt.name === 'login') {
+        const returnTo = await provider.interactionResult(
+          request.raw,
+          reply.raw,
+          { login: { accountId: user.id } },
+          { mergeWithLastSubmission: false },
+        );
+        return reply.code(303).redirect(publicResumePath(returnTo, config.issuer));
+      }
+      if (
+        details.prompt.name !== 'consent' ||
+        details.session?.accountId !== user.id ||
+        details.params.resource !== config.resource ||
+        details.params.scope !== MCP_READ_SCOPE ||
+        typeof details.params.client_id !== 'string' ||
+        typeof details.params.redirect_uri !== 'string'
+      ) {
+        return reply.code(403).send({ error: 'authorization_denied' });
+      }
+      const workspaces = await listOAuthWorkspaces(user.id);
+      if (workspaces.length === 0) return reply.code(403).send({ error: 'workspace_required' });
+      const offeredWorkspaceIds = workspaces.map((workspace) => workspace.id).join(',');
+      const csrf = consentCsrf(
+        config.cookieKeys[0]!,
+        details.uid,
+        user.refreshToken,
+        user.id,
+        offeredWorkspaceIds,
+      );
+      // Chromium applies form-action to the final redirect after this form's POST.
+      // The provider already validated this interaction's redirect URI. Serialize
+      // only its origin so paths/queries cannot inject CSP directives.
+      const callbackOrigin = new URL(details.params.redirect_uri).origin;
+      const choices =
+        workspaces.length === 1
+          ? `<p>Workspace: <strong>${escapeHtml(workspaces[0]!.name)}</strong></p>
+           <input type="hidden" name="workspaceId" value="${workspaces[0]!.id}">`
+          : `<label for="workspace">Workspace</label><select id="workspace" name="workspaceId" required>
+           <option value="">Choose a workspace</option>${workspaces
+             .map((w) => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.name)}</option>`)
+             .join('')}</select>`;
+      return reply
+        .type('text/html; charset=utf-8')
+        .header('referrer-policy', 'no-referrer')
+        .header(
+          'content-security-policy',
+          `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${callbackOrigin}; base-uri 'none'; frame-ancestors 'none'`,
+        )
+        .send(
+          `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Authorize ChatGPT</title>
+       <style>body{font:16px system-ui;max-width:34rem;margin:8vh auto;padding:1rem;line-height:1.5}select,button{font:inherit;padding:.5rem;margin:.4rem 0}button{cursor:pointer}</style>
+       <h1>Connect ChatGPT</h1><p>ChatGPT will receive read access to teaching context in one ESL Pipeline workspace. It cannot change learner state.</p>
+       <form method="post" action="/api/oauth/interaction/${encodeURIComponent(details.uid)}/confirm">
+       <input type="hidden" name="csrf" value="${csrf}">
+       <input type="hidden" name="offeredWorkspaceIds" value="${offeredWorkspaceIds}">
+       ${choices}<p><button type="submit">Authorize read access</button></p></form></html>`,
+        );
+    },
+  );
+
+  app.post<{
+    Params: { uid: string };
+    Body: { csrf?: string; workspaceId?: string; offeredWorkspaceIds?: string };
+  }>('/oauth/interaction/:uid/confirm', interactionOptions, async (request, reply) => {
     reply.header('cache-control', 'no-store');
     const details = await provider.interactionDetails(request.raw, reply.raw);
-    if (details.uid !== request.params.uid)
-      return reply.code(400).send({ error: 'invalid_interaction' });
+    if (details.uid !== request.params.uid) return sendInteractionRecovery(reply);
     const user = await requirePipelineUser(request);
-    if (!user) {
-      const continuePath = `/api/oauth/interaction/${encodeURIComponent(details.uid)}`;
-      return reply.redirect(`/?oauth_continue=${encodeURIComponent(continuePath)}`);
-    }
-    if (details.prompt.name === 'login') {
-      const returnTo = await provider.interactionResult(
-        request.raw,
-        reply.raw,
-        { login: { accountId: user.id } },
-        { mergeWithLastSubmission: false },
-      );
-      return reply.code(303).redirect(publicResumePath(returnTo, config.issuer));
-    }
     if (
+      !user ||
       details.prompt.name !== 'consent' ||
       details.session?.accountId !== user.id ||
       details.params.resource !== config.resource ||
@@ -531,103 +626,58 @@ export function registerMcpOAuthRoutes(
     ) {
       return reply.code(403).send({ error: 'authorization_denied' });
     }
-    const workspaces = await listOAuthWorkspaces(user.id);
-    if (workspaces.length === 0) return reply.code(403).send({ error: 'workspace_required' });
-    const offeredWorkspaceIds = workspaces.map((workspace) => workspace.id).join(',');
-    const csrf = consentCsrf(
-      config.cookieKeys[0]!, details.uid, user.refreshToken, user.id, offeredWorkspaceIds,
+    const offeredWorkspaceIds = request.body?.offeredWorkspaceIds;
+    const expected = consentCsrf(
+      config.cookieKeys[0]!,
+      details.uid,
+      user.refreshToken,
+      user.id,
+      offeredWorkspaceIds ?? '',
     );
-    const choices =
-      workspaces.length === 1
-        ? `<p>Workspace: <strong>${escapeHtml(workspaces[0]!.name)}</strong></p>
-           <input type="hidden" name="workspaceId" value="${workspaces[0]!.id}">`
-        : `<label for="workspace">Workspace</label><select id="workspace" name="workspaceId" required>
-           <option value="">Choose a workspace</option>${workspaces
-             .map((w) => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.name)}</option>`)
-             .join('')}</select>`;
-    return reply
-      .type('text/html; charset=utf-8')
-      .header(
-        'content-security-policy',
-        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'",
-      )
-      .send(
-        `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Authorize ChatGPT</title>
-       <style>body{font:16px system-ui;max-width:34rem;margin:8vh auto;padding:1rem;line-height:1.5}select,button{font:inherit;padding:.5rem;margin:.4rem 0}button{cursor:pointer}</style>
-       <h1>Connect ChatGPT</h1><p>ChatGPT will receive read access to teaching context in one ESL Pipeline workspace. It cannot change learner state.</p>
-       <form method="post" action="/api/oauth/interaction/${encodeURIComponent(details.uid)}/confirm">
-       <input type="hidden" name="csrf" value="${csrf}">
-       <input type="hidden" name="offeredWorkspaceIds" value="${offeredWorkspaceIds}">
-       ${choices}<p><button type="submit">Authorize read access</button></p></form></html>`,
-      );
+    if (!request.body?.csrf || !offeredWorkspaceIds || !csrfMatches(request.body.csrf, expected)) {
+      return reply.code(403).send({ error: 'invalid_csrf' });
+    }
+    const workspaces = await listOAuthWorkspaces(user.id);
+    const selected = offeredWorkspaceIds.split(',').includes(request.body.workspaceId ?? '')
+      ? workspaces.find((workspace) => workspace.id === request.body.workspaceId)
+      : undefined;
+    if (!selected) return reply.code(403).send({ error: 'workspace_required' });
+    const grant = new provider.Grant({ accountId: user.id, clientId: details.params.client_id });
+    // oidc-provider tracks advertised static scopes separately from resource
+    // scopes. Cover its static-scope consent check without enabling OIDC identity.
+    grant.addOIDCScope(MCP_READ_SCOPE);
+    grant.addResourceScope(config.resource, MCP_READ_SCOPE);
+    const grantId = await grant.save();
+    const bound = await bindOAuthGrant(
+      {
+        id: grantId,
+        userId: user.id,
+        workspaceId: selected.id,
+        clientId: details.params.client_id,
+        resource: config.resource,
+        scope: MCP_READ_SCOPE,
+      },
+      GRANT_TTL_SECONDS,
+    );
+    if (!bound) {
+      await grant.destroy();
+      return reply.code(403).send({ error: 'workspace_required' });
+    }
+    const returnTo = await provider.interactionResult(
+      request.raw,
+      reply.raw,
+      { consent: { grantId } },
+      { mergeWithLastSubmission: true },
+    );
+    const resumePath = publicResumePath(returnTo, config.issuer);
+    logger.info('MCP OAuth grant authorized', {
+      event: 'mcp_oauth_authorized',
+      requestId: request.id,
+      clientClass: oauthClientClass(details.params.client_id),
+      grantRef: oauthGrantReference(grantId, config.cookieKeys[0]!),
+    });
+    return reply.code(303).redirect(resumePath);
   });
-
-  app.post<{ Params: { uid: string }; Body: { csrf?: string; workspaceId?: string; offeredWorkspaceIds?: string } }>(
-    '/oauth/interaction/:uid/confirm',
-    async (request, reply) => {
-      reply.header('cache-control', 'no-store');
-      const details = await provider.interactionDetails(request.raw, reply.raw);
-      const user = await requirePipelineUser(request);
-      if (
-        !user ||
-        details.uid !== request.params.uid ||
-        details.prompt.name !== 'consent' ||
-        details.session?.accountId !== user.id ||
-        details.params.resource !== config.resource ||
-        details.params.scope !== MCP_READ_SCOPE ||
-        typeof details.params.client_id !== 'string'
-      ) {
-        return reply.code(403).send({ error: 'authorization_denied' });
-      }
-      const offeredWorkspaceIds = request.body?.offeredWorkspaceIds;
-      const expected = consentCsrf(
-        config.cookieKeys[0]!, details.uid, user.refreshToken, user.id,
-        offeredWorkspaceIds ?? '',
-      );
-      if (!request.body?.csrf || !offeredWorkspaceIds ||
-          !csrfMatches(request.body.csrf, expected)) {
-        return reply.code(403).send({ error: 'invalid_csrf' });
-      }
-      const workspaces = await listOAuthWorkspaces(user.id);
-      const selected = offeredWorkspaceIds.split(',').includes(request.body.workspaceId ?? '')
-        ? workspaces.find((workspace) => workspace.id === request.body.workspaceId)
-        : undefined;
-      if (!selected) return reply.code(403).send({ error: 'workspace_required' });
-      const grant = new provider.Grant({ accountId: user.id, clientId: details.params.client_id });
-      // oidc-provider tracks advertised static scopes separately from resource
-      // scopes. Cover its static-scope consent check without enabling OIDC identity.
-      grant.addOIDCScope(MCP_READ_SCOPE);
-      grant.addResourceScope(config.resource, MCP_READ_SCOPE);
-      const grantId = await grant.save();
-      const bound = await bindOAuthGrant(
-        {
-          id: grantId,
-          userId: user.id,
-          workspaceId: selected.id,
-          clientId: details.params.client_id,
-          resource: config.resource,
-          scope: MCP_READ_SCOPE,
-        },
-        GRANT_TTL_SECONDS,
-      );
-      if (!bound) {
-        await grant.destroy();
-        return reply.code(403).send({ error: 'workspace_required' });
-      }
-      logger.info('MCP OAuth grant authorized', {
-        event: 'mcp_oauth_authorized',
-        clientClass: oauthClientClass(details.params.client_id),
-        grantRef: oauthGrantReference(grantId, config.cookieKeys[0]!),
-      });
-      const returnTo = await provider.interactionResult(
-        request.raw,
-        reply.raw,
-        { consent: { grantId } },
-        { mergeWithLastSubmission: true },
-      );
-      return reply.code(303).redirect(publicResumePath(returnTo, config.issuer));
-    },
-  );
 
   app.post<{ Params: { grantId: string } }>(
     '/oauth/grants/:grantId/revoke',
