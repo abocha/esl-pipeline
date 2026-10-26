@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.4.0] - 2026-10-26
+
+### Changed
+
+- Automated release from PR #453: feat(assignments): complete Step 3 material and transcript workflow (https://github.com/abocha/esl-pipeline/pull/453)
+
 ## [22.3.1] - 2026-10-25
 
 ### Changed
