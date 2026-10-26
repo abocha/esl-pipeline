@@ -3901,3 +3901,122 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
   });
 });
+
+describe('typed assignment material recovery and confirmation', () => {
+  beforeEach(resetTables);
+  it('retains recoverable source across modes and conflicts and invalidates changed confirmed material', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
+      mappingWorkingVersion: 1,
+      mappingContentHash: 'a'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const source = await confirmMixedSource(repository, fixture);
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE profile_initial_enrichment_operations SET state='failed', failure_code='controlled_failure' WHERE assignment_session_id=$1`,
+        [fixture.sessionId],
+      ),
+    );
+    const material = {
+      mode: 'authentic' as const,
+      sourceUrl: '  HTTPS://EXAMPLE.COM/garden  ',
+      sourceTextUrl: '  https://example.com/garden  ',
+      sourceText: 'People opened a shared garden.',
+    };
+    const recovered = await repository.updateAssignmentSessionRecovery({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      expectedRevision: source.session.revision,
+      patch: { material, teacherNotes: 'Practice describing changes.' },
+    });
+    const loaded = await repository.getAssignmentSessionByIdForUser(
+      fixture.sessionId,
+      fixture.userId,
+    );
+    expect(loaded?.material).toEqual(material);
+    expect(loaded?.teacherNotes).toBe('Practice describing changes.');
+    await expect(
+      repository.updateAssignmentSessionRecovery({
+        id: fixture.sessionId,
+        userId: fixture.userId,
+        expectedRevision: source.session.revision,
+        patch: { material: { ...material, sourceText: 'Stale edit' } },
+      }),
+    ).rejects.toMatchObject({ name: 'AssignmentSessionRevisionConflictError' });
+    expect(
+      (await repository.getAssignmentSessionByIdForUser(fixture.sessionId, fixture.userId))
+        ?.material?.sourceText,
+    ).toBe(material.sourceText);
+    const confirmed = await repository.confirmAssignmentSessionStepPersistence({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      request: {
+        step: 'context',
+        expectedRevision: recovered.revision,
+        material,
+        teacherNotes: recovered.teacherNotes,
+        profileRevisionId: null,
+        profileRevisionHash: null,
+      },
+    });
+    const effective = {
+      ...material,
+      sourceUrl: 'https://example.com/garden',
+      sourceTextUrl: 'https://example.com/garden',
+    };
+    expect(confirmed.session.confirmed.context?.material).toEqual(effective);
+    expect(confirmed.session.material).toEqual(material);
+    expect(confirmed.invalidated).toEqual(['prompt', 'draft', 'preview']);
+    const nextMaterial = { ...material, mode: 'generated' as const };
+    const changed = await repository.updateAssignmentSessionRecovery({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      expectedRevision: confirmed.session.revision,
+      patch: { material: nextMaterial },
+    });
+    expect(changed.material).toEqual(nextMaterial);
+    expect(changed.confirmed.context?.material).toEqual(effective);
+    const generated = await repository.confirmAssignmentSessionStepPersistence({
+      id: fixture.sessionId,
+      userId: fixture.userId,
+      request: {
+        step: 'context',
+        expectedRevision: changed.revision,
+        material: nextMaterial,
+        teacherNotes: changed.teacherNotes,
+        profileRevisionId: null,
+        profileRevisionHash: null,
+      },
+    });
+    expect(generated.session.confirmed.context?.material).toEqual({
+      mode: 'generated',
+      sourceUrl: '',
+      sourceTextUrl: '',
+      sourceText: '',
+    });
+    expect(generated.session.material).toEqual(nextMaterial);
+    expect(generated.invalidated).toEqual(['prompt', 'draft', 'preview']);
+    await expect(
+      repository.confirmAssignmentSessionStepPersistence({
+        id: fixture.sessionId,
+        userId: fixture.userId,
+        request: {
+          step: 'context',
+          expectedRevision: generated.session.revision,
+          material: { ...material, sourceTextUrl: 'https://example.com/other' },
+          teacherNotes: null,
+          profileRevisionId: null,
+          profileRevisionHash: null,
+        },
+      }),
+    ).rejects.toThrow('Confirm that this text belongs');
+    const final = await repository.getAssignmentSessionByIdForUser(
+      fixture.sessionId,
+      fixture.userId,
+    );
+    expect(final?.material).toEqual(nextMaterial);
+    expect(final?.confirmed.context?.material?.mode).toBe('generated');
+  });
+});

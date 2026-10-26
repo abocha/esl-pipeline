@@ -112,13 +112,13 @@ export function registerGenerationDefaultsTests() {
       async () => {
         const { user } = await renderPromptReadyAssignment();
         await user.click(screen.getByRole('button', { name: /Teaching context/i }));
-        await screen.findByRole('textbox', { name: /Teacher notes/i });
+        await screen.findByRole('textbox', { name: /Lesson guidance/i });
         vi.mocked(api.confirmStudentAssignmentSession).mockClear();
         vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
         vi.mocked(api.confirmAssignmentSessionStep).mockClear();
         vi.useFakeTimers();
 
-        fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+        fireEvent.change(screen.getByRole('textbox', { name: /Lesson guidance/i }), {
           target: { value: 'Use more travel vocabulary.' },
         });
 
@@ -336,14 +336,16 @@ export function registerGenerationThrottleTests() {
         const draftTitle = screen.getByRole('textbox', { name: /^Assignment title$/i });
         draftTitle.textContent = 'Existing draft';
         fireEvent.input(draftTitle);
-        await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+        await user.click(
+          screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+        );
         await screen.findByRole('heading', { name: /Review and share/i });
         await previewCurrentDraft(user);
 
         const publishButton = screen.getByRole('button', { name: /Share assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
 
-        await user.click(screen.getByRole('button', { name: /Create/i }));
+        await user.click(screen.getByRole('button', { name: /^Step 4Create$/i }));
         const generateDraftButton = await screen.findByRole('button', {
           name: /^(Generate assignment|Regenerate)$/i,
         });
@@ -360,7 +362,9 @@ export function registerGenerationThrottleTests() {
           });
           expect(screen.getByText('Generated assignment draft')).toBeTruthy();
         });
-        await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+        await user.click(
+          screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+        );
         await waitFor(() =>
           expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
             'session-resumed',

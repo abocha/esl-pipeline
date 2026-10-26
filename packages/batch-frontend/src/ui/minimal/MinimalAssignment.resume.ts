@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  type AssignmentMaterial,
+  adoptLegacyAssignmentMaterial,
+  emptyAssignmentMaterial,
+} from '@esl-pipeline/contracts';
+
 import type {
   AssignmentSession,
   JobOptionsResponse,
@@ -131,6 +137,7 @@ export interface HydratedAssignmentSnapshot {
   transcriptStatus: TranscriptUiStatus;
   transcriptError: string | null;
   teacherNotes: string;
+  material?: AssignmentMaterial;
   rerunTargetPronunciationMode: PronunciationMode | null;
   selectedStudentId: string;
   lessonId: string | null;
@@ -392,7 +399,10 @@ export function useMinimalAssignmentResume({
         transcriptText: '',
         transcriptStatus: 'idle',
         transcriptError: null,
-        teacherNotes: session.teacherNotes ?? '',
+        teacherNotes: !session.material
+          ? (adoptLegacyAssignmentMaterial(session.teacherNotes).teacherNotes ?? '')
+          : (session.teacherNotes ?? ''),
+        material: session.material ?? adoptLegacyAssignmentMaterial(session.teacherNotes).material,
         rerunTargetPronunciationMode: null,
         selectedStudentId: session.studentId ?? currentSelectedStudentId,
         lessonId: session.lessonId ?? null,
@@ -507,6 +517,7 @@ export function useMinimalAssignmentResume({
           transcriptStatus: 'idle',
           transcriptError: null,
           teacherNotes: completedSession?.teacherNotes ?? '',
+          material: completedSession?.material ?? emptyAssignmentMaterial(),
           rerunTargetPronunciationMode: status.pronunciationMode ?? null,
           selectedStudentId: currentSelectedStudentId,
           lessonId: status.lessonId ?? completedSession?.lessonId ?? null,
@@ -604,7 +615,8 @@ export function useMinimalAssignmentResume({
           try {
             const resumedPromptPackage = await fetchPromptPackage(status.promptPackageId);
             snapshot.authoring.promptPackage = resumedPromptPackage;
-            snapshot.teacherNotes = resumedPromptPackage.notes ?? '';
+            if (!completedSession?.confirmed.context?.material)
+              snapshot.teacherNotes = resumedPromptPackage.notes ?? '';
             snapshot.authoring.promptText = resumedPromptPackage.text ?? '';
             if (!resolvedStudentId && resumedPromptPackage.studentId) {
               resolvedStudentId = resumedPromptPackage.studentId;
@@ -774,7 +786,8 @@ export function useMinimalAssignmentResume({
           try {
             const resumedPromptPackage = await fetchPromptPackage(session.promptPackageId);
             snapshot.authoring.promptPackage = resumedPromptPackage;
-            snapshot.teacherNotes = session.teacherNotes ?? resumedPromptPackage.notes ?? '';
+            if (session.material)
+              snapshot.teacherNotes = session.teacherNotes ?? resumedPromptPackage.notes ?? '';
             snapshot.authoring.promptText = resumedPromptPackage.text ?? '';
             if (!resolvedStudentId && resumedPromptPackage.studentId) {
               resolvedStudentId = resumedPromptPackage.studentId;

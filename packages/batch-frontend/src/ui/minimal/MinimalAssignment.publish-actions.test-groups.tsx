@@ -72,10 +72,9 @@ export function registerPublishValidationTests() {
       draftTitle.textContent = '';
       fireEvent.input(draftTitle);
 
-      expect(screen.getByRole('button', { name: /Confirm and continue/i })).toHaveProperty(
-        'disabled',
-        true,
-      );
+      expect(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      ).toHaveProperty('disabled', true);
       expect(api.createDraft).not.toHaveBeenCalled();
     }, 30_000);
 
@@ -177,7 +176,7 @@ export function registerPublishValidationTests() {
       expect(
         await screen.findByText(/Review and confirm Teaching context before sharing\./i),
       ).toBeTruthy();
-      expect(await screen.findByRole('heading', { name: /Add teaching context/i })).toBeTruthy();
+      expect(await screen.findByRole('heading', { name: /Material & guidance/i })).toBeTruthy();
       expect(screen.queryByText(/HTTP 409: assignment_share_dirty_recovery/i)).toBeNull();
     }, 30_000);
 
@@ -235,7 +234,7 @@ export function registerJobActionTests() {
         const user = createMinimalUser();
         await renderPreviewReadyAssignment();
 
-        await user.click(screen.getByRole('button', { name: /Create/i }));
+        await user.click(screen.getByRole('button', { name: /^Step 4Create$/i }));
         const draftTitle = screen.getByRole('textbox', { name: /^Assignment title$/i });
         draftTitle.textContent = 'Preview gated draft';
         fireEvent.input(draftTitle);
@@ -247,7 +246,9 @@ export function registerJobActionTests() {
         await user.click(screen.getByRole('button', { name: 'Edit' }));
         await user.click(screen.getByRole('button', { name: /Review & share/i }));
         expect(screen.getByRole('heading', { name: /Create assignment/i })).toBeTruthy();
-        await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+        await user.click(
+          screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+        );
         await screen.findByRole('heading', { name: /Review and share/i });
         const initialPublishButton = screen.getByRole('button', { name: /Share assignment/i });
         const initialPreviewButton = screen.getByRole('button', { name: /Preview assignment/i });

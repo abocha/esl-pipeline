@@ -148,12 +148,14 @@ CREATE TABLE public.assignment_sessions (
     transcript_completed_at timestamp with time zone,
     transcript_completion_history jsonb DEFAULT '[]'::jsonb NOT NULL,
     homework_started_from_revision integer,
+    material jsonb,
     CONSTRAINT assignment_sessions_completed_share_job_check CHECK (((confirmed_step <> 'share'::text) OR (share_job_id IS NOT NULL))),
     CONSTRAINT assignment_sessions_confirmed_snapshot_check CHECK (((jsonb_typeof(confirmed_snapshot) = 'object'::text) AND (confirmed_snapshot ?& ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text]) AND (jsonb_typeof((confirmed_snapshot -> 'student'::text)) = 'object'::text) AND (NULLIF((confirmed_snapshot #>> '{student,studentId}'::text[]), ''::text) IS NOT NULL) AND (((confirmed_snapshot #>> '{student,studentId}'::text[]))::uuid = student_id) AND (((confirmed_snapshot -> 'source'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'source'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'context'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'create'::text)) = 'object'::text)))),
     CONSTRAINT assignment_sessions_confirmed_step_check CHECK ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text, 'share'::text]))),
     CONSTRAINT assignment_sessions_creation_request_id_check CHECK (((creation_request_id IS NULL) OR (btrim(creation_request_id) <> ''::text))),
     CONSTRAINT assignment_sessions_generation_provider_check CHECK (((selected_generation_provider IS NULL) OR (selected_generation_provider = ANY (ARRAY['openai'::text, 'google_ai_studio'::text, 'openrouter'::text])))),
     CONSTRAINT assignment_sessions_homework_intent CHECK ((homework_intent = ANY (ARRAY['create'::text, 'none'::text]))),
+    CONSTRAINT assignment_sessions_material_object_check CHECK (((material IS NULL) OR (jsonb_typeof(material) = 'object'::text))),
     CONSTRAINT assignment_sessions_no_homework_downstream CHECK (((homework_intent <> 'none'::text) OR ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text])) AND ((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) AND ((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) AND (prompt_package_id IS NULL) AND (draft_id IS NULL) AND (share_job_id IS NULL)))),
     CONSTRAINT assignment_sessions_publish_target_check CHECK (((publish_target IS NULL) OR (publish_target = 'html'::text))),
     CONSTRAINT assignment_sessions_revision_check CHECK ((revision > 0)),
@@ -3178,5 +3180,6 @@ VALUES
   ('0070_calendar_scheduling', 'c30cbc331b6f884ff7a732fe28d582b74e2bf1ef54bb0588dca063ddfeb2c759', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0071_scheduler_retirement', '45ee490d0893537325b299c0e6ee161ec72f139fe2c260aa95d3a5a4abf1eb7c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0072_calendar_projection_reference_guard', '50cf12476c3fd513fa328777a12ca2260d2c6a1b99b15b4b8c623a9093b3ef06', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0073_gemini_tts_provider', 'cdaee92f0b9f19241844d93ed34db298c4cf0f6d852de4c21bca555dcd33a169', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0073_gemini_tts_provider', 'cdaee92f0b9f19241844d93ed34db298c4cf0f6d852de4c21bca555dcd33a169', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0074_assignment_material', '355e87270ed685ba9cdf82ef8e0a192dc47724fcf8bbe71c4c49de830c7d104c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

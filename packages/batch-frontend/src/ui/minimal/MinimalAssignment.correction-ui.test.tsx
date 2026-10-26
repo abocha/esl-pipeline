@@ -132,7 +132,9 @@ describe('MinimalAssignment post-share correction UI', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Correct published assignment/i })).toBeTruthy();
     });
-    expect(screen.queryByRole('button', { name: /Confirm and continue/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+    ).toBeNull();
     await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
     expect(screen.queryByRole('textbox', { name: /^Assignment title$/i })).toBeNull();
     expect(screen.getAllByText('Published draft').length).toBeGreaterThan(0);

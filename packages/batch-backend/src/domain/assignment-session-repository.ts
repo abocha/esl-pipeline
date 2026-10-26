@@ -6,6 +6,7 @@ import type {
   AssignmentConfirmedSnapshot,
   AssignmentConfirmedStep,
   AssignmentInvalidatedArtifact,
+  AssignmentMaterial,
   ConfirmAssignmentSessionStepRequest,
   FinishTranscriptAssignmentSessionRequest,
   GenerationProvider,
@@ -14,6 +15,12 @@ import type {
   TranscriptCompletionEvent,
   TtsProviderId,
   TtsStrategy,
+} from '@esl-pipeline/contracts';
+import {
+  AssignmentMaterialSchema,
+  ConfirmedAssignmentMaterialSchema,
+  composeAssignmentMaterialNotes,
+  effectiveAssignmentMaterial,
 } from '@esl-pipeline/contracts';
 import { ASSIGNMENT_HTML_RENDERER_VERSION } from '@esl-pipeline/html-publisher';
 
@@ -73,6 +80,7 @@ interface AssignmentSessionRow {
   selected_generation_provider: GenerationProvider | null;
   selected_generation_model: string | null;
   teacher_notes: string | null;
+  material: AssignmentMaterial | null;
   selected_profile_id: string | null;
   selected_profile_revision_id: string | null;
   selected_profile_revision_hash: string | null;
@@ -103,6 +111,7 @@ export interface AssignmentSessionRecoveryPatch {
   selectedGenerationProvider?: GenerationProvider | null;
   selectedGenerationModel?: string | null;
   teacherNotes?: string | null;
+  material?: AssignmentMaterial;
   selectedProfileRevisionId?: string | null;
   selectedProfileRevisionHash?: string | null;
 }
@@ -193,7 +202,7 @@ const RETURNING_COLUMNS = `
   prompt_package_id, draft_id, revision, confirmed_step, confirmed_snapshot,
   creation_request_id, publish_target, selected_tts_provider, selected_tts_strategy,
   selected_tts_model, selected_preset, selected_generation_provider,
-  selected_generation_model, teacher_notes, selected_profile_id,
+  selected_generation_model, teacher_notes, material, selected_profile_id,
   selected_profile_revision_id, selected_profile_revision_hash, share_job_id,
   created_at, updated_at
 `;
@@ -213,6 +222,7 @@ const RECOVERY_COLUMNS = {
   selectedGenerationProvider: 'selected_generation_provider',
   selectedGenerationModel: 'selected_generation_model',
   teacherNotes: 'teacher_notes',
+  material: 'material',
   selectedProfileRevisionId: 'selected_profile_revision_id',
   selectedProfileRevisionHash: 'selected_profile_revision_hash',
 } as const satisfies Record<keyof AssignmentSessionRecoveryPatch, string>;
@@ -755,8 +765,12 @@ async function confirmLockedContext(
   ) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
   }
+  const material = request.material ?? current.material;
   const context = {
     teacherNotes: request.teacherNotes,
+    ...(material
+      ? { material: effectiveAssignmentMaterial(ConfirmedAssignmentMaterialSchema.parse(material)) }
+      : {}),
     profileRevisionId: request.profileRevisionId,
     profileRevisionHash: request.profileRevisionHash,
   };
@@ -764,6 +778,7 @@ async function confirmLockedContext(
   if (
     previousContext &&
     previousContext.teacherNotes === context.teacherNotes &&
+    isDeepStrictEqual(previousContext.material, context.material) &&
     previousContext.profileRevisionId === context.profileRevisionId &&
     previousContext.profileRevisionHash === context.profileRevisionHash
   ) {
@@ -824,6 +839,7 @@ async function confirmLockedContext(
     confirmed,
     columns: {
       teacher_notes: request.teacherNotes,
+      ...(material ? { material: JSON.stringify(material) } : {}),
       selected_profile_id: null,
       selected_profile_revision_id: request.profileRevisionId,
       selected_profile_revision_hash: request.profileRevisionHash,
@@ -855,6 +871,10 @@ async function confirmLockedCreate(
   const context = current.confirmed.context;
   if (
     current.teacherNotes !== context.teacherNotes ||
+    !isDeepStrictEqual(
+      current.material ? effectiveAssignmentMaterial(current.material) : undefined,
+      context.material,
+    ) ||
     current.selectedProfileId !== (context.profileId ?? null) ||
     current.selectedProfileRevisionId !== context.profileRevisionId ||
     current.selectedProfileRevisionHash !== context.profileRevisionHash
@@ -882,7 +902,10 @@ async function confirmLockedCreate(
     throw new ArtifactWorkingConflictError(draft);
   }
   if (
-    packageRow.notes !== context.teacherNotes ||
+    packageRow.notes !==
+      (context.material
+        ? composeAssignmentMaterialNotes(context.material, context.teacherNotes)
+        : context.teacherNotes) ||
     packageRow.resolved_profile_id !== (context.profileId ?? null) ||
     packageRow.resolved_profile_revision_id !== context.profileRevisionId ||
     (context.profileRevisionId === null
@@ -1549,6 +1572,7 @@ async function retireUnownedLosingCandidateAudio(
 export async function updateAssignmentSessionRecovery(
   params: UpdateAssignmentSessionRecoveryParams,
 ): Promise<AssignmentSessionRecord> {
+  if (params.patch.material) AssignmentMaterialSchema.parse(params.patch.material);
   const entries = Object.entries(params.patch) as [keyof AssignmentSessionRecoveryPatch, unknown][];
   if (entries.length === 0) throw new Error('Assignment recovery patch must not be empty');
   for (const [field] of entries) {
@@ -1615,7 +1639,7 @@ export async function updateAssignmentSessionRecovery(
       const assignments: string[] = [];
       const values: unknown[] = [params.id, params.userId, params.expectedRevision];
       for (const [field, value] of entries) {
-        values.push(value);
+        values.push(field === 'material' ? JSON.stringify(value) : value);
         assignments.push(`${RECOVERY_COLUMNS[field]} = $${values.length}`);
       }
       assignments.push('revision = revision + 1', 'updated_at = NOW()');
@@ -1826,6 +1850,10 @@ export async function reserveAssignmentShare(
         current.recordingId !== source.recordingId ||
         current.transcriptId !== source.transcriptId ||
         current.teacherNotes !== context.teacherNotes ||
+        !isDeepStrictEqual(
+          current.material ? effectiveAssignmentMaterial(current.material) : undefined,
+          context.material,
+        ) ||
         current.selectedProfileId !== (context.profileId ?? null) ||
         current.selectedProfileRevisionId !== context.profileRevisionId ||
         current.selectedProfileRevisionHash !== context.profileRevisionHash ||
@@ -2575,6 +2603,7 @@ function mapRow(row: AssignmentSessionRow): AssignmentSessionRecord {
     selectedGenerationProvider: row.selected_generation_provider ?? null,
     selectedGenerationModel: row.selected_generation_model ?? null,
     teacherNotes: row.teacher_notes ?? null,
+    ...(row.material ? { material: AssignmentMaterialSchema.parse(row.material) } : {}),
     selectedProfileId: row.selected_profile_id ?? null,
     selectedProfileRevisionId: row.selected_profile_revision_id ?? null,
     selectedProfileRevisionHash: row.selected_profile_revision_hash ?? null,

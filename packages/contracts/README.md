@@ -57,3 +57,12 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
 ESL-41 advances API to 11: fresh generation and operator selections admit only OpenAI. The
 `GenerationProvider` union retains retired Google/OpenRouter identifiers for stored provenance and
 read projections. DB 4, manifest 4, prompt 3 and validator 3 remain unchanged.
+
+Assignment Step 3 (API 12.1) adds optional historical-compatible `AssignmentMaterial` state to
+recovery and confirmed Context: selected `mode`, supplied `sourceUrl`, editable `sourceText`, and
+`sourceTextUrl` as the tutor-confirmed URL/text association. Authentic confirmation requires a safe
+public HTTP(S) URL, nonblank source text (at most 60,000 UTF-16 code units), and a current association.
+Equivalent supported YouTube URLs share a video identity. Recovery admits incomplete drafts;
+Generated confirmations omit inactive source content from effective evidence. Immutable old snapshots
+and packages remain readable without material fields. The assignment output/validator schema remains
+unchanged; typed request authority uses its existing selected-kind and supplied-URL checks.

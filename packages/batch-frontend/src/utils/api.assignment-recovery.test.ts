@@ -7,6 +7,7 @@ import {
   attachAssignmentSource,
   confirmAssignmentSessionStep,
   confirmStudentAssignmentSession,
+  fetchAssignmentMaterialTranscript,
   finishTranscriptAssignmentSession,
   listAssignmentSessions,
   publishAssignmentCorrection,
@@ -56,6 +57,24 @@ describe('assignment recovery API', () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     vi.mocked(apiClient.post).mockReset();
+  });
+
+  it('posts explicit material retrieval once and never uses recovery retries', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: { sourceUrl: 'https://youtu.be/abc123XYZ_0', sourceText: 'Caption text.' },
+    } as never);
+    await expect(
+      fetchAssignmentMaterialTranscript('session/1', 'https://youtu.be/abc123XYZ_0'),
+    ).resolves.toMatchObject({ sourceText: 'Caption text.' });
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/assignment-sessions/session%2F1/material-transcript',
+      { sourceUrl: 'https://youtu.be/abc123XYZ_0' },
+    );
+    vi.mocked(apiClient.post).mockClear().mockRejectedValueOnce(makeAxiosError(503));
+    await expect(
+      fetchAssignmentMaterialTranscript('session-1', 'https://youtu.be/abc123XYZ_0'),
+    ).rejects.toThrow('HTTP 503');
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
   });
 
   it('keeps exact finish identity stable across transient retry and sends explicit promotion', async () => {

@@ -11,6 +11,8 @@ import {
 import userEvent from '@testing-library/user-event';
 import { expect, vi } from 'vitest';
 
+import { effectiveAssignmentMaterial } from '@esl-pipeline/contracts';
+
 import * as api from '../../utils/api';
 import {
   AssignmentNavigationGuardContext,
@@ -69,6 +71,7 @@ vi.mock('../../utils/api', () => ({
   fetchDraft: vi.fn(),
   fetchAssignmentSession: vi.fn(),
   fetchAssignmentLearnerContext: vi.fn(),
+  fetchAssignmentMaterialTranscript: vi.fn(),
   fetchJobProvenance: vi.fn(),
   fetchJobOptions: vi.fn(),
   fetchPromptPackage: vi.fn(),
@@ -254,6 +257,9 @@ export function makeAssignmentSession(
         confirmedStep === 'context' || confirmedStep === 'create' || confirmedStep === 'share'
           ? {
               teacherNotes: sessionOverrides.teacherNotes ?? null,
+              ...(sessionOverrides.material
+                ? { material: effectiveAssignmentMaterial(sessionOverrides.material) }
+                : {}),
               profileId: sessionOverrides.selectedProfileId ?? null,
               profileRevisionId: sessionOverrides.selectedProfileRevisionId ?? null,
               profileRevisionHash: sessionOverrides.selectedProfileRevisionHash ?? null,
@@ -445,7 +451,9 @@ export async function previewCurrentDraft(user: ReturnType<typeof userEvent.setu
   const reviewStep = screen.queryByRole('button', { name: /Review & share/i });
   if (reviewStep) {
     if ((reviewStep as HTMLButtonElement).disabled) {
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(
+        screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+      );
     } else {
       await user.click(reviewStep);
     }
@@ -489,13 +497,17 @@ export async function startNewAssignmentForLearner(
 }
 
 export async function advanceSourceToTeachingContext(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+  await user.click(
+    screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+  );
   await screen.findByRole('heading', { name: /Learner context/i }, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
 export async function advanceSourceToCreate(user: ReturnType<typeof userEvent.setup>) {
   await advanceSourceToTeachingContext(user);
-  const continueButton = screen.getByRole('button', { name: /Confirm and continue/i });
+  const continueButton = screen.getByRole('button', {
+    name: /Confirm and continue|Continue to Create/i,
+  });
   await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false), {
     timeout: UI_WAIT_TIMEOUT_MS,
   });
@@ -619,11 +631,13 @@ async function waitForResumedPromptReady(
 ) {
   const createStep = await screen.findByRole(
     'button',
-    { name: /Create/i },
+    { name: /^Step 4Create$/i },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
   if ((createStep as HTMLButtonElement).disabled) {
-    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    await user.click(
+      screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
+    );
   } else {
     await user.click(createStep);
   }
@@ -1150,6 +1164,7 @@ export function setupMinimalAssignmentTest() {
         revision: request.expectedRevision + 1,
         confirmedStep: 'context',
         teacherNotes: request.teacherNotes,
+        material: request.material,
         selectedProfileId: base.studentId,
         selectedProfileRevisionId: request.profileRevisionId,
         selectedProfileRevisionHash: request.profileRevisionHash,
@@ -1157,6 +1172,7 @@ export function setupMinimalAssignmentTest() {
           ...base.confirmed,
           context: {
             teacherNotes: request.teacherNotes,
+            material: request.material ? effectiveAssignmentMaterial(request.material) : undefined,
             profileRevisionId: request.profileRevisionId,
             profileRevisionHash: request.profileRevisionHash,
           },

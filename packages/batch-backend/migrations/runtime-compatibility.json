@@ -73,6 +73,7 @@
     "0070_calendar_scheduling": "compatible",
     "0071_scheduler_retirement": "incompatible",
     "0072_calendar_projection_reference_guard": "compatible",
-    "0073_gemini_tts_provider": "incompatible"
+    "0073_gemini_tts_provider": "incompatible",
+    "0074_assignment_material": "incompatible"
   }
 }

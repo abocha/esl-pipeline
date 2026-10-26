@@ -177,8 +177,8 @@
   cursor: pointer;
 }
 
-.minimal-homework-choice input[type="checkbox"],
-.minimal-transcript-result input[type="checkbox"] {
+.minimal-homework-choice input[type='checkbox'],
+.minimal-transcript-result input[type='checkbox'] {
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
@@ -1293,7 +1293,7 @@
   outline-offset: 2px;
 }
 
-.minimal-speaker-choice-option input[type="radio"] {
+.minimal-speaker-choice-option input[type='radio'] {
   flex: 0 0 auto;
   width: 1rem;
   height: 1rem;
@@ -1305,7 +1305,7 @@
   accent-color: var(--color-primary-600);
 }
 
-.minimal-speaker-choice-option input[type="radio"]:focus {
+.minimal-speaker-choice-option input[type='radio']:focus {
   box-shadow: none;
 }
 
@@ -1624,5 +1624,167 @@
 
   .minimal-rerun-control-heading span:last-child {
     text-align: left;
+  }
+}
+
+/* Material is assignment-owned; the learner sidebar remains a compact reference. */
+.assignment-context-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 30%);
+  gap: var(--space-6);
+}
+.assignment-context-main {
+  min-width: 0;
+}
+.assignment-context-main textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+}
+.assignment-material-choice {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.assignment-material-choice legend,
+.assignment-authentic-fields > label,
+.assignment-guidance-label label {
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+.assignment-material-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-2) 0 var(--space-5);
+}
+.assignment-material-option {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-4);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  min-height: 76px;
+}
+.assignment-material-option.is-selected {
+  border-color: var(--color-primary-600);
+  background: var(--minimal-primary-tint-soft);
+}
+.assignment-material-option input {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--color-primary-600);
+}
+.assignment-material-option > span {
+  display: grid;
+  gap: var(--space-1);
+}
+.assignment-material-option > span > span {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+.assignment-authentic-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+.assignment-authentic-fields > label:not(:first-child) {
+  margin-top: var(--space-4);
+}
+.assignment-material-url-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+.assignment-material-url-row input {
+  min-width: 0;
+  flex: 1;
+}
+.assignment-material-url-row button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.assignment-material-replacement {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.assignment-material-replacement p {
+  flex-basis: 100%;
+}
+.assignment-guidance-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: baseline;
+  margin-bottom: var(--space-2);
+}
+.assignment-learner-context {
+  min-width: 0;
+  border-left: 1px solid var(--border-light);
+  padding-left: var(--space-6);
+}
+.assignment-learner-context h3 {
+  margin: 0 0 var(--space-5);
+}
+.assignment-learner-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.assignment-learner-section {
+  border-top: 1px solid var(--border-light);
+  padding: var(--space-4) 0;
+  overflow-wrap: anywhere;
+}
+.assignment-learner-section h4 {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin: 0 0 var(--space-2);
+}
+.assignment-learner-section h4 svg {
+  width: 20px;
+  height: 20px;
+  color: var(--color-primary-600);
+  flex-shrink: 0;
+}
+.assignment-learner-section ul {
+  padding-left: 25px;
+  margin: 0;
+  color: var(--text-secondary);
+}
+.assignment-learner-context > a {
+  display: inline-block;
+  margin-top: var(--space-4);
+}
+@media (max-width: 960px) {
+  .assignment-context-layout {
+    grid-template-columns: 1fr;
+  }
+  .assignment-learner-context {
+    border-left: 0;
+    border-top: 1px solid var(--border-light);
+    padding-left: 0;
+    padding-top: var(--space-5);
+  }
+}
+@media (max-width: 600px) {
+  .assignment-material-options {
+    grid-template-columns: 1fr;
+  }
+  .assignment-material-url-row {
+    flex-direction: column;
+  }
+  .assignment-guidance-label {
+    gap: var(--space-1);
   }
 }

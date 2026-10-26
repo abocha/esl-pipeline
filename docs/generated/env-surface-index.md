@@ -68,6 +68,8 @@
 | `ESL_HOST_HEALTH_MEMORY_PSI_FULL_CRITICAL_PERCENT` | `.env.example` | misc | `docs/reference/env.md` |
 | `ESL_HOST_HEALTH_MEMORY_PSI_SOME_WARN_PERCENT` | `.env.example` | misc | `docs/reference/env.md` |
 | `ESL_HOST_HEALTH_RESTART_WINDOW_MINUTES` | `.env.example` | misc | `docs/reference/env.md` |
+| `ESL_MATERIAL_TRANSCRIPT_API_KEY` | `.env.example` | misc | `docs/reference/env.md` |
+| `ESL_MATERIAL_TRANSCRIPT_TIMEOUT_MS` | `.env.example` | misc | `docs/reference/env.md` |
 | `ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `ESL_PIPELINE_CONFIG_CACHE_TTL_MS` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS` | `.env.example` | shared_runtime | `docs/reference/env.md` |

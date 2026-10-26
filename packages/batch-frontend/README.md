@@ -72,7 +72,7 @@ Canonical behavior and current status live in:
   completed-step navigation are user-owned and keep the current assignment state instead of
   redirecting as readiness updates. Step 2 keeps the prepared source visible and asks which of two
   anonymous speakers is the tutor; unusual speaker counts retain explicit role pickers. Step 3
-  starts with lesson guidance and a compact learner dossier. Step 4 centers generation when empty.
+  starts with material choice, optional lesson guidance and a compact learner reference. Step 4 centers generation when empty.
   Step 5 requires a current preview before Share, keeps queued/running publication distinct from a
   succeeded handout with a URL, and offers Start another assignment only after that handout exists.
   Advanced rerun and republish actions appear only for a succeeded handout with a URL; technical
@@ -112,6 +112,10 @@ Canonical behavior and current status live in:
     `VITE_BATCH_FRONTEND_SANDBOX=mock-auth pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
   - The sandbox is dev-only, marks the UI with `Mock data`, bypasses frontend auth only, and uses
     seeded mock API responses for the assignment builder, Business routes and Student History.
+  - Add student accepts a fresh structured starter profile in memory. In the same tab, start a new
+    assignment for that student, paste an existing transcript, and confirm the source to review
+    Teaching context. Lesson guidance and context confirmation remain in memory; reloading resets
+    these students and sessions. This walkthrough does not exercise backend persistence or generation.
   - `http://localhost:5173/?sandboxScenario=assignment-editor&sessionId=session-editor` opens a
     focused current-format editor with fictional material and the real authoring hooks. Saves stay
     in that sandbox instance's memory; reload resets the fixture. This is editor walkthrough
@@ -181,6 +185,27 @@ Canonical behavior and current status live in:
   model-generated change classification remains intentionally deferred.
 - Lesson follow-up reminders use in-app actions first; Telegram/email delivery remains outside the frontend surface for this slice.
 - Job-event SSE subscriptions should target known `jobId` and `recordingId` values; wildcard all-job streams are explicit.
+
+## Assignment material (Step 3)
+
+Fresh assignments select Generated. Authentic requires a public HTTP(S) source link and editable
+source text; articles use pasted excerpts. YouTube retrieval runs only after Fetch transcript,
+through the authenticated backend. Missing configuration or provider failures retain the manual
+editor and Get transcript manually link. Source text is separate from the lesson transcript.
+The 60,000-character source limit rejects oversized content explicitly; it never truncates it.
+
+Switching modes preserves Authentic draft fields in assignment recovery, while confirmed Generated
+inputs omit them from generation. A changed source identity retains the text but requires explicit
+reuse or replacement; equivalent YouTube URL variants retain their association. Fetching cannot
+overwrite existing text without consent or attach results after newer edits, another session,
+material changes or leaving/confirming the step. Save and fetch status remain independent.
+Continue to Create saves and confirms without generating. Step 4 uses backend-confirmed material.
+
+In the frontend sandbox, use a fresh fictional student and pasted lesson source. Authentic retrieval
+is mocked in memory: `https://www.youtube.com/watch?v=ESL84demo01` succeeds and
+`https://www.youtube.com/watch?v=ESL84fail01` demonstrates the manual fallback. These illustrative
+IDs are test inputs, not real videos. Reload resets sandbox students/sessions; this demonstrates UI
+behavior only, not backend persistence or live provider success.
 
 ## Assignment Recovery and Confirmation
 

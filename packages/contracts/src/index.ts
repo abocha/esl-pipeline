@@ -1,3 +1,7 @@
+export * from './assignment-material.js';
+
+import type { AssignmentMaterial } from './assignment-material.js';
+
 export type {
   AdminTemplateRevisionDto,
   TemplateControlPlaneDto,
@@ -268,6 +272,7 @@ export interface AssignmentConfirmedSnapshot {
   } | null;
   context: {
     teacherNotes: string | null;
+    material?: AssignmentMaterial;
     /** Legacy provenance only; new confirmations omit standalone identity. */
     profileId?: string | null;
     profileRevisionId: string | null;
@@ -322,6 +327,7 @@ export interface AssignmentSessionDto {
   selectedGenerationProvider: GenerationProvider | null;
   selectedGenerationModel: string | null;
   teacherNotes: string | null;
+  material?: AssignmentMaterial;
   selectedProfileId: string | null;
   selectedProfileRevisionId: string | null;
   selectedProfileRevisionHash: string | null;
@@ -393,6 +399,7 @@ export interface UpdateAssignmentSessionRecoveryRequest {
     selectedGenerationProvider: GenerationProvider | null;
     selectedGenerationModel: string | null;
     teacherNotes: string | null;
+    material: AssignmentMaterial;
     selectedProfileRevisionId: string | null;
     selectedProfileRevisionHash: string | null;
   }>;
@@ -421,6 +428,7 @@ export type ConfirmAssignmentSessionStepRequest =
       step: 'context';
       expectedRevision: number;
       teacherNotes: string | null;
+      material?: AssignmentMaterial;
       profileRevisionId: string | null;
       profileRevisionHash: string | null;
     }
