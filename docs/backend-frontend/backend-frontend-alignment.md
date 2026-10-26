@@ -102,6 +102,11 @@ revision content/history are preserved.
   Pipeline grant rather than the provider browser session. Migration `0067` backfills stable
   user/workspace profile identities with old grant writers stopped; deployment and live verification
   of these changes remain pending.
+  ESL-85 consent permits the validated callback origin in its form-action CSP so browser redirects
+  can complete. Unusable cookie-bound interaction links show restart guidance; they cannot be
+  resumed by copying the URL to another browser profile. The authorization marker now follows
+  saved consent and includes the confirmation request ID. Production rollout and reconnect checks
+  for both ChatGPT integrations remain separate acceptance steps.
 - Use production observations and tutor reports to select work from
   [`docs/plans/2026-06-23-alpha-readiness.md`](../plans/2026-06-23-alpha-readiness.md).
 - Treat reproduced reliability or workflow failures as priority evidence.

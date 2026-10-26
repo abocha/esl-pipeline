@@ -487,6 +487,15 @@ artifact writes and family revocation serialize on the Pipeline grant row, so re
 cannot leave an overlapping token valid. OAuth cookies use the external `/api/oauth` path and stay
 Secure on HTTPS through the Caddy to nginx proxy chain.
 
+Consent's `form-action` CSP allows the origin of the provider-validated callback as well as
+`'self'`, so Chromium can follow the POST/resume redirect chain back to ChatGPT or the selected
+Codex loopback port. OAuth redirect validation still owns the exact callback URI; the page never
+uses an unchecked query parameter for its policy. Consent and recovery pages suppress referrers.
+Interaction links require their original signed browser cookie and are not transferable between
+browser profiles. Missing, invalid, expired, completed or mismatched interactions show a no-store
+recovery page directing the user to start Connect again in ChatGPT in the same browser profile;
+the page never replays consent or resumes from the URL alone.
+
 OAuth diagnostics use the existing Pino stdout JSON stream. At `info` level,
 `mcp_oauth_diagnostic` emits one summary per token exchange, initial authorization request,
 or provider revocation request; rejections use `warn`. `status` is the HTTP status (authorization
@@ -501,6 +510,13 @@ Provider-supported case/trailing-slash endpoint aliases receive the same diagnos
 provider exception also emits a bounded `mcp_oauth_provider_error` fallback; the provider's supported
 `error` listener prevents Koa's default stderr exception dump. Repeated session-cleanup failures
 preserve the captured server-failure classification and report the escaping failure's HTTP status.
+
+`mcp_oauth_authorized` is emitted only after the consent result is saved and its resume path is
+validated. It includes the Fastify `requestId` for that confirmation; it does not prove delivery of
+the callback, code issuance or token exchange. `mcp_oauth_interaction_unavailable` records a
+provider `SessionNotFound` on an interaction route with only its Fastify request ID and method,
+without raw interaction IDs, cookies or exception contents. It means the provider could not load a
+valid cookie-bound interaction, not necessarily that a database row is missing.
 
 Each summary includes a generated `requestId`, completion `timestamp` in UTC, `durationMs`,
 `grantType`, `clientClass` (`chatgpt_web`, `codex`, `other`), and `resourceState`
