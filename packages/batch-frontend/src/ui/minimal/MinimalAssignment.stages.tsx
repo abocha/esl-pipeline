@@ -1046,6 +1046,7 @@ function LearnerContextSection({ section }: { section: ProfileDossierSection }) 
     // Measure the actual two-line preview, including a single very long item.
     // ResizeObserver also catches wrapping changes and sections opened inside details.
     const measure = () => {
+      if (!content.isConnected) return;
       setTextOverflows(
         Array.from(content.querySelectorAll('.assignment-learner-preview')).some(
           (item) => item.scrollHeight > item.clientHeight + 1,
@@ -1053,6 +1054,8 @@ function LearnerContextSection({ section }: { section: ProfileDossierSection }) 
       );
     };
     measure();
+    // A webfont can change clipping while the clamped box stays two lines high.
+    document.fonts?.ready.then(measure);
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(content);
     return () => observer?.disconnect();
