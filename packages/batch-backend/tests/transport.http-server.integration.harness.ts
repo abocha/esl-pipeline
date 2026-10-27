@@ -364,6 +364,8 @@ vi.mock('../src/application/initialize-student-profile-draft', () => {
 vi.mock('../src/application/student-schedule-billing', () => {
   return {
     getStudentScheduleBillingSurface: vi.fn(),
+    getStudentLesson: vi.fn(),
+    getStudentLessonPage: vi.fn(),
     hideStudentLessonFollowupReminder: vi.fn(),
     undoLatestHiddenStudentReminder: vi.fn(),
     updateStudentLessonPlan: vi.fn(),
@@ -503,6 +505,8 @@ export function describeHttpServerIntegrationSuite(
     const mockGetStudentScheduleBillingSurface = vi.mocked(
       studentScheduleBillingModule.getStudentScheduleBillingSurface,
     );
+    const mockGetStudentLesson = vi.mocked(studentScheduleBillingModule.getStudentLesson);
+    const mockGetStudentLessonPage = vi.mocked(studentScheduleBillingModule.getStudentLessonPage);
     const mockHideStudentLessonFollowupReminder = vi.mocked(
       studentScheduleBillingModule.hideStudentLessonFollowupReminder,
     );
@@ -1120,6 +1124,13 @@ export function describeHttpServerIntegrationSuite(
         },
         nextLesson: null,
         lessons: [],
+        lessonWindows: {
+          timezone: 'UTC',
+          date: '2026-05-05',
+          today: [],
+          recent: { items: [], nextCursor: null },
+          upcoming: { items: [], nextCursor: null },
+        },
         creditSummary: {
           purchased: 0,
           consumed: 0,
@@ -1312,6 +1323,8 @@ export function describeHttpServerIntegrationSuite(
       mockRefreshProfileDraftFromApprovedCandidates,
       mockInitializeStudentProfileDraft,
       mockGetStudentScheduleBillingSurface,
+      mockGetStudentLesson,
+      mockGetStudentLessonPage,
       mockHideStudentLessonFollowupReminder,
       mockUndoLatestHiddenStudentReminder,
       mockUpdateStudentLessonPlan,

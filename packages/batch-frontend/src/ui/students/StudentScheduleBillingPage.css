@@ -303,3 +303,28 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.student-schedule-billing-window-heading,
+.student-schedule-billing-paging,
+.student-schedule-billing-management {
+  min-width: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.student-schedule-billing-management summary,
+.student-schedule-billing-panel summary {
+  cursor: pointer;
+  padding: 0.75rem 0;
+  font-weight: 700;
+}
+.student-schedule-billing-window-heading button,
+.student-schedule-billing-paging button {
+  justify-self: start;
+  min-height: 44px;
+}
+.student-schedule-billing-list-row {
+  overflow-wrap: anywhere;
+}
+.student-schedule-billing-list-row .student-schedule-billing-actions {
+  grid-column: 1 / -1;
+}

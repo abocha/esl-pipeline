@@ -36,6 +36,7 @@ import {
   fetchPromptOptions,
   finishTranscriptAssignmentSession,
   getJobStatus,
+  getStudentLesson,
   getStudentScheduleBillingSurface,
   publishAssignmentCorrection,
   shareAssignmentSession,
@@ -351,6 +352,10 @@ export const MinimalAssignment: React.FC = () => {
     null,
   );
   const [scheduleSurfaceError, setScheduleSurfaceError] = useState<string | null>(null);
+  const [exactLinkedLesson, setExactLinkedLesson] = useState<{
+    studentId: string;
+    lesson: StudentScheduleBillingSurface['lessons'][number];
+  } | null>(null);
   const [teacherNotes, setTeacherNotes] = useState('');
   const [material, setMaterial] = useState<AssignmentMaterial>(emptyAssignmentMaterial);
   const [materialAttempted, setMaterialAttempted] = useState(false);
@@ -1615,6 +1620,8 @@ export const MinimalAssignment: React.FC = () => {
     }
 
     let active = true;
+    setScheduleSurface(null);
+    setScheduleSurfaceError(null);
     void getStudentScheduleBillingSurface(studentId)
       .then((surface) => {
         if (!active) return;
@@ -2386,7 +2393,10 @@ export const MinimalAssignment: React.FC = () => {
       setActiveStep('review');
       if (response.session.studentId) {
         void getStudentScheduleBillingSurface(response.session.studentId)
-          .then(setScheduleSurface)
+          .then((surface) => {
+            if (activeAssignmentSessionRef.current?.studentId === surface.studentId)
+              setScheduleSurface(surface);
+          })
           .catch(() => {});
       }
     } catch (error) {
@@ -2962,17 +2972,50 @@ export const MinimalAssignment: React.FC = () => {
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
   ]);
-  const linkedLesson = useMemo(() => {
-    if (!linkedLessonId || !scheduleSurface) return null;
-    return scheduleSurface.lessons.find((lesson) => lesson.id === linkedLessonId) ?? null;
-  }, [linkedLessonId, scheduleSurface]);
+  useEffect(() => {
+    const studentId = source.selectedStudentId.trim();
+    setExactLinkedLesson(null);
+    if (!studentId || !linkedLessonId) return;
+    if (
+      scheduleSurface?.studentId === studentId &&
+      [
+        ...scheduleSurface.lessonWindows.today,
+        ...scheduleSurface.lessonWindows.recent.items,
+        ...scheduleSurface.lessonWindows.upcoming.items,
+      ].some((lesson) => lesson.id === linkedLessonId)
+    )
+      return;
+    let active = true;
+    void getStudentLesson(studentId, linkedLessonId)
+      .then((lesson) => {
+        if (active) setExactLinkedLesson({ studentId, lesson });
+      })
+      .catch(() => {
+        /* Keep the durable link visible even if the exact read is unavailable. */
+      });
+    return () => {
+      active = false;
+    };
+  }, [source.selectedStudentId, linkedLessonId, scheduleSurface]);
+  const linkedLesson =
+    (scheduleSurface?.studentId === source.selectedStudentId
+      ? [
+          ...scheduleSurface.lessonWindows.today,
+          ...scheduleSurface.lessonWindows.recent.items,
+          ...scheduleSurface.lessonWindows.upcoming.items,
+        ].find((lesson) => lesson.id === linkedLessonId)
+      : null) ??
+    (exactLinkedLesson?.studentId === source.selectedStudentId &&
+    exactLinkedLesson.lesson.id === linkedLessonId
+      ? exactLinkedLesson.lesson
+      : null);
   const linkedLessonContextLabel = linkedLessonId
     ? formatLessonContext(linkedLesson, linkedLessonId)
     : null;
   const lessonSuggestions = useMemo<AssignmentLessonSuggestion[]>(() => {
-    if (!scheduleSurface) return [];
+    if (!scheduleSurface || scheduleSurface.studentId !== source.selectedStudentId) return [];
     const nowMs = Date.now();
-    return scheduleSurface.lessons
+    return [...scheduleSurface.lessonWindows.today, ...scheduleSurface.lessonWindows.recent.items]
       .filter((lesson) => lesson.id !== linkedLessonId)
       .filter((lesson) => isRecentPassedNoHomeworkLesson(lesson, nowMs))
       .sort((left, right) => new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime())
@@ -2985,7 +3028,7 @@ export const MinimalAssignment: React.FC = () => {
           detail: `Lesson ${lesson.id}`,
         };
       });
-  }, [linkedLessonId, scheduleSurface]);
+  }, [linkedLessonId, scheduleSurface, source.selectedStudentId]);
   const workflowStages = useMemo<WorkflowStage[]>(() => {
     const downstreamArtifactReady = authoring.promptReady || hasAssignmentContent || jobReady;
     const startStatus: WorkflowStageStatus = hasStartedFlow ? 'complete' : 'current';

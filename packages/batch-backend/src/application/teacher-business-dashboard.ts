@@ -1103,7 +1103,7 @@ function validateBusinessTimezone(timezone: string): void {
   normalizeBusinessTimezone(timezone);
 }
 
-function normalizeBusinessTimezone(timezone: string): string {
+export function normalizeBusinessTimezone(timezone: string): string {
   const trimmed = timezone.trim();
   const alias = TIMEZONE_ALIASES.get(trimmed.toUpperCase());
   const normalized = alias ?? normalizeFixedOffsetTimezone(trimmed) ?? trimmed;

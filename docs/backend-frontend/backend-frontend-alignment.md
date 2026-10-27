@@ -146,6 +146,17 @@ revision content/history are preserved.
   URLs, rerun lineage, and required markdown storage remain read-only history. Current API, DB, and
   migration pins are machine-owned by [`packages/contracts/src/contract-versions.ts`](../../packages/contracts/src/contract-versions.ts),
   so the historical values in this paragraph are not the latest contract versions.
+- Student Schedule & Billing reads independent Today, Recent (10) and Upcoming (3) occurrence
+  windows using workspace Business timezone. Each older/future page uses an authorized
+  `(starts_at,id)` keyset bound to the initial student/window/local day/timezone; mutations and
+  explicit refresh replace the initial windows. Visible cancellations count as occurrences and hidden
+  replacement projections remain excluded. The next scheduled session card stays independent.
+  Lesson checks precede collapsed management and payment-entry controls; failed paging retains rows,
+  and student switches or superseding refresh/mutations reject stale responses. Assignment suggestions
+  use Today/Recent, with an exact authorized lesson read for links outside those windows.
+  API 12.2 adds these reads and preserves the legacy descending 30-row `lessons` field unchanged.
+  Sync depth, identities, accounting and assignment links are unchanged; a usual recurrence summary
+  remains deferred because current occurrence DTOs do not establish an authoritative recurrence rule.
 - Session recovery and confirmation use session revision CAS. Transcript/draft recovery use working
   version CAS and content-addressed objects. Confirmed Source/Create snapshots hold the server-owned
   immutable URI, hash, and working version directly; no content-revision tables exist.

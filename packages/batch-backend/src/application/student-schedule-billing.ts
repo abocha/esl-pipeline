@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
+import { z } from 'zod';
 
 import type {
   AddStudentPackageRequest,
@@ -10,8 +11,11 @@ import type {
   StudentLessonDto,
   StudentLessonHomeworkDto,
   StudentLessonHomeworkStatus,
+  StudentLessonPageResponse,
   StudentLessonPlanDto,
   StudentLessonStatus,
+  StudentLessonWindow,
+  StudentLessonWindowsDto,
   StudentPaymentRecordDto,
   StudentReminderLessonSummaryDto,
   StudentReminderRecommendationDto,
@@ -23,6 +27,7 @@ import type {
 import { ACTIVE_ASSIGNMENT_SESSION_SQL } from '../domain/assignment-session-repository.js';
 import { setStudentActivityActor } from '../domain/student-activity-recording.js';
 import { withPgClient } from '../infrastructure/db.js';
+import { normalizeBusinessTimezone } from './teacher-business-dashboard.js';
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 const DEFAULT_TIMEZONE = 'UTC';
@@ -219,6 +224,159 @@ export async function getStudentScheduleBillingSurface(
     if (!context) return null;
     return getSurfaceForContext(client, context);
   });
+}
+
+export async function getStudentLesson(
+  workspaceId: string,
+  studentId: string,
+  lessonId: string,
+): Promise<StudentLessonDto | null> {
+  return withPgClient(async (client) => {
+    const context = await getAuthorizedStudentContext(client, workspaceId, studentId);
+    if (!context) return null;
+    const result = await client.query<LessonRow>(
+      `SELECT ${LESSON_HOMEWORK_SELECT} FROM student_lessons
+       ${LESSON_HOMEWORK_JOINS}
+       WHERE student_id = $1 AND ${workspacePredicate('workspace_id', '$2', '$3')}
+         AND student_lessons.id = $4::uuid AND schedule_hidden_at IS NULL`,
+      [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID, lessonId],
+    );
+    return result.rows[0] ? mapLesson(result.rows[0]) : null;
+  });
+}
+
+const lessonCursorSchema = z
+  .object({
+    studentId: z.string(),
+    workspaceId: z.string(),
+    window: z.enum(['recent', 'upcoming']),
+    timezone: z.string(),
+    date: z.iso.date(),
+    startsAt: z.iso.datetime(),
+    id: z.string().uuid(),
+  })
+  .strict();
+type LessonCursor = z.infer<typeof lessonCursorSchema>;
+
+export async function getStudentLessonPage(
+  workspaceId: string,
+  studentId: string,
+  window: StudentLessonWindow,
+  cursor: string,
+): Promise<StudentLessonPageResponse | null> {
+  return withPgClient(async (client) => {
+    const context = await getAuthorizedStudentContext(client, workspaceId, studentId);
+    if (!context) return null;
+    let decoded: LessonCursor;
+    try {
+      if (cursor.length > 2048) throw new Error('Oversized cursor');
+      decoded = lessonCursorSchema.parse(JSON.parse(Buffer.from(cursor, 'base64url').toString()));
+    } catch {
+      throw new StudentScheduleBillingError('invalid_request', 400, 'Invalid lesson cursor');
+    }
+    const timezone = await getScheduleTimezone(client, context);
+    if (
+      decoded.studentId !== studentId ||
+      decoded.workspaceId !== workspaceId ||
+      decoded.window !== window ||
+      decoded.timezone !== timezone
+    ) {
+      throw new StudentScheduleBillingError(
+        'invalid_request',
+        400,
+        'Lesson window changed. Refresh lessons.',
+      );
+    }
+    return readLessonPage(client, context, { timezone, date: decoded.date }, window, 10, decoded);
+  });
+}
+
+async function getScheduleTimezone(client: PoolClient, context: StudentContext): Promise<string> {
+  const result = await client.query<{ timezone: string }>(
+    'SELECT timezone FROM workspace_business_settings WHERE workspace_id = $1',
+    [context.workspaceId],
+  );
+  return normalizeBusinessTimezone(result.rows[0]?.timezone ?? DEFAULT_TIMEZONE);
+}
+
+async function getLessonWindows(
+  client: PoolClient,
+  context: StudentContext,
+): Promise<StudentLessonWindowsDto> {
+  const timezone = await getScheduleTimezone(client, context);
+  const result = await client.query<{ date: string }>(
+    "SELECT to_char($1::timestamptz AT TIME ZONE $2, 'YYYY-MM-DD') AS date",
+    [new Date(), timezone],
+  );
+  const date = result.rows[0]?.date;
+  if (!date) throw new Error('Lesson date unavailable');
+  const boundary = { timezone, date };
+  const today = await client.query<LessonRow>(
+    `SELECT ${LESSON_HOMEWORK_SELECT} FROM student_lessons ${LESSON_HOMEWORK_JOINS}
+     WHERE student_id = $1 AND ${workspacePredicate('workspace_id', '$2', '$3')}
+       AND schedule_hidden_at IS NULL
+       AND starts_at >= ($4::date::timestamp AT TIME ZONE $5)
+       AND starts_at < (($4::date + 1)::timestamp AT TIME ZONE $5)
+     ORDER BY starts_at ASC, id ASC`,
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID, boundary.date, timezone],
+  );
+  return {
+    ...boundary,
+    today: today.rows.map(mapLesson),
+    recent: await readLessonPage(client, context, boundary, 'recent', 10),
+    upcoming: await readLessonPage(client, context, boundary, 'upcoming', 3),
+  };
+}
+
+async function readLessonPage(
+  client: PoolClient,
+  context: StudentContext,
+  boundary: { timezone: string; date: string },
+  window: StudentLessonWindow,
+  limit: number,
+  cursor?: LessonCursor,
+): Promise<StudentLessonPageResponse> {
+  const recent = window === 'recent';
+  const order = recent ? 'DESC' : 'ASC';
+  const result = await client.query<LessonRow & { paging_starts_at: string }>(
+    `SELECT ${LESSON_HOMEWORK_SELECT},
+       to_char(starts_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS paging_starts_at
+     FROM student_lessons ${LESSON_HOMEWORK_JOINS}
+     WHERE student_id = $1 AND ${workspacePredicate('workspace_id', '$2', '$3')}
+       AND schedule_hidden_at IS NULL
+       AND starts_at ${recent ? '< ($4::date::timestamp' : '>= (($4::date + 1)::timestamp'} AT TIME ZONE $5)
+       AND ($6::timestamptz IS NULL OR (starts_at, student_lessons.id) ${recent ? '<' : '>'} ($6::timestamptz, $7::uuid))
+     ORDER BY starts_at ${order}, id ${order}
+     LIMIT $8`,
+    [
+      context.id,
+      context.workspaceId,
+      DEFAULT_WORKSPACE_ID,
+      boundary.date,
+      boundary.timezone,
+      cursor?.startsAt ?? null,
+      cursor?.id ?? null,
+      limit + 1,
+    ],
+  );
+  const rows = result.rows.slice(0, limit);
+  const last = rows.at(-1);
+  return {
+    items: rows.map(mapLesson),
+    nextCursor:
+      result.rows.length > limit && last
+        ? Buffer.from(
+            JSON.stringify({
+              ...boundary,
+              studentId: context.id,
+              workspaceId: context.workspaceId ?? DEFAULT_WORKSPACE_ID,
+              window,
+              startsAt: last.paging_starts_at,
+              id: last.id,
+            } satisfies LessonCursor),
+          ).toString('base64url')
+        : null,
+  };
 }
 
 export async function hideStudentLessonFollowupReminder(
@@ -535,6 +693,7 @@ async function getSurfaceForContext(
   const plan = await getLessonPlan(client, context);
   const nextLesson = await getNextLesson(client, context);
   const lessons = await listLessons(client, context);
+  const lessonWindows = await getLessonWindows(client, context);
   const creditEvents = await listCreditEvents(client, context);
   const payments = await listPayments(client, context);
   const reminderPrefs = await getReminderPreferences(client, context);
@@ -554,6 +713,7 @@ async function getSurfaceForContext(
     lessonPlan: plan,
     nextLesson: nextLesson ? mapLesson(nextLesson) : null,
     lessons: lessons.map((lesson) => mapLesson(lesson)),
+    lessonWindows,
     creditSummary,
     creditEvents: creditEvents.map((event) => mapCreditEvent(event)),
     payments: payments.map((payment) => mapPayment(payment)),
@@ -582,7 +742,7 @@ async function getAuthorizedStudentContext(
   const result = await client.query<{
     id: string;
     student: string;
-    workspace_id: string | null;
+    workspace_id: string;
   }>(
     `
     SELECT id, student, COALESCE(workspace_id, $3::uuid) AS workspace_id

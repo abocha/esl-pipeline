@@ -16,6 +16,8 @@ describeHttpServerIntegrationSuite(
     mockGetStudentProfileById,
     mockGetStudentTimeline,
     mockGetStudentScheduleBillingSurface,
+    mockGetStudentLesson,
+    mockGetStudentLessonPage,
     mockHideStudentLessonFollowupReminder,
     mockListStudentProfiles,
     mockResolvePrimaryWorkspaceIdForUser,
@@ -1181,6 +1183,42 @@ describeHttpServerIntegrationSuite(
         });
         expect(response.statusCode).toBe(400);
       }
+    });
+
+    it('validates lesson page/exact reads and passes only the authenticated workspace', async () => {
+      const studentId = deriveStudentId('Anna');
+      const lessonId = '00000000-0000-4000-8000-000000000088';
+      mockGetStudentLessonPage.mockResolvedValue({ items: [], nextCursor: null });
+      mockGetStudentLesson.mockResolvedValue(null);
+      const page = await app.inject({
+        method: 'GET',
+        url: `/students/${studentId}/lessons?window=recent&cursor=opaque&workspaceId=foreign`,
+      });
+      expect(page.statusCode).toBe(200);
+      expect(mockGetStudentLessonPage).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        'recent',
+        'opaque',
+      );
+      const exact = await app.inject({
+        method: 'GET',
+        url: `/students/${studentId}/lessons/${lessonId}`,
+      });
+      expect(exact.statusCode).toBe(404);
+      expect(mockGetStudentLesson).toHaveBeenCalledWith(DEFAULT_WORKSPACE_ID, studentId, lessonId);
+      for (const url of [
+        `/students/${studentId}/lessons?window=today&cursor=opaque`,
+        `/students/${studentId}/lessons?window=recent`,
+        `/students/${studentId}/lessons/not-a-uuid`,
+      ]) {
+        expect((await app.inject({ method: 'GET', url })).statusCode).toBe(400);
+      }
+      mockResolvePrimaryWorkspaceIdForUser.mockRejectedValueOnce(new WorkspaceContextError());
+      expect(
+        (await app.inject({ method: 'GET', url: `/students/${studentId}/lessons/${lessonId}` }))
+          .statusCode,
+      ).toBe(403);
     });
 
     it('passes authenticated workspace membership through every student business route', async () => {

@@ -937,6 +937,13 @@ export function registerPromptStudentSelectionTests() {
       );
       vi.mocked(api.getStudentScheduleBillingSurface).mockResolvedValueOnce(
         makeScheduleBillingSurface({
+          lessonWindows: {
+            timezone: 'UTC',
+            date: '2026-02-05',
+            today: [],
+            recent: { items: [], nextCursor: null },
+            upcoming: { items: [], nextCursor: null },
+          },
           lessons: [
             makeStudentLesson({
               id: 'lesson-followup-1',
@@ -944,6 +951,13 @@ export function registerPromptStudentSelectionTests() {
               title: 'Pitch follow-up',
             }),
           ],
+        }),
+      );
+      vi.mocked(api.getStudentLesson).mockResolvedValue(
+        makeStudentLesson({
+          id: 'lesson-followup-1',
+          startsAt: '2026-02-04T10:00:00.000Z',
+          title: 'Pitch follow-up',
         }),
       );
       const user = createMinimalUser();
@@ -1068,22 +1082,34 @@ export function registerPromptStudentSelectionTests() {
       const recentStart = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
       vi.mocked(api.getStudentScheduleBillingSurface).mockResolvedValueOnce(
         makeScheduleBillingSurface({
+          lessonWindows: {
+            timezone: 'UTC',
+            date: '2026-02-05',
+            today: [],
+            upcoming: { items: [], nextCursor: null },
+            recent: {
+              nextCursor: null,
+              items: [
+                makeStudentLesson({
+                  id: 'lesson-recent-no-homework',
+                  startsAt: recentStart,
+                  title: 'Client update practice',
+                }),
+                makeStudentLesson({
+                  id: 'lesson-has-homework',
+                  startsAt: recentStart,
+                  title: 'Already assigned',
+                  homework: {
+                    ...makeStudentLesson().homework,
+                    status: 'published',
+                    htmlUrl: 'https://example.test/homework',
+                  },
+                }),
+              ],
+            },
+          },
           lessons: [
-            makeStudentLesson({
-              id: 'lesson-recent-no-homework',
-              startsAt: recentStart,
-              title: 'Client update practice',
-            }),
-            makeStudentLesson({
-              id: 'lesson-has-homework',
-              startsAt: recentStart,
-              title: 'Already assigned',
-              homework: {
-                ...makeStudentLesson().homework,
-                status: 'published',
-                htmlUrl: 'https://example.test/homework',
-              },
-            }),
+            makeStudentLesson({ id: 'unrelated-future', startsAt: '2027-01-01T00:00:00Z' }),
           ],
         }),
       );

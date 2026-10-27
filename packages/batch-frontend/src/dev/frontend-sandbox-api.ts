@@ -854,7 +854,7 @@ function profileCandidateList() {
 }
 
 function scheduleBillingSurface() {
-  return {
+  const surface = {
     studentId: 'student-alex',
     workspaceId: 'workspace-sandbox',
     lessonPlan: {
@@ -908,6 +908,37 @@ function scheduleBillingSurface() {
     payments: [],
     reminders: [],
     latestHiddenReminder: null,
+  };
+  const dayStart = Date.parse('2026-07-02T17:00:00.000Z');
+  const makeLesson = (index: number, day: number) => ({
+    ...surface.nextLesson,
+    id: `sandbox-lesson-${index}`,
+    startsAt: new Date(dayStart + day * 86400000 + 11 * 3600000).toISOString(),
+    title:
+      day === 0
+        ? 'Today: conversation practice'
+        : day < 0
+          ? `Recent conversation ${-day}`
+          : `Upcoming conversation ${day}`,
+    status: day === 2 ? 'canceled' : day < 0 ? 'completed' : 'scheduled',
+    schedulingSource: 'calendar',
+    calendarEventUrl: 'https://calendar.google.com/',
+  });
+  const recent = Array.from({ length: 23 }, (_, i) => makeLesson(i, -i - 1));
+  const upcoming = Array.from({ length: 45 }, (_, i) => makeLesson(30 + i, i + 1));
+  const today = [makeLesson(100, 0)];
+  return {
+    ...surface,
+    nextLesson: upcoming[0],
+    lessons: upcoming.slice(-30).reverse(),
+    lessonWindows: {
+      timezone: 'Asia/Saigon',
+      date: '2026-07-03',
+      today,
+      recent: { items: recent.slice(0, 10), nextCursor: 'recent:10' },
+      upcoming: { items: upcoming.slice(0, 3), nextCursor: 'upcoming:3' },
+    },
+    sandboxLessons: { recent, upcoming, today },
   };
 }
 
@@ -2400,6 +2431,23 @@ export function createFrontendSandboxApiAdapter(
       });
     }
 
+    if (method === 'get' && path === '/students/student-alex/lessons') {
+      const surface = scheduleBillingSurface();
+      const window = config.params?.window === 'recent' ? 'recent' : 'upcoming';
+      const offset = Number(String(config.params?.cursor).split(':')[1]);
+      const rows = surface.sandboxLessons[window];
+      return responseFor(config, {
+        items: rows.slice(offset, offset + 10),
+        nextCursor: offset + 10 < rows.length ? `${window}:${offset + 10}` : null,
+      });
+    }
+    if (method === 'get' && path.startsWith('/students/student-alex/lessons/')) {
+      const id = decodeURIComponent(path.split('/').at(-1) ?? '');
+      const rows = Object.values(scheduleBillingSurface().sandboxLessons).flat();
+      const lesson = rows.find((item) => item.id === id);
+      if (lesson) return responseFor(config, lesson);
+      throw new AxiosError('Lesson not found', '404', config);
+    }
     if (method === 'get' && path === '/students/student-alex/surfaces/schedule-billing') {
       return responseFor(config, scheduleBillingSurface());
     }
