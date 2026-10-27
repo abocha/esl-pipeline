@@ -296,7 +296,10 @@ async function getScheduleTimezone(client: PoolClient, context: StudentContext):
     'SELECT timezone FROM workspace_business_settings WHERE workspace_id = $1',
     [context.workspaceId],
   );
-  return normalizeBusinessTimezone(result.rows[0]?.timezone ?? DEFAULT_TIMEZONE);
+  const timezone = normalizeBusinessTimezone(result.rows[0]?.timezone ?? DEFAULT_TIMEZONE);
+  // Some PostgreSQL system tzdata installations omit the legacy Saigon link.
+  // Keep the same workspace calendar rules using its current IANA name.
+  return timezone.toLowerCase() === 'asia/saigon' ? 'Asia/Ho_Chi_Minh' : timezone;
 }
 
 async function getLessonWindows(

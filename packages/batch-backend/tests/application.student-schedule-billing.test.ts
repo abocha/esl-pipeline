@@ -566,7 +566,10 @@ describeIfPg('application/student-schedule-billing', () => {
     });
     const before = await readStudentBusinessMutationSnapshot(studentId);
     const surface = await getStudentScheduleBillingSurface(alpha.workspaceId, studentId);
-    expect(surface?.lessonWindows).toMatchObject({ timezone: 'Asia/Saigon', date: '2026-05-05' });
+    expect(surface?.lessonWindows).toMatchObject({
+      timezone: 'Asia/Ho_Chi_Minh',
+      date: '2026-05-05',
+    });
     expect(surface?.lessonWindows.today.map((lesson) => lesson.id)).toEqual([today, endToday]);
     expect(surface?.lessonWindows.upcoming.items.map((lesson) => lesson.id)).toEqual([
       moved,

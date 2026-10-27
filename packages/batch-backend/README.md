@@ -94,6 +94,8 @@ Core surfaces:
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
 - Schedule & Billing returns `lessonWindows`: all visible occurrences starting on the workspace
   Business calendar day (ascending), 10 before that day (descending), and three after it (ascending).
+  The legacy `Asia/Saigon` setting uses equivalent `Asia/Ho_Chi_Minh` for these reads so PostgreSQL
+  installations without legacy timezone links work without rewriting stored settings.
   `GET /students/:id/lessons?window=recent|upcoming&cursor=...` loads ten more using an opaque
   `(starts_at,id)` cursor bound to the authorized workspace/student/window and initial local date
   and timezone. A timezone change requires refresh; crossing midnight preserves the initial window
