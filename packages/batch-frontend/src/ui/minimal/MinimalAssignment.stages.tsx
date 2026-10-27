@@ -1033,6 +1033,68 @@ export function SourceStageSection({
   );
 }
 
+function LearnerContextSection({ section }: { section: ProfileDossierSection }) {
+  const contentId = React.useId();
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = React.useState(false);
+  const [textOverflows, setTextOverflows] = React.useState(false);
+  const items = section.items ?? [];
+
+  React.useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content || expanded || (!section.items?.length && !section.body)) return;
+    // Measure the actual two-line preview, including a single very long item.
+    // ResizeObserver also catches wrapping changes and sections opened inside details.
+    const measure = () => {
+      setTextOverflows(
+        Array.from(content.querySelectorAll('.assignment-learner-preview')).some(
+          (item) => item.scrollHeight > item.clientHeight + 1,
+        ),
+      );
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(content);
+    return () => observer?.disconnect();
+  }, [expanded, section.items, section.body]);
+
+  const canExpand = expanded || items.length > 2 || textOverflows;
+  const label = section.title.toLowerCase();
+  return (
+    <section className="assignment-learner-section">
+      <h4>
+        <section.icon aria-hidden="true" />
+        {section.title}
+      </h4>
+      <div id={contentId} ref={contentRef}>
+        {items.length ? (
+          <ul>
+            {(expanded ? items : items.slice(0, 2)).map((item, index) => (
+              <li key={`${index}-${item}`}>
+                <span className={expanded ? undefined : 'assignment-learner-preview'}>{item}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={expanded ? undefined : 'assignment-learner-preview'}>{section.body}</p>
+        )}
+      </div>
+      {canExpand ? (
+        <button
+          type="button"
+          className="minimal-secondary assignment-learner-toggle"
+          aria-expanded={expanded}
+          aria-controls={contentId}
+          aria-label={expanded ? `Show less ${label}` : undefined}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? 'Show less' : `Show all ${label}${items.length ? ` (${items.length})` : ''}`}
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
 export function ContextStageSection({
   stage,
   sectionRef,
@@ -1074,22 +1136,7 @@ export function ContextStageSection({
   );
 
   const renderSection = (section: ProfileDossierSection) => (
-    <section className="assignment-learner-section" key={section.id}>
-      <h4>
-        <section.icon aria-hidden="true" />
-        {section.title}
-      </h4>
-
-      {section.items?.length ? (
-        <ul>
-          {section.items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      ) : (
-        <p>{section.body}</p>
-      )}
-    </section>
+    <LearnerContextSection section={section} key={section.id} />
   );
 
   const path = `/students/${encodeURIComponent(studentId)}/learning`;
@@ -1128,6 +1175,16 @@ export function ContextStageSection({
         <aside className="assignment-learner-context" aria-label="Learner context">
           <h3>Learner context</h3>
 
+          <div className="assignment-learner-identity">
+            <span className="minimal-profile-dossier-avatar" aria-hidden="true">
+              {getProfileInitials(studentName)}
+            </span>
+            <strong>
+              {studentName || 'Learner'}
+              {profilePreview?.overallLevel ? ` · ${profilePreview.overallLevel}` : ''}
+            </strong>
+          </div>
+
           {profileRevisionError ? (
             <div role="alert">
               <p className="minimal-error">{profileRevisionError}</p>
@@ -1141,30 +1198,7 @@ export function ContextStageSection({
             <p role="status" className="minimal-muted">
               Loading learner context…
             </p>
-          ) : profilePreview ? (
-            <>
-              <div className="assignment-learner-identity">
-                <span className="minimal-profile-dossier-avatar" aria-hidden="true">
-                  {getProfileInitials(studentName)}
-                </span>
-                <strong>
-                  {studentName || 'Learner'}
-                  {profilePreview.overallLevel ? ` · ${profilePreview.overallLevel}` : ''}
-                </strong>
-              </div>
-
-              {sections
-                .filter((section) => ['goals', 'challenges', 'interests'].includes(section.id))
-                .map(renderSection)}
-
-              {additional.length ? (
-                <details className="minimal-details">
-                  <summary>More learner context</summary>
-                  {additional.map(renderSection)}
-                </details>
-              ) : null}
-            </>
-          ) : learnerContext.state !== 'preparing' ? (
+          ) : !profilePreview && learnerContext.state !== 'preparing' ? (
             <p className="minimal-muted">No structured Learning page context is available yet.</p>
           ) : null}
 
@@ -1185,6 +1219,29 @@ export function ContextStageSection({
               Learner context could not be prepared from this lesson. You can continue with the
               available context.
             </p>
+          ) : null}
+
+          {!profileRevisionError &&
+          learnerContext &&
+          profilePreview &&
+          sections.some((section) => section.id !== 'level') ? (
+            <div
+              key={`${studentId}:${sessionId ?? learnerContext.assignmentSessionId}`}
+              className="assignment-learner-reading-area"
+              role="region"
+              aria-label="Learner profile details"
+              tabIndex={0}
+            >
+              {sections
+                .filter((section) => ['goals', 'challenges', 'interests'].includes(section.id))
+                .map(renderSection)}
+              {additional.length ? (
+                <details className="minimal-details">
+                  <summary>More learner context</summary>
+                  {additional.map(renderSection)}
+                </details>
+              ) : null}
+            </div>
           ) : null}
 
           {studentId ? (
