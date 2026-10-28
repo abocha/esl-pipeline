@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AssignmentLearnerContext } from '../../utils/api';
@@ -40,6 +41,108 @@ function mount(context: AssignmentLearnerContext, notes = '') {
 }
 
 describe('assignment learner-context presentation', () => {
+  const preview = {
+    studentId: 'student-1',
+    overallLevel: 'B1',
+    primaryGoals: ['First goal.', 'Second goal.', 'Third goal.'],
+    persistentChallenges: ['First challenge.', 'Second challenge.', 'Third challenge.'],
+    interests: ['First interest.', 'Second interest.', 'Third interest.'],
+    communicationContexts: [],
+    stableStrengths: [],
+    studyPreferences: [],
+    durableConstraints: [],
+    goalsAndContexts: [],
+    strengthsAndChallenges: [],
+    teacherNoteSnippet: 'An exact durable teacher note.',
+    updatedAt: null,
+  };
+  function profileStage(studentId = 'student-1', sessionId = 'session-1') {
+    return (
+      <ContextStageSection
+        stage={{ id: 'context', title: 'Teaching context', description: '', status: 'current' }}
+        studentId={studentId}
+        studentName="Alex"
+        selectedProfileId={studentId}
+        sessionId={sessionId}
+        profilePreview={preview}
+        profileRevisionError={null}
+        learnerContext={baseContext}
+        teacherNotes=""
+        onTeacherNotesChange={vi.fn()}
+      />
+    );
+  }
+
+  it('reveals exact primary items with named keyboard controls and keeps status outside the reading region', async () => {
+    const user = userEvent.setup();
+    render(profileStage());
+    const region = screen.getByRole('region', { name: 'Learner profile details' });
+    expect(region.tabIndex).toBe(0);
+    expect(within(region).queryByText(/Preparing learner context/)).toBeNull();
+    expect(within(region).queryByRole('link', { name: 'Edit in Learning' })).toBeNull();
+    for (const [name, last] of [
+      ['goals', 'Third goal.'],
+      ['challenges', 'Third challenge.'],
+      ['interests', 'Third interest.'],
+    ] as const) {
+      expect(screen.queryByText(last)).toBeNull();
+      const button = screen.getByRole('button', { name: `Show all ${name} (3)` });
+      const controlledId = button.getAttribute('aria-controls');
+      button.focus();
+      await user.keyboard('{Enter}');
+      expect(button.getAttribute('aria-expanded')).toBe('true');
+      expect(document.getElementById(controlledId!)?.textContent).toContain(last);
+      expect(screen.getAllByText(last)).toHaveLength(1);
+      await user.keyboard(' ');
+      expect(screen.queryByText(last)).toBeNull();
+      expect(document.activeElement).toBe(button);
+    }
+  });
+
+  it('resets primary and secondary disclosures for both learner and assignment switches', () => {
+    const view = render(profileStage());
+    for (const next of [profileStage('student-2'), profileStage('student-2', 'session-2')]) {
+      fireEvent.click(screen.getByRole('button', { name: 'Show all goals (3)' }));
+      const details = screen.getByText('More learner context').closest('details')!;
+      details.open = true;
+      view.rerender(next);
+      expect(screen.queryByText('Third goal.')).toBeNull();
+      expect(screen.getByText('More learner context').closest('details')?.open).toBe(false);
+    }
+  });
+
+  it('offers disclosure for a single clipped paragraph and secondary teacher note', () => {
+    // jsdom has no layout: emulate only the browser overflow signal here.
+    // Real two-line clipping and viewport containment are verified in the browser.
+    const scroll = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(80);
+    const client = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(40);
+    try {
+      render(
+        <ContextStageSection
+          stage={{ id: 'context', title: '', description: '', status: 'current' }}
+          studentId="student-1"
+          studentName="Alex"
+          selectedProfileId="student-1"
+          profilePreview={{ ...preview, primaryGoals: ['One huge paragraph. '.repeat(60)] }}
+          profileRevisionError={null}
+          learnerContext={baseContext}
+          teacherNotes=""
+          onTeacherNotesChange={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Show all goals (1)' }));
+      expect(screen.getByText('One huge paragraph. '.repeat(60).trim()).textContent).toBe(
+        'One huge paragraph. '.repeat(60).trim(),
+      );
+      fireEvent.click(screen.getByText('More learner context'));
+      fireEvent.click(screen.getByRole('button', { name: 'Show all teacher note' }));
+      expect(screen.getAllByText(preview.teacherNoteSnippet)).toHaveLength(1);
+    } finally {
+      scroll.mockRestore();
+      client.mockRestore();
+    }
+  });
+
   it('expands only populated additional context and keeps the summary unique', () => {
     render(
       <ContextStageSection

@@ -1728,6 +1728,8 @@
 }
 .assignment-learner-context {
   min-width: 0;
+  align-self: start;
+  overflow-wrap: anywhere;
   border-left: 1px solid var(--border-light);
   padding-left: var(--space-6);
 }
@@ -1739,6 +1741,33 @@
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
+}
+.assignment-learner-identity strong {
+  min-width: 0;
+}
+.assignment-learner-identity .minimal-profile-dossier-avatar {
+  flex-shrink: 0;
+}
+.assignment-learner-reading-area {
+  max-height: min(28rem, 50dvh);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-inline: var(--space-1);
+}
+.assignment-learner-reading-area:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
+.assignment-learner-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.assignment-learner-toggle {
+  margin-top: var(--space-3);
+  max-width: 100%;
+  white-space: normal;
 }
 .assignment-learner-section {
   border-top: 1px solid var(--border-light);
@@ -1767,6 +1796,11 @@
   margin-top: var(--space-4);
 }
 @media (max-width: 960px) {
+  .assignment-learner-reading-area {
+    max-height: none;
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
   .assignment-context-layout {
     grid-template-columns: 1fr;
   }

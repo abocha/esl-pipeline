@@ -188,6 +188,19 @@ Canonical behavior and current status live in:
 
 ## Assignment material (Step 3)
 
+The learner reference keeps identity, current level, context readiness/error messages, Retry and
+Edit in Learning outside a single keyboard-scrollable profile reading area on desktop. Goals,
+Challenges and Interests preview up to two items and two lines per item, with section-specific
+Show all / Show less controls whenever items or text are hidden. More learner context contains
+only populated secondary sections, with the same disclosure for long text and teacher notes.
+Full source text is retained; disclosures reset when the learner or assignment session changes.
+At the 960px stacked-layout breakpoint, the profile has no internal height or scrolling limit.
+With the frontend dev server running, `/learner-context-preview.html` renders synthetic short,
+long, huge-item, partial, empty, missing and unavailable profiles in the real shell and assignment
+workflow components, including the footer. It also supports long names, readiness states, Retry,
+learner/session switches and editable guidance. This standalone development entry uses props only;
+it makes no API/provider calls and is not backend or full application persistence evidence.
+
 Fresh assignments select Generated. Authentic requires a public HTTP(S) source link and editable
 source text; articles use pasted excerpts. YouTube retrieval runs only after Fetch transcript,
 through the authenticated backend. Missing configuration or provider failures retain the manual
