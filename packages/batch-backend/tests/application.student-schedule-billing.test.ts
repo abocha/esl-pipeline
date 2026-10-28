@@ -1841,6 +1841,34 @@ describeIfPg('application/student-schedule-billing', () => {
     });
   });
 
+  it.each([-2, -1, 0, 1, 2])(
+    'offers optional student top-up discussions for a balance of %i without demanding payment',
+    async (remaining) => {
+      const { studentId } = await seedStudent();
+      if (remaining !== 0) await insertBusinessCreditEvent(studentId, remaining);
+
+      const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+      const balanceReminders = surface?.reminders.filter((item) =>
+        ['low_balance', 'payment_followup'].includes(item.type),
+      );
+      expect(balanceReminders?.map((item) => item.type)).toEqual(
+        remaining <= 0 ? ['low_balance', 'payment_followup'] : ['low_balance'],
+      );
+      for (const reminder of balanceReminders ?? []) {
+        expect(reminder).toMatchObject({
+          channel: 'manual',
+          actionIntent: 'copy_text',
+          severity: remaining < 0 ? 'urgent' : 'attention',
+          message: `${remaining} lesson credit${Math.abs(remaining) === 1 ? '' : 's'} remaining.`,
+          copyText: `Hi Alex, your lesson balance is ${remaining} credit${Math.abs(remaining) === 1 ? '' : 's'}. Would you like to discuss a top-up?`,
+        });
+      }
+      expect(balanceReminders?.find((item) => item.type === 'payment_followup')?.title).toBe(
+        remaining <= 0 ? 'Review lesson credit balance' : undefined,
+      );
+    },
+  );
+
   it('honors stored reminder opt-outs', async () => {
     const { studentId, userId } = await seedStudent();
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {

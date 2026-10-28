@@ -70,8 +70,9 @@ Core surfaces:
 - student archive/restore under `/students/:id/archive` and `/students/:id/restore`; archived students are hidden from default student reads without deleting history
 - Business monthly recorded payments retain archived students' history, exclude voided records,
   and separate currencies. Lesson/workload, credit suggestions and recent-payment lists still
-  cover non-archived students. Low-credit message drafts state the balance and offer an optional
-  top-up discussion; they do not establish debt or renewal. Business uses workspace thresholds;
+  cover non-archived students. Business and Student Schedule & Billing low-credit/payment-follow-up
+  drafts state the balance and offer an optional top-up discussion, including zero and negative
+  balances; they do not establish debt or renewal. Business uses workspace thresholds;
   per-student reminder preferences currently apply only to Student Schedule & Billing.
 - student-area route payloads under `/students/:id/surfaces/overview`, `/students/:id/surfaces/learning`, and `/students/:id/surfaces/history`
 - Student-area surfaces, profile revisions, memory, timeline, candidate review/promotion and

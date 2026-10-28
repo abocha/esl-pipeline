@@ -101,6 +101,8 @@ Canonical behavior and current status live in:
   Refresh obtains a new local-day boundary. Assignment suggestions use Today plus Recent, and an
   exact authorized lesson read preserves linked context outside those windows. Occurrences do not
   establish an authoritative usual weekly schedule, so no recurrence summary is inferred.
+  Low-credit and payment-follow-up drafts report the balance and offer an optional top-up
+  discussion; zero or negative credits do not establish debt or a decision to buy another package.
 - History uses one student-authorized activity feed with server-side category/date filters and
   older-page loading. Recorded transitions, retained outcomes and incomplete earlier records are
   distinguished; practical facts and owner links lead, with technical evidence under Details.
