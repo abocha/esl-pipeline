@@ -171,8 +171,32 @@ export async function projectCalendarObservation(
   const declined =
     event.attendees?.some((attendee) => attendee.responseStatus === 'declined') ?? false;
   if (!link) {
-    // A selected calendar is not an import of unrelated past teaching history.
-    if (timing.startsAt < now) return;
+    // Only an explicit association of this exact one-off admits past history.
+    // Check durable provenance here so an already-saved association can recover on refresh.
+    if (timing.startsAt < now) {
+      if (
+        binding.kind !== 'one_off' ||
+        event.id !== binding.provider_event_id ||
+        event.recurringEventId ||
+        event.recurrence?.length
+      )
+        return;
+      const explicitBind = await client.query(
+        `SELECT id FROM calendar_operations
+         WHERE id=$1 AND kind='bind' AND state='succeeded'
+           AND workspace_id=$2 AND student_id=$3 AND connection_id=$4
+           AND provider_event_id=$5 AND request_payload->>'bindingId'=$6`,
+        [
+          binding.setup_operation_id,
+          binding.workspace_id,
+          binding.student_id,
+          binding.connection_id,
+          event.id,
+          binding.id,
+        ],
+      );
+      if (!explicitBind.rowCount) return;
+    }
     const lessonId = randomUUID();
     await client.query(
       `INSERT INTO student_lessons(id,student_id,workspace_id,starts_at,timezone,duration_minutes,title,status,consumes_credit)

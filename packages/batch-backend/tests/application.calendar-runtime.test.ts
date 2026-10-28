@@ -1419,6 +1419,97 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
       code: 'calendar_permission_changed',
     });
   });
+  it.each([30, 90])(
+    'projects an explicitly associated one-off that started %i minutes ago without charging or duplicating it',
+    async (minutesAgo) => {
+      const f = providerFixture();
+      const startsAt = new Date(Date.now() - minutesAgo * 60_000);
+      const event = confirmed({
+        id: 'elapsed-explicit-event',
+        summary: 'Explicit past lesson',
+        start: { dateTime: startsAt.toISOString(), timeZone: 'Asia/Bangkok' },
+        end: { dateTime: new Date(startsAt.getTime() + 50 * 60_000).toISOString() },
+      });
+      f.events.set(event.id, event);
+      const bound = await bindCalendarEvent(workspace, owner, student, event.id);
+      await dispatchCalendarWork(f.provider, 1);
+      expect((await opFor(bound.operationId!)).state).toBe('succeeded');
+
+      // Also exercises recovery of an association saved before its first lesson projection.
+      const refresh = await operationFixture('refresh', { bindingId: bound.bindingId });
+      await processCalendarRefresh(refresh, f.provider);
+      const lessons = await q(
+        `SELECT l.id,l.starts_at,l.duration_minutes,l.status,l.consumes_credit,l.credit_event_id,l.completed_by
+         FROM student_lessons l JOIN calendar_lesson_bindings b ON b.lesson_id=l.id
+         WHERE b.schedule_binding_id=$1`,
+        [bound.bindingId],
+      );
+      expect(lessons.rows).toHaveLength(1);
+      expect(lessons.rows[0]).toMatchObject({
+        starts_at: startsAt,
+        duration_minutes: 50,
+        status: 'scheduled',
+        consumes_credit: false,
+        credit_event_id: null,
+        completed_by: null,
+      });
+
+      await processCalendarRefresh(refresh, f.provider);
+      f.changes.mockResolvedValue({ items: [event], nextSyncToken: 'past-event-sync' });
+      await processCalendarSync(await operationFixture('sync'), f.provider);
+      expect(
+        (await q('SELECT id FROM student_lessons WHERE student_id=$1', [student])).rows,
+      ).toEqual([{ id: lessons.rows[0].id }]);
+      expect(
+        (await q('SELECT id FROM student_credit_events WHERE student_id=$1', [student])).rows,
+      ).toEqual([]);
+      expect(f.insert).not.toHaveBeenCalled();
+    },
+  );
+  it.each(['one_off', 'series'] as const)(
+    'does not backfill elapsed %s observations without an exact explicit one-off association',
+    async (kind) => {
+      const binding = await bindingFixture(kind);
+      const event = occurrence(kind === 'one_off' ? 'master' : 'instance', {
+        ...(kind === 'one_off'
+          ? { recurringEventId: undefined, originalStartTime: undefined }
+          : {}),
+        start: { dateTime: '2028-12-31T04:00:00Z' },
+        end: { dateTime: '2028-12-31T04:50:00Z' },
+      });
+      await project(binding, event);
+      expect(
+        (await q('SELECT id FROM student_lessons WHERE student_id=$1', [student])).rows,
+      ).toEqual([]);
+    },
+  );
+  it.each(['create', 'different-event'])(
+    'rejects elapsed one-off backfill when its saved provenance points to %s',
+    async (mismatch) => {
+      const f = providerFixture();
+      const event = confirmed({
+        id: 'past-event',
+        start: { dateTime: '2020-01-07T04:00:00Z' },
+        end: { dateTime: '2020-01-07T04:50:00Z' },
+      });
+      f.events.set(event.id, event);
+      const bound = await bindCalendarEvent(workspace, owner, student, event.id);
+      await dispatchCalendarWork(f.provider, 1);
+      await q(
+        mismatch === 'create'
+          ? "UPDATE calendar_operations SET kind='create' WHERE id=$1"
+          : "UPDATE calendar_operations SET provider_event_id='different-event' WHERE id=$1",
+        [bound.operationId],
+      );
+      await processCalendarRefresh(
+        await operationFixture('refresh', { bindingId: bound.bindingId }),
+        f.provider,
+      );
+      expect(
+        (await q('SELECT id FROM student_lessons WHERE student_id=$1', [student])).rows,
+      ).toEqual([]);
+    },
+  );
   it('does not automatically churn sync intents while a current sync requires authorized review', async () => {
     const f = providerFixture();
     const op = await operationFixture('sync');

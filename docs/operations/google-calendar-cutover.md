@@ -53,6 +53,13 @@ unlinked. Copies/splits cannot establish occurrence identity through title, emai
 iCalUID or marker alone. Provider instance original start and stable event/master mapping are
 independent of actual moved start time. Preserve protected history and display discrepancies.
 
+An explicit association of a one-off event may project an already-started or elapsed lesson. The
+projector verifies the exact successful bind operation and its workspace, student, connection, event
+and binding identities. It creates a scheduled, uncharged lesson; completion is a separate action.
+Existing associations with no lesson recover on an ordinary binding refresh (including the daily
+projection refresh). Sync requests alone need not replay an unchanged event. This exception does not
+backfill past series occurrences or unassociated history, or merge similar unmanaged lessons.
+
 Background polling and bounded instance projection run independently of HTTP reads. Page checkpoints
 and dirty refresh intents are committed together; `Synced` requires projection completion too.
 Incomplete pages are never cancellation proof. A 410 resets provider sync state, not ledger IDs,
