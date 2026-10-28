@@ -5,6 +5,7 @@ import { assignmentPlainText } from '@esl-pipeline/contracts';
 import {
   caretPlaceholder,
   formatInlineSelection,
+  inlineSelectionHighlighted,
   inlineValue,
   insertInlineText,
   renderInline,
@@ -70,14 +71,12 @@ export const EditorTextField = forwardRef<EditorTextHandle, Props>(function Edit
     const selection = window.getSelection();
     const range = selection?.getRangeAt(0);
     const rect = range?.getBoundingClientRect?.() ?? node.getBoundingClientRect();
-    const anchor = range?.startContainer;
-    const element = anchor instanceof Element ? anchor : anchor?.parentElement;
     onSelection({
       ...selected,
       field,
       x: rect.left + rect.width / 2,
       y: rect.top,
-      highlighted: Boolean(element?.closest('mark')),
+      highlighted: inlineSelectionHighlighted(node),
       multiline: /[\r\n]/.test(
         assignmentPlainText(inlineValue(node)).slice(selected.start, selected.end),
       ),

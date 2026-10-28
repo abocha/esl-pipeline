@@ -161,7 +161,7 @@ afterEach(() => {
 });
 
 describe('AssignmentV1 authoring and historical access', () => {
-  it('keeps visual Undo during a delayed save, saves the restored object with the new CAS base, and retains Redo', async () => {
+  it('keeps highlight Undo during a delayed save, saves the restored object with the new CAS base, and retains Redo', async () => {
     const initial = editorFixture();
     let controller!: ReturnType<typeof useMinimalAssignmentAuthoringController>;
     function LiveEditor() {
@@ -186,10 +186,18 @@ describe('AssignmentV1 authoring and historical access', () => {
         }),
     );
     render(<LiveEditor />);
+    fireEvent.click(screen.getByRole('button', { name: 'Practice' }));
     const prompt = screen.getByRole('textbox', { name: 'Group 1 · Prompt 1' });
-    fireEvent.focus(prompt);
-    prompt.textContent = 'We ___ visit the park.';
-    fireEvent.input(prompt);
+    act(() => prompt.focus());
+    const range = document.createRange();
+    range.selectNodeContents(prompt);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    fireEvent.mouseUp(prompt);
+    fireEvent.click(screen.getByRole('button', { name: 'Highlight' }));
+    expect(JSON.parse(controller.draftText).practice[0].items[0].prompt).toBe(
+      '`I ___ visit the park.`',
+    );
     const edited = JSON.parse(controller.draftText);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);

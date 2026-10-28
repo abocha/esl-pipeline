@@ -21,6 +21,7 @@ describe('embedded learner-handout style boundary', () => {
       <button class="business-primary-button">Save settings</button>
       <details><summary>Support details</summary><a href="#">Help</a></details>
       <input><textarea></textarea><audio></audio>
+      <mark class="linguistic-highlight">Host highlight</mark>
     `;
     document.body.append(host);
     const embedded = document.createElement('div');

@@ -175,7 +175,6 @@ export type AuthoringAction =
         generatedValidationContext?: AssignmentValidationContext;
         quota: GenerateDraftResponse['quota'] | null;
         runtimeSelection: { provider: string; model: string };
-        successMessage: string;
         quotaWindowTickMs: number;
       };
     }
@@ -353,7 +352,7 @@ function authoringReducer(state: AuthoringState, action: AuthoringAction): Autho
         ),
         generationRuntimeSelection: action.payload.runtimeSelection,
         quotaWindowTickMs: action.payload.quotaWindowTickMs,
-        generationSuccess: action.payload.successMessage,
+        generationSuccess: null,
       };
     case 'draft_generate_failed':
       return {
@@ -1415,7 +1414,6 @@ export function useMinimalAssignmentAuthoringController({
               provider: generated.provider,
               model: generated.model,
             },
-            successMessage: 'Assignment draft ready. Review and edit below.',
             quotaWindowTickMs: Date.now(),
           },
         });

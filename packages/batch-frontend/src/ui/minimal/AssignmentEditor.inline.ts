@@ -49,6 +49,18 @@ export function inlineValue(root: Node): string {
     .join('');
 }
 
+/** Inspect the selected contents, including ranges anchored on the field or a mark boundary. */
+export function inlineSelectionHighlighted(root: HTMLElement): boolean {
+  const selected = textSelection(root);
+  if (!selected || selected.start === selected.end) return false;
+  let offset = 0;
+  return parts(root).every((part) => {
+    const start = offset;
+    offset += part.text.length;
+    return offset <= selected.start || start >= selected.end || part.highlighted;
+  });
+}
+
 export function caretPlaceholder(root: HTMLElement) {
   root.querySelectorAll('[data-caret-placeholder]').forEach((node) => {
     node.remove();

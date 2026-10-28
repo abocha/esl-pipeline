@@ -59,7 +59,10 @@ export function registerGenerationDefaultsTests() {
         });
       });
       expect(await screen.findByText('Generated assignment draft')).toBeTruthy();
-      expect(screen.getByText(/Assignment draft ready\. Review and edit below\./i)).toBeTruthy();
+      expect(screen.queryByText(/Assignment draft ready\. Review and edit below\./i)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Your goal' }).getAttribute('aria-current')).toBe(
+        'page',
+      );
     });
 
     it(
@@ -95,7 +98,10 @@ export function registerGenerationDefaultsTests() {
           });
         });
         expect(await screen.findByText('Generated assignment draft')).toBeTruthy();
-        expect(screen.getByText(/Assignment draft ready\. Review and edit below\./i)).toBeTruthy();
+        expect(screen.queryByText(/Assignment draft ready\. Review and edit below\./i)).toBeNull();
+        expect(screen.getByRole('button', { name: 'Your goal' }).getAttribute('aria-current')).toBe(
+          'page',
+        );
         await waitFor(() => {
           expect(api.updateDraft).toHaveBeenCalledWith(
             'draft-1',
