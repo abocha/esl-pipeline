@@ -171,6 +171,50 @@ describe('Google Calendar scheduling panel', () => {
     await waitFor(() => expect(api.createCalendarSetup).toHaveBeenCalledTimes(2));
     expect(api.createCalendarSetup.mock.calls[1]).toEqual(submitted);
   });
+  it('requires review of a changed draft clock without changing fields or frozen retry payloads', async () => {
+    api.createCalendarSetup.mockRejectedValueOnce(new Error('Response lost'));
+    const view = render(<CalendarSchedulingPanel {...props} />);
+    await screen.findByText('Synced');
+    fireEvent.change(screen.getByLabelText('Invitation title'), {
+      target: { value: 'Review draft wall times' },
+    });
+    fireEvent.change(screen.getByLabelText('Local time'), { target: { value: '14:30' } });
+    const enteredDate = (screen.getByLabelText('Start date') as HTMLInputElement).value;
+    view.rerender(<CalendarSchedulingPanel {...props} timezone="Europe/London" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create in Google' }));
+    await screen.findByText(
+      'Tutor timezone changed. Review the lesson times and create the setup again.',
+    );
+    expect(api.createCalendarSetup).not.toHaveBeenCalled();
+    expect(localStorage.getItem('calendar-setup:workspace-1:student-1')).toBeNull();
+    expect((screen.getByLabelText('Invitation title') as HTMLInputElement).value).toBe(
+      'Review draft wall times',
+    );
+    expect((screen.getByLabelText('Local time') as HTMLInputElement).value).toBe('14:30');
+    expect((screen.getByLabelText('Start date') as HTMLInputElement).value).toBe(enteredDate);
+    fireEvent.click(screen.getByRole('button', { name: 'Create in Google' }));
+    await screen.findByText('Response lost');
+    const captured = api.createCalendarSetup.mock.calls[0]!;
+    expect(captured[2]).toMatchObject({
+      timezone: 'Europe/London',
+      title: 'Review draft wall times',
+      slots: [expect.objectContaining({ localTime: '14:30', startDate: enteredDate })],
+    });
+    view.rerender(<CalendarSchedulingPanel {...props} timezone="America/New_York" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry submitted setup' }));
+    await waitFor(() => expect(api.createCalendarSetup).toHaveBeenCalledTimes(2));
+    expect(api.createCalendarSetup.mock.calls[1]).toEqual(captured);
+  });
+  it('does not require draft review for an equivalent timezone alias', async () => {
+    const view = render(<CalendarSchedulingPanel {...props} timezone="Asia/Saigon" />);
+    await screen.findByText('Synced');
+    view.rerender(<CalendarSchedulingPanel {...props} timezone="Asia/Ho_Chi_Minh" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create in Google' }));
+    await waitFor(() => expect(api.createCalendarSetup).toHaveBeenCalledOnce());
+    expect(api.createCalendarSetup.mock.calls[0]?.[2]).toMatchObject({
+      timezone: 'Asia/Ho_Chi_Minh',
+    });
+  });
   it('reopens only a definitively rejected stale setup with a refreshed clock and a new request key', async () => {
     api.getBusinessSettings
       .mockResolvedValueOnce({ workspaceId: 'workspace-1', timezone: 'Asia/Bangkok' })

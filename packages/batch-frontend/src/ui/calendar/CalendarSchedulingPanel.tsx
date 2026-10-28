@@ -33,6 +33,7 @@ import {
   updateStudentProfile,
 } from '../../utils/api';
 import { dateInputInTimezone } from '../../utils/scheduling-time';
+import { normalizeTimezone } from '../../utils/timezones';
 import { formatTutorTime } from '../../utils/tutor-time';
 import './CalendarSchedulingPanel.css';
 
@@ -109,6 +110,7 @@ export function CalendarSchedulingPanel({
       durationMinutes: defaultDurationMinutes,
     },
   ]);
+  const draftTimezone = useRef(normalizeTimezone(timezone));
   const [saved, setSaved] = useState<SavedSetup | null>(null);
   const [setup, setSetup] = useState<CalendarSetupDto | null>(null);
   const [review, setReview] = useState<CalendarOperationReviewDto | null>(null);
@@ -205,6 +207,14 @@ export function CalendarSchedulingPanel({
     }
   };
   const submit = async () => {
+    if (!saved && draftTimezone.current !== normalizeTimezone(timezone)) {
+      // Keep entered wall times, but require review before interpreting them in a
+      // changed workspace clock. Captured requests always retain their own clock.
+      draftTimezone.current = normalizeTimezone(timezone);
+      throw new Error(
+        'Tutor timezone changed. Review the lesson times and create the setup again.',
+      );
+    }
     // Persist before network admission. A timeout/reload must reuse the immutable request.
     const intent = saved ?? {
       key: crypto.randomUUID(),
@@ -232,7 +242,8 @@ export function CalendarSchedulingPanel({
         setTitle(intent.request.title);
         setSlots(intent.request.slots);
         setSendInvitation(Boolean(intent.request.sendInvitation));
-        await workspace.refreshSettings();
+        const refreshedSettings = await workspace.refreshSettings();
+        draftTimezone.current = normalizeTimezone(refreshedSettings?.timezone ?? timezone);
         throw new Error(
           'Tutor timezone changed. Review the lesson times and create the setup again.',
         );
