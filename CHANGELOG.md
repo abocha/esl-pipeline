@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.5.1] - 2026-10-28
+
+### Changed
+
+- Automated release from PR #463: fix(students): remove inferred payment demands (ESL-89) (https://github.com/abocha/esl-pipeline/pull/463)
+
 ## [22.5.0] - 2026-10-28
 
 ### Changed
