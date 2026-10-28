@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import type { StudentActivityItem, StudentActivityResponse } from '@esl-pipeline/contracts';
 
+import { useWorkspaceSettings, useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import { getStudentActivity } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
 import './StudentHistoryPage.css';
@@ -122,6 +123,8 @@ function ActivityRow({ item, timezone }: { item: StudentActivityItem; timezone: 
 }
 
 export function StudentHistoryPage() {
+  const tutorTimezone = useWorkspaceTimezone();
+  const { reconcileTimezone } = useWorkspaceSettings();
   const { studentId, studentLoading, studentError } = useStudentAreaContext();
   const [search, setSearch] = useSearchParams();
   const requestedFilter = search.get('activity') ?? 'all';
@@ -132,7 +135,7 @@ export function StudentHistoryPage() {
   const from = validDate(search.get('from'));
   const to = validDate(search.get('to'));
   const invalidRange = Boolean(from && to && from > to);
-  const scopeKey = JSON.stringify([studentId, category, from, to]);
+  const scopeKey = JSON.stringify([studentId, category, from, to, tutorTimezone]);
   const [loaded, setLoaded] = useState<{ key: string; data: StudentActivityResponse } | null>(null);
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState<{ key: string; message: string; cursor?: string } | null>(
@@ -157,6 +160,8 @@ export function StudentHistoryPage() {
           ...(cursor ? { cursor } : {}),
         });
         if (latestRequest.current !== request) return;
+        await reconcileTimezone(next.timezone);
+        if (latestRequest.current !== request) return;
         setLoaded((current) => {
           const items =
             cursor && current?.key === scopeKey
@@ -179,7 +184,7 @@ export function StudentHistoryPage() {
         if (latestRequest.current === request) setLoading(false);
       }
     },
-    [studentId, category, from, to, scopeKey],
+    [studentId, category, from, to, scopeKey, reconcileTimezone],
   );
 
   useEffect(() => {
@@ -218,7 +223,7 @@ export function StudentHistoryPage() {
               className="student-activity-timezone"
               title="Activity dates use the workspace timezone"
             >
-              {data.timezone}
+              {tutorTimezone ?? data.timezone}
             </span>
           ) : null}
           <button
@@ -310,7 +315,11 @@ export function StudentHistoryPage() {
               {data.items.length ? (
                 <ol className="student-activity-list">
                   {data.items.map((item) => (
-                    <ActivityRow key={item.id} item={item} timezone={data.timezone} />
+                    <ActivityRow
+                      key={item.id}
+                      item={item}
+                      timezone={tutorTimezone ?? data.timezone}
+                    />
                   ))}
                 </ol>
               ) : (

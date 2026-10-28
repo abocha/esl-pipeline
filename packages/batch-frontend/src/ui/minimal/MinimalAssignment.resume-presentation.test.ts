@@ -165,6 +165,7 @@ describe('buildRecentAssignmentItems', () => {
       [createJob({ updatedAt: '2026-07-10T10:00:00.000Z' })],
       '',
       new Map([['student-cora', 'Cora']]),
+      'UTC',
     );
 
     expect(item?.timeLabel).toMatch(/^\d{2}\D\d{2}\D\d{2} · /);

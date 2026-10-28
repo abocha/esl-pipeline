@@ -32,6 +32,20 @@ export type GuidedCallbackAction =
   | { kind: 'confirm'; action: GuidedActionName };
 
 const CALLBACK_VERSION = 'a4';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function compactJobId(id: string): string {
+  return UUID.test(id)
+    ? `~${Buffer.from(id.replaceAll('-', ''), 'hex').toString('base64url')}`
+    : id;
+}
+function expandJobId(id: string): string | null {
+  if (!id.startsWith('~')) return id;
+  if (!/^~[A-Za-z0-9_-]{22}$/.test(id)) return null;
+  const bytes = Buffer.from(id.slice(1), 'base64url');
+  if (bytes.length !== 16 || bytes.toString('base64url') !== id.slice(1)) return null;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 export function encodeGuidedCallback(action: GuidedCallbackAction): string {
   switch (action.kind) {
@@ -64,7 +78,7 @@ export function encodeGuidedCallback(action: GuidedCallbackAction): string {
     }
     case 'job': {
       return action.backViewKey
-        ? `${CALLBACK_VERSION}|j|${action.jobId}|${action.backViewKey}`
+        ? `${CALLBACK_VERSION}|j|${compactJobId(action.jobId)}|${action.backViewKey}`
         : `${CALLBACK_VERSION}|j|${action.jobId}`;
     }
     case 'op': {
@@ -132,7 +146,8 @@ export function decodeGuidedCallback(value: string): GuidedCallbackAction | null
       if (rest.length === 1 && rest[0]) {
         return { kind: 'job', jobId: rest[0] };
       }
-      const [jobId, backViewKey] = rest;
+      const [encodedJobId, backViewKey] = rest;
+      const jobId = encodedJobId ? expandJobId(encodedJobId) : null;
       if (rest.length === 2 && jobId && backViewKey && isJobsViewKey(backViewKey)) {
         return { kind: 'job', jobId, backViewKey };
       }
@@ -164,5 +179,7 @@ export function decodeGuidedCallback(value: string): GuidedCallbackAction | null
 }
 
 function isJobsViewKey(value: string): value is JobsViewKey {
-  return /^(gr|gf|gn|gs|ta|tf|tn|tw|ts|s[rfs]:[a-z0-9-]{1,16}|q:[a-z0-9_-]{22})$/i.test(value);
+  return /^(gr|gf|gn|gs|ta|tf|tn|tw|ts|s[rfs]:[a-z0-9-]{1,16}|q:(?:[a-z0-9_-]{22}|[a-z0-9_-]{28}))$/i.test(
+    value,
+  );
 }

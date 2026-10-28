@@ -1,4 +1,5 @@
 import type { AssignmentSession, JobStatus } from '../../utils/api';
+import { dateInputInTimezone } from '../../utils/scheduling-time';
 import { deriveResumeDestination } from './MinimalAssignment.confirmation';
 import {
   getJobRecentAssignmentPresentation,
@@ -8,31 +9,21 @@ import {
 } from './MinimalAssignment.entry-state';
 import type { CurrentAssignmentCard } from './MinimalAssignment.stages';
 
-function formatResumeTimeLabel(value: string): string {
+export function formatResumeTimeLabel(value: string, timezone?: string | null): string {
+  if (!timezone) return '—';
   const timestamp = new Date(value);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfTarget = new Date(
-    timestamp.getFullYear(),
-    timestamp.getMonth(),
-    timestamp.getDate(),
-  );
-  const dayDiff = Math.round(
-    (startOfToday.getTime() - startOfTarget.getTime()) / (24 * 60 * 60 * 1000),
-  );
-  const timeLabel = timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  if (dayDiff === 0) {
-    return `Today at ${timeLabel}`;
-  }
-  if (dayDiff === 1) {
-    return `Yesterday at ${timeLabel}`;
-  }
-  const dateLabel = timestamp.toLocaleDateString([], {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
+  if (Number.isNaN(timestamp.getTime())) return '—';
+  const today = dateInputInTimezone(new Date(), timezone);
+  const target = dateInputInTimezone(timestamp, timezone);
+  const dayDiff = (Date.parse(today) - Date.parse(target)) / 86400000;
+  const timeLabel = timestamp.toLocaleTimeString('en-US', {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: '2-digit',
   });
-  return `${dateLabel} · ${timeLabel}`;
+  if (dayDiff === 0) return `Today at ${timeLabel}`;
+  if (dayDiff === 1) return `Yesterday at ${timeLabel}`;
+  return `${timestamp.toLocaleDateString('en-US', { timeZone: timezone, day: '2-digit', month: '2-digit', year: '2-digit' })} · ${timeLabel}`;
 }
 
 function getResumeStatusPresentation(
@@ -99,6 +90,7 @@ export function buildRecentAssignmentItems(
   jobs: readonly JobStatus[],
   selectedResumeJobId: string,
   studentNameById: ReadonlyMap<string, string>,
+  timezone?: string | null,
 ): RecentAssignmentItem[] {
   const sessionItems = sessions.map((session) => {
     const destination = deriveResumeDestination(session);
@@ -114,7 +106,7 @@ export function buildRecentAssignmentItems(
         lessonTitle: undefined,
         recoveryAnchor: SESSION_RECOVERY_ANCHORS[destination],
         ...getSessionRecentAssignmentPresentation(session),
-        timeLabel: formatResumeTimeLabel(session.updatedAt),
+        timeLabel: formatResumeTimeLabel(session.updatedAt, timezone),
         selected: selectedResumeJobId === `session:${session.id}`,
       },
       timestamp: Date.parse(session.updatedAt),
@@ -129,7 +121,7 @@ export function buildRecentAssignmentItems(
       lessonTitle: undefined,
       recoveryAnchor: getJobRecoveryAnchor(job),
       ...getJobRecentAssignmentPresentation(job.state, Boolean(job.htmlUrl)),
-      timeLabel: formatResumeTimeLabel(job.finishedAt ?? job.updatedAt ?? job.createdAt),
+      timeLabel: formatResumeTimeLabel(job.finishedAt ?? job.updatedAt ?? job.createdAt, timezone),
       selected: job.jobId === selectedResumeJobId,
     },
     timestamp: Date.parse(job.finishedAt ?? job.updatedAt ?? job.createdAt),
@@ -196,6 +188,7 @@ export function buildRecentAssignmentLineages(
 export function buildCurrentAssignmentCard(
   job: JobStatus | null,
   studentNameById: ReadonlyMap<string, string>,
+  timezone?: string | null,
 ): CurrentAssignmentCard | null {
   if (!job?.jobId) {
     return null;
@@ -206,7 +199,7 @@ export function buildCurrentAssignmentCard(
     statusLabel: status.statusLabel,
     statusTone: status.statusTone,
     meta: [
-      formatResumeTimeLabel(job.finishedAt ?? job.updatedAt ?? job.createdAt),
+      formatResumeTimeLabel(job.finishedAt ?? job.updatedAt ?? job.createdAt, timezone),
       getPublishSurfaceLabel(job),
       ...(job.sourceJobId ? ['Audio refresh'] : []),
     ],

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import type {
   ProfileContentResponse,
   ProfileRevisionDetailResponse,
@@ -27,6 +28,7 @@ import {
   saveProfileDraftRevision,
   upsertProfileContent,
 } from '../../utils/api';
+import { formatTutorTime } from '../../utils/tutor-time';
 import { ProfileCandidatesPanel } from './ProfileCandidatesPanel';
 import { useStudentAreaContext } from './StudentAreaContext';
 import {
@@ -45,11 +47,6 @@ import {
 import { useStudentPageEdits } from './StudentWorkspaceContext';
 import { formatStudentShortId } from './studentIdentity';
 import './StudentLearningPage.css';
-
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
 
 type ProfileFieldKey = keyof FoundationalProfileFormState;
 
@@ -201,13 +198,6 @@ interface LearningSectionCardProps {
   config: LearningSectionConfig;
   values: FoundationalProfileFormState;
   onChange: (key: ProfileFieldKey, value: string) => void;
-}
-
-function formatDateTime(value?: string | null): string {
-  if (!value) return 'n/a';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'n/a';
-  return DATE_TIME_FORMATTER.format(date);
 }
 
 function getLegacyProfileNotice(profile: {
@@ -608,6 +598,8 @@ function describeCandidateOmissions(omissions: Array<{ reason: string }>): strin
 }
 
 export const StudentLearningPage: React.FC = () => {
+  const timezone = useWorkspaceTimezone();
+  const formatDateTime = (value?: string | null) => formatTutorTime(value, timezone);
   const { student, studentId, studentLoading, studentError, refreshStudent } =
     useStudentAreaContext();
   const latestPageLoadRequestRef = useRef(0);

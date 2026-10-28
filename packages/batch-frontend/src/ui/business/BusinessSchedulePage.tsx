@@ -2,6 +2,7 @@ import { CalendarDays, ChevronDown, RefreshCw } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { useWorkspaceSettings, useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import {
   type BusinessScheduleSurface,
   getBusinessScheduleSurface,
@@ -9,6 +10,7 @@ import {
   undoLatestHiddenStudentReminder,
   updateStudentLesson,
 } from '../../utils/api';
+import { normalizeTimezone } from '../../utils/timezones';
 import { CalendarSchedulingPanel } from '../calendar/CalendarSchedulingPanel';
 import { BusinessInfoHint } from './BusinessInfoHint';
 import { formatDate, formatDateTime, formatMoney } from './business-format';
@@ -24,6 +26,8 @@ function formatReminderLessonDetail(
 }
 export const BusinessSchedulePage: React.FC = () => {
   const navigate = useNavigate();
+  const tutorTimezone = useWorkspaceTimezone();
+  const { reconcileTimezone } = useWorkspaceSettings();
   const [fromOverride, setFromOverride] = useState<string | undefined>();
   const [toOverride, setToOverride] = useState<string | undefined>();
   const [surface, setSurface] = useState<BusinessScheduleSurface | null>(null);
@@ -71,6 +75,8 @@ export const BusinessSchedulePage: React.FC = () => {
           : { from: fromOverride, to: toOverride };
       const nextSurface = await getBusinessScheduleSurface(range);
       if (latestLoadRequestRef.current !== requestId) return;
+      await reconcileTimezone(nextSurface.settings.timezone);
+      if (latestLoadRequestRef.current !== requestId) return;
       setSurface(nextSurface);
     } catch (loadError: unknown) {
       if (latestLoadRequestRef.current !== requestId) return;
@@ -80,7 +86,7 @@ export const BusinessSchedulePage: React.FC = () => {
         setLoading(false);
       }
     }
-  }, [fromOverride, toOverride]);
+  }, [fromOverride, toOverride, tutorTimezone, reconcileTimezone]);
   useEffect(() => {
     void load();
     return () => {
@@ -164,13 +170,23 @@ export const BusinessSchedulePage: React.FC = () => {
       setSavingLessonId(null);
     }
   };
-  if (loading && !surface) {
+  if (
+    (loading && !surface) ||
+    (surface && tutorTimezone && normalizeTimezone(surface.settings.timezone) !== tutorTimezone)
+  ) {
     return (
       <section className="business-dashboard-surface">
         <header className="business-agenda-heading">
           <h2>Schedule</h2>
         </header>
-        <p className="business-empty">Loading business schedule...</p>
+        <p className="business-empty" role={error ? 'alert' : undefined}>
+          {error ?? 'Loading business schedule...'}
+        </p>
+        {error ? (
+          <button type="button" onClick={() => void load()}>
+            Retry
+          </button>
+        ) : null}
       </section>
     );
   }
@@ -189,7 +205,7 @@ export const BusinessSchedulePage: React.FC = () => {
       </section>
     );
   }
-  const timezone = surface.settings.timezone;
+  const timezone = tutorTimezone ?? surface.settings.timezone;
   const dayKey = (value: string) =>
     new Intl.DateTimeFormat('en-CA', {
       timeZone: timezone,

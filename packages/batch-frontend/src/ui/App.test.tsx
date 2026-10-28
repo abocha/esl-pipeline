@@ -8,6 +8,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthContextType } from '../context/AuthContext';
 import { App } from './App';
 
+vi.mock('../utils/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/api')>()),
+  getBusinessSettings: vi
+    .fn()
+    .mockResolvedValue({ workspaceId: 'workspace-1', timezone: 'Asia/Ho_Chi_Minh' }),
+}));
+
 const useAuthMock = vi.hoisted(() => vi.fn());
 const sandboxModeMock = vi.hoisted(() => vi.fn(() => false));
 const UI_WAIT_TIMEOUT_MS = 10_000;
@@ -232,9 +239,9 @@ describe('App', () => {
 
     renderApp();
 
-    expect(screen.getByRole('link', { name: /Skip to main content/i }).getAttribute('href')).toBe(
-      '#main-content',
-    );
+    expect(
+      (await screen.findByRole('link', { name: /Skip to main content/i })).getAttribute('href'),
+    ).toBe('#main-content');
     expect(screen.getByRole('link', { name: /Assignments/i })).toBeTruthy();
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
     expect(await screen.findByText('Minimal assignment content')).toBeTruthy();
@@ -242,7 +249,7 @@ describe('App', () => {
     expect(screen.queryByRole('link', { name: /Prompts/i })).toBeNull();
     expect(document.querySelector('style')?.textContent ?? '').not.toContain('.app-shell::before');
 
-    await user.click(screen.getByRole('link', { name: /Skip to main content/i }));
+    await user.click(await screen.findByRole('link', { name: /Skip to main content/i }));
 
     expect(document.activeElement).toBe(document.getElementById('main-content'));
   });
@@ -283,7 +290,7 @@ describe('App', () => {
 
     renderApp();
 
-    await user.click(screen.getByRole('link', { name: /Students/i }));
+    await user.click(await screen.findByRole('link', { name: /Students/i }));
 
     expect(await screen.findByText('Student directory content')).toBeTruthy();
   });
@@ -304,7 +311,7 @@ describe('App', () => {
 
     renderApp();
 
-    await user.click(screen.getByRole('link', { name: /Prompts/i }));
+    await user.click(await screen.findByRole('link', { name: /Prompts/i }));
 
     expect(await screen.findByText('Prompt templates content')).toBeTruthy();
   });
@@ -419,8 +426,10 @@ describe('App', () => {
       }),
     );
     renderApp();
+    await screen.findByText('Minimal assignment content');
     await user.click(screen.getByRole('button', { name: /Logout/i }));
     expect((await screen.findByRole('alert')).textContent).toBe('Session service unavailable');
+    await screen.findByText('Minimal assignment content');
     await user.click(screen.getByRole('button', { name: /Logout/i }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     expect(logout).toHaveBeenCalledTimes(2);
@@ -443,6 +452,8 @@ describe('App', () => {
     );
 
     renderApp();
+
+    await screen.findByText('Minimal assignment content');
 
     await user.click(screen.getByRole('button', { name: /Logout/i }));
 

@@ -1,6 +1,7 @@
 import type { Message, Update } from '@grammyjs/types';
 
 import type {
+  BusinessSettingsDto,
   JobListResponse,
   JobState,
   JobStatusDto,
@@ -93,6 +94,7 @@ export interface AuditLogger {
 }
 
 export interface BackendClient {
+  getBusinessSettings: () => Promise<BusinessSettingsDto>;
   getOpsStatus: () => Promise<OpsStatusResponse>;
   enqueueOpsAction: (payload: OpsActionRequest) => Promise<OpsActionStatus>;
   getOpsActionStatus: (operationId: string) => Promise<OpsActionStatus>;

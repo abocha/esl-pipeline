@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import type { StudentLessonWindow } from '@esl-pipeline/contracts';
 
+import { useWorkspaceSettings, useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import {
   addStudentPackage,
   getStudentLessonPage,
@@ -14,6 +15,8 @@ import {
   updateStudentLesson,
   updateStudentLessonPlan,
 } from '../../utils/api';
+import { normalizeTimezone } from '../../utils/timezones';
+import { formatPlainDate, formatTutorTime } from '../../utils/tutor-time';
 import { CalendarSchedulingPanel } from '../calendar/CalendarSchedulingPanel';
 import { useStudentAreaContext } from './StudentAreaContext';
 import {
@@ -26,29 +29,8 @@ import {
 } from './StudentAreaDesignSystem';
 import './StudentScheduleBillingPage.css';
 
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-});
-
-function formatDateTime(value: string | null | undefined, timezone: string): string {
-  if (!value) return 'Not scheduled yet';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? 'Not scheduled yet'
-    : date.toLocaleString('en-US', {
-        timeZone: timezone,
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-}
-
-function formatDate(value?: string | null): string {
-  if (!value) return 'Not recorded yet';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Not recorded yet' : DATE_FORMATTER.format(date);
+function formatDateTime(value: string | null | undefined, timezone: string | null): string {
+  return formatTutorTime(value, timezone);
 }
 
 function formatMoney(amountMinor: number, currency: string): string {
@@ -64,7 +46,7 @@ function formatCredits(value: number): string {
 
 function formatReminderLessonDetail(
   summary: StudentScheduleBillingSurface['reminders'][number]['lessonSummary'] | null | undefined,
-  timezone: string,
+  timezone: string | null,
 ): string {
   if (!summary) return 'Lesson no longer available';
   const topic = summary.title?.trim() ? summary.title.trim() : 'Untitled lesson';
@@ -82,7 +64,9 @@ const StudentScheduleBillingContent: React.FC = () => {
   const navigate = useNavigate();
   const studentName = student?.student ?? 'this student';
   const [surface, setSurface] = useState<StudentScheduleBillingSurface | null>(null);
-  const [workspaceTimezone, setWorkspaceTimezone] = useState('UTC');
+  const tutorTimezone = useWorkspaceTimezone();
+  const { reconcileTimezone } = useWorkspaceSettings();
+  const workspaceTimezone = tutorTimezone ?? surface?.lessonWindows.timezone ?? null;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
@@ -116,7 +100,6 @@ const StudentScheduleBillingContent: React.FC = () => {
     };
   }, []);
   const [planForm, setPlanForm] = useState({
-    timezone: 'UTC',
     defaultDurationMinutes: '60',
     schedulingNotes: '',
   });
@@ -152,10 +135,10 @@ const StudentScheduleBillingContent: React.FC = () => {
       try {
         const nextSurface = await getStudentScheduleBillingSurface(studentId);
         if (!active || requestEpoch !== epoch.current) return;
+        await reconcileTimezone(nextSurface.lessonWindows.timezone);
+        if (!active || requestEpoch !== epoch.current) return;
         setSurface(nextSurface);
-        setWorkspaceTimezone(nextSurface.lessonWindows.timezone);
         setPlanForm({
-          timezone: nextSurface.lessonWindows.timezone,
           defaultDurationMinutes: String(nextSurface.lessonPlan.defaultDurationMinutes),
           schedulingNotes: nextSurface.lessonPlan.schedulingNotes ?? '',
         });
@@ -174,7 +157,7 @@ const StudentScheduleBillingContent: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [studentId, refreshVersion, resetPages]);
+  }, [studentId, refreshVersion, resetPages, tutorTimezone, reconcileTimezone]);
 
   const loadPage = async (window: StudentLessonWindow) => {
     const cursor = surface?.lessonWindows[window].nextCursor;
@@ -237,9 +220,9 @@ const StudentScheduleBillingContent: React.FC = () => {
     setError(null);
     try {
       const nextSurface = await action();
+      await reconcileTimezone(nextSurface.lessonWindows.timezone);
       if (!active.current || requestEpoch !== epoch.current) return false;
       setSurface(nextSurface);
-      setWorkspaceTimezone(nextSurface.lessonWindows.timezone);
       return true;
     } catch (actionError: unknown) {
       if (active.current && requestEpoch === epoch.current)
@@ -294,10 +277,20 @@ const StudentScheduleBillingContent: React.FC = () => {
     return hideStudentLessonFollowupReminder(studentId, reminder.lessonId);
   };
 
-  if (loading) {
+  if (
+    loading ||
+    (surface &&
+      tutorTimezone &&
+      normalizeTimezone(surface.lessonWindows.timezone) !== tutorTimezone)
+  ) {
     return (
       <section className="student-schedule-billing-page student-area-theme">
-        <StudentAreaEmptyState>Loading schedule and billing...</StudentAreaEmptyState>
+        <StudentAreaEmptyState>{error ?? 'Loading schedule and billing...'}</StudentAreaEmptyState>
+        {error ? (
+          <button type="button" onClick={() => setRefreshVersion((value) => value + 1)}>
+            Retry schedule
+          </button>
+        ) : null}
       </section>
     );
   }
@@ -358,7 +351,7 @@ const StudentScheduleBillingContent: React.FC = () => {
           }
           detail={
             surface.payments[0]
-              ? formatDate(surface.payments[0].receivedAt)
+              ? formatPlainDate(surface.payments[0].receivedAt)
               : 'Record payment with a package.'
           }
         />
@@ -616,7 +609,7 @@ const StudentScheduleBillingContent: React.FC = () => {
       ))}
       <details className="student-schedule-billing-management">
         <summary>Manage schedule, defaults and packages</summary>
-        {surface.workspaceId ? (
+        {surface.workspaceId && workspaceTimezone ? (
           <CalendarSchedulingPanel
             key={studentId}
             workspaceId={surface.workspaceId}
@@ -642,7 +635,6 @@ const StudentScheduleBillingContent: React.FC = () => {
                 event.preventDefault();
                 void runAction('plan', () =>
                   updateStudentLessonPlan(studentId, {
-                    timezone: workspaceTimezone,
                     defaultDurationMinutes: Number(planForm.defaultDurationMinutes),
                     schedulingNotes: planForm.schedulingNotes || null,
                   }),
@@ -825,7 +817,7 @@ const StudentScheduleBillingContent: React.FC = () => {
               <span>
                 <strong>{formatMoney(payment.amountMinor, payment.currency)}</strong>
                 <small>
-                  {formatDate(payment.receivedAt)}
+                  {formatPlainDate(payment.receivedAt)}
                   {payment.method ? ` · ${payment.method}` : ''}
                 </small>
               </span>

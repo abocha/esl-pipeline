@@ -3,6 +3,34 @@ import { describe, expect, it, vi } from 'vitest';
 import { HttpBackendClient } from '../src/backend-client.js';
 
 describe('backend client', () => {
+  it('loads the workspace clock through the authenticated settings endpoint', async () => {
+    const requests: Array<{ url: string; authorization?: string }> = [];
+    const client = new HttpBackendClient({
+      baseUrl: 'http://localhost:8080',
+      email: 'bot@example.com',
+      password: 'test-only',
+      timeoutMs: 1000,
+      fetchImpl: vi.fn(async (input, init) => {
+        const url = String(input);
+        const headers = init?.headers as Record<string, string>;
+        requests.push({ url, authorization: headers.Authorization });
+        if (url.endsWith('/auth/login'))
+          return Response.json({ accessToken: 'workspace-token', expiresIn: 3600 });
+        if (url.endsWith('/business/settings'))
+          return Response.json({ workspaceId: 'workspace-a', timezone: 'Asia/Saigon' });
+        throw new Error(`Unexpected request ${url}`);
+      }),
+    });
+    expect(await client.getBusinessSettings()).toMatchObject({
+      workspaceId: 'workspace-a',
+      timezone: 'Asia/Saigon',
+    });
+    expect(requests).toEqual([
+      { url: 'http://localhost:8080/auth/login', authorization: undefined },
+      { url: 'http://localhost:8080/business/settings', authorization: 'Bearer workspace-token' },
+    ]);
+  });
+
   it('uses login, then refresh, and forwards ops shared secret', async () => {
     const urls: string[] = [];
     const authHeaders: string[] = [];

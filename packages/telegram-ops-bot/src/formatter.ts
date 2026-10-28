@@ -20,14 +20,27 @@ function formatNullable(value: string | null | undefined): string {
   return value;
 }
 
-export function formatLocalizedDateTime(value: string | null | undefined): string {
+export function formatLocalizedDateTime(
+  value: string | null | undefined,
+  timezone?: string,
+): string {
+  if (!timezone) return '\u2014';
   if (!value) return 'n/a';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-  const iso = parsed.toISOString();
-  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(parsed);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')} ${timezone}`;
 }
 
 function formatStudentDisplayName(job: Pick<JobStatusDto, 'studentId' | 'studentName'>): string {
@@ -55,24 +68,28 @@ function formatPreset(job: Pick<JobStatusDto, 'learningPresetId' | 'preset'>): s
 
 function formatJobTimestamp(
   job: Pick<JobStatusDto, 'finishedAt' | 'updatedAt' | 'createdAt'>,
+  timezone?: string,
 ): string {
-  return formatLocalizedDateTime(job.finishedAt ?? job.updatedAt ?? job.createdAt);
+  return formatLocalizedDateTime(job.finishedAt ?? job.updatedAt ?? job.createdAt, timezone);
 }
 
-function formatJobListLine(job: JobStatusDto): string {
+function formatJobListLine(job: JobStatusDto, timezone?: string): string {
   return [
     `• <b>${escapeHtml(formatStudentIdentity(job))}</b>`,
     `<b>State</b> ${escapeHtml(job.state)}`,
-    `<b>When</b> ${escapeHtml(formatJobTimestamp(job))}`,
+    `<b>When</b> ${escapeHtml(formatJobTimestamp(job, timezone))}`,
     `<b>Preset</b> ${escapeHtml(formatPreset(job))}`,
     `<code>${escapeHtml(job.jobId)}</code>`,
   ].join('\n');
 }
 
-function formatStudentSummaryLine(student: StudentSummaryResponse['items'][number]): string {
+function formatStudentSummaryLine(
+  student: StudentSummaryResponse['items'][number],
+  timezone?: string,
+): string {
   const details: string[] = [];
   if (student.lastLessonAt) {
-    details.push(`Last lesson ${formatLocalizedDateTime(student.lastLessonAt)}`);
+    details.push(`Last lesson ${formatLocalizedDateTime(student.lastLessonAt, timezone)}`);
   }
   if (student.pendingDrafts > 0) {
     details.push(`Pending drafts ${student.pendingDrafts}`);
@@ -127,7 +144,7 @@ export function formatGuidedHelpHome(args: {
   });
 }
 
-export function formatOpsStatus(status: OpsStatusResponse): string {
+export function formatOpsStatus(status: OpsStatusResponse, timezone?: string): string {
   const emoji =
     status.overall.state === 'healthy' ? '✅' : status.overall.state === 'degraded' ? '⚠️' : '❌';
   const reasons =
@@ -135,7 +152,7 @@ export function formatOpsStatus(status: OpsStatusResponse): string {
 
   return [
     `<b>${emoji} Ops Status: ${escapeHtml(status.overall.state.toUpperCase())}</b>`,
-    `<code>${escapeHtml(status.checkedAtUtc)}</code>`,
+    `<code>${escapeHtml(formatLocalizedDateTime(status.checkedAtUtc, timezone))}</code>`,
     '',
     `<b>Backup</b> ${escapeHtml(status.backup.state)} • ${escapeHtml(status.backup.reason)}`,
     `<b>Artifact integrity</b> ${escapeHtml(status.artifactIntegrity.state)} • ${escapeHtml(status.artifactIntegrity.reason)}`,
@@ -146,7 +163,7 @@ export function formatOpsStatus(status: OpsStatusResponse): string {
   ].join('\n');
 }
 
-export function formatFinishedJobs(response: JobListResponse): string {
+export function formatFinishedJobs(response: JobListResponse, timezone?: string): string {
   if (response.jobs.length === 0) {
     return '<b>Jobs · Recent Finished</b>\n\nNo succeeded jobs found.';
   }
@@ -157,7 +174,7 @@ export function formatFinishedJobs(response: JobListResponse): string {
     '',
     response.jobs
       .slice(0, 10)
-      .map((job) => formatJobListLine(job))
+      .map((job) => formatJobListLine(job, timezone))
       .join('\n\n'),
   ].join('\n');
 }
@@ -166,6 +183,7 @@ export function formatJobDetails(
   job: JobStatusDto,
   options?: {
     assignmentTitle?: string | null;
+    timezone?: string;
   },
 ): string {
   const assignmentTitle = normalizeAssignmentTitle(
@@ -177,8 +195,8 @@ export function formatJobDetails(
     '',
     `<b>Student</b> ${escapeHtml(formatStudentDisplayName(job))}`,
     `<b>Homework</b> ${escapeHtml(formatNullable(assignmentTitle))}`,
-    `<b>Created</b> ${escapeHtml(formatLocalizedDateTime(job.createdAt))}`,
-    `<b>Finished</b> ${escapeHtml(formatLocalizedDateTime(job.finishedAt))}`,
+    `<b>Created</b> ${escapeHtml(formatLocalizedDateTime(job.createdAt, options?.timezone))}`,
+    `<b>Finished</b> ${escapeHtml(formatLocalizedDateTime(job.finishedAt, options?.timezone))}`,
     `<b>Preset</b> ${escapeHtml(formatNullable(job.learningPresetId ?? job.preset))}`,
     `<b>Error</b> ${escapeHtml(formatNullable(job.error))}`,
   ].join('\n');
@@ -188,6 +206,7 @@ export function formatShareJobHeader(
   job: JobStatusDto,
   options?: {
     assignmentTitle?: string | null;
+    timezone?: string;
   },
 ): string {
   const assignmentTitle = normalizeAssignmentTitle(
@@ -197,8 +216,8 @@ export function formatShareJobHeader(
     '<b>Share package</b>',
     `<b>Student</b> ${escapeHtml(formatStudentIdentity(job))}`,
     `<b>Job</b> <code>${escapeHtml(job.jobId)}</code>`,
-    `<b>Created</b> ${escapeHtml(formatLocalizedDateTime(job.createdAt))}`,
-    `<b>Finished</b> ${escapeHtml(formatLocalizedDateTime(job.finishedAt ?? job.updatedAt))}`,
+    `<b>Created</b> ${escapeHtml(formatLocalizedDateTime(job.createdAt, options?.timezone))}`,
+    `<b>Finished</b> ${escapeHtml(formatLocalizedDateTime(job.finishedAt ?? job.updatedAt, options?.timezone))}`,
     `<b>Homework</b> ${escapeHtml(formatNullable(assignmentTitle))}`,
     `<b>Preset</b> ${escapeHtml(formatNullable(job.learningPresetId ?? job.preset))}`,
   ].join('\n');
@@ -233,6 +252,7 @@ export function formatStudentDisambiguation(args: {
 }
 
 export function formatStudentSummary(args: {
+  timezone?: string;
   student: StudentProfileDto;
   latestJob: JobStatusDto | null;
   latestAssignmentTitle: string | null;
@@ -245,7 +265,7 @@ export function formatStudentSummary(args: {
       : args.recentJobs
           .map(
             (job) =>
-              `• ${escapeHtml(job.state)} · ${escapeHtml(formatJobTimestamp(job))} · ${escapeHtml(formatPreset(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`,
+              `• ${escapeHtml(job.state)} · ${escapeHtml(formatJobTimestamp(job, args.timezone))} · ${escapeHtml(formatPreset(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`,
           )
           .join('\n');
 
@@ -253,7 +273,7 @@ export function formatStudentSummary(args: {
     `<b>${escapeHtml(args.student.student)} (${escapeHtml(args.student.id.slice(0, 8))})</b>`,
     '',
     `<b>Latest state</b> ${escapeHtml(latest?.state ?? 'n/a')}`,
-    `<b>Latest time</b> ${escapeHtml(latest ? formatJobTimestamp(latest) : 'n/a')}`,
+    `<b>Latest time</b> ${escapeHtml(latest ? formatJobTimestamp(latest, args.timezone) : 'n/a')}`,
     `<b>Latest homework</b> ${escapeHtml(formatNullable(args.latestAssignmentTitle))}`,
     '',
     '<b>Recent jobs</b>',
@@ -262,6 +282,7 @@ export function formatStudentSummary(args: {
 }
 
 export function formatJobsQueryResults(args: {
+  timezone?: string;
   response: JobListResponse;
   normalizedFilters: string[];
   title?: string;
@@ -287,12 +308,13 @@ export function formatJobsQueryResults(args: {
     `<b>Filters</b> ${escapeHtml(normalizedFilters)}`,
     `<b>Showing</b> ${args.response.jobs.length} of ${args.response.total}`,
     '',
-    args.response.jobs.map((job) => formatJobListLine(job)).join('\n\n'),
+    args.response.jobs.map((job) => formatJobListLine(job, args.timezone)).join('\n\n'),
     ...(footerLines.length > 0 ? ['', ...footerLines.map((line) => escapeHtml(line))] : []),
   ].join('\n');
 }
 
 export function formatTodaySummary(args: {
+  timezone?: string;
   dateLabel: string;
   summary: JobSummaryResponse;
   failedJobs: JobStatusDto[];
@@ -311,7 +333,7 @@ export function formatTodaySummary(args: {
   }
 
   return [
-    `<b>Today · ${escapeHtml(args.dateLabel)} UTC</b>`,
+    `<b>Today · ${escapeHtml(args.dateLabel)} ${escapeHtml(args.timezone ?? '\u2014')}</b>`,
     '',
     `<b>Total</b> ${args.summary.total}`,
     `<b>Succeeded</b> ${args.summary.byState.succeeded ?? 0}`,
@@ -326,7 +348,7 @@ export function formatTodaySummary(args: {
           '<b>Recent finished</b>',
           ...args.succeededJobs.map(
             (job) =>
-              `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`,
+              `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job, args.timezone))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`,
           ),
         ]
       : []),
@@ -336,7 +358,7 @@ export function formatTodaySummary(args: {
           '<b>Recent failures</b>',
           ...args.failedJobs.map(
             (job) =>
-              `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · ${escapeHtml(formatNullable(job.error))}`,
+              `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job, args.timezone))} · ${escapeHtml(formatNullable(job.error))}`,
           ),
         ]
       : []),
@@ -346,7 +368,7 @@ export function formatTodaySummary(args: {
           '<b>Running now</b>',
           ...args.runningJobs.map(
             (job) =>
-              `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`,
+              `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job, args.timezone))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`,
           ),
         ]
       : []),
@@ -431,6 +453,7 @@ export function formatBotStatusReport(args: {
 }
 
 export function formatStudentsBrowser(args: {
+  timezone?: string;
   response: StudentSummaryResponse;
   page: number;
 }): string {
@@ -443,7 +466,9 @@ export function formatStudentsBrowser(args: {
     '',
     `<b>Showing</b> ${args.response.items.length} of ${args.response.total}`,
     '',
-    args.response.items.map((student) => formatStudentSummaryLine(student)).join('\n\n'),
+    args.response.items
+      .map((student) => formatStudentSummaryLine(student, args.timezone))
+      .join('\n\n'),
   ].join('\n');
 }
 
@@ -525,17 +550,17 @@ function normalizeAssignmentEmoji(value: string | null | undefined): string | nu
   return trimmed;
 }
 
-export function formatActionQueued(status: OpsActionStatus): string {
+export function formatActionQueued(status: OpsActionStatus, timezone?: string): string {
   return [
     '<b>⏳ Action queued</b>',
     `<b>Action</b> <code>${escapeHtml(status.action)}</code>`,
     `<b>Operation</b> <code>${escapeHtml(status.operationId)}</code>`,
     `<b>State</b> <code>${escapeHtml(status.state)}</code>`,
-    `<b>Requested</b> <code>${escapeHtml(status.requestedAt)}</code>`,
+    `<b>Requested</b> <code>${escapeHtml(formatLocalizedDateTime(status.requestedAt, timezone))}</code>`,
   ].join('\n');
 }
 
-export function formatActionStatus(status: OpsActionStatus): string {
+export function formatActionStatus(status: OpsActionStatus, timezone?: string): string {
   const emoji =
     status.state === 'succeeded'
       ? '✅'
@@ -549,9 +574,9 @@ export function formatActionStatus(status: OpsActionStatus): string {
     `<b>Action</b> <code>${escapeHtml(status.action)}</code>`,
     `<b>Operation</b> <code>${escapeHtml(status.operationId)}</code>`,
     `<b>State</b> <code>${escapeHtml(status.state)}</code>`,
-    `<b>Requested</b> <code>${escapeHtml(status.requestedAt)}</code>`,
-    `<b>Started</b> <code>${escapeHtml(formatNullable(status.startedAt))}</code>`,
-    `<b>Finished</b> <code>${escapeHtml(formatNullable(status.finishedAt))}</code>`,
+    `<b>Requested</b> <code>${escapeHtml(formatLocalizedDateTime(status.requestedAt, timezone))}</code>`,
+    `<b>Started</b> <code>${escapeHtml(formatLocalizedDateTime(status.startedAt, timezone))}</code>`,
+    `<b>Finished</b> <code>${escapeHtml(formatLocalizedDateTime(status.finishedAt, timezone))}</code>`,
     `<b>Exit</b> <code>${escapeHtml(formatNullable(status.exitCode === null ? null : String(status.exitCode)))}</code>`,
     `<b>Message</b> ${escapeHtml(formatNullable(status.message))}`,
   ].join('\n');

@@ -40,9 +40,10 @@ export function createConfig(overrides: Partial<BotConfig> = {}): BotConfig {
 }
 
 export function createBaseContext(overrides: Partial<CommandContext> = {}): CommandContext {
-  return {
+  const context: CommandContext = {
     config: createConfig(),
     backend: {
+      getBusinessSettings: vi.fn(async () => ({ timezone: 'UTC' }) as never),
       getOpsStatus: vi.fn(),
       enqueueOpsAction: vi.fn(),
       getOpsActionStatus: vi.fn(),
@@ -98,6 +99,8 @@ export function createBaseContext(overrides: Partial<CommandContext> = {}): Comm
     args: [],
     ...overrides,
   } as CommandContext;
+  context.backend.getBusinessSettings ??= vi.fn(async () => ({ timezone: 'UTC' }) as never);
+  return context;
 }
 
 export function createUpdate(
@@ -192,6 +195,7 @@ export function createRunner(args?: {
   getUpdates?: ReturnType<typeof vi.fn>;
   getMe?: ReturnType<typeof vi.fn>;
   backend?: Partial<{
+    getBusinessSettings: ReturnType<typeof vi.fn>;
     getOpsStatus: ReturnType<typeof vi.fn>;
     enqueueOpsAction: ReturnType<typeof vi.fn>;
     getOpsActionStatus: ReturnType<typeof vi.fn>;
@@ -214,6 +218,7 @@ export function createRunner(args?: {
   runner: TelegramOpsBotRunner;
   sendHtmlMessage: ReturnType<typeof vi.fn>;
   backend: {
+    getBusinessSettings: ReturnType<typeof vi.fn>;
     getOpsStatus: ReturnType<typeof vi.fn>;
     enqueueOpsAction: ReturnType<typeof vi.fn>;
     getOpsActionStatus: ReturnType<typeof vi.fn>;
@@ -252,6 +257,8 @@ export function createRunner(args?: {
       username: 'esl_ops_bot',
     }));
   const backend = {
+    getBusinessSettings:
+      args?.backend?.getBusinessSettings ?? vi.fn(async () => ({ timezone: 'UTC' })),
     getOpsStatus: args?.backend?.getOpsStatus ?? vi.fn(),
     enqueueOpsAction: args?.backend?.enqueueOpsAction ?? vi.fn(),
     getOpsActionStatus: args?.backend?.getOpsActionStatus ?? vi.fn(),

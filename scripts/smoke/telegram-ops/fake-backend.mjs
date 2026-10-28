@@ -309,6 +309,26 @@ async function handler(req, res) {
     }
   }
 
+  if (req.method === 'GET' && pathname === '/business/settings') {
+    if (!isAuthorized(req.headers)) {
+      unauthorized(res);
+      return;
+    }
+    sendJson(res, 200, {
+      workspaceId: 'b5304edc-202c-4c8c-ab24-28db670368be',
+      defaultCurrency: 'USD',
+      defaultLessonRateMinor: 2500,
+      defaultLessonDurationMinutes: 60,
+      timezone: 'Asia/Ho_Chi_Minh',
+      forecastHorizonDays: 30,
+      noShowRateBasisPoints: 10000,
+      cancellationRateBasisPoints: 0,
+      topUpThreshold: 2,
+      updatedAt: '2026-03-13T04:00:00.000Z',
+    });
+    return;
+  }
+
   if (req.method === 'GET' && pathname === '/ops/status') {
     sendJson(res, 200, buildOpsStatus());
     return;
@@ -379,7 +399,8 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`[telegram-smoke-backend] listening on ${host}:${port}`);
+  const address = server.address();
+  console.log(`[telegram-smoke-backend] listening on ${host}:${address.port}`);
 });
 
 const shutdown = () => {

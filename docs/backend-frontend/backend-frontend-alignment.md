@@ -146,6 +146,13 @@ revision content/history are preserved.
   URLs, rerun lineage, and required markdown storage remain read-only history. Current API, DB, and
   migration pins are machine-owned by [`packages/contracts/src/contract-versions.ts`](../../packages/contracts/src/contract-versions.ts),
   so the historical values in this paragraph are not the latest contract versions.
+- ESL-90 uses workspace Business settings as the single tutor clock across frontend and Telegram
+  displays and human date filters. Authenticated frontend settings load before clock-bearing screens;
+  loading/failure never substitutes browser time or guessed UTC, and successful settings saves
+  propagate through shared state. Device detection only annotates the workspace selector. Calendar
+  fresh setup admission rejects a stale zone; accepted retries retain their immutable payload and
+  event/invitation identity. Existing occurrences, recurrence anchors, credits, historical evidence,
+  UTC quota accounting and date-only payments keep their semantics.
 - Student Schedule & Billing reads independent Today, Recent (10) and Upcoming (3) occurrence
   windows using workspace Business timezone. Each older/future page uses an authorized
   `(starts_at,id)` keyset bound to the initial student/window/local day/timezone; mutations and

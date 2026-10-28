@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 
 import type { AdminTemplateRevisionDto, TemplateControlPlaneDto } from '@esl-pipeline/contracts';
 
+import { useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
+import { formatTutorTime } from '../../utils/tutor-time';
 import { diffTemplateContent } from './template-diff';
 
 const driftLabels = {
@@ -12,6 +14,7 @@ const driftLabels = {
 };
 
 function RevisionMetadata({ revision }: { revision: AdminTemplateRevisionDto }) {
+  const timezone = useWorkspaceTimezone();
   return (
     <dl className="prompt-control-metadata">
       <dt>Revision</dt>
@@ -23,11 +26,11 @@ function RevisionMetadata({ revision }: { revision: AdminTemplateRevisionDto }) 
         <code title={revision.contentHash}>{revision.contentHash.slice(0, 12)}</code>
       </dd>
       <dt>Created</dt>
-      <dd>{new Date(revision.createdAt).toLocaleString()}</dd>
+      <dd>{formatTutorTime(revision.createdAt, timezone)}</dd>
       <dt>Activated</dt>
       <dd>
         {revision.activatedAt
-          ? new Date(revision.activatedAt).toLocaleString()
+          ? formatTutorTime(revision.activatedAt, timezone)
           : 'Never / no longer active'}
       </dd>
       <dt>ID</dt>

@@ -1,15 +1,19 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useWorkspaceSettings } from '../../context/WorkspaceTimezoneContext';
 import {
   type BusinessSettings,
   getBusinessSettings,
   updateBusinessSettings,
 } from '../../utils/api';
-import { TIMEZONE_OPTIONS } from '../../utils/timezones';
+import { buildTimezoneOptions, detectDeviceTimezone } from '../../utils/timezones';
 import { BusinessInfoHint } from './BusinessInfoHint';
 
 export const BusinessSettingsPage: React.FC = () => {
-  const [settings, setSettings] = useState<BusinessSettings | null>(null);
+  const workspace = useWorkspaceSettings();
+  const [settings, setSettings] = useState<BusinessSettings | null>(workspace.settings);
+  const [deviceTimezone] = useState(detectDeviceTimezone);
   const [form, setForm] = useState({
     defaultCurrency: 'USD',
     timezone: 'UTC',
@@ -21,11 +25,15 @@ export const BusinessSettingsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const mounted = useRef(true);
+  const timezoneOptions = useMemo(
+    () => buildTimezoneOptions(form.timezone, deviceTimezone),
+    [form.timezone, deviceTimezone],
+  );
   const loadSettings = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const nextSettings = await getBusinessSettings();
+      const nextSettings = workspace.settings ?? (await getBusinessSettings());
       if (!mounted.current) return;
       setSettings(nextSettings);
       setFormFromSettings(nextSettings, setForm);
@@ -96,6 +104,8 @@ export const BusinessSettingsPage: React.FC = () => {
               topUpThreshold: Number(form.topUpThreshold),
             })
               .then((nextSettings) => {
+                if (!mounted.current) return;
+                workspace.setSettings(nextSettings);
                 setSettings(nextSettings);
                 setFormFromSettings(nextSettings, setForm);
                 setSuccess('Business settings saved.');
@@ -128,24 +138,27 @@ export const BusinessSettingsPage: React.FC = () => {
           </div>
           <div className="business-setting">
             <div className="business-setting-label">
-              <label htmlFor="business-timezone">Timezone</label>
+              <label htmlFor="business-timezone">Tutor timezone</label>
               <BusinessInfoHint id="business-timezone-hint" label="timezone">
-                Controls manual lesson entry and schedule display. Existing weekly plans keep their
-                saved timezone.
+                Controls all tutor dates and times and new schedules. Existing Google series keep
+                their recorded timezone.
               </BusinessInfoHint>
             </div>
-            <select
-              id="business-timezone"
-              aria-describedby="business-timezone-hint"
-              value={form.timezone}
-              onChange={(event) => setForm({ ...form, timezone: event.target.value })}
-            >
-              {TIMEZONE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="business-timezone-select">
+              <select
+                id="business-timezone"
+                aria-describedby="business-timezone-hint"
+                value={form.timezone}
+                onChange={(event) => setForm({ ...form, timezone: event.target.value })}
+              >
+                {timezoneOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </div>
           </div>
           <div className="business-setting">
             <div className="business-setting-label">

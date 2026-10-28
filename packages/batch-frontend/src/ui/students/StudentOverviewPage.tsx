@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useWorkspaceSettings, useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import {
   type FoundationalProfile,
-  getBusinessSettings,
   getStudentOverviewSurface,
   type ProfileContentResponse,
   type ProfileRevisionSummaryResponse,
@@ -12,6 +12,7 @@ import {
   type StudentScheduleBillingSurface,
   type StudentTimelineItem,
 } from '../../utils/api';
+import { formatPlainDate, formatTutorTime } from '../../utils/tutor-time';
 import { useStudentAreaContext } from './StudentAreaContext';
 import './StudentOverviewPage.css';
 
@@ -37,40 +38,6 @@ function createOverviewKey(studentId: string): string {
   return studentId;
 }
 
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-});
-
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
-function formatDate(value?: string | null): string {
-  if (!value) return 'Not recorded yet';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Not recorded yet';
-  return DATE_FORMATTER.format(date);
-}
-
-function formatDateTime(value?: string | null, timezone?: string): string {
-  if (!value) return 'Not recorded yet';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Not recorded yet';
-  return timezone
-    ? date.toLocaleString('en-US', {
-        timeZone: timezone,
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : DATE_TIME_FORMATTER.format(date);
-}
-
 function formatCredits(surface: StudentScheduleBillingSurface | null): string {
   if (!surface) return 'Not configured yet';
   const remaining = surface.creditSummary.remaining;
@@ -84,7 +51,7 @@ function formatLatestPayment(surface: StudentScheduleBillingSurface | null): str
   return `${payment.currency} ${major.toLocaleString('en-US', {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
-  })} · ${formatDate(payment.receivedAt)}`;
+  })} · ${formatPlainDate(payment.receivedAt)}`;
 }
 
 function compactList(values: readonly string[], limit = 2): string[] {
@@ -447,7 +414,15 @@ function StudentOverviewPendingCanvas({
 export const StudentOverviewPage: React.FC = () => {
   const { student, studentId, studentLoading, studentError } = useStudentAreaContext();
   const [overviewData, setOverviewData] = useState<OverviewData>(EMPTY_OVERVIEW_DATA);
-  const [workspaceTimezone, setWorkspaceTimezone] = useState('UTC');
+  const workspaceTimezone = useWorkspaceTimezone();
+  const { reconcileTimezone } = useWorkspaceSettings();
+  const formatDateTime = (value?: string | null) =>
+    formatTutorTime(value, workspaceTimezone, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [loadedOverviewKey, setLoadedOverviewKey] = useState<string | null>(null);
@@ -479,10 +454,8 @@ export const StudentOverviewPage: React.FC = () => {
 
     const loadOverview = async () => {
       try {
-        const [surface, settings] = await Promise.all([
-          getStudentOverviewSurface(studentId),
-          getBusinessSettings(),
-        ]);
+        const surface = await getStudentOverviewSurface(studentId);
+        await reconcileTimezone(surface.scheduleBilling?.lessonWindows?.timezone);
 
         if (latestOverviewRequestRef.current !== requestId) {
           return;
@@ -496,7 +469,6 @@ export const StudentOverviewPage: React.FC = () => {
           timeline: surface.recentTimeline.items,
           scheduleBilling: surface.scheduleBilling ?? null,
         });
-        setWorkspaceTimezone(settings.timezone);
         setLoadedOverviewKey(requestOverviewKey);
         setOverviewError(null);
       } catch (error: unknown) {
@@ -519,7 +491,7 @@ export const StudentOverviewPage: React.FC = () => {
     return () => {
       latestOverviewRequestRef.current += 1;
     };
-  }, [overviewRetryCount, studentId, studentLoading]);
+  }, [overviewRetryCount, studentId, studentLoading, workspaceTimezone, reconcileTimezone]);
 
   const overviewReady = loadedOverviewKey === currentOverviewKey && !overviewLoading;
   const shellLoading = studentLoading || !overviewReady;
@@ -554,7 +526,11 @@ export const StudentOverviewPage: React.FC = () => {
   const contexts = compactList(profile?.communicationContexts ?? [], 1);
   const strengths = compactList(profile?.stableStrengths ?? [], 2);
   const challenges = compactList(profile?.persistentChallenges ?? [], 2);
-  const profileUpdatedAt = formatDate(renderedOverviewData.profile?.updatedAt);
+  const profileUpdatedAt = formatTutorTime(
+    renderedOverviewData.profile?.updatedAt,
+    workspaceTimezone,
+    { month: 'short', day: 'numeric' },
+  );
 
   return (
     <section className="student-overview-page student-area-theme" aria-busy={shellLoading}>
@@ -609,7 +585,7 @@ export const StudentOverviewPage: React.FC = () => {
                 <strong>Next lesson</strong>
                 <small>
                   {scheduleBilling?.nextLesson
-                    ? `${formatDateTime(scheduleBilling.nextLesson.startsAt, workspaceTimezone)} · ${workspaceTimezone}`
+                    ? `${formatDateTime(scheduleBilling.nextLesson.startsAt)} · ${workspaceTimezone}`
                     : 'Not scheduled yet'}
                 </small>
               </span>

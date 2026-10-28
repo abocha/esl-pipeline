@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { TemplateControlPlaneDto } from '@esl-pipeline/contracts';
 
+import { useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import type {
   TemplateContentOption,
   TemplateContentResponse,
@@ -18,6 +19,7 @@ import {
   setDefaultTemplateContent,
   upsertTemplateContent,
 } from '../../utils/api';
+import { formatTutorTime } from '../../utils/tutor-time';
 import { TemplateContentComparison, TemplateControlPlane } from './TemplateControlPlane';
 import './PromptTemplatesPage.css';
 
@@ -59,13 +61,6 @@ type TemplateBusyState =
   | 'defaulting'
   | 'archiving';
 
-function formatDateTime(value?: string | null): string {
-  if (!value) return 'n/a';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'n/a';
-  return date.toLocaleString();
-}
-
 function getRevisionLabel(revision: TemplateRevisionSummaryResponse): string {
   return revision.versionLabel || `v${revision.versionNumber ?? '?'}`;
 }
@@ -75,6 +70,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export const PromptTemplatesPage: React.FC = () => {
+  const timezone = useWorkspaceTimezone();
+  const formatDateTime = (value?: string | null) => formatTutorTime(value, timezone);
   const [templates, setTemplates] = useState<TemplateContentOption[]>([]);
   const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');

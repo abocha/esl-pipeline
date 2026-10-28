@@ -2,9 +2,13 @@ import { RefreshCw } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useWorkspaceSettings, useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import { type BusinessStatsSurface, getBusinessStatsSurface } from '../../utils/api';
+import { normalizeTimezone } from '../../utils/timezones';
 import { formatDateRange, formatHours, formatMoney } from './business-format';
 export const BusinessStatsPage: React.FC = () => {
+  const timezone = useWorkspaceTimezone();
+  const { reconcileTimezone } = useWorkspaceSettings();
   const [monthOverride, setMonthOverride] = useState<string | undefined>();
   const [surface, setSurface] = useState<BusinessStatsSurface | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +24,8 @@ export const BusinessStatsPage: React.FC = () => {
       const params = monthOverride === undefined ? {} : { month: monthOverride };
       const nextSurface = await getBusinessStatsSurface(params);
       if (latestLoadRequestRef.current !== requestId) return;
+      await reconcileTimezone(nextSurface.settings.timezone);
+      if (latestLoadRequestRef.current !== requestId) return;
       setSurface(nextSurface);
     } catch (loadError: unknown) {
       if (latestLoadRequestRef.current !== requestId) return;
@@ -29,20 +35,30 @@ export const BusinessStatsPage: React.FC = () => {
         setLoading(false);
       }
     }
-  }, [monthOverride]);
+  }, [monthOverride, timezone, reconcileTimezone]);
   useEffect(() => {
     void load();
     return () => {
       latestLoadRequestRef.current += 1;
     };
   }, [load]);
-  if (loading && !surface) {
+  if (
+    (loading && !surface) ||
+    (surface && timezone && normalizeTimezone(surface.settings.timezone) !== timezone)
+  ) {
     return (
       <section className="business-dashboard-surface">
         <header className="business-agenda-heading">
           <h2>Stats</h2>
         </header>
-        <p className="business-empty">Loading business stats...</p>
+        <p className="business-empty" role={error ? 'alert' : undefined}>
+          {error ?? 'Loading business stats...'}
+        </p>
+        {error ? (
+          <button type="button" onClick={() => void load()}>
+            Retry
+          </button>
+        ) : null}
       </section>
     );
   }

@@ -44,7 +44,9 @@ describe('BusinessSettingsPage', () => {
     expect(screen.queryByLabelText('Default duration')).toBeNull();
     expect(screen.queryByLabelText('No-show correction %')).toBeNull();
     expect(screen.queryByLabelText('Cancellation correction %')).toBeNull();
-    fireEvent.change(screen.getByLabelText('Timezone'), { target: { value: 'Asia/Bangkok' } });
+    fireEvent.change(screen.getByLabelText('Tutor timezone'), {
+      target: { value: 'Asia/Bangkok' },
+    });
     fireEvent.change(screen.getByLabelText('Planning horizon (days)'), { target: { value: '60' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
     await waitFor(() => {
@@ -107,38 +109,21 @@ describe('BusinessSettingsPage', () => {
       });
     });
   });
-  it('offers a timezone picker sorted west-to-east by UTC offset', async () => {
+  it('faithfully renders a saved Vietnam alias without a first-option substitution', async () => {
+    const settings = await apiMocks.getBusinessSettings();
+    apiMocks.getBusinessSettings.mockResolvedValue({ ...settings, timezone: 'Asia/Saigon' });
     render(<BusinessSettingsPage />);
-    const picker = await screen.findByLabelText('Timezone');
-    const options = Array.from(picker.querySelectorAll('option')).map((option) => ({
-      label: option.textContent,
-      value: option.value,
-    }));
-    expect(options.map((option) => option.value)).toEqual([
-      'America/Los_Angeles',
-      'America/Denver',
-      'America/Chicago',
-      'America/New_York',
-      'UTC',
-      'Europe/London',
-      'Europe/Berlin',
-      'Europe/Moscow',
-      'Asia/Dubai',
-      'Asia/Tbilisi',
-      'Asia/Almaty',
-      'Asia/Kolkata',
-      'Asia/Bishkek',
-      'Asia/Bangkok',
-      'Asia/Singapore',
-      'Asia/Tokyo',
-      'Australia/Sydney',
-    ]);
-    expect(options).toEqual(
-      expect.arrayContaining([
-        { value: 'Asia/Kolkata', label: 'India (UTC+5:30)' },
-        { value: 'Asia/Bishkek', label: 'Bishkek (UTC+6)' },
-        { value: 'Asia/Singapore', label: 'Singapore / Shanghai (UTC+8)' },
-      ]),
-    );
+    const picker = (await screen.findByLabelText('Tutor timezone')) as HTMLSelectElement;
+    expect(picker.value).toBe('Asia/Saigon');
+    expect(picker.selectedOptions[0]?.textContent).toContain('Ho Chi Minh City · UTC+07:00');
+    expect(
+      [...picker.options].filter((option) => option.textContent?.includes('Ho Chi Minh City')),
+    ).toHaveLength(1);
+    expect(screen.queryByText(/Controls all tutor dates/, { selector: 'p' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'About timezone' }));
+    expect(
+      screen.getByRole('button', { name: 'About timezone' }).getAttribute('aria-expanded'),
+    ).toBe('true');
+    expect(apiMocks.updateBusinessSettings).not.toHaveBeenCalled();
   });
 });

@@ -129,6 +129,10 @@ async function fixture() {
       workspace,
     ]);
     await client.query(
+      "INSERT INTO workspace_business_settings(workspace_id,timezone) VALUES($1,'Asia/Bangkok')",
+      [workspace],
+    );
+    await client.query(
       "INSERT INTO workspace_memberships(workspace_id,user_id,role) VALUES($1,$2,'owner'),($1,$3,'member')",
       [workspace, owner, member],
     );
@@ -266,6 +270,81 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
       [another, workspace],
     );
     expect(another).not.toBe(student);
+  });
+  it('rejects fresh stale forms but recovers the frozen accepted request after workspace clock changes', async () => {
+    await q("UPDATE workspace_business_settings SET timezone='Asia/Saigon' WHERE workspace_id=$1", [
+      workspace,
+    ]);
+    const accepted = { ...request, timezone: 'Asia/Saigon', slots: [request.slots[0]!] };
+    await expect(
+      createCalendarSetup(workspace, student, member, 'stale', request),
+    ).rejects.toMatchObject({ code: 'workspace_timezone_changed' });
+    expect(
+      (
+        await q(
+          "SELECT 1 FROM calendar_operations WHERE workspace_id=$1 AND idempotency_key='stale'",
+          [workspace],
+        )
+      ).rows,
+    ).toHaveLength(0);
+    const setup = await createCalendarSetup(workspace, student, member, 'frozen-zone', accepted);
+    const before = await opFor(setup.operations[0]!.id);
+    expect(before.request_payload.event).toMatchObject({
+      start: { dateTime: '2030-01-07T04:00:00.000Z', timeZone: 'Asia/Ho_Chi_Minh' },
+    });
+    await q(
+      "UPDATE workspace_business_settings SET timezone='America/New_York' WHERE workspace_id=$1",
+      [workspace],
+    );
+    expect(await createCalendarSetup(workspace, student, member, 'frozen-zone', accepted)).toEqual(
+      setup,
+    );
+    await expect(
+      createCalendarSetup(workspace, student, member, 'frozen-zone', {
+        ...accepted,
+        timezone: 'America/New_York',
+      }),
+    ).rejects.toMatchObject({ code: 'idempotency_conflict' });
+    await retryCalendarOperation(workspace, member, before.id);
+    const fixture = providerFixture();
+    await processCalendarCreate(await claim(before.id), fixture.provider);
+    await processCalendarCreate(await claim(before.id), fixture.provider);
+    const after = await opFor(before.id);
+    expect(after.provider_event_id).toBe(before.provider_event_id);
+    expect(after.request_hash).toBe(before.request_hash);
+    expect(after.request_payload).toEqual(before.request_payload);
+    expect(fixture.insert).toHaveBeenCalledTimes(1);
+    expect(fixture.insert.mock.calls[0]![3]).toBe(true);
+  });
+  it('uses provider Calendar metadata for a zone-less one-off without workspace retiming', async () => {
+    const binding = await bindingFixture('one_off');
+    await q(
+      "UPDATE workspace_calendar_connections SET calendar_timezone='Europe/London' WHERE id=$1",
+      [connection],
+    );
+    const event = {
+      id: 'master',
+      start: { dateTime: '2030-01-07T11:00:00+07:00' },
+      end: { dateTime: '2030-01-07T12:00:00+07:00' },
+      etag: 'zone-less-1',
+    };
+    await project(binding, event);
+    const before = (
+      await q('SELECT id,starts_at,timezone FROM student_lessons WHERE student_id=$1', [student])
+    ).rows;
+    expect(before).toHaveLength(1);
+    expect(before[0]).toMatchObject({
+      starts_at: new Date('2030-01-07T04:00:00Z'),
+      timezone: 'Europe/London',
+    });
+    await q("UPDATE workspace_business_settings SET timezone='Asia/Tokyo' WHERE workspace_id=$1", [
+      workspace,
+    ]);
+    await project(binding, { ...event, etag: 'zone-less-2' });
+    expect(
+      (await q('SELECT id,starts_at,timezone FROM student_lessons WHERE student_id=$1', [student]))
+        .rows,
+    ).toEqual(before);
   });
   it('rejects cross-workspace and viewer mutations without persisting setup children', async () => {
     const foreign = randomUUID();

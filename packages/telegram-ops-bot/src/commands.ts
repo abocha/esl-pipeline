@@ -44,6 +44,12 @@ import type {
   ParsedCommand,
   TelegramInlineKeyboardMarkup,
 } from './types.js';
+import {
+  shiftDate,
+  workspaceDate,
+  workspaceDayStart,
+  workspaceTimezone,
+} from './workspace-time.js';
 
 export interface CommandRegistry {
   commands: CommandDefinition[];
@@ -64,8 +70,8 @@ const ADVANCED_APPROVAL_TTL_MS = 10 * 60 * 1000;
 const ADVANCED_APPROVAL_TOKEN_VERSION = 1;
 const STUDENTS_PAGE_SIZE = 10;
 const STUDENT_RESOLUTION_LIMIT = 500;
-const COMPACT_JOBS_VIEW_VERSION = '1';
-const COMPACT_JOBS_VIEW_EMPTY_DAY = 'zzz';
+const COMPACT_JOBS_VIEW_VERSION = '2';
+const COMPACT_JOBS_VIEW_EMPTY_DAY = 'zzzzzz';
 const COMPACT_JOBS_VIEW_EMPTY_STUDENT = '____________';
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const EXACT_UUID_REGEX =
@@ -130,28 +136,20 @@ function toCompactStudentRef(studentId: string): string {
 }
 
 function encodeDayCode(iso: string | undefined): string {
-  if (!iso) {
-    return COMPACT_JOBS_VIEW_EMPTY_DAY;
+  if (!iso) return COMPACT_JOBS_VIEW_EMPTY_DAY;
+  const minutes = Date.parse(iso) / 60_000;
+  if (!Number.isSafeInteger(minutes) || minutes < 0 || minutes >= 36 ** 6 - 1) {
+    throw new TypeError(`Cannot encode jobs view boundary from ${iso}.`);
   }
-  const parsed = Date.parse(iso);
-  if (Number.isNaN(parsed)) {
-    throw new TypeError(`Cannot encode jobs view day from ${iso}.`);
-  }
-  return Math.floor(parsed / MS_PER_DAY)
-    .toString(36)
-    .padStart(3, '0')
-    .slice(-3);
+  return minutes.toString(36).padStart(6, '0');
 }
 
-function decodeDayCode(dayCode: string): string | null {
-  if (dayCode === COMPACT_JOBS_VIEW_EMPTY_DAY) {
-    return null;
+function decodeDayCode(code: string, legacy = false): string | null {
+  if (code === (legacy ? 'zzz' : COMPACT_JOBS_VIEW_EMPTY_DAY)) return null;
+  if (!new RegExp(`^[0-9a-z]{${legacy ? 3 : 6}}$`).test(code)) {
+    throw new Error('Invalid jobs view boundary.');
   }
-  const daysSinceEpoch = Number.parseInt(dayCode, 36);
-  if (!Number.isFinite(daysSinceEpoch) || daysSinceEpoch < 0) {
-    throw new Error(`Invalid jobs view day code: ${dayCode}`);
-  }
-  return new Date(daysSinceEpoch * MS_PER_DAY).toISOString();
+  return new Date(Number.parseInt(code, 36) * (legacy ? MS_PER_DAY : 60_000)).toISOString();
 }
 
 function encodeJobStateMask(states: JobState[] | undefined): string {
@@ -178,6 +176,7 @@ function buildAdHocJobsViewKey(parsed: ParsedJobsFilter, options: JobsViewOption
 }
 
 function buildNormalizedJobsTokens(parsed: {
+  timezone: string;
   states?: JobState[];
   studentLabel?: string;
   from?: string;
@@ -193,10 +192,10 @@ function buildNormalizedJobsTokens(parsed: {
     tokens.push(`student:${parsed.studentLabel}`);
   }
   if (parsed.from) {
-    tokens.push(`since:${parsed.from.slice(0, 10)}`);
+    tokens.push(`since:${workspaceDate(new Date(parsed.from), parsed.timezone)}`);
   }
   if (parsed.to) {
-    tokens.push(`before:${parsed.to.slice(0, 10)}`);
+    tokens.push(`before:${workspaceDate(new Date(parsed.to), parsed.timezone)}`);
   }
   if (parsed.limit !== 10) {
     tokens.push(`limit:${parsed.limit}`);
@@ -404,6 +403,7 @@ async function approveAdvancedAction(
   }
 
   const tokenFingerprint = approvalTokenFingerprint(token);
+  const timezone = await workspaceTimezone(context);
   let reserveResult;
   try {
     reserveResult = await replayStore.reserveTokenUse({
@@ -479,7 +479,7 @@ async function approveAdvancedAction(
       action: result.action,
     },
   });
-  await sendDomainMessage(context, 'ops', formatActionQueued(result));
+  await sendDomainMessage(context, 'ops', formatActionQueued(result, timezone));
 }
 
 function incomingThreadId(context: CommandContext): number | undefined {
@@ -1035,7 +1035,7 @@ export async function loadOpsStatusView(context: CommandContext): Promise<{
 }> {
   const status = await context.backend.getOpsStatus();
   return {
-    html: formatOpsStatus(status),
+    html: formatOpsStatus(status, await workspaceTimezone(context)),
     replyMarkup: buildStatusKeyboard(),
   };
 }
@@ -1050,7 +1050,7 @@ export async function loadFinishedJobsView(
 }> {
   const response = await context.backend.getFinishedJobs(limit);
   return {
-    html: formatFinishedJobs(response),
+    html: formatFinishedJobs(response, await workspaceTimezone(context)),
     replyMarkup: buildFinishedJobsKeyboard(response),
     response,
   };
@@ -1076,6 +1076,7 @@ export async function loadStudentsView(
   };
   return {
     html: formatStudentsBrowser({
+      timezone: await workspaceTimezone(context),
       response: viewModel.response,
       page: viewModel.page,
     }),
@@ -1113,6 +1114,7 @@ export async function loadStudentView(
   const viewModel = await loadStudentViewModel(context, studentId);
   return {
     html: formatStudentSummary({
+      timezone: await workspaceTimezone(context),
       student: viewModel.student,
       latestJob: viewModel.latestJob,
       latestAssignmentTitle: viewModel.latestAssignmentTitle,
@@ -1180,6 +1182,7 @@ export async function loadJobsView(
     });
   return {
     html: formatJobsQueryResults({
+      timezone: await workspaceTimezone(context),
       response,
       normalizedFilters: parsed.normalizedTokens,
       title: options.title,
@@ -1214,7 +1217,9 @@ export async function loadTodayView(
   html: string;
   replyMarkup: TelegramInlineKeyboardMarkup;
 }> {
-  const dayStart = startOfUtcDay(now);
+  const timezone = await workspaceTimezone(context);
+  const dateLabel = workspaceDate(now, timezone);
+  const dayStart = workspaceDayStart(dateLabel, timezone);
   const from = dayStart.toISOString();
   const to = now.toISOString();
   const [summary, failed, running, succeeded] = await Promise.all([
@@ -1225,7 +1230,8 @@ export async function loadTodayView(
   ]);
   return {
     html: formatTodaySummary({
-      dateLabel: formatUtcDateOnly(dayStart),
+      timezone: await workspaceTimezone(context),
+      dateLabel,
       summary,
       failedJobs: failed.jobs,
       runningJobs: running.jobs,
@@ -1274,6 +1280,7 @@ export async function loadJobDetailsView(
   });
   return {
     html: formatJobDetails(job, {
+      timezone: await workspaceTimezone(context),
       assignmentTitle: sharePayload.assignmentTitle,
     }),
     replyMarkup: buildJobDetailsKeyboard(jobId, backViewKey),
@@ -1289,7 +1296,7 @@ export async function loadOperationDetailsView(
 }> {
   const status = await context.backend.getOpsActionStatus(operationId);
   return {
-    html: formatActionStatus(status),
+    html: formatActionStatus(status, await workspaceTimezone(context)),
     replyMarkup: buildOperationDetailsKeyboard(operationId),
   };
 }
@@ -1403,7 +1410,8 @@ async function describeJobsViewKey(
   options: JobsViewOptions;
 }> {
   const now = new Date();
-  const todayStart = startOfUtcDay(now).toISOString();
+  const timezone = await workspaceTimezone(context);
+  const todayStart = workspaceDayStart(workspaceDate(now, timezone), timezone).toISOString();
   if (viewKey === 'gr') {
     return {
       parsed: {
@@ -1485,7 +1493,8 @@ async function describeJobsViewKey(
 
   if (viewKey.startsWith('q:')) {
     const payload = viewKey.slice(2);
-    if (payload.length !== 22 || payload[0] !== COMPACT_JOBS_VIEW_VERSION) {
+    const legacy = payload.length === 22 && payload[0] === '1';
+    if (!legacy && (payload.length !== 28 || payload[0] !== COMPACT_JOBS_VIEW_VERSION)) {
       throw new Error(`Unsupported jobs view: ${viewKey}`);
     }
     const states = decodeJobStateMask(payload.charAt(1));
@@ -1501,9 +1510,11 @@ async function describeJobsViewKey(
     if (orderCode !== 'a' && orderCode !== 'd') {
       throw new Error(`Invalid jobs view order in ${viewKey}`);
     }
-    const from = decodeDayCode(payload.slice(4, 7)) ?? undefined;
-    const to = decodeDayCode(payload.slice(7, 10)) ?? undefined;
-    const studentCode = payload.slice(10, 22);
+    const boundaryWidth = legacy ? 3 : 6;
+    const from = decodeDayCode(payload.slice(4, 4 + boundaryWidth), legacy) ?? undefined;
+    const to =
+      decodeDayCode(payload.slice(4 + boundaryWidth, 4 + boundaryWidth * 2), legacy) ?? undefined;
+    const studentCode = payload.slice(4 + boundaryWidth * 2);
     const studentRef =
       studentCode === COMPACT_JOBS_VIEW_EMPTY_STUDENT ? null : studentCode.replace(/_+$/u, '');
     const student = studentRef ? await resolveStudentRef(context, studentRef) : null;
@@ -1518,6 +1529,7 @@ async function describeJobsViewKey(
       limit,
       order: orderCode === 'a' ? 'asc' : 'desc',
       normalizedTokens: buildNormalizedJobsTokens({
+        timezone,
         states,
         studentLabel: student?.student,
         from,
@@ -1570,7 +1582,11 @@ async function describeJobsViewKey(
   };
 }
 
-function parseJobsFilterInput(raw: string, now = new Date()): ParsedJobsFilter | { error: string } {
+function parseJobsFilterInput(
+  raw: string,
+  timezone: string,
+  now = new Date(),
+): ParsedJobsFilter | { error: string } {
   const trimmed = raw.trim();
   if (!trimmed) {
     return {
@@ -1587,7 +1603,7 @@ function parseJobsFilterInput(raw: string, now = new Date()): ParsedJobsFilter |
   const hasStructuredTokens = tokens.some((token) => token.includes(':'));
 
   if (!hasStructuredTokens) {
-    const parsedKeywordResult = parseSoftJobsKeywords(tokens, now);
+    const parsedKeywordResult = parseSoftJobsKeywords(tokens, now, timezone);
     if (parsedKeywordResult) {
       return parsedKeywordResult;
     }
@@ -1643,7 +1659,7 @@ function parseJobsFilterInput(raw: string, now = new Date()): ParsedJobsFilter |
         break;
       }
       case 'since': {
-        const since = resolveDateFilter(value, 'since', now);
+        const since = resolveDateFilter(value, now, timezone);
         if (!since) {
           return { error: 'since must be today, yesterday, or YYYY-MM-DD.' };
         }
@@ -1652,7 +1668,7 @@ function parseJobsFilterInput(raw: string, now = new Date()): ParsedJobsFilter |
         break;
       }
       case 'before': {
-        const before = resolveDateFilter(value, 'before', now);
+        const before = resolveDateFilter(value, now, timezone);
         if (!before) {
           return { error: 'before must be today, yesterday, or YYYY-MM-DD.' };
         }
@@ -1690,7 +1706,11 @@ function parseJobsFilterInput(raw: string, now = new Date()): ParsedJobsFilter |
   return parsed;
 }
 
-function parseSoftJobsKeywords(tokens: string[], now: Date): ParsedJobsFilter | null {
+function parseSoftJobsKeywords(
+  tokens: string[],
+  now: Date,
+  timezone: string,
+): ParsedJobsFilter | null {
   const states: JobState[] = [];
   let from: string | undefined;
   let to: string | undefined;
@@ -1704,14 +1724,13 @@ function parseSoftJobsKeywords(tokens: string[], now: Date): ParsedJobsFilter | 
       continue;
     }
     if (lower === 'today') {
-      from = startOfUtcDay(now).toISOString();
+      from = workspaceDayStart(workspaceDate(now, timezone), timezone).toISOString();
       continue;
     }
     if (lower === 'yesterday') {
-      const yesterday = startOfUtcDay(now);
-      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      from = yesterday.toISOString();
-      to = startOfUtcDay(now).toISOString();
+      const today = workspaceDate(now, timezone);
+      from = workspaceDayStart(shiftDate(today, -1), timezone).toISOString();
+      to = workspaceDayStart(today, timezone).toISOString();
       continue;
     }
     residualTokens.push(value);
@@ -1777,34 +1796,15 @@ function isJobState(value: string): value is JobState {
   return ['queued', 'running', 'awaiting_approval', 'succeeded', 'failed'].includes(value);
 }
 
-function resolveDateFilter(value: string, kind: 'since' | 'before', now: Date): Date | null {
-  if (value === 'today') {
-    return startOfUtcDay(now);
-  }
-  if (value === 'yesterday') {
-    const day = startOfUtcDay(now);
-    day.setUTCDate(day.getUTCDate() - 1);
-    return day;
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+function resolveDateFilter(value: string, now: Date, timezone: string): Date | null {
+  const today = workspaceDate(now, timezone);
+  const date = value === 'today' ? today : value === 'yesterday' ? shiftDate(today, -1) : value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  try {
+    return workspaceDayStart(date, timezone);
+  } catch {
     return null;
   }
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  if (kind === 'before') {
-    return parsed;
-  }
-  return parsed;
-}
-
-function startOfUtcDay(value: Date): Date {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
-}
-
-function formatUtcDateOnly(value: Date): string {
-  return value.toISOString().slice(0, 10);
 }
 
 function resolveTopicStatus(
@@ -1985,6 +1985,7 @@ export async function sendShareableJobLinks(
       context,
       'jobs',
       formatShareJobHeader(job, {
+        timezone: await workspaceTimezone(context),
         assignmentTitle: sharePayload.assignmentTitle,
       }),
       {
@@ -2041,6 +2042,7 @@ export async function executeBackupAction(context: CommandContext, label?: strin
     await queueAdvancedApproval(context, 'backup', request);
     return;
   }
+  const timezone = await workspaceTimezone(context);
   const result = await context.backend.enqueueOpsAction(request);
   context.audit.log({
     level: 'info',
@@ -2056,7 +2058,7 @@ export async function executeBackupAction(context: CommandContext, label?: strin
       action: result.action,
     },
   });
-  await sendDomainMessage(context, 'ops', formatActionQueued(result));
+  await sendDomainMessage(context, 'ops', formatActionQueued(result, timezone));
 }
 
 export async function executeIntegrityAction(context: CommandContext): Promise<void> {
@@ -2070,6 +2072,7 @@ export async function executeIntegrityAction(context: CommandContext): Promise<v
     await queueAdvancedApproval(context, 'integrity', request);
     return;
   }
+  const timezone = await workspaceTimezone(context);
   const result = await context.backend.enqueueOpsAction(request);
   context.audit.log({
     level: 'info',
@@ -2085,7 +2088,7 @@ export async function executeIntegrityAction(context: CommandContext): Promise<v
       action: result.action,
     },
   });
-  await sendDomainMessage(context, 'ops', formatActionQueued(result));
+  await sendDomainMessage(context, 'ops', formatActionQueued(result, timezone));
 }
 
 export function createCommandRegistry(args?: {
@@ -2285,7 +2288,7 @@ export function createCommandRegistry(args?: {
           });
           return;
         }
-        const parsed = parseJobsFilterInput(raw);
+        const parsed = parseJobsFilterInput(raw, await workspaceTimezone(context));
         if ('error' in parsed) {
           await sendDomainMessage(context, 'jobs', formatCommandError(parsed.error));
           return;
@@ -2301,7 +2304,7 @@ export function createCommandRegistry(args?: {
     },
     {
       command: 'today',
-      description: 'Show today job dashboard in UTC',
+      description: 'Show today job dashboard',
       domain: 'jobs',
       async execute(context) {
         const view = await loadTodayView(context);

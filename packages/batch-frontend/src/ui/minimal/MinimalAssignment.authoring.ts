@@ -7,6 +7,7 @@ import {
   serializeAssignmentV1,
 } from '@esl-pipeline/contracts';
 
+import { useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import type {
   AssignmentValidationResponse,
   DraftResponse,
@@ -30,6 +31,7 @@ import {
   updateDraft,
 } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/clipboard';
+import { formatTutorTime } from '../../utils/tutor-time';
 import {
   buildPublishJobOverrides,
   getDraftPreviewGate,
@@ -95,14 +97,6 @@ function formatRelativeTimestamp(timestamp: string, nowMs: number = Date.now()):
     return `${Math.floor(deltaMs / 3_600_000)}h ago`;
   }
   return `${Math.floor(deltaMs / 86_400_000)}d ago`;
-}
-
-function formatAbsoluteTimestamp(timestamp: string): string {
-  const parsed = new Date(timestamp);
-  if (Number.isNaN(parsed.getTime())) {
-    return timestamp;
-  }
-  return parsed.toLocaleString();
 }
 
 const DEFAULT_TTS_PROVIDER: UiTtsProvider = 'gemini';
@@ -623,6 +617,7 @@ export function useMinimalAssignmentAuthoringController({
   onDraftPronunciationModeDetected,
   onTeacherNotesResolved,
 }: UseMinimalAssignmentAuthoringControllerParams): AuthoringController {
+  const timezone = useWorkspaceTimezone();
   const [state, dispatch] = useReducer(authoringReducer, undefined, () =>
     createInitialAuthoringState(),
   );
@@ -807,7 +802,7 @@ export function useMinimalAssignmentAuthoringController({
     ? formatRelativeTimestamp(activeGenerationQuota.lastUpdatedAt, state.quotaWindowTickMs)
     : null;
   const generationQuotaUpdatedAbsolute = activeGenerationQuota
-    ? formatAbsoluteTimestamp(activeGenerationQuota.lastUpdatedAt)
+    ? formatTutorTime(activeGenerationQuota.lastUpdatedAt, timezone)
     : null;
   const generationQuotaHasNumericValues = Boolean(
     activeGenerationQuota &&

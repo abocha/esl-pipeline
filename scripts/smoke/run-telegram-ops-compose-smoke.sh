@@ -413,6 +413,10 @@ const statusEdit = editedMessages.find((entry) =>
   String(entry?.payload?.text ?? '').includes('Ops Status:'),
 );
 assert(Boolean(statusEdit), 'Missing callback-driven status edit');
+assert(
+  String(statusEdit?.payload?.text ?? '').includes('2026-03-13 12:15 Asia/Ho_Chi_Minh'),
+  'Status should use the configured workspace tutor timezone',
+);
 
 const recentOpsEdit = editedMessages.find((entry) =>
   String(entry?.payload?.text ?? '').includes('Recent operations'),
@@ -428,6 +432,10 @@ const finishedJobsEdit = editedMessages.find((entry) =>
   String(entry?.payload?.text ?? '').includes('Jobs · Recent Finished'),
 );
 assert(Boolean(finishedJobsEdit), 'Missing callback-driven finished jobs edit');
+assert(
+  String(finishedJobsEdit?.payload?.text ?? '').includes('2026-03-13 12:10 Asia/Ho_Chi_Minh'),
+  'Finished jobs should use the configured workspace tutor timezone',
+);
 
 const jobDetailEdit = editedMessages.find((entry) =>
   String(entry?.payload?.text ?? '').includes(String(process.env.EXPECTED_SHARE_JOB_ID)),
@@ -484,6 +492,13 @@ if (pronunciationAudioMessage) {
     'Pronunciation audio should resolve from durable publication metadata',
   );
 }
+
+const settingsRequests = (backendState.requests ?? []).filter((entry) => entry.path === '/business/settings');
+assert(settingsRequests.length > 0, 'Fake backend did not receive workspace timezone settings lookup');
+assert(
+  settingsRequests.every((entry) => entry.method === 'GET' && entry.authHeader === 'Bearer smoke-access-token'),
+  'Workspace timezone lookup should use the authenticated workspace',
+);
 
 const opsStatusRequest = (backendState.requests ?? []).find((entry) => entry.path === '/ops/status');
 assert(Boolean(opsStatusRequest), 'Fake backend did not receive /ops/status');

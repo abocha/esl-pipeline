@@ -92,13 +92,14 @@ Behavior notes:
   - `/students` is a paged recent-activity browser over `/students/summary`
 - `/job` now prefers `Share` as the single visible output action
 - `/links` is retired from the visible UX; direct `/links <jobId>` calls are treated as a compatibility alias to `/share` and return a short deprecation note
-- job and student timestamps display in explicit UTC (`YYYY-MM-DD HH:mm UTC`)
+- tutor-facing timestamps use the authenticated workspace's Business timezone; unavailable settings
+  use the existing command error/retry path instead of a guessed clock
 
 ## Browse Surface
 
 Primary browse entries:
 
-- `/today` for the current UTC-day dashboard and attention lists
+- `/today` for the current workspace-calendar-day dashboard and attention lists
 - `/students` for recent-activity student browsing
 - `/student <name-or-id>` for direct student lookup
 - `/jobs [filter]` for canonical filtered job browsing
@@ -119,12 +120,14 @@ Primary browse entries:
   - `/jobs Margarita`
   - `/jobs failed Margarita`
 - ad-hoc filtered views preserve their browse context when operators open a job and then use `Back` or `Refresh`
+- `today`, `yesterday`, and explicit `YYYY-MM-DD` filters use workspace calendar boundaries,
+  including DST and fractional offsets; internal UTC quota windows remain unchanged
 
 Student browsing behavior:
 
 - `/students` shows unique students ordered by recent lesson activity, with null activity last
 - each row includes name, short student id, recent lesson time, and pending drafts count when present
-- `/student` highlights latest state, latest UTC time, latest homework title, and recent jobs
+- `/student` highlights latest state, latest tutor time, latest homework title, and recent jobs
 - latest homework resolution matches the `/job` and `/share` durable publication metadata path; historical links remain readable, and Markdown/HTML scraping is retired
 
 ## Routing and Transport

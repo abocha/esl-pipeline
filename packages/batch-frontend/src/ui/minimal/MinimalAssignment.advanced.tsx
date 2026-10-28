@@ -1,8 +1,10 @@
 import type { Ref } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import type { JobOptionsResponse, JobProvenanceResponse, JobStatus } from '../../utils/api';
 import { cancelJob, fetchJobProvenance, getJobStatus, rerunJob } from '../../utils/api';
+import { formatTutorTime } from '../../utils/tutor-time';
 import { ProductButton } from '../system/ProductButton';
 import {
   buildCustomRerunPayload,
@@ -971,6 +973,7 @@ export interface AssignmentDiagnosticsProps {
 }
 
 export function AssignmentDiagnostics({ jobStatus, controller }: AssignmentDiagnosticsProps) {
+  const timezone = useWorkspaceTimezone();
   return (
     <>
       <div className="minimal-section-header">
@@ -1047,7 +1050,7 @@ export function AssignmentDiagnostics({ jobStatus, controller }: AssignmentDiagn
                 <div key={event.id} className="minimal-list-item">
                   <span>
                     {event.actionType} • {event.outcome} •{' '}
-                    {new Date(event.requestedAt).toLocaleString()}
+                    {formatTutorTime(event.requestedAt, timezone)}
                   </span>
                   <span className="minimal-muted">{event.message}</span>
                 </div>

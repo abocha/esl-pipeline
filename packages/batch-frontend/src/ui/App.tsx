@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
+import { WorkspaceTimezoneProvider } from '../context/WorkspaceTimezoneContext';
 import { isFrontendSandboxEnabled } from '../dev/frontend-sandbox';
 import type { AuthMode } from './auth/AuthDialog';
 import { LegalLinks } from './LegalLinks';
@@ -187,7 +188,11 @@ export const App: React.FC = () => {
       </div>
     );
   } else {
-    appBody = <AuthenticatedApp user={user} onLogout={handleLogout} logoutError={logoutError} />;
+    appBody = (
+      <WorkspaceTimezoneProvider key={user.id} onLogout={handleLogout}>
+        <AuthenticatedApp user={user} onLogout={handleLogout} logoutError={logoutError} />
+      </WorkspaceTimezoneProvider>
+    );
   }
 
   return (

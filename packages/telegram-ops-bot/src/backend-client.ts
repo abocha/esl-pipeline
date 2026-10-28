@@ -1,4 +1,5 @@
 import type {
+  BusinessSettingsDto,
   JobListResponse,
   JobStatusDto,
   JobSummaryResponse,
@@ -55,6 +56,10 @@ export class HttpBackendClient {
     this.timeoutMs = options.timeoutMs;
     this.sharedSecret = options.sharedSecret;
     this.fetchImpl = options.fetchImpl ?? fetch;
+  }
+
+  async getBusinessSettings(): Promise<BusinessSettingsDto> {
+    return this.requestJson<BusinessSettingsDto>('GET', '/business/settings');
   }
 
   async getOpsStatus(): Promise<OpsStatusResponse> {
