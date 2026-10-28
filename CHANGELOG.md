@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.4.3] - 2026-10-28
+
+### Changed
+
+- Automated release from PR #460: fix(frontend): keep Step 3 learner context readable (ESL-87) (https://github.com/abocha/esl-pipeline/pull/460)
+
 ## [22.4.2] - 2026-10-26
 
 ### Changed
