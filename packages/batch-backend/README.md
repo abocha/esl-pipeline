@@ -127,6 +127,10 @@ Core surfaces:
   Several weekly slots create independent series with separate durable recovery outcomes. See the
   [Calendar runbook](../../docs/operations/google-calendar-cutover.md) for configuration, retirement,
   callback security and provider/production acceptance gates.
+- Explicitly associating an existing one-off Google event also admits an already-started or elapsed
+  event. Projection verifies the exact successful bind provenance, creates one scheduled, uncharged
+  lesson, and can recover an association saved before projection. Completion remains explicit;
+  automatic sync and series projection do not backfill unrelated historical lessons.
 - tutor business dashboard and student schedule/billing routes resolve the active workspace from the
   authenticated tutor's membership before application reads or writes. Foreign students, lessons,
   and mismatched child rows use non-enumerating not-found responses and are never mutated; legacy

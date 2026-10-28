@@ -96,6 +96,10 @@ revision content/history are preserved.
   recurrence. OAuth callback/session/logging, retired schedule inventory and provider UI identity
   gates are owned by the [Calendar runbook](../operations/google-calendar-cutover.md). Local/hosted
   evidence does not imply live Google or production delivery.
+- Explicit association of an already-started or elapsed one-off Google event creates its scheduled,
+  uncharged student lesson after exact successful bind-provenance verification. Refresh can recover
+  an existing association with no lesson; repeated observations retain the same lesson identity.
+  Completion remains explicit, and series/unassociated history is not automatically backfilled.
 - The read-only ChatGPT MCP resource is implemented behind disabled-by-default `MCP_OAUTH_ENABLED`.
   It exposes learner name lookup, canonical teaching context, and the authenticated connection's
   read-only profile. Production OAuth diagnostics are active. New credentials follow their explicit
