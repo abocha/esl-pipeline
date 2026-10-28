@@ -112,6 +112,7 @@ vi.mock('../../utils/api', () => ({
   getRecordingUploadOperation: vi.fn(),
   getStudentMemoryHealth: vi.fn(),
   getStudentScheduleBillingSurface: vi.fn(),
+  getStudentLesson: vi.fn(),
   listUserJobs: vi.fn(),
   listAssignmentSessions: vi.fn(),
   listProfileRevisions: vi.fn(),
@@ -395,6 +396,13 @@ export function makeScheduleBillingSurface(
     },
     nextLesson: null,
     lessons: [],
+    lessonWindows: {
+      timezone: 'UTC',
+      date: '2026-02-05',
+      today: [],
+      recent: { items: overrides.lessons ?? [], nextCursor: null },
+      upcoming: { items: [], nextCursor: null },
+    },
     creditSummary: {
       purchased: 0,
       consumed: 0,
@@ -1020,6 +1028,9 @@ export function setupMinimalAssignmentTest() {
     ],
   });
   vi.mocked(api.getStudentScheduleBillingSurface).mockResolvedValue(makeScheduleBillingSurface());
+  vi.mocked(api.getStudentLesson).mockImplementation(async (_studentId, lessonId) =>
+    makeStudentLesson({ id: lessonId }),
+  );
   vi.mocked(api.listUserJobs).mockResolvedValue({
     jobs: [],
     total: 0,

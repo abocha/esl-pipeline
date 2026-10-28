@@ -13,6 +13,8 @@ import {
   adjustStudentCredits,
   applyGeneratedLessonTitleIfPlaceholder,
   completeElapsedScheduledLessonForHomework,
+  getStudentLesson,
+  getStudentLessonPage,
   getStudentScheduleBillingSurface,
   hideStudentLessonFollowupReminder,
   recordStudentPayment,
@@ -509,6 +511,178 @@ describeIfPg('application/student-schedule-billing', () => {
     vi.useRealTimers();
     await resetScheduleBillingTables();
     await closePgPool();
+  });
+
+  it('keeps today and recent history independent of future volume, pages ties and preserves visible exceptions', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const studentId = await seedStudentInWorkspace(alpha.workspaceId, 'Synthetic learner');
+    await updateBusinessSettings(alpha.workspaceId, { timezone: 'Asia/Saigon' });
+    // Local day is May 5, beginning at 17:00Z on May 4.
+    vi.setSystemTime(new Date('2026-05-05T12:00:00Z'));
+    const today = await seedLessonInWorkspace(alpha.workspaceId, studentId, '2026-05-04T17:00:00Z');
+    const endToday = await seedLessonInWorkspace(
+      alpha.workspaceId,
+      studentId,
+      '2026-05-05T16:59:59Z',
+    );
+    const moved = await seedLessonInWorkspace(alpha.workspaceId, studentId, '2026-05-05T17:00:00Z');
+    const hidden = await seedLessonInWorkspace(
+      alpha.workspaceId,
+      studentId,
+      '2026-05-05T18:00:00Z',
+    );
+    const canceled = await seedLessonInWorkspace(
+      alpha.workspaceId,
+      studentId,
+      '2026-05-05T19:00:00Z',
+    );
+    const recent: string[] = [];
+    for (let i = 0; i < 23; i++) {
+      recent.push(
+        await seedLessonInWorkspace(alpha.workspaceId, studentId, '2026-05-04T16:59:59.123456Z'),
+      );
+    }
+    const microsecondEarlier = await seedLessonInWorkspace(
+      alpha.workspaceId,
+      studentId,
+      '2026-05-04T16:59:59.123455Z',
+    );
+    const future: string[] = [];
+    for (let i = 0; i < 45; i++) {
+      future.push(
+        await seedLessonInWorkspace(alpha.workspaceId, studentId, '2026-06-01T10:00:00Z'),
+      );
+    }
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query('UPDATE student_lessons SET schedule_hidden_at = NOW() WHERE id = $1', [
+        hidden,
+      ]);
+      await client.query("UPDATE student_lessons SET status = 'canceled' WHERE id = $1", [
+        canceled,
+      ]);
+      await client.query("UPDATE student_lessons SET title = 'Moved occurrence' WHERE id = $1", [
+        moved,
+      ]);
+    });
+    const before = await readStudentBusinessMutationSnapshot(studentId);
+    const surface = await getStudentScheduleBillingSurface(alpha.workspaceId, studentId);
+    expect(surface?.lessonWindows).toMatchObject({
+      timezone: 'Asia/Ho_Chi_Minh',
+      date: '2026-05-05',
+    });
+    expect(surface?.lessonWindows.today.map((lesson) => lesson.id)).toEqual([today, endToday]);
+    expect(surface?.lessonWindows.upcoming.items.map((lesson) => lesson.id)).toEqual([
+      moved,
+      canceled,
+      [...future].sort()[0],
+    ]);
+    expect(surface?.lessonWindows.upcoming.items[1]?.status).toBe('canceled');
+    expect(surface?.lessonWindows.recent.items.map((lesson) => lesson.id)).toEqual(
+      [...recent].sort().reverse().slice(0, 10),
+    );
+    const olderIds = surface?.lessonWindows.recent.items.map((lesson) => lesson.id) ?? [];
+    let cursor = surface?.lessonWindows.recent.nextCursor;
+    while (cursor) {
+      const page = await getStudentLessonPage(alpha.workspaceId, studentId, 'recent', cursor);
+      olderIds.push(...(page?.items.map((lesson) => lesson.id) ?? []));
+      cursor = page?.nextCursor;
+    }
+    expect(olderIds).toEqual([...recent].sort().reverse().concat(microsecondEarlier));
+    const upcomingIds = surface?.lessonWindows.upcoming.items.map((lesson) => lesson.id) ?? [];
+    cursor = surface?.lessonWindows.upcoming.nextCursor;
+    while (cursor) {
+      const page = await getStudentLessonPage(alpha.workspaceId, studentId, 'upcoming', cursor);
+      upcomingIds.push(...(page?.items.map((lesson) => lesson.id) ?? []));
+      cursor = page?.nextCursor;
+    }
+    expect(upcomingIds).toEqual([moved, canceled, ...future.sort()]);
+    expect(new Set(upcomingIds).size).toBe(upcomingIds.length);
+    expect(await getStudentLesson(alpha.workspaceId, studentId, microsecondEarlier)).toMatchObject({
+      id: microsecondEarlier,
+    });
+    expect(await getStudentLesson(alpha.workspaceId, studentId, hidden)).toBeNull();
+    expect(await readStudentBusinessMutationSnapshot(studentId)).toEqual(before);
+    const edited = await updateStudentLesson(alpha.workspaceId, studentId, today, {
+      notes: 'Checked lesson',
+    });
+    expect(edited.lessonWindows.today[0]).toMatchObject({ id: today, notes: 'Checked lesson' });
+    expect(edited.lessonWindows.recent.items).toHaveLength(10);
+    expect(edited.lessonWindows.upcoming.items).toHaveLength(3);
+
+    const anotherStudent = await seedStudentInWorkspace(alpha.workspaceId, 'Another learner');
+    const beta = await seedWorkspaceTutor('beta');
+    const initialCursor = surface?.lessonWindows.recent.nextCursor ?? '';
+    await expect(
+      getStudentLessonPage(alpha.workspaceId, anotherStudent, 'recent', initialCursor),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      getStudentLessonPage(alpha.workspaceId, studentId, 'upcoming', initialCursor),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      getStudentLessonPage(alpha.workspaceId, studentId, 'recent', 'malformed'),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(
+      await getStudentLessonPage(beta.workspaceId, studentId, 'recent', initialCursor),
+    ).toBeNull();
+    expect(await getStudentLesson(beta.workspaceId, studentId, today)).toBeNull();
+    expect(await getStudentLesson(alpha.workspaceId, anotherStudent, today)).toBeNull();
+    // Paging stays on the original day after midnight until an explicit refresh.
+    vi.setSystemTime(new Date('2026-05-06T12:00:00Z'));
+    expect(
+      (await getStudentLessonPage(alpha.workspaceId, studentId, 'recent', initialCursor))?.items,
+    ).toHaveLength(10);
+    await updateBusinessSettings(alpha.workspaceId, { timezone: 'UTC' });
+    await expect(
+      getStudentLessonPage(alpha.workspaceId, studentId, 'recent', initialCursor),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it.each([
+    ['2026-03-08T12:00:00Z', '2026-03-08', '2026-03-08T05:00:00Z', '2026-03-09T04:00:00Z'],
+    ['2026-11-01T12:00:00Z', '2026-11-01', '2026-11-01T04:00:00Z', '2026-11-02T05:00:00Z'],
+  ])('uses calendar midnights across DST at %s', async (now, date, start, end) => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const studentId = await seedStudentInWorkspace(alpha.workspaceId, 'DST learner');
+    vi.setSystemTime(new Date(now));
+    await updateBusinessSettings(alpha.workspaceId, { timezone: 'America/New_York' });
+    const previous = await seedLessonInWorkspace(
+      alpha.workspaceId,
+      studentId,
+      new Date(Date.parse(start) - 1).toISOString(),
+    );
+    const first = await seedLessonInWorkspace(alpha.workspaceId, studentId, start);
+    const last = await seedLessonInWorkspace(
+      alpha.workspaceId,
+      studentId,
+      new Date(Date.parse(end) - 1).toISOString(),
+    );
+    const next = await seedLessonInWorkspace(alpha.workspaceId, studentId, end);
+    const surface = await getStudentScheduleBillingSurface(alpha.workspaceId, studentId);
+    expect(surface?.lessonWindows.date).toBe(date);
+    expect(surface?.lessonWindows.today.map((lesson) => lesson.id)).toEqual([first, last]);
+    expect(surface?.lessonWindows.recent.items.map((lesson) => lesson.id)).toEqual([previous]);
+    expect(surface?.lessonWindows.upcoming.items.map((lesson) => lesson.id)).toEqual([next]);
+  });
+
+  it('returns truthful empty and upcoming-only windows', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const studentId = await seedStudentInWorkspace(alpha.workspaceId, 'Upcoming learner');
+    const empty = await getStudentScheduleBillingSurface(alpha.workspaceId, studentId);
+    expect(empty?.lessonWindows).toMatchObject({
+      today: [],
+      recent: { items: [], nextCursor: null },
+      upcoming: { items: [], nextCursor: null },
+    });
+    const future = await seedLessonInWorkspace(
+      alpha.workspaceId,
+      studentId,
+      '2026-05-06T10:00:00Z',
+    );
+    const surface = await getStudentScheduleBillingSurface(alpha.workspaceId, studentId);
+    expect(surface?.lessonWindows.today).toEqual([]);
+    expect(surface?.lessonWindows.recent).toEqual({ items: [], nextCursor: null });
+    expect(surface?.lessonWindows.upcoming.items.map((lesson) => lesson.id)).toEqual([future]);
+    expect(surface?.lessonWindows.upcoming.nextCursor).toBeNull();
   });
 
   it('uses the requested tutor workspace for business settings', async () => {

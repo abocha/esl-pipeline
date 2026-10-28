@@ -86,6 +86,9 @@ import type {
   RecordingErrorCode,
   RecordStudentPaymentRequest,
   StreamEventMessage,
+  StudentLessonDto,
+  StudentLessonPageResponse,
+  StudentLessonWindow,
   StudentMemoryAvailability,
   StudentScheduleBillingSurfaceResponse,
   TemplateControlPlaneListDto,
@@ -2681,6 +2684,40 @@ export async function getStudentScheduleBillingSurface(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view schedule and billing.');
     }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentLessonPage(
+  studentId: string,
+  window: StudentLessonWindow,
+  cursor: string,
+): Promise<StudentLessonPageResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/lessons`),
+      { params: { window, cursor } },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentLesson(
+  studentId: string,
+  lessonId: string,
+): Promise<StudentLessonDto> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/lessons/${encodeURIComponent(lessonId)}`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }

@@ -878,12 +878,32 @@ export interface StudentLatestHiddenReminderDto {
   lessonSummary: StudentReminderLessonSummaryDto | null;
 }
 
+export type StudentLessonWindow = 'recent' | 'upcoming';
+
+export interface StudentLessonPageResponse {
+  items: StudentLessonDto[];
+  /** Opaque, student/window/day/timezone-bound keyset cursor. Null means exhausted. */
+  nextCursor: string | null;
+}
+
+export interface StudentLessonWindowsDto {
+  timezone: string;
+  /** Workspace-local calendar date; all windows share this initial boundary. */
+  date: string;
+  today: StudentLessonDto[];
+  recent: StudentLessonPageResponse;
+  upcoming: StudentLessonPageResponse;
+}
+
 export interface StudentScheduleBillingSurfaceResponse {
   studentId: string;
   workspaceId: string | null;
   lessonPlan: StudentLessonPlanDto;
   nextLesson: StudentLessonDto | null;
+  /** @deprecated Legacy descending 30-row read, retained unchanged for API compatibility.
+   * Use lessonWindows for lesson checks and GET /students/:id/lessons/:lessonId for exact links. */
   lessons: StudentLessonDto[];
+  lessonWindows: StudentLessonWindowsDto;
   creditSummary: StudentCreditSummaryDto;
   creditEvents: StudentCreditEventDto[];
   payments: StudentPaymentRecordDto[];

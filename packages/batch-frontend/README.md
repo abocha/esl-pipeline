@@ -93,6 +93,14 @@ Canonical behavior and current status live in:
   reminder-total, recent-memory-total, or open-thread metric cards. Candidate review counts sit
   beside the relevant controls; snapshot source counts and technical memory diagnostics remain
   under Memory support details. Candidate confidence labels are not displayed to tutors.
+- Schedule & Billing puts Today, Recent lessons and Upcoming before collapsed schedule/defaults/package
+  controls and payment entry. Workspace Business timezone defines the day. Recent starts with ten
+  rows and Upcoming with three occurrences, including clearly labeled cancellations; the independent
+  next scheduled session card remains. Each list loads ten more with separate loading/retry state.
+  Failed pages retain rows; student changes reset state, and refresh/mutations invalidate old pages.
+  Refresh obtains a new local-day boundary. Assignment suggestions use Today plus Recent, and an
+  exact authorized lesson read preserves linked context outside those windows. Occurrences do not
+  establish an authoritative usual weekly schedule, so no recurrence summary is inferred.
 - History uses one student-authorized activity feed with server-side category/date filters and
   older-page loading. Recorded transitions, retained outcomes and incomplete earlier records are
   distinguished; practical facts and owner links lead, with technical evidence under Details.

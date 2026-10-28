@@ -92,6 +92,18 @@ Core surfaces:
   [ABO-12 reconciliation](../../docs/operations/student-profile-revision-cutover.md) explains
   the frozen legacy archive and exact historical IDs retained for assignments and prompt packages.
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
+- Schedule & Billing returns `lessonWindows`: all visible occurrences starting on the workspace
+  Business calendar day (ascending), 10 before that day (descending), and three after it (ascending).
+  The legacy `Asia/Saigon` setting uses equivalent `Asia/Ho_Chi_Minh` for these reads so PostgreSQL
+  installations without legacy timezone links work without rewriting stored settings.
+  `GET /students/:id/lessons?window=recent|upcoming&cursor=...` loads ten more using an opaque
+  `(starts_at,id)` cursor bound to the authorized workspace/student/window and initial local date
+  and timezone. A timezone change requires refresh; crossing midnight preserves the initial window
+  until refresh. Each page includes visible cancellations and excludes hidden replacement projections.
+  `GET /students/:id/lessons/:lessonId` independently reads an exact visible lesson under the same
+  ownership checks. Reads do not change lesson state or sync depth. All schedule/billing mutation
+  responses return fresh initial windows. API 12.2 retains the deprecated `lessons` array's original
+  descending 30-row semantics for existing API consumers; the current UI uses `lessonWindows`.
 - ESL-62 replaces local lesson creation/time editing with the selected Google Calendar workflow.
   Google owns recurrence and later timing edits; the backend retains lesson identity, completion,
   credits and source links. Optional student email is operational contact, never an identity key.

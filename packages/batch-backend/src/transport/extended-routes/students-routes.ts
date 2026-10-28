@@ -49,6 +49,8 @@ import {
 import {
   addStudentPackage,
   adjustStudentCredits,
+  getStudentLesson,
+  getStudentLessonPage,
   getStudentScheduleBillingSurface,
   hideStudentLessonFollowupReminder,
   recordStudentPayment,
@@ -528,6 +530,42 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         });
 
         return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get('/students/:id/lessons', { preHandler: [authenticate] }, async (request, reply) => {
+    const routePath = resolveRoutePath(request, 'GET /students/:id/lessons');
+    try {
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
+      const query = z
+        .object({
+          window: z.enum(['recent', 'upcoming']),
+          cursor: z.string().min(1).max(2048),
+        })
+        .parse(request.query);
+      const workspaceId = await resolveWorkspaceIdForRequest(request);
+      const page = await getStudentLessonPage(workspaceId, params.id, query.window, query.cursor);
+      return page ? reply.send(page) : errorResponse(reply, 'not_found');
+    } catch (error) {
+      return handleScheduleBillingRouteError(reply, routePath, error);
+    }
+  });
+
+  app.get(
+    '/students/:id/lessons/:lessonId',
+    { preHandler: [authenticate] },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/lessons/:lessonId');
+      try {
+        const params = z
+          .object({ id: z.string().min(1), lessonId: z.string().uuid() })
+          .parse(request.params);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
+        const lesson = await getStudentLesson(workspaceId, params.id, params.lessonId);
+        return lesson ? reply.send(lesson) : errorResponse(reply, 'not_found');
+      } catch (error) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
   );
