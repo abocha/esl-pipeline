@@ -49,6 +49,13 @@ against the canonical source without overwriting deliberate adaptations or chang
 If a skill or runtime capability is unavailable, root `AGENTS.md` and local owners still control;
 report the limitation instead of making up execution evidence or restoring a forked workflow.
 
+The opt-in `visual_specialist` role is staged for actual screenshot/rendered-UI or interactive
+uncertainty, following the shared plugin's visual dispatch and activation guide. Frontend source
+edits alone do not trigger it. Assessment is the default; bounded UI edits need an explicit
+assignment. Verify fresh runtime role discovery and image/browser tool exposure before dispatch;
+the role inherits parent permissions and does not provision tools or an independent sandbox.
+Authenticated UI access does not extend the task's external-action authorization.
+
 ## Validation mapping
 
 Use the [evidence decision route](../docs/reference/TESTING_GUIDELINES.md#choose-the-evidence-route)
