@@ -37,6 +37,17 @@ Canonical behavior and current status live in:
 
 ## Runtime Notes
 
+- All tutor-facing clocks use the authenticated workspace Business timezone through
+  `WorkspaceTimezoneProvider`. The authenticated scope remounts when the user changes; settings
+  load before clock-bearing routes render, with Retry and Logout when unavailable. A successful
+  settings save updates the shared clock and reloads calendar-day surfaces. Device/server clocks
+  never supply a temporary default. Instants remain UTC in transport; elapsed durations and quota
+  windows retain their semantics, and payment dates remain plain dates.
+- Business Settings labels the native selector Tutor timezone, with city/region and current UTC
+  offset. Supported saved aliases remain represented exactly; equivalent options are deduplicated.
+  Locally detected device time only marks its matching choice and never changes saved settings.
+  The scope explanation stays behind the keyboard-, hover- and touch-accessible information icon.
+
 - Browser startup configures Zod in `jitless` mode before application schemas load, avoiding
   eval probes under CSP. HTML keeps the resource policy; Vite and frontend nginx supply
   `frame-ancestors 'none'` and `X-Frame-Options: DENY` as response headers. nginx also sends

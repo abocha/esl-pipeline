@@ -1,6 +1,8 @@
 import { type Dispatch, type SetStateAction, useCallback, useMemo, useState } from 'react';
 
+import { useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import type { StudentProfileCandidate } from '../../utils/api';
+import { formatTutorTime } from '../../utils/tutor-time';
 import {
   type CandidateActionKind,
   formatCandidateSectionLabel,
@@ -43,12 +45,6 @@ export interface ProfileCandidatesPanelProps {
   ) => void | Promise<void>;
 }
 
-function formatCandidateDate(value?: string | null): string {
-  if (!value) return 'n/a';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-}
-
 function candidateDecisionLabel(candidate: StudentProfileCandidate): string | null {
   const decision = candidate.dedupDecision?.decision;
   return typeof decision === 'string' && decision !== 'created' ? decision : null;
@@ -75,6 +71,8 @@ export function ProfileCandidatesPanel({
   onPromoteProfileCandidates,
   onReviewProfileCandidate,
 }: ProfileCandidatesPanelProps) {
+  const timezone = useWorkspaceTimezone();
+  const formatCandidateDate = (value?: string | null) => formatTutorTime(value, timezone);
   const [openCandidateIds, setOpenCandidateIds] = useState<string[]>([]);
   const approvedCandidatesReadyForPromotion = useMemo(
     () => getApprovedCandidatesReadyForPromotion(profileCandidates),

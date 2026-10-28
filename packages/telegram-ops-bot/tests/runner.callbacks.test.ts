@@ -201,7 +201,7 @@ describe('telegram runner callbacks', () => {
       | { inline_keyboard: { callback_data: string }[][] }
       | undefined;
     const jobCallbackData = firstReplyMarkup?.inline_keyboard[0]?.[0]?.callback_data;
-    expect(jobCallbackData).toMatch(/^a4\|j\|job-filter-1\|q:[a-z0-9_-]{22}$/);
+    expect(jobCallbackData).toMatch(/^a4\|j\|job-filter-1\|q:[a-z0-9_-]{28}$/);
 
     await processUpdate(
       runner,
@@ -218,7 +218,7 @@ describe('telegram runner callbacks', () => {
     const backButton = jobDetailsMarkup?.inline_keyboard[1]?.find(
       (button) => button.text === 'Back',
     );
-    expect(backButton?.callback_data).toMatch(/^a4\|v\|q:[a-z0-9_-]{22}$/);
+    expect(backButton?.callback_data).toMatch(/^a4\|v\|q:[a-z0-9_-]{28}$/);
   });
 
   it('renders guided students browser callbacks with paging controls', async () => {

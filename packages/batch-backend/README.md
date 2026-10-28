@@ -95,8 +95,10 @@ Core surfaces:
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
 - Schedule & Billing returns `lessonWindows`: all visible occurrences starting on the workspace
   Business calendar day (ascending), 10 before that day (descending), and three after it (ascending).
-  The legacy `Asia/Saigon` setting uses equivalent `Asia/Ho_Chi_Minh` for these reads so PostgreSQL
-  installations without legacy timezone links work without rewriting stored settings.
+  Business, lesson windows and Activity share workspace timezone normalization: Vietnam aliases use
+  `Asia/Ho_Chi_Minh`, legacy integer UTC/GMT offsets retain fixed-offset meaning via reversed-sign
+  `Etc/GMT` identifiers, and numeric fractional offsets receive PostgreSQL's POSIX sign conversion
+  at query boundaries. Distinct regions are never matched merely by current offset.
   `GET /students/:id/lessons?window=recent|upcoming&cursor=...` loads ten more using an opaque
   `(starts_at,id)` cursor bound to the authorized workspace/student/window and initial local date
   and timezone. A timezone change requires refresh; crossing midnight preserves the initial window
@@ -105,6 +107,20 @@ Core surfaces:
   ownership checks. Reads do not change lesson state or sync depth. All schedule/billing mutation
   responses return fresh initial windows. API 12.2 retains the deprecated `lessons` array's original
   descending 30-row semantics for existing API consumers; the current UI uses `lessonWindows`.
+- Workspace Business settings own the tutor clock and fresh Calendar scheduling. Fresh setup
+  requests reject a stale/mismatched timezone with `workspace_timezone_changed`; immutable accepted
+  setup payloads are compared first, so retries retain their captured event/invitation identity and
+  original timezone after settings change. Equivalent aliases are accepted without changing the
+  original request used for idempotency. Google remains recurrence owner; settings changes never
+  retime existing series or rewrite occurrence instants, credits or protected history.
+- Student-plan `timezone` remains deprecated compatibility metadata. Omitted timezone on defaults
+  updates preserves the existing value; first insert uses workspace timezone. It does not control
+  display or Calendar creation. Payment `receivedAt` stays date-only; an omitted date uses workspace
+  today rather than the database/server calendar day.
+- Provider timezone provenance is separate from tutor display policy. Missing event timezone uses
+  recurring master or provider response/selected Calendar metadata when available. Without such
+  context, retain the observed numeric offset (or UTC for `Z`); never infer a region from it. Absolute
+  occurrence instants still come from the required provider timestamp offset.
 - ESL-62 replaces local lesson creation/time editing with the selected Google Calendar workflow.
   Google owns recurrence and later timing edits; the backend retains lesson identity, completion,
   credits and source links. Optional student email is operational contact, never an identity key.

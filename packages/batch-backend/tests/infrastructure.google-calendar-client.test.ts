@@ -193,6 +193,37 @@ describe('Calendar creation and observation semantics', () => {
       calendarEventProjection(request, request.slots[0]!, 'abc123', 'marker', 'hash', null),
     ).not.toHaveProperty('attendees');
   });
+  it('uses evidenced provider timezone context without inventing a region or changing instants', () => {
+    const missingZone = {
+      ...event,
+      start: { dateTime: '2030-01-07T11:00:00+07:00' },
+      end: { dateTime: '2030-01-07T12:00:00+07:00' },
+    };
+    expect(calendarEventTiming(missingZone)).toMatchObject({
+      timezone: '+07:00',
+      startsAt: new Date('2030-01-07T04:00:00Z'),
+    });
+    expect(calendarEventTiming(missingZone, 'Asia/Ho_Chi_Minh')).toMatchObject({
+      timezone: 'Asia/Ho_Chi_Minh',
+      startsAt: new Date('2030-01-07T04:00:00Z'),
+    });
+    expect(
+      calendarEventTiming(
+        { ...missingZone, start: { ...missingZone.start, timeZone: 'Asia/Bangkok' } },
+        'Europe/London',
+      )?.timezone,
+    ).toBe('Asia/Bangkok');
+    expect(resolveCalendarWallTime('2030-01-07', '11:00', 'Asia/Kathmandu').toISOString()).toBe(
+      '2030-01-07T05:15:00.000Z',
+    );
+    // Vietnam teaching time stays fixed across London's DST change.
+    expect(resolveCalendarWallTime('2030-03-24', '11:00', 'Asia/Ho_Chi_Minh').toISOString()).toBe(
+      '2030-03-24T04:00:00.000Z',
+    );
+    expect(resolveCalendarWallTime('2030-03-31', '11:00', 'Asia/Ho_Chi_Minh').toISOString()).toBe(
+      '2030-03-31T04:00:00.000Z',
+    );
+  });
   it('rejects all-day, missing-offset, zero and negative-duration lessons', () => {
     expect(
       calendarEventTiming({ id: 'a', start: { date: '2030-01-07' }, end: { date: '2030-01-08' } }),

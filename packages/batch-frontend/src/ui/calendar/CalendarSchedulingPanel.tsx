@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import { CalendarDays, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -13,6 +14,7 @@ import type {
 } from '@esl-pipeline/contracts';
 import { calendarSetupRequestSchema } from '@esl-pipeline/contracts';
 
+import { useWorkspaceSettings } from '../../context/WorkspaceTimezoneContext';
 import {
   adoptCalendarOperation,
   beginCalendarConnect,
@@ -31,6 +33,7 @@ import {
   updateStudentProfile,
 } from '../../utils/api';
 import { dateInputInTimezone } from '../../utils/scheduling-time';
+import { formatTutorTime } from '../../utils/tutor-time';
 import './CalendarSchedulingPanel.css';
 
 interface SavedSetup {
@@ -84,6 +87,7 @@ export function CalendarSchedulingPanel({
   defaultDurationMinutes = 60,
   onLedgerRefresh,
 }: Props) {
+  const workspace = useWorkspaceSettings();
   const storageKey = `calendar-setup:${workspaceId}:${studentId ?? 'workspace'}`;
   const [connection, setConnection] = useState<CalendarConnectionStatusDto | null>(null);
   const [status, setStatus] = useState<CalendarSchedulingStatusDto | null>(null);
@@ -208,11 +212,33 @@ export function CalendarSchedulingPanel({
     };
     localStorage.setItem(storageKey, JSON.stringify(intent));
     setSaved(intent);
-    const result = await createCalendarSetup(workspaceId, studentId!, intent.request, intent.key);
-    const persisted = { ...intent, setupId: result.id };
-    localStorage.setItem(storageKey, JSON.stringify(persisted));
-    setSaved(persisted);
-    setSetup(result);
+    try {
+      const result = await createCalendarSetup(workspaceId, studentId!, intent.request, intent.key);
+      const persisted = { ...intent, setupId: result.id };
+      localStorage.setItem(storageKey, JSON.stringify(persisted));
+      setSaved(persisted);
+      setSetup(result);
+    } catch (cause) {
+      if (
+        !intent.setupId &&
+        isAxiosError(cause) &&
+        cause.response?.data?.error === 'workspace_timezone_changed'
+      ) {
+        // The backend definitively rejected fresh admission: no accepted operation
+        // exists. Every other failure retains the immutable request and key.
+        localStorage.removeItem(storageKey);
+        setSaved(null);
+        setSetup(null);
+        setTitle(intent.request.title);
+        setSlots(intent.request.slots);
+        setSendInvitation(Boolean(intent.request.sendInvitation));
+        await workspace.refreshSettings();
+        throw new Error(
+          'Tutor timezone changed. Review the lesson times and create the setup again.',
+        );
+      }
+      throw cause;
+    }
   };
   const updateSlot = (index: number, patch: Partial<CalendarSlotDto>) =>
     setSlots((current) => current.map((slot, i) => (i === index ? { ...slot, ...patch } : slot)));
@@ -334,9 +360,7 @@ export function CalendarSchedulingPanel({
               {status?.lastSyncedAt ? (
                 <div>
                   <dt>Last successful sync</dt>
-                  <dd>
-                    {new Date(status.lastSyncedAt).toLocaleString('en-US', { timeZone: timezone })}
-                  </dd>
+                  <dd>{formatTutorTime(status.lastSyncedAt, timezone)}</dd>
                 </div>
               ) : null}
             </dl>
@@ -526,7 +550,7 @@ export function CalendarSchedulingPanel({
                     />
                   </label>
                   <p className="calendar-timezone">
-                    All lesson times use <strong>{timezone}</strong>.
+                    Tutor timezone: <strong>{timezone}</strong>
                   </p>
                   <label>
                     <input
@@ -789,7 +813,8 @@ export function CalendarSchedulingPanel({
               <h3>Review before taking responsibility</h3>
               <p>{review.title}</p>
               <p>
-                {review.startsAt} – {review.endsAt} · {review.timezone}
+                {formatTutorTime(review.startsAt, timezone)} –{' '}
+                {formatTutorTime(review.endsAt, timezone)}
               </p>
               <p>{review.recurrence?.join(', ') || 'One-off lesson'}</p>
               <p>Invitation recipient: {review.invitationRecipient || 'No invitation'}</p>
@@ -842,7 +867,8 @@ export function CalendarSchedulingPanel({
             {unlinked.map((event) => (
               <div className="calendar-unlinked-row" key={event.id}>
                 <span>
-                  {event.title} · {event.startsAt ?? 'Unsupported time'}
+                  {event.title} ·{' '}
+                  {event.startsAt ? formatTutorTime(event.startsAt, timezone) : 'Unsupported time'}
                 </span>
                 <button
                   className="calendar-button"

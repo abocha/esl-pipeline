@@ -5,6 +5,10 @@ import type {
   StudentActivityResponse,
 } from '@esl-pipeline/contracts';
 
+import {
+  normalizeWorkspaceTimezone,
+  postgresWorkspaceTimezone,
+} from '../domain/workspace-timezone.js';
 import { withPgClient } from '../infrastructure/db.js';
 
 export interface StudentActivityParams {
@@ -216,8 +220,9 @@ export async function getStudentActivity(
       `SELECT COALESCE(b.timezone,'UTC') AS timezone FROM students s LEFT JOIN workspace_business_settings b ON b.workspace_id=COALESCE(s.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid) WHERE s.id=$1 AND (s.workspace_id=$2 OR (s.workspace_id IS NULL AND $2='00000000-0000-4000-8000-000000000001'::uuid))`,
       [studentId, workspaceId],
     );
-    const timezone = authorized.rows[0]?.timezone;
-    if (!timezone) return null;
+    const configuredTimezone = authorized.rows[0]?.timezone;
+    if (!configuredTimezone) return null;
+    const timezone = normalizeWorkspaceTimezone(configuredTimezone);
     const context = JSON.stringify([
       workspaceId,
       studentId,
@@ -259,7 +264,7 @@ export async function getStudentActivity(
       category,
       params.from ?? null,
       params.to ?? null,
-      timezone,
+      postgresWorkspaceTimezone(timezone),
       cursor?.upper ?? null,
       cursor?.at ?? null,
       cursor?.id ?? null,

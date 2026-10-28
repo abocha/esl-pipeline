@@ -1,4 +1,6 @@
+import { useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import type { AssignmentSession, StudentScheduleBillingSurface } from '../../utils/api';
+import { formatTutorTime } from '../../utils/tutor-time';
 import { ProductButton } from '../system/ProductButton';
 import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
@@ -48,6 +50,7 @@ export function TranscriptReviewResult({
   onChoiceChange: (checked: boolean) => void;
   onStartHomework: () => void;
 }) {
+  const timezone = useWorkspaceTimezone();
   const warnings = getTranscriptUnexpectedCharacterWarnings(transcriptText);
   const processing = session?.transcriptProcessing;
   const processingNeedsAttention =
@@ -68,7 +71,7 @@ export function TranscriptReviewResult({
           lesson ? (
             <>
               <p>
-                {lesson.title} · {new Date(lesson.startsAt).toLocaleString()}
+                {lesson.title} · {formatTutorTime(lesson.startsAt, timezone)}
               </p>
               <p className="minimal-muted">
                 {lesson.status.replaceAll('_', ' ')} ·{' '}

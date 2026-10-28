@@ -900,6 +900,50 @@ describe('student activity owner-to-feed contract', () => {
     expect(items.filter((x) => x.type === 'recurrence_changed')).toHaveLength(0);
   });
 
+  it('shares alias, fractional-offset and DST calendar-day boundaries with tutor schedule reads', async () => {
+    const cases = [
+      ['Asia/Saigon', '2026-05-05', '2026-05-04T17:00:00Z', '2026-05-05T17:00:00Z'],
+
+      ['UTC+7', '2026-05-05', '2026-05-04T17:00:00Z', '2026-05-05T17:00:00Z'],
+
+      ['+05:45', '2026-05-05', '2026-05-04T18:15:00Z', '2026-05-05T18:15:00Z'],
+
+      ['America/New_York', '2026-03-08', '2026-03-08T05:00:00Z', '2026-03-09T04:00:00Z'],
+
+      ['America/New_York', '2025-11-02', '2025-11-02T04:00:00Z', '2025-11-03T05:00:00Z'],
+    ];
+
+    for (const [zone, date, lower, upper] of cases) {
+      const f = await fixture();
+
+      await withPgClient(async (client) => {
+        await client.query(
+          'UPDATE workspace_business_settings SET timezone=$2 WHERE workspace_id=$1',
+          [f.workspaceId, zone],
+        );
+
+        const instants = [
+          new Date(Date.parse(lower!) - 1),
+          new Date(lower!),
+          new Date(Date.parse(upper!) - 1),
+          new Date(upper!),
+        ];
+
+        for (const [index, instant] of instants.entries())
+          await client.query(
+            "INSERT INTO student_credit_events(id,student_id,workspace_id,event_type,quantity_delta,created_at) VALUES($1,$2,$3,'credit_adjusted',$4,$5)",
+            [randomUUID(), f.studentId, f.workspaceId, index + 1, instant],
+          );
+      });
+
+      expect(
+        (await f.read({ category: 'billing', from: date, to: date }))!.items
+          .map((item) => item.subject)
+          .sort(),
+      ).toEqual(['Credits adjusted · +2 credits', 'Credits adjusted · +3 credits']);
+    }
+  });
+
   it('keeps package payments and credits together and filters action dates in the workspace timezone', async () => {
     const f = await fixture();
     await addStudentPackage(

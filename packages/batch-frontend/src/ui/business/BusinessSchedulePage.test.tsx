@@ -2,9 +2,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  useWorkspaceSettings,
+  WorkspaceTimezoneProvider,
+} from '../../context/WorkspaceTimezoneContext';
 import { BusinessSchedulePage } from './BusinessSchedulePage';
 
 const apiMocks = vi.hoisted(() => ({
+  getBusinessSettings: vi.fn(),
   getBusinessScheduleSurface: vi.fn(),
   hideStudentLessonFollowupReminder: vi.fn(),
   undoLatestHiddenStudentReminder: vi.fn(),
@@ -126,6 +131,62 @@ describe('BusinessSchedulePage', () => {
     vi.resetAllMocks();
     apiMocks.getBusinessScheduleSurface.mockResolvedValue(makeSurface());
     apiMocks.updateStudentLesson.mockResolvedValue({});
+  });
+  it('refreshes a mismatched workspace clock and leaves a failed refresh recoverable', async () => {
+    const surface = makeSurface();
+    const updated = { ...surface.settings, timezone: 'America/New_York' };
+    apiMocks.getBusinessSettings
+      .mockResolvedValueOnce({ ...surface.settings, timezone: 'Asia/Bangkok' })
+      .mockRejectedValueOnce(new Error('Workspace settings unavailable'))
+      .mockResolvedValue(updated);
+    apiMocks.getBusinessScheduleSurface.mockResolvedValue({ ...surface, settings: updated });
+    render(
+      <WorkspaceTimezoneProvider onLogout={vi.fn()}>
+        <MemoryRouter>
+          <BusinessSchedulePage />
+        </MemoryRouter>
+      </WorkspaceTimezoneProvider>,
+    );
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Workspace settings unavailable',
+    );
+    expect(screen.queryByRole('article', { name: /Alex,/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('article', { name: 'Alex, May 8, 6:00 AM' })).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+  it('offers Retry if reloading existing rows fails after a workspace clock change', async () => {
+    const surface = makeSurface();
+    const updated = { ...surface.settings, timezone: 'Asia/Kathmandu' };
+    apiMocks.getBusinessSettings.mockResolvedValue(surface.settings);
+    apiMocks.getBusinessScheduleSurface
+      .mockResolvedValueOnce(surface)
+      .mockRejectedValueOnce(new Error('Current schedule unavailable'))
+      .mockResolvedValue({ ...surface, settings: updated });
+    function ClockChange() {
+      const workspace = useWorkspaceSettings();
+      return (
+        <button type="button" onClick={() => workspace.setSettings(updated)}>
+          Change tutor clock
+        </button>
+      );
+    }
+    render(
+      <WorkspaceTimezoneProvider onLogout={vi.fn()}>
+        <ClockChange />
+        <MemoryRouter>
+          <BusinessSchedulePage />
+        </MemoryRouter>
+      </WorkspaceTimezoneProvider>,
+    );
+    await screen.findByRole('article', { name: 'Alex, May 8, 10:00 AM' });
+    fireEvent.click(screen.getByRole('button', { name: 'Change tutor clock' }));
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Current schedule unavailable',
+    );
+    expect(screen.queryByRole('article', { name: /Alex,/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('article', { name: 'Alex, May 8, 3:45 PM' })).toBeTruthy();
   });
   it('opens completed transcript-only lessons without a homework or billing mutation', async () => {
     const original = makeSurface();

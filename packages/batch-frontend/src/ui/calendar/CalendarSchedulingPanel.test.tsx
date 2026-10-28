@@ -1,9 +1,14 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  useWorkspaceTimezone,
+  WorkspaceTimezoneProvider,
+} from '../../context/WorkspaceTimezoneContext';
 import { CalendarSchedulingPanel } from './CalendarSchedulingPanel';
 
 const api = vi.hoisted(() => ({
+  getBusinessSettings: vi.fn(),
   getCalendarConnection: vi.fn(),
   getCalendarSchedulingStatus: vi.fn(),
   getCalendarSetup: vi.fn(),
@@ -166,6 +171,49 @@ describe('Google Calendar scheduling panel', () => {
     await waitFor(() => expect(api.createCalendarSetup).toHaveBeenCalledTimes(2));
     expect(api.createCalendarSetup.mock.calls[1]).toEqual(submitted);
   });
+  it('reopens only a definitively rejected stale setup with a refreshed clock and a new request key', async () => {
+    api.getBusinessSettings
+      .mockResolvedValueOnce({ workspaceId: 'workspace-1', timezone: 'Asia/Bangkok' })
+      .mockResolvedValue({ workspaceId: 'workspace-1', timezone: 'Europe/London' });
+    api.createCalendarSetup.mockRejectedValueOnce(
+      Object.assign(new Error('stale timezone'), {
+        isAxiosError: true,
+        response: { status: 409, data: { error: 'workspace_timezone_changed' } },
+      }),
+    );
+    function Panel() {
+      const timezone = useWorkspaceTimezone();
+      return <CalendarSchedulingPanel {...props} timezone={timezone!} />;
+    }
+    render(
+      <WorkspaceTimezoneProvider onLogout={vi.fn()}>
+        <Panel />
+      </WorkspaceTimezoneProvider>,
+    );
+    await screen.findByText('Synced');
+    fireEvent.change(screen.getByLabelText('Invitation title'), {
+      target: { value: 'Review these local times' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create in Google' }));
+    await screen.findByText(
+      'Tutor timezone changed. Review the lesson times and create the setup again.',
+    );
+    expect(localStorage.getItem('calendar-setup:workspace-1:student-1')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry submitted setup' })).toBeNull();
+    expect((screen.getByLabelText('Invitation title') as HTMLInputElement).value).toBe(
+      'Review these local times',
+    );
+    expect(screen.getByText('Europe/London')).toBeTruthy();
+    const rejected = api.createCalendarSetup.mock.calls[0]!;
+    fireEvent.click(screen.getByRole('button', { name: 'Create in Google' }));
+    await waitFor(() => expect(api.createCalendarSetup).toHaveBeenCalledTimes(2));
+    const fresh = api.createCalendarSetup.mock.calls[1]!;
+    expect(fresh[2]).toMatchObject({
+      timezone: 'Europe/London',
+      title: 'Review these local times',
+    });
+    expect(fresh[3]).not.toBe(rejected[3]);
+  });
   it('keeps attention visible and connection management behind a keyboard accessible disclosure', async () => {
     api.getCalendarSchedulingStatus.mockResolvedValue({
       state: 'needs_attention',
@@ -205,7 +253,7 @@ describe('Google Calendar scheduling panel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create in Google' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Review row 2 for adoption' }));
     await screen.findByText('Invitation recipient: captured@example.test');
-    expect(screen.getByText(/2026-10-23T09:00:00/)).toBeTruthy();
+    expect(screen.getByText('Oct 23, 2026, 9:00 AM – Oct 23, 2026, 10:00 AM')).toBeTruthy();
     expect(api.adoptCalendarOperation).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and adopt operation' }));
     await waitFor(() =>
@@ -252,7 +300,7 @@ describe('Google Calendar scheduling panel', () => {
     await screen.findByText('Synced');
     fireEvent.click(screen.getByText('Associate an existing Google event'));
     fireEvent.click(screen.getByRole('button', { name: 'Load unlinked events' }));
-    await screen.findByText(/First synthetic event/);
+    await screen.findByText('First synthetic event · Jan 7, 2030, 11:00 AM');
     expect(api.getCalendarUnlinkedEvents).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole('button', { name: 'Load more events' }));
     await screen.findByText(/Later synthetic event/);

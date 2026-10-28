@@ -652,3 +652,30 @@ html:has(.business-dashboard-page) {
     width: 0;
   }
 }
+
+.business-timezone-select {
+  position: relative;
+}
+.business-dashboard-page .business-timezone-select select {
+  appearance: none;
+  width: 100%;
+  padding-right: 2.5rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+.business-timezone-select > svg {
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--app-muted);
+  pointer-events: none;
+}
+.business-dashboard-page .business-timezone-select select:focus-visible {
+  outline: 2px solid var(--app-sage);
+  outline-offset: 3px;
+}
+.business-info-tooltip[data-pinned="true"] {
+  opacity: 1;
+  visibility: visible;
+}

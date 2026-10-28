@@ -104,11 +104,28 @@ The first implementation must not:
 
 ## Workspace scheduling timezone
 
-Business settings (`workspace_business_settings.timezone`) owns the tutor-facing clock for schedule
-display and the default creation timezone. Calendar creation requires explicit valid local timing;
-ambiguous/nonexistent wall times are rejected instead of silently adjusted. Google expands recurring
-instances in the recorded IANA timezone. Changing workspace settings does not rewrite historical
-instants or retime existing Google series.
+Business settings (`workspace_business_settings.timezone`) owns the single tutor-facing clock across
+the workspace: schedule, assignments, history, learning, administration, operational dashboards and
+Telegram. Human calendar-day/month controls use this timezone, including DST boundaries. UTC storage,
+API instants, elapsed durations and provider quota windows retain their semantics; payment dates
+remain plain dates. Device timezone detection only marks a selector option and never changes clocks
+or saved settings automatically.
+
+Every fresh Calendar setup uses the authoritative workspace timezone. A stale/mismatched submitted
+timezone is rejected before accepting a new operation, rather than reinterpreting its wall time.
+Already accepted requests are checked against their immutable payload before current-settings
+admission, so retries retain their event and invitation identity after a settings change. Creation
+requires explicit valid local timing; ambiguous/nonexistent wall times are rejected instead of
+silently adjusted. Google expands recurring instances in the recorded IANA timezone. Changing
+workspace settings affects display/grouping and future setups, never historical instants, credits
+or existing Google series. A Vietnam workspace's weekly wall time stays fixed across a London
+student's DST change; the student's local time may change.
+
+The legacy student-plan timezone remains compatible historical metadata, not an active scheduling
+preference. Saving duration or notes does not incidentally rewrite it. Provider event/series/calendar
+timezone provenance stays separate from tutor display settings; a numeric offset does not establish
+an IANA region. No per-student/per-series selector is exposed; student booking under ABO-55 is the
+reconsideration trigger.
 
 ## Recurrence Architecture
 

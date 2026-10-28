@@ -13,6 +13,11 @@ const apiMocks = vi.hoisted(() => ({
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../utils/api', () => apiMocks);
+const workspaceSettings = vi.hoisted(() => ({ reconcileTimezone: async () => undefined }));
+vi.mock('../../context/WorkspaceTimezoneContext', () => ({
+  useWorkspaceTimezone: () => 'Asia/Bangkok',
+  useWorkspaceSettings: () => workspaceSettings,
+}));
 
 vi.mock('./StudentAreaContext', () => ({
   useStudentAreaContext: useStudentAreaContextMock,

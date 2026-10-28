@@ -19,6 +19,10 @@ import type {
 } from '@esl-pipeline/contracts';
 
 import { ACTIVE_ASSIGNMENT_SESSION_SQL } from '../domain/assignment-session-repository.js';
+import {
+  normalizeWorkspaceTimezone,
+  postgresWorkspaceTimezone,
+} from '../domain/workspace-timezone.js';
 import { withPgClient } from '../infrastructure/db.js';
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
@@ -28,11 +32,6 @@ const DEFAULT_TIMEZONE = 'UTC';
 const DEFAULT_FORECAST_HORIZON_DAYS = 45;
 const DEFAULT_TOP_UP_THRESHOLD = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const TIMEZONE_ALIASES = new Map<string, string>([
-  ['GMT', 'UTC'],
-  ['UTC+7', 'Asia/Bangkok'],
-  ['GMT+7', 'Asia/Bangkok'],
-]);
 
 interface BusinessSettingsRow {
   workspace_id: string;
@@ -477,7 +476,7 @@ async function listBusinessLessons(
       AND (student_lessons.starts_at AT TIME ZONE $3)::date <= $2::date
     ORDER BY student_lessons.starts_at ASC, student_lessons.id ASC
     `,
-    [fromDate, toDate, timezone, workspaceId, DEFAULT_WORKSPACE_ID],
+    [fromDate, toDate, postgresWorkspaceTimezone(timezone), workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows.map((row) => ({
     lesson: mapBusinessLesson(row),
@@ -816,7 +815,13 @@ async function getLessonStatsForMonth(
       AND (student_lessons.starts_at AT TIME ZONE $3)::date >= $1::date
       AND (student_lessons.starts_at AT TIME ZONE $3)::date < $2::date
     `,
-    [fromDate, toExclusiveDate, timezone, workspaceId, DEFAULT_WORKSPACE_ID],
+    [
+      fromDate,
+      toExclusiveDate,
+      postgresWorkspaceTimezone(timezone),
+      workspaceId,
+      DEFAULT_WORKSPACE_ID,
+    ],
   );
   const row = result.rows[0];
   return {
@@ -1104,32 +1109,11 @@ function validateBusinessTimezone(timezone: string): void {
 }
 
 export function normalizeBusinessTimezone(timezone: string): string {
-  const trimmed = timezone.trim();
-  const alias = TIMEZONE_ALIASES.get(trimmed.toUpperCase());
-  const normalized = alias ?? normalizeFixedOffsetTimezone(trimmed) ?? trimmed;
   try {
-    toDateInputInTimeZone(new Date(), normalized);
-    return normalized;
+    return normalizeWorkspaceTimezone(timezone);
   } catch {
     throw new TeacherBusinessDashboardError('invalid_request', 400, 'Invalid timezone');
   }
-}
-
-function normalizeFixedOffsetTimezone(timezone: string): string | null {
-  const match = /^(?:UTC|GMT)([+-])(\d{1,2})(?::?00)?$/i.exec(timezone.trim());
-  if (!match) {
-    return null;
-  }
-  const sign = match[1];
-  const hours = Number(match[2]);
-  if (!Number.isInteger(hours) || hours > 14) {
-    return null;
-  }
-  if (hours === 0) {
-    return 'UTC';
-  }
-  const etcSign = sign === '+' ? '-' : '+';
-  return `Etc/GMT${etcSign}${hours}`;
 }
 
 function severityRank(value: 'info' | 'attention' | 'urgent'): number {

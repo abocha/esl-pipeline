@@ -469,7 +469,7 @@ describe('telegram commands - jobs and students', () => {
           [
             expect.objectContaining({
               text: 'Mary Jane · student-',
-              callback_data: expect.stringMatching(/^a4\|j\|job-filter-1\|q:[a-z0-9_-]{22}$/),
+              callback_data: expect.stringMatching(/^a4\|j\|job-filter-1\|q:[a-z0-9_-]{28}$/),
             }),
           ],
         ]),
@@ -543,7 +543,7 @@ describe('telegram commands - jobs and students', () => {
       | string
       | undefined;
     const viewKey = callbackData?.split('|')[3];
-    expect(viewKey).toMatch(/^q:[a-z0-9_-]{22}$/);
+    expect(viewKey).toMatch(/^q:[a-z0-9_-]{28}$/);
 
     listJobsMock.mockResolvedValueOnce({
       jobs: [],

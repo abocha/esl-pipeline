@@ -29,6 +29,7 @@ export interface GoogleCalendarPage {
   items: GoogleCalendarEvent[];
   nextPageToken?: string;
   nextSyncToken?: string;
+  timeZone?: string;
 }
 export class GoogleCalendarError extends Error {
   constructor(
@@ -193,6 +194,7 @@ export class GoogleCalendarClient implements CalendarProvider {
         items: z.array(googleCalendarEventSchema).default([]),
         nextPageToken: z.string().optional(),
         nextSyncToken: z.string().optional(),
+        timeZone: z.string().optional(),
       })
       .safeParse(value);
     if (!parsed.success) throw new GoogleCalendarError('invalid_provider_response');

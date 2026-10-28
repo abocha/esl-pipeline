@@ -20,6 +20,7 @@ import {
   newCalendarEventId,
 } from '../domain/calendar-repository.js';
 import { assertWorkspaceCalendarRole } from '../domain/google-connection-repository.js';
+import { normalizeWorkspaceTimezone, readWorkspaceTimezone } from '../domain/workspace-timezone.js';
 
 function wallParts(date: Date, timezone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -157,6 +158,16 @@ export async function createCalendarSetup(
         throw new CalendarError('idempotency_conflict');
       return loadSetup(client, workspaceId, old.id);
     }
+    // Recovery above compares the original immutable payload before today's settings.
+    // A fresh stale form must be resubmitted in the authoritative tutor clock.
+    const timezone = await readWorkspaceTimezone(client, workspaceId);
+    let submittedTimezone: string;
+    try {
+      submittedTimezone = normalizeWorkspaceTimezone(request.timezone);
+    } catch {
+      throw new CalendarError('invalid_timezone', 400);
+    }
+    if (submittedTimezone !== timezone) throw new CalendarError('workspace_timezone_changed');
     const invite = request.sendInvitation ?? Boolean(student.email);
     if (invite && !student.email) throw new CalendarError('invitation_email_required', 400);
     const payload = {
@@ -184,7 +195,7 @@ export async function createCalendarSetup(
         marker,
         index,
         event: calendarEventProjection(
-          request,
+          { ...request, timezone },
           slot,
           eventId,
           marker,

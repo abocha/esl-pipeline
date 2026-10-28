@@ -39,6 +39,7 @@ interface LessonBinding {
 }
 export function calendarEventTiming(
   event: GoogleCalendarEvent,
+  contextTimezone?: string,
 ): { startsAt: Date; duration: number; timezone: string } | null {
   if (!event.start?.dateTime || !event.end?.dateTime || event.start.date || event.end.date)
     return null;
@@ -58,7 +59,18 @@ export function calendarEventTiming(
     duration > 1440
   )
     return null;
-  return { startsAt: start, duration, timezone: event.start.timeZone ?? 'UTC' };
+  // A numeric offset establishes an instant, never a region. Prefer evidenced
+  // provider event/master/calendar context and retain an offset if no zone exists.
+  const offset = event.start.dateTime.match(/(Z|[+-]\d{2}:\d{2})$/)![1]!;
+  return {
+    startsAt: start,
+    duration,
+    timezone:
+      event.start.timeZone ??
+      event.originalStartTime?.timeZone ??
+      contextTimezone ??
+      (offset === 'Z' ? 'UTC' : offset),
+  };
 }
 export function safeCalendarEventUrl(value: string | undefined): string | null {
   if (!value) return null;
@@ -104,6 +116,7 @@ export async function projectCalendarObservation(
   binding: ScheduleBinding,
   event: GoogleCalendarEvent,
   now = new Date(),
+  providerTimezone?: string,
 ): Promise<void> {
   const original = occurrenceIdentity(event);
   if (
@@ -142,7 +155,15 @@ export async function projectCalendarObservation(
     if (link) await cancelCalendarLesson(client, binding, link, event, now);
     return;
   }
-  const timing = calendarEventTiming(event);
+  const calendarTimezone =
+    providerTimezone ??
+    (
+      await client.query<{ calendar_timezone: string }>(
+        'SELECT calendar_timezone FROM workspace_calendar_connections WHERE id=$1',
+        [binding.connection_id],
+      )
+    ).rows[0]?.calendar_timezone;
+  const timing = calendarEventTiming(event, calendarTimezone);
   if (!timing) {
     await attention(client, binding.id, link?.lesson_id ?? null, 'unsupported_event');
     return;
@@ -391,7 +412,13 @@ export async function processCalendarSync(
         // Tombstones may no longer be readable through events.get. Apply their authoritative
         // evidence in the same commit as the page checkpoint, then retain refresh work.
         if (event.status === 'cancelled') {
-          await projectCalendarObservation(client, binding, event);
+          await projectCalendarObservation(
+            client,
+            binding,
+            event,
+            new Date(),
+            page.timeZone ?? current.calendar_timezone,
+          );
           if (event.id === binding.provider_event_id) {
             await client.query(
               "UPDATE calendar_schedule_bindings SET next_projection_at='infinity',source_version=$2 WHERE id=$1",
@@ -400,7 +427,13 @@ export async function processCalendarSync(
             continue;
           }
         } else if (event.id !== binding.provider_event_id || binding.kind === 'one_off')
-          await projectCalendarObservation(client, binding, event);
+          await projectCalendarObservation(
+            client,
+            binding,
+            event,
+            new Date(),
+            page.timeZone ?? current.calendar_timezone,
+          );
         await enqueueCalendarRefresh(client, current, id);
       }
       const marker = event.extendedProperties?.private?.eslAssociation;
@@ -577,6 +610,7 @@ async function projectCalendarSeriesFamily(
     master: GoogleCalendarEvent;
     events: Map<string, GoogleCalendarEvent>;
     missing: Set<string>;
+    timezone?: string;
   }[] = [];
   const renewLease = () => fencedProjection(op, async () => {});
   for (const item of snapshot.family) {
@@ -598,6 +632,7 @@ async function projectCalendarSeriesFamily(
       missing = new Set<string>(),
       tokens = new Set<string>();
     let token: string | undefined;
+    let timezone = master.start?.timeZone;
     if (master.status !== 'cancelled')
       do {
         if (signal?.aborted) throw new CalendarError('calendar_shutdown');
@@ -608,6 +643,7 @@ async function projectCalendarSeriesFamily(
           { timeMin, timeMax, ...(token ? { pageToken: token } : {}) },
         );
         await renewLease();
+        timezone ??= page.timeZone;
         for (const event of page.items) {
           if (event.recurringEventId !== item.provider_event_id || !occurrenceIdentity(event))
             throw new CalendarError('provider_identity_conflict');
@@ -650,7 +686,7 @@ async function projectCalendarSeriesFamily(
     await renewLease();
     if ((!latest && master.status !== 'cancelled') || (latest && latest.etag !== master.etag))
       throw new GoogleCalendarError('provider_unavailable', true);
-    collections.push({ binding: item, master, events, missing });
+    collections.push({ binding: item, master, events, missing, timezone });
   }
   await fencedProjection(op, async (client, current) => {
     if (current.sync_page_token) throw new GoogleCalendarError('provider_unavailable', true);
@@ -736,7 +772,13 @@ async function projectCalendarSeriesFamily(
           )
         )
           continue;
-        await projectCalendarObservation(client, item, event, now);
+        await projectCalendarObservation(
+          client,
+          item,
+          event,
+          now,
+          collection.timezone ?? current.calendar_timezone,
+        );
       }
       if (!replacing)
         for (const link of snapshot.known.filter((link) => collection.missing.has(link.lesson_id)))

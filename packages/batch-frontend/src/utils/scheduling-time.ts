@@ -1,3 +1,4 @@
+import { normalizeTimezone } from './timezones';
 export function dateTimeInputInTimezone(value: Date | string, timezone: string): string {
   const date = value instanceof Date ? value : new Date(value);
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -7,7 +8,7 @@ export function dateTimeInputInTimezone(value: Date | string, timezone: string):
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
-    timeZone: timezone,
+    timeZone: normalizeTimezone(timezone) ?? timezone,
   }).formatToParts(date);
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((item) => item.type === type)?.value ?? '';

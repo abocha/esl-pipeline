@@ -748,6 +748,7 @@ export interface StudentLessonHomeworkDto {
 export interface StudentLessonPlanDto {
   studentId: string;
   workspaceId: string | null;
+  /** Legacy metadata only. Workspace settings own the tutor clock and fresh scheduling. */
   timezone: string;
   defaultDurationMinutes: number;
   schedulingNotes: string | null;
@@ -755,6 +756,7 @@ export interface StudentLessonPlanDto {
 }
 
 export interface UpdateStudentLessonPlanRequest {
+  /** @deprecated Compatibility metadata; omitted values preserve existing history. */
   timezone?: string;
   defaultDurationMinutes?: number;
   schedulingNotes?: string | null;

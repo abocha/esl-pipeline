@@ -44,7 +44,9 @@ Browse model:
 
 Display notes:
 
-- operator-facing timestamps are rendered in explicit UTC as `YYYY-MM-DD HH:mm UTC`
+- operator-facing timestamps and Today/date filters use the authenticated workspace tutor timezone
+  from Business Settings; settings failures use the normal command error path, without a device/UTC fallback
+- job-detail return buttons retain exact accepted date-filter boundaries; legacy callback filters remain readable
 - job and student surfaces lead with human-readable identity and use short ids as supporting context
 - `/share` includes the optional pronunciation playback link only for the published primary
   pronunciation recording; chunk-only pronunciation clips stay inside the HTML assignment

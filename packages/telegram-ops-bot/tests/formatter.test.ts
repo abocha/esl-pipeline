@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  formatActionStatus,
+  formatActionStatus as formatActionStatusInZone,
   formatAudioPlaybackLink,
   formatBotStatusReport,
-  formatFinishedJobs,
+  formatFinishedJobs as formatFinishedJobsInZone,
   formatJobDetails,
   formatJobLinks,
   formatJobsQueryResults,
@@ -14,6 +14,11 @@ import {
   formatStudentsBrowser,
   formatTodaySummary,
 } from '../src/formatter.js';
+
+const formatFinishedJobs = (value: Parameters<typeof formatFinishedJobsInZone>[0]) =>
+  formatFinishedJobsInZone(value, 'UTC');
+const formatActionStatus = (value: Parameters<typeof formatActionStatusInZone>[0]) =>
+  formatActionStatusInZone(value, 'UTC');
 
 describe('formatter', () => {
   it('renders finished jobs with student names first and localized timestamps', () => {
@@ -55,7 +60,7 @@ describe('formatter', () => {
 
     expect(html).toContain('<b>Jobs · Recent Finished</b>');
     expect(html).toContain('<b>Alice Nguyen (student-)</b>');
-    expect(html).toContain(formatLocalizedDateTime('2026-03-14T08:47:06.373Z'));
+    expect(html).toContain(formatLocalizedDateTime('2026-03-14T08:47:06.373Z', 'UTC'));
     expect(html).toContain('<b>Preset</b> general-english');
     expect(html).toContain('<code>job-1</code>');
   });
@@ -91,6 +96,7 @@ describe('formatter', () => {
         manifestPath: null,
       },
       {
+        timezone: 'UTC',
         assignmentTitle: 'Homework Assignment: Office Rules & Modal Verbs',
       },
     );
@@ -98,8 +104,8 @@ describe('formatter', () => {
     expect(html).toContain('<b>Job · SUCCEEDED</b>');
     expect(html).toContain('<b>Student</b> Alice Nguyen');
     expect(html).toContain('<b>Homework</b> Office Rules &amp; Modal Verbs');
-    expect(html).toContain(formatLocalizedDateTime('2026-03-14T08:46:42.494Z'));
-    expect(html).toContain(formatLocalizedDateTime('2026-03-14T08:47:06.373Z'));
+    expect(html).toContain(formatLocalizedDateTime('2026-03-14T08:46:42.494Z', 'UTC'));
+    expect(html).toContain(formatLocalizedDateTime('2026-03-14T08:47:06.373Z', 'UTC'));
   });
 
   it('renders share header with job metadata', () => {
@@ -133,6 +139,7 @@ describe('formatter', () => {
         manifestPath: null,
       },
       {
+        timezone: 'UTC',
         assignmentTitle: 'Homework Assignment: The Cafe & The Adjective Trap',
       },
     );
@@ -141,7 +148,7 @@ describe('formatter', () => {
     expect(html).toContain('<b>Student</b> Margarita (72444fdf)');
     expect(html).toContain('<b>Job</b> <code>job-1</code>');
     expect(html).toContain('<b>Homework</b> The Cafe &amp; The Adjective Trap');
-    expect(html).toContain(formatLocalizedDateTime('2026-03-14T08:47:06.373Z'));
+    expect(html).toContain(formatLocalizedDateTime('2026-03-14T08:47:06.373Z', 'UTC'));
   });
 
   it('renders operation status details', () => {
@@ -326,6 +333,7 @@ describe('formatter', () => {
 
   it('renders student summary with explicit UTC timestamps and latest homework', () => {
     const html = formatStudentSummary({
+      timezone: 'UTC',
       student: {
         id: '72444fdf-4abe-43ce-9166-5a1529c2e6cb',
         student: 'Margarita',
@@ -369,6 +377,7 @@ describe('formatter', () => {
 
   it('renders jobs query results with normalized filters and student identity', () => {
     const html = formatJobsQueryResults({
+      timezone: 'UTC',
       normalizedFilters: ['state:failed', 'student:Mary Jane', 'limit:5'],
       title: 'Jobs · Failed',
       response: {
@@ -416,6 +425,7 @@ describe('formatter', () => {
 
   it('renders paged students browser rows with recent-activity metadata', () => {
     const html = formatStudentsBrowser({
+      timezone: 'UTC',
       page: 2,
       response: {
         items: [
@@ -440,6 +450,7 @@ describe('formatter', () => {
 
   it('renders today and bot status summaries for operator diagnostics', () => {
     const todayHtml = formatTodaySummary({
+      timezone: 'UTC',
       dateLabel: '2026-03-14',
       summary: {
         total: 4,

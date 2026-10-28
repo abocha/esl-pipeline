@@ -7,6 +7,7 @@ import {
   emptyAssignmentMaterial,
 } from '@esl-pipeline/contracts';
 
+import { useWorkspaceSettings, useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import type {
   AssignmentLearnerContext,
   AssignmentSession,
@@ -44,6 +45,7 @@ import {
   subscribeToJobEvents,
   updateAssignmentSessionRecovery,
 } from '../../utils/api';
+import { formatTutorTime } from '../../utils/tutor-time';
 import { AssignmentSupport } from '../assignments/AssignmentSupport';
 import { AssignmentWorkflow } from '../assignments/AssignmentWorkflow';
 import {
@@ -308,23 +310,14 @@ function buildSelectablePresetOptions(
   }));
 }
 
-const LESSON_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
-function formatLessonDateTime(value: string | null | undefined): string {
-  if (!value) return 'date unknown';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'date unknown' : LESSON_DATE_TIME_FORMATTER.format(date);
-}
-
-function formatLessonContext(lesson: ScheduleLesson | null, lessonId: string): string {
+function formatLessonContext(
+  lesson: ScheduleLesson | null,
+  lessonId: string,
+  timezone: string | null,
+): string {
   if (!lesson) return `Lesson context: ${lessonId}`;
   const topic = lesson.title?.trim() ? lesson.title.trim() : 'Untitled lesson';
-  return `Lesson context: ${formatLessonDateTime(lesson.startsAt)} - ${topic} - ${lesson.id}`;
+  return `Lesson context: ${formatTutorTime(lesson.startsAt, timezone)} - ${topic} - ${lesson.id}`;
 }
 
 function isRecentPassedNoHomeworkLesson(lesson: ScheduleLesson, nowMs: number): boolean {
@@ -338,6 +331,8 @@ function isRecentPassedNoHomeworkLesson(lesson: ScheduleLesson, nowMs: number): 
 }
 
 export const MinimalAssignment: React.FC = () => {
+  const timezone = useWorkspaceTimezone();
+  const { reconcileTimezone } = useWorkspaceSettings();
   const scheduleFollowupContext = useMemo(() => {
     const params = new URLSearchParams(globalThis.location?.search ?? '');
     return {
@@ -1623,7 +1618,8 @@ export const MinimalAssignment: React.FC = () => {
     setScheduleSurface(null);
     setScheduleSurfaceError(null);
     void getStudentScheduleBillingSurface(studentId)
-      .then((surface) => {
+      .then(async (surface) => {
+        await reconcileTimezone(surface.lessonWindows.timezone);
         if (!active) return;
         setScheduleSurface(surface);
         setScheduleSurfaceError(null);
@@ -1639,7 +1635,7 @@ export const MinimalAssignment: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [source.selectedStudentId]);
+  }, [source.selectedStudentId, timezone, reconcileTimezone]);
 
   useEffect(() => {
     if (!jobStatus?.jobId || !isActivelyProcessingJobState(jobStatus.state)) return;
@@ -1998,8 +1994,15 @@ export const MinimalAssignment: React.FC = () => {
       resume.resumeJobs,
       resume.selectedResumeJobId,
       studentNameById,
+      timezone,
     );
-  }, [resume.assignmentSessions, resume.resumeJobs, resume.selectedResumeJobId, studentNameById]);
+  }, [
+    resume.assignmentSessions,
+    resume.resumeJobs,
+    resume.selectedResumeJobId,
+    studentNameById,
+    timezone,
+  ]);
   const resumeLineages = useMemo(
     () => buildRecentAssignmentLineages(resumeJobItems),
     [resumeJobItems],
@@ -2393,7 +2396,8 @@ export const MinimalAssignment: React.FC = () => {
       setActiveStep('review');
       if (response.session.studentId) {
         void getStudentScheduleBillingSurface(response.session.studentId)
-          .then((surface) => {
+          .then(async (surface) => {
+            await reconcileTimezone(surface.lessonWindows.timezone);
             if (activeAssignmentSessionRef.current?.studentId === surface.studentId)
               setScheduleSurface(surface);
           })
@@ -3010,7 +3014,7 @@ export const MinimalAssignment: React.FC = () => {
       ? exactLinkedLesson.lesson
       : null);
   const linkedLessonContextLabel = linkedLessonId
-    ? formatLessonContext(linkedLesson, linkedLessonId)
+    ? formatLessonContext(linkedLesson, linkedLessonId, timezone)
     : null;
   const lessonSuggestions = useMemo<AssignmentLessonSuggestion[]>(() => {
     if (!scheduleSurface || scheduleSurface.studentId !== source.selectedStudentId) return [];
@@ -3024,11 +3028,11 @@ export const MinimalAssignment: React.FC = () => {
         const topic = lesson.title?.trim() ? lesson.title.trim() : 'Untitled lesson';
         return {
           id: lesson.id,
-          label: `${formatLessonDateTime(lesson.startsAt)} - ${topic}`,
+          label: `${formatTutorTime(lesson.startsAt, timezone)} - ${topic}`,
           detail: `Lesson ${lesson.id}`,
         };
       });
-  }, [linkedLessonId, scheduleSurface, source.selectedStudentId]);
+  }, [linkedLessonId, scheduleSurface, source.selectedStudentId, timezone]);
   const workflowStages = useMemo<WorkflowStage[]>(() => {
     const downstreamArtifactReady = authoring.promptReady || hasAssignmentContent || jobReady;
     const startStatus: WorkflowStageStatus = hasStartedFlow ? 'complete' : 'current';

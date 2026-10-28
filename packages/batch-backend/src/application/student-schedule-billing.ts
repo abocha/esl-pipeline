@@ -26,8 +26,8 @@ import type {
 
 import { ACTIVE_ASSIGNMENT_SESSION_SQL } from '../domain/assignment-session-repository.js';
 import { setStudentActivityActor } from '../domain/student-activity-recording.js';
+import { postgresWorkspaceTimezone, readWorkspaceTimezone } from '../domain/workspace-timezone.js';
 import { withPgClient } from '../infrastructure/db.js';
-import { normalizeBusinessTimezone } from './teacher-business-dashboard.js';
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 const DEFAULT_TIMEZONE = 'UTC';
@@ -292,14 +292,7 @@ export async function getStudentLessonPage(
 }
 
 async function getScheduleTimezone(client: PoolClient, context: StudentContext): Promise<string> {
-  const result = await client.query<{ timezone: string }>(
-    'SELECT timezone FROM workspace_business_settings WHERE workspace_id = $1',
-    [context.workspaceId],
-  );
-  const timezone = normalizeBusinessTimezone(result.rows[0]?.timezone ?? DEFAULT_TIMEZONE);
-  // Some PostgreSQL system tzdata installations omit the legacy Saigon link.
-  // Keep the same workspace calendar rules using its current IANA name.
-  return timezone.toLowerCase() === 'asia/saigon' ? 'Asia/Ho_Chi_Minh' : timezone;
+  return readWorkspaceTimezone(client, context.workspaceId ?? DEFAULT_WORKSPACE_ID);
 }
 
 async function getLessonWindows(
@@ -309,7 +302,7 @@ async function getLessonWindows(
   const timezone = await getScheduleTimezone(client, context);
   const result = await client.query<{ date: string }>(
     "SELECT to_char($1::timestamptz AT TIME ZONE $2, 'YYYY-MM-DD') AS date",
-    [new Date(), timezone],
+    [new Date(), postgresWorkspaceTimezone(timezone)],
   );
   const date = result.rows[0]?.date;
   if (!date) throw new Error('Lesson date unavailable');
@@ -321,7 +314,13 @@ async function getLessonWindows(
        AND starts_at >= ($4::date::timestamp AT TIME ZONE $5)
        AND starts_at < (($4::date + 1)::timestamp AT TIME ZONE $5)
      ORDER BY starts_at ASC, id ASC`,
-    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID, boundary.date, timezone],
+    [
+      context.id,
+      context.workspaceId,
+      DEFAULT_WORKSPACE_ID,
+      boundary.date,
+      postgresWorkspaceTimezone(timezone),
+    ],
   );
   return {
     ...boundary,
@@ -356,7 +355,7 @@ async function readLessonPage(
       context.workspaceId,
       DEFAULT_WORKSPACE_ID,
       boundary.date,
-      boundary.timezone,
+      postgresWorkspaceTimezone(boundary.timezone),
       cursor?.startsAt ?? null,
       cursor?.id ?? null,
       limit + 1,
@@ -463,7 +462,7 @@ export async function updateStudentLessonPlan(
       ON CONFLICT (student_id) DO UPDATE
       SET
         workspace_id = EXCLUDED.workspace_id,
-        timezone = EXCLUDED.timezone,
+        timezone = CASE WHEN $9::boolean THEN EXCLUDED.timezone ELSE student_lesson_plans.timezone END,
         default_duration_minutes = EXCLUDED.default_duration_minutes,
         scheduling_notes = EXCLUDED.scheduling_notes,
         updated_by = EXCLUDED.updated_by,
@@ -474,12 +473,13 @@ export async function updateStudentLessonPlan(
       [
         studentId,
         context.workspaceId,
-        params.timezone ?? DEFAULT_TIMEZONE,
+        params.timezone ?? (await getScheduleTimezone(client, context)),
         params.defaultDurationMinutes ?? DEFAULT_DURATION_MINUTES,
         params.schedulingNotes ?? null,
         actorUserId ?? null,
         context.workspaceId,
         DEFAULT_WORKSPACE_ID,
+        params.timezone !== undefined,
       ],
     );
     if ((result.rowCount ?? 0) === 0) {
@@ -1130,7 +1130,7 @@ async function insertPayment(
       id, student_id, workspace_id, amount_minor, currency, method,
       received_at, external_url, note, created_by
     )
-    VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::date, CURRENT_DATE), $8, $9, $10)
+    VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8, $9, $10)
     `,
     [
       id,
@@ -1139,7 +1139,13 @@ async function insertPayment(
       params.amountMinor,
       params.currency.toUpperCase(),
       params.method ?? null,
-      params.receivedAt ?? null,
+      params.receivedAt ??
+        new Intl.DateTimeFormat('en-CA', {
+          timeZone: await getScheduleTimezone(client, context),
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date()),
       params.externalUrl ?? null,
       params.note ?? null,
       actorUserId,

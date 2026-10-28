@@ -513,6 +513,39 @@ describeIfPg('application/student-schedule-billing', () => {
     await closePgPool();
   });
 
+  it('preserves legacy plan metadata on defaults saves and uses workspace today only for omitted payment dates', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const studentId = await seedStudentInWorkspace(alpha.workspaceId, 'Synthetic learner');
+    await updateBusinessSettings(alpha.workspaceId, { timezone: 'America/Los_Angeles' });
+    await updateStudentLessonPlan(alpha.workspaceId, studentId, {
+      timezone: 'Asia/Tokyo',
+      defaultDurationMinutes: 60,
+    });
+    const updated = await updateStudentLessonPlan(alpha.workspaceId, studentId, {
+      defaultDurationMinutes: 45,
+      schedulingNotes: 'Keep metadata',
+    });
+    expect(updated.lessonPlan).toMatchObject({
+      timezone: 'Asia/Tokyo',
+      defaultDurationMinutes: 45,
+    });
+    expect(updated.lessonWindows.timezone).toBe('America/Los_Angeles');
+    await recordStudentPayment(alpha.workspaceId, studentId, {
+      amountMinor: 1000,
+      currency: 'USD',
+    });
+    await recordStudentPayment(alpha.workspaceId, studentId, {
+      amountMinor: 2000,
+      currency: 'USD',
+      receivedAt: '2026-05-01',
+    });
+    const surface = await getStudentScheduleBillingSurface(alpha.workspaceId, studentId);
+    expect(surface!.payments.map((payment) => payment.receivedAt).sort()).toEqual([
+      '2026-05-01',
+      '2026-05-04',
+    ]);
+  });
+
   it('keeps today and recent history independent of future volume, pages ties and preserves visible exceptions', async () => {
     const alpha = await seedWorkspaceTutor('alpha');
     const studentId = await seedStudentInWorkspace(alpha.workspaceId, 'Synthetic learner');
@@ -2003,7 +2036,7 @@ describeIfPg('application/student-schedule-billing', () => {
     await expect(
       updateBusinessSettings(DEFAULT_WORKSPACE_ID, { timezone: 'UTC+7' }),
     ).resolves.toMatchObject({
-      timezone: 'Asia/Bangkok',
+      timezone: 'Etc/GMT-7',
     });
     await expect(
       updateBusinessSettings(DEFAULT_WORKSPACE_ID, { timezone: 'Not/A_Timezone' }),
@@ -2199,7 +2232,7 @@ describeIfPg('application/student-schedule-billing', () => {
       to: '2026-05-07',
     });
 
-    expect(surface.settings.timezone).toBe('Asia/Bangkok');
+    expect(surface.settings.timezone).toBe('Etc/GMT-7');
     expect(surface.lessons).toHaveLength(1);
   });
 
