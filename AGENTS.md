@@ -59,6 +59,19 @@ verify remembered commands and mutable facts against those current sources.
 Put subsystem-specific detail in its owning package/doc. Put reusable optional procedures in skills.
 Put deterministic requirements in code, scripts, hooks, or CI rather than relying on prose alone.
 
+## Everyday implementation
+
+- Validate unknown external values at their owning boundary; within the same trusted flow, rely on
+  established typed/schema guarantees instead of repeating null/type/property guards. Avoid
+  preemptive trivial single-use helpers and catches that swallow, obscure, or merely repackage
+  failures. Keep checks and failure handling justified by independent trust boundaries, mutable or
+  durable state, async revalidation, concurrency, authorization, retries/recovery, or another concrete
+  invariant; weigh both the likelihood and consequence of failure.
+- Keep interface copy concise, natural, and task-oriented. Omit decorative explanations, redundant
+  subtitles, taglines, eyebrow/kicker labels, and descriptions that merely restate controls unless
+  they add useful information. Preserve text needed for navigation, instruction, feedback/status,
+  accessibility, action consequences (including cost or irreversibility), or necessary context.
+
 ## Workflow and authorization
 
 Choose the lightest workflow that fits current ambiguity and risk. Shared methods and revisable
