@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.5.4] - 2026-10-28
+
+### Changed
+
+- Automated release from PR #472: fix(calendar): project explicitly associated past one-off lessons (ESL-94) (https://github.com/abocha/esl-pipeline/pull/472)
+
 ## [22.5.3] - 2026-10-28
 
 ### Changed
