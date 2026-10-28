@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.5.0] - 2026-10-28
+
+### Changed
+
+- Automated release from PR #461: feat(students): keep recent lessons visible with independent schedule windows (https://github.com/abocha/esl-pipeline/pull/461)
+
 ## [22.4.3] - 2026-10-28
 
 ### Changed
