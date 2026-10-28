@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.5.2] - 2026-10-28
+
+### Changed
+
+- Automated release from PR #467: fix(timezones): use one tutor clock across workspace surfaces (https://github.com/abocha/esl-pipeline/pull/467)
+
 ## [22.5.1] - 2026-10-28
 
 ### Changed
