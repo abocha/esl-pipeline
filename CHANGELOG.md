@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [22.5.3] - 2026-10-28
+
+### Changed
+
+- Automated release from PR #470: fix(frontend): polish Step 4 highlights and initial section (https://github.com/abocha/esl-pipeline/pull/470)
+
 ## [22.5.2] - 2026-10-28
 
 ### Changed
