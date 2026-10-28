@@ -1159,6 +1159,9 @@ function buildReminderRecommendations(params: {
 }): StudentReminderRecommendationDto[] {
   const recommendations: StudentReminderRecommendationDto[] = [];
   const channel = params.preferredChannel;
+  const remaining = params.creditSummary.remaining;
+  const balanceMessage = `${remaining} lesson credit${Math.abs(remaining) === 1 ? '' : 's'} remaining.`;
+  const topUpCopy = `Hi ${params.studentName}, your lesson balance is ${remaining} credit${Math.abs(remaining) === 1 ? '' : 's'}. Would you like to discuss a top-up?`;
   if (params.enableUpcomingLesson && !params.nextLesson) {
     recommendations.push({
       type: 'no_next_lesson',
@@ -1171,18 +1174,14 @@ function buildReminderRecommendations(params: {
     });
   }
   if (params.enableLowBalance && params.creditSummary.isLow) {
-    const remaining = params.creditSummary.remaining;
     recommendations.push({
       type: 'low_balance',
       channel,
       actionIntent: 'copy_text',
       severity: remaining < 0 ? 'urgent' : 'attention',
       title: remaining < 0 ? 'Balance is negative' : 'Lesson credits are low',
-      message: `${remaining} lesson credit${Math.abs(remaining) === 1 ? '' : 's'} remaining.`,
-      copyText:
-        remaining < 0
-          ? `Hi ${params.studentName}, your lesson balance is currently ${remaining}. Please top up when you can.`
-          : `Hi ${params.studentName}, you have ${remaining} lesson credit${remaining === 1 ? '' : 's'} remaining. Would you like to top up?`,
+      message: balanceMessage,
+      copyText: topUpCopy,
     });
   }
   if (params.enablePaymentFollowup && params.creditSummary.remaining <= 0) {
@@ -1191,9 +1190,9 @@ function buildReminderRecommendations(params: {
       channel,
       actionIntent: 'copy_text',
       severity: params.creditSummary.remaining < 0 ? 'urgent' : 'attention',
-      title: 'Payment follow-up ready',
-      message: 'The student needs new paid lesson credits.',
-      copyText: `Hi ${params.studentName}, please send payment for the next lesson package when convenient.`,
+      title: 'Review lesson credit balance',
+      message: balanceMessage,
+      copyText: topUpCopy,
     });
   }
   for (const lesson of params.elapsedHomeworkFollowups) {
