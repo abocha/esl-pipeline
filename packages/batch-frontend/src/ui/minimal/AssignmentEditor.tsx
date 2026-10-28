@@ -597,7 +597,7 @@ export function AssignmentEditor({
   const hasAssignment = assignment !== null;
   const [selected, select] = useState<string | null>(null),
     [learnerView, setLearnerView] = useState(false),
-    [route, setRoute] = useState('practice.0'),
+    [route, setRoute] = useState<string>(() => sections[0][0]),
     [history, setHistory] = useState<History>({ past: [], future: [] }),
     [floating, setFloating] = useState<EditorSelection | null>(null),
     [notice, setNotice] = useState<string | null>(null),

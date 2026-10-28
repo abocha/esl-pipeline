@@ -552,7 +552,7 @@
 :where(.learner-handout) .sample-mission {
   padding: 0;
 }
-:where(.learner-handout) .linguistic-highlight {
+:where(.learner-handout, .assignment-editor) .linguistic-highlight {
   display: inline-block;
   max-width: 100%;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;

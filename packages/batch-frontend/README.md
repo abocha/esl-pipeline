@@ -207,6 +207,14 @@ Canonical behavior and current status live in:
 - Lesson follow-up reminders use in-app actions first; Telegram/email delivery remains outside the frontend surface for this slice.
 - Job-event SSE subscriptions should target known `jobId` and `recordingId` values; wildcard all-job streams are explicit.
 
+## Assignment editor (Step 4)
+
+Each new editor session opens the first section in the assignment outline (currently Your goal).
+Edits and autosaves preserve the tutor's selected section. Highlight toggles the selected text:
+fully highlighted selections become plain text; plain or mixed selections become highlighted.
+Editor highlights share the learner preview's blue fill and border, including answer explanations.
+Generation readiness is shown by the draft itself; save status and loading/error feedback remain.
+
 ## Assignment material (Step 3)
 
 The learner reference keeps identity, current level, context readiness/error messages, Retry and

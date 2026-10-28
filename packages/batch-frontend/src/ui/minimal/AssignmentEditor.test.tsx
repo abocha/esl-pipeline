@@ -9,7 +9,7 @@ import { AssignmentEditor } from './AssignmentEditor';
 import { restoreTextSelection, textSelection } from './AssignmentEditor.inline';
 
 const context = { studentName: 'Alex', inputKind: 'generate' as const, suppliedUrls: [] };
-function setup(value = editorFixture(), readOnly = false) {
+function setup(value = editorFixture(), readOnly = false, section = 'Practice') {
   let current = value;
   const changed = vi.fn();
   function Harness() {
@@ -29,6 +29,7 @@ function setup(value = editorFixture(), readOnly = false) {
     );
   }
   const view = render(<Harness />);
+  if (section === 'Practice') fireEvent.click(screen.getByRole('button', { name: 'Practice' }));
   return { ...view, current: () => current, changed };
 }
 const click = (name: string) => {
@@ -63,6 +64,62 @@ const edit = (label: string, value: string) => {
   fireEvent.input(field);
 };
 describe('current AssignmentV1 workbook editor', () => {
+  it('starts on the first section and preserves explicit navigation across edits and Undo', () => {
+    setup(editorFixture(), false, 'Your goal');
+    const nav = screen.getByRole('navigation', { name: 'Assignment sections' });
+    expect(within(nav).getAllByRole('button')[0]!.getAttribute('aria-current')).toBe('page');
+    click('Practice');
+    edit('Group 1 · Prompt 1', 'Changed prompt');
+    expect(screen.getByRole('button', { name: 'Practice' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    click('Undo');
+    expect(screen.getByRole('button', { name: 'Practice' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+  });
+
+  it('toggles whole-node boundary selections repeatedly and preserves markup through Undo/Redo', () => {
+    const h = setup();
+    const field = screen.getByRole('textbox', { name: 'Group 1 · Prompt 1' });
+    const original = field.textContent!;
+    const selectContents = () => {
+      act(() => field.focus());
+      const range = document.createRange();
+      range.selectNodeContents(field);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      fireEvent.mouseUp(field);
+    };
+    for (let i = 0; i < 3; i++) {
+      selectContents();
+      click('Highlight');
+      expect(h.current().practice[0]!.items[0]!.prompt).toBe('`' + original + '`');
+      expect(field.querySelectorAll('mark')).toHaveLength(1);
+      selectContents();
+      click('Remove highlight');
+      expect(h.current().practice[0]!.items[0]!.prompt).toBe(original);
+      expect(field.querySelector('mark')).toBeNull();
+    }
+    click('Undo');
+    expect(h.current().practice[0]!.items[0]!.prompt).toBe('`' + original + '`');
+    click('Redo');
+    expect(h.current().practice[0]!.items[0]!.prompt).toBe(original);
+  });
+
+  it('adds highlight to a mixed selection even when it begins inside a highlight', () => {
+    const initial = editorFixture();
+    initial.practice[0]!.items[0]!.prompt = '`Hello` world';
+    const h = setup(initial);
+    const field = screen.getByRole('textbox', { name: 'Group 1 · Prompt 1' });
+    act(() => field.focus());
+    restoreTextSelection(field, { start: 1, end: 11 });
+    fireEvent.mouseUp(field);
+    click('Highlight');
+    expect(h.current().practice[0]!.items[0]!.prompt).toBe('`Hello world`');
+    expect(field.querySelectorAll('mark')).toHaveLength(1);
+  });
+
   it('selects a neighbor after deletion and restores selection with Undo', async () => {
     const h = setup();
     const prompt = screen.getByRole('textbox', { name: 'Group 1 · Prompt 2' });
