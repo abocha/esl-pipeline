@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +21,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 function renderStudio(view = 'learning', learner = 'alex') {
   const router = createMemoryRouter([{ path: '*', element: <CalmStudioV2 /> }], {
@@ -90,14 +93,18 @@ describe('Calm Studio design journeys', () => {
   });
 
   it('keeps a tutor draft intact when first-lesson enrichment updates the active profile', async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers();
     renderStudio('learning', 'daniel');
-    await user.click(screen.getByRole('button', { name: 'Edit profile' }));
-    await user.type(screen.getByLabelText('Teacher notes'), 'My own focus wording');
-    await waitFor(
-      () => expect(screen.getByText('Profile updated in the background')).toBeTruthy(),
-      { timeout: 3500 },
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit profile' }));
+    fireEvent.change(screen.getByLabelText('Teacher notes'), {
+      target: { value: 'My own focus wording' },
+    });
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    expect(screen.getByText('Profile updated in the background')).toBeTruthy();
     expect((screen.getByLabelText('Teacher notes') as HTMLTextAreaElement).value).toBe(
       'My own focus wording',
     );
