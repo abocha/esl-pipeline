@@ -16,6 +16,14 @@ import {
   upsertProfileContent,
 } from '../../application/profile-content.js';
 import { postgresUuidSchema } from '../../domain/postgres-uuid.js';
+import {
+  listProfileMaintenanceChanges,
+  undoProfileMaintenanceChange,
+} from '../../domain/profile-maintenance-repository.js';
+import {
+  ProfileWriteConflictError,
+  readProfileWritePrecondition,
+} from '../../domain/profile-write-authority.js';
 import { logger } from '../../infrastructure/logger.js';
 import { getAuthenticatedUser } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
@@ -67,6 +75,13 @@ export function registerStudentProfileRoutes(
 
         return reply.send(profile);
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -115,6 +130,7 @@ export function registerStudentProfileRoutes(
         });
 
       try {
+        const expectedActiveRevisionId = readProfileWritePrecondition(request.body);
         const params = paramsSchema.parse(request.params ?? {});
         const body = schema.parse(request.body ?? {});
         const content =
@@ -124,6 +140,7 @@ export function registerStudentProfileRoutes(
           params.id,
           content,
           {
+            expectedActiveRevisionId,
             createdBy: getAuthenticatedUser(request)?.id ?? null,
           },
           body.structuredContent ?? null,
@@ -138,6 +155,13 @@ export function registerStudentProfileRoutes(
 
         return reply.send(updated);
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -187,6 +211,7 @@ export function registerStudentProfileRoutes(
         });
 
       try {
+        const expectedActiveRevisionId = readProfileWritePrecondition(request.body);
         const params = paramsSchema.parse(request.params ?? {});
         const body = schema.parse(request.body ?? {});
         const structuredContent = body.structuredContent ?? null;
@@ -198,6 +223,7 @@ export function registerStudentProfileRoutes(
               : '';
 
         const saved = await saveProfileRevisionContent(params.id, content, {
+          expectedActiveRevisionId,
           source: 'update',
           status: 'draft',
           createdBy: getAuthenticatedUser(request)?.id ?? null,
@@ -214,6 +240,13 @@ export function registerStudentProfileRoutes(
 
         return reply.code(201).send(saved);
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -274,6 +307,13 @@ export function registerStudentProfileRoutes(
 
         return reply.send(revisions);
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -333,6 +373,13 @@ export function registerStudentProfileRoutes(
 
         return reply.send(revision);
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -376,8 +423,10 @@ export function registerStudentProfileRoutes(
       });
 
       try {
+        const expectedActiveRevisionId = readProfileWritePrecondition(request.body);
         const params = paramsSchema.parse(request.params ?? {});
         const restored = await restoreProfileRevision(params.id, params.revisionId, {
+          expectedActiveRevisionId,
           createdBy: getAuthenticatedUser(request)?.id ?? null,
         });
         if (!restored) {
@@ -394,6 +443,13 @@ export function registerStudentProfileRoutes(
 
         return reply.send(restored);
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -437,8 +493,10 @@ export function registerStudentProfileRoutes(
       });
 
       try {
+        const expectedActiveRevisionId = readProfileWritePrecondition(request.body);
         const params = paramsSchema.parse(request.params ?? {});
         const activated = await activateProfileRevisionForStudent(params.id, params.revisionId, {
+          expectedActiveRevisionId,
           actorUserId: getAuthenticatedUser(request)?.id ?? null,
         });
         if (!activated) {
@@ -455,6 +513,13 @@ export function registerStudentProfileRoutes(
 
         return reply.send(activated);
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -478,6 +543,53 @@ export function registerStudentProfileRoutes(
         });
 
         return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+  app.get(
+    '/students/:id/profile/changes',
+    { preHandler: [authenticate, authorizeStudent] },
+    async (request, reply) => {
+      const params = z.object({ id: postgresUuidSchema }).parse(request.params);
+      const query = z.object({ cursor: postgresUuidSchema.optional() }).safeParse(request.query);
+      if (!query.success)
+        return reply
+          .code(400)
+          .send({ error: 'validation_failed', message: 'Invalid history cursor' });
+      return reply.send(await listProfileMaintenanceChanges(params.id, query.data.cursor ?? null));
+    },
+  );
+  app.post(
+    '/students/:id/profile/changes/:changeId/undo',
+    { preHandler: [authenticate, authorizeStudent] },
+    async (request, reply) => {
+      try {
+        const params = z
+          .object({ id: postgresUuidSchema, changeId: postgresUuidSchema })
+          .parse(request.params);
+        const expectedActiveRevisionId = readProfileWritePrecondition(request.body);
+        const user = getAuthenticatedUser(request);
+        if (!user) return reply.code(401).send({ error: 'unauthorized' });
+        const result = await undoProfileMaintenanceChange({
+          studentId: params.id,
+          changeId: params.changeId,
+          expectedActiveRevisionId,
+          actorUserId: user.id,
+        });
+        return result ? reply.send(result) : errorResponse(reply, 'not_found');
+      } catch (error) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
+        if (error instanceof z.ZodError)
+          return reply
+            .code(400)
+            .send({ error: 'validation_failed', message: 'Invalid undo request' });
+        throw error;
       }
     },
   );

@@ -652,6 +652,7 @@ export function describeHttpServerIntegrationSuite(
           teacherNotes: 'Responds well to practical scenarios.',
         },
         currentRevisionId: 'revision-1',
+        activeRevisionId: 'revision-1',
         updatedAt: '2024-01-01T00:00:00.000Z',
       });
       mockUpsertProfileContent.mockResolvedValue({
@@ -670,6 +671,7 @@ export function describeHttpServerIntegrationSuite(
           teacherNotes: 'Responds well to practical scenarios.',
         },
         currentRevisionId: 'revision-latest',
+        activeRevisionId: 'revision-latest',
         updatedAt: '2024-01-01T00:00:00.000Z',
       });
       mockSaveProfileRevisionContent.mockResolvedValue({
@@ -685,6 +687,8 @@ export function describeHttpServerIntegrationSuite(
         createdAt: '2024-01-02T00:00:00.000Z',
         createdBy: 'test-user-id',
         restoredFromRevisionId: null,
+        baseActiveRevisionId: null,
+        baseActiveRevisionKnown: true,
         content: '# Foundational Profile\n\nStructured draft content',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -714,6 +718,8 @@ export function describeHttpServerIntegrationSuite(
             createdAt: '2024-01-01T00:00:00.000Z',
             createdBy: null,
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: true,
           },
         ],
         total: 1,
@@ -734,6 +740,8 @@ export function describeHttpServerIntegrationSuite(
         createdAt: '2024-01-01T00:00:00.000Z',
         createdBy: null,
         restoredFromRevisionId: null,
+        baseActiveRevisionId: null,
+        baseActiveRevisionKnown: true,
         content: 'Profile content',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -764,6 +772,7 @@ export function describeHttpServerIntegrationSuite(
           teacherNotes: 'Responds well to practical scenarios.',
         },
         currentRevisionId: 'revision-2',
+        activeRevisionId: 'revision-2',
         updatedAt: '2024-01-02T00:00:00.000Z',
       });
       mockListTemplateContents.mockResolvedValue({
@@ -1040,6 +1049,8 @@ export function describeHttpServerIntegrationSuite(
           createdAt: '2024-01-01T00:00:00.000Z',
           createdBy: 'test-user-id',
           restoredFromRevisionId: null,
+          baseActiveRevisionId: null,
+          baseActiveRevisionKnown: true,
           content: '# Draft profile',
         },
         includedCandidateIds: ['candidate-1'],
@@ -1063,6 +1074,8 @@ export function describeHttpServerIntegrationSuite(
           createdAt: '2024-01-01T00:00:00.000Z',
           createdBy: 'test-user-id',
           restoredFromRevisionId: null,
+          baseActiveRevisionId: null,
+          baseActiveRevisionKnown: true,
           content: '# Refreshed foundational profile',
         },
         includedCandidateIds: ['candidate-1'],
@@ -1085,6 +1098,8 @@ export function describeHttpServerIntegrationSuite(
           createdAt: '2024-01-01T00:00:00.000Z',
           createdBy: 'test-user-id',
           restoredFromRevisionId: null,
+          baseActiveRevisionId: null,
+          baseActiveRevisionKnown: true,
           content: '# Foundational Profile',
         },
       });

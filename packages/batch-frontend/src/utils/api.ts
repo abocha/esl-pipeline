@@ -82,6 +82,11 @@ import type {
   GenerationErrorCategory,
   JobActionRequest,
   JobStatusDto,
+  MaintainedProfileContentDto,
+  ProfileChangeListDto,
+  ProfileRevisionBaseDto,
+  ProfileRevisionConflictDto,
+  ProfileWritePrecondition,
   PublishTarget,
   RecordingErrorCode,
   RecordStudentPaymentRequest,
@@ -90,8 +95,10 @@ import type {
   StudentLessonPageResponse,
   StudentLessonWindow,
   StudentMemoryAvailability,
+  StudentProfileRevisionSource,
   StudentScheduleBillingSurfaceResponse,
   TemplateControlPlaneListDto,
+  UndoProfileChangeDto,
   UpdateBusinessSettingsRequest,
   UpdateStudentLessonPlanRequest,
   UpdateStudentLessonRequest,
@@ -154,6 +161,13 @@ export class AssignmentSessionConflictApiError extends Error {
   constructor(public readonly latestSession: AssignmentSession) {
     super('Newer saved assignment work was found. Review it before confirming again.');
     this.name = 'AssignmentSessionConflictApiError';
+  }
+}
+
+export class AssignmentLessonConflictApiError extends Error {
+  constructor(public readonly latestSession: AssignmentSession) {
+    super('Lesson changed. Review its charge before continuing. Your assignment link is saved.');
+    this.name = 'AssignmentLessonConflictApiError';
   }
 }
 
@@ -277,12 +291,37 @@ export interface StudentProfileListResponse {
   order: 'asc' | 'desc';
 }
 
-export interface ProfileContentResponse {
-  studentId: string;
-  content: string;
-  structuredContent?: FoundationalProfile | null;
-  currentRevisionId: string | null;
-  updatedAt: string | null;
+export type ProfileContentResponse = MaintainedProfileContentDto;
+export type ProfileChangesResponse = ProfileChangeListDto;
+export type ProfileWriteBaseline = ProfileWritePrecondition;
+
+export class ProfileRevisionConflictApiError extends Error {
+  constructor(
+    public readonly code: ProfileRevisionConflictDto['code'],
+    public readonly activeRevisionId: string | null,
+  ) {
+    super(
+      code === 'profile_change_conflict'
+        ? 'This update can no longer be undone.'
+        : 'The learner profile has changed. Your edits are kept.',
+    );
+    this.name = 'ProfileRevisionConflictApiError';
+  }
+}
+
+function getProfileRevisionConflict(error: unknown): ProfileRevisionConflictApiError | null {
+  const axiosError = toAxiosError(error);
+  if (axiosError?.response?.status !== 409 && axiosError?.response?.status !== 428) return null;
+  const data = axiosError.response.data as Partial<ProfileRevisionConflictDto> | undefined;
+  if (
+    !data ||
+    (data.code !== 'profile_revision_conflict' &&
+      data.code !== 'profile_revision_precondition_required' &&
+      data.code !== 'profile_change_conflict')
+  )
+    return null;
+  if (data.activeRevisionId !== null && typeof data.activeRevisionId !== 'string') return null;
+  return new ProfileRevisionConflictApiError(data.code, data.activeRevisionId);
 }
 
 export interface FoundationalProfile {
@@ -298,19 +337,11 @@ export interface FoundationalProfile {
   teacherNotes: string | null;
 }
 
-export interface ProfileRevisionSummaryResponse {
+export interface ProfileRevisionSummaryResponse extends ProfileRevisionBaseDto {
   id: string;
   studentId: string;
   contentHash: string;
-  source:
-    | 'create'
-    | 'update'
-    | 'restore'
-    | 'starter_profile_form'
-    | 'candidate_promotion'
-    | 'legacy_normalization'
-    | 'lesson_population'
-    | 'profile_revision_refresh';
+  source: StudentProfileRevisionSource;
   status?: 'draft' | 'active' | 'deprecated';
   versionNumber?: number;
   versionLabel?: string;
@@ -331,7 +362,7 @@ export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryRes
   };
 }
 
-export interface SaveProfileDraftRevisionRequest {
+export interface SaveProfileDraftRevisionRequest extends ProfileWritePrecondition {
   content?: string;
   structuredContent?: FoundationalProfile;
   inheritCandidateLinksFromRevisionId?: string | null;
@@ -546,6 +577,8 @@ export interface PronunciationFocusEntry {
 }
 
 export interface LessonMemoryRecord {
+  assignmentSessionId?: string | null;
+  sourceContentHash?: string | null;
   id: string;
   studentId: string;
   transcriptId: string;
@@ -890,7 +923,7 @@ export interface DeferStudentProfileCandidateRequest {
   reviewerNote?: string;
 }
 
-export interface StudentProfileCandidatePromotionRequest {
+export interface StudentProfileCandidatePromotionRequest extends ProfileWritePrecondition {
   candidateIds: string[];
   baseRevisionId?: string;
   reviewerNote?: string;
@@ -1641,6 +1674,14 @@ function getAssignmentSessionConflict(error: AxiosError | null): AssignmentSessi
     : null;
 }
 
+function getAssignmentLessonConflict(error: AxiosError | null): AssignmentSession | null {
+  if (error?.response?.status !== 409) return null;
+  const data = error.response.data as
+    | { code?: unknown; session?: ContractAssignmentSessionDto }
+    | undefined;
+  return data?.code === 'assignment_lesson_changed' && data.session ? data.session : null;
+}
+
 function getAssignmentSourceOwnershipConflict(error: AxiosError | null): AssignmentSession | null {
   if (error?.response?.status !== 409) return null;
   const data = error.response.data as
@@ -2188,12 +2229,14 @@ export async function getProfileContent(studentId: string): Promise<ProfileConte
 export async function upsertProfileContent(
   studentId: string,
   content: string | null,
-  structuredContent?: FoundationalProfile,
+  structuredContent: FoundationalProfile | undefined,
+  precondition: ProfileWritePrecondition,
 ): Promise<ProfileContentResponse> {
   try {
     const response = await apiClient.put(
       buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile`),
       {
+        ...precondition,
         ...(content !== null ? { content } : {}),
         ...(structuredContent ? { structuredContent } : {}),
       },
@@ -2204,6 +2247,8 @@ export async function upsertProfileContent(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to edit profiles.');
     }
+    const conflict = getProfileRevisionConflict(error);
+    if (conflict) throw conflict;
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
@@ -2233,6 +2278,45 @@ export async function listProfileRevisions(
   }
 }
 
+export async function listProfileChanges(
+  studentId: string,
+  cursor?: string,
+): Promise<ProfileChangeListDto> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile/changes`),
+      {
+        params: cursor ? { cursor } : {},
+      },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function undoProfileChange(
+  studentId: string,
+  changeId: string,
+  precondition: ProfileWritePrecondition,
+): Promise<UndoProfileChangeDto> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile/changes/${encodeURIComponent(changeId)}/undo`,
+      ),
+      precondition,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const conflict = getProfileRevisionConflict(error);
+    if (conflict) throw conflict;
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function getProfileRevision(
   studentId: string,
   revisionId: string,
@@ -2256,13 +2340,14 @@ export async function getProfileRevision(
 export async function restoreProfileRevision(
   studentId: string,
   revisionId: string,
+  precondition: ProfileWritePrecondition,
 ): Promise<ProfileContentResponse> {
   try {
     const response = await apiClient.post(
       buildApiProxyPath(
         `/students/${encodeURIComponent(studentId)}/profile/revisions/${encodeURIComponent(revisionId)}/restore`,
       ),
-      {},
+      precondition,
     );
     return response.data;
   } catch (error: unknown) {
@@ -2270,6 +2355,8 @@ export async function restoreProfileRevision(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to restore profile revisions.');
     }
+    const conflict = getProfileRevisionConflict(error);
+    if (conflict) throw conflict;
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
@@ -2291,6 +2378,8 @@ export async function saveProfileDraftRevision(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to save profile drafts.');
     }
+    const conflict = getProfileRevisionConflict(error);
+    if (conflict) throw conflict;
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
@@ -2298,13 +2387,14 @@ export async function saveProfileDraftRevision(
 export async function activateProfileRevision(
   studentId: string,
   revisionId: string,
+  precondition: ProfileWritePrecondition,
 ): Promise<ProfileRevisionDetailResponse> {
   try {
     const response = await apiClient.post(
       buildApiProxyPath(
         `/students/${encodeURIComponent(studentId)}/profile/revisions/${encodeURIComponent(revisionId)}/activate`,
       ),
-      {},
+      precondition,
     );
     return response.data;
   } catch (error: unknown) {
@@ -2312,6 +2402,8 @@ export async function activateProfileRevision(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to activate profile revisions.');
     }
+    const conflict = getProfileRevisionConflict(error);
+    if (conflict) throw conflict;
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
@@ -2738,6 +2830,8 @@ export async function updateStudentLessonPlan(
   }
 }
 
+export class StudentLessonConflictApiError extends Error {}
+
 export async function updateStudentLesson(
   studentId: string,
   lessonId: string,
@@ -2753,6 +2847,8 @@ export async function updateStudentLesson(
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    if (axiosError?.response?.status === 409)
+      throw new StudentLessonConflictApiError(handleApiError(axiosError));
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
@@ -3032,6 +3128,8 @@ export async function promoteStudentProfileCandidates(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to promote profile candidates.');
     }
+    const conflict = getProfileRevisionConflict(error);
+    if (conflict) throw conflict;
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
@@ -3053,16 +3151,20 @@ export async function refreshProfileDraftFromApprovedCandidates(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to refresh profile drafts.');
     }
+    const conflict = getProfileRevisionConflict(error);
+    if (conflict) throw conflict;
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
 export async function initializeStudentProfileDraft(
   studentId: string,
+  precondition: ProfileWritePrecondition,
 ): Promise<InitializeStudentProfileDraftResponse> {
   try {
     const response = await apiClient.post(
       buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile-drafts/initialize`),
+      precondition,
     );
     return response.data;
   } catch (error: unknown) {
@@ -3070,6 +3172,8 @@ export async function initializeStudentProfileDraft(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to initialize the learner profile.');
     }
+    const conflict = getProfileRevisionConflict(error);
+    if (conflict) throw conflict;
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
@@ -3318,7 +3422,7 @@ export async function fetchJobProvenance(jobId: string): Promise<JobProvenanceRe
 
 export async function listAssignmentSessions(
   limit = 20,
-  scope?: 'history',
+  scope?: 'active' | 'history',
   offset?: number,
 ): Promise<AssignmentSessionListResponse> {
   try {
@@ -3345,6 +3449,8 @@ export async function confirmStudentAssignmentSession(
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    const lessonConflict = getAssignmentLessonConflict(axiosError);
+    if (lessonConflict) throw new AssignmentLessonConflictApiError(lessonConflict);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to save assignment progress.');
     }
@@ -3416,6 +3522,8 @@ export async function updateAssignmentSessionRecovery(
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    const lessonConflict = getAssignmentLessonConflict(axiosError);
+    if (lessonConflict) throw new AssignmentLessonConflictApiError(lessonConflict);
     const sourceOwnershipConflict = getAssignmentSourceOwnershipConflict(axiosError);
     if (sourceOwnershipConflict) {
       throw new AssignmentSourceOwnershipApiError(sourceOwnershipConflict);

@@ -380,10 +380,14 @@ export interface ConfirmStudentAssignmentSessionRequest {
   requestId: string;
   studentId: string;
   lessonId?: string | null;
+  expectedLessonPlannedCharge?: boolean | null;
+  expectedLessonStatus?: StudentLessonStatus;
 }
 
 export interface UpdateAssignmentSessionRecoveryRequest {
   expectedRevision: number;
+  expectedLessonPlannedCharge?: boolean | null;
+  expectedLessonStatus?: StudentLessonStatus;
   patch: Partial<{
     homeworkIntent: 'create' | 'none';
     lessonId: string | null;
@@ -771,6 +775,8 @@ export interface StudentLessonDto {
   durationMinutes: number;
   status: StudentLessonStatus;
   consumesCredit: boolean;
+  /** Planned charge for a scheduled lesson; null means legacy intent is unknown. */
+  plannedCharge: boolean | null;
   title: string | null;
   notes: string | null;
   creditEventId: string | null;
@@ -785,6 +791,9 @@ export interface StudentLessonDto {
 export interface UpdateStudentLessonRequest {
   status?: 'completed' | 'no_show';
   consumesCredit?: boolean;
+  plannedCharge?: boolean;
+  expectedStatus?: StudentLessonStatus;
+  expectedPlannedCharge?: boolean | null;
   notes?: string | null;
 }
 
@@ -1161,3 +1170,4 @@ export * from './errors.js';
 export * from './job-actions.js';
 export * from './observability.js';
 export * from './student-activity.js';
+export * from './student-profile-maintenance.js';

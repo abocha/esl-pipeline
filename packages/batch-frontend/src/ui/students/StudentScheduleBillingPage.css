@@ -83,8 +83,8 @@
   grid-column: 1 / -1;
 }
 
-.student-schedule-billing-form button,
-.student-schedule-billing-list-row button,
+.student-schedule-billing-form button:where(:not(.product-button)),
+.student-schedule-billing-list-row button:where(:not(.product-button)),
 .student-schedule-billing-weekdays button,
 .student-schedule-billing-reminder button,
 .student-schedule-billing-hidden-reminder button {

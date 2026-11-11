@@ -1,0 +1,183 @@
+.studio-assignment-list {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  color: var(--cs-ink);
+}
+.studio-assignment-list__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.studio-assignment-list__heading h1 {
+  margin: 0;
+  font-size: 29px;
+  font-weight: 600;
+  letter-spacing: -0.8px;
+}
+.studio-assignment-list__heading a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.studio-assignment-list__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-bottom: 16px;
+}
+.studio-assignment-list__filters label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--cs-ink-muted);
+  font-size: 14px;
+}
+.studio-assignment-list__filters select {
+  min-height: 38px;
+  padding: 6px 28px 6px 10px;
+  border: 1px solid var(--cs-border);
+  border-radius: 5px;
+  background: var(--cs-surface);
+  color: var(--cs-ink);
+  font: inherit;
+}
+.studio-assignment-list__coverage,
+.studio-assignment-list__empty {
+  margin: 0 0 18px;
+  color: var(--cs-ink-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.studio-assignment-list__rows,
+.studio-assignment-list__versions ul {
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+.studio-assignment-list__rows > li {
+  border-bottom: 1px solid var(--cs-border);
+}
+.studio-assignment-list__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 100px;
+  padding: 18px 8px;
+  color: var(--cs-ink);
+  text-decoration: none;
+}
+.studio-assignment-list__row:hover {
+  background: color-mix(in srgb, var(--cs-selection) 45%, transparent);
+}
+.studio-assignment-list__row > svg {
+  flex-shrink: 0;
+  color: var(--cs-ink-muted);
+}
+.studio-assignment-list__identity,
+.studio-assignment-list__outcome {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.studio-assignment-list__identity strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+.studio-assignment-list__identity > span,
+.studio-assignment-list__outcome > span {
+  font-size: 14px;
+}
+.studio-assignment-list__identity > span,
+.studio-assignment-list__time {
+  color: var(--cs-ink-muted);
+}
+.studio-assignment-list__outcome {
+  margin-left: auto;
+  text-align: right;
+}
+.studio-assignment-list__outcome > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--cs-action);
+}
+.studio-assignment-list__status--success {
+  color: var(--cs-success);
+}
+.studio-assignment-list__status--warning {
+  color: var(--cs-error);
+}
+.studio-assignment-list__status--progress {
+  color: var(--cs-action);
+}
+.studio-assignment-list__status--neutral {
+  color: var(--cs-ink-muted);
+}
+.studio-assignment-list__versions {
+  padding: 0 8px 12px 45px;
+}
+.studio-assignment-list__versions summary {
+  width: fit-content;
+  padding: 5px 0;
+  color: var(--cs-action);
+  font-size: 14px;
+  cursor: pointer;
+}
+.studio-assignment-list__versions ul {
+  margin: 6px 0 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--cs-border);
+}
+.studio-assignment-list__row:focus-visible,
+.studio-assignment-list__versions summary:focus-visible {
+  outline: 2px solid var(--cs-action);
+  outline-offset: 2px;
+}
+@media (max-width: 620px) {
+  .studio-assignment-list__heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .studio-assignment-list__row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .studio-assignment-list__identity {
+    flex: 1;
+  }
+  .studio-assignment-list__outcome {
+    width: 100%;
+    margin-left: 31px;
+    text-align: left;
+  }
+  .studio-assignment-list__outcome > span:last-child {
+    justify-content: flex-start;
+  }
+}
+.studio-assignment-list__search {
+  gap: 10px;
+  min-width: 220px;
+  border: 1px solid var(--cs-border);
+  border-radius: 5px;
+  padding: 0 10px;
+  background: var(--cs-surface);
+}
+.studio-assignment-list__search input[type="search"] {
+  min-width: 0;
+  width: 100%;
+  padding: 8px 0;
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+  font: inherit;
+  color: var(--cs-ink);
+  background: transparent;
+}
+.studio-assignment-list__search:focus-within {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}

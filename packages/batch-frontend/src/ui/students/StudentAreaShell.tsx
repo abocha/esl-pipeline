@@ -1,5 +1,5 @@
 import { Archive, ArrowLeft, Maximize, Minimize, MoreHorizontal } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Link,
   NavLink,
@@ -10,12 +10,25 @@ import {
   useSearchParams,
 } from 'react-router-dom';
 
-import { archiveStudentProfile, getStudentProfile, type StudentProfile } from '../../utils/api';
+import {
+  archiveStudentProfile,
+  getProfileContent,
+  getStudentProfile,
+  type StudentProfile,
+} from '../../utils/api';
+import { useStudioV2 } from '../studio-v2/StudioV2Context';
+import { LoadingPlaceholder } from '../system/LoadingPlaceholder';
 import { StudentDialog } from './StudentDialog';
 import { useStudentDirectoryRefresh } from './StudentWorkspaceContext';
 import { getStudentInitials } from './studentIdentity';
 
-type StudentAreaPageKey = 'overview' | 'learning' | 'history' | 'schedule-billing';
+type StudentAreaPageKey =
+  | 'overview'
+  | 'learning'
+  | 'history'
+  | 'schedule-billing'
+  | 'schedule'
+  | 'billing';
 
 type StudentAreaDensity = 'overview' | 'learning' | 'reading' | 'operations';
 
@@ -44,6 +57,8 @@ const STUDENT_AREA_PAGE_META: Record<StudentAreaPageKey, StudentAreaPageMeta> = 
     density: 'reading',
   },
 
+  schedule: { label: 'Schedule', density: 'operations' },
+  billing: { label: 'Billing', density: 'operations' },
   'schedule-billing': {
     label: 'Schedule & Billing',
 
@@ -62,12 +77,19 @@ const STUDENT_AREA_PAGE_ORDER: StudentAreaPageKey[] = [
 ];
 
 function getActivePage(pathname: string): StudentAreaPageKey {
-  const activePage = STUDENT_AREA_PAGE_ORDER.find((page) => pathname.endsWith(`/${page}`));
+  const segment = pathname.split('/').filter(Boolean).at(-1)?.toLowerCase();
+  const activePage = (
+    [...STUDENT_AREA_PAGE_ORDER, 'schedule', 'billing'] as StudentAreaPageKey[]
+  ).find((page) => page === segment);
 
   return activePage ?? 'overview';
 }
 
 export const StudentAreaShell: React.FC = () => {
+  const studioV2 = useStudioV2();
+  const pages: StudentAreaPageKey[] = studioV2
+    ? ['overview', 'learning', 'history', 'schedule', 'billing']
+    : STUDENT_AREA_PAGE_ORDER;
   const { studentId = '' } = useParams<{ studentId: string }>();
 
   const location = useLocation();
@@ -111,6 +133,7 @@ export const StudentAreaShell: React.FC = () => {
   const [student, setStudent] = useState<StudentProfile | null>(null);
 
   const [studentLoading, setStudentLoading] = useState(true);
+  const [studentLevel, setStudentLevel] = useState<string | null>(null);
 
   const [studentError, setStudentError] = useState<string | null>(null);
 
@@ -142,7 +165,6 @@ export const StudentAreaShell: React.FC = () => {
     }
 
     setStudentLoading(true);
-
     setStudentError(null);
 
     try {
@@ -153,6 +175,18 @@ export const StudentAreaShell: React.FC = () => {
       }
 
       setStudent(response);
+      if (studioV2) {
+        void getProfileContent(studentId)
+          .catch(() => null)
+          .then((profile) => {
+            if (latestStudentRequestRef.current !== requestId) return;
+            setStudentLevel(
+              profile?.activeRevisionId && profile.currentRevisionId === profile.activeRevisionId
+                ? profile.structuredContent?.overallLevel || null
+                : null,
+            );
+          });
+      }
     } catch (error) {
       if (latestStudentRequestRef.current !== requestId) {
         return;
@@ -161,6 +195,7 @@ export const StudentAreaShell: React.FC = () => {
       const message = error instanceof Error ? error.message : 'Unable to load the student.';
 
       setStudent(null);
+      setStudentLevel(null);
 
       setStudentError(message);
     } finally {
@@ -168,7 +203,7 @@ export const StudentAreaShell: React.FC = () => {
         setStudentLoading(false);
       }
     }
-  }, [studentId]);
+  }, [studentId, studioV2]);
 
   useEffect(() => {
     void loadStudent();
@@ -178,9 +213,13 @@ export const StudentAreaShell: React.FC = () => {
     };
   }, [loadStudent]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset pane scroll/menu when its route changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dismiss the menu on a route change.
   useEffect(() => {
     setMenuOpen(false);
+  }, [location.pathname]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset pane scroll before painting the new route.
+  useLayoutEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = 0;
   }, [location.pathname]);
 
@@ -227,16 +266,25 @@ export const StudentAreaShell: React.FC = () => {
   };
 
   return (
-    <section className="student-area-shell">
+    <section className={`student-area-shell${studioV2 ? ' student-v2' : ''}`}>
       <div className="workspace-chrome">
         <header className="student-pane-header">
           <div className="pane-identity">
             <span className="student-monogram large" aria-hidden="true">
-              {studentInitials}
+              {studentLoading && !student ? null : studentInitials}
             </span>
-            <div>
-              <h2>{studentName}</h2>
-            </div>
+            {studentLoading && !student ? (
+              <LoadingPlaceholder label="Loading student details" kind="inline" count={1} />
+            ) : (
+              <div>
+                <h2>{studentName}</h2>
+              </div>
+            )}
+            {studioV2 && studentLevel && (
+              <span className="student-v2-level" aria-label={`Level ${studentLevel}`}>
+                {studentLevel}
+              </span>
+            )}
           </div>
           <div className="pane-controls">
             <Link
@@ -320,7 +368,7 @@ export const StudentAreaShell: React.FC = () => {
           </div>
         </header>
         <nav className="student-page-tabs" aria-label="Student area navigation">
-          {STUDENT_AREA_PAGE_ORDER.map((page) => (
+          {pages.map((page) => (
             <NavLink key={page} to={sectionHref(page)}>
               {STUDENT_AREA_PAGE_META[page].label}
             </NavLink>

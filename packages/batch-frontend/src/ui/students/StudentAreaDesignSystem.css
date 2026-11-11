@@ -169,12 +169,39 @@
   font-weight: 700;
   text-decoration: none;
   transition:
-    transform 160ms ease,
-    background-color 160ms ease;
+    background-color var(--cs-motion-fast),
+    border-color var(--cs-motion-fast);
 }
 
 .student-area-action-link:hover {
-  transform: translateY(-1px);
+  background-color: var(--cs-control-hover-surface);
+  border-color: var(--cs-control-hover-border);
+  color: var(--student-area-blue);
+}
+
+.student-area-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 38px;
+  min-height: 36px;
+  width: 38px;
+  padding: 0;
+  border: 1px solid var(--app-line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-ink);
+  cursor: pointer;
+}
+
+.student-area-icon-button:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--cs-control-hover-surface);
+  border-color: var(--cs-control-hover-border);
+}
+
+.student-area-icon-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 
 .student-area-status-pill {

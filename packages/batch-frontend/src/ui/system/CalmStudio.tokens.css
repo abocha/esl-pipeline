@@ -8,6 +8,8 @@
   --cs-action-hover: #183f69;
   --cs-selection: #dce7f2;
   --cs-border: #d6dde4;
+  --cs-control-hover-surface: #e9f0f4;
+  --cs-control-hover-border: #9fb2bf;
   --cs-success: #507660;
   --cs-warning: #8a6518;
   --cs-error: #a53f35;
@@ -94,9 +96,6 @@
   background: var(--cs-action);
   color: white;
 }
-.product-button--primary:hover:not(:disabled) {
-  background: var(--cs-action-hover);
-}
 .product-button--secondary {
   border-color: var(--cs-border);
   background: var(--cs-surface);
@@ -110,6 +109,32 @@
   background: var(--cs-error);
   color: white;
 }
+
+@media (hover: hover) {
+  .product-button--primary:hover:not(:disabled, [aria-disabled="true"]) {
+    background-color: var(--cs-action-hover);
+  }
+
+  .product-button--secondary:hover:not(:disabled, [aria-disabled="true"]),
+  .product-button--quiet:hover:not(:disabled, [aria-disabled="true"]) {
+    background-color: var(--cs-control-hover-surface);
+  }
+
+  .product-button--secondary:hover:not(:disabled, [aria-disabled="true"]) {
+    border-color: var(--cs-control-hover-border);
+  }
+
+  .product-button--danger:hover:not(:disabled, [aria-disabled="true"]) {
+    background-color: color-mix(in srgb, var(--cs-error) 86%, black);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-button {
+    transition: none;
+  }
+}
+
 .product-button:disabled {
   cursor: not-allowed;
   opacity: 0.62;

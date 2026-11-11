@@ -1,7 +1,9 @@
 import { ArrowLeft, AudioLines, BookOpen, Check, Send, Sparkles, UserRound } from 'lucide-react';
 import type React from 'react';
 import { useLayoutEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 
+import { useStudioV2 } from '../studio-v2/StudioV2Context';
 import { ProductButton } from '../system/ProductButton';
 import type { AssignmentStepId, AssignmentWorkflowStep } from './assignment-workflow';
 
@@ -68,6 +70,7 @@ export function AssignmentWorkflow({
   completionLabel,
   children,
 }: AssignmentWorkflowProps) {
+  const studioV2 = useStudioV2();
   const root = useRef<HTMLElement>(null);
   const progress = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
@@ -91,9 +94,15 @@ export function AssignmentWorkflow({
   return (
     <section
       ref={root}
-      className={`assignment-workflow${editorActive ? ' assignment-workflow--editing' : ''}`}
+      className={`assignment-workflow${editorActive ? ' assignment-workflow--editing' : ''}${studioV2 ? ' assignment-workflow--v2' : ''}`}
       aria-label="Assignment builder"
     >
+      {studioV2 ? (
+        <Link className="assignment-workflow__back-list" to="/">
+          <ArrowLeft size={16} aria-hidden="true" />
+          Assignments
+        </Link>
+      ) : null}
       {!editorActive && (
         <div className="assignment-workflow__status">
           {studentName?.trim() ? (
@@ -138,12 +147,16 @@ export function AssignmentWorkflow({
                   <span className="assignment-workflow__step-icon">
                     {visualStatus === 'complete' ? (
                       <Check aria-hidden="true" />
+                    ) : studioV2 ? (
+                      <span aria-hidden="true">{index + 1}</span>
                     ) : (
                       <Icon aria-hidden="true" />
                     )}
                   </span>
                   <span className="assignment-workflow__step-copy">
-                    <small>{visualStatus === 'skipped' ? 'Skipped' : `Step ${index + 1}`}</small>
+                    {!studioV2 || visualStatus === 'skipped' ? (
+                      <small>{visualStatus === 'skipped' ? 'Skipped' : `Step ${index + 1}`}</small>
+                    ) : null}
                     <strong>{step.label}</strong>
                   </span>
                 </button>

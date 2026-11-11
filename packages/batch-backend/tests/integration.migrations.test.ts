@@ -242,6 +242,65 @@ describe('integration/migrations', () => {
   });
 
   it(
+    'adds planned charge without inferring legacy intent or rewriting billing history',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0074_assignment_material');
+        const workspaceId = randomUUID(),
+          studentId = randomUUID(),
+          scheduledId = randomUUID(),
+          completedId = randomUUID(),
+          eventId = randomUUID();
+        await pool.query("INSERT INTO workspaces(id,name) VALUES($1,'Charge migration fixture')", [
+          workspaceId,
+        ]);
+        await pool.query(
+          "INSERT INTO students(id,student,workspace_id) VALUES($1,'Synthetic learner',$2)",
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          "INSERT INTO student_lessons(id,student_id,workspace_id,starts_at,status,consumes_credit) VALUES($1,$3,$4,'2000-01-01','scheduled',false),($2,$3,$4,'2000-01-02','completed',true)",
+          [scheduledId, completedId, studentId, workspaceId],
+        );
+        await pool.query(
+          "INSERT INTO student_credit_events(id,student_id,workspace_id,event_type,quantity_delta,source_lesson_id) VALUES($1,$2,$3,'credit_consumed',-1,$4)",
+          [eventId, studentId, workspaceId, completedId],
+        );
+        await pool.query('UPDATE student_lessons SET credit_event_id=$2 WHERE id=$1', [
+          completedId,
+          eventId,
+        ]);
+        const beforeLessons = (
+          await pool.query('SELECT to_jsonb(l) AS row FROM student_lessons l ORDER BY id')
+        ).rows;
+        const beforeEvents = (await pool.query('SELECT * FROM student_credit_events ORDER BY id'))
+          .rows;
+        await runMigrations();
+        expect(
+          (
+            await pool.query(
+              "SELECT to_jsonb(l)-'planned_charge' AS row FROM student_lessons l ORDER BY id",
+            )
+          ).rows,
+        ).toEqual(beforeLessons);
+        expect((await pool.query('SELECT * FROM student_credit_events ORDER BY id')).rows).toEqual(
+          beforeEvents,
+        );
+        expect((await pool.query('SELECT planned_charge FROM student_lessons')).rows).toEqual([
+          { planned_charge: null },
+          { planned_charge: null },
+        ]);
+        const fresh = await pool.query(
+          "INSERT INTO student_lessons(id,student_id,workspace_id,starts_at) VALUES($1,$2,$3,'2030-01-01') RETURNING planned_charge,consumes_credit",
+          [randomUUID(), studentId, workspaceId],
+        );
+        expect(fresh.rows[0]).toEqual({ planned_charge: true, consumes_credit: false });
+      });
+    },
+    testTimeout,
+  );
+
+  it(
     'admits Gemini after upgrade without rewriting existing TTS choices',
     async () => {
       await withAdminClient(async (pool) => {

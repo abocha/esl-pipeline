@@ -210,6 +210,9 @@ revision content/history are preserved.
   revision before effects. Default session lists are active; `scope=history` exposes transcript
   results without requiring a Share job. Manifest/prompt/validator and frozen AssignmentV1 bytes
   remain unchanged. Earlier API/DB version references above describe historical cutovers.
+  Both active and history session lists accept nonnegative offset pagination with a 1–50 page
+  limit; totals and ownership stay scoped to the authenticated user. Live offset pages do not
+  establish a snapshot across concurrent session updates.
 - The frontend owns automatic debounce/retry/refresh mechanics and preserves local buffers on
   conflict. The frontend enables Share only when confirmed recovery and current artifacts are clean;
   before reservation it drains pending recovery and returns a dirty session to its earliest

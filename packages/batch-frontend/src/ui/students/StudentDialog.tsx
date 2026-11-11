@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect, useRef } from 'react';
 
+import { useDialogBackdropDismiss } from '../system/useDialogBackdropDismiss';
+
 /** Native modal isolation/focus return, with explicit positioning over the app reset. */
 export function StudentDialog({
   open,
@@ -13,6 +15,7 @@ export function StudentDialog({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const backdropDismiss = useDialogBackdropDismiss(open ? onCancel : undefined);
   useEffect(() => {
     const dialog = ref.current;
     if (open && !dialog?.open) dialog?.showModal();
@@ -23,6 +26,7 @@ export function StudentDialog({
       ref={ref}
       className="student-workspace-dialog"
       aria-labelledby={titleId}
+      {...backdropDismiss}
       onCancel={(event) => {
         event.preventDefault();
         onCancel();

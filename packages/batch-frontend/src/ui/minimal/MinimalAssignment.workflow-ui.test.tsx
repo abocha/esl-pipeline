@@ -879,6 +879,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       studentId: 'student-alex',
       content: 'NEWER PROFILE CONTENT',
       currentRevisionId: 'revision-2',
+      activeRevisionId: 'revision-2',
       updatedAt: '2026-07-19T00:02:00.000Z',
     });
     vi.mocked(api.getProfileRevision).mockResolvedValue({
@@ -889,6 +890,8 @@ describe('MinimalAssignment - staged workflow UI', () => {
       createdAt: '2026-07-19T00:02:00.000Z',
       createdBy: null,
       restoredFromRevisionId: null,
+      baseActiveRevisionId: null,
+      baseActiveRevisionKnown: false,
       content: 'NEWER PROFILE CONTENT',
     });
     vi.mocked(api.fetchAssignmentLearnerContext).mockResolvedValue({
@@ -928,6 +931,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       studentId: 'student-alex',
       content: 'NEWER PROFILE CONTENT',
       currentRevisionId: 'revision-2',
+      activeRevisionId: 'revision-2',
       updatedAt: '2026-07-19T00:02:00.000Z',
     });
     await waitFor(() =>
@@ -2216,7 +2220,9 @@ describe('MinimalAssignment - staged workflow UI', () => {
     vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
     globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes-review');
     renderMinimalAssignment();
-    await user.click(screen.getByRole('button', { name: /^Step 4Create$/i }));
+    expect(screen.getByRole('status', { name: 'Opening assignment' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Step 4Create$/i })).toBeNull();
+    await user.click(await screen.findByRole('button', { name: /^Step 4Create$/i }));
     await screen.findByRole('button', { name: /^(Generate assignment|Regenerate)$/i });
     await user.click(screen.getByRole('button', { name: /Teaching context/i }));
     await waitFor(() =>
@@ -2224,10 +2230,12 @@ describe('MinimalAssignment - staged workflow UI', () => {
         screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
       ).toBe('step'),
     );
-    await user.type(
-      screen.getByRole('textbox', { name: /Lesson guidance/i }),
-      'Focus on articles.',
-    );
+    const header = document.querySelector('.assignment-workflow__status') as HTMLElement;
+    expect(within(header).getByRole('status').textContent).toContain('All changes saved');
+    fireEvent.change(screen.getByRole('textbox', { name: /Lesson guidance/i }), {
+      target: { value: 'Focus on articles.' },
+    });
+    expect(within(header).getByRole('status').textContent).toContain('Unsaved changes');
 
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
 
@@ -2379,6 +2387,38 @@ describe('MinimalAssignment - staged workflow UI', () => {
       });
       await waitFor(() => expect(api.getJobStatus).toHaveBeenCalledWith('job-rerun'));
       expect(api.getJobStatus).not.toHaveBeenCalledWith('job-root');
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'opens a persisted published deep link as saved without writing recovery or artifacts',
+    async () => {
+      const status = makeJobStatus({
+        state: 'succeeded',
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'pkg-1',
+        draftId: 'draft-1',
+        htmlUrl: 'https://example.com/published-assignment.html',
+      });
+      vi.mocked(api.getJobStatus).mockResolvedValue(status);
+      vi.mocked(api.listUserJobs).mockResolvedValue({
+        jobs: [status],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      });
+      globalThis.history.replaceState(null, '', `/?jobId=${status.jobId}`);
+      renderMinimalAssignment();
+      await screen.findByText('Published and ready for your student.');
+      const header = document.querySelector('.assignment-workflow__status') as HTMLElement;
+      expect(within(header).getByRole('status').textContent).toContain('All changes saved');
+      expect(screen.queryByText('Unsaved changes')).toBeNull();
+      expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
+      expect(api.updateDraft).not.toHaveBeenCalled();
+      expect(api.updateRecordingTranscript).not.toHaveBeenCalled();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );

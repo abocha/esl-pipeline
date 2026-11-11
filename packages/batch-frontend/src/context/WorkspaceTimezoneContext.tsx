@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 
+import { LoadingPlaceholder } from '../ui/system/LoadingPlaceholder';
 import { type BusinessSettings, getBusinessSettings } from '../utils/api';
 import { normalizeTimezone } from '../utils/timezones';
 
@@ -82,15 +83,19 @@ export function WorkspaceTimezoneProvider({
     };
   }, [attempt, refreshSettings]);
 
+  if (!settings && !error)
+    return (
+      <div className="auth-shell">
+        <LoadingPlaceholder label="Preparing the teaching workspace" kind="inline" count={1} />
+      </div>
+    );
   if (!settings)
     return (
       <section className="route-loading-panel" aria-live="polite">
-        <p>{error ? 'Workspace settings unavailable.' : 'Preparing the teaching workspace…'}</p>
-        {error ? (
-          <button type="button" onClick={() => setAttempt((value) => value + 1)}>
-            Retry
-          </button>
-        ) : null}
+        <p>Workspace settings unavailable.</p>
+        <button type="button" onClick={() => setAttempt((value) => value + 1)}>
+          Retry
+        </button>
         <button type="button" onClick={onLogout}>
           Logout
         </button>

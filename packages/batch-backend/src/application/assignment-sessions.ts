@@ -24,9 +24,19 @@ import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { isHistoricalAssignmentSession } from './historical-assignment.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
-import { completeElapsedScheduledLessonForHomework } from './student-schedule-billing.js';
+import {
+  completeElapsedScheduledLessonForHomework,
+  StudentScheduleBillingError,
+} from './student-schedule-billing.js';
 import { getTranscriptProcessingStatus } from './transcript-processing-status.js';
 import { resolvePrimaryWorkspaceIdForUser } from './workspace-context.js';
+
+export class AssignmentLessonConflictError extends Error {
+  readonly code = 'assignment_lesson_changed';
+  constructor(readonly session: AssignmentSessionDto) {
+    super('Lesson changed. Review its charge before continuing. Your assignment link is saved.');
+  }
+}
 
 export async function confirmStudentAssignmentSessionForUser(
   userId: string,
@@ -43,7 +53,7 @@ export async function confirmStudentAssignmentSessionForUser(
     studentId: request.studentId,
     lessonId,
   });
-  await completeLinkedElapsedLessonForHomework(userId, workspaceId, session);
+  await completeLinkedElapsedLessonForHomework(userId, workspaceId, session, request);
   return toAssignmentSessionDto(session);
 }
 
@@ -66,7 +76,7 @@ export async function updateAssignmentSessionRecoveryForUser(
     patch: request.patch,
   });
   const workspaceId = await resolvePrimaryWorkspaceIdForUser(userId);
-  await completeLinkedElapsedLessonForHomework(userId, workspaceId, session);
+  await completeLinkedElapsedLessonForHomework(userId, workspaceId, session, request);
   return toAssignmentSessionDto(session);
 }
 
@@ -175,14 +185,32 @@ async function completeLinkedElapsedLessonForHomework(
   userId: string,
   workspaceId: string,
   session: AssignmentSessionRecord,
+  expected: {
+    expectedLessonPlannedCharge?: boolean | null;
+    expectedLessonStatus?: import('@esl-pipeline/contracts').StudentLessonStatus;
+  },
 ): Promise<void> {
   if (!session.lessonId) return;
-  await completeElapsedScheduledLessonForHomework(
-    workspaceId,
-    session.studentId,
-    session.lessonId,
-    userId,
-  );
+  try {
+    await completeElapsedScheduledLessonForHomework(
+      workspaceId,
+      session.studentId,
+      session.lessonId,
+      userId,
+      expected.expectedLessonPlannedCharge !== undefined ||
+        expected.expectedLessonStatus !== undefined
+        ? {
+            plannedCharge: expected.expectedLessonPlannedCharge,
+            status: expected.expectedLessonStatus,
+          }
+        : undefined,
+    );
+  } catch (error) {
+    if (error instanceof StudentScheduleBillingError && error.code === 'lesson_conflict') {
+      throw new AssignmentLessonConflictError(toAssignmentSessionDto(session));
+    }
+    throw error;
+  }
 }
 
 async function validateLessonStudentPair(

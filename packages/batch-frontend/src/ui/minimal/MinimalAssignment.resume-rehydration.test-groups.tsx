@@ -396,7 +396,7 @@ export function registerResumeBasicTests() {
       globalThis.history.replaceState(null, '', '/?sessionId=session-resume');
       renderMinimalAssignment();
 
-      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
+      await user.click(await screen.findByRole('button', { name: /Lesson source/i }));
       expect(await screen.findByDisplayValue('Session transcript')).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /^Step 4Create$/i }));
       expect(await screen.findByText('Session draft')).toBeTruthy();
@@ -865,6 +865,7 @@ export function registerResumeBasicTests() {
           teacherNotes: null,
         },
         currentRevisionId: confirmedProfile.profileRevisionId,
+        activeRevisionId: confirmedProfile.profileRevisionId,
         updatedAt: now,
       });
 
@@ -1025,13 +1026,9 @@ export function registerResumeBasicTests() {
       await waitFor(() => {
         expect(api.fetchDraft).toHaveBeenCalledWith('draft-stale');
       });
-      expect(
-        (screen.getByRole('button', { name: /Start new assignment/i }) as HTMLButtonElement)
-          .disabled,
-      ).toBe(true);
-      expect(screen.getByRole('button', { name: /Student/i }).getAttribute('aria-current')).toBe(
-        'step',
-      );
+      expect(screen.getByRole('status', { name: 'Opening assignment' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Start new assignment/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Student/i })).toBeNull();
 
       await act(async () => {
         resolveStaleDraft({

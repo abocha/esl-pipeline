@@ -16,6 +16,17 @@ describeHttpServerIntegrationSuite(
     mockRejectStudentProfileCandidate,
     mockActivateProfileRevisionForStudent,
   }) => {
+    it('rejects an old browser mutation without revision authority before application access', async () => {
+      mockActivateProfileRevisionForStudent.mockClear();
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile/revisions/00000000-0000-4000-8000-000000000047/activate`,
+      });
+      expect(response.statusCode).toBe(428);
+      expect(response.json()).toMatchObject({ code: 'profile_revision_precondition_required' });
+      expect(mockActivateProfileRevisionForStudent).not.toHaveBeenCalled();
+    });
+
     it.each(['refresh-from-approved-candidates', 'promote'])(
       'returns applied IDs and omission reasons for %s',
       async (operation: string) => {
@@ -36,6 +47,8 @@ describeHttpServerIntegrationSuite(
             createdAt: '2026-10-11T00:00:00Z',
             createdBy: null,
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: true,
             content: 'Draft',
           },
           includedCandidateIds: ['candidate-1'],
@@ -51,7 +64,7 @@ describeHttpServerIntegrationSuite(
         const response = await app.inject({
           method: 'POST',
           url: `/students/${studentId}/${operation === 'promote' ? 'profile-candidates/promote' : 'profile-drafts/refresh-from-approved-candidates'}`,
-          payload: { candidateIds: ['candidate-1', 'candidate-2'] },
+          payload: { expectedActiveRevisionId: null, candidateIds: ['candidate-1', 'candidate-2'] },
         });
         expect(response.statusCode).toBe(200);
         expect(response.json()).toMatchObject({
@@ -82,12 +95,15 @@ describeHttpServerIntegrationSuite(
         createdAt: '2026-10-11T00:00:00Z',
         createdBy: null,
         restoredFromRevisionId: null,
+        baseActiveRevisionId: null,
+        baseActiveRevisionKnown: true,
         content: 'Draft',
         candidatePromotion,
       });
       const response = await app.inject({
         method: 'POST',
         url: `/students/${studentId}/profile/revisions/${revisionId}/activate`,
+        payload: { expectedActiveRevisionId: null },
       });
       expect(response.statusCode).toBe(200);
       expect(response.json().candidatePromotion).toEqual(candidatePromotion);
@@ -119,7 +135,7 @@ describeHttpServerIntegrationSuite(
         const response = await app.inject({
           method: 'POST',
           url,
-          payload: { candidateIds: ['candidate-1'] },
+          payload: { expectedActiveRevisionId: null, candidateIds: ['candidate-1'] },
         });
         expect(response.statusCode).toBe(429);
         expect(response.json()).toMatchObject({

@@ -173,17 +173,32 @@ function buildGeneratedHeader(): string {
   ].join('\n');
 }
 
-function normalizeDumpSql(rawSql: string): string {
+export function normalizeDumpSql(rawSql: string): string {
+  let dollarQuote: string | null = null;
+  let previousBlank = false;
   const filtered = rawSql
     .replaceAll('\r\n', '\n')
     .split('\n')
     .filter((line) => {
+      // pg_dump emits dollar-quoted function bodies. Their SQL is application
+      // behavior, including SET statements and comments, not dump session setup.
+      if (dollarQuote) {
+        if (line.trim() === `${dollarQuote};`) dollarQuote = null;
+        previousBlank = false;
+        return true;
+      }
+      const opening = line.match(/^\s*(?:AS|DO)\s+(\$(?:[A-Za-z_]\w*)?\$)/i);
+      if (opening) {
+        dollarQuote = opening[1]!;
+        previousBlank = false;
+        return true;
+      }
       const trimmed = line.trim();
       if (
         trimmed.startsWith('--') ||
         trimmed.startsWith(String.raw`\restrict`) ||
         trimmed.startsWith(String.raw`\unrestrict`) ||
-        trimmed.startsWith('SET ') ||
+        (trimmed.startsWith('SET ') && trimmed !== 'SET check_function_bodies = false;') ||
         trimmed === "SELECT pg_catalog.set_config('search_path', '', false);" ||
         trimmed === 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;' ||
         trimmed ===
@@ -195,16 +210,14 @@ function normalizeDumpSql(rawSql: string): string {
       ) {
         return false;
       }
+      if (!trimmed && previousBlank) return false;
+      previousBlank = !trimmed;
       return true;
     })
-    .join('\n');
+    .join('\n')
+    .trim();
 
-  const collapsed = filtered
-    .replaceAll(/\n{3,}/g, '\n\n')
-    .replaceAll(/^\s+/g, '')
-    .replaceAll(/\s+$/g, '');
-
-  return `${buildGeneratedHeader()}${collapsed}\n\n-- Optional pg_stat_statements support retained from migrations.\n${OPTIONAL_PG_STAT_STATEMENTS_SQL}\n\n-- Optional pg_trgm support retained from migrations.\n${OPTIONAL_PG_TRGM_SQL}\n`;
+  return `${buildGeneratedHeader()}${filtered}\n\n-- Optional pg_stat_statements support retained from migrations.\n${OPTIONAL_PG_STAT_STATEMENTS_SQL}\n\n-- Optional pg_trgm support retained from migrations.\n${OPTIONAL_PG_TRGM_SQL}\n`;
 }
 
 function buildSchemaMigrationsSeed(

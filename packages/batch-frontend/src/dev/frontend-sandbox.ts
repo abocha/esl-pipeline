@@ -2,6 +2,8 @@ export const FRONTEND_SANDBOX_MODE = 'mock-auth';
 export const FRONTEND_SANDBOX_ACCESS_TOKEN = 'sandbox-access-token';
 
 export type FrontendSandboxScenario =
+  | 'calm-studio-v2'
+  | 'calendar-setup'
   | 'assignment-editor'
   | 'default'
   | 'step-one-no-recent'
@@ -13,6 +15,8 @@ export type FrontendSandboxScenario =
   | 'step-one-slow';
 
 const frontendSandboxScenarios = new Set<FrontendSandboxScenario>([
+  'calm-studio-v2',
+  'calendar-setup',
   'assignment-editor',
   'default',
   'step-one-no-recent',

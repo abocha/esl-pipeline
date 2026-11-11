@@ -6,7 +6,11 @@ import type { StudentActivityItem, StudentActivityResponse } from '@esl-pipeline
 
 import { useWorkspaceSettings, useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import { getStudentActivity } from '../../utils/api';
+import { timezoneName } from '../../utils/timezones';
+import { useStudioV2 } from '../studio-v2/StudioV2Context';
+import { LoadingPlaceholder } from '../system/LoadingPlaceholder';
 import { useStudentAreaContext } from './StudentAreaContext';
+import './StudentAreaDesignSystem.css';
 import './StudentHistoryPage.css';
 
 const FILTERS = [
@@ -26,6 +30,23 @@ function activityDestination(href: string): 'internal' | 'external' | null {
   }
 }
 
+function activityHref(
+  href: string,
+  item: StudentActivityItem,
+  studentId: string,
+  studioV2: boolean,
+): string {
+  if (!studioV2 || !href.startsWith('/') || href.startsWith('//')) return href;
+
+  const pathEnd = href.search(/[?#]/);
+  const pathname = pathEnd < 0 ? href : href.slice(0, pathEnd);
+  const studentPath = `/students/${encodeURIComponent(studentId)}`;
+  if (pathname !== `${studentPath}/schedule-billing`) return href;
+
+  const section = item.category === 'billing' ? 'billing' : 'schedule';
+  return `${studentPath}/${section}${pathEnd < 0 ? '' : href.slice(pathEnd)}`;
+}
+
 function eventDate(value: string, timezone: string, includeTime = false): string {
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
   const date = new Date(value);
@@ -39,13 +60,39 @@ function eventDate(value: string, timezone: string, includeTime = false): string
   }).format(date);
 }
 
-function ActivityRow({ item, timezone }: { item: StudentActivityItem; timezone: string }) {
+function ActivityRow({
+  item,
+  timezone,
+  studentId,
+  studioV2,
+}: {
+  item: StudentActivityItem;
+  timezone: string;
+  studentId: string;
+  studioV2: boolean;
+}) {
+  const actor =
+    item.actor?.label ??
+    (item.actor?.kind === 'system' ? 'Automatic' : item.actor?.kind === 'user' ? 'Tutor' : null);
+  const receivedDate =
+    item.type.startsWith('payment_') &&
+    item.effectiveAt &&
+    item.summary === `Received ${item.effectiveAt}`
+      ? item.effectiveAt
+      : null;
+  const summary = receivedDate ? `Received ${eventDate(receivedDate, timezone)}` : item.summary;
+  const effectiveAt = receivedDate ? null : item.effectiveAt;
+  const details = receivedDate
+    ? item.details.filter(
+        (detail) => detail.label !== 'Received date' || detail.value !== receivedDate,
+      )
+    : item.details;
   return (
     <li className="student-activity-row">
       <time dateTime={item.occurredAt}>{eventDate(item.occurredAt, timezone, true)}</time>
       <div className="student-activity-content">
         <h3>{item.subject}</h3>
-        {item.summary ? <p>{item.summary}</p> : null}
+        {summary ? <p>{summary}</p> : null}
         {item.effects?.length ? (
           <dl className="student-activity-effects">
             {item.effects.map((effect) => (
@@ -58,10 +105,11 @@ function ActivityRow({ item, timezone }: { item: StudentActivityItem; timezone: 
         ) : null}
         <div className="student-activity-row-actions">
           {item.links.map((link) => {
-            const destination = activityDestination(link.href);
+            const href = activityHref(link.href, item, studentId, studioV2);
+            const destination = activityDestination(href);
             const name = `${link.label}: ${item.subject}`;
             return destination === 'internal' ? (
-              <Link key={link.href} to={link.href} aria-label={name}>
+              <Link key={link.href} to={href} aria-label={name}>
                 {link.label}
               </Link>
             ) : destination === 'external' ? (
@@ -76,46 +124,31 @@ function ActivityRow({ item, timezone }: { item: StudentActivityItem; timezone: 
               </a>
             ) : null;
           })}
-          <details>
-            <summary aria-label={`Details: ${item.subject}`}>Details</summary>
-            <dl className="student-activity-details">
-              {item.actor ? (
-                <div>
-                  <dt>Actor</dt>
-                  <dd>
-                    {item.actor.label ??
-                      (item.actor.kind === 'system'
-                        ? 'Automatic'
-                        : item.actor.kind === 'user'
-                          ? 'Tutor'
-                          : 'Unknown')}
-                  </dd>
-                </div>
-              ) : null}
-              {item.effectiveAt ? (
-                <div>
-                  <dt>Effective date</dt>
-                  <dd>{eventDate(item.effectiveAt, timezone, true)}</dd>
-                </div>
-              ) : null}
-              {item.details.map((detail) => (
-                <div key={`${detail.label}:${detail.value}`}>
-                  <dt>{detail.label}</dt>
-                  <dd>{detail.value}</dd>
-                </div>
-              ))}
-              <div>
-                <dt>Evidence</dt>
-                <dd>
-                  {item.evidence === 'recorded'
-                    ? 'Recorded action'
-                    : item.evidence === 'retained'
-                      ? 'Retained outcome'
-                      : 'Earlier record; change history may be incomplete'}
-                </dd>
-              </div>
-            </dl>
-          </details>
+          {actor || effectiveAt || details.length ? (
+            <details>
+              <summary aria-label={`Details: ${item.subject}`}>Details</summary>
+              <dl className="student-activity-details">
+                {actor ? (
+                  <div>
+                    <dt>Actor</dt>
+                    <dd>{actor}</dd>
+                  </div>
+                ) : null}
+                {effectiveAt ? (
+                  <div>
+                    <dt>Effective date</dt>
+                    <dd>{eventDate(effectiveAt, timezone, true)}</dd>
+                  </div>
+                ) : null}
+                {details.map((detail) => (
+                  <div key={`${detail.label}:${detail.value}`}>
+                    <dt>{detail.label}</dt>
+                    <dd>{detail.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          ) : null}
         </div>
       </div>
     </li>
@@ -123,6 +156,7 @@ function ActivityRow({ item, timezone }: { item: StudentActivityItem; timezone: 
 }
 
 export function StudentHistoryPage() {
+  const studioV2 = useStudioV2();
   const tutorTimezone = useWorkspaceTimezone();
   const { reconcileTimezone } = useWorkspaceSettings();
   const { studentId, studentLoading, studentError } = useStudentAreaContext();
@@ -209,28 +243,32 @@ export function StudentHistoryPage() {
   };
 
   const filtered = category !== 'all' || Boolean(from || to);
+  const pending = Boolean(studentId) && !studentError && !invalidRange && !data && !error;
+  const displayedTimezone = tutorTimezone ?? data?.timezone;
   return (
     <section
-      className="student-activity-page"
+      className={`student-activity-page${studioV2 ? ' student-v2' : ''}`}
       aria-label="Student history"
-      aria-busy={loading || studentLoading}
+      aria-busy={pending || (Boolean(data) && loading)}
     >
       <header className="student-activity-heading">
         <h2>History</h2>
         <div className="student-activity-heading-actions">
-          {data ? (
+          {displayedTimezone ? (
             <span
               className="student-activity-timezone"
               title="Activity dates use the workspace timezone"
             >
-              {tutorTimezone ?? data.timezone}
+              Time zone: {timezoneName(displayedTimezone)}
             </span>
           ) : null}
           <button
             type="button"
+            className="student-area-icon-button"
             onClick={() => void loadPage()}
             disabled={loading || studentLoading || Boolean(studentError) || invalidRange}
             aria-label="Refresh history"
+            title="Refresh history"
           >
             <RefreshCw size={16} aria-hidden="true" />
           </button>
@@ -293,8 +331,8 @@ export function StudentHistoryPage() {
         <p role="alert">{studentError}</p>
       ) : !studentId ? (
         <p role="alert">Student ID is required.</p>
-      ) : studentLoading ? (
-        <p role="status">Loading student…</p>
+      ) : pending ? (
+        <LoadingPlaceholder label="Loading student history" />
       ) : (
         <>
           {error ? (
@@ -308,10 +346,8 @@ export function StudentHistoryPage() {
               </button>
             </div>
           ) : null}
-          {loading ? <p role="status">{data ? 'Loading activity…' : 'Loading history…'}</p> : null}
           {data ? (
             <>
-              <p className="student-activity-coverage">{data.coverage.notice}</p>
               {data.items.length ? (
                 <ol className="student-activity-list">
                   {data.items.map((item) => (
@@ -319,6 +355,8 @@ export function StudentHistoryPage() {
                       key={item.id}
                       item={item}
                       timezone={tutorTimezone ?? data.timezone}
+                      studentId={studentId}
+                      studioV2={studioV2}
                     />
                   ))}
                 </ol>
@@ -328,7 +366,7 @@ export function StudentHistoryPage() {
                   <p>
                     {filtered
                       ? 'No activity was found for these filters.'
-                      : 'No recorded activity or retained outcomes were found for this learner.'}
+                      : 'This student has no activity yet.'}
                   </p>
                 </div>
               )}

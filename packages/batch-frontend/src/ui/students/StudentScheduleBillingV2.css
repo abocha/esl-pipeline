@@ -1,0 +1,561 @@
+/* These regions retain the real controller and native form state across sibling tabs. */
+.student-operations-schedule-region {
+  display: contents;
+}
+.student-schedule-billing-page [hidden] {
+  display: none !important;
+}
+.student-operations-v2 {
+  --student-area-blue: #0f766e;
+  --student-area-blue-soft: #e7f4f0;
+  --student-area-paper: #fff;
+  --student-area-ink: #203b4e;
+  --student-area-muted: #657984;
+  --student-area-line: #e1e9eb;
+  gap: 24px;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.student-operations-v2-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.student-operations-v2-heading h1 {
+  margin: 0;
+  color: var(--student-area-ink);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.student-operations-v2 .student-area-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+.student-operations-v2 .student-area-section-label {
+  color: var(--student-area-ink);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  margin: 0 0 12px;
+}
+.student-schedule-heading-actions {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+.student-schedule-heading-actions p {
+  min-width: 0;
+  margin: 0;
+  text-align: end;
+  overflow-wrap: anywhere;
+  color: var(--student-area-muted);
+  font-size: 14px;
+}
+.student-operations-v2-empty-lessons {
+  margin: 0;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--student-area-line);
+  color: var(--student-area-muted);
+}
+.student-operations-v2 .student-schedule-billing-list {
+  gap: 0;
+}
+.student-operations-v2 .student-schedule-billing-list-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  border: 0;
+  border-bottom: 1px solid var(--student-area-line);
+  border-radius: 0;
+  background: transparent;
+  padding: 16px 0;
+}
+.student-operations-v2 .student-operations-lesson-title {
+  display: grid;
+  gap: 4px;
+  font-weight: 400;
+}
+.student-operations-v2 .student-schedule-billing-list-row strong {
+  font-weight: 500;
+}
+.student-operations-v2 .student-schedule-billing-list-row small {
+  color: var(--student-area-muted);
+  font-size: 14px;
+}
+.student-operations-v2 .student-operations-lesson-details {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.student-operations-v2 .student-operations-lesson-details > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  color: var(--student-area-ink);
+  list-style: none;
+}
+.student-operations-lesson-details > summary::-webkit-details-marker {
+  display: none;
+}
+.student-operations-lesson-details > summary:focus-visible {
+  outline-offset: 4px;
+}
+.student-operations-v2 .student-operations-lesson-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--student-area-blue);
+  font-size: 14px;
+  font-weight: 500;
+}
+.student-operations-lesson-details[open] .student-operations-lesson-toggle svg {
+  rotate: 180deg;
+}
+.student-operations-lesson-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--cs-radius-control);
+  background: var(--cs-surface-muted);
+}
+.student-operations-lesson-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.student-operations-lesson-meta .student-area-status-pill-quiet {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--student-area-muted);
+  font-weight: 500;
+}
+.student-operations-lesson-body .student-schedule-billing-actions {
+  margin: 0;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.student-operations-v2 .student-schedule-billing-actions a,
+.student-operations-v2 .student-schedule-billing-actions button {
+  gap: 6px;
+}
+.student-operations-v2 .student-schedule-billing-edit-form {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  padding: 14px 0 4px;
+}
+.student-operations-v2 .student-schedule-billing-edit-form label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.student-operations-v2 .student-schedule-billing-edit-form textarea {
+  width: 100%;
+  min-height: 5rem;
+  padding: 10px 12px;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  background: var(--student-area-paper);
+  color: var(--student-area-ink);
+  font: inherit;
+  resize: vertical;
+}
+.student-operations-v2 label.student-operations-v2-chargeable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.student-operations-v2-chargeable input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--student-area-blue);
+}
+.student-operations-v2-lesson-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.student-operations-v2-discard .studio-v2-dialog__actions {
+  margin-top: 8px;
+}
+.student-operations-v2-schedule-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--student-area-muted);
+  font-size: 14px;
+}
+.student-operations-v2-schedule-footer a {
+  color: var(--student-area-blue);
+  text-decoration: none;
+}
+.student-operations-v2 summary {
+  color: var(--student-area-blue);
+  cursor: pointer;
+}
+.student-operations-v2-billing {
+  display: grid;
+  gap: 20px;
+}
+.student-operations-v2-credit {
+  background: #fff;
+  border: 1px solid #d2e2df;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.student-operations-v2-credit-overview {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px 18px;
+  padding: 22px 24px 10px;
+}
+.student-operations-v2-credit-overview > div {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.student-operations-v2-credit-overview strong {
+  color: var(--student-area-blue);
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.student-operations-v2-credit-warning strong,
+.student-operations-v2-credit-attention strong {
+  color: #94652d;
+}
+.student-operations-v2-credit h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+.student-operations-v2-credit-detail {
+  color: var(--student-area-muted);
+  font-size: 14px;
+  padding: 0 24px 14px;
+  margin: 0;
+}
+.student-operations-v2-credit-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  padding: 5px 24px;
+  border-top: 1px solid var(--student-area-line);
+  font-size: 14px;
+}
+.student-operations-v2-credit-footer > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--student-area-blue);
+  text-decoration: none;
+}
+.student-operations-v2-defaults {
+  gap: 8px;
+  padding: 6px 0;
+  color: var(--student-area-blue);
+  font-size: 14px;
+  font-weight: 500;
+}
+.student-operations-v2-defaults span {
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: var(--cs-surface-muted);
+  color: var(--student-area-muted);
+  font-variant-numeric: tabular-nums;
+}
+.student-operations-v2-defaults:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.student-operations-v2 .student-schedule-billing-form {
+  margin: 16px 0;
+}
+.student-operations-v2 .student-schedule-billing-form.studio-v2-dialog__body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+.student-operations-v2 .student-operations-v2-plan-form.studio-v2-dialog__body {
+  grid-template-columns: minmax(0, 1fr);
+}
+.student-operations-v2-plan-form input[type="number"] {
+  max-width: 10rem;
+}
+.student-operations-v2 .student-schedule-billing-form label {
+  font-weight: 500;
+  font-size: 14px;
+}
+.student-operations-v2 .student-schedule-billing-form button {
+  font-weight: 500;
+}
+.student-operations-v2 .student-schedule-billing-form .studio-v2-dialog__actions,
+.student-operations-v2 .student-schedule-billing-form > .student-schedule-billing-error {
+  grid-column: 1 / -1;
+}
+.student-operations-v2 .student-schedule-billing-form .studio-v2-dialog__actions > button {
+  width: auto;
+  min-width: 84px;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+}
+.student-operations-v2
+  .student-schedule-billing-form
+  .studio-v2-dialog__actions
+  > .product-button--quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--student-area-blue);
+}
+.student-operations-v2
+  .student-schedule-billing-form
+  .studio-v2-dialog__actions
+  > .product-button--primary {
+  border-color: var(--student-area-blue);
+  background: var(--student-area-blue);
+  color: #fff;
+}
+.student-billing-entry__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.student-billing-entry__modes legend {
+  padding: 0;
+  margin-bottom: 6px;
+  color: var(--student-area-muted);
+  font-size: 14px;
+}
+.student-operations-v2 .student-billing-entry__modes label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 1px solid var(--student-area-line);
+  border-radius: 6px;
+  color: var(--student-area-ink);
+}
+.student-billing-entry__modes label:has(input:checked) {
+  border-color: var(--student-area-blue);
+  background: var(--student-area-blue-soft);
+}
+.student-billing-entry__modes input[type="radio"] {
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--student-area-blue);
+}
+.student-billing-entry__calculation,
+.student-billing-entry__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.student-billing-entry__calculation {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--student-area-blue-soft);
+  color: var(--student-area-ink);
+  font-size: 14px;
+}
+.student-operations-v2 .student-billing-entry__apply {
+  padding-inline: 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--student-area-blue);
+}
+.student-billing-entry__apply:hover {
+  text-decoration: underline;
+}
+.student-billing-entry__footer {
+  padding-top: 10px;
+  border-top: 1px solid var(--student-area-line);
+}
+.student-operations-v2 .student-billing-entry__footer .studio-v2-dialog__actions {
+  margin: 0 0 0 auto;
+}
+.student-billing-entry__summary {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  color: var(--student-area-ink);
+  font-size: 14px;
+}
+.student-billing-activity > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.student-billing-activity h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.student-billing-activity__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 6px;
+  background: var(--cs-surface-muted);
+}
+.student-billing-activity__filters button {
+  min-height: 40px;
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--student-area-ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.student-billing-activity__filters button[aria-pressed="true"],
+.student-billing-activity__filters button:hover {
+  border-color: var(--student-area-line);
+  background: #fff;
+  color: var(--student-area-blue);
+}
+.student-billing-activity__table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.student-billing-activity__table th,
+.student-billing-activity__table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--student-area-line);
+  vertical-align: middle;
+}
+.student-billing-activity__table :is(th, td):first-child {
+  padding-left: 0;
+}
+.student-billing-activity__table :is(th, td):last-child {
+  padding-right: 0;
+  width: 44px;
+}
+.student-billing-activity__table th {
+  color: var(--student-area-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.student-billing-activity__table :is(th, td):is(:nth-child(2), :nth-child(3)) {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.student-billing-activity__table td[data-credit-change="added"] {
+  color: var(--student-area-blue);
+  font-weight: 600;
+}
+.student-billing-activity__table small {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--student-area-muted);
+  overflow-wrap: anywhere;
+}
+.student-billing-activity__table .student-billing-activity__note {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+}
+.student-billing-activity__details {
+  width: 44px;
+  padding: 0;
+}
+.student-billing-activity__details:hover {
+  background: var(--student-area-blue-soft);
+}
+.student-billing-activity__history,
+.student-billing-activity__entry a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+.student-billing-activity__history {
+  font-size: 14px;
+}
+.student-billing-activity__entry section + section {
+  border-top: 1px solid var(--student-area-line);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+.student-billing-activity__entry h3,
+.student-billing-activity__entry p {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.student-billing-activity__entry p {
+  white-space: pre-wrap;
+}
+@media (max-width: 600px) {
+  .student-operations-v2 .student-schedule-billing-list-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .student-operations-v2-credit-overview,
+  .student-operations-v2-credit-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+@media (max-width: 480px) {
+  .student-operations-v2 .student-operations-lesson-details > summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .student-operations-v2 .student-operations-lesson-title {
+    grid-column: 1 / -1;
+  }
+  .student-operations-lesson-body {
+    padding: 12px;
+  }
+  .student-operations-v2 .student-schedule-billing-form.studio-v2-dialog__body {
+    grid-template-columns: 1fr;
+  }
+  .student-billing-activity__table {
+    font-size: 14px;
+  }
+  .student-billing-activity__table :is(th, td) {
+    padding-inline: 4px;
+  }
+}

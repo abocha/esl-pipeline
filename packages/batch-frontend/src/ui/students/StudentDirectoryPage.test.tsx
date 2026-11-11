@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StudentDirectoryPage } from './StudentDirectoryPage';
@@ -58,6 +58,23 @@ describe('StudentDirectoryPage', () => {
       '/students/student-alex-rivera/overview',
     );
     expect(screen.queryByRole('link', { name: /Open Overview/i })).toBeNull();
+  });
+
+  it('keeps the loaded roster in place when only the student tab changes', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/students/student-alex-rivera/overview']}>
+        <StudentDirectoryPage />
+        <Link to="/students/student-alex-rivera/billing">Open Billing</Link>
+      </MemoryRouter>,
+    );
+    const row = await screen.findByRole('link', { name: 'Alex Rivera' });
+
+    await user.click(screen.getByRole('link', { name: 'Open Billing' }));
+
+    expect(screen.getByRole('link', { name: 'Alex Rivera' })).toBe(row);
+    expect(screen.queryByRole('status', { name: 'Loading students' })).toBeNull();
+    expect(apiMocks.listStudents).toHaveBeenCalledTimes(1);
   });
 
   it('shows the student-list error without normal empty-state copy', async () => {

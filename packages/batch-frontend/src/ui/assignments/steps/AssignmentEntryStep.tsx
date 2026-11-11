@@ -8,6 +8,7 @@ import type {
   RecentAssignmentLineage,
   RecentAssignmentState,
 } from '../../minimal/MinimalAssignment.entry-state';
+import { LoadingPlaceholder } from '../../system/LoadingPlaceholder';
 import { ProductButton } from '../../system/ProductButton';
 import { StudentStep } from './StudentStep';
 
@@ -181,13 +182,7 @@ export function AssignmentEntryStep({
           Change choice
         </button>
         {recentLoading ? (
-          <div
-            className="assignment-entry-step__skeleton"
-            role="status"
-            aria-label="Loading recent work"
-          >
-            Loading recent work…
-          </div>
+          <LoadingPlaceholder label="Loading recent work" />
         ) : recentError ? (
           <div className="assignment-entry-step__error" role="alert">
             <p>{recentError}</p>

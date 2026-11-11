@@ -403,6 +403,7 @@ describeHttpServerIntegrationSuite(
         method: 'POST',
         url: `/students/${deriveStudentId('Anna')}/profile-candidates/promote`,
         payload: {
+          expectedActiveRevisionId: null,
           candidateIds: ['candidate-1'],
         },
       });
@@ -427,6 +428,8 @@ describeHttpServerIntegrationSuite(
           createdAt: '2024-01-01T00:00:00.000Z',
           createdBy: 'test-user-id',
           restoredFromRevisionId: null,
+          baseActiveRevisionId: null,
+          baseActiveRevisionKnown: true,
           content: '# Draft profile',
         },
       });
@@ -449,7 +452,7 @@ describeHttpServerIntegrationSuite(
         const response = await app.inject({
           method: 'POST',
           url: `/students/${deriveStudentId('Anna')}/${path}`,
-          payload: { candidateIds: ['candidate-1', 'candidate-2'] },
+          payload: { expectedActiveRevisionId: null, candidateIds: ['candidate-1', 'candidate-2'] },
         });
         expect(response.statusCode).toBe(200);
         expect(response.json().includedCandidateIds).toEqual(['candidate-1']);
@@ -464,6 +467,7 @@ describeHttpServerIntegrationSuite(
         method: 'POST',
         url: `/students/${deriveStudentId('Anna')}/profile-drafts/refresh-from-approved-candidates`,
         payload: {
+          expectedActiveRevisionId: null,
           candidateIds: ['candidate-1'],
         },
       });
@@ -488,6 +492,8 @@ describeHttpServerIntegrationSuite(
           createdAt: '2024-01-01T00:00:00.000Z',
           createdBy: 'test-user-id',
           restoredFromRevisionId: null,
+          baseActiveRevisionId: null,
+          baseActiveRevisionKnown: true,
           content: '# Refreshed foundational profile',
         },
         provider: 'google_ai_studio',
@@ -506,6 +512,7 @@ describeHttpServerIntegrationSuite(
       const response = await app.inject({
         method: 'POST',
         url: `/students/${deriveStudentId('Anna')}/profile-drafts/initialize`,
+        payload: { expectedActiveRevisionId: null },
       });
 
       expect(response.statusCode).toBe(200);
@@ -524,6 +531,8 @@ describeHttpServerIntegrationSuite(
           createdAt: '2024-01-01T00:00:00.000Z',
           createdBy: 'test-user-id',
           restoredFromRevisionId: null,
+          baseActiveRevisionId: null,
+          baseActiveRevisionKnown: true,
           content: '# Foundational Profile',
         },
       });
@@ -552,6 +561,7 @@ describeHttpServerIntegrationSuite(
           teacherNotes: 'Responds well to practical scenarios.',
         },
         currentRevisionId: 'revision-1',
+        activeRevisionId: 'revision-1',
         updatedAt: '2024-01-01T00:00:00.000Z',
       });
     });
@@ -562,9 +572,7 @@ describeHttpServerIntegrationSuite(
       const response = await app.inject({
         method: 'PUT',
         url: `/students/${deriveStudentId('Anna')}/profile`,
-        payload: {
-          content: 'Updated profile content',
-        },
+        payload: { expectedActiveRevisionId: null, content: 'Updated profile content' },
       });
 
       expect(response.statusCode).toBe(200);
@@ -572,11 +580,12 @@ describeHttpServerIntegrationSuite(
         studentId: deriveStudentId('Anna'),
         content: 'Updated content',
         currentRevisionId: 'revision-latest',
+        activeRevisionId: 'revision-latest',
       });
       expect(mockUpsertProfileContent).toHaveBeenCalledWith(
         deriveStudentId('Anna'),
         'Updated profile content',
-        { createdBy: 'test-user-id' },
+        { createdBy: 'test-user-id', expectedActiveRevisionId: null },
         null,
       );
     });
@@ -598,13 +607,13 @@ describeHttpServerIntegrationSuite(
       const response = await app.inject({
         method: 'PUT',
         url: `/students/${deriveStudentId('Anna')}/profile`,
-        payload: { structuredContent },
+        payload: { expectedActiveRevisionId: null, structuredContent },
       });
       expect(response.statusCode).toBe(200);
       expect(mockUpsertProfileContent).toHaveBeenCalledWith(
         deriveStudentId('Anna'),
         expect.stringContaining('Speak clearly'),
-        { createdBy: 'test-user-id' },
+        { createdBy: 'test-user-id', expectedActiveRevisionId: null },
         structuredContent,
       );
     });
@@ -615,7 +624,7 @@ describeHttpServerIntegrationSuite(
       const response = await app.inject({
         method: 'PUT',
         url: `/students/${deriveStudentId('Anna')}/profile`,
-        payload: {},
+        payload: { expectedActiveRevisionId: null },
       });
 
       expect(response.statusCode).toBe(400);
@@ -628,6 +637,7 @@ describeHttpServerIntegrationSuite(
         method: 'POST',
         url: `/students/${deriveStudentId('Anna')}/profile/revisions`,
         payload: {
+          expectedActiveRevisionId: null,
           structuredContent: {
             schemaVersion: 'foundational_profile_v1',
             overallLevel: 'B2',
@@ -657,6 +667,8 @@ describeHttpServerIntegrationSuite(
         createdAt: '2024-01-02T00:00:00.000Z',
         createdBy: 'test-user-id',
         restoredFromRevisionId: null,
+        baseActiveRevisionId: null,
+        baseActiveRevisionKnown: true,
         content: '# Foundational Profile\n\nStructured draft content',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -680,6 +692,7 @@ describeHttpServerIntegrationSuite(
         method: 'POST',
         url: `/students/${deriveStudentId('Anna')}/profile/revisions`,
         payload: {
+          expectedActiveRevisionId: null,
           content: 'Inherited draft',
           inheritCandidateLinksFromRevisionId: MIGRATED_PROFILE_REVISION_ID,
         },
@@ -711,6 +724,8 @@ describeHttpServerIntegrationSuite(
             createdAt: '2024-01-01T00:00:00.000Z',
             createdBy: null,
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: true,
           });
         const operation =
           action === '/activate'
@@ -722,15 +737,16 @@ describeHttpServerIntegrationSuite(
         const response = await app.inject({
           method: action ? 'POST' : 'GET',
           url: `/students/${deriveStudentId('Anna')}/profile/revisions/${MIGRATED_PROFILE_REVISION_ID}${action}`,
+          ...(action ? { payload: { expectedActiveRevisionId: null } } : {}),
         });
         expect(response.statusCode).toBe(200);
         const expectedArgs = [
           deriveStudentId('Anna'),
           MIGRATED_PROFILE_REVISION_ID,
           ...(action === '/activate'
-            ? [{ actorUserId: 'test-user-id' }]
+            ? [{ actorUserId: 'test-user-id', expectedActiveRevisionId: null }]
             : action === '/restore'
-              ? [{ createdBy: 'test-user-id' }]
+              ? [{ createdBy: 'test-user-id', expectedActiveRevisionId: null }]
               : []),
         ];
         expect(operation).toHaveBeenCalledWith(...expectedArgs);
@@ -752,8 +768,16 @@ describeHttpServerIntegrationSuite(
           method: action ? 'POST' : 'GET',
           url: `/students/${deriveStudentId('Anna')}/profile/revisions${inherit ? '' : `/not-a-uuid${action}`}`,
           ...(inherit
-            ? { payload: { content: 'Draft', inheritCandidateLinksFromRevisionId: 'not-a-uuid' } }
-            : {}),
+            ? {
+                payload: {
+                  expectedActiveRevisionId: null,
+                  content: 'Draft',
+                  inheritCandidateLinksFromRevisionId: 'not-a-uuid',
+                },
+              }
+            : action
+              ? { payload: { expectedActiveRevisionId: null } }
+              : {}),
         });
         expect(response.statusCode).toBe(400);
         for (const operation of [
@@ -788,6 +812,8 @@ describeHttpServerIntegrationSuite(
             createdAt: '2024-01-01T00:00:00.000Z',
             createdBy: null,
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: true,
           },
         ],
         total: 1,
@@ -817,6 +843,8 @@ describeHttpServerIntegrationSuite(
         createdAt: '2024-01-01T00:00:00.000Z',
         createdBy: null,
         restoredFromRevisionId: null,
+        baseActiveRevisionId: null,
+        baseActiveRevisionKnown: true,
         content: 'Profile content',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -837,6 +865,7 @@ describeHttpServerIntegrationSuite(
       const response = await app.inject({
         method: 'POST',
         url: `/students/${deriveStudentId('Anna')}/profile/revisions/11111111-1111-4111-8111-111111111111/restore`,
+        payload: { expectedActiveRevisionId: null },
       });
 
       expect(response.statusCode).toBe(200);
@@ -856,6 +885,7 @@ describeHttpServerIntegrationSuite(
           teacherNotes: 'Responds well to practical scenarios.',
         },
         currentRevisionId: 'revision-2',
+        activeRevisionId: 'revision-2',
         updatedAt: '2024-01-02T00:00:00.000Z',
       });
     });
@@ -874,12 +904,15 @@ describeHttpServerIntegrationSuite(
         createdAt: '2024-01-01T00:00:00.000Z',
         createdBy: null,
         restoredFromRevisionId: null,
+        baseActiveRevisionId: null,
+        baseActiveRevisionKnown: true,
         content: 'Profile content',
       });
 
       const response = await app.inject({
         method: 'POST',
         url: `/students/${deriveStudentId('Anna')}/profile/revisions/11111111-1111-4111-8111-111111111111/activate`,
+        payload: { expectedActiveRevisionId: null },
       });
 
       expect(response.statusCode).toBe(200);
@@ -918,9 +951,17 @@ describeHttpServerIntegrationSuite(
       mockGetStudentProfileById.mockResolvedValue(null);
       for (const route of [
         { method: 'GET' as const, suffix: '' },
-        { method: 'PUT' as const, suffix: '', payload: { content: 'Updated' } },
+        {
+          method: 'PUT' as const,
+          suffix: '',
+          payload: { expectedActiveRevisionId: null, content: 'Updated' },
+        },
         { method: 'GET' as const, suffix: '/revisions' },
-        { method: 'POST' as const, suffix: '/revisions', payload: { content: 'Draft' } },
+        {
+          method: 'POST' as const,
+          suffix: '/revisions',
+          payload: { expectedActiveRevisionId: null, content: 'Draft' },
+        },
         { method: 'GET' as const, suffix: '/revisions/11111111-1111-4111-8111-111111111111' },
         {
           method: 'POST' as const,

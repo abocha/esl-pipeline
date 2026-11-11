@@ -338,6 +338,14 @@
   white-space: nowrap;
   font-size: 13px;
 }
+@media (hover: hover) {
+  .student-page-tabs a:not(.active):hover {
+    color: var(--cs-action-hover);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.25em;
+  }
+}
 .student-page-tabs a.active {
   border-bottom-color: #214f80;
   color: #214f80;
@@ -470,26 +478,26 @@
   white-space: nowrap;
 }
 @container (min-width: 850px) {
-  .workspace-chrome {
+  :where(.student-area-shell:not(.student-v2)) .workspace-chrome {
     display: flex;
     align-items: center;
     gap: 24px;
     min-height: 56px;
     padding: 0 16px;
   }
-  .student-pane-header {
+  :where(.student-area-shell:not(.student-v2)) .student-pane-header {
     display: contents;
   }
-  .pane-identity {
+  :where(.student-area-shell:not(.student-v2)) .pane-identity {
     order: 0;
   }
-  .student-page-tabs {
+  :where(.student-area-shell:not(.student-v2)) .student-page-tabs {
     min-width: 0;
     order: 1;
     margin: 0;
     align-self: stretch;
   }
-  .pane-controls {
+  :where(.student-area-shell:not(.student-v2)) .pane-controls {
     order: 2;
   }
 }
@@ -587,4 +595,119 @@
 }
 .student-action-notice button {
   margin-left: 12px;
+}
+
+/* Production v2 is opt-in; the existing workspace keeps its original rules. */
+.student-workspace-layout:has(.student-roster.student-v2) {
+  grid-template-columns: 236px minmax(0, 1fr);
+  background: #f8fafb;
+  color: #203e53;
+  font-size: 16px;
+}
+.student-roster.student-v2 {
+  padding: 0 14px;
+  border-color: #dce5eb;
+  background: #f5f8fa;
+}
+.student-roster.student-v2 .roster-heading {
+  min-height: 72px;
+}
+.student-roster.student-v2 .roster-heading h1 {
+  font-size: 20px;
+  font-weight: 550;
+}
+.student-roster.student-v2 .roster-search input[type="search"] {
+  font-size: 15px;
+}
+.student-roster.student-v2 .roster-row > a {
+  min-height: 68px;
+  gap: 10px;
+  padding: 12px 8px;
+}
+.student-roster.student-v2 .roster-row > a > span:nth-child(2) {
+  font-size: 15px;
+}
+.student-roster.student-v2 .student-monogram {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+  background: #e8eff4;
+  color: #4b6b82;
+}
+.student-roster.student-v2 .roster-row.selected {
+  background: #e5eef5;
+}
+.student-roster.student-v2 .status-switch button {
+  font-size: 14px;
+}
+.student-area-shell.student-v2 .student-pane-header {
+  min-height: 76px;
+  padding: 16px 30px;
+  background: #fff;
+}
+.student-area-shell.student-v2 .pane-identity h2 {
+  font-size: 23px;
+  font-weight: 550;
+  color: #203e53;
+}
+.student-area-shell.student-v2 .student-monogram.large {
+  width: 34px;
+  height: 34px;
+  font-size: 13px;
+}
+.student-area-shell.student-v2 .student-page-tabs {
+  padding: 0 30px;
+  gap: 28px;
+  background: #fff;
+  border-bottom: 1px solid #dce5eb;
+  overflow-x: auto;
+}
+.student-area-shell.student-v2 .student-page-tabs a {
+  padding: 14px 0;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.student-workspace-layout .student-area-shell.student-v2 .student-area-body {
+  padding: 30px;
+  background: #f8fafb;
+  scrollbar-gutter: stable;
+}
+.student-v2-level {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 9px;
+  border: 1px solid #b9ccd9;
+  border-radius: 4px;
+  color: #42627b;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+.student-workspace-layout:has(.student-roster.student-v2):has(.focus-button[aria-pressed="true"]) {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+@media (max-width: 1000px) {
+  .student-workspace-layout:has(.student-roster.student-v2) {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+  .student-workspace-layout .student-area-shell.student-v2 .student-area-body {
+    padding: 24px;
+  }
+}
+@media (max-width: 760px) {
+  .student-workspace-layout:has(.student-roster.student-v2) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .student-area-shell.student-v2 .student-pane-header {
+    padding: 16px 20px;
+  }
+  .student-area-shell.student-v2 .student-page-tabs {
+    padding: 0 20px;
+    gap: 24px;
+  }
+  .student-workspace-layout .student-area-shell.student-v2 .student-area-body {
+    padding: 24px 18px;
+  }
 }

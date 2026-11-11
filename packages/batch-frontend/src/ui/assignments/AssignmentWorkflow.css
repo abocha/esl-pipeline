@@ -419,7 +419,6 @@
     transition: none;
   }
 }
-.assignment-entry-step__skeleton,
 .assignment-entry-step__error,
 .assignment-entry-step__empty,
 .assignment-entry-step__summary {
@@ -693,4 +692,88 @@
 
 .assignment-workflow--editing .assignment-editor-legacy-header {
   display: none;
+}
+
+/* The v2 shell opts in; controller-owned forms and the workbook keep their behavior. */
+.assignment-workflow--v2 {
+  --cs-action: #0f766e;
+  --cs-action-hover: #115e59;
+  --cs-selection: #e8f5f2;
+  width: min(100%, 1120px);
+}
+.assignment-workflow--v2 .assignment-workflow__status {
+  margin-bottom: 14px;
+}
+.assignment-workflow--v2 .assignment-workflow__back-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  color: var(--cs-action);
+  font-size: 14px;
+  text-decoration: none;
+}
+.assignment-workflow--v2 .assignment-workflow__progress {
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--cs-border);
+  border-radius: 0;
+  background: var(--cs-surface);
+}
+.assignment-workflow--v2 .assignment-workflow__progress ol {
+  gap: 6px;
+}
+.assignment-workflow--v2 .assignment-workflow__progress li::after {
+  display: none;
+}
+.assignment-workflow--v2 .assignment-workflow__progress button {
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 10px;
+  gap: 8px;
+  border: 0;
+  border-radius: 5px;
+}
+.assignment-workflow--v2 .assignment-workflow__step-icon {
+  width: 25px;
+  height: 25px;
+  border-color: #bccdd0;
+  border-radius: 50%;
+  font-size: 13px;
+}
+.assignment-workflow--v2 button[aria-current="step"] .assignment-workflow__step-icon {
+  border-color: var(--cs-action);
+  background: var(--cs-action);
+  color: #fff;
+}
+.assignment-workflow--v2 .assignment-workflow__step-copy strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.assignment-workflow--v2 .assignment-workflow__canvas {
+  padding: 24px;
+  border-radius: 6px;
+}
+.assignment-workflow--v2 .assignment-workflow__footer {
+  margin-top: 20px;
+}
+.assignment-workflow--v2.assignment-workflow--editing {
+  width: 100%;
+}
+.assignment-workflow--v2.assignment-workflow--editing .assignment-workflow__canvas {
+  padding: 0;
+}
+@media (max-width: 900px) {
+  .assignment-workflow--v2 .assignment-workflow__progress {
+    overflow-x: auto;
+  }
+  .assignment-workflow--v2 .assignment-workflow__progress ol {
+    min-width: 700px;
+  }
+}
+@media (max-width: 620px) {
+  .assignment-workflow--v2 .assignment-workflow__canvas {
+    padding: 16px;
+  }
 }

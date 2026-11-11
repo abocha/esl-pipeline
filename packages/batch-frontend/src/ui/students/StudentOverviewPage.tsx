@@ -1,3 +1,4 @@
+import { ArrowRight, BookOpen, CalendarDays } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -12,8 +13,12 @@ import {
   type StudentScheduleBillingSurface,
   type StudentTimelineItem,
 } from '../../utils/api';
+import { timezoneName } from '../../utils/timezones';
 import { formatPlainDate, formatTutorTime } from '../../utils/tutor-time';
+import { useStudioV2 } from '../studio-v2/StudioV2Context';
+import { PageLoading } from '../system/LoadingPlaceholder';
 import { useStudentAreaContext } from './StudentAreaContext';
+import { StudentRecentAssignments } from './StudentRecentAssignments';
 import './StudentOverviewPage.css';
 
 interface OverviewData {
@@ -412,6 +417,7 @@ function StudentOverviewPendingCanvas({
 }
 
 export const StudentOverviewPage: React.FC = () => {
+  const studioV2 = useStudioV2();
   const { student, studentId, studentLoading, studentError } = useStudentAreaContext();
   const [overviewData, setOverviewData] = useState<OverviewData>(EMPTY_OVERVIEW_DATA);
   const workspaceTimezone = useWorkspaceTimezone();
@@ -495,10 +501,13 @@ export const StudentOverviewPage: React.FC = () => {
 
   const overviewReady = loadedOverviewKey === currentOverviewKey && !overviewLoading;
   const shellLoading = studentLoading || !overviewReady;
-  const studentAreaPath = (section: 'learning' | 'history' | 'schedule-billing'): string =>
-    `/students/${encodeURIComponent(studentId)}/${section}`;
+  const studentAreaPath = (
+    section: 'learning' | 'history' | 'schedule-billing' | 'schedule' | 'billing',
+  ): string =>
+    `/students/${encodeURIComponent(studentId)}/${studioV2 && section === 'schedule-billing' ? 'schedule' : section}`;
 
   if (!overviewReady) {
+    if (studioV2 && !studentError && !overviewError) return <PageLoading page="overview" />;
     return (
       <StudentOverviewPendingCanvas
         errorMessage={studentError ?? overviewError}
@@ -509,6 +518,14 @@ export const StudentOverviewPage: React.FC = () => {
 
   const renderedOverviewData = overviewData;
   const scheduleBilling = renderedOverviewData.scheduleBilling;
+  const nextLessonTime = scheduleBilling?.nextLesson
+    ? [
+        formatDateTime(scheduleBilling.nextLesson.startsAt),
+        workspaceTimezone && `Time zone: ${timezoneName(workspaceTimezone)}`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
   const profile = renderedOverviewData.profile?.structuredContent ?? null;
   const profileStatus = getProfileStatus({
     profile: renderedOverviewData.profile,
@@ -532,8 +549,146 @@ export const StudentOverviewPage: React.FC = () => {
     { month: 'short', day: 'numeric' },
   );
 
+  if (studioV2) {
+    const memoryUnavailable = getMemoryUnavailableNotice(renderedOverviewData.memory);
+    const nextLesson = scheduleBilling?.nextLesson;
+    return (
+      <section className="student-overview-page student-v2" aria-busy={shellLoading}>
+        <header className="student-v2-overview-heading">
+          <h2>Overview</h2>
+          <Link
+            className="product-button product-button--primary student-v2-start-assignment"
+            to={`/?studentId=${encodeURIComponent(studentId)}`}
+          >
+            <BookOpen size={18} aria-hidden="true" />
+            Start assignment
+          </Link>
+        </header>
+        {(studentError || overviewError) && <p role="alert">{studentError ?? overviewError}</p>}
+        <div className="student-v2-overview-composition">
+          <section className="student-v2-overview-story" aria-label="Learner profile">
+            <h3>What we are working toward</h3>
+            <p className="student-v2-overview-lead">
+              {profile?.primaryGoals.length
+                ? profile.primaryGoals.join('\n')
+                : profile
+                  ? getStudentSummary(profile)
+                  : 'Add learner context in Learning.'}
+            </p>
+            <dl>
+              <div className="student-v2-overview-focus">
+                <dt>Current focus</dt>
+                <dd>{suggestedFocus.title}</dd>
+                {suggestedFocus.detail && (suggestedFocus.generatedAt || memoryUnavailable) && (
+                  <dd
+                    className="student-v2-overview-detail"
+                    role={memoryUnavailable ? 'status' : undefined}
+                  >
+                    {suggestedFocus.detail}
+                  </dd>
+                )}
+                {suggestedFocus.generatedAt && (
+                  <dd className="student-v2-overview-provenance">
+                    Updated {formatDateTime(suggestedFocus.generatedAt)}
+                  </dd>
+                )}
+              </div>
+              <div>
+                <dt>Worth remembering</dt>
+                <dd>{challenges.join(' · ') || 'No recurring challenges recorded yet.'}</dd>
+              </div>
+              <div>
+                <dt>Interests</dt>
+                <dd>
+                  {compactList(profile?.interestsAndUsefulThemes ?? [], 3).join(' · ') ||
+                    'No interests recorded yet.'}
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <aside className="student-v2-overview-practical" aria-label="At a glance">
+            <h3>At a glance</h3>
+            <div className="student-v2-overview-glance-item">
+              <div className="student-v2-overview-credit">
+                <span className="student-v2-overview-label">Lesson credits</span>
+                {scheduleBilling ? (
+                  <strong>{scheduleBilling.creditSummary.remaining}</strong>
+                ) : (
+                  <span>Not configured</span>
+                )}
+              </div>
+              <Link to={studentAreaPath('billing')}>View billing</Link>
+            </div>
+            <div className="student-v2-overview-glance-item">
+              <Link to={studentAreaPath('learning')}>Learning profile</Link>
+              <p>{profileStatus.label}</p>
+              {profileStatus.tone === 'attention' && (
+                <p className="student-v2-overview-detail">{attentionItem.detail}</p>
+              )}
+            </div>
+            <div className="student-v2-overview-glance-item">
+              <span className="student-v2-overview-label">Latest payment</span>
+              <p>{formatLatestPayment(scheduleBilling)}</p>
+            </div>
+          </aside>
+        </div>
+        <section className="student-v2-overview-work" aria-label="Current work">
+          <header>
+            <h3>Current work</h3>
+            <Link to={studentAreaPath('schedule')}>
+              View schedule <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+          </header>
+          {nextLesson ? (
+            <div className="student-v2-overview-next-lesson">
+              <CalendarDays size={21} aria-hidden="true" />
+              <div>
+                <span className="student-v2-overview-label">Next lesson</span>
+                <time dateTime={nextLesson.startsAt}>{formatDateTime(nextLesson.startsAt)}</time>
+                <p>
+                  {nextLesson.durationMinutes} min
+                  {workspaceTimezone && ` · Time zone: ${timezoneName(workspaceTimezone)}`}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p>No upcoming lesson in this window.</p>
+          )}
+          <StudentRecentAssignments
+            key={studentId}
+            studentId={studentId}
+            studentName={student?.student ?? 'Student'}
+          />
+        </section>
+        <section className="student-v2-overview-activity" aria-label="Recent activity">
+          <header>
+            <h3>Recent activity</h3>
+            <Link to={studentAreaPath('history')}>
+              View history <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+          </header>
+          {renderedOverviewData.timeline.length ? (
+            <ol>
+              {renderedOverviewData.timeline.slice(0, 3).map((item) => (
+                <li key={`${item.type}-${item.createdAt}-${item.displayName}`}>
+                  <span>{getActivityLabel(item)}</span>
+                  <time dateTime={item.createdAt}>{formatDateTime(item.createdAt)}</time>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>No recorded activity yet.</p>
+          )}
+        </section>
+      </section>
+    );
+  }
+
   return (
-    <section className="student-overview-page student-area-theme" aria-busy={shellLoading}>
+    <section
+      className={`student-overview-page student-area-theme${studioV2 ? ' student-v2' : ''}`}
+      aria-busy={shellLoading}
+    >
       <div
         className="student-area-frame student-overview-frame"
         data-testid="student-overview-layout"
@@ -577,21 +732,17 @@ export const StudentOverviewPage: React.FC = () => {
           >
             <p className="student-overview-section-label">Operations</p>
             <Link
-              to={studentAreaPath('schedule-billing')}
+              to={studentAreaPath(studioV2 ? 'schedule' : 'schedule-billing')}
               className="student-overview-operation-row"
             >
               <span className="student-overview-operation-icon">Cal</span>
               <span>
                 <strong>Next lesson</strong>
-                <small>
-                  {scheduleBilling?.nextLesson
-                    ? `${formatDateTime(scheduleBilling.nextLesson.startsAt)} · ${workspaceTimezone}`
-                    : 'Not scheduled yet'}
-                </small>
+                <small>{nextLessonTime ?? 'Not scheduled yet'}</small>
               </span>
             </Link>
             <Link
-              to={studentAreaPath('schedule-billing')}
+              to={studentAreaPath(studioV2 ? 'billing' : 'schedule-billing')}
               className="student-overview-operation-row"
             >
               <span className="student-overview-operation-icon">Cr</span>
@@ -601,7 +752,7 @@ export const StudentOverviewPage: React.FC = () => {
               </span>
             </Link>
             <Link
-              to={studentAreaPath('schedule-billing')}
+              to={studentAreaPath(studioV2 ? 'billing' : 'schedule-billing')}
               className="student-overview-operation-row"
             >
               <span className="student-overview-operation-icon">Inv</span>
@@ -627,7 +778,9 @@ export const StudentOverviewPage: React.FC = () => {
             <div className="student-overview-profile-grid">
               <div>
                 <span>Level</span>
-                <strong>{profile?.overallLevel ?? 'Not set'}</strong>
+                <strong className={studioV2 ? 'student-v2-level' : undefined}>
+                  {profile?.overallLevel ?? 'Not set'}
+                </strong>
               </div>
               <div>
                 <span>Main goal</span>
@@ -726,7 +879,9 @@ export const StudentOverviewPage: React.FC = () => {
           </aside>
         </div>
 
-        <p className="student-overview-note">Small, regular steps create real progress.</p>
+        {!studioV2 && (
+          <p className="student-overview-note">Small, regular steps create real progress.</p>
+        )}
       </div>
     </section>
   );

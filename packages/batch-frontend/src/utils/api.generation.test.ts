@@ -252,6 +252,9 @@ it('shows the actionable profile quota message without a successful result', asy
     }),
   );
   await expect(
-    refreshProfileDraftFromApprovedCandidates('student-1', { candidateIds: ['candidate-1'] }),
+    refreshProfileDraftFromApprovedCandidates('student-1', {
+      candidateIds: ['candidate-1'],
+      expectedActiveRevisionId: null,
+    }),
   ).rejects.toThrow('reserved-token budget is exhausted. Wait for 00:00 UTC.');
 });

@@ -3,17 +3,24 @@ import { AxiosError } from 'axios';
 
 import {
   type AssignmentConfirmedSnapshot,
+  type CalendarSetupDto,
   type ConfirmAssignmentSessionStepRequest,
+  calendarSetupRequestSchema,
   effectiveAssignmentMaterial,
   emptyAssignmentMaterial,
   parseAssignmentV1,
+  type StudentCreditEventDto,
+  type StudentPaymentRecordDto,
   serializeAssignmentV1,
 } from '@esl-pipeline/contracts';
 
+import type { ProfileContentResponse, ProfileRevisionDetailResponse } from '../utils/api';
+import { dateInputInTimezone } from '../utils/scheduling-time';
 import { editorFixture } from './assignment-editor-fixture';
 import assignmentFixture from './assignment-fixture.json';
 import { createBusinessSandbox } from './business-sandbox';
 import type { FrontendSandboxScenario } from './frontend-sandbox';
+import { createProfileMaintenanceSandbox } from './profile-maintenance-sandbox';
 import { studentActivitySandbox } from './student-activity-sandbox';
 
 const now = '2026-07-03T00:00:00.000Z';
@@ -31,6 +38,21 @@ function responseFor(config: InternalAxiosRequestConfig, data: unknown): AxiosRe
     statusText: 'OK',
     headers: {},
     config,
+  };
+}
+
+function demoCalendarSetup(id: string, count: number): CalendarSetupDto {
+  return {
+    id,
+    operations: Array.from({ length: count }, (_, slotIndex) => ({
+      id: `${id}-${slotIndex}`,
+      parentId: id,
+      kind: 'create',
+      state: 'succeeded',
+      errorCode: null,
+      slotIndex,
+      eventUrl: null,
+    })),
   };
 }
 
@@ -259,6 +281,7 @@ function profileContent() {
       teacherNotes: 'Keep examples grounded in real workplace situations.',
     },
     currentRevisionId: 'profile-revision-sandbox',
+    activeRevisionId: 'profile-revision-sandbox',
     updatedAt: now,
   };
 }
@@ -301,6 +324,7 @@ function firstProfileContent() {
     content: 'Cora wants practical English for short client updates.',
     structuredContent: firstProfileDraftStructuredContent(),
     currentRevisionId: sandboxFirstProfileRevisionId,
+    activeRevisionId: null,
     updatedAt: now,
   };
 }
@@ -319,6 +343,8 @@ function profileRevisionSummary() {
     createdAt: now,
     createdBy: 'sandbox-tutor',
     restoredFromRevisionId: null,
+    baseActiveRevisionId: null,
+    baseActiveRevisionKnown: false,
   };
 }
 
@@ -336,6 +362,8 @@ function profileRevisionHistorySummary(versionNumber: number) {
     createdAt: now,
     createdBy: 'sandbox-tutor',
     restoredFromRevisionId: null,
+    baseActiveRevisionId: null,
+    baseActiveRevisionKnown: false,
   };
 }
 
@@ -395,6 +423,8 @@ function profileDraftReviewRevision(overrides: Record<string, unknown> = {}) {
     createdAt: now,
     createdBy: 'sandbox-tutor',
     restoredFromRevisionId: null,
+    baseActiveRevisionId: 'profile-revision-sandbox',
+    baseActiveRevisionKnown: true,
     content: '# Foundational Profile\n\nSandbox profile draft refreshed from approved candidates.',
     structuredContent: profileDraftReviewStructuredContent(),
     ...overrides,
@@ -479,6 +509,11 @@ function memoryOverview() {
     recentReadyLessonMemory: [
       {
         id: 'lesson-memory-sandbox',
+        recordingId: 'recording-sandbox',
+        transcriptId: 'transcript-sandbox',
+        sourceContentHash: 'a'.repeat(64),
+        generatedAt: now,
+        lessonTitle: 'Project updates and follow-up questions',
         studentId: 'student-alex',
         lessonId: 'lesson-sandbox-next',
         status: 'ready',
@@ -490,6 +525,7 @@ function memoryOverview() {
     recentReadyHomeworkMemory: [
       {
         id: 'homework-memory-sandbox',
+        generatedAt: now,
         studentId: 'student-alex',
         jobId: 'job-sandbox',
         status: 'ready',
@@ -560,6 +596,11 @@ function firstProfileMemoryOverview() {
     recentReadyLessonMemory: [
       {
         id: 'lesson-memory-cora',
+        recordingId: sandboxFirstProfileRecordingId,
+        transcriptId: sandboxFirstProfileTranscriptId,
+        sourceContentHash: 'e'.repeat(64),
+        generatedAt: now,
+        lessonTitle: 'Client updates and clarification',
         studentId: sandboxFirstProfileStudentId,
         lessonId: 'lesson-cora-first',
         status: 'ready',
@@ -853,14 +894,14 @@ function profileCandidateList() {
   };
 }
 
-function scheduleBillingSurface() {
+function scheduleBillingSurface(timezone: string) {
   const surface = {
     studentId: 'student-alex',
     workspaceId: 'workspace-sandbox',
     lessonPlan: {
       studentId: 'student-alex',
       workspaceId: 'workspace-sandbox',
-      timezone: 'Asia/Saigon',
+      timezone,
       defaultDurationMinutes: 60,
       schedulingNotes: 'Sandbox lesson data for local UI testing.',
       updatedAt: now,
@@ -870,7 +911,7 @@ function scheduleBillingSurface() {
       studentId: 'student-alex',
       workspaceId: 'workspace-sandbox',
       startsAt: '2026-07-04T11:00:00.000Z',
-      timezone: 'Asia/Saigon',
+      timezone,
       durationMinutes: 60,
       status: 'scheduled',
       consumesCredit: true,
@@ -932,7 +973,7 @@ function scheduleBillingSurface() {
     nextLesson: upcoming[0],
     lessons: upcoming.slice(-30).reverse(),
     lessonWindows: {
-      timezone: 'Asia/Saigon',
+      timezone,
       date: '2026-07-03',
       today,
       recent: { items: recent.slice(0, 10), nextCursor: 'recent:10' },
@@ -1123,6 +1164,134 @@ export function createFrontendSandboxApiAdapter(
   sandboxFirstProfileLessonMemoryConfirmed = false;
   sandboxFirstProfileLessonMemoryHealthPolls = 0;
   const businessSandbox = createBusinessSandbox();
+  const profileSandbox = createProfileMaintenanceSandbox(
+    profileContent() as ProfileContentResponse,
+    profileDraftReviewRevision() as ProfileRevisionDetailResponse,
+    profileDraftReviewRevision({
+      id: sandboxFirstProfileRevisionId,
+      studentId: sandboxFirstProfileStudentId,
+      baseActiveRevisionId: null,
+      structuredContent: firstProfileDraftStructuredContent(),
+    }) as ProfileRevisionDetailResponse,
+    profileRevisionList().items.map((revision) => ({
+      ...revision,
+      content: profileContent().content,
+      structuredContent: profileContent().structuredContent,
+    })) as ProfileRevisionDetailResponse[],
+  );
+  const getSandboxTimezone = () =>
+    (
+      businessSandbox('get', '/business/settings', new URLSearchParams(), {}) as {
+        timezone: string;
+      }
+    ).timezone;
+  const lessonPlanEdits = new Map<
+    string,
+    { defaultDurationMinutes: number; schedulingNotes: string | null; updatedAt: string }
+  >();
+  const calendarPreview = scenario === 'calendar-setup';
+  const billingPayments: StudentPaymentRecordDto[] = [];
+  const billingCredits: StudentCreditEventDto[] = [];
+  const demoPayment: StudentPaymentRecordDto = {
+    id: 'demo-package-payment',
+    studentId: 'student-alex',
+    workspaceId: 'workspace-sandbox',
+    amountMinor: 16000,
+    currency: 'USD',
+    method: 'Bank transfer',
+    receivedAt: '2026-06-26',
+    externalUrl: null,
+    note: 'June lesson package',
+    voidedAt: null,
+    createdAt: '2026-06-26T09:00:00.000Z',
+  };
+  const getScheduleBillingSurface = (studentId = 'student-alex') => {
+    const surface = scheduleBillingSurface(getSandboxTimezone());
+    const creditEvents = billingCredits.filter((event) => event.studentId === studentId);
+    const added = creditEvents
+      .filter((event) => event.eventType === 'credit_added')
+      .reduce((total, event) => total + event.quantityDelta, 0);
+    const adjusted = creditEvents
+      .filter((event) => event.eventType === 'credit_adjusted')
+      .reduce((total, event) => total + event.quantityDelta, 0);
+    const remaining = surface.creditSummary.remaining + added + adjusted;
+    const payments = billingPayments.filter((payment) => payment.studentId === studentId);
+    if (calendarPreview && studentId === demoPayment.studentId) {
+      payments.push(demoPayment);
+      const fixtureCredit = {
+        studentId,
+        workspaceId: demoPayment.workspaceId,
+        note: null,
+        voidedAt: null,
+      };
+      creditEvents.push({
+        ...fixtureCredit,
+        id: 'demo-package-credit',
+        eventType: 'credit_added',
+        quantityDelta: surface.creditSummary.purchased,
+        sourceLessonId: null,
+        sourcePaymentId: demoPayment.id,
+        createdAt: demoPayment.createdAt,
+      });
+      for (const lesson of surface.lessonWindows.recent.items.slice(
+        0,
+        surface.creditSummary.consumed,
+      )) {
+        creditEvents.push({
+          ...fixtureCredit,
+          id: `demo-charge-${lesson.id}`,
+          eventType: 'credit_consumed',
+          quantityDelta: -1,
+          sourceLessonId: lesson.id,
+          sourcePaymentId: null,
+          createdAt: lesson.startsAt,
+        });
+      }
+    }
+    return {
+      ...surface,
+      studentId,
+      lessonPlan: { ...surface.lessonPlan, studentId, ...lessonPlanEdits.get(studentId) },
+      creditEvents,
+      creditSummary: {
+        ...surface.creditSummary,
+        purchased: surface.creditSummary.purchased + added,
+        adjustments: surface.creditSummary.adjustments + adjusted,
+        remaining,
+        isLow: remaining <= surface.creditSummary.lowBalanceThreshold,
+        isNegative: remaining < 0,
+      },
+      payments: payments.sort((left, right) => right.receivedAt.localeCompare(left.receivedAt)),
+    };
+  };
+  const demoCalendarGrant = {
+    id: 'e3232f44-2f52-4bac-ab09-866e111d1ba6',
+    googleEmail: 'calendar-demo@example.test',
+  };
+  const demoCalendar = { id: 'demo-lessons', summary: 'Demo lessons', accessRole: 'owner' };
+  let demoCalendarEvents = calendarPreview
+    ? [
+        {
+          id: 'demo-conversation',
+          title: 'Conversation practice',
+          startsAt: new Date(Date.now() + 86_400_000).toISOString(),
+          recurring: false,
+          eventUrl: null,
+        },
+        {
+          id: 'demo-weekly-english',
+          title: 'Weekly English lesson',
+          startsAt: new Date(Date.now() + 172_800_000).toISOString(),
+          recurring: true,
+          eventUrl: null,
+        },
+      ]
+    : [];
+  let calendarAuthorized =
+    calendarPreview &&
+    new URLSearchParams(window.location.search).get('calendarPreview') === 'authorized';
+  let calendarSelected = false;
+  let demoLastSyncedAt: string | null = null;
 
   // New students belong to this sandbox instance, never to a seeded learner.
 
@@ -1168,6 +1337,8 @@ export function createFrontendSandboxApiAdapter(
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const method = (config.method ?? 'get').toLowerCase();
     const path = normalizePath(config.url);
+    const profileResult = profileSandbox.handle(config, path);
+    if (profileResult !== undefined) return responseFor(config, profileResult);
 
     if (method === 'post' && path === '/students') {
       const body = readRequestBody(config.data);
@@ -1193,6 +1364,7 @@ export function createFrontendSandboxApiAdapter(
             studentId: id,
 
             currentRevisionId: `profile-${id}-v1`,
+            activeRevisionId: `profile-${id}-v1`,
 
             updatedAt: now,
 
@@ -1227,6 +1399,7 @@ export function createFrontendSandboxApiAdapter(
         : null;
 
       createdStudents.set(id, { student, profile });
+      profileSandbox.register(id, profile as ProfileContentResponse | null);
 
       return responseFor(config, student);
     }
@@ -1236,7 +1409,8 @@ export function createFrontendSandboxApiAdapter(
     const createdStudent = studentRoute && createdStudents.get(studentRoute[1]!);
 
     if (createdStudent && method === 'get') {
-      const { student, profile } = createdStudent;
+      const { student } = createdStudent;
+      const profile = profileSandbox.getProfile(student.id);
 
       const revision = profile
         ? {
@@ -1612,22 +1786,91 @@ export function createFrontendSandboxApiAdapter(
         return responseFor(config, editorDraft);
       }
     }
-    if (method === 'get' && /^\/workspaces\/[^/]+\/calendar\/connection$/.test(path))
+    const calendarRoute = /^\/workspaces\/([^/]+)\/calendar\/(.+)$/.exec(path);
+    const calendarAction = calendarRoute?.[2];
+    if (calendarPreview) {
+      if (method === 'post' && calendarAction === 'connect') {
+        const returnTo = new URL(window.location.href);
+        returnTo.searchParams.set('sandboxScenario', 'calendar-setup');
+        returnTo.searchParams.set('calendarPreview', 'authorized');
+        returnTo.hash = 'teaching-calendar';
+        return responseFor(config, { authorizationUrl: returnTo.href });
+      }
+      if (method === 'get' && calendarAction === 'calendars' && calendarAuthorized)
+        return responseFor(config, {
+          calendars: [{ ...demoCalendar, timeZone: getSandboxTimezone() }],
+        });
+      if (method === 'post' && calendarAction === 'select' && calendarAuthorized) {
+        calendarSelected = readRequestBody(config.data).calendarId === demoCalendar.id;
+        demoLastSyncedAt = null;
+        return responseFor(config, {});
+      }
+      if (method === 'post' && calendarAction === 'disconnect') {
+        calendarAuthorized = false;
+        calendarSelected = false;
+        demoLastSyncedAt = null;
+        return responseFor(config, {});
+      }
+      if (method === 'post' && calendarAction === 'sync' && calendarSelected) {
+        await new Promise((resolve) => setTimeout(resolve, 650));
+        if (calendarSelected) demoLastSyncedAt = new Date().toISOString();
+        return responseFor(config, {});
+      }
+      if (method === 'get' && calendarAction === 'unlinked-events' && calendarSelected)
+        return responseFor(config, { events: demoCalendarEvents, nextPageToken: null });
+      if (method === 'post' && calendarAction === 'bindings' && calendarSelected) {
+        const { eventId } = readRequestBody(config.data);
+        if (!demoCalendarEvents.some((event) => event.id === eventId)) throw notFoundFor(config);
+        demoCalendarEvents = demoCalendarEvents.filter((event) => event.id !== eventId);
+        return responseFor(config, {});
+      }
+      if (
+        method === 'post' &&
+        calendarSelected &&
+        /^\/workspaces\/[^/]+\/students\/[^/]+\/calendar\/setups$/.test(path)
+      ) {
+        const request = calendarSetupRequestSchema.parse(readRequestBody(config.data));
+        const id = crypto.randomUUID();
+        localStorage.setItem(`calendar-demo-setup:${id}`, String(request.slots.length));
+        return responseFor(config, demoCalendarSetup(id, request.slots.length));
+      }
+      if (method === 'get' && calendarAction?.startsWith('setups/')) {
+        const id = calendarAction.slice('setups/'.length);
+        const count = Number(localStorage.getItem(`calendar-demo-setup:${id}`));
+        if (Number.isInteger(count) && count >= 1 && count <= 20)
+          return responseFor(config, demoCalendarSetup(id, count));
+      }
+    }
+    const calendarConnectionId = calendarSelected ? '08503855-81a2-479d-81fd-2f90e58a63ab' : null;
+    if (method === 'get' && calendarAction === 'connection')
       return responseFor(config, {
-        enabled: false,
+        enabled: calendarPreview,
         canManage: true,
         canSchedule: true,
-        unavailableReason: 'google_calendar_disabled',
-        connection: null,
-        grant: null,
+        unavailableReason: calendarPreview ? null : 'google_calendar_disabled',
+        connection: calendarConnectionId
+          ? {
+              id: calendarConnectionId,
+              workspaceId: calendarRoute?.[1],
+              calendarId: demoCalendar.id,
+              calendarName: demoCalendar.summary,
+              calendarTimezone: getSandboxTimezone(),
+              googleEmail: demoCalendarGrant.googleEmail,
+              generation: 1,
+              status: 'connected',
+              lastSyncedAt: demoLastSyncedAt,
+              errorCode: null,
+            }
+          : null,
+        grant: calendarAuthorized ? demoCalendarGrant : null,
       });
-    if (method === 'get' && /^\/workspaces\/[^/]+\/calendar\/scheduling-status$/.test(path))
+    if (method === 'get' && calendarAction === 'scheduling-status')
       return responseFor(config, {
-        state: 'disconnected',
-        connectionId: null,
-        calendarName: null,
-        googleEmail: null,
-        lastSyncedAt: null,
+        state: calendarSelected ? 'synced' : 'disconnected',
+        connectionId: calendarConnectionId,
+        calendarName: calendarSelected ? demoCalendar.summary : null,
+        googleEmail: calendarAuthorized ? demoCalendarGrant.googleEmail : null,
+        lastSyncedAt: demoLastSyncedAt,
         errorCode: null,
         operations: [],
       });
@@ -1655,7 +1898,10 @@ export function createFrontendSandboxApiAdapter(
       for (const [name, value] of Object.entries(config.params ?? {})) {
         if (value !== undefined) query.set(name, String(value));
       }
-      return responseFor(config, studentActivitySandbox(activityMatch[1]!, query));
+      return responseFor(
+        config,
+        studentActivitySandbox(activityMatch[1]!, query, getSandboxTimezone()),
+      );
     }
 
     if (isSlowScenarioRequest(scenario, method, path)) {
@@ -1672,7 +1918,6 @@ export function createFrontendSandboxApiAdapter(
             ? []
             : [
                 { id: 'student-alex', name: 'Alex' },
-                { id: 'student-bella', name: 'Bella' },
                 { id: sandboxFirstProfileStudentId, name: 'Cora Preview' },
 
                 ...Array.from(createdStudents.values(), ({ student }) => ({
@@ -1729,8 +1974,8 @@ export function createFrontendSandboxApiAdapter(
 
     if (method === 'get' && path === '/students/student-alex/surfaces/overview') {
       return responseFor(config, {
-        profile: profileContent(),
-        revisions: profileRevisionList(),
+        profile: profileSandbox.getProfile('student-alex'),
+        revisions: profileSandbox.listRevisions('student-alex'),
         memory:
           scenario === 'student-availability'
             ? {
@@ -1758,14 +2003,22 @@ export function createFrontendSandboxApiAdapter(
           offset: 0,
           order: 'desc',
         },
-        scheduleBilling: scheduleBillingSurface(),
+        scheduleBilling: getScheduleBillingSurface(),
       });
     }
 
+    if (method === 'get' && path === '/students/student-alex/memory')
+      return responseFor(config, memoryOverview());
+    if (method === 'get' && path === '/students/student-alex/memory/health')
+      return responseFor(config, memoryHealth());
+    if (method === 'get' && path === `/students/${sandboxFirstProfileStudentId}/memory`)
+      return responseFor(config, firstProfileMemoryOverview());
+
     if (method === 'get' && path === '/students/student-alex/surfaces/learning') {
       return responseFor(config, {
-        profile: profileContent(),
-        revisions: profileRevisionList(),
+        profile: profileSandbox.getProfile('student-alex'),
+        activeRevisionId: profileSandbox.getProfile('student-alex')?.activeRevisionId ?? null,
+        revisions: profileSandbox.listRevisions('student-alex'),
         memory: memoryOverview(),
         memoryHealth: memoryHealth(),
         candidates: profileCandidateList(),
@@ -1777,8 +2030,10 @@ export function createFrontendSandboxApiAdapter(
       path === `/students/${sandboxFirstProfileStudentId}/surfaces/learning`
     ) {
       return responseFor(config, {
-        profile: null,
-        revisions: { items: [], total: 0, limit: 25, offset: 0, order: 'desc' },
+        profile: profileSandbox.getProfile(sandboxFirstProfileStudentId),
+        activeRevisionId:
+          profileSandbox.getProfile(sandboxFirstProfileStudentId)?.activeRevisionId ?? null,
+        revisions: profileSandbox.listRevisions(sandboxFirstProfileStudentId),
         memory: firstProfileMemoryOverview(),
         memoryHealth: firstProfileMemoryHealth(),
         candidates: emptyCandidateList(),
@@ -1883,11 +2138,19 @@ export function createFrontendSandboxApiAdapter(
       if (scenario === 'step-one-no-recent') {
         return responseFor(config, { jobs: [], total: 0, limit: 20, offset: 0 });
       }
-      if (scenario === 'step-one-resume-states') {
-        const jobs = resumeStateJobs();
-        return responseFor(config, { jobs, total: jobs.length, limit: 20, offset: 0 });
-      }
-      return responseFor(config, { jobs: [jobStatus()], total: 1, limit: 20, offset: 0 });
+      const jobs = scenario === 'step-one-resume-states' ? resumeStateJobs() : [jobStatus()];
+      const search = new URL(config.url ?? '/', 'http://sandbox.local').searchParams;
+      const studentId = readStudentIdParam(config) ?? search.get('studentId');
+      const filtered = studentId ? jobs.filter((job) => job.studentId === studentId) : jobs;
+      const params = config.params as { limit?: number; offset?: number } | undefined;
+      const limit = params?.limit ?? Number(search.get('limit') ?? 20);
+      const offset = params?.offset ?? Number(search.get('offset') ?? 0);
+      return responseFor(config, {
+        jobs: filtered.slice(offset, offset + limit),
+        total: filtered.length,
+        limit,
+        offset,
+      });
     }
 
     if (method === 'get' && path === '/user/assignment-sessions') {
@@ -2432,7 +2695,7 @@ export function createFrontendSandboxApiAdapter(
     }
 
     if (method === 'get' && path === '/students/student-alex/lessons') {
-      const surface = scheduleBillingSurface();
+      const surface = getScheduleBillingSurface();
       const window = config.params?.window === 'recent' ? 'recent' : 'upcoming';
       const offset = Number(String(config.params?.cursor).split(':')[1]);
       const rows = surface.sandboxLessons[window];
@@ -2443,33 +2706,129 @@ export function createFrontendSandboxApiAdapter(
     }
     if (method === 'get' && path.startsWith('/students/student-alex/lessons/')) {
       const id = decodeURIComponent(path.split('/').at(-1) ?? '');
-      const rows = Object.values(scheduleBillingSurface().sandboxLessons).flat();
+      const rows = Object.values(getScheduleBillingSurface().sandboxLessons).flat();
       const lesson = rows.find((item) => item.id === id);
       if (lesson) return responseFor(config, lesson);
       throw new AxiosError('Lesson not found', '404', config);
     }
-    if (method === 'get' && path === '/students/student-alex/surfaces/schedule-billing') {
-      return responseFor(config, scheduleBillingSurface());
-    }
-
+    const readScheduleBilling =
+      method === 'get' && studentRoute?.[2] === '/surfaces/schedule-billing';
+    const saveLessonPlan = method === 'put' && studentRoute?.[2] === '/operations/lesson-plan';
+    const addPackage = method === 'post' && studentRoute?.[2] === '/packages';
+    const recordPayment = method === 'post' && studentRoute?.[2] === '/payments';
+    const adjustCredits = method === 'post' && studentRoute?.[2] === '/credits/adjustments';
+    const scheduleStudentId = studentRoute?.[1];
     if (
-      method === 'get' &&
-      path === `/students/${sandboxFirstProfileStudentId}/surfaces/schedule-billing`
+      (readScheduleBilling || saveLessonPlan || addPackage || recordPayment || adjustCredits) &&
+      (scheduleStudentId === 'student-alex' || scheduleStudentId === sandboxFirstProfileStudentId)
     ) {
-      return responseFor(config, {
-        ...scheduleBillingSurface(),
-        studentId: sandboxFirstProfileStudentId,
-        student: {
-          studentId: sandboxFirstProfileStudentId,
-          displayName: 'Cora Preview',
-          defaultRateMinor: 4000,
-          packageBalance: 0,
-          lowCreditThreshold: 2,
-          archivedAt: null,
-          createdAt: now,
-          updatedAt: now,
-        },
-      });
+      if (saveLessonPlan) {
+        const body = readRequestBody(config.data);
+        lessonPlanEdits.set(scheduleStudentId, {
+          defaultDurationMinutes:
+            typeof body.defaultDurationMinutes === 'number' ? body.defaultDurationMinutes : 60,
+          schedulingNotes: typeof body.schedulingNotes === 'string' ? body.schedulingNotes : null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      if (addPackage || recordPayment) {
+        const body = readRequestBody(config.data);
+        const payment = recordPayment
+          ? body
+          : body.payment == null
+            ? null
+            : readRequestBody(body.payment);
+        const lessons = Number(body.lessons);
+        if (addPackage && (!Number.isInteger(lessons) || lessons < 1 || lessons > 500)) {
+          throw scenarioErrorFor(config, 'Enter 1 to 500 lessons.');
+        }
+        const recordedAt = new Date();
+        const workspaceId = 'workspace-sandbox';
+        let sourcePaymentId: string | null = null;
+        if (payment) {
+          const amountMinor = Number(payment.amountMinor);
+          if (
+            !Number.isInteger(amountMinor) ||
+            amountMinor < 1 ||
+            typeof payment.currency !== 'string'
+          ) {
+            throw scenarioErrorFor(config, 'Enter a payment amount and currency.');
+          }
+          sourcePaymentId = crypto.randomUUID();
+          billingPayments.unshift({
+            id: sourcePaymentId,
+            studentId: scheduleStudentId,
+            workspaceId,
+            amountMinor,
+            currency: payment.currency,
+            method: typeof payment.method === 'string' ? payment.method : null,
+            receivedAt:
+              typeof payment.receivedAt === 'string'
+                ? payment.receivedAt
+                : dateInputInTimezone(recordedAt, getSandboxTimezone()),
+            externalUrl: null,
+            note: typeof payment.note === 'string' ? payment.note : null,
+            voidedAt: null,
+            createdAt: recordedAt.toISOString(),
+          });
+        }
+        if (addPackage) {
+          billingCredits.unshift({
+            id: crypto.randomUUID(),
+            studentId: scheduleStudentId,
+            workspaceId,
+            eventType: 'credit_added',
+            quantityDelta: lessons,
+            sourceLessonId: null,
+            sourcePaymentId,
+            note: typeof body.note === 'string' ? body.note : null,
+            voidedAt: null,
+            createdAt: recordedAt.toISOString(),
+          });
+        }
+      }
+      if (adjustCredits) {
+        const body = readRequestBody(config.data);
+        const quantityDelta = Number(body.quantityDelta);
+        if (
+          !Number.isInteger(quantityDelta) ||
+          quantityDelta === 0 ||
+          Math.abs(quantityDelta) > 500
+        ) {
+          throw scenarioErrorFor(config, 'Enter an adjustment of 1 to 500 credits.');
+        }
+        billingCredits.unshift({
+          id: crypto.randomUUID(),
+          studentId: scheduleStudentId,
+          workspaceId: 'workspace-sandbox',
+          eventType: 'credit_adjusted',
+          quantityDelta,
+          sourceLessonId: null,
+          sourcePaymentId: null,
+          note: typeof body.note === 'string' ? body.note : null,
+          voidedAt: null,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      const surface = getScheduleBillingSurface(scheduleStudentId);
+      return responseFor(
+        config,
+        scheduleStudentId === sandboxFirstProfileStudentId
+          ? {
+              ...surface,
+              student: {
+                studentId: sandboxFirstProfileStudentId,
+                displayName: 'Cora Preview',
+                defaultRateMinor: 4000,
+                packageBalance: 0,
+                lowCreditThreshold: 2,
+                archivedAt: null,
+                createdAt: now,
+                updatedAt: now,
+              },
+            }
+          : surface,
+      );
     }
 
     if (method === 'post' && path === '/recordings/recording-sandbox/prompt-package') {

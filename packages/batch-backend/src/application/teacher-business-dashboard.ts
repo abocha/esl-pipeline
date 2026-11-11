@@ -56,6 +56,7 @@ interface BusinessLessonRow {
   duration_minutes: number;
   status: StudentLessonStatus;
   consumes_credit: boolean;
+  planned_charge: boolean | null;
   title: string | null;
   notes: string | null;
   credit_event_id: string | null;
@@ -951,6 +952,7 @@ function mapBusinessLesson(row: BusinessLessonRow): BusinessLessonDto {
     durationMinutes: row.duration_minutes,
     status: row.status,
     consumesCredit: row.consumes_credit,
+    plannedCharge: row.planned_charge,
     title: row.title ?? null,
     notes: row.notes ?? null,
     creditEventId: row.credit_event_id ?? null,

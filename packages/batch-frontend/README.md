@@ -37,6 +37,25 @@ Canonical behavior and current status live in:
 
 ## Runtime Notes
 
+- The integrated Calm Studio v2 presentation is selected with `VITE_CALM_STUDIO_V2=true`
+  at build time. The default remains v1. The frontend Dockerfile accepts the same build
+  argument; changing a running container's environment does not rewrite a built frontend.
+  V2 uses the authenticated application and real API controllers, with `/` for assignments,
+  `/assignments/new` for native authoring, `/day` for the agenda, and separate student
+  `/schedule` and `/billing` routes. Existing assignment deep links remain valid. The old
+  student `/schedule-billing` URL redirects to Schedule in v2.
+- Schedule and Billing retain one mounted controller and Calendar panel across the sibling
+  routes, including independent lesson cursors, form drafts, operation recovery and mutation
+  guards. Google remains authoritative for timing and recurrence. The v2 Calendar disclosure
+  keeps connection consent and provider actions available without crowding the agenda.
+- The v2 assignment list loads active work, completed history and jobs in pages. Filters and
+  search apply to loaded work and stay in the URL; older work remains available through Load
+  older assignments. Exact session/job links open the full native editor and publication
+  workflow. A succeeded job without a handout URL is not presented as published.
+- Use the [switch plan](../../docs/plans/calm-studio-v2-switch.md) for current acceptance and
+  coordinated backend/frontend requirements. Mock-auth browser checks establish presentation
+  and interaction evidence only; they do not establish persistence or provider execution.
+
 - All tutor-facing clocks use the authenticated workspace Business timezone through
   `WorkspaceTimezoneProvider`. The authenticated scope remounts when the user changes; settings
   load before clock-bearing routes render, with Retry and Logout when unavailable. A successful
@@ -149,6 +168,44 @@ Canonical behavior and current status live in:
   - Open `http://localhost:5173/business/schedule` for a fictional, in-memory Business preview;
     status changes and reminder hide/undo affect only that sandbox instance.
   - Sandbox scenarios are allow-listed through `sandboxScenario`; unknown values use the default:
+    - With `VITE_CALM_STUDIO_V2=true`, open
+      `/students/student-alex/schedule?sandboxScenario=calendar-setup#teaching-calendar` to try the
+      integrated Calendar drawer with a fictional account, calendar selection and lesson setup.
+      The Connect action returns to the local preview and lesson outcomes are simulated.
+    - `http://localhost:5173/?sandboxScenario=calm-studio-v2` opens the isolated Calm Studio v2
+      design prototype. `studioView=day`, `overview`, `learning`, `history`, `schedule`, `billing`,
+      `assignments`, `editor` or `settings` selects a workspace; `learner=alex`, `maria` or `daniel`
+      selects fictional context. The Preview states menu exposes missing/unavailable context,
+      disconnected Calendar, partial/failed creation and profile/assignment save failures.
+      Navigation, full profile edits/version drafts, separate learner assignments, confirmed source
+      and authentic-material entry, editable questions/answers/vocabulary/practice, local handout
+      snapshots/HTML downloads, calendar event simulation, recovery, payments and credit packages
+      use disposable React state and reset on reload. Teacher notes are excluded from preview/export;
+      transcript-only finish is separate from homework and credits. A completed lesson's charge
+      and corrections update the mock balance; payments do not create credits. New assignment links
+      report reset state after reload instead of opening another learner's work. Recurrence shows each
+      series' first occurrence. No backend, Google, invitation, generation or publication operation
+      is performed; this is interaction/design evidence, not validation of those contracts.
+      Lesson-linked homework previews completion and the one-credit debit before confirmation; canceling and reopening existing homework do not debit. Eligibility is rechecked at confirmation. Calendar details support newly added learners; version restore is blocked while a profile draft is dirty.
+      Learning separates the readable profile, background memory and exact teaching sources.
+      Daniel previews automatic first-lesson profile enrichment; Alex and Maria show fictional
+      automatic profile updates with an optional change log and per-item Undo. Undo keeps unrelated
+      updates and prevents the same evidence from reapplying that item; later tutor wording blocks
+      blind rollback. This proposes future profile maintenance, not the current backend candidate
+      approval behavior. A background profile update preserves an open tutor draft and requires
+      field comparison before saving. Preview states can simulate memory refresh/failure/retry;
+      failure retains the last ready context. Small state/disclosure transitions respect reduced motion.
+      Learning fixtures match the live surface's nine profile fields and denser multiline content,
+      with separate lesson memory, homework memory and open threads. Routine candidate approval
+      tasks are removed from Learning, Overview and Your day. Maria demonstrates a ready snapshot alongside
+      a later processing failure. All example learner facts remain fictional.
+      Learning leads with open threads and visible snapshot text; lesson transcripts and teaching notes open on demand. The selected learner level uses an outlined badge.
+      The shared sandbox uses a larger reading scale, tighter spacing and a full-width profile editor.
+      The same hierarchy and teal action/selection accent continue across Billing, Schedule, Your day,
+      Overview, History, settings and the assignment workspace. Both side lists align left. The roster's
+      - action adds a disposable student to the directory, assignment and scheduling pickers; a stale
+        student URL after reload shows the reset state instead of another learner's records.
+        The dev-only lazy entry and scoped styles leave the ordinary UI available for comparison.
     - `http://localhost:5173/?sandboxScenario=default`
     - `http://localhost:5173/?sandboxScenario=step-one-no-recent`
     - `http://localhost:5173/?sandboxScenario=step-one-resume-states`
@@ -400,3 +457,17 @@ and prompt-backed sessions open as read-only evidence with original text and pro
 Correction, regeneration, preview rendering, retry/recovery, rerun and autosave are unavailable for
 these records. The backend rejects legacy processing even when an old client requests it; no
 conversion is attempted. See [AssignmentV1 retirement](../../docs/reference/ASSIGNMENT_V1.md).
+
+## Lesson completion and charge review
+
+Schedule and Business offer manual completion once a lesson starts. A scheduled lesson's saved
+planned charge controls its completion cost; No-show costs zero. Legacy lessons with unknown intent
+ask for an explicit one-credit or No charge choice before the native lesson entry or completion.
+The charge editor writes planned intent for scheduled lessons and the existing recorded-charge
+correction for completed outcomes. Payments remain independent of lesson credits.
+
+Before lesson end, the v2 assignment action is Prepare homework. After end it is Complete & add
+homework; completed lessons offer Add homework. These enter the existing native assignment flow,
+where durable session linking owns automatic completion. Native requests carry the reviewed charge
+and status. If another writer changes them, the saved link remains available, no credit is consumed,
+and a fresh review is required before retry. The request ID/revision recovery path is preserved.

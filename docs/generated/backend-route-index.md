@@ -102,6 +102,8 @@
 | POST | `/students/:id/profile-candidates/promote` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-drafts/initialize` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-drafts/refresh-from-approved-candidates` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| GET | `/students/:id/profile/changes` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
+| POST | `/students/:id/profile/changes/:changeId/undo` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
 | GET | `/students/:id/profile/revisions` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
 | POST | `/students/:id/profile/revisions` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |
 | GET | `/students/:id/profile/revisions/:revisionId` | `packages/batch-backend/src/transport/extended-routes/student-profile-routes.ts` |

@@ -1,4 +1,6 @@
+import { BookOpen, ChevronRight, History, Pencil, Sparkles } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import type {
@@ -29,7 +31,13 @@ import {
   upsertProfileContent,
 } from '../../utils/api';
 import { formatTutorTime } from '../../utils/tutor-time';
+import { useStudioV2 } from '../studio-v2/StudioV2Context';
+import { StudioV2Dialog } from '../studio-v2/StudioV2Dialog';
+import { LoadingPlaceholder, PageLoading } from '../system/LoadingPlaceholder';
+import { LearningLessonContext } from './LearningLessonContext';
+import { LessonTranscriptDisclosure } from './LessonTranscriptDisclosure';
 import { ProfileCandidatesPanel } from './ProfileCandidatesPanel';
+import { ProfileUpdatesDialog } from './ProfileUpdatesDialog';
 import { useStudentAreaContext } from './StudentAreaContext';
 import {
   buildProfileDraftDiff,
@@ -192,12 +200,14 @@ interface LearningFieldProps {
   config: LearningFieldConfig;
   value: string;
   onChange: (key: ProfileFieldKey, value: string) => void;
+  disabled?: boolean;
 }
 
 interface LearningSectionCardProps {
   config: LearningSectionConfig;
   values: FoundationalProfileFormState;
   onChange: (key: ProfileFieldKey, value: string) => void;
+  disabled?: boolean;
 }
 
 function getLegacyProfileNotice(profile: {
@@ -233,6 +243,8 @@ function buildRevisionDetailFromProfile(
     createdAt: summary?.createdAt ?? profile.updatedAt ?? new Date().toISOString(),
     createdBy: summary?.createdBy ?? null,
     restoredFromRevisionId: summary?.restoredFromRevisionId ?? null,
+    baseActiveRevisionId: summary?.baseActiveRevisionId ?? null,
+    baseActiveRevisionKnown: summary?.baseActiveRevisionKnown ?? false,
     content: profile.content,
     structuredContent: profile.structuredContent,
   };
@@ -292,15 +304,20 @@ function MemoryHealthDetails({
   onToggle: () => void;
 }): React.JSX.Element {
   const snapshot = health?.latestSnapshot ?? null;
+  const studioV2 = useStudioV2();
   return (
     <section className="student-learning-memory-support">
       <button
         type="button"
-        className="workspace-secondary-btn student-learning-memory-support-toggle"
+        className={
+          studioV2
+            ? 'product-button product-button--quiet student-learning-memory-support-toggle'
+            : 'workspace-secondary-btn student-learning-memory-support-toggle'
+        }
         aria-expanded={open}
         onClick={onToggle}
       >
-        Memory support details
+        {studioV2 ? 'Memory details' : 'Memory support details'}
       </button>
       {open ? (
         <div className="student-learning-memory-support-body">
@@ -421,7 +438,12 @@ function LearningMetricCard({
   );
 }
 
-function LearningField({ config, value, onChange }: LearningFieldProps): React.JSX.Element {
+function LearningField({
+  config,
+  value,
+  onChange,
+  disabled,
+}: LearningFieldProps): React.JSX.Element {
   const inputId = `learning-${config.key}`;
   const fieldClassName =
     config.span === 'full'
@@ -437,6 +459,7 @@ function LearningField({ config, value, onChange }: LearningFieldProps): React.J
           name={config.key}
           type="text"
           autoComplete="off"
+          disabled={disabled}
           value={value}
           onChange={(event) => onChange(config.key, event.target.value)}
           placeholder={config.placeholder}
@@ -446,6 +469,7 @@ function LearningField({ config, value, onChange }: LearningFieldProps): React.J
           id={inputId}
           name={config.key}
           autoComplete="off"
+          disabled={disabled}
           value={value}
           onChange={(event) => onChange(config.key, event.target.value)}
           rows={config.rows ?? 4}
@@ -460,6 +484,7 @@ function LearningSectionCard({
   config,
   values,
   onChange,
+  disabled,
 }: LearningSectionCardProps): React.JSX.Element {
   return (
     <section className="student-learning-section-card">
@@ -475,9 +500,40 @@ function LearningSectionCard({
             config={field}
             value={values[field.key]}
             onChange={onChange}
+            disabled={disabled}
           />
         ))}
       </div>
+    </section>
+  );
+}
+
+function MemoryEntriesSection({
+  collapsible,
+  title,
+  count,
+  children,
+}: {
+  collapsible: boolean;
+  title: string;
+  count?: number;
+  children: React.ReactNode;
+}) {
+  return collapsible ? (
+    <details className="student-learning-memory-column">
+      <summary>
+        <span>
+          {title}
+          {count !== undefined && <span className="student-v2-memory-count">{count}</span>}
+        </span>
+        <ChevronRight size={16} aria-hidden="true" />
+      </summary>
+      {children}
+    </details>
+  ) : (
+    <section className="student-learning-memory-column">
+      <h3>{title}</h3>
+      {children}
     </section>
   );
 }
@@ -598,6 +654,16 @@ function describeCandidateOmissions(omissions: Array<{ reason: string }>): strin
 }
 
 export const StudentLearningPage: React.FC = () => {
+  const studioV2 = useStudioV2();
+  const [editing, setEditing] = useState(false);
+  const [profilePanel, setProfilePanel] = useState<'versions' | 'suggestions' | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const profileHeadingRef = useRef<HTMLHeadingElement>(null);
+  const profileEditorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (studioV2 && editing)
+      profileEditorRef.current?.querySelector<HTMLInputElement>('input, textarea')?.focus();
+  }, [studioV2, editing]);
   const timezone = useWorkspaceTimezone();
   const formatDateTime = (value?: string | null) => formatTutorTime(value, timezone);
   const { student, studentId, studentLoading, studentError, refreshStudent } =
@@ -626,6 +692,16 @@ export const StudentLearningPage: React.FC = () => {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileLegacyNotice, setProfileLegacyNotice] = useState<string | null>(null);
+  const [bufferActiveRevisionId, setBufferActiveRevisionId] = useState<string | null | undefined>(
+    undefined,
+  );
+  const [latestProfile, setLatestProfile] = useState<ProfileContentResponse | null>(null);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [comparisonBusy, setComparisonBusy] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [draftNeedsSave, setDraftNeedsSave] = useState(false);
+  const [updatesOpen, setUpdatesOpen] = useState(false);
+  const profileRefreshRequestRef = useRef(0);
 
   const [memoryOverview, setMemoryOverview] = useState<StudentMemoryOverviewResponse | null>(null);
   const [memoryHealth, setMemoryHealth] = useState<StudentMemoryHealthResponse | null>(null);
@@ -660,6 +736,16 @@ export const StudentLearningPage: React.FC = () => {
     () => getProfileSnapshot(profileForm) !== getProfileSnapshot(loadedProfileForm),
     [profileForm, loadedProfileForm],
   );
+  const reviewDirty =
+    Object.entries(profileCandidateDrafts).some(([id, draft]) => {
+      const candidate = profileCandidates.find((item) => item.id === id);
+      return (
+        candidate &&
+        (draft.reviewerNote !== (candidate.reviewerNote ?? '') ||
+          draft.approvedFactText !== (candidate.approvedFactText ?? candidate.proposedFact))
+      );
+    }) || profileCandidatePromotionNote.trim() !== '';
+
   const profileDraftDiffItems = useMemo(
     () =>
       currentRevision?.status === 'draft' && profileDraftDiffBase
@@ -682,6 +768,9 @@ export const StudentLearningPage: React.FC = () => {
 
   const profileVersionDisplay = useMemo(() => {
     const currentRevisionId = currentRevision?.id ?? null;
+    const current = studioV2
+      ? profileRevisions.find((revision) => revision.id === currentRevisionId)
+      : undefined;
     const nonCurrentRevisions = profileRevisions.filter(
       (revision) => revision.id !== currentRevisionId,
     );
@@ -694,10 +783,14 @@ export const StudentLearningPage: React.FC = () => {
     const cappedRevisions = showAllProfileVersions ? olderRevisions : olderRevisions.slice(0, 3);
 
     return {
-      visibleRevisions: activeRevision ? [activeRevision, ...cappedRevisions] : cappedRevisions,
+      visibleRevisions: [
+        ...(current ? [current] : []),
+        ...(activeRevision ? [activeRevision] : []),
+        ...cappedRevisions,
+      ],
       hiddenCount: showAllProfileVersions ? 0 : Math.max(0, olderRevisions.length - 3),
     };
-  }, [currentRevision?.id, profileRevisions, showAllProfileVersions]);
+  }, [currentRevision?.id, profileRevisions, showAllProfileVersions, studioV2]);
   const visibleProfileRevisions = profileVersionDisplay.visibleRevisions;
   const hiddenProfileRevisionCount = profileVersionDisplay.hiddenCount;
 
@@ -710,6 +803,17 @@ export const StudentLearningPage: React.FC = () => {
     setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
     setProfileDraftDiffBase(null);
     setProfileLegacyNotice(null);
+    setBufferActiveRevisionId(undefined);
+    setLatestProfile(null);
+    setComparisonOpen(false);
+    setComparisonError(null);
+    setComparisonBusy(false);
+    setDraftNeedsSave(false);
+    setUpdatesOpen(false);
+    setEditing(false);
+    setProfilePanel(null);
+    setConfirmDiscard(false);
+    profileRefreshRequestRef.current += 1;
     setMemoryOverview(null);
     setMemoryHealth(null);
     setMemoryHealthDetailsOpen(false);
@@ -736,7 +840,7 @@ export const StudentLearningPage: React.FC = () => {
   }, [approvedCandidateIdsReadyForPromotion]);
 
   useEffect(() => {
-    if (!profileDirty) return undefined;
+    if (!profileDirty && !draftNeedsSave) return undefined;
 
     const beforeUnloadHandler = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -745,7 +849,7 @@ export const StudentLearningPage: React.FC = () => {
 
     window.addEventListener('beforeunload', beforeUnloadHandler);
     return () => window.removeEventListener('beforeunload', beforeUnloadHandler);
-  }, [profileDirty]);
+  }, [profileDirty, draftNeedsSave]);
 
   const isCurrentPageLoadRequest = useCallback(
     (requestId: number) => latestPageLoadRequestRef.current === requestId,
@@ -765,13 +869,27 @@ export const StudentLearningPage: React.FC = () => {
       setLoadedProfileForm(form);
       setProfileDraftDiffBase(null);
       setProfileLegacyNotice(getLegacyProfileNotice(revision));
+      if (revision.status === 'draft') {
+        setBufferActiveRevisionId(
+          revision.baseActiveRevisionKnown ? revision.baseActiveRevisionId : undefined,
+        );
+        setComparisonOpen(
+          !revision.baseActiveRevisionKnown ||
+            revision.baseActiveRevisionId !== latestProfile?.activeRevisionId,
+        );
+      } else {
+        setBufferActiveRevisionId(latestProfile?.activeRevisionId);
+        setComparisonOpen(false);
+      }
+      setDraftNeedsSave(false);
       return revision;
     },
-    [isCurrentPageLoadRequest],
+    [isCurrentPageLoadRequest, latestProfile?.activeRevisionId],
   );
 
   const loadProfileSurface = useCallback(
     async (requestId: number) => {
+      profileRefreshRequestRef.current += 1;
       if (!profileStudentId) {
         if (!isCurrentPageLoadRequest(requestId)) {
           return;
@@ -822,6 +940,20 @@ export const StudentLearningPage: React.FC = () => {
         setProfileDraftDiffBase(null);
         setProfileRevisions(revisions.items ?? []);
         setProfileLegacyNotice(getLegacyProfileNotice(revision ?? profile));
+        setBufferActiveRevisionId(
+          revision?.status === 'draft'
+            ? revision.baseActiveRevisionKnown
+              ? revision.baseActiveRevisionId
+              : undefined
+            : profile.activeRevisionId,
+        );
+        setLatestProfile(profile);
+        setComparisonOpen(
+          revision?.status === 'draft' &&
+            (!revision.baseActiveRevisionKnown ||
+              revision.baseActiveRevisionId !== profile.activeRevisionId),
+        );
+        setDraftNeedsSave(false);
       } catch (error) {
         if (!isCurrentPageLoadRequest(requestId)) {
           return;
@@ -948,6 +1080,8 @@ export const StudentLearningPage: React.FC = () => {
         }
 
         setProfileAvailable(Boolean(surface.profile));
+        setBufferActiveRevisionId(surface.profile?.activeRevisionId ?? null);
+        setLatestProfile(surface.profile);
         if (surface.profile) {
           const currentSummary = findCurrentProfileRevisionSummary(
             surface.profile,
@@ -960,6 +1094,15 @@ export const StudentLearningPage: React.FC = () => {
           const form = foundationalProfileToFormState(
             revision?.structuredContent ?? surface.profile.structuredContent,
           );
+          if (revision?.status === 'draft') {
+            setBufferActiveRevisionId(
+              revision.baseActiveRevisionKnown ? revision.baseActiveRevisionId : undefined,
+            );
+            setComparisonOpen(
+              !revision.baseActiveRevisionKnown ||
+                revision.baseActiveRevisionId !== surface.profile.activeRevisionId,
+            );
+          }
           setProfileAvailable(true);
           setCurrentRevision(revision);
           setProfileForm(form);
@@ -1004,6 +1147,62 @@ export const StudentLearningPage: React.FC = () => {
     };
   }, [clearLoadedLearningSurface, isCurrentPageLoadRequest, studentId, learningRetryCount]);
 
+  const refreshLatestProfile = useCallback(async () => {
+    const page = latestPageLoadRequestRef.current;
+    const request = ++profileRefreshRequestRef.current;
+    setComparisonBusy(true);
+    setComparisonError(null);
+    try {
+      const profile = await getProfileContent(profileStudentId);
+      if (!isCurrentPageLoadRequest(page) || request !== profileRefreshRequestRef.current) return;
+      setLatestProfile(profile);
+    } catch {
+      if (isCurrentPageLoadRequest(page) && request === profileRefreshRequestRef.current)
+        setComparisonError('Current profile unavailable. Your edits are kept.');
+    } finally {
+      if (isCurrentPageLoadRequest(page) && request === profileRefreshRequestRef.current)
+        setComparisonBusy(false);
+    }
+  }, [isCurrentPageLoadRequest, profileStudentId]);
+
+  useEffect(() => {
+    if (!profileAvailable) return;
+    const refresh = () => {
+      if (!document.hidden && profileBusy === null) void refreshLatestProfile();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [profileAvailable, profileBusy, refreshLatestProfile]);
+
+  const reportProfileWriteError = (error: unknown, fallback: string) => {
+    setProfileError(error instanceof Error ? error.message : fallback);
+    if (error instanceof Error && error.name === 'ProfileRevisionConflictApiError') {
+      setComparisonOpen(true);
+      void refreshLatestProfile();
+    }
+  };
+  const profileUpdated = latestProfile && latestProfile.activeRevisionId !== bufferActiveRevisionId;
+  const comparisonItems = useMemo(
+    () =>
+      latestProfile
+        ? buildProfileDraftDiff({
+            base: foundationalProfileToFormState(latestProfile.structuredContent),
+            draft: profileForm,
+          })
+        : [],
+    [latestProfile, profileForm],
+  );
+
+  const handleAutomaticProfileChange = async () => {
+    if (profileDirty || editing || currentRevision?.status === 'draft')
+      await refreshLatestProfile();
+    else await reloadCurrentLearningSurface();
+  };
+
   const handleProfileFieldChange = useCallback(
     (field: keyof FoundationalProfileFormState, value: string) => {
       setProfileForm((current) => ({
@@ -1020,39 +1219,55 @@ export const StudentLearningPage: React.FC = () => {
       return;
     }
 
+    if (bufferActiveRevisionId === undefined) {
+      setComparisonOpen(true);
+      return false;
+    }
+    const page = latestPageLoadRequestRef.current;
     setProfileBusy('saving');
     setProfileError(null);
     setProfileSuccess(null);
     try {
       const saved = await saveProfileDraftRevision(profileStudentId, {
+        expectedActiveRevisionId: bufferActiveRevisionId,
         structuredContent: foundationalProfileFormToStructuredContent(profileForm),
         inheritCandidateLinksFromRevisionId:
           currentRevision?.status === 'draft' ? currentRevision.id : null,
       });
+      if (!isCurrentPageLoadRequest(page)) return false;
       const form = foundationalProfileToFormState(saved.structuredContent);
       setCurrentRevision(saved);
       setProfileForm(form);
       setLoadedProfileForm(form);
       setProfileLegacyNotice(null);
+      setDraftNeedsSave(false);
+      setComparisonOpen(false);
       const revisions = await listProfileRevisions(profileStudentId, {
         limit: 25,
         offset: 0,
         order: 'desc',
       });
+      if (!isCurrentPageLoadRequest(page)) return false;
       setProfileRevisions(revisions.items ?? []);
       setProfileSuccess('Profile draft saved.');
+      if (studioV2) setEditing(false);
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save profile draft.';
-      setProfileError(message);
+      if (!isCurrentPageLoadRequest(page)) return false;
+      reportProfileWriteError(error, 'Unable to save profile draft.');
       return false;
     } finally {
-      setProfileBusy(null);
+      if (isCurrentPageLoadRequest(page)) setProfileBusy(null);
     }
   };
 
   const handleSaveProfile = async () => {
     if (!profileStudentId) return;
+    if (bufferActiveRevisionId === undefined) {
+      setComparisonOpen(true);
+      return false;
+    }
+    const page = latestPageLoadRequestRef.current;
     setProfileBusy('saving');
     setProfileError(null);
     setProfileSuccess(null);
@@ -1061,35 +1276,31 @@ export const StudentLearningPage: React.FC = () => {
         profileStudentId,
         null,
         foundationalProfileFormToStructuredContent(profileForm),
+        { expectedActiveRevisionId: bufferActiveRevisionId },
       );
+      if (!isCurrentPageLoadRequest(page)) return false;
       await reloadCurrentLearningSurface();
+      if (!isCurrentPageLoadRequest(page)) return false;
       setProfileSuccess('Learner profile saved.');
+      if (studioV2) setEditing(false);
       return true;
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Unable to save learner profile.');
+      if (!isCurrentPageLoadRequest(page)) return false;
+      reportProfileWriteError(error, 'Unable to save learner profile.');
       return false;
     } finally {
-      setProfileBusy(null);
+      if (isCurrentPageLoadRequest(page)) setProfileBusy(null);
     }
   };
 
-  const reviewDirty =
-    Object.entries(profileCandidateDrafts).some(([id, draft]) => {
-      const candidate = profileCandidates.find((item) => item.id === id);
-      return (
-        draft.reviewerNote !== (candidate?.reviewerNote ?? '') ||
-        (draft.approvedFactText.trim() !== '' &&
-          draft.approvedFactText !== (candidate?.approvedFactText ?? candidate?.proposedFact))
-      );
-    }) || profileCandidatePromotionNote.trim() !== '';
   useStudentPageEdits({
-    dirty: profileDirty || reviewDirty,
+    dirty: profileDirty || draftNeedsSave || reviewDirty,
     busy:
       (profileBusy !== null && profileBusy !== 'loading') ||
       profileCandidateAction !== null ||
       profileCandidatePromotionBusy,
     save:
-      profileDirty && !reviewDirty && profileBusy === null
+      (profileDirty || draftNeedsSave) && !reviewDirty && profileBusy === null
         ? async () =>
             Boolean(
               await (currentRevision?.status === 'draft' ? handleSaveDraft() : handleSaveProfile()),
@@ -1097,18 +1308,28 @@ export const StudentLearningPage: React.FC = () => {
         : undefined,
     discard: () => {
       setProfileForm(loadedProfileForm);
+      setDraftNeedsSave(false);
       setProfileCandidateDrafts({});
       setProfileCandidatePromotionNote('');
     },
   });
 
   const handleStartEmptyProfile = async () => {
+    if (profileDirty || draftNeedsSave || reviewDirty || profileBusy !== null) return;
+    const page = latestPageLoadRequestRef.current;
     setProfileBusy('saving');
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const response = await initializeStudentProfileDraft(studentId);
-      const activated = await activateProfileRevision(studentId, response.draftRevision.id);
+      const response = await initializeStudentProfileDraft(studentId, {
+        expectedActiveRevisionId: null,
+      });
+      if (!isCurrentPageLoadRequest(page)) return;
+      const activated = await activateProfileRevision(studentId, response.draftRevision.id, {
+        expectedActiveRevisionId: null,
+      });
+      if (!isCurrentPageLoadRequest(page)) return;
+      profileRefreshRequestRef.current += 1;
       const form = foundationalProfileToFormState(activated.structuredContent);
       setProfileAvailable(true);
       setCurrentRevision(activated);
@@ -1117,14 +1338,24 @@ export const StudentLearningPage: React.FC = () => {
       setProfileDraftDiffBase(null);
       setProfileLegacyNotice(null);
       setProfileRevisions([{ ...activated }]);
+      setBufferActiveRevisionId(activated.id);
+      setLatestProfile({
+        studentId,
+        content: activated.content,
+        structuredContent: activated.structuredContent,
+        currentRevisionId: activated.id,
+        activeRevisionId: activated.id,
+        updatedAt: activated.activatedAt ?? activated.createdAt,
+      });
       await refreshStudent();
+      if (!isCurrentPageLoadRequest(page)) return;
       setProfileSuccess('Learner profile created. Add context and save when ready.');
+      if (studioV2) setEditing(true);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to start the learner profile.';
-      setProfileError(message);
+      if (!isCurrentPageLoadRequest(page)) return;
+      reportProfileWriteError(error, 'Unable to start the learner profile.');
     } finally {
-      setProfileBusy(null);
+      if (isCurrentPageLoadRequest(page)) setProfileBusy(null);
     }
   };
 
@@ -1134,12 +1365,28 @@ export const StudentLearningPage: React.FC = () => {
       return;
     }
 
+    if (
+      bufferActiveRevisionId === undefined ||
+      !currentRevision.baseActiveRevisionKnown ||
+      draftNeedsSave ||
+      profileDirty
+    ) {
+      setComparisonOpen(true);
+      setProfileError('Compare the current profile and save a new draft before activating.');
+      return;
+    }
+    const page = latestPageLoadRequestRef.current;
+
     setProfileBusy('activating');
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const activated = await activateProfileRevision(profileStudentId, currentRevision.id);
+      const activated = await activateProfileRevision(profileStudentId, currentRevision.id, {
+        expectedActiveRevisionId: bufferActiveRevisionId,
+      });
+      if (!isCurrentPageLoadRequest(page)) return;
       await Promise.all([reloadCurrentLearningSurface(), refreshStudent()]);
+      if (!isCurrentPageLoadRequest(page)) return;
       setProfileDraftDiffBase(null);
       setProfileError(null);
       const promotion = activated.candidatePromotion;
@@ -1149,21 +1396,31 @@ export const StudentLearningPage: React.FC = () => {
           : 'Draft activated. Candidate promotion was not reported by the server.',
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to activate the draft.';
-      setProfileError(message);
+      if (!isCurrentPageLoadRequest(page)) return;
+      reportProfileWriteError(error, 'Unable to activate the draft.');
     } finally {
-      setProfileBusy(null);
+      if (isCurrentPageLoadRequest(page)) setProfileBusy(null);
     }
   };
 
   const handleRestoreRevision = async (revisionId: string) => {
     if (!profileStudentId) return;
+    if (profileDirty || draftNeedsSave || reviewDirty || profileBusy !== null) return;
+    if (bufferActiveRevisionId === undefined) {
+      setComparisonOpen(true);
+      return;
+    }
+    const page = latestPageLoadRequestRef.current;
 
     setProfileBusy('restoring');
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const restored = await restoreProfileRevision(profileStudentId, revisionId);
+      const restored = await restoreProfileRevision(profileStudentId, revisionId, {
+        expectedActiveRevisionId: bufferActiveRevisionId,
+      });
+      if (!isCurrentPageLoadRequest(page)) return;
+      profileRefreshRequestRef.current += 1;
       const restoredRevision = restored.currentRevisionId
         ? await getProfileRevision(profileStudentId, restored.currentRevisionId).catch(() =>
             buildRevisionDetailFromProfile(profileStudentId, restored),
@@ -1172,31 +1429,67 @@ export const StudentLearningPage: React.FC = () => {
       const form = foundationalProfileToFormState(
         restoredRevision?.structuredContent ?? restored.structuredContent,
       );
+      if (!isCurrentPageLoadRequest(page)) return;
       setCurrentRevision(restoredRevision);
       setProfileForm(form);
       setLoadedProfileForm(form);
       setProfileDraftDiffBase(null);
       setProfileLegacyNotice(getLegacyProfileNotice(restoredRevision ?? restored));
+      setBufferActiveRevisionId(restored.activeRevisionId);
+      setLatestProfile(restored);
+      setComparisonOpen(false);
+      setDraftNeedsSave(false);
       const revisions = await listProfileRevisions(profileStudentId, {
         limit: 25,
         offset: 0,
         order: 'desc',
       });
+      if (!isCurrentPageLoadRequest(page)) return;
       setProfileRevisions(revisions.items ?? []);
-      setProfileSuccess('Revision restored into the editor.');
+      setProfileSuccess('Profile version restored.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to restore the revision.';
-      setProfileError(message);
+      if (!isCurrentPageLoadRequest(page)) return;
+      reportProfileWriteError(error, 'Unable to restore the revision.');
     } finally {
-      setProfileBusy(null);
+      if (isCurrentPageLoadRequest(page)) setProfileBusy(null);
+    }
+  };
+
+  const handleOpenRevision = async (revisionId: string) => {
+    if (profileDirty || draftNeedsSave || reviewDirty || profileBusy !== null) return;
+    const page = latestPageLoadRequestRef.current;
+    setProfileBusy('loading');
+    setProfileError(null);
+    try {
+      const revision = await loadProfileRevisionIntoEditor(profileStudentId, revisionId);
+      if (studioV2 && isCurrentPageLoadRequest(page)) {
+        setProfilePanel(null);
+        if (revision.status === 'draft') setEditing(true);
+        else requestAnimationFrame(() => profileHeadingRef.current?.focus());
+      }
+    } catch (error) {
+      if (isCurrentPageLoadRequest(page))
+        setProfileError(error instanceof Error ? error.message : 'Profile version unavailable.');
+    } finally {
+      if (isCurrentPageLoadRequest(page)) setProfileBusy(null);
     }
   };
 
   const handleRefreshDraftFromCandidates = async (candidateIds: string[]) => {
+    if (profileDirty || draftNeedsSave || reviewDirty || profileBusy !== null) {
+      setProfileCandidatePromotionError('Save or cancel your edits before opening a new draft.');
+      return;
+    }
     if (candidateIds.length === 0) {
       setProfileCandidatePromotionError('No approved candidates are ready to promote yet.');
       return;
     }
+
+    if (bufferActiveRevisionId === undefined) {
+      setComparisonOpen(true);
+      return;
+    }
+    const page = latestPageLoadRequestRef.current;
 
     setProfileBusy('promoting');
     setProfileCandidatePromotionBusy(true);
@@ -1205,14 +1498,18 @@ export const StudentLearningPage: React.FC = () => {
     const draftDiffBase = loadedProfileForm;
     try {
       const response = await refreshProfileDraftFromApprovedCandidates(studentId, {
+        expectedActiveRevisionId: bufferActiveRevisionId,
+        ...(currentRevision?.id ? { baseRevisionId: currentRevision.id } : {}),
         candidateIds,
         ...(profileCandidatePromotionNote.trim()
           ? { reviewerNote: profileCandidatePromotionNote.trim() }
           : {}),
       });
+      if (!isCurrentPageLoadRequest(page)) return;
       const revision =
         response.draftRevision ??
         (await loadProfileRevisionIntoEditor(studentId, response.draftRevisionId));
+      if (!isCurrentPageLoadRequest(page)) return;
       if (response.draftRevision) {
         const form = foundationalProfileToFormState(revision.structuredContent);
         setProfileAvailable(true);
@@ -1221,12 +1518,17 @@ export const StudentLearningPage: React.FC = () => {
         setLoadedProfileForm(form);
         setProfileDraftDiffBase(draftDiffBase);
         setProfileLegacyNotice(getLegacyProfileNotice(revision));
+        setBufferActiveRevisionId(
+          revision.baseActiveRevisionKnown ? revision.baseActiveRevisionId : undefined,
+        );
+        setDraftNeedsSave(false);
       }
       const revisions = await listProfileRevisions(studentId, {
         limit: 25,
         offset: 0,
         order: 'desc',
       });
+      if (!isCurrentPageLoadRequest(page)) return;
       setProfileRevisions(revisions.items ?? []);
       setSelectedCandidateIds([]);
       const excludedCount = candidateIds.filter(
@@ -1237,15 +1539,18 @@ export const StudentLearningPage: React.FC = () => {
       );
       setProfileSuccess('Draft revision opened in the editor.');
     } catch (error) {
+      if (!isCurrentPageLoadRequest(page)) return;
       const message =
         error instanceof Error
           ? error.message
           : 'Unable to refresh the draft from approved candidates.';
       setProfileCandidatePromotionError(message);
-      setProfileError(message);
+      reportProfileWriteError(error, message);
     } finally {
-      setProfileBusy(null);
-      setProfileCandidatePromotionBusy(false);
+      if (isCurrentPageLoadRequest(page)) {
+        setProfileBusy(null);
+        setProfileCandidatePromotionBusy(false);
+      }
     }
   };
 
@@ -1276,6 +1581,12 @@ export const StudentLearningPage: React.FC = () => {
       setProfileCandidates((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
+      setProfileCandidateDrafts((current) => {
+        if (!current[updated.id]) return current;
+        const next = { ...current };
+        delete next[updated.id];
+        return next;
+      });
       if (!isSelectableForPromotion(updated)) {
         setSelectedCandidateIds((current) => current.filter((item) => item !== updated.id));
       }
@@ -1290,18 +1601,29 @@ export const StudentLearningPage: React.FC = () => {
 
   const updateProfileCandidateDraft = useCallback(
     (candidateId: string, patch: Partial<{ approvedFactText: string; reviewerNote: string }>) => {
+      const candidate = profileCandidates.find((item) => item.id === candidateId);
+      if (!candidate) return;
       setProfileCandidateDrafts((current) => ({
         ...current,
         [candidateId]: {
-          approvedFactText: patch.approvedFactText ?? current[candidateId]?.approvedFactText ?? '',
-          reviewerNote: patch.reviewerNote ?? current[candidateId]?.reviewerNote ?? '',
+          approvedFactText:
+            patch.approvedFactText ??
+            current[candidateId]?.approvedFactText ??
+            candidate.approvedFactText ??
+            candidate.proposedFact,
+          reviewerNote:
+            patch.reviewerNote ??
+            current[candidateId]?.reviewerNote ??
+            candidate.reviewerNote ??
+            '',
         },
       }));
     },
-    [],
+    [profileCandidates],
   );
 
-  if (studentLoading) {
+  if (studentLoading && (!studioV2 || !student)) {
+    if (studioV2) return <PageLoading page="learning" />;
     return (
       <section
         className="student-learning-layout student-area-theme student-learning-standalone-state"
@@ -1341,6 +1663,7 @@ export const StudentLearningPage: React.FC = () => {
   }
 
   if (profileAvailable === null) {
+    if (studioV2 && !profileError) return <PageLoading page="learning" />;
     return (
       <section
         className="student-learning-layout student-area-theme student-learning-standalone-state"
@@ -1377,12 +1700,24 @@ export const StudentLearningPage: React.FC = () => {
       ? 'Stored memory history requires explicit repair. Recent observations do not restore established history.'
       : availability?.state === 'repository_unavailable'
         ? 'Memory retrieval is unavailable. Existing history is unknown.'
-        : 'No established student-memory snapshot is available yet.';
+        : studioV2
+          ? 'No learning summary yet.'
+          : 'No established student-memory snapshot is available yet.';
   const canActivateDraft = currentRevision?.status === 'draft';
+  const discardEditorChanges = () => {
+    setProfileForm(loadedProfileForm);
+    setConfirmDiscard(false);
+    setEditing(false);
+    setProfileError(null);
+  };
+  const closeEditor = () => {
+    if (profileDirty) setConfirmDiscard(true);
+    else discardEditorChanges();
+  };
   const unresolvedIssues = latestSnapshot?.unresolvedIssues ?? [];
   const recentLessons = memoryOverview?.recentReadyLessonMemory ?? [];
   const recentHomework = memoryOverview?.recentReadyHomeworkMemory ?? [];
-  if (profileAvailable === false) {
+  if (profileAvailable === false && !studioV2) {
     return (
       <section className="student-learning-layout student-area-theme student-learning-bootstrap">
         <div className="student-learning-bootstrap-copy">
@@ -1424,323 +1759,786 @@ export const StudentLearningPage: React.FC = () => {
     );
   }
 
-  return (
-    <section className="student-learning-layout student-area-theme">
-      <article className="student-area-panel student-learning-hero">
-        <div className="student-learning-status-grid">
-          <LearningMetricCard
-            eyebrow="Memory Snapshot"
-            value={
-              memoryOverviewLoading && !memoryOverview
-                ? 'Loading…'
-                : memoryRequestFailed
-                  ? 'Unavailable'
-                  : latestSnapshot
-                    ? 'Ready'
-                    : availability?.state === 'repair_required'
-                      ? 'Repair required'
-                      : availability?.state === 'repository_unavailable'
-                        ? 'Unavailable'
-                        : 'No Snapshot Yet'
-            }
-            detail={
-              memoryRequestFailed
-                ? 'Memory could not be loaded. Existing history is unknown.'
-                : memoryOverviewLoading && !memoryOverview
-                  ? 'Loading student memory…'
-                  : latestSnapshot
-                    ? `Updated ${formatDateTime(latestSnapshot.generatedAt)}`
-                    : memoryUnavailableCopy
-            }
-          />
-        </div>
+  const profileActions = (
+    <div className="student-learning-action-row student-learning-action-row-main">
+      {!studioV2 && (
+        <button
+          type="button"
+          className="workspace-secondary-btn"
+          onClick={() =>
+            void handleRefreshDraftFromCandidates(
+              approvedCandidatesReadyForPromotion.map((candidate) => candidate.id),
+            )
+          }
+          disabled={
+            profileBusy !== null ||
+            candidatesUnavailable ||
+            approvedCandidatesReadyForPromotion.length === 0
+          }
+        >
+          {profileBusy === 'promoting'
+            ? 'Refreshing…'
+            : candidatesUnavailable
+              ? 'Refresh Draft From Approved Candidates'
+              : `Refresh Draft From Approved Candidates (${approvedCandidatesReadyForPromotion.length})`}
+        </button>
+      )}
+      {(!studioV2 || editing) &&
+        (canActivateDraft ? (
+          <>
+            <button
+              type="button"
+              className={studioV2 ? 'workspace-secondary-btn' : 'workspace-primary-btn'}
+              onClick={() => void handleSaveDraft()}
+              disabled={profileBusy !== null || (!profileDirty && !draftNeedsSave)}
+            >
+              {profileBusy === 'saving' ? 'Saving…' : 'Save Draft'}
+            </button>
+            <button
+              type="button"
+              className="workspace-primary-btn"
+              onClick={() => void handleActivateDraft()}
+              disabled={
+                profileBusy !== null ||
+                profileDirty ||
+                draftNeedsSave ||
+                Boolean(profileUpdated) ||
+                !currentRevision?.baseActiveRevisionKnown
+              }
+            >
+              {profileBusy === 'activating' ? 'Activating…' : 'Activate Draft'}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="workspace-primary-btn"
+            onClick={() => void handleSaveProfile()}
+            disabled={profileBusy !== null || !profileDirty}
+          >
+            {profileBusy === 'saving' ? 'Saving…' : 'Save learner profile'}
+          </button>
+        ))}
+      {studioV2 && editing && (
+        <button
+          type="button"
+          className="workspace-secondary-btn"
+          disabled={profileBusy !== null}
+          onClick={closeEditor}
+        >
+          Cancel editing
+        </button>
+      )}
+    </div>
+  );
 
-        <div className="student-learning-action-row student-learning-action-row-main">
+  const profileFields = (
+    <div className="student-learning-section-grid" ref={profileEditorRef}>
+      {PROFILE_SECTION_CONFIGS.map((section) => (
+        <LearningSectionCard
+          key={section.id}
+          config={section}
+          values={profileForm}
+          onChange={handleProfileFieldChange}
+          disabled={profileBusy !== null}
+        />
+      ))}
+    </div>
+  );
+
+  const profileCard = (
+    <article
+      id="learning-profile"
+      className="student-area-panel workspace-card student-learning-profile-card"
+    >
+      <header className="student-learning-block-header">
+        <div>
+          <h2 ref={profileHeadingRef} tabIndex={-1}>
+            {studioV2 ? 'Learning profile' : 'Foundational Profile'}
+          </h2>
+          {studioV2 && (
+            <p className="student-v2-profile-provenance">
+              {currentRevision?.versionLabel ?? 'Profile revision'} ·{' '}
+              {currentRevision?.status === 'deprecated'
+                ? 'Earlier version'
+                : (currentRevision?.status ?? 'Status unavailable')}
+              {currentRevision ? ` · ${formatDateTime(currentRevision.createdAt)}` : ''}
+            </p>
+          )}
+        </div>
+        <div className={studioV2 ? 'student-v2-profile-actions' : undefined}>
+          <button
+            type="button"
+            className={
+              studioV2 ? 'product-button product-button--quiet' : 'workspace-secondary-btn'
+            }
+            disabled={profileBusy !== null}
+            onClick={() => setUpdatesOpen(true)}
+          >
+            Profile updates
+          </button>
+          {studioV2 && (
+            <button
+              type="button"
+              className="product-button product-button--secondary"
+              disabled={profileBusy !== null}
+              onClick={() => {
+                setConfirmDiscard(false);
+                if (profileAvailable) setEditing(true);
+                else void handleStartEmptyProfile();
+              }}
+            >
+              <Pencil aria-hidden="true" />
+              {profileAvailable
+                ? canActivateDraft
+                  ? 'Edit draft'
+                  : 'Edit profile'
+                : 'Create learner profile'}
+            </button>
+          )}
+        </div>
+      </header>
+      {studioV2 ? (
+        <div className="student-v2-profile-reading">
+          <section className="student-v2-profile-goals">
+            <div>
+              <h3>Learning goals</h3>
+              {loadedProfileForm.overallLevel ? (
+                <span className="student-v2-level">{loadedProfileForm.overallLevel}</span>
+              ) : null}
+            </div>
+            <p>{loadedProfileForm.primaryGoals || 'No learning goals recorded yet.'}</p>
+          </section>
+          {PROFILE_SECTION_CONFIGS.slice(1).map((section) => {
+            const fields = section.fields.filter((field) => loadedProfileForm[field.key].trim());
+            if (!fields.length) return null;
+            return (
+              <details className="student-v2-profile-group" key={section.id}>
+                <summary>
+                  {section.eyebrow === 'Teacher Notes' ? 'Teacher notes' : section.eyebrow}
+                  <ChevronRight size={16} aria-hidden="true" />
+                </summary>
+                <dl>
+                  {fields.map((field) => (
+                    <div key={field.key}>
+                      <dt>{field.label}</dt>
+                      <dd>{loadedProfileForm[field.key]}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            );
+          })}
+          {profileLegacyNotice && <p className="workspace-muted">{profileLegacyNotice}</p>}
+        </div>
+      ) : (
+        <>
+          {profileFields}
+          <footer className="student-learning-editor-footer">
+            <div>
+              <strong>{profileDirty ? 'Unsaved structured edits' : 'No unsaved changes'}</strong>
+            </div>
+            {profileLegacyNotice ? <p className="workspace-muted">{profileLegacyNotice}</p> : null}
+          </footer>
+        </>
+      )}
+    </article>
+  );
+  const memoryCard = (
+    <article
+      id="learning-current"
+      className="student-area-panel workspace-card student-learning-memory-card"
+    >
+      <header className="student-learning-block-header">
+        <h2>{studioV2 ? 'Current learning' : 'Student Memory'}</h2>
+        {studioV2 &&
+          memoryHealth &&
+          (memoryHealth.memoryCounts.lesson.pending.count > 0 ||
+            memoryHealth.memoryCounts.homework.pending.count > 0 ||
+            memoryHealth.latestSnapshot?.status === 'pending') && (
+            <span className="student-learning-background-status" role="status">
+              Updating learning summary…
+            </span>
+          )}
+      </header>
+
+      {memoryOverviewError ? (
+        <p className="workspace-error" aria-live="polite">
+          {memoryOverviewError}
+          {memoryOverview ? ' Showing previously loaded memory.' : ''}
+        </p>
+      ) : null}
+
+      {memoryOverviewLoading && !memoryOverview ? (
+        <LoadingPlaceholder label="Loading memory summary" kind="lines" />
+      ) : memoryRequestFailed ? (
+        <p className="workspace-muted">Memory could not be loaded. Existing history is unknown.</p>
+      ) : latestSnapshot ? (
+        <>
+          {studioV2 && unresolvedIssues.length > 0 && (
+            <section className="student-v2-open-threads">
+              <h3>
+                Open threads <span>{unresolvedIssues.length}</span>
+              </h3>
+              <ul>
+                {unresolvedIssues.map((issue) => (
+                  <li key={`${issue.label}-${issue.note}`}>
+                    <strong>{issue.label}</strong>
+                    <p>{issue.note}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {!studioV2 && (
+            <p className="workspace-muted">
+              Snapshot generated {formatDateTime(latestSnapshot.generatedAt)}
+            </p>
+          )}
+
+          <div className="student-learning-memory-highlight">
+            {studioV2 ? (
+              <header>
+                <h3>Memory summary</h3>
+                <time dateTime={latestSnapshot.generatedAt}>
+                  {formatDateTime(latestSnapshot.generatedAt)}
+                </time>
+              </header>
+            ) : (
+              <strong>Snapshot Summary</strong>
+            )}
+            <p>{latestSnapshot.snapshotSummary ?? 'No snapshot summary yet.'}</p>
+          </div>
+
+          <div className="student-learning-memory-columns">
+            <MemoryEntriesSection
+              collapsible={studioV2}
+              title={studioV2 ? 'Recent lessons' : 'Recent Lesson Memory'}
+              count={recentLessons.length}
+            >
+              {recentLessons.length > 0 ? (
+                <ul>
+                  {recentLessons.map((entry) => (
+                    <li key={entry.id}>
+                      {studioV2 && (
+                        <header>
+                          <strong>{entry.lessonTitle || 'Lesson'}</strong>
+                          <time dateTime={entry.generatedAt}>
+                            {formatDateTime(entry.generatedAt)}
+                          </time>
+                        </header>
+                      )}
+                      {entry.lessonSummary ?? 'Summary unavailable'}
+                      {studioV2 && <LessonTranscriptDisclosure lesson={entry} compact />}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="workspace-muted">No ready lesson-memory entries yet.</p>
+              )}
+            </MemoryEntriesSection>
+
+            <MemoryEntriesSection
+              collapsible={studioV2}
+              title={studioV2 ? 'Recent homework' : 'Recent Homework Memory'}
+              count={recentHomework.length}
+            >
+              {recentHomework.length > 0 ? (
+                <ul>
+                  {recentHomework.map((entry) => (
+                    <li key={entry.id}>
+                      {studioV2 && (
+                        <header>
+                          <strong>{entry.topic || 'Homework'}</strong>
+                          <time dateTime={entry.generatedAt}>
+                            {formatDateTime(entry.generatedAt)}
+                          </time>
+                        </header>
+                      )}
+                      {entry.homeworkSummary ?? entry.topic ?? 'Summary unavailable'}
+                      {studioV2 && (
+                        <Link
+                          className="student-memory-assignment-link"
+                          to={`/?jobId=${encodeURIComponent(entry.jobId)}`}
+                          aria-label={`Open assignment: ${entry.topic || 'Homework'}`}
+                          title={`Open assignment: ${entry.topic || 'Homework'}`}
+                        >
+                          <BookOpen size={18} aria-hidden="true" />
+                        </Link>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="workspace-muted">No ready homework-memory entries yet.</p>
+              )}
+            </MemoryEntriesSection>
+
+            {!studioV2 && (
+              <section className="student-learning-memory-column">
+                <h3>{studioV2 ? 'Open threads' : 'Current Open Threads'}</h3>
+                {unresolvedIssues.length > 0 ? (
+                  <ul>
+                    {unresolvedIssues.map((issue) => (
+                      <li key={`${issue.label}-${issue.note}`}>
+                        <strong>{issue.label}</strong>
+                        {studioV2 ? <p>{issue.note}</p> : `: ${issue.note}`}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="workspace-muted">No open threads in the latest memory snapshot.</p>
+                )}
+              </section>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="student-learning-empty-block">
+          <strong>{memoryUnavailableCopy}</strong>
+          {studioV2 && (
+            <Link
+              className="learning-latest-work"
+              to={`/?studentId=${encodeURIComponent(studentId)}`}
+            >
+              <BookOpen size={18} aria-hidden="true" />
+              Start assignment
+            </Link>
+          )}
+          {!studioV2 && (
+            <p>
+              {availability?.state === 'repair_required'
+                ? 'Existing observations remain retained. A separately authorized rebuild is required before using the established summary.'
+                : availability?.state === 'repository_unavailable'
+                  ? 'Try again when memory retrieval is restored. The profile can still be edited manually.'
+                  : 'The profile can still be edited manually, and this area will become more useful as lesson and homework memory accumulates.'}
+            </p>
+          )}
+        </div>
+      )}
+      {memoryHealth || latestSnapshot ? (
+        <MemoryHealthDetails
+          health={memoryHealth}
+          readySnapshot={latestSnapshot}
+          open={memoryHealthDetailsOpen}
+          onToggle={() => setMemoryHealthDetailsOpen((current) => !current)}
+        />
+      ) : null}
+    </article>
+  );
+  const candidatesPanel = (
+    <ProfileCandidatesPanel
+      className="student-area-panel student-learning-candidates-card"
+      selectedStudentId={studentId}
+      profileCandidates={profileCandidates}
+      profileCandidatesLoading={profileCandidatesLoading}
+      profileCandidatesError={profileCandidatesError}
+      profileCandidateFilter={profileCandidateFilter}
+      setProfileCandidateFilter={setProfileCandidateFilter}
+      profileCandidateAction={profileCandidateAction}
+      profileCandidateDrafts={profileCandidateDrafts}
+      updateProfileCandidateDraft={updateProfileCandidateDraft}
+      selectedCandidateIds={selectedCandidateIds}
+      setSelectedCandidateIds={setSelectedCandidateIds}
+      profileCandidatePromotionNote={profileCandidatePromotionNote}
+      setProfileCandidatePromotionNote={setProfileCandidatePromotionNote}
+      profileCandidatePromotionBusy={profileCandidatePromotionBusy}
+      profileCandidatePromotionError={profileCandidatePromotionError}
+      profileCandidatePromotionSuccess={profileCandidatePromotionSuccess}
+      onRefreshCandidates={() =>
+        profileDirty || draftNeedsSave || reviewDirty || profileBusy !== null
+          ? Promise.resolve()
+          : reloadCurrentLearningSurface()
+      }
+      onPromoteProfileCandidates={() => handleRefreshDraftFromCandidates(selectedCandidateIds)}
+      onReviewProfileCandidate={handleReviewProfileCandidate}
+    />
+  );
+
+  const profileFeedback = (
+    <>
+      {profileUpdated && !comparisonOpen ? (
+        <div className="student-profile-updated" role="status">
+          <span>Profile updated</span>
           <button
             type="button"
             className="workspace-secondary-btn"
-            onClick={() =>
-              void handleRefreshDraftFromCandidates(
-                approvedCandidatesReadyForPromotion.map((candidate) => candidate.id),
-              )
-            }
-            disabled={
-              profileBusy !== null ||
-              candidatesUnavailable ||
-              approvedCandidatesReadyForPromotion.length === 0
-            }
+            onClick={() => {
+              setComparisonOpen(true);
+              void refreshLatestProfile();
+            }}
           >
-            {profileBusy === 'promoting'
-              ? 'Refreshing…'
-              : candidatesUnavailable
-                ? 'Refresh Draft From Approved Candidates'
-                : `Refresh Draft From Approved Candidates (${approvedCandidatesReadyForPromotion.length})`}
+            Review changes
           </button>
-          {canActivateDraft ? (
+        </div>
+      ) : null}
+      {comparisonOpen ? (
+        <section className="student-profile-comparison" aria-label="Compare profile versions">
+          <h3>Profile updated</h3>
+          <p>Your edits are kept. Compare before saving.</p>
+          {comparisonBusy ? (
+            <LoadingPlaceholder label="Loading current profile" kind="lines" />
+          ) : null}
+          {comparisonError ? <p role="alert">{comparisonError}</p> : null}
+          {latestProfile && !comparisonBusy ? (
             <>
-              <button
-                type="button"
-                className="workspace-primary-btn"
-                onClick={() => void handleSaveDraft()}
-                disabled={profileBusy !== null || !profileDirty}
-              >
-                {profileBusy === 'saving' ? 'Saving…' : 'Save Draft'}
-              </button>
-              <button
-                type="button"
-                className="workspace-primary-btn"
-                onClick={() => void handleActivateDraft()}
-                disabled={profileBusy !== null}
-              >
-                {profileBusy === 'activating' ? 'Activating…' : 'Activate Draft'}
-              </button>
+              <div className="student-profile-comparison-list">
+                {comparisonItems.map((item) => (
+                  <article key={item.key}>
+                    <h4>{item.label}</h4>
+                    <div>
+                      <section aria-label="Current profile">
+                        <h5>Current profile</h5>
+                        <p>{item.before || 'Not recorded'}</p>
+                      </section>
+                      <section aria-label="Your edits">
+                        <h5>Your edits</h5>
+                        <p>{item.after || 'Not recorded'}</p>
+                      </section>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              {!comparisonItems.length ? <p>The profile values match.</p> : null}
+              <div className="student-learning-action-row">
+                <button
+                  type="button"
+                  className="workspace-secondary-btn"
+                  disabled={profileBusy !== null}
+                  onClick={() => {
+                    setBufferActiveRevisionId(latestProfile.activeRevisionId);
+                    setDraftNeedsSave(currentRevision?.status === 'draft');
+                    setComparisonOpen(false);
+                    setProfileError(null);
+                  }}
+                >
+                  Keep my edits
+                </button>
+                <button
+                  type="button"
+                  className="workspace-secondary-btn"
+                  disabled={profileBusy !== null}
+                  onClick={() => {
+                    const form = foundationalProfileToFormState(latestProfile.structuredContent);
+                    setProfileForm(form);
+                    setLoadedProfileForm(form);
+                    setCurrentRevision(
+                      buildRevisionDetailFromProfile(
+                        studentId,
+                        latestProfile,
+                        findCurrentProfileRevisionSummary(latestProfile, profileRevisions),
+                      ),
+                    );
+                    setBufferActiveRevisionId(latestProfile.activeRevisionId);
+                    setDraftNeedsSave(false);
+                    setComparisonOpen(false);
+                    setProfileDraftDiffBase(null);
+                    setProfileError(null);
+                  }}
+                >
+                  Use current profile
+                </button>
+              </div>
+              {currentRevision?.status === 'draft' ? (
+                <p>Save a new draft before activating.</p>
+              ) : null}
             </>
           ) : (
             <button
               type="button"
-              className="workspace-primary-btn"
-              onClick={() => void handleSaveProfile()}
-              disabled={profileBusy !== null || !profileDirty}
+              className="workspace-secondary-btn"
+              disabled={comparisonBusy}
+              onClick={() => void refreshLatestProfile()}
             >
-              {profileBusy === 'saving' ? 'Saving…' : 'Save learner profile'}
+              Retry current profile
             </button>
           )}
-        </div>
+        </section>
+      ) : null}
+      {profileError ? (
+        <p className="workspace-error" aria-live="polite">
+          {profileError}
+        </p>
+      ) : null}
+      {profileSuccess ? (
+        <p className="workspace-success" aria-live="polite">
+          {profileSuccess}
+        </p>
+      ) : null}
+    </>
+  );
 
-        {profileError ? (
-          <p className="workspace-error" aria-live="polite">
-            {profileError}
-          </p>
-        ) : null}
-        {profileSuccess ? (
-          <p className="workspace-success" aria-live="polite">
-            {profileSuccess}
-          </p>
-        ) : null}
-      </article>
+  const profileVersions = (
+    <>
+      <div className="workspace-list student-learning-revision-list">
+        {visibleProfileRevisions.map((revision) => (
+          <div key={revision.id} className="workspace-list-item workspace-list-item-stack">
+            <div>
+              <strong>{revision.versionLabel ?? revision.id}</strong>
+              <div className="workspace-muted">
+                {revision.status ?? 'unknown'} • {formatDateTime(revision.createdAt)}
+              </div>
+            </div>
+            <div className="student-learning-inline">
+              {(!studioV2 || revision.id !== currentRevision?.id) && (
+                <button
+                  type="button"
+                  className="workspace-secondary-btn"
+                  onClick={() => void handleOpenRevision(revision.id)}
+                  disabled={profileBusy !== null || profileDirty || draftNeedsSave || reviewDirty}
+                  title={
+                    profileDirty || draftNeedsSave || reviewDirty
+                      ? 'Save or cancel your edits first'
+                      : undefined
+                  }
+                >
+                  Open
+                </button>
+              )}
+              {revision.status !== 'active' ? (
+                <button
+                  type="button"
+                  className="workspace-secondary-btn"
+                  onClick={() => void handleRestoreRevision(revision.id)}
+                  disabled={profileBusy !== null || profileDirty || draftNeedsSave || reviewDirty}
+                  title={
+                    profileDirty || draftNeedsSave || reviewDirty
+                      ? 'Save or cancel your edits first'
+                      : 'Restore this version as the active profile'
+                  }
+                >
+                  Restore
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+      {hiddenProfileRevisionCount > 0 || showAllProfileVersions ? (
+        <button
+          type="button"
+          className="workspace-secondary-btn student-learning-version-toggle"
+          onClick={() => setShowAllProfileVersions((current) => !current)}
+        >
+          {showAllProfileVersions ? 'Hide older versions' : 'View all versions'}
+        </button>
+      ) : null}
+    </>
+  );
+
+  return (
+    <section
+      className={`student-learning-layout student-area-theme${studioV2 ? ' student-v2' : ''}`}
+    >
+      {updatesOpen ? (
+        <ProfileUpdatesDialog
+          key={studentId}
+          studentId={studentId}
+          onClose={() => setUpdatesOpen(false)}
+          onProfileChanged={handleAutomaticProfileChange}
+        />
+      ) : null}
+      {studioV2 && (
+        <header className="student-v2-learning-heading">
+          <div className="student-v2-learning-title">
+            <h2>Learning</h2>
+            <div className="student-v2-profile-actions">
+              <button
+                type="button"
+                className="product-button product-button--quiet"
+                onClick={() => setProfilePanel('versions')}
+              >
+                <History aria-hidden="true" />
+                Profile versions
+              </button>
+              <button
+                type="button"
+                className="product-button product-button--quiet"
+                onClick={() => setProfilePanel('suggestions')}
+              >
+                <Sparkles aria-hidden="true" />
+                Profile suggestions
+              </button>
+            </div>
+          </div>
+          <nav aria-label="Learning sections">
+            <a href="#learning-current">Current learning</a>
+            <a href="#learning-profile">Learner profile</a>
+          </nav>
+        </header>
+      )}
+      {studioV2 && (
+        <LearningLessonContext
+          key={`${studentId}:${recentLessons[0]?.id ?? 'none'}`}
+          studentId={studentId}
+          latestLesson={recentLessons[0] ?? null}
+        />
+      )}
+      {(!studioV2 ||
+        (!editing &&
+          !profilePanel &&
+          (profileUpdated || comparisonOpen || profileError || profileSuccess))) && (
+        <article className="student-area-panel student-learning-hero">
+          {profileFeedback}
+          {!studioV2 && (
+            <div className="student-learning-status-grid">
+              <LearningMetricCard
+                eyebrow="Memory Snapshot"
+                value={
+                  memoryOverviewLoading && !memoryOverview
+                    ? 'Loading…'
+                    : memoryRequestFailed
+                      ? 'Unavailable'
+                      : latestSnapshot
+                        ? 'Ready'
+                        : availability?.state === 'repair_required'
+                          ? 'Repair required'
+                          : availability?.state === 'repository_unavailable'
+                            ? 'Unavailable'
+                            : 'No Snapshot Yet'
+                }
+                detail={
+                  memoryRequestFailed
+                    ? 'Memory could not be loaded. Existing history is unknown.'
+                    : memoryOverviewLoading && !memoryOverview
+                      ? 'Loading student memory…'
+                      : latestSnapshot
+                        ? `Updated ${formatDateTime(latestSnapshot.generatedAt)}`
+                        : memoryUnavailableCopy
+                }
+              />
+            </div>
+          )}
+
+          {!studioV2 && profileActions}
+        </article>
+      )}
 
       <div className="student-learning-main">
         <div className="student-learning-primary-column">
-          {currentRevision?.status === 'draft' && profileDraftDiffBase ? (
+          {!studioV2 && currentRevision?.status === 'draft' && profileDraftDiffBase ? (
             <ProfileDraftDiffPanel items={profileDraftDiffItems} />
           ) : null}
 
-          <article className="student-area-panel workspace-card student-learning-profile-card">
-            <header className="student-learning-block-header">
-              <h2>Foundational Profile</h2>
-            </header>
+          {studioV2 ? memoryCard : profileCard}
 
-            <div className="student-learning-section-grid">
-              {PROFILE_SECTION_CONFIGS.map((section) => (
-                <LearningSectionCard
-                  key={section.id}
-                  config={section}
-                  values={profileForm}
-                  onChange={handleProfileFieldChange}
-                />
-              ))}
-            </div>
+          {studioV2 ? profileCard : memoryCard}
 
-            <footer className="student-learning-editor-footer">
-              <div>
-                <strong>{profileDirty ? 'Unsaved structured edits' : 'No unsaved changes'}</strong>
-              </div>
-              {profileLegacyNotice ? (
-                <p className="workspace-muted">{profileLegacyNotice}</p>
-              ) : null}
-            </footer>
-          </article>
-
-          <article className="student-area-panel workspace-card student-learning-memory-card">
-            <header className="student-learning-block-header">
-              <h2>Student Memory</h2>
-            </header>
-
-            {memoryOverviewError ? (
-              <p className="workspace-error" aria-live="polite">
-                {memoryOverviewError}
-                {memoryOverview ? ' Showing previously loaded memory.' : ''}
-              </p>
-            ) : null}
-
-            {memoryOverviewLoading && !memoryOverview ? (
-              <p className="workspace-muted">Loading memory summary…</p>
-            ) : memoryRequestFailed ? (
-              <p className="workspace-muted">
-                Memory could not be loaded. Existing history is unknown.
-              </p>
-            ) : latestSnapshot ? (
-              <>
-                <p className="workspace-muted">
-                  Snapshot generated {formatDateTime(latestSnapshot.generatedAt)}
-                </p>
-
-                <div className="student-learning-memory-highlight">
-                  <strong>Snapshot Summary</strong>
-                  <p>{latestSnapshot.snapshotSummary ?? 'No snapshot summary yet.'}</p>
-                </div>
-
-                <div className="student-learning-memory-columns">
-                  <section className="student-learning-memory-column">
-                    <h3>Recent Lesson Memory</h3>
-                    {recentLessons.length > 0 ? (
-                      <ul>
-                        {recentLessons.map((entry) => (
-                          <li key={entry.id}>{entry.lessonSummary ?? entry.id}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="workspace-muted">No ready lesson-memory entries yet.</p>
-                    )}
-                  </section>
-
-                  <section className="student-learning-memory-column">
-                    <h3>Recent Homework Memory</h3>
-                    {recentHomework.length > 0 ? (
-                      <ul>
-                        {recentHomework.map((entry) => (
-                          <li key={entry.id}>{entry.homeworkSummary ?? entry.topic ?? entry.id}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="workspace-muted">No ready homework-memory entries yet.</p>
-                    )}
-                  </section>
-
-                  <section className="student-learning-memory-column">
-                    <h3>Current Open Threads</h3>
-                    {unresolvedIssues.length > 0 ? (
-                      <ul>
-                        {unresolvedIssues.map((issue) => (
-                          <li key={`${issue.label}-${issue.note}`}>
-                            <strong>{issue.label}</strong>: {issue.note}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="workspace-muted">
-                        No open threads in the latest memory snapshot.
-                      </p>
-                    )}
-                  </section>
-                </div>
-              </>
-            ) : (
-              <div className="student-learning-empty-block">
-                <strong>{memoryUnavailableCopy}</strong>
-                <p>
-                  {availability?.state === 'repair_required'
-                    ? 'Existing observations remain retained. A separately authorized rebuild is required before using the established summary.'
-                    : availability?.state === 'repository_unavailable'
-                      ? 'Try again when memory retrieval is restored. The profile can still be edited manually.'
-                      : 'The profile can still be edited manually, and this area will become more useful as lesson and homework memory accumulates.'}
-                </p>
-              </div>
-            )}
-            {memoryHealth || latestSnapshot ? (
-              <MemoryHealthDetails
-                health={memoryHealth}
-                readySnapshot={latestSnapshot}
-                open={memoryHealthDetailsOpen}
-                onToggle={() => setMemoryHealthDetailsOpen((current) => !current)}
-              />
-            ) : null}
-          </article>
-
-          <ProfileCandidatesPanel
-            className="student-area-panel student-learning-candidates-card"
-            selectedStudentId={studentId}
-            profileCandidates={profileCandidates}
-            profileCandidatesLoading={profileCandidatesLoading}
-            profileCandidatesError={profileCandidatesError}
-            profileCandidateFilter={profileCandidateFilter}
-            setProfileCandidateFilter={setProfileCandidateFilter}
-            profileCandidateAction={profileCandidateAction}
-            profileCandidateDrafts={profileCandidateDrafts}
-            updateProfileCandidateDraft={updateProfileCandidateDraft}
-            selectedCandidateIds={selectedCandidateIds}
-            setSelectedCandidateIds={setSelectedCandidateIds}
-            profileCandidatePromotionNote={profileCandidatePromotionNote}
-            setProfileCandidatePromotionNote={setProfileCandidatePromotionNote}
-            profileCandidatePromotionBusy={profileCandidatePromotionBusy}
-            profileCandidatePromotionError={profileCandidatePromotionError}
-            profileCandidatePromotionSuccess={profileCandidatePromotionSuccess}
-            onRefreshCandidates={() => reloadCurrentLearningSurface()}
-            onPromoteProfileCandidates={() =>
-              handleRefreshDraftFromCandidates(selectedCandidateIds)
-            }
-            onReviewProfileCandidate={handleReviewProfileCandidate}
-          />
+          {!studioV2 && candidatesPanel}
         </div>
 
-        <aside className="student-area-panel workspace-card student-learning-sidebar">
-          <header className="student-learning-block-header">
-            <h2>Profile Versions</h2>
-          </header>
+        {!studioV2 && (
+          <aside
+            id="learning-versions"
+            className="student-area-panel workspace-card student-learning-sidebar"
+          >
+            <header className="student-learning-block-header">
+              <h2>Profile Versions</h2>
+            </header>
 
-          <div className="student-learning-rail-summary">
-            <LearningMetricCard
-              eyebrow="Current Revision"
-              value={currentRevision?.versionLabel ?? currentRevision?.id ?? 'n/a'}
-              detail={currentRevision?.status ?? 'no current revision'}
-              tone={currentRevision?.status === 'draft' ? 'accent' : 'success'}
-            />
-            <LearningMetricCard
-              eyebrow="Support ID"
-              value={formatStudentShortId(studentId)}
-              detail={
-                currentRevision?.activatedAt
-                  ? `Profile active since ${formatDateTime(currentRevision.activatedAt)}`
-                  : 'Profile activation history is not available yet'
-              }
-            />
-          </div>
+            <div className="student-learning-rail-summary">
+              <LearningMetricCard
+                eyebrow="Current Revision"
+                value={currentRevision?.versionLabel ?? currentRevision?.id ?? 'n/a'}
+                detail={currentRevision?.status ?? 'no current revision'}
+                tone={currentRevision?.status === 'draft' ? 'accent' : 'success'}
+              />
+              <LearningMetricCard
+                eyebrow="Support ID"
+                value={formatStudentShortId(studentId)}
+                detail={
+                  currentRevision?.activatedAt
+                    ? `Profile active since ${formatDateTime(currentRevision.activatedAt)}`
+                    : 'Profile activation history is not available yet'
+                }
+              />
+            </div>
 
-          <div className="workspace-list student-learning-revision-list">
-            {visibleProfileRevisions.map((revision) => (
-              <div key={revision.id} className="workspace-list-item workspace-list-item-stack">
-                <div>
-                  <strong>{revision.versionLabel ?? revision.id}</strong>
-                  <div className="workspace-muted">
-                    {revision.status ?? 'unknown'} • {formatDateTime(revision.createdAt)}
-                  </div>
-                </div>
-                <div className="student-learning-inline">
-                  <button
-                    type="button"
-                    className="workspace-secondary-btn"
-                    onClick={() =>
-                      void loadProfileRevisionIntoEditor(profileStudentId, revision.id)
-                    }
-                    disabled={profileBusy !== null}
-                  >
-                    Open
-                  </button>
-                  {revision.status !== 'active' ? (
+            {profileVersions}
+          </aside>
+        )}
+      </div>
+      {studioV2 && editing && (
+        <StudioV2Dialog
+          title={canActivateDraft ? 'Edit profile draft' : 'Edit profile'}
+          drawer
+          wide
+          onClose={closeEditor}
+          closeDisabled={profileBusy !== null}
+        >
+          <div className="studio-v2-dialog__body student-v2-profile-editor">
+            {profileFeedback}
+            {canActivateDraft && profileDraftDiffBase && (
+              <ProfileDraftDiffPanel items={profileDraftDiffItems} />
+            )}
+            {profileFields}
+            <footer className="student-learning-editor-footer">
+              {confirmDiscard ? (
+                <div
+                  className="student-v2-discard"
+                  role="group"
+                  aria-label="Unsaved profile changes"
+                >
+                  <strong>Discard unsaved changes?</strong>
+                  <div className="studio-v2-dialog__actions">
                     <button
                       type="button"
-                      className="workspace-secondary-btn"
-                      onClick={() => void handleRestoreRevision(revision.id)}
-                      disabled={profileBusy !== null}
+                      className="product-button product-button--secondary"
+                      onClick={() => setConfirmDiscard(false)}
                     >
-                      Restore
+                      Keep editing
                     </button>
-                  ) : null}
+                    <button
+                      type="button"
+                      className="product-button product-button--danger"
+                      onClick={discardEditorChanges}
+                    >
+                      Discard changes
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ) : (
+                <>
+                  {profileDirty && <strong>Unsaved profile changes</strong>}
+                  {profileLegacyNotice && <p className="workspace-muted">{profileLegacyNotice}</p>}
+                  {profileActions}
+                </>
+              )}
+            </footer>
           </div>
-          {hiddenProfileRevisionCount > 0 || showAllProfileVersions ? (
-            <button
-              type="button"
-              className="workspace-secondary-btn student-learning-version-toggle"
-              onClick={() => setShowAllProfileVersions((current) => !current)}
-            >
-              {showAllProfileVersions ? 'Hide older versions' : 'View all versions'}
-            </button>
-          ) : null}
-        </aside>
-      </div>
+        </StudioV2Dialog>
+      )}
+      {studioV2 && profilePanel === 'versions' && (
+        <StudioV2Dialog
+          title="Profile versions"
+          wide
+          onClose={() => setProfilePanel(null)}
+          closeDisabled={profileBusy !== null}
+        >
+          <div className="studio-v2-dialog__body student-v2-profile-versions">
+            {profileFeedback}
+            {visibleProfileRevisions.length ? profileVersions : <p>No saved versions yet.</p>}
+          </div>
+        </StudioV2Dialog>
+      )}
+      {studioV2 && profilePanel === 'suggestions' && (
+        <StudioV2Dialog
+          title="Profile suggestions"
+          drawer
+          wide
+          onClose={() => setProfilePanel(null)}
+          closeDisabled={profileCandidateAction !== null || profileCandidatePromotionBusy}
+        >
+          <div className="studio-v2-dialog__body student-v2-profile-suggestions">
+            {profileFeedback}
+            {candidatesUnavailable || profileCandidates.length > 0 ? (
+              candidatesPanel
+            ) : (
+              <p className="workspace-muted">No profile suggestions yet.</p>
+            )}
+          </div>
+        </StudioV2Dialog>
+      )}
     </section>
   );
 };

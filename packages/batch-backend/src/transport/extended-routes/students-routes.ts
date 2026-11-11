@@ -70,6 +70,10 @@ import {
 } from '../../application/workspace-context.js';
 import { HomeworkMemoryEntryStatusSchema } from '../../domain/homework-memory-model.js';
 import { LessonMemoryEntryStatusSchema } from '../../domain/lesson-memory-model.js';
+import {
+  ProfileWriteConflictError,
+  readProfileWritePrecondition,
+} from '../../domain/profile-write-authority.js';
 import { StudentMemorySnapshotStatusSchema } from '../../domain/student-memory-snapshot-model.js';
 import {
   StudentProfileCandidateReviewStateSchema,
@@ -183,10 +187,20 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
     .object({
       status: lessonStatusSchema.optional(),
       consumesCredit: z.boolean().optional(),
+      plannedCharge: z.boolean().optional(),
+      expectedStatus: z.enum(['scheduled', 'completed', 'canceled', 'no_show']).optional(),
+      expectedPlannedCharge: z.boolean().nullable().optional(),
       notes: optionalTextSchema,
     })
     .strict()
-    .refine((value) => Object.keys(value).length > 0, 'At least one lesson field is required');
+    .refine(
+      (value) =>
+        value.status !== undefined ||
+        value.consumesCredit !== undefined ||
+        value.plannedCharge !== undefined ||
+        value.notes !== undefined,
+      'At least one lesson field is required',
+    );
   const packageBodySchema = z.object({
     lessons: z.number().int().positive().max(500),
     note: optionalTextSchema,
@@ -223,6 +237,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
     return {
       profile,
+      activeRevisionId: profile?.activeRevisionId ?? null,
       revisions: revisions ?? emptyProfileRevisions,
     };
   }
@@ -1109,12 +1124,14 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       });
 
       try {
+        const expectedActiveRevisionId = readProfileWritePrecondition(request.body);
         const params = paramsSchema.parse(request.params ?? {});
         const body = bodySchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
         const result = await promoteStudentProfileCandidates({
           request: {
             studentId: params.id,
+            expectedActiveRevisionId,
             candidateIds: body.candidateIds,
             baseRevisionId: body.baseRevisionId ?? null,
             reviewerId: authenticatedUser?.id ?? null,
@@ -1143,6 +1160,13 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           draftRevision: result.draftRevision,
         });
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof HistoricalAssignmentReadOnlyError)
           return reply
             .code(410)
@@ -1207,12 +1231,14 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       });
 
       try {
+        const expectedActiveRevisionId = readProfileWritePrecondition(request.body);
         const params = paramsSchema.parse(request.params ?? {});
         const body = bodySchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
         const result = await refreshProfileDraftFromApprovedCandidates({
           request: {
             studentId: params.id,
+            expectedActiveRevisionId,
             candidateIds: body.candidateIds,
             baseRevisionId: body.baseRevisionId ?? null,
             reviewerId: authenticatedUser?.id ?? null,
@@ -1243,6 +1269,13 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           usage: result.usage,
         });
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof HistoricalAssignmentReadOnlyError)
           return reply
             .code(410)
@@ -1299,11 +1332,13 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       });
 
       try {
+        const expectedActiveRevisionId = readProfileWritePrecondition(request.body);
         const params = paramsSchema.parse(request.params ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
         const result = await initializeStudentProfileDraft({
           request: {
             studentId: params.id,
+            expectedActiveRevisionId,
             reviewerId: authenticatedUser?.id ?? null,
           },
           overrides: {
@@ -1323,6 +1358,13 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           draftRevision: result.draftRevision,
         });
       } catch (error: unknown) {
+        if (error instanceof ProfileWriteConflictError)
+          return reply.code(error.status).send({
+            error: error.code,
+            code: error.code,
+            message: error.message,
+            activeRevisionId: error.activeRevisionId,
+          });
         if (error instanceof HistoricalAssignmentReadOnlyError)
           return reply
             .code(410)

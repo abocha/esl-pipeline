@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { useWorkspaceSettings, useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import { type BusinessStatsSurface, getBusinessStatsSurface } from '../../utils/api';
 import { normalizeTimezone } from '../../utils/timezones';
+import { LoadingPlaceholder } from '../system/LoadingPlaceholder';
 import { formatDateRange, formatHours, formatMoney } from './business-format';
 export const BusinessStatsPage: React.FC = () => {
   const timezone = useWorkspaceTimezone();
@@ -51,14 +52,18 @@ export const BusinessStatsPage: React.FC = () => {
         <header className="business-agenda-heading">
           <h2>Stats</h2>
         </header>
-        <p className="business-empty" role={error ? 'alert' : undefined}>
-          {error ?? 'Loading business stats...'}
-        </p>
         {error ? (
-          <button type="button" onClick={() => void load()}>
-            Retry
-          </button>
-        ) : null}
+          <>
+            <p className="business-empty" role="alert">
+              {error}
+            </p>
+            <button type="button" onClick={() => void load()}>
+              Retry
+            </button>
+          </>
+        ) : (
+          <LoadingPlaceholder label="Loading business stats" />
+        )}
       </section>
     );
   }

@@ -53,23 +53,32 @@ export function detectDeviceTimezone(): string | null {
     return null;
   }
 }
-export function timezoneLabel(value: string, now: Date = new Date()): string {
-  const zone = normalizeTimezone(value);
-  if (!zone) return value;
-  const city =
-    zone === 'Asia/Ho_Chi_Minh'
-      ? 'Ho Chi Minh City'
-      : zone === 'UTC'
-        ? 'UTC'
-        : !zone.includes('/') || zone.startsWith('Etc/GMT')
-          ? value
-          : `${zone.split('/').at(-1)?.replaceAll('_', ' ')} (${zone.split('/')[0]})`;
+function timezoneOffset(zone: string, now: Date): string {
   const offset =
     new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
       .formatToParts(now)
       .find((part) => part.type === 'timeZoneName')
       ?.value.replace('GMT', 'UTC') ?? 'UTC';
-  return `${city} · ${offset === 'UTC' ? 'UTC+00:00' : offset}`;
+  return offset === 'UTC' ? 'UTC+00:00' : offset;
+}
+function timezonePlace(zone: string): string {
+  const parts = zone.split('/');
+  const city =
+    zone === 'Asia/Ho_Chi_Minh' ? 'Ho Chi Minh City' : (parts.at(-1) ?? zone).replaceAll('_', ' ');
+  const region = parts[0] === 'America' ? 'Americas' : parts[0];
+  return parts.length > 1 ? `${city} (${region})` : city;
+}
+export function timezoneName(value: string): string {
+  const zone = normalizeTimezone(value);
+  if (!zone) return value;
+  return zone.startsWith('Etc/GMT') ? timezoneOffset(zone, new Date()) : timezonePlace(zone);
+}
+export function timezoneLabel(value: string, now: Date = new Date()): string {
+  const zone = normalizeTimezone(value);
+  if (!zone) return value;
+  const offset = timezoneOffset(zone, now);
+  if (zone.startsWith('Etc/GMT')) return offset;
+  return `${timezonePlace(zone)} · ${offset}`;
 }
 export function buildTimezoneOptions(
   saved: string,

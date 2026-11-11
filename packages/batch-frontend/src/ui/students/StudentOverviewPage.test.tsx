@@ -3,11 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { StudioV2Provider } from '../studio-v2/StudioV2Context';
 import { StudentOverviewPage } from './StudentOverviewPage';
 
 const apiMocks = vi.hoisted(() => ({
   getStudentOverviewSurface: vi.fn(),
   getBusinessSettings: vi.fn(),
+  listUserJobs: vi.fn(),
 }));
 
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
@@ -42,6 +44,7 @@ function createDeferred<T>(): Deferred<T> {
 }
 
 function seedOverviewMocks() {
+  apiMocks.listUserJobs.mockResolvedValue({ jobs: [], total: 0, limit: 4, offset: 0 });
   apiMocks.getBusinessSettings.mockResolvedValue({ timezone: 'Asia/Bangkok' });
   useStudentAreaContextMock.mockReturnValue({
     student: {
@@ -68,7 +71,7 @@ function makeOverviewSurface(overrides: Record<string, unknown> = {}) {
         overallLevel: 'B1',
         primaryGoals: ['Speak confidently in workplace meetings.'],
         communicationContexts: ['Product team updates'],
-        interestsAndUsefulThemes: ['Design critique'],
+        interestsAndUsefulThemes: ['Design critique', 'Travel'],
         stableStrengths: ['Clear ideas', 'High curiosity'],
         persistentChallenges: ['Pronunciation', 'Phrasal verbs'],
         studyPreferences: ['Short practical speaking loops'],
@@ -215,10 +218,12 @@ function makeOverviewSurface(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function renderOverview() {
+function renderOverview(studioV2 = false) {
   return render(
     <MemoryRouter initialEntries={['/students/student-alex/overview']}>
-      <StudentOverviewPage />
+      <StudioV2Provider enabled={studioV2}>
+        <StudentOverviewPage />
+      </StudioV2Provider>
     </MemoryRouter>,
   );
 }
@@ -227,6 +232,30 @@ describe('StudentOverviewPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     seedOverviewMocks();
+  });
+
+  it('uses the v2 learner composition and links to separate operational pages', async () => {
+    renderOverview(true);
+    await screen.findByRole('heading', { name: 'What we are working toward' });
+    expect(screen.getByRole('link', { name: 'View billing' }).getAttribute('href')).toBe(
+      '/students/student-alex/billing',
+    );
+    expect(screen.getByRole('link', { name: 'View schedule' }).getAttribute('href')).toBe(
+      '/students/student-alex/schedule',
+    );
+    expect(screen.getByRole('link', { name: 'Learning profile' }).getAttribute('href')).toBe(
+      '/students/student-alex/learning',
+    );
+    expect(screen.getByText('Design critique · Travel')).toBeTruthy();
+    expect(screen.getByText('Pronunciation · Phrasal verbs')).toBeTruthy();
+    expect(
+      screen.getByText('Expand vocabulary while keeping speech precise and flowing.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Start assignment' }).getAttribute('href')).toBe(
+      '/?studentId=student-alex',
+    );
+    expect(screen.queryByText('Profile updated automatically')).toBeNull();
+    expect(apiMocks.getStudentOverviewSurface).toHaveBeenCalledTimes(1);
   });
 
   it('renders a factual overview from structured learner profile and memory data', async () => {
@@ -278,7 +307,7 @@ describe('StudentOverviewPage', () => {
     expect(screen.getByRole('region', { name: /Recent Activity/i })).toBeTruthy();
 
     const operations = screen.getByRole('region', { name: /Operations/i });
-    expect(operations.textContent).toContain('May 7, 5:00 PM · Asia/Bangkok');
+    expect(operations.textContent).toContain('May 7, 5:00 PM · Time zone: Bangkok (Asia)');
     const operationLinks = Array.from(operations.querySelectorAll('a'));
     expect(operationLinks).toHaveLength(3);
     expect(operationLinks.map((link) => link.getAttribute('href'))).toEqual([

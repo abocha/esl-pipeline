@@ -258,6 +258,9 @@ export function useMinimalAssignmentResume({
     null,
   );
   const [selectedResumeJobId, setSelectedResumeJobId] = useState('');
+  const [initialResumePending, setInitialResumePending] = useState(() =>
+    Boolean(readSessionIdFromQuery() || readJobIdFromQuery()),
+  );
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [resumeJobsTotal, setResumeJobsTotal] = useState(0);
@@ -924,7 +927,7 @@ export function useMinimalAssignmentResume({
       setResumeLoading(false);
     };
 
-    void initializeResume();
+    void initializeResume().finally(() => setInitialResumePending(false));
   }, [hydrateFromJob, hydrateFromSession, loadResumeJobs]);
 
   const openAssignmentSession = useCallback(
@@ -939,6 +942,7 @@ export function useMinimalAssignmentResume({
     setActiveAssignmentSession,
     selectedResumeJobId,
     setSelectedResumeJobId,
+    initialResumePending,
     resumeLoading,
     resumeError,
     resumeHasMore:

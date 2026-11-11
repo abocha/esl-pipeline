@@ -12,6 +12,7 @@ import { getStudentProfileById, type StudentStoreOverrides } from './student-pro
 
 export interface InitializeStudentProfileDraftRequest {
   studentId: string;
+  expectedActiveRevisionId?: string | null;
   reviewerId?: string | null;
 }
 
@@ -90,6 +91,7 @@ export async function initializeStudentProfileDraft(args: {
     request.studentId,
     renderFoundationalProfileContent(structuredContent),
     {
+      expectedActiveRevisionId: request.expectedActiveRevisionId,
       source: 'create',
       status: 'draft',
       createdBy: request.reviewerId ?? null,

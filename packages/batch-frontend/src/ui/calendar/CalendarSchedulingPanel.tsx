@@ -1,5 +1,5 @@
 import { isAxiosError } from 'axios';
-import { CalendarDays, RefreshCw } from 'lucide-react';
+import { CalendarDays, Check, Link2, RefreshCw, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
@@ -33,8 +33,11 @@ import {
   updateStudentProfile,
 } from '../../utils/api';
 import { dateInputInTimezone } from '../../utils/scheduling-time';
-import { normalizeTimezone } from '../../utils/timezones';
+import { normalizeTimezone, timezoneName } from '../../utils/timezones';
 import { formatTutorTime } from '../../utils/tutor-time';
+import { useStudioV2 } from '../studio-v2/StudioV2Context';
+import { StudioV2Dialog } from '../studio-v2/StudioV2Dialog';
+import { LoadingPlaceholder } from '../system/LoadingPlaceholder';
 import './CalendarSchedulingPanel.css';
 
 interface SavedSetup {
@@ -50,6 +53,8 @@ interface Props {
   email?: string | null;
   defaultDurationMinutes?: number;
   onLedgerRefresh: () => Promise<void>;
+  presentationActive?: boolean;
+  routeHash?: string;
 }
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const message = (error: unknown) =>
@@ -87,6 +92,8 @@ export function CalendarSchedulingPanel({
   email,
   defaultDurationMinutes = 60,
   onLedgerRefresh,
+  presentationActive = true,
+  routeHash,
 }: Props) {
   const workspace = useWorkspaceSettings();
   const storageKey = `calendar-setup:${workspaceId}:${studentId ?? 'workspace'}`;
@@ -94,6 +101,7 @@ export function CalendarSchedulingPanel({
   const [status, setStatus] = useState<CalendarSchedulingStatusDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [requestingSync, setRequestingSync] = useState(false);
   const [calendars, setCalendars] = useState<CalendarSelectionDto[]>([]);
   const [selectedCalendar, setSelectedCalendar] = useState('');
   const [confirmReplacement, setConfirmReplacement] = useState(false);
@@ -117,10 +125,12 @@ export function CalendarSchedulingPanel({
   const [unlinked, setUnlinked] = useState<CalendarUnlinkedEventDto[]>([]);
   const [unlinkedNextPageToken, setUnlinkedNextPageToken] = useState<string | null>(null);
   const [unlinkedLoaded, setUnlinkedLoaded] = useState(false);
+  const [linkedEventTitle, setLinkedEventTitle] = useState<string | null>(null);
   useEffect(() => {
     setUnlinked([]);
     setUnlinkedNextPageToken(null);
     setUnlinkedLoaded(false);
+    setLinkedEventTitle(null);
   }, [workspaceId, connection?.connection?.id, connection?.connection?.generation]);
   const ledgerRefresh = useRef(onLedgerRefresh);
   ledgerRefresh.current = onLedgerRefresh;
@@ -206,6 +216,11 @@ export function CalendarSchedulingPanel({
       setBusy(false);
     }
   };
+  const syncNow = async () => {
+    setRequestingSync(true);
+    await run(() => requestCalendarSync(workspaceId));
+    setRequestingSync(false);
+  };
   const submit = async () => {
     if (!saved && draftTimezone.current !== normalizeTimezone(timezone)) {
       // Keep entered wall times, but require review before interpreting them in a
@@ -253,23 +268,155 @@ export function CalendarSchedulingPanel({
   };
   const updateSlot = (index: number, patch: Partial<CalendarSlotDto>) =>
     setSlots((current) => current.map((slot, i) => (i === index ? { ...slot, ...patch } : slot)));
-  const connected = connection?.connection?.status === 'connected';
+  const studioV2 = useStudioV2();
+  const [expanded, setExpanded] = useState(
+    () => presentationActive && (routeHash ?? window.location.hash) === '#teaching-calendar',
+  );
+  const [drawerView, setDrawerView] = useState<'schedule' | 'link' | 'settings'>('schedule');
+  const manageRef = useRef<HTMLButtonElement>(null);
+  const drawerTrigger = useRef<HTMLButtonElement>(null);
+  const closeDrawer = () => {
+    const trigger = drawerTrigger.current ?? manageRef.current;
+    drawerTrigger.current = null;
+    setExpanded(false);
+    window.setTimeout(() => trigger?.focus(), 0);
+  };
+  useEffect(() => {
+    const openFromHash = () => {
+      if (
+        studioV2 &&
+        presentationActive &&
+        (routeHash ?? window.location.hash) === '#teaching-calendar'
+      )
+        setExpanded(true);
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+  }, [studioV2, presentationActive, routeHash]);
+  const needsAttention =
+    status?.state === 'needs_attention' ||
+    status?.state === 'reconnect_required' ||
+    status?.operations.some((operation) => operation.state === 'needs_review');
+  useEffect(() => {
+    if (presentationActive && (error || needsAttention)) setExpanded(true);
+  }, [error, needsAttention, presentationActive]);
+  useEffect(() => {
+    if (!presentationActive) {
+      drawerTrigger.current = null;
+      setExpanded(false);
+    }
+  }, [presentationActive]);
+  const unavailable = studioV2 && connection?.enabled === false;
+  const connected = !unavailable && connection?.connection?.status === 'connected';
   const canConnect = connection?.enabled && connection.canManage;
+  const choosingCalendar = studioV2 && !connected && canConnect && Boolean(connection?.grant);
+  const canSchedule = connected && connection?.canSchedule;
+  const canLink = connected && connection?.canManage;
+  const hasScheduleView = Boolean(studentId && (canSchedule || saved));
+  const activeView =
+    studentId && canLink && drawerView === 'link'
+      ? 'link'
+      : hasScheduleView && drawerView !== 'settings'
+        ? 'schedule'
+        : 'settings';
+  const showSettings = !studioV2 || choosingCalendar || (connected && activeView === 'settings');
+  const loadUnlinkedEvents = () =>
+    run(async () => {
+      const page = await getCalendarUnlinkedEvents(workspaceId);
+      setUnlinked(page.events);
+      setUnlinkedNextPageToken(page.nextPageToken);
+      setUnlinkedLoaded(true);
+    });
+  const calendarChoiceRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (studioV2 && presentationActive && expanded && !busy && calendars.length)
+      calendarChoiceRef.current?.focus();
+  }, [studioV2, presentationActive, expanded, busy, calendars.length]);
+  const loadCalendars = () =>
+    run(async () => {
+      const result = await getLessonCalendars(workspaceId);
+      setCalendars(result.calendars);
+      if (studioV2) {
+        const [onlyCalendar] = result.calendars;
+        setSelectedCalendar(
+          !connection?.connection && result.calendars.length === 1 ? (onlyCalendar?.id ?? '') : '',
+        );
+        setConfirmReplacement(false);
+      }
+      if (studioV2 && !result.calendars.length)
+        throw new Error('No writable calendars found for this Google account.');
+    });
   const connect = () =>
     run(async () => {
       const result = await beginCalendarConnect(workspaceId);
       window.location.assign(result.authorizationUrl);
     });
-  const stateLabel = status
-    ? {
-        disconnected: 'Disconnected',
-        reconnect_required: 'Reconnect required',
-        syncing: 'Syncing',
-        synced: 'Synced',
-        needs_attention: 'Needs attention',
-      }[status.state]
-    : 'Checking connection…';
-  return (
+  const syncInProgress =
+    requestingSync ||
+    (status?.state === 'syncing' &&
+      status.operations.some(
+        ({ kind, state }) =>
+          kind === 'sync' && (state === 'pending' || state === 'running' || state === 'retry_wait'),
+      ));
+  const minutesSinceSync = Math.floor(
+    (Date.now() - Date.parse(status?.lastSyncedAt ?? '')) / 60_000,
+  );
+  const syncAge =
+    minutesSinceSync === 0
+      ? 'just now'
+      : minutesSinceSync > 0 && minutesSinceSync < 60
+        ? `${minutesSinceSync}m ago`
+        : null;
+  const statusPending = !status && !error && !unavailable;
+  const stateLabel = unavailable
+    ? 'Unavailable'
+    : status
+      ? {
+          disconnected: 'Disconnected',
+          reconnect_required: 'Reconnect required',
+          syncing: 'Syncing',
+          synced: syncAge ? `Synced ${syncAge}` : 'Synced',
+          needs_attention: 'Needs attention',
+        }[status.state]
+      : error
+        ? 'Needs attention'
+        : 'Checking connection…';
+  const ConnectionSettings = studioV2 ? 'section' : 'details';
+  const CalendarAssociation = studioV2 ? 'section' : 'details';
+  const calendarName = connection?.connection?.calendarName;
+  const privacyNotice = (
+    <p className="calendar-notice calendar-privacy-notice">
+      Connecting shares your Google account identity and writable calendar list with ESL Pipeline.
+      The selected calendar's event details are stored to sync lessons; invitations share event
+      details with recipients when you choose to send them. Access can continue in the background.
+      OpenAI API processes selected teaching context; memory rebuilds and profile refreshes can also
+      send Calendar-derived lesson start times and internal lesson associations. Separately
+      authorized ChatGPT connections receive selected learner context. Disconnecting stops sync but
+      keeps stored data and Google authorization. Read the{' '}
+      <a
+        href="https://eslpipeline.com/privacy/#google-calendar"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Privacy Policy (opens in a new tab)
+      </a>{' '}
+      for details and how to revoke access or request deletion.
+    </p>
+  );
+  const permissionScope = (
+    <p className="calendar-help">
+      Google grants access to events across your calendars. ESL Pipeline uses only the calendar you
+      select.
+    </p>
+  );
+  const privacyDetails = (
+    <details className="calendar-v2-disclosure">
+      <summary>Calendar access and privacy</summary>
+      {privacyNotice}
+    </details>
+  );
+  const panel = (
     <section className="calendar-scheduling-panel" aria-label="Google Calendar scheduling">
       <header className="calendar-header">
         <div className="calendar-heading">
@@ -279,25 +426,50 @@ export function CalendarSchedulingPanel({
           <div>
             <div className="calendar-title-line">
               <h2>Google Calendar</h2>
-              <span className="calendar-status" data-state={status?.state} role="status">
-                {stateLabel}
-              </span>
+              {studioV2 && statusPending ? (
+                <LoadingPlaceholder label="Checking calendar connection" kind="inline" count={1} />
+              ) : (
+                <span className="calendar-status" data-state={status?.state} role="status">
+                  {status?.state === 'synced' && <Check size={12} aria-hidden="true" />}
+                  {stateLabel}
+                </span>
+              )}
             </div>
-            <p className="calendar-subtitle">
-              {connection?.connection?.calendarName ?? 'Connect a calendar to schedule lessons'}
-            </p>
+            {calendarName || choosingCalendar || !studioV2 ? (
+              <p className="calendar-subtitle">
+                {choosingCalendar
+                  ? connection?.grant?.googleEmail
+                  : (calendarName ?? 'Connect a calendar to schedule lessons')}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="calendar-header-actions">
-          {connected ? (
+          {connected && showSettings ? (
             <button
-              className="calendar-button"
+              className="calendar-button calendar-sync-button"
               type="button"
-              disabled={busy}
-              onClick={() => void run(() => requestCalendarSync(workspaceId))}
+              disabled={busy || syncInProgress}
+              onClick={() => void syncNow()}
             >
-              <RefreshCw size={15} aria-hidden="true" /> Sync now
+              <RefreshCw
+                size={15}
+                className={syncInProgress ? 'calendar-sync-spinner' : undefined}
+                aria-hidden="true"
+              />
+              {syncInProgress ? 'Syncing…' : 'Sync now'}
             </button>
+          ) : connected ? null : choosingCalendar ? (
+            calendars.length === 0 ? (
+              <button
+                className="calendar-button calendar-button-primary"
+                type="button"
+                disabled={busy}
+                onClick={() => void loadCalendars()}
+              >
+                Choose lesson calendar
+              </button>
+            ) : null
           ) : canConnect ? (
             <button
               className="calendar-button calendar-button-primary"
@@ -310,23 +482,55 @@ export function CalendarSchedulingPanel({
           ) : null}
         </div>
       </header>
-      <p className="calendar-notice">
-        Connecting shares your Google account identity and writable calendar list with ESL Pipeline.
-        The selected calendar's event details are stored to sync lessons; invitations share event
-        details with recipients when you choose to send them. Access can continue in the background.
-        OpenAI API processes selected teaching context; memory rebuilds and profile refreshes can
-        also send Calendar-derived lesson start times and internal lesson associations. Separately
-        authorized ChatGPT connections receive selected learner context. Disconnecting stops sync
-        but keeps stored data and Google authorization. Read the{' '}
-        <a
-          href="https://eslpipeline.com/privacy/#google-calendar"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Privacy Policy (opens in a new tab)
-        </a>{' '}
-        for details and how to revoke access or request deletion.
-      </p>
+      {studioV2 && connected && studentId && (hasScheduleView || canLink) ? (
+        <div className="calendar-v2-actions" role="group" aria-label="Calendar actions">
+          {hasScheduleView && (
+            <button
+              type="button"
+              aria-pressed={activeView === 'schedule'}
+              aria-disabled={busy}
+              onClick={() => {
+                if (!busy) setDrawerView('schedule');
+              }}
+            >
+              <CalendarDays size={16} aria-hidden="true" /> Schedule lesson
+            </button>
+          )}
+          {canLink && (
+            <button
+              type="button"
+              aria-pressed={activeView === 'link'}
+              aria-disabled={busy}
+              onClick={() => {
+                if (busy) return;
+                setDrawerView('link');
+                if (!unlinkedLoaded) void loadUnlinkedEvents();
+              }}
+            >
+              <Link2 size={16} aria-hidden="true" /> Link existing event
+            </button>
+          )}
+          <button
+            type="button"
+            aria-pressed={activeView === 'settings'}
+            aria-disabled={busy}
+            onClick={() => {
+              if (!busy) setDrawerView('settings');
+            }}
+          >
+            <Settings2 size={16} aria-hidden="true" /> Calendar settings
+          </button>
+        </div>
+      ) : null}
+      {unavailable && (
+        <p className="calendar-help">
+          {connection.unavailableReason === 'google_calendar_disabled'
+            ? 'Google Calendar is turned off in this environment.'
+            : 'Google Calendar setup is incomplete.'}
+        </p>
+      )}
+      {!studioV2 && privacyNotice}
+      {studioV2 && !connected && canConnect && !choosingCalendar ? permissionScope : null}
       {error ? (
         <p className="calendar-notice calendar-notice-error" role="alert">
           {error}
@@ -335,7 +539,10 @@ export function CalendarSchedulingPanel({
       {status?.errorCode ? (
         <p className="calendar-notice">{attentionCopy(status.errorCode)}</p>
       ) : null}
-      {!connected ? (
+      {studioV2 && !connected && connection?.enabled && !canConnect ? (
+        <p className="calendar-help">Ask a workspace owner to connect Google Calendar.</p>
+      ) : null}
+      {!studioV2 && !connected ? (
         <div className="calendar-intro">
           <p>
             Google Calendar is required to schedule lessons. Teaching history, homework and billing
@@ -355,141 +562,211 @@ export function CalendarSchedulingPanel({
           ) : null}
         </div>
       ) : null}
-      <details className="calendar-connection" open={!connected}>
-        <summary>Connection settings</summary>
-        <div className="calendar-connection-body">
-          {connection?.connection ? (
-            <dl className="calendar-connection-facts">
-              <div>
-                <dt>Google account</dt>
-                <dd>{connection.connection.googleEmail}</dd>
-              </div>
-              <div>
-                <dt>Calendar timezone</dt>
-                <dd>{connection.connection.calendarTimezone}</dd>
-              </div>
-              {status?.lastSyncedAt ? (
+      {studioV2 && !connected && error && !choosingCalendar && (
+        <button
+          className="calendar-button"
+          type="button"
+          disabled={busy}
+          onClick={() => void run(refresh)}
+        >
+          Retry connection check
+        </button>
+      )}
+      {showSettings ? (
+        <ConnectionSettings
+          className="calendar-connection"
+          open={studioV2 ? undefined : !connected}
+        >
+          {!studioV2 && <summary>Connection settings</summary>}
+          <div className="calendar-connection-body">
+            {connection?.connection && !choosingCalendar ? (
+              <dl className="calendar-connection-facts">
                 <div>
-                  <dt>Last successful sync</dt>
-                  <dd>{formatTutorTime(status.lastSyncedAt, timezone)}</dd>
+                  <dt>Google account</dt>
+                  <dd>{connection.connection.googleEmail}</dd>
                 </div>
-              ) : null}
-            </dl>
-          ) : null}
-          <div className="calendar-actions">
-            <button
-              className="calendar-button"
-              type="button"
-              disabled={busy}
-              onClick={() => void run(refresh)}
-            >
-              Refresh status
-            </button>
-            {connected && canConnect ? (
-              <button
-                className="calendar-button"
-                type="button"
-                disabled={busy}
-                onClick={() => void connect()}
-              >
-                Reconnect Google
-              </button>
+                <div>
+                  <dt>Calendar timezone</dt>
+                  <dd>{timezoneName(connection.connection.calendarTimezone)}</dd>
+                </div>
+                {status?.lastSyncedAt ? (
+                  <div>
+                    <dt>Last successful sync</dt>
+                    <dd>{formatTutorTime(status.lastSyncedAt, timezone)}</dd>
+                  </div>
+                ) : null}
+              </dl>
             ) : null}
-            {connection?.enabled && connection.canManage && connection.grant ? (
-              <button
-                className="calendar-button"
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () =>
-                    setCalendars((await getLessonCalendars(workspaceId)).calendars),
-                  )
-                }
+            {!choosingCalendar && (
+              <div className="calendar-actions">
+                {!studioV2 && (
+                  <button
+                    className="calendar-button"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(refresh)}
+                  >
+                    Refresh status
+                  </button>
+                )}
+                {connected && canConnect ? (
+                  <button
+                    className="calendar-button"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void connect()}
+                  >
+                    Reconnect Google
+                  </button>
+                ) : null}
+                {connection?.enabled && connection.canManage && connection.grant ? (
+                  <button
+                    className="calendar-button"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void loadCalendars()}
+                  >
+                    {studioV2 ? 'Change lesson calendar' : 'Choose lesson calendar'}
+                  </button>
+                ) : null}
+              </div>
+            )}
+            {calendars.length ? (
+              <form
+                className={studioV2 ? 'calendar-picker' : undefined}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void run(async () => {
+                    await selectLessonCalendar(workspaceId, selectedCalendar, confirmReplacement);
+                    setCalendars([]);
+                  });
+                }}
               >
-                Choose lesson calendar
-              </button>
-            ) : null}
-          </div>
-          {calendars.length ? (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void run(async () => {
-                  await selectLessonCalendar(workspaceId, selectedCalendar, confirmReplacement);
-                  setCalendars([]);
-                });
-              }}
-            >
-              <label>
-                Lesson calendar
-                <select
-                  required
-                  value={selectedCalendar}
-                  onChange={(event) => setSelectedCalendar(event.target.value)}
+                {studioV2 ? (
+                  <fieldset className="calendar-picker-options" disabled={busy}>
+                    <legend>Lesson calendar</legend>
+                    <div className="calendar-picker-list">
+                      {calendars.map((calendar, index) => (
+                        <label className="calendar-picker-option" key={calendar.id}>
+                          <input
+                            ref={
+                              (selectedCalendar ? selectedCalendar === calendar.id : index === 0)
+                                ? calendarChoiceRef
+                                : undefined
+                            }
+                            type="radio"
+                            name="lesson-calendar"
+                            value={calendar.id}
+                            checked={selectedCalendar === calendar.id}
+                            onChange={() => setSelectedCalendar(calendar.id)}
+                            required
+                          />
+                          <span>
+                            <strong>{calendar.summary}</strong>{' '}
+                            <small>Time zone: {timezoneName(calendar.timeZone)}</small>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                ) : (
+                  <label>
+                    Lesson calendar
+                    <select
+                      required
+                      value={selectedCalendar}
+                      onChange={(event) => setSelectedCalendar(event.target.value)}
+                    >
+                      <option value="">Select a writable calendar</option>
+                      {calendars.map((calendar) => (
+                        <option key={calendar.id} value={calendar.id}>
+                          {calendar.summary} · Time zone: {timezoneName(calendar.timeZone)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {connection?.connection ? (
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={confirmReplacement}
+                      onChange={(event) => setConfirmReplacement(event.target.checked)}
+                    />
+                    I understand this replaces the scheduling source; existing lessons and pending
+                    work will not be retargeted.
+                  </label>
+                ) : null}
+                <button
+                  className={
+                    studioV2 ? 'calendar-button calendar-button-primary' : 'calendar-button'
+                  }
+                  type="submit"
+                  disabled={
+                    busy ||
+                    !selectedCalendar ||
+                    (Boolean(connection?.connection) && !confirmReplacement)
+                  }
                 >
-                  <option value="">Select a writable calendar</option>
-                  {calendars.map((calendar) => (
-                    <option key={calendar.id} value={calendar.id}>
-                      {calendar.summary} ({calendar.timeZone})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {connection?.connection ? (
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={confirmReplacement}
-                    onChange={(event) => setConfirmReplacement(event.target.checked)}
-                  />
-                  I understand this replaces the scheduling source; existing lessons and pending
-                  work will not be retargeted.
-                </label>
-              ) : null}
-              <button
-                className="calendar-button"
-                type="submit"
-                disabled={
-                  busy ||
-                  !selectedCalendar ||
-                  (Boolean(connection?.connection) && !confirmReplacement)
-                }
-              >
-                Use this calendar
-              </button>
-            </form>
-          ) : null}
-          {connected ? (
-            <p className="calendar-help">
-              Google permission covers Calendar events across your calendars; ESL uses only your
-              selected lesson calendar.
-            </p>
-          ) : null}
-          <p className="calendar-help">
-            Existing appointments in other calendars remain yours to manage. Recreating them here
-            can leave duplicate events visible.
-          </p>
-          {connected && connection?.canManage ? (
-            <div className="calendar-disconnect">
-              <p>
-                Disconnecting stops Calendar scheduling and sync. Your lesson history and billing
-                remain available.
+                  Use this calendar
+                </button>
+              </form>
+            ) : null}
+            {connected && !studioV2 ? (
+              <p className="calendar-help">
+                Google permission covers Calendar events across your calendars; ESL uses only your
+                selected lesson calendar.
               </p>
-              <button
-                className="calendar-button calendar-button-danger"
-                type="button"
-                disabled={busy}
-                onClick={() => void run(() => disconnectLessonCalendar(workspaceId))}
-              >
-                Disconnect Google
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </details>
-      {studentId ? (
+            ) : null}
+            {!studioV2 && (
+              <p className="calendar-help">
+                Existing appointments in other calendars remain yours to manage. Recreating them
+                here can leave duplicate events visible.
+              </p>
+            )}
+            {connected && connection?.canManage ? (
+              <div className="calendar-disconnect">
+                <p>
+                  {studioV2
+                    ? 'Disconnecting stops scheduling and sync.'
+                    : 'Disconnecting stops Calendar scheduling and sync. Your lesson history and billing remain available.'}
+                </p>
+                <button
+                  className="calendar-button calendar-button-danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void run(() => disconnectLessonCalendar(workspaceId))}
+                >
+                  Disconnect Google
+                </button>
+              </div>
+            ) : null}
+            {studioV2 && connected && (
+              <>
+                {canConnect && permissionScope}
+                {privacyDetails}
+              </>
+            )}
+            {choosingCalendar && (
+              <div className="calendar-v2-switch-account">
+                <button
+                  className="calendar-v2-text-button"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void connect()}
+                >
+                  Use another Google account
+                </button>
+                {permissionScope}
+              </div>
+            )}
+          </div>
+        </ConnectionSettings>
+      ) : null}
+      {studioV2 && !connected && privacyDetails}
+      {studentId && (!studioV2 || !connected || activeView === 'schedule') ? (
         <>
-          {!saved ? (
+          {!saved && (!studioV2 || canSchedule) ? (
             <div className="calendar-creation">
               <form
                 className="calendar-email-form"
@@ -507,10 +784,12 @@ export function CalendarSchedulingPanel({
               >
                 <div className="calendar-section-heading">
                   <h3>Invitations</h3>
-                  <p>
-                    A student email is optional. You can create lessons without sending an
-                    invitation.
-                  </p>
+                  {!studioV2 && (
+                    <p>
+                      A student email is optional. You can create lessons without sending an
+                      invitation.
+                    </p>
+                  )}
                 </div>
                 <label>
                   Student email (optional)
@@ -525,13 +804,23 @@ export function CalendarSchedulingPanel({
                     }}
                   />
                 </label>
-                <button className="calendar-button" type="submit" disabled={busy || Boolean(saved)}>
-                  Save email
-                </button>
-                <p>
-                  Save a changed email before creating a schedule. Changes apply to future
-                  invitations; edit existing guests in Google.
-                </p>
+                {(!studioV2 || recipient.trim() !== savedRecipient) && (
+                  <button
+                    className="calendar-button"
+                    type="submit"
+                    disabled={busy || Boolean(saved)}
+                  >
+                    Save email
+                  </button>
+                )}
+                {!studioV2 ? (
+                  <p>
+                    Save a changed email before creating a schedule. Changes apply to future
+                    invitations; edit existing guests in Google.
+                  </p>
+                ) : recipient.trim() !== savedRecipient ? (
+                  <p>Save the email before scheduling.</p>
+                ) : null}
               </form>
               <form
                 className="calendar-lesson-form"
@@ -542,10 +831,12 @@ export function CalendarSchedulingPanel({
               >
                 <div className="calendar-section-heading">
                   <h3>Create lessons</h3>
-                  <p>
-                    Each weekly row creates a separate Google series. Edit it later in Google
-                    Calendar.
-                  </p>
+                  {!studioV2 && (
+                    <p>
+                      Each weekly row creates a separate Google series. Edit it later in Google
+                      Calendar.
+                    </p>
+                  )}
                 </div>
                 <fieldset
                   className="calendar-setup-fields"
@@ -560,9 +851,11 @@ export function CalendarSchedulingPanel({
                       onChange={(event) => setTitle(event.target.value)}
                     />
                   </label>
-                  <p className="calendar-timezone">
-                    Tutor timezone: <strong>{timezone}</strong>
-                  </p>
+                  {!studioV2 && (
+                    <p className="calendar-timezone">
+                      Tutor timezone: <strong>{timezoneName(timezone)}</strong>
+                    </p>
+                  )}
                   <label>
                     <input
                       type="checkbox"
@@ -714,7 +1007,7 @@ export function CalendarSchedulingPanel({
                 <p>{saved.request.title}</p>
               </div>
               <p className="calendar-help">
-                {saved.request.timezone} ·{' '}
+                Time zone: {timezoneName(saved.request.timezone)} ·{' '}
                 {saved.request.sendInvitation ? 'Invitation requested' : 'No invitation requested'}
               </p>
               <ol className="calendar-submitted-rows" aria-label="Submitted lesson rows">
@@ -851,83 +1144,173 @@ export function CalendarSchedulingPanel({
               </button>
             </div>
           ) : null}
-          <details className="calendar-association">
-            <summary>Associate an existing Google event</summary>
+        </>
+      ) : null}
+      {studentId && (!studioV2 || (canLink && activeView === 'link')) && (
+        <CalendarAssociation
+          className="calendar-association"
+          aria-label={studioV2 ? 'Unlinked Google events' : undefined}
+        >
+          {!studioV2 && <summary>Associate an existing Google event</summary>}
+          {!studioV2 && (
             <p>
               Select the exact event for this student. Titles and guest emails never determine the
               student automatically.
             </p>
+          )}
+          {(!studioV2 || (!unlinkedLoaded && !busy)) && (
+            <button
+              className="calendar-button"
+              type="button"
+              disabled={busy || !connected || !connection?.canManage}
+              onClick={() => void loadUnlinkedEvents()}
+            >
+              {studioV2 ? 'Retry loading events' : 'Load unlinked events'}
+            </button>
+          )}
+          {studioV2 && busy && !unlinkedLoaded && (
+            <LoadingPlaceholder label="Loading Google events" />
+          )}
+          {studioV2 && linkedEventTitle && (
+            <p className="calendar-v2-linked" role="status">
+              Linked “{linkedEventTitle}” to {studentName}.
+            </p>
+          )}
+          {unlinkedLoaded && !unlinked.length && !unlinkedNextPageToken ? (
+            <p>
+              {studioV2 ? 'No unlinked Google events.' : 'No unlinked events in the loaded pages.'}
+            </p>
+          ) : null}
+          {unlinked.map((event) => (
+            <div className="calendar-unlinked-row" key={event.id}>
+              {studioV2 ? (
+                <div className="calendar-v2-event-label">
+                  <strong>{event.title}</strong>
+                  <span>
+                    {event.startsAt
+                      ? formatTutorTime(event.startsAt, timezone)
+                      : 'Unsupported time'}
+                  </span>
+                </div>
+              ) : (
+                <span>
+                  {event.title} ·{' '}
+                  {event.startsAt ? formatTutorTime(event.startsAt, timezone) : 'Unsupported time'}
+                </span>
+              )}
+              <button
+                className="calendar-button"
+                type="button"
+                disabled={busy || !connection?.canManage}
+                aria-label={studioV2 ? `Link ${event.title} to ${studentName}` : undefined}
+                onClick={() =>
+                  void run(async () => {
+                    await bindCalendarEvent(workspaceId, studentId, event.id);
+                    setUnlinked((current) => current.filter((item) => item.id !== event.id));
+                    if (studioV2) setLinkedEventTitle(event.title);
+                  })
+                }
+              >
+                {studioV2 ? 'Link event' : `Associate with ${studentName}`}
+              </button>
+            </div>
+          ))}
+          {unlinkedNextPageToken ? (
             <button
               className="calendar-button"
               type="button"
               disabled={busy || !connected || !connection?.canManage}
               onClick={() =>
                 void run(async () => {
-                  const page = await getCalendarUnlinkedEvents(workspaceId);
-                  setUnlinked(page.events);
+                  const page = await getCalendarUnlinkedEvents(workspaceId, unlinkedNextPageToken);
+                  setUnlinked((current) => [
+                    ...new Map(
+                      [...current, ...page.events].map((event) => [event.id, event]),
+                    ).values(),
+                  ]);
                   setUnlinkedNextPageToken(page.nextPageToken);
-                  setUnlinkedLoaded(true);
                 })
               }
             >
-              Load unlinked events
+              Load more events
             </button>
-            {unlinkedLoaded && !unlinked.length ? (
-              <p>No unlinked events in the loaded pages.</p>
-            ) : null}
-            {unlinked.map((event) => (
-              <div className="calendar-unlinked-row" key={event.id}>
-                <span>
-                  {event.title} ·{' '}
-                  {event.startsAt ? formatTutorTime(event.startsAt, timezone) : 'Unsupported time'}
-                </span>
-                <button
-                  className="calendar-button"
-                  type="button"
-                  disabled={busy || !connection?.canManage}
-                  onClick={() =>
-                    void run(async () => {
-                      await bindCalendarEvent(workspaceId, studentId, event.id);
-                      setUnlinked((current) => current.filter((item) => item.id !== event.id));
-                    })
-                  }
-                >
-                  Associate with {studentName}
-                </button>
-              </div>
-            ))}
-            {unlinkedNextPageToken ? (
-              <button
-                className="calendar-button"
-                type="button"
-                disabled={busy || !connected || !connection?.canManage}
-                onClick={() =>
-                  void run(async () => {
-                    const page = await getCalendarUnlinkedEvents(
-                      workspaceId,
-                      unlinkedNextPageToken,
-                    );
-                    setUnlinked((current) => [
-                      ...new Map(
-                        [...current, ...page.events].map((event) => [event.id, event]),
-                      ).values(),
-                    ]);
-                    setUnlinkedNextPageToken(page.nextPageToken);
-                  })
-                }
-              >
-                Load more events
-              </button>
-            ) : null}
-          </details>
-        </>
-      ) : null}
-      {studentId ? (
+          ) : null}
+        </CalendarAssociation>
+      )}
+      {studentId && !studioV2 ? (
         <p className="calendar-footer">
           Edit lesson times, recurrence, guests and cancellations in Google. Google sends
           invitations; inbox delivery is not guaranteed.
         </p>
       ) : null}
     </section>
+  );
+  if (!studioV2) return panel;
+  return (
+    <div id="teaching-calendar" className="calendar-v2-entry">
+      <div className="calendar-v2-entry-info">
+        <span className="calendar-v2-dot" data-state={status?.state} />
+        <strong>Teaching calendar</strong>
+        {statusPending ? (
+          <LoadingPlaceholder label="Checking calendar connection" kind="inline" count={1} />
+        ) : (
+          <span role="status">{error ? 'Needs attention' : stateLabel}</span>
+        )}
+      </div>
+      <div className="calendar-v2-entry-actions">
+        <button
+          ref={manageRef}
+          type="button"
+          className="product-button product-button--quiet"
+          onClick={(event) => {
+            drawerTrigger.current = event.currentTarget;
+            setExpanded(true);
+          }}
+        >
+          Manage <span aria-hidden="true">→</span>
+        </button>
+        {studentId && canSchedule && (
+          <button
+            type="button"
+            className="product-button product-button--primary"
+            aria-label={studentName ? `Schedule lesson for ${studentName}` : 'Schedule a lesson'}
+            onClick={(event) => {
+              drawerTrigger.current = event.currentTarget;
+              setDrawerView('schedule');
+              setExpanded(true);
+            }}
+          >
+            <CalendarDays size={16} aria-hidden="true" />
+            Schedule lesson
+          </button>
+        )}
+      </div>
+      {presentationActive && expanded ? (
+        <StudioV2Dialog
+          title={
+            studentId && connected && activeView === 'link'
+              ? 'Link existing event'
+              : studentId && (connected ? activeView === 'schedule' : saved)
+                ? 'Schedule lesson'
+                : connected
+                  ? 'Calendar settings'
+                  : 'Teaching calendar'
+          }
+          drawer
+          closeDisabled={busy}
+          onClose={closeDrawer}
+        >
+          <div className="calendar-v2-drawer">
+            {studentName && (canSchedule || saved) ? (
+              <div className="calendar-v2-context">
+                <strong>{studentName}</strong>
+                <span>Time zone: {timezoneName(timezone)}</span>
+              </div>
+            ) : null}
+            {panel}
+          </div>
+        </StudioV2Dialog>
+      ) : null}
+    </div>
   );
 }

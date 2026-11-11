@@ -30,8 +30,8 @@ export async function seedUnmanagedLesson(
     try {
       await setStudentActivityActor(client, actorUserId);
       await client.query(
-        `INSERT INTO student_lessons(id,student_id,workspace_id,starts_at,timezone,duration_minutes,status,consumes_credit,title,notes,created_by,updated_by)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`,
+        `INSERT INTO student_lessons(id,student_id,workspace_id,starts_at,timezone,duration_minutes,status,consumes_credit,title,notes,created_by,updated_by,planned_charge)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$8)`,
         [
           id,
           studentId,

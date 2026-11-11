@@ -2,7 +2,7 @@
 
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Outlet } from 'react-router-dom';
+import { MemoryRouter, Outlet, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthContextType } from '../context/AuthContext';
@@ -25,10 +25,19 @@ vi.mock('../context/AuthContext', () => ({
 
 vi.mock('../dev/frontend-sandbox', () => ({
   isFrontendSandboxEnabled: sandboxModeMock,
+  readFrontendSandboxScenario: () => 'default',
 }));
 
 vi.mock('./minimal/MinimalAssignment', () => ({
   MinimalAssignment: () => <div>Minimal assignment content</div>,
+}));
+
+vi.mock('./studio-v2/AssignmentListPage', () => ({
+  default: () => <div>Assignment list content</div>,
+}));
+
+vi.mock('./studio-v2/DayPage', () => ({
+  default: () => <div>Your day content</div>,
 }));
 
 vi.mock('./students/StudentDirectoryPage', () => ({
@@ -57,7 +66,21 @@ vi.mock('./students/StudentHistoryPage', () => ({
 }));
 
 vi.mock('./students/StudentScheduleBillingPage', () => ({
-  StudentScheduleBillingPage: () => <div>Student schedule content</div>,
+  StudentScheduleBillingPage: () => {
+    const { search, hash } = useLocation();
+    return (
+      <div>
+        Student schedule content{search}
+        {hash}
+      </div>
+    );
+  },
+  StudentScheduleBillingLayout: () => (
+    <div>
+      Student schedule billing layout
+      <Outlet />
+    </div>
+  ),
 }));
 
 vi.mock('./business/BusinessShell', () => ({
@@ -110,8 +133,56 @@ function renderApp(initialEntries: string[] = ['/']) {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('VITE_CALM_STUDIO_V2', 'false');
     sandboxModeMock.mockReturnValue(false);
     window.history.replaceState(null, '', '/');
+  });
+
+  it.each([
+    ['/', 'Assignment list content'],
+    ['/assignments/new', 'Minimal assignment content'],
+    ['/?sessionId=session-1', 'Minimal assignment content'],
+    ['/?jobId=job-1', 'Minimal assignment content'],
+    ['/?studentId=student-1&lessonId=lesson-1', 'Minimal assignment content'],
+    ['/day', 'Your day content'],
+    ['/students/student-1/schedule', 'Student schedule billing layout'],
+    ['/students/student-1/billing', 'Student schedule billing layout'],
+    ['/students/student-1/schedule-billing', 'Student schedule billing layout'],
+  ])('opens v2 %s with the existing authentication gate', async (route, content) => {
+    vi.stubEnv('VITE_CALM_STUDIO_V2', 'true');
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: { id: 'user-1', email: 'teacher@example.com', role: 'user', isActive: true },
+        isAuthenticated: true,
+      }),
+    );
+    renderApp([route]);
+    expect(await screen.findByText(content)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Your day' }).getAttribute('href')).toBe('/day');
+  });
+
+  it.each(['billing', 'schedule'])(
+    'keeps the v2 %s bookmark working with v1 selected',
+    async (tab) => {
+      useAuthMock.mockReturnValue(
+        createAuthState({
+          user: { id: 'user-1', email: 'teacher@example.com', role: 'user', isActive: true },
+          isAuthenticated: true,
+        }),
+      );
+      renderApp([`/students/student-1/${tab}?focus=1#teaching-calendar`]);
+      expect(
+        await screen.findByText('Student schedule content?focus=1#teaching-calendar'),
+      ).toBeTruthy();
+    },
+  );
+
+  it('keeps v2 behind sign in', () => {
+    vi.stubEnv('VITE_CALM_STUDIO_V2', 'true');
+    useAuthMock.mockReturnValue(createAuthState());
+    renderApp(['/day']);
+    expect(screen.getByRole('heading', { name: /Sign in to get started/i })).toBeTruthy();
+    expect(screen.queryByText('Your day content')).toBeNull();
   });
 
   it('shows the loading panel while session restore is in progress', () => {

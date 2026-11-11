@@ -60,6 +60,7 @@ export interface PromoteStudentProfileCandidatesRequest {
   studentId: string;
   candidateIds: string[];
   baseRevisionId?: string | null;
+  expectedActiveRevisionId?: string | null;
   reviewerId?: string | null;
   reviewerNote?: string | null;
   maxOutputTokens?: number;
@@ -246,6 +247,7 @@ export async function promoteStudentProfileCandidates(args: {
     request.studentId,
     renderedDraft,
     {
+      expectedActiveRevisionId: request.expectedActiveRevisionId,
       source: 'candidate_promotion',
       status: 'draft',
       createdBy: request.reviewerId ?? null,

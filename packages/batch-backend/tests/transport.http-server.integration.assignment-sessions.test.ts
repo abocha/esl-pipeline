@@ -52,7 +52,7 @@ describeHttpServerIntegrationSuite(
       updatedAt: '2026-07-19T00:00:00.000Z',
     };
 
-    it('paginates older transcript history with a fixed limit and offset while keeping active admission', async () => {
+    it('paginates active sessions and transcript history with bounded limits and nonnegative offsets', async () => {
       const older = {
         ...session,
         homeworkIntent: 'none' as const,
@@ -78,8 +78,9 @@ describeHttpServerIntegrationSuite(
       for (const query of [
         'scope=history&limit=60&offset=40',
         'scope=history&offset=-1',
-        'scope=active&offset=20',
-        'offset=20',
+        'scope=active&limit=0',
+        'scope=active&offset=-1',
+        'offset=1.5',
       ]) {
         const invalid = await app.inject({
           method: 'GET',
@@ -91,6 +92,14 @@ describeHttpServerIntegrationSuite(
       const active = await app.inject({ method: 'GET', url: '/user/assignment-sessions' });
       expect(active.statusCode).toBe(200);
       expect(list).toHaveBeenCalledWith('test-user-id', 20, 'active', 0);
+      for (const query of ['scope=active&limit=20&offset=40', 'limit=20&offset=40']) {
+        const nextActive = await app.inject({
+          method: 'GET',
+          url: `/user/assignment-sessions?${query}`,
+        });
+        expect(nextActive.statusCode).toBe(200);
+        expect(list).toHaveBeenLastCalledWith('test-user-id', 20, 'active', 40);
+      }
     });
 
     it('transports exact reviewed finish and promotion commands, and saved intent', async () => {
@@ -348,6 +357,53 @@ describeHttpServerIntegrationSuite(
         patch: { teacherNotes: 'Recovered automatically' },
       });
     });
+
+    it.each(['confirm', 'recovery'] as const)(
+      'returns the accepted session and charge conflict on %s',
+      async (entry: 'confirm' | 'recovery') => {
+        const latest = {
+          ...session,
+          lessonId: '44444444-4444-4444-8444-444444444444',
+          revision: 2,
+        };
+        const failure = {
+          code: 'assignment_lesson_changed',
+          message: 'Review the changed lesson charge.',
+          session: latest,
+        };
+        const confirm = vi
+          .spyOn(assignmentSessionsModule, 'confirmStudentAssignmentSessionForUser')
+          .mockRejectedValue(failure);
+        const recover = vi
+          .spyOn(assignmentSessionsModule, 'updateAssignmentSessionRecoveryForUser')
+          .mockRejectedValue(failure);
+        const expected = {
+          expectedLessonPlannedCharge: false,
+          expectedLessonStatus: 'scheduled' as const,
+        };
+        const body =
+          entry === 'confirm'
+            ? {
+                requestId: '33333333-3333-4333-8333-333333333333',
+                studentId: session.studentId,
+                lessonId: latest.lessonId,
+                ...expected,
+              }
+            : { expectedRevision: 1, patch: { lessonId: latest.lessonId }, ...expected };
+        const response = await app.inject({
+          method: entry === 'confirm' ? 'POST' : 'PATCH',
+          url:
+            entry === 'confirm'
+              ? '/assignment-sessions/confirm-student'
+              : `/assignment-sessions/${session.id}/recovery`,
+          payload: body,
+        });
+        expect(response.statusCode).toBe(409);
+        expect(response.json()).toEqual(failure);
+        if (entry === 'confirm') expect(confirm).toHaveBeenCalledWith('test-user-id', body);
+        else expect(recover).toHaveBeenCalledWith('test-user-id', session.id, body);
+      },
+    );
 
     it('returns the latest session on recovery revision conflict', async () => {
       vi.spyOn(

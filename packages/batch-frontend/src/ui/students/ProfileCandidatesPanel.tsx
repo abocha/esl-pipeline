@@ -3,6 +3,8 @@ import { type Dispatch, type SetStateAction, useCallback, useMemo, useState } fr
 import { useWorkspaceTimezone } from '../../context/WorkspaceTimezoneContext';
 import type { StudentProfileCandidate } from '../../utils/api';
 import { formatTutorTime } from '../../utils/tutor-time';
+import { useStudioV2 } from '../studio-v2/StudioV2Context';
+import { LoadingPlaceholder } from '../system/LoadingPlaceholder';
 import {
   type CandidateActionKind,
   formatCandidateSectionLabel,
@@ -71,6 +73,7 @@ export function ProfileCandidatesPanel({
   onPromoteProfileCandidates,
   onReviewProfileCandidate,
 }: ProfileCandidatesPanelProps) {
+  const studioV2 = useStudioV2();
   const timezone = useWorkspaceTimezone();
   const formatCandidateDate = (value?: string | null) => formatTutorTime(value, timezone);
   const [openCandidateIds, setOpenCandidateIds] = useState<string[]>([]);
@@ -197,7 +200,7 @@ export function ProfileCandidatesPanel({
 
       {selectedStudentId ? (
         profileCandidatesLoading && profileCandidates.length === 0 ? (
-          <p className="workspace-muted">Loading profile candidates...</p>
+          <LoadingPlaceholder label="Loading profile suggestions" />
         ) : groupedProfileCandidates.length > 0 ? (
           groupedProfileCandidates.map(([section, candidates]) => (
             <section key={section} className="workspace-candidate-group">
@@ -206,9 +209,15 @@ export function ProfileCandidatesPanel({
               <div className="workspace-list workspace-candidate-list">
                 {candidates.map((candidate) => {
                   const draft = profileCandidateDrafts[candidate.id];
-                  const approvedFactText =
-                    draft?.approvedFactText ?? candidate.approvedFactText ?? candidate.proposedFact;
-                  const reviewerNote = draft?.reviewerNote ?? '';
+                  const savedFactText = candidate.approvedFactText ?? candidate.proposedFact;
+                  const approvedFactText = draft?.approvedFactText ?? savedFactText;
+                  const reviewerNote =
+                    draft?.reviewerNote ?? (studioV2 ? candidate.reviewerNote : null) ?? '';
+                  const hasDraft = Boolean(
+                    draft &&
+                      (draft.approvedFactText !== savedFactText ||
+                        draft.reviewerNote !== (candidate.reviewerNote ?? '')),
+                  );
                   const isBusy = profileCandidateAction?.candidateId === candidate.id;
                   const isTerminal =
                     candidate.status === 'promoted' || candidate.status === 'superseded';
@@ -224,8 +233,11 @@ export function ProfileCandidatesPanel({
                     >
                       <div className="workspace-candidate-summary">
                         <div className="workspace-candidate-copy">
-                          <strong>{approvedFactText}</strong>
-                          {decisionLabel ? (
+                          <strong>{studioV2 ? savedFactText : approvedFactText}</strong>
+                          {studioV2 && hasDraft ? (
+                            <p className="workspace-candidate-source">Unsaved edit</p>
+                          ) : null}
+                          {!studioV2 && decisionLabel ? (
                             <p className="workspace-candidate-source">
                               Dedup decision: {decisionLabel}
                             </p>
@@ -239,7 +251,11 @@ export function ProfileCandidatesPanel({
                           {isSelectableForPromotion(candidate) ? (
                             <label className="workspace-inline workspace-candidate-select">
                               <input
-                                aria-label={`Select candidate ${candidate.id} for promotion`}
+                                aria-label={
+                                  studioV2
+                                    ? `Use in draft: ${savedFactText}`
+                                    : `Select candidate ${candidate.id} for promotion`
+                                }
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={(event) =>
@@ -272,7 +288,7 @@ export function ProfileCandidatesPanel({
                           type="button"
                           className="workspace-primary-btn"
                           onClick={() => void onReviewProfileCandidate(candidate, 'approve')}
-                          disabled={isTerminal || isBusy}
+                          disabled={isTerminal || isBusy || (studioV2 && !approvedFactText.trim())}
                         >
                           {isBusy && profileCandidateAction?.action === 'approve'
                             ? 'Saving...'
@@ -302,73 +318,99 @@ export function ProfileCandidatesPanel({
 
                       {isDetailsOpen ? (
                         <div className="workspace-candidate-body">
-                          <div className="workspace-meta">
-                            <span>
-                              <strong>Target section:</strong>{' '}
-                              {formatCandidateSectionLabel(candidate.targetSection)}
-                            </span>
-                            <span>
-                              <strong>Authority:</strong> {candidate.authority ?? 'n/a'}
-                            </span>
-                            <span>
-                              <strong>Source summary:</strong> {candidate.sourceSummary ?? 'n/a'}
-                            </span>
-                            <span>
-                              <strong>Snapshot:</strong> {candidate.sourceSnapshotId ?? 'none'}
-                            </span>
-                            <span>
-                              <strong>Lesson memory IDs:</strong>{' '}
-                              {candidate.sourceLessonMemoryIds.length > 0
-                                ? candidate.sourceLessonMemoryIds.join(', ')
-                                : 'none'}
-                            </span>
-                            <span>
-                              <strong>Source lesson:</strong>{' '}
-                              {candidate.sourceLessonTitle ?? candidate.sourceLessonId ?? 'none'}
-                            </span>
-                            <span>
-                              <strong>Source lesson date:</strong>{' '}
-                              {formatCandidateDate(candidate.sourceLessonStartedAt)}
-                            </span>
-                            {!candidate.sourceLessonStartedAt &&
-                            typeof candidate.provenance?.sourceLessonGeneratedAt === 'string' ? (
+                          {studioV2 ? (
+                            <>
+                              {candidate.sourceLessonTitle || candidate.sourceLessonStartedAt ? (
+                                <p className="workspace-candidate-source">
+                                  {[
+                                    candidate.sourceLessonTitle,
+                                    candidate.sourceLessonStartedAt
+                                      ? formatCandidateDate(candidate.sourceLessonStartedAt)
+                                      : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </p>
+                              ) : null}
+                              {candidate.sourceSummary ? <p>{candidate.sourceSummary}</p> : null}
+                            </>
+                          ) : (
+                            <div className="workspace-meta">
                               <span>
-                                <strong>Extraction date (lesson date unknown):</strong>{' '}
-                                {formatCandidateDate(candidate.provenance.sourceLessonGeneratedAt)}
+                                <strong>Target section:</strong>{' '}
+                                {formatCandidateSectionLabel(candidate.targetSection)}
                               </span>
-                            ) : null}
-                            <span>
-                              <strong>Source memory IDs:</strong>{' '}
-                              {candidate.sourceMemoryIds && candidate.sourceMemoryIds.length > 0
-                                ? candidate.sourceMemoryIds.join(', ')
-                                : 'none'}
-                            </span>
-                            <span>
-                              <strong>Dedup decision:</strong>{' '}
-                              {candidate.dedupDecision?.decision
-                                ? `${candidate.dedupDecision.decision}`
-                                : 'none'}
-                            </span>
-                            {typeof candidate.dedupDecision?.reason === 'string' ? (
                               <span>
-                                <strong>Dedup reason:</strong> {candidate.dedupDecision.reason}
+                                <strong>Authority:</strong> {candidate.authority ?? 'n/a'}
                               </span>
-                            ) : null}
-                            <span>
-                              <strong>Promoted revision:</strong>{' '}
-                              {candidate.promotedRevisionId ?? 'not yet promoted'}
-                            </span>
-                          </div>
+                              <span>
+                                <strong>Source summary:</strong> {candidate.sourceSummary ?? 'n/a'}
+                              </span>
+                              <span>
+                                <strong>Snapshot:</strong> {candidate.sourceSnapshotId ?? 'none'}
+                              </span>
+                              <span>
+                                <strong>Lesson memory IDs:</strong>{' '}
+                                {candidate.sourceLessonMemoryIds.length > 0
+                                  ? candidate.sourceLessonMemoryIds.join(', ')
+                                  : 'none'}
+                              </span>
+                              <span>
+                                <strong>Source lesson:</strong>{' '}
+                                {candidate.sourceLessonTitle ?? candidate.sourceLessonId ?? 'none'}
+                              </span>
+                              <span>
+                                <strong>Source lesson date:</strong>{' '}
+                                {formatCandidateDate(candidate.sourceLessonStartedAt)}
+                              </span>
+                              {!candidate.sourceLessonStartedAt &&
+                              typeof candidate.provenance?.sourceLessonGeneratedAt === 'string' ? (
+                                <span>
+                                  <strong>Extraction date (lesson date unknown):</strong>{' '}
+                                  {formatCandidateDate(
+                                    candidate.provenance.sourceLessonGeneratedAt,
+                                  )}
+                                </span>
+                              ) : null}
+                              <span>
+                                <strong>Source memory IDs:</strong>{' '}
+                                {candidate.sourceMemoryIds && candidate.sourceMemoryIds.length > 0
+                                  ? candidate.sourceMemoryIds.join(', ')
+                                  : 'none'}
+                              </span>
+                              <span>
+                                <strong>Dedup decision:</strong>{' '}
+                                {candidate.dedupDecision?.decision
+                                  ? `${candidate.dedupDecision.decision}`
+                                  : 'none'}
+                              </span>
+                              {typeof candidate.dedupDecision?.reason === 'string' ? (
+                                <span>
+                                  <strong>Dedup reason:</strong> {candidate.dedupDecision.reason}
+                                </span>
+                              ) : null}
+                              <span>
+                                <strong>Promoted revision:</strong>{' '}
+                                {candidate.promotedRevisionId ?? 'not yet promoted'}
+                              </span>
+                            </div>
+                          )}
 
-                          <div>
-                            <strong>Original proposal</strong>
-                            <p>{candidate.proposedFact}</p>
-                          </div>
+                          {!studioV2 || savedFactText !== candidate.proposedFact ? (
+                            <div>
+                              <strong>
+                                {studioV2 ? 'Original suggestion' : 'Original proposal'}
+                              </strong>
+                              <p>{candidate.proposedFact}</p>
+                            </div>
+                          ) : null}
 
                           <label className="workspace-field">
-                            Approved Fact Text
+                            {studioV2 ? 'Wording to approve' : 'Approved Fact Text'}
                             <textarea
-                              aria-label={`Approved Fact Text ${candidate.id}`}
+                              aria-label={
+                                studioV2 ? undefined : `Approved Fact Text ${candidate.id}`
+                              }
                               value={approvedFactText}
                               onChange={(event) =>
                                 updateProfileCandidateDraft(candidate.id, {
@@ -381,9 +423,9 @@ export function ProfileCandidatesPanel({
                           </label>
 
                           <label className="workspace-field">
-                            Reviewer Note
+                            {studioV2 ? 'Note (optional)' : 'Reviewer Note'}
                             <textarea
-                              aria-label={`Reviewer Note ${candidate.id}`}
+                              aria-label={studioV2 ? undefined : `Reviewer Note ${candidate.id}`}
                               value={reviewerNote}
                               onChange={(event) =>
                                 updateProfileCandidateDraft(candidate.id, {
@@ -395,38 +437,50 @@ export function ProfileCandidatesPanel({
                             />
                           </label>
 
-                          <div>
-                            <strong>Evidence</strong>
-                            {candidate.evidence.length > 0 ? (
-                              <div className="workspace-list">
-                                {candidate.evidence.map((evidence, index) => (
-                                  <div
-                                    key={`${candidate.id}-evidence-${index}`}
-                                    className="workspace-list-item workspace-list-item-stack"
-                                  >
-                                    <div>
-                                      <strong>{evidence.quote}</strong>
-                                      <div className="workspace-muted">
-                                        {evidence.speakerRole ?? 'unknown'}
-                                        {evidence.transcriptSpan
-                                          ? ` · ${evidence.transcriptSpan}`
-                                          : ''}
-                                        {evidence.sourceKind ? ` · ${evidence.sourceKind}` : ''}
-                                      </div>
-                                      {evidence.evidenceNote ? (
+                          {!studioV2 || candidate.evidence.length > 0 ? (
+                            <div>
+                              <strong>{studioV2 ? 'Supporting excerpts' : 'Evidence'}</strong>
+                              {candidate.evidence.length > 0 ? (
+                                <div className="workspace-list">
+                                  {candidate.evidence.map((evidence, index) => (
+                                    <div
+                                      key={`${candidate.id}-evidence-${index}`}
+                                      className="workspace-list-item workspace-list-item-stack"
+                                    >
+                                      <div>
+                                        <strong>{evidence.quote}</strong>
                                         <div className="workspace-muted">
-                                          {evidence.evidenceNote}
+                                          {studioV2
+                                            ? evidence.speakerRole === 'student'
+                                              ? 'Student'
+                                              : evidence.speakerRole === 'teacher'
+                                                ? 'Tutor'
+                                                : null
+                                            : (evidence.speakerRole ?? 'unknown')}
+                                          {evidence.transcriptSpan
+                                            ? ` · ${evidence.transcriptSpan}`
+                                            : ''}
+                                          {!studioV2 && evidence.sourceKind
+                                            ? ` · ${evidence.sourceKind}`
+                                            : ''}
                                         </div>
-                                      ) : null}
+                                        {evidence.evidenceNote ? (
+                                          <div className="workspace-muted">
+                                            {evidence.evidenceNote}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                      {!studioV2 && (
+                                        <span>{evidence.sourceArtifactId ?? 'n/a'}</span>
+                                      )}
                                     </div>
-                                    <span>{evidence.sourceArtifactId ?? 'n/a'}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="workspace-muted">No evidence excerpts provided.</p>
-                            )}
-                          </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="workspace-muted">No evidence excerpts provided.</p>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </article>

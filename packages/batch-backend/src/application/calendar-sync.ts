@@ -199,8 +199,8 @@ export async function projectCalendarObservation(
     }
     const lessonId = randomUUID();
     await client.query(
-      `INSERT INTO student_lessons(id,student_id,workspace_id,starts_at,timezone,duration_minutes,title,status,consumes_credit)
-      VALUES($1,$2,$3,$4,$5,$6,$7,'scheduled',false)`,
+      `INSERT INTO student_lessons(id,student_id,workspace_id,starts_at,timezone,duration_minutes,title,status,consumes_credit,planned_charge)
+      VALUES($1,$2,$3,$4,$5,$6,$7,'scheduled',false,true)`,
       [
         lessonId,
         binding.student_id,

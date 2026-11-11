@@ -23,6 +23,8 @@ describe('application/legacy-profile-migration', () => {
       createdAt: '2026-04-22T00:00:00.000Z',
       createdBy: 'teacher-1',
       restoredFromRevisionId: null,
+      baseActiveRevisionId: null,
+      baseActiveRevisionKnown: true,
       content: '# Foundational Profile',
       structuredContent: {
         schemaVersion: 'foundational_profile_v1' as const,
@@ -95,6 +97,8 @@ describe('application/legacy-profile-migration', () => {
             createdAt: new Date('2026-04-01T00:00:00.000Z'),
             createdBy: 'teacher-1',
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: true,
           }),
         },
         profileContent: {
@@ -190,6 +194,8 @@ describe('application/legacy-profile-migration', () => {
             createdAt: new Date('2026-04-01T00:00:00.000Z'),
             createdBy: 'teacher-1',
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: true,
           }),
         },
         profileContent: {
@@ -288,6 +294,8 @@ describe('application/legacy-profile-migration', () => {
             createdAt: new Date('2026-04-01T00:00:00.000Z'),
             createdBy: 'teacher-1',
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: true,
           }),
         },
         profileContent: {
@@ -409,6 +417,8 @@ describe('application/legacy-profile-migration', () => {
             createdAt: new Date('2026-04-01T00:00:00.000Z'),
             createdBy: 'teacher-1',
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: true,
           }),
         },
         profileContent: {

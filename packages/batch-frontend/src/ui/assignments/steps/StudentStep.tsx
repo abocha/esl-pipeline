@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { LoadingPlaceholder } from '../../system/LoadingPlaceholder';
 import type { StudentStepProps } from '../assignment-step-props';
 
 export function StudentStep({
@@ -32,11 +33,8 @@ export function StudentStep({
   if (loading) {
     return (
       <div className="assignment-step assignment-step--student">
-        <div className="assignment-student-choice" role="status" aria-label="Loading learners">
-          <div className="assignment-student-choice__copy">
-            <h3>Loading learners</h3>
-            <p>Preparing learner options…</p>
-          </div>
+        <div className="assignment-student-choice">
+          <LoadingPlaceholder label="Loading learners" kind="form" count={1} />
         </div>
       </div>
     );

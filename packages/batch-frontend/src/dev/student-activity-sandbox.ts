@@ -137,6 +137,7 @@ const records: StudentActivityItem[] = [
 export function studentActivitySandbox(
   studentId: string,
   query: URLSearchParams,
+  timezone: string,
 ): StudentActivityResponse {
   const category = query.get('category') ?? 'all';
   const from = query.get('from');
@@ -157,7 +158,7 @@ export function studentActivitySandbox(
   return {
     items: items.slice(offset, end),
     nextCursor: end < items.length ? String(end) : null,
-    timezone: 'Asia/Bangkok',
+    timezone,
     coverage: {
       recordingStartedAt: null,
       notice:

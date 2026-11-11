@@ -115,7 +115,7 @@ describe('BusinessSettingsPage', () => {
     render(<BusinessSettingsPage />);
     const picker = (await screen.findByLabelText('Tutor timezone')) as HTMLSelectElement;
     expect(picker.value).toBe('Asia/Saigon');
-    expect(picker.selectedOptions[0]?.textContent).toContain('Ho Chi Minh City · UTC+07:00');
+    expect(picker.selectedOptions[0]?.textContent).toContain('Ho Chi Minh City (Asia) · UTC+07:00');
     expect(
       [...picker.options].filter((option) => option.textContent?.includes('Ho Chi Minh City')),
     ).toHaveLength(1);

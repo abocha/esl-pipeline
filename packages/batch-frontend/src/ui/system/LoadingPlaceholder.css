@@ -1,0 +1,215 @@
+.loading-placeholder,
+.page-loading {
+  --loading-shape: color-mix(in srgb, var(--cs-ink, #203b4e) 10%, transparent);
+  min-inline-size: 0;
+}
+
+.loading-placeholder__label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.loading-placeholder__row {
+  display: grid;
+  align-content: center;
+  gap: 9px;
+  min-block-size: 68px;
+  border-block-end: 1px solid var(--cs-border, #d6dde4);
+}
+
+.loading-placeholder__row > span,
+.page-loading__action,
+.page-loading__toolbar > span,
+.page-loading__summary > span,
+.page-loading__glance > span {
+  display: block;
+  inline-size: min(54%, 15rem);
+  block-size: 12px;
+  border-radius: 4px;
+  background: var(--loading-shape);
+}
+
+.loading-placeholder__row > span + span,
+.page-loading__summary > span + span {
+  inline-size: min(32%, 9rem);
+  block-size: 9px;
+}
+
+.page-loading__toolbar > span {
+  block-size: 30px;
+}
+
+.loading-placeholder--lines .loading-placeholder__row {
+  min-block-size: 26px;
+  border: 0;
+}
+
+.loading-placeholder--inline {
+  display: inline-block;
+  inline-size: 8rem;
+  max-inline-size: 100%;
+}
+
+.loading-placeholder--inline .loading-placeholder__row {
+  min-block-size: 1.5em;
+  border: 0;
+}
+
+.loading-placeholder--inline .loading-placeholder__row > span {
+  inline-size: 100%;
+}
+
+.loading-placeholder--inline .loading-placeholder__row > span + span,
+.loading-placeholder--lines .loading-placeholder__row > span + span {
+  display: none;
+}
+
+.loading-placeholder--roster .loading-placeholder__row {
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+}
+
+.loading-placeholder--roster .loading-placeholder__row > span:first-child {
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 50%;
+}
+
+.loading-placeholder--roster .loading-placeholder__row > span + span {
+  inline-size: 64%;
+  block-size: 12px;
+}
+
+.loading-placeholder--form .loading-placeholder__row {
+  border: 0;
+  min-block-size: 78px;
+}
+
+.loading-placeholder--form .loading-placeholder__row > span:first-child {
+  inline-size: 6rem;
+  block-size: 10px;
+}
+
+.loading-placeholder--form .loading-placeholder__row > span + span {
+  inline-size: min(100%, 22rem);
+  block-size: 38px;
+}
+
+/* Keep space reserved for small loads and avoid flashing a shape on fast requests. */
+.loading-placeholder--inline .loading-placeholder__shapes,
+.loading-placeholder--roster .loading-placeholder__shapes {
+  animation: loading-placeholder-reveal 0s 160ms both;
+}
+
+@keyframes loading-placeholder-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-loading {
+  container-type: inline-size;
+  color: var(--cs-ink, #203b4e);
+}
+
+:is(.calm-shell--students .calm-shell__main, .student-workspace-pane) > .page-loading {
+  padding: clamp(18px, 2.5vw, 30px);
+}
+
+.page-loading--day,
+.page-loading--business,
+.page-loading--assignments {
+  max-inline-size: 1120px;
+  margin-inline: auto;
+}
+
+.page-loading__heading {
+  display: flex;
+  min-block-size: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block-end: 24px;
+}
+
+.page-loading__heading h2 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.page-loading--history .page-loading__heading h2 {
+  font-size: 1.4rem;
+}
+
+.page-loading__action {
+  inline-size: min(32%, 10rem);
+  block-size: 40px;
+}
+
+.page-loading--history .page-loading__action {
+  inline-size: 38px;
+  block-size: 36px;
+}
+
+.page-loading__toolbar {
+  display: flex;
+  gap: 16px;
+  margin-block-end: 16px;
+}
+
+.page-loading--history .page-loading__toolbar {
+  flex-direction: column;
+}
+
+.page-loading--overview .page-loading__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(205px, 0.42fr);
+  gap: 20px 28px;
+  align-items: start;
+}
+
+.page-loading__summary,
+.page-loading__glance {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--cs-border, #d6dde4);
+  border-radius: 8px;
+  margin-block-end: 16px;
+}
+
+.page-loading--overview .page-loading__summary,
+.page-loading--billing .page-loading__summary {
+  min-block-size: 144px;
+}
+
+.page-loading--schedule .page-loading__summary {
+  min-block-size: 64px;
+}
+
+.page-loading__glance {
+  min-block-size: 170px;
+}
+
+@container (max-width: 600px) {
+  .page-loading--overview .page-loading__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-placeholder__shapes {
+    animation: none;
+  }
+}

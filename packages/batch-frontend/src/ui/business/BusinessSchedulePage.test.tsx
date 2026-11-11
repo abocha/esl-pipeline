@@ -11,6 +11,7 @@ import { BusinessSchedulePage } from './BusinessSchedulePage';
 const apiMocks = vi.hoisted(() => ({
   getBusinessSettings: vi.fn(),
   getBusinessScheduleSurface: vi.fn(),
+  getStudentLesson: vi.fn(),
   hideStudentLessonFollowupReminder: vi.fn(),
   undoLatestHiddenStudentReminder: vi.fn(),
   updateStudentLesson: vi.fn(),
@@ -72,6 +73,7 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
         durationMinutes: 60,
         status: 'scheduled',
         consumesCredit: true,
+        plannedCharge: true,
         title: null,
         notes: null,
         creditEventId: null,
@@ -274,7 +276,7 @@ describe('BusinessSchedulePage', () => {
     );
     expect(
       await screen.findByRole('link', {
-        name: 'Timezone: America/Los_Angeles. Change in Business settings.',
+        name: 'Time zone: Los Angeles (Americas). Change in Business settings.',
       }),
     ).toBeTruthy();
     expect(screen.getByRole('article', { name: 'Alex, May 7, 11:30 PM' })).toBeTruthy();
@@ -377,7 +379,7 @@ describe('BusinessSchedulePage', () => {
     const info = screen.getByRole('button', { name: 'About completing a lesson' });
     fireEvent.focus(info);
     fireEvent.click(info);
-    const creditHint = screen.getByText('Completing uses 1 lesson credit.');
+    const creditHint = screen.getByText('1 lesson credit');
     fireEvent.pointerDown(creditHint);
     fireEvent.click(creditHint);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
@@ -406,7 +408,8 @@ describe('BusinessSchedulePage', () => {
     await waitFor(() => {
       expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
         status: 'completed',
-        consumesCredit: true,
+        expectedStatus: 'scheduled',
+        expectedPlannedCharge: true,
       });
     });
   });
@@ -448,6 +451,39 @@ describe('BusinessSchedulePage', () => {
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
     });
     expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
+  });
+
+  it('keeps a homework charge review tied to the lesson that opened it', async () => {
+    const first = { ...makeSurface().lessons[0], plannedCharge: null };
+    const second = { ...first, id: 'lesson-2', studentId: 'student-maria', studentName: 'Maria' };
+    apiMocks.getBusinessScheduleSurface.mockResolvedValue(
+      makeSurface({ lessons: [first, second] }),
+    );
+    apiMocks.getStudentLesson.mockResolvedValue({ ...first, plannedCharge: true });
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+
+    const [firstAction, secondAction] = await screen.findAllByRole('button', {
+      name: 'Complete & add homework',
+    });
+    fireEvent.click(firstAction!);
+    expect((secondAction as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(secondAction!);
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm charge' }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledExactlyOnceWith(
+        '/?studentId=student-alex&lessonId=lesson-1',
+      );
+    });
+    expect(apiMocks.updateStudentLesson).toHaveBeenCalledExactlyOnceWith(
+      'student-alex',
+      'lesson-1',
+      { plannedCharge: true, expectedStatus: 'scheduled', expectedPlannedCharge: null },
+    );
   });
   it('shows lesson context, hides business reminders, and undoes the latest hidden reminder', async () => {
     apiMocks.getBusinessScheduleSurface

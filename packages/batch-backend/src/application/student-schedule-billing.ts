@@ -50,6 +50,7 @@ interface LessonRow {
   duration_minutes: number;
   status: StudentLessonStatus;
   consumes_credit: boolean;
+  planned_charge: boolean | null;
   title: string | null;
   notes: string | null;
   credit_event_id: string | null;
@@ -119,7 +120,7 @@ interface ReminderPreferences {
 
 export class StudentScheduleBillingError extends Error {
   constructor(
-    readonly code: 'not_found' | 'invalid_request',
+    readonly code: 'not_found' | 'invalid_request' | 'lesson_conflict',
     readonly status: number,
     message: string,
   ) {
@@ -494,6 +495,7 @@ export async function completeElapsedScheduledLessonForHomework(
   studentId: string,
   lessonId: string,
   actorUserId?: string | null,
+  expected?: { plannedCharge?: boolean | null; status?: StudentLessonStatus },
 ): Promise<boolean> {
   return withPgTransaction(async (client) => {
     await setStudentActivityActor(client, actorUserId);
@@ -505,6 +507,25 @@ export async function completeElapsedScheduledLessonForHomework(
       [lessonId, context.id],
     );
     const existing = await getLessonRow(client, context, lessonId);
+    if (
+      expected &&
+      (!existing ||
+        (expected.plannedCharge !== undefined &&
+          expected.plannedCharge !== existing.planned_charge) ||
+        (expected.status !== undefined &&
+          expected.status !== existing.status &&
+          !(
+            expected.status === 'scheduled' &&
+            existing.status === 'completed' &&
+            existing.consumes_credit === (expected.plannedCharge ?? true)
+          )))
+    ) {
+      throw new StudentScheduleBillingError(
+        'lesson_conflict',
+        409,
+        'Lesson changed. Review its charge before continuing.',
+      );
+    }
     if (!existing || existing.status !== 'scheduled' || !isLessonHomeworkFollowUpDue(existing)) {
       return false;
     }
@@ -514,7 +535,7 @@ export async function completeElapsedScheduledLessonForHomework(
       UPDATE student_lessons
       SET
         status = 'completed',
-        consumes_credit = true,
+        consumes_credit = COALESCE(planned_charge, true),
         updated_by = $3,
         completed_by = CASE
           WHEN status <> 'completed' THEN $3
@@ -573,13 +594,30 @@ export async function updateStudentLesson(
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   if (
-    Object.keys(params).some((key) => !['status', 'consumesCredit', 'notes'].includes(key)) ||
+    Object.keys(params).some(
+      (key) =>
+        ![
+          'status',
+          'consumesCredit',
+          'plannedCharge',
+          'expectedStatus',
+          'expectedPlannedCharge',
+          'notes',
+        ].includes(key),
+    ) ||
     (params.status !== undefined && !['completed', 'no_show'].includes(params.status))
   ) {
     throw new StudentScheduleBillingError(
       'invalid_request',
       400,
       'Edit lesson timing and cancellations in Google Calendar',
+    );
+  }
+  if (params.plannedCharge !== undefined && params.consumesCredit !== undefined) {
+    throw new StudentScheduleBillingError(
+      'invalid_request',
+      400,
+      'Edit either the planned charge or the recorded charge.',
     );
   }
   return withPgTransaction(async (client) => {
@@ -594,13 +632,59 @@ export async function updateStudentLesson(
       throw new StudentScheduleBillingError('not_found', 404, 'Lesson not found');
     }
 
+    if (
+      (params.expectedStatus !== undefined && params.expectedStatus !== existing.status) ||
+      (params.expectedPlannedCharge !== undefined &&
+        params.expectedPlannedCharge !== existing.planned_charge)
+    ) {
+      throw new StudentScheduleBillingError(
+        'lesson_conflict',
+        409,
+        'Lesson changed. Refresh and review its charge.',
+      );
+    }
+    if (params.plannedCharge !== undefined && existing.status !== 'scheduled') {
+      throw new StudentScheduleBillingError(
+        'lesson_conflict',
+        409,
+        'Lesson is already recorded. Refresh before editing its charge.',
+      );
+    }
+
     const nextStatus = params.status ?? existing.status;
+    const firstCompletion = nextStatus === 'completed' && existing.status !== 'completed';
+    if (firstCompletion && existing.starts_at.getTime() > Date.now()) {
+      throw new StudentScheduleBillingError(
+        'invalid_request',
+        400,
+        'Complete a lesson once it has started.',
+      );
+    }
+    // Existing scheduled consumesCredit writes remain explicit legacy choices. A known
+    // planned charge wins over older clients' hardcoded completion flags.
+    const plannedCharge =
+      params.plannedCharge ??
+      (existing.status === 'scheduled' &&
+      params.status === undefined &&
+      params.consumesCredit !== undefined
+        ? params.consumesCredit
+        : (existing.planned_charge ??
+          (existing.status === 'scheduled' && params.consumesCredit !== undefined
+            ? params.consumesCredit
+            : null)));
+    const consumesCredit =
+      nextStatus === 'no_show'
+        ? false
+        : firstCompletion && existing.status === 'scheduled'
+          ? (plannedCharge ?? true)
+          : (params.consumesCredit ?? existing.consumes_credit);
     await client.query(
       `
       UPDATE student_lessons
       SET
         status = $3,
         consumes_credit = $4,
+        planned_charge = $7,
         notes = $5,
         updated_by = $6,
         completed_by = CASE
@@ -616,9 +700,10 @@ export async function updateStudentLesson(
         lessonId,
         studentId,
         nextStatus,
-        params.consumesCredit ?? existing.consumes_credit,
+        consumesCredit,
         params.notes === undefined ? existing.notes : params.notes,
         actorUserId ?? null,
+        plannedCharge,
       ],
     );
     await reconcileLessonCreditEvent(client, lessonId, actorUserId ?? null);
@@ -1347,6 +1432,7 @@ function mapLesson(row: LessonRow): StudentLessonDto {
     durationMinutes: row.duration_minutes,
     status: row.status,
     consumesCredit: row.consumes_credit,
+    plannedCharge: row.planned_charge,
     title: row.title ?? null,
     notes: row.notes ?? null,
     creditEventId: row.credit_event_id ?? null,
