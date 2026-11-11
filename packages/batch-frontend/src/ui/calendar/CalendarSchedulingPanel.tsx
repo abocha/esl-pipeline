@@ -61,8 +61,29 @@ const message = (error: unknown) =>
   error instanceof Error ? error.message : 'Calendar action failed. Try again.';
 
 const attentionCopy = (code: string) => {
-  if (code === 'lesson_attention_required' || code === 'association_required')
-    return 'Some Google changes need review. Check the affected lessons before making further changes.';
+  switch (code) {
+    case 'lesson_attention_required':
+      return 'The teaching calendar has lesson issues. Details are unavailable.';
+    case 'association_required':
+      return 'ESL Pipeline could not match the Google event to the lesson.';
+    case 'association_provenance_conflict':
+    case 'identity_conflict':
+      return 'The Google event conflicts with an existing lesson link.';
+    case 'unsupported_event':
+      return 'ESL Pipeline could not use this event’s start or end time. Check that it is a timed event in Google Calendar.';
+    case 'provider_event_missing':
+      return 'ESL Pipeline could not find the linked event in Google Calendar.';
+    case 'protected_lesson_changed':
+      return 'Sync found a difference and kept the existing record to protect teaching history.';
+    case 'protected_lesson_deleted':
+      return 'The Google event was canceled or removed. Sync kept the existing lesson record.';
+    case 'protected_series_changed':
+      return 'Google Calendar changed the series. Sync kept lessons with protected records.';
+    case 'invitation_declined':
+      return 'The lesson invitation was declined in Google Calendar.';
+    case 'sync_stale':
+      return 'Calendar sync is behind. Use Sync now to request an update.';
+  }
   if (
     [
       'google_reauthorization_required',
@@ -295,12 +316,7 @@ export function CalendarSchedulingPanel({
     return () => window.removeEventListener('hashchange', openFromHash);
   }, [studioV2, presentationActive, routeHash]);
   const needsAttention =
-    status?.state === 'needs_attention' ||
-    status?.state === 'reconnect_required' ||
-    status?.operations.some((operation) => operation.state === 'needs_review');
-  useEffect(() => {
-    if (presentationActive && (error || needsAttention)) setExpanded(true);
-  }, [error, needsAttention, presentationActive]);
+    error || status?.state === 'needs_attention' || status?.state === 'reconnect_required';
   useEffect(() => {
     if (!presentationActive) {
       drawerTrigger.current = null;
@@ -385,6 +401,13 @@ export function CalendarSchedulingPanel({
   const ConnectionSettings = studioV2 ? 'section' : 'details';
   const CalendarAssociation = studioV2 ? 'section' : 'details';
   const calendarName = connection?.connection?.calendarName;
+  const issues = status?.issues;
+  const statusNotice =
+    status?.errorCode && (status.errorCode !== 'lesson_attention_required' || !issues?.items.length)
+      ? attentionCopy(status.errorCode)
+      : status?.state === 'needs_attention' && !issues?.items.length
+        ? 'A calendar operation needs review. Check the submitted setup for recovery options.'
+        : null;
   const privacyNotice = (
     <p className="calendar-notice calendar-privacy-notice">
       Connecting shares your Google account identity and writable calendar list with ESL Pipeline.
@@ -536,9 +559,36 @@ export function CalendarSchedulingPanel({
           {error}
         </p>
       ) : null}
-      {status?.errorCode ? (
-        <p className="calendar-notice">{attentionCopy(status.errorCode)}</p>
-      ) : null}
+      {(!studioV2 || activeView === 'settings') && (
+        <>
+          {statusNotice && <p className="calendar-notice">{statusNotice}</p>}
+          {issues && issues.items.length > 0 && (
+            <section className="calendar-notice" aria-label="Teaching calendar issues">
+              <strong>Teaching calendar issues</strong>
+              <ul className="calendar-issue-list">
+                {issues.items.map((issue) => (
+                  <li key={`${issue.kind}:${issue.id}`}>
+                    <strong>{issue.studentName}</strong>
+                    {' · '}
+                    {issue.startsAt
+                      ? formatTutorTime(issue.startsAt, timezone)
+                      : issue.kind === 'series'
+                        ? 'Recurring series'
+                        : 'Linked event'}
+                    <p>{attentionCopy(issue.errorCode)}</p>
+                    {issue.eventUrl && (
+                      <a href={issue.eventUrl} target="_blank" rel="noreferrer">
+                        Open in Google
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {issues.hasMore && <p>Showing the first {issues.items.length} issues.</p>}
+            </section>
+          )}
+        </>
+      )}
       {studioV2 && !connected && connection?.enabled && !canConnect ? (
         <p className="calendar-help">Ask a workspace owner to connect Google Calendar.</p>
       ) : null}
@@ -1264,10 +1314,11 @@ export function CalendarSchedulingPanel({
           className="product-button product-button--quiet"
           onClick={(event) => {
             drawerTrigger.current = event.currentTarget;
+            setDrawerView(needsAttention ? 'settings' : 'schedule');
             setExpanded(true);
           }}
         >
-          Manage <span aria-hidden="true">→</span>
+          {needsAttention ? 'Review calendar issues' : 'Manage'} <span aria-hidden="true">→</span>
         </button>
         {studentId && canSchedule && (
           <button

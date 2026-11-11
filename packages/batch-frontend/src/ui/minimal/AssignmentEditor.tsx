@@ -2,10 +2,11 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUp,
-  BookOpen,
   Check,
   GripVertical,
+  Headphones,
   Highlighter,
+  Info,
   Library,
   MessageSquare,
   NotebookPen,
@@ -561,12 +562,12 @@ interface AssignmentEditorProps {
 }
 const sections = [
   ['goal', 'Your goal', Target],
-  ['input', 'Listen and read', BookOpen],
+  ['input', 'Listen and read', Headphones],
   ['toolkit', 'Grammar & vocabulary', Library],
   ['practice', 'Practice', PencilLine],
   ['pronunciation', 'Say it clearly', Volume2],
   ['output', 'Your task', MessageSquare],
-  ['rationale', 'Why this helps', BookOpen],
+  ['rationale', 'Why this helps', Info],
 ] as const;
 const pathRoute = (path: EditorPath) =>
   path[0] === 'practice'

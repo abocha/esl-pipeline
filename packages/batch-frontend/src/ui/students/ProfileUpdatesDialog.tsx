@@ -1,4 +1,4 @@
-import { BookOpen, Undo2, X } from 'lucide-react';
+import { FileSearch, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ProfileMaintenanceChangeDto } from '@esl-pipeline/contracts';
@@ -225,7 +225,7 @@ export function ProfileUpdatesDialog({
                     aria-label={`View lesson evidence for ${item.addedValue}`}
                     title="View lesson evidence"
                   >
-                    <BookOpen size={18} aria-hidden="true" />
+                    <FileSearch size={18} aria-hidden="true" />
                   </button>
                   {item.status !== 'undone' ? (
                     <button

@@ -258,6 +258,14 @@ html:has(.business-dashboard-page) {
 .business-lesson-actions > a {
   font-size: 0.85rem;
 }
+.business-lesson-actions > :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.business-lesson-actions > :is(a, button) > svg {
+  flex-shrink: 0;
+}
 .business-lesson-actions > button {
   color: var(--app-blue);
   border-color: var(--app-blue);

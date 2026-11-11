@@ -139,8 +139,14 @@
   font-size: 0.8rem;
 }
 .student-activity-row-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   color: var(--app-blue);
   text-underline-offset: 3px;
+}
+.student-activity-row-actions a svg {
+  flex-shrink: 0;
 }
 .student-activity-row-actions details {
   min-width: 0;

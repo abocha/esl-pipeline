@@ -1,4 +1,4 @@
-import { ArrowRight, FileText, Plus, Search } from 'lucide-react';
+import { ArrowRight, BookOpen, Plus, Search, TextQuote } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
@@ -257,7 +257,11 @@ export default function AssignmentListPage() {
           : `/?jobId=${encodeURIComponent(item.id)}`
       }
     >
-      <FileText size={21} aria-hidden="true" />
+      {isTranscript(item) ? (
+        <TextQuote size={21} aria-hidden="true" />
+      ) : (
+        <BookOpen size={21} aria-hidden="true" />
+      )}
       <span className="studio-assignment-list__identity">
         <strong>{item.learnerName}</strong>
         <span>{item.activityLabel}</span>

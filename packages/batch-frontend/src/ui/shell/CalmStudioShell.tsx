@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   CalendarDays,
   ChartNoAxesCombined,
   FileText,
@@ -49,7 +50,7 @@ export interface CalmStudioShellProps {
 }
 
 const workspaceLinks = [
-  { to: '/', label: 'Assignments', icon: FileText, end: true },
+  { to: '/', label: 'Assignments', icon: BookOpen, end: true },
   { to: '/students', label: 'Students', icon: Users },
   { to: '/business', label: 'Business', icon: ChartNoAxesCombined },
 ] as const;
@@ -181,6 +182,24 @@ export function CalmStudioShell({
     });
   }, [onLogout]);
 
+  const brandContents = (
+    <>
+      <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={24} height={24} />
+      ESL Pipeline
+    </>
+  );
+  const brand = v2 ? (
+    <Link
+      className="calm-shell__brand-home"
+      to="/day"
+      onClick={(event) => handleWorkspaceNavigation(event, '/day')}
+    >
+      {brandContents}
+    </Link>
+  ) : (
+    <strong className="calm-shell__brand-home">{brandContents}</strong>
+  );
+
   return (
     <AssignmentNavigationGuardContext.Provider value={navigationGuardContextValue}>
       {dataRouterContext ? (
@@ -212,20 +231,7 @@ export function CalmStudioShell({
           >
             {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
           </button>
-          <div className="calm-shell__mobile-brand">
-            <span className="calm-shell__mark calm-shell__mark--compact" aria-hidden="true" />
-            {v2 ? (
-              <Link
-                className="calm-shell__brand-home"
-                to="/day"
-                onClick={(event) => handleWorkspaceNavigation(event, '/day')}
-              >
-                ESL Pipeline
-              </Link>
-            ) : (
-              <strong>ESL Pipeline</strong>
-            )}
-          </div>
+          <div className="calm-shell__mobile-brand">{brand}</div>
         </header>
 
         <aside
@@ -236,17 +242,7 @@ export function CalmStudioShell({
           }}
         >
           <div className="calm-shell__brand">
-            {v2 ? (
-              <Link
-                className="calm-shell__brand-home"
-                to="/day"
-                onClick={(event) => handleWorkspaceNavigation(event, '/day')}
-              >
-                ESL Pipeline
-              </Link>
-            ) : (
-              <strong>ESL Pipeline</strong>
-            )}
+            {brand}
             <button
               className="calm-shell__rail-toggle"
               type="button"

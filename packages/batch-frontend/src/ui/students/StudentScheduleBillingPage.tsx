@@ -1,4 +1,4 @@
-import { BookOpen, CalendarDays, ChevronDown, Pencil, Plus, RefreshCw } from 'lucide-react';
+import { BookOpen, CalendarDays, ChevronDown, Pencil, Plus, RefreshCw, TextQuote } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom';
 
@@ -52,6 +52,10 @@ function formatMoney(amountMinor: number, currency: string): string {
 
 function formatCredits(value: number): string {
   return `${value} lesson credit${Math.abs(value) === 1 ? '' : 's'}`;
+}
+
+function isLegacyScheduledLesson(lesson: StudentScheduleBillingSurface['lessons'][number]) {
+  return lesson.schedulingSource === 'unmanaged' && lesson.status === 'scheduled';
 }
 
 function formatReminderLessonDetail(
@@ -154,6 +158,28 @@ const StudentScheduleBillingContent: React.FC<{ split?: boolean }> = ({ split = 
   const studentName = student?.student ?? 'this student';
   const { requestChargeReview, chargeReview } = useLessonChargeReview(studentId);
   const [surface, setSurface] = useState<StudentScheduleBillingSurface | null>(null);
+  const hiddenLessonsKey = `student-schedule:hidden-legacy-lessons:${studentId}`;
+  const [hiddenLessons, setHiddenLessons] = useState<string[]>(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(hiddenLessonsKey) ?? '[]');
+      return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showHiddenLessons, setShowHiddenLessons] = useState(false);
+  const setLegacyLessonHidden = (lessonId: string, hidden: boolean) => {
+    const next = hidden
+      ? [...hiddenLessons, lessonId]
+      : hiddenLessons.filter((id) => id !== lessonId);
+    setHiddenLessons(next);
+    if (hidden || !next.length) setShowHiddenLessons(false);
+    try {
+      localStorage.setItem(hiddenLessonsKey, JSON.stringify(next));
+    } catch {
+      // A browser that blocks storage can still hide and restore lessons for this visit.
+    }
+  };
   const tutorTimezone = useWorkspaceTimezone();
   const { reconcileTimezone } = useWorkspaceSettings();
   const workspaceTimezone = tutorTimezone ?? surface?.lessonWindows.timezone ?? null;
@@ -888,6 +914,16 @@ const StudentScheduleBillingContent: React.FC<{ split?: boolean }> = ({ split = 
           </div>
         )}
         {split ? calendarPanel : null}
+        {hiddenLessons.length > 0 && (
+          <button
+            type="button"
+            className={split ? 'product-button product-button--quiet' : undefined}
+            aria-pressed={showHiddenLessons}
+            onClick={() => setShowHiddenLessons((show) => !show)}
+          >
+            Show hidden legacy lessons
+          </button>
+        )}
         {(
           [
             {
@@ -920,6 +956,15 @@ const StudentScheduleBillingContent: React.FC<{ split?: boolean }> = ({ split = 
                 ['today', 'upcoming', 'recent'].indexOf(b.key)
               : 0,
           )
+          .map((group) => ({
+            ...group,
+            items: group.items.filter(
+              (lesson) =>
+                showHiddenLessons ||
+                !isLegacyScheduledLesson(lesson) ||
+                !hiddenLessons.includes(lesson.id),
+            ),
+          }))
           .map((group) => (
             <StudentAreaPanel key={group.key} className="student-schedule-billing-panel">
               <header>
@@ -1011,6 +1056,7 @@ const StudentScheduleBillingContent: React.FC<{ split?: boolean }> = ({ split = 
                             <Link
                               to={`/?sessionId=${encodeURIComponent(lesson.homework.transcriptResultSessionId)}`}
                             >
+                              {split && <TextQuote size={16} aria-hidden="true" />}
                               View transcript
                             </Link>
                           ) : null}
@@ -1092,6 +1138,20 @@ const StudentScheduleBillingContent: React.FC<{ split?: boolean }> = ({ split = 
                               Open in Google
                             </a>
                           ) : null}
+                          {isLegacyScheduledLesson(lesson) && (
+                            <button
+                              type="button"
+                              className={split ? 'product-button product-button--quiet' : undefined}
+                              disabled={Boolean(saving) || editingLessonId === lesson.id}
+                              onClick={() =>
+                                setLegacyLessonHidden(lesson.id, !hiddenLessons.includes(lesson.id))
+                              }
+                            >
+                              {hiddenLessons.includes(lesson.id)
+                                ? 'Restore to schedule list'
+                                : 'Hide from schedule list'}
+                            </button>
+                          )}
                           <button
                             className={
                               split ? 'product-button product-button--secondary' : undefined

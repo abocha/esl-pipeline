@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, ChevronRight, History } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -187,7 +187,7 @@ export function StudentBillingActivity({
         className="student-billing-activity__history"
         to={{ pathname: `${studentPath}/history`, search: `?${historyParams}` }}
       >
-        Full billing history <ArrowUpRight size={15} aria-hidden="true" />
+        <History size={16} aria-hidden="true" /> Full billing history
       </Link>
       {selected && (
         <StudioV2Dialog title={selected.title} onClose={() => setOpenEntryId(null)}>
@@ -232,7 +232,7 @@ export function StudentBillingActivity({
                     to={{ pathname: `${studentPath}/schedule`, search }}
                     onClick={() => setOpenEntryId(null)}
                   >
-                    View schedule
+                    <CalendarDays size={16} aria-hidden="true" /> View schedule
                   </Link>
                 )}
               </section>

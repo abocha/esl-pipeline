@@ -1,4 +1,13 @@
-import { RefreshCw } from 'lucide-react';
+import {
+  BookOpen,
+  CalendarDays,
+  ListOrdered,
+  ReceiptText,
+  RefreshCw,
+  Sparkles,
+  TextQuote,
+  UserRound,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
@@ -45,6 +54,23 @@ function activityHref(
 
   const section = item.category === 'billing' ? 'billing' : 'schedule';
   return `${studentPath}/${section}${pathEnd < 0 ? '' : href.slice(pathEnd)}`;
+}
+
+function activityLinkIcon(href: string, type: string, studentId: string) {
+  const pathname = href.split(/[?#]/, 1)[0];
+  const studentPath = `/students/${encodeURIComponent(studentId)}`;
+  if (pathname === `${studentPath}/billing` || pathname === `${studentPath}/schedule-billing`) {
+    if (type.startsWith('payment_')) return ReceiptText;
+    if (type.startsWith('credits_')) return ListOrdered;
+  }
+  if (pathname === `${studentPath}/schedule` || pathname === `${studentPath}/schedule-billing`)
+    return CalendarDays;
+  if (pathname === `${studentPath}/learning`)
+    return type.startsWith('candidate_') ? Sparkles : UserRound;
+  if (pathname === '/' && type === 'transcript_saved') return TextQuote;
+  if (type === 'homework_published' || (pathname === '/' && type.startsWith('homework_')))
+    return BookOpen;
+  return null;
 }
 
 function eventDate(value: string, timezone: string, includeTime = false): string {
@@ -108,9 +134,16 @@ function ActivityRow({
             const href = activityHref(link.href, item, studentId, studioV2);
             const destination = activityDestination(href);
             const name = `${link.label}: ${item.subject}`;
+            const Icon = activityLinkIcon(href, item.type, studentId);
+            const content = (
+              <>
+                {Icon && <Icon size={16} aria-hidden="true" />}
+                <span>{link.label}</span>
+              </>
+            );
             return destination === 'internal' ? (
               <Link key={link.href} to={href} aria-label={name}>
-                {link.label}
+                {content}
               </Link>
             ) : destination === 'external' ? (
               <a
@@ -120,7 +153,7 @@ function ActivityRow({
                 rel="noreferrer"
                 aria-label={name}
               >
-                {link.label}
+                {content}
               </a>
             ) : null;
           })}

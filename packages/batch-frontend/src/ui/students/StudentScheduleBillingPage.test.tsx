@@ -233,6 +233,34 @@ describe('StudentScheduleBillingPage', () => {
     ).toBeTruthy();
   });
 
+  it('hides and restores an individual legacy scheduled lesson alongside a matching Google lesson', async () => {
+    const lesson = makeSurface().lessons[0];
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        lessons: [
+          { ...lesson, title: 'Old scheduled lesson', schedulingSource: 'unmanaged' },
+          { ...lesson, id: 'google-lesson', title: 'Google lesson', schedulingSource: 'calendar' },
+        ],
+      }),
+    );
+    const view = renderSplitPage();
+    fireEvent.click((await screen.findByText('Old scheduled lesson')).closest('summary')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide from schedule list' }));
+    expect(screen.queryByText('Old scheduled lesson')).toBeNull();
+    expect(screen.getByText('Google lesson')).toBeTruthy();
+    view.unmount();
+
+    renderSplitPage();
+    await screen.findByText('Google lesson');
+    expect(screen.queryByText('Old scheduled lesson')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show hidden legacy lessons' }));
+    fireEvent.click(screen.getByText('Old scheduled lesson').closest('summary')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Restore to schedule list' }));
+    expect(screen.getByText('Old scheduled lesson')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Show hidden legacy lessons' })).toBeNull();
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
+  });
+
   it('retains paged windows, drafts and one Calendar owner across sibling tabs without refetching', async () => {
     const lesson = makeSurface().lessons[0];
     apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(

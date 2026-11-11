@@ -87,6 +87,16 @@ Never rely on color or icon recognition alone.
 Selection and state are separate concepts. Use the normal control vocabulary for selection and do
 not let green, red, or blue status styling imply which item is selected.
 
+Use Lucide `BookOpen` for homework assignments, `TextQuote` for transcripts, `AudioLines` for
+audio input, and `FileSearch` for lesson evidence. Use `Plus` to start a new assignment and
+`Pencil` for edit actions. Assignment progress uses `UserRound` for Student, `FileInput` for
+Lesson source, `ClipboardList` for Teaching context, `Sparkles` for Create, and `Send` for Review &
+share. A checkmark marks a completed step. Keep the step labels visible.
+
+Use `ReceiptText` for payment records, `ListOrdered` for the credit ledger, `CalendarDays` for
+lesson schedules, and `History` for activity history. Give an action an icon when it helps the
+tutor recognize the destination or outcome. Text is enough for generic controls such as Details.
+
 ### Use compact progressive disclosure for secondary depth
 
 Show the small, high-probability set first. Reveal older, rarer, or more technical material through
