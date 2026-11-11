@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [23.0.1] - 2026-11-11
+
+### Changed
+
+- Automated release from PR #475: fix(frontend): select Calm Studio v2 in production images (https://github.com/abocha/esl-pipeline/pull/475)
+
 ## [23.0.0] - 2026-11-11
 
 ### Changed
