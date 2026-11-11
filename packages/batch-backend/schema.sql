@@ -3641,6 +3641,6 @@ VALUES
   ('0072_calendar_projection_reference_guard', '50cf12476c3fd513fa328777a12ca2260d2c6a1b99b15b4b8c623a9093b3ef06', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0073_gemini_tts_provider', 'cdaee92f0b9f19241844d93ed34db298c4cf0f6d852de4c21bca555dcd33a169', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0074_assignment_material', '355e87270ed685ba9cdf82ef8e0a192dc47724fcf8bbe71c4c49de830c7d104c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0075_lesson_planned_charge', '897dd703aa157cfae6a525590e8aec14be3f62118c071a30097dbe7883ca89eb', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0075_lesson_planned_charge', '0402bbb9e1f7d3f6cc009177d69bd0b3241ab827f834bec2ef7f1a79a2bdf545', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0076_student_profile_maintenance', '243745b0629ba63f128e732fcc6bb4a5eefb657791a4f7d55658ca437d698c25', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
