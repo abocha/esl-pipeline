@@ -15,7 +15,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
 
 COPY packages ./packages
 
-ARG VITE_CALM_STUDIO_V2=false
+ARG VITE_CALM_STUDIO_V2=true
 ENV VITE_CALM_STUDIO_V2=${VITE_CALM_STUDIO_V2}
 
 RUN find packages -name '*.tsbuildinfo' -delete

@@ -26,7 +26,7 @@ Split student Schedule/Billing with one mounted controller across sibling routes
 ## Switch acceptance
 
 - No fixture imports or local pretend success in integrated routes.
-- Existing frontend remains the default while v2 is selected for acceptance.
+- The paired v23.0.0 release retains v1 as the default. The follow-up release selects v2 for the production switch.
 - Real route loading/empty/error/retry, archive/restore, paging/timezones, credit/payment isolation, profile drafts and navigation guards pass focused checks.
 - Full native assignment source-to-share/recovery behavior remains available and validated.
 - Approved design differences have concrete delivered behavior or explicit blockers; no missing work is hidden by a broad readiness percentage.
@@ -38,9 +38,9 @@ Split student Schedule/Billing with one mounted controller across sibling routes
 V2 is selected by the `VITE_CALM_STUDIO_V2=true` frontend build environment or Docker build
 argument. The flag changes presentation and routes, never authorization. The standard
 [release workflow](../../.github/workflows/release-on-merge.yml) uses the Dockerfile default
-and publishes v1. After switch acceptance, change the build default in a reviewed follow-up
-and publish the new frontend through the same workflow. The build embeds the setting in the
-frontend bundle, so changing an environment variable on an existing deployment cannot select v2.
+of `true` for the switch release. The build embeds the setting in the frontend bundle.
+The v23.0.0 release bundle selects v1 and supports the same API and database contracts,
+so it is available as a presentation fallback after the schema upgrade.
 
 API 13.0.0 and DB 6.0.0 describe the mandatory profile revision preconditions and incompatible
 migrations 0075 and 0076. The paired release requires the

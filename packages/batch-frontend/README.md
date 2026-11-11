@@ -38,8 +38,8 @@ Canonical behavior and current status live in:
 ## Runtime Notes
 
 - The integrated Calm Studio v2 presentation is selected with `VITE_CALM_STUDIO_V2=true`
-  at build time. The default remains v1. The frontend Dockerfile accepts the same build
-  argument; changing a running container's environment does not rewrite a built frontend.
+  at build time. The production Dockerfile defaults to v2 and accepts `false` to build v1.
+  Local builds without the flag use v1. The selection is embedded in the built frontend.
   V2 uses the authenticated application and real API controllers, with `/` for assignments,
   `/assignments/new` for native authoring, `/day` for the agenda, and separate student
   `/schedule` and `/billing` routes. Existing assignment deep links remain valid. The old
