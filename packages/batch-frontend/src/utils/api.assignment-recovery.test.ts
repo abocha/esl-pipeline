@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ArtifactWorkingConflictApiError,
+  AssignmentLessonConflictApiError,
   AssignmentSpeakerRoleMappingRequiredApiError,
   attachAssignmentSource,
   confirmAssignmentSessionStep,
@@ -59,6 +60,39 @@ describe('assignment recovery API', () => {
     vi.mocked(apiClient.post).mockReset();
   });
 
+  it.each(['confirm', 'recovery'] as const)(
+    'retains the accepted session on %s lesson-charge conflict without retrying the stale charge',
+    async (entry) => {
+      const session = {
+        id: 'saved-session',
+        studentId: 'student-1',
+        lessonId: 'lesson-1',
+        revision: 2,
+      };
+      const error = makeAxiosError(409, { code: 'assignment_lesson_changed', session });
+      const call = entry === 'confirm' ? vi.mocked(apiClient.post) : vi.mocked(apiClient.patch);
+      call.mockReset().mockRejectedValueOnce(error);
+      const operation =
+        entry === 'confirm'
+          ? confirmStudentAssignmentSession({
+              requestId: 'request-1',
+              studentId: 'student-1',
+              lessonId: 'lesson-1',
+              expectedLessonPlannedCharge: false,
+              expectedLessonStatus: 'scheduled',
+            })
+          : updateAssignmentSessionRecovery('saved-session', {
+              expectedRevision: 1,
+              patch: { lessonId: 'lesson-1' },
+              expectedLessonPlannedCharge: false,
+              expectedLessonStatus: 'scheduled',
+            });
+      await expect(operation).rejects.toMatchObject({ latestSession: session });
+      await expect(operation).rejects.toBeInstanceOf(AssignmentLessonConflictApiError);
+      expect(call).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('posts explicit material retrieval once and never uses recovery retries', async () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce({
       data: { sourceUrl: 'https://youtu.be/abc123XYZ_0', sourceText: 'Caption text.' },
@@ -110,7 +144,7 @@ describe('assignment recovery API', () => {
     );
   });
 
-  it('requests explicit result history without changing the default unfinished list', async () => {
+  it('paginates explicit active and result history without changing the default unfinished list', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { sessions: [], total: 0, limit: 20 } });
     await listAssignmentSessions();
     expect(apiClient.get).toHaveBeenLastCalledWith('/api/user/assignment-sessions', {
@@ -119,6 +153,10 @@ describe('assignment recovery API', () => {
     await listAssignmentSessions(20, 'history', 60);
     expect(apiClient.get).toHaveBeenLastCalledWith('/api/user/assignment-sessions', {
       params: { limit: 20, scope: 'history', offset: 60 },
+    });
+    await listAssignmentSessions(20, 'active', 40);
+    expect(apiClient.get).toHaveBeenLastCalledWith('/api/user/assignment-sessions', {
+      params: { limit: 20, scope: 'active', offset: 40 },
     });
   });
 

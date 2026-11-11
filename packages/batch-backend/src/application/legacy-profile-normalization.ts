@@ -140,6 +140,7 @@ export async function normalizeLegacyStudentProfile(args: {
     request.studentId,
     renderFoundationalProfileContent(structuredDraft),
     {
+      expectedActiveRevisionId: activeRevision.id,
       source: 'legacy_normalization',
       status: 'draft',
       createdBy: request.reviewerId ?? null,

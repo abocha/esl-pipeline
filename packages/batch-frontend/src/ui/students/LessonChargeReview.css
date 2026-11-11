@@ -1,0 +1,47 @@
+.lesson-charge-review {
+  padding: 20px;
+  border: 1px solid var(--border-default, #d2e2df);
+  border-radius: 8px;
+  background: var(--surface-default, #fff);
+}
+.lesson-charge-review form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.lesson-charge-review fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  gap: 20px;
+}
+.lesson-charge-review legend {
+  padding: 0;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+.lesson-charge-review label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.lesson-charge-review button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-default, #d2e2df);
+  border-radius: 6px;
+  background: var(--surface-default, #fff);
+  color: var(--text-primary, #203b4e);
+  font: inherit;
+  cursor: pointer;
+}
+.lesson-charge-review button[type="submit"] {
+  color: #fff;
+  background: var(--cs-action, #0f766e);
+}
+.lesson-charge-review [role="alert"] {
+  width: 100%;
+}

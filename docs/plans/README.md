@@ -93,6 +93,8 @@ replacement for current issue/PR state.
 9. `docs/plans/slice-2-invite-workspace-first-student.md`
 10. `docs/plans/2026-06-23-alpha-readiness.md`
 11. `docs/plans/2026-10-22-script-safety.md`
+12. `docs/plans/calm-studio-v2-switch.md`
+13. `docs/plans/calm-studio-v2-profile-maintenance.md`
 
 ## Historical and Generated Aids
 

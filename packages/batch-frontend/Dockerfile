@@ -15,6 +15,9 @@ RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
 
 COPY packages ./packages
 
+ARG VITE_CALM_STUDIO_V2=false
+ENV VITE_CALM_STUDIO_V2=${VITE_CALM_STUDIO_V2}
+
 RUN find packages -name '*.tsbuildinfo' -delete
 RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
     pnpm --filter @esl-pipeline/batch-frontend... install --offline --frozen-lockfile

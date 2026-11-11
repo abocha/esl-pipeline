@@ -167,6 +167,9 @@
   padding: clamp(1.25rem, 2.8vw, 2.5rem);
   outline: none;
 }
+html:has(.calm-shell--v2:not(.calm-shell--students)) {
+  scrollbar-gutter: stable;
+}
 .calm-shell__scrim {
   display: none;
 }

@@ -2,6 +2,8 @@
 -- GENERATED FILE: refresh with `pnpm --filter @esl-pipeline/batch-backend db:generate-baseline`.
 -- Do not hand-edit.
 -- Fresh-install baseline generated from the full versioned migration chain.
+SET check_function_bodies = false;
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
@@ -29,6 +31,21 @@ CREATE FUNCTION public.app_rls_bypass() RETURNS boolean
   SELECT COALESCE(NULLIF(current_setting('app.rls_bypass', true), ''), 'off') = 'on'
 $$;
 
+CREATE FUNCTION public.attribute_profile_maintenance_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.type='profile_saved' AND NEW.payload->>'source'='automatic_maintenance' THEN
+    NEW.actor_kind:='system'; NEW.actor_user_id:=NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: enforce_recording_workspace_authority(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.enforce_recording_workspace_authority() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -50,6 +67,11 @@ BEGIN
   RETURN NEW;
 END $$;
 
+
+--
+-- Name: fence_calendar_authority_loss(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.fence_calendar_authority_loss() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -67,6 +89,54 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.fence_student_profile_maintenance() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE selected record;
+  baseline jsonb; remaining jsonb; undo_id text; validated_undo boolean := false;
+BEGIN
+  IF NEW.status <> 'active' THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' AND OLD.status = 'active' THEN RETURN NEW; END IF;
+  undo_id:=current_setting('app.profile_maintenance_undo_change_id',true);
+  IF undo_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    SELECT * INTO selected FROM student_profile_maintenance_changes
+      WHERE id=undo_id::uuid AND student_id=NEW.student_id AND undone_at IS NULL AND undo_blocked_at IS NULL;
+    SELECT structured_content INTO baseline FROM student_profile_revisions
+      WHERE id=NEW.base_active_revision_id AND student_id=NEW.student_id;
+    IF selected.id IS NOT NULL AND baseline->selected.field = COALESCE(selected.undo_expected_value,selected.after_value) THEN
+      SELECT COALESCE(jsonb_agg(value ORDER BY ordinal),'[]'::jsonb) INTO remaining
+        FROM jsonb_array_elements(baseline->selected.field) WITH ORDINALITY entry(value,ordinal)
+        WHERE value <> to_jsonb(selected.added_value);
+      validated_undo := jsonb_array_length(remaining)+1=jsonb_array_length(baseline->selected.field)
+        AND NEW.structured_content=jsonb_set(baseline,ARRAY[selected.field],remaining);
+    END IF;
+  END IF;
+  -- Only a proven removal of exactly the ledger-selected item can advance sibling
+  -- undo expectations. The public revision source string never grants this exemption.
+  IF validated_undo THEN
+    UPDATE student_profile_maintenance_changes c SET undo_expected_value=remaining
+      WHERE c.student_id=NEW.student_id AND c.field=selected.field AND c.id<>selected.id
+        AND c.undone_at IS NULL AND c.undo_blocked_at IS NULL
+        AND COALESCE(c.undo_expected_value,c.after_value)=baseline->selected.field;
+  END IF;
+  INSERT INTO student_profile_fact_suppressions(student_id,fact_key,change_id,reason)
+    SELECT c.student_id,c.fact_key,c.id,'profile_value_removed'
+    FROM student_profile_maintenance_changes c
+    WHERE c.student_id=NEW.student_id AND c.undone_at IS NULL
+      AND NOT COALESCE(NEW.structured_content->c.field @> jsonb_build_array(c.added_value),false)
+    ON CONFLICT (student_id,fact_key) DO NOTHING;
+  UPDATE student_profile_maintenance_changes c
+    SET undo_blocked_at=clock_timestamp(),undo_blocked_reason='field_changed'
+    WHERE c.student_id=NEW.student_id AND c.undone_at IS NULL AND c.undo_blocked_at IS NULL
+      AND NEW.structured_content->c.field IS DISTINCT FROM COALESCE(c.undo_expected_value,c.after_value);
+  RETURN NEW;
+END $_$;
+
+
+--
+-- Name: guard_calendar_projection_reference(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.guard_calendar_projection_reference() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -78,6 +148,7 @@ BEGIN
     RETURN NEW;
   END IF;
   PERFORM id FROM student_lessons WHERE id=lesson FOR KEY SHARE;
+  -- Separate statement gets the committed state after waiting for a projection lock.
   SELECT schedule_hidden_at IS NOT NULL INTO hidden FROM student_lessons WHERE id=lesson;
   IF hidden THEN
     RAISE EXCEPTION 'Lesson schedule changed; refresh before continuing'
@@ -85,6 +156,11 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
+
+
+--
+-- Name: guard_completed_transcript_source(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.guard_completed_transcript_source() RETURNS trigger
     LANGUAGE plpgsql
@@ -103,6 +179,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: guard_session_homework_artifact(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.guard_session_homework_artifact() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -116,6 +197,15 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: assignment_sessions; Type: TABLE; Schema: public; Owner: -
+--
 
 CREATE TABLE public.assignment_sessions (
     id uuid NOT NULL,
@@ -166,6 +256,11 @@ CREATE TABLE public.assignment_sessions (
     CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
 );
 
+
+--
+-- Name: historical_assignment_session(public.assignment_sessions); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.historical_assignment_session(s public.assignment_sessions) RETURNS boolean
     LANGUAGE plpgsql STABLE
     AS $$
@@ -179,15 +274,23 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: link_student_credit_activity(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.link_student_credit_activity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 DECLARE transition_id uuid;
 BEGIN
+  -- Retention deletes the domain student and its activity/ledger together.
+  -- FK SET NULL actions may run while another retained reference is cascading.
   IF TG_OP='UPDATE' AND NOT EXISTS (SELECT 1 FROM students WHERE id=NEW.student_id) THEN RETURN NEW; END IF;
   IF TG_OP='UPDATE' THEN
     IF OLD.workspace_id IS NOT NULL AND NEW.workspace_id IS NULL
       AND NOT EXISTS (SELECT 1 FROM workspaces WHERE id=OLD.workspace_id) THEN RETURN NEW; END IF;
+    -- A cascading activity deletion may null either of two references first.
     IF ((NEW.activity_id IS NULL AND OLD.activity_id IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM student_activity WHERE id=OLD.activity_id))
       OR (NEW.reversal_activity_id IS NULL AND OLD.reversal_activity_id IS NOT NULL
@@ -202,6 +305,8 @@ BEGIN
     IF TG_OP='INSERT' THEN
       RAISE EXCEPTION 'Credit activity requires a lesson' USING ERRCODE='23514';
     END IF;
+    -- Existing links survive the original lesson FK's ON DELETE SET NULL.
+    -- A caller cannot remove a still-existing source or introduce a new link.
     IF (OLD.source_lesson_id IS NOT NULL AND EXISTS (SELECT 1 FROM student_lessons WHERE id=OLD.source_lesson_id))
       OR NEW.activity_id IS DISTINCT FROM OLD.activity_id
       OR NEW.reversal_activity_id IS DISTINCT FROM OLD.reversal_activity_id THEN
@@ -226,6 +331,11 @@ BEGIN
   RETURN NEW;
 END $$;
 
+
+--
+-- Name: lock_canonical_memory_student(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.lock_canonical_memory_student() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -249,6 +359,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: lock_memory_source_student(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.lock_memory_source_student() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -266,6 +381,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: preserve_assignment_artifact_identity(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.preserve_assignment_artifact_identity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -278,6 +398,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: preserve_assignment_draft_format(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.preserve_assignment_draft_format() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -288,6 +413,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: preserve_transcript_completion_history(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.preserve_transcript_completion_history() RETURNS trigger
     LANGUAGE plpgsql
@@ -317,6 +447,42 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: protect_profile_maintenance_evidence(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_profile_maintenance_evidence() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP='UPDATE' THEN
+    IF (to_jsonb(NEW)-ARRAY['undo_expected_value','undo_blocked_at','undo_blocked_reason','undo_revision_id','undone_at','undone_by'])
+      IS DISTINCT FROM
+      (to_jsonb(OLD)-ARRAY['undo_expected_value','undo_blocked_at','undo_blocked_reason','undo_revision_id','undone_at','undone_by'])
+      OR (OLD.undo_blocked_at IS NOT NULL AND NEW.undo_blocked_at IS DISTINCT FROM OLD.undo_blocked_at)
+      OR (OLD.undone_at IS NOT NULL AND NEW.undone_at IS DISTINCT FROM OLD.undone_at) THEN
+      RAISE EXCEPTION 'Profile maintenance evidence is immutable' USING ERRCODE='23514';
+    END IF;
+  ELSE
+    IF (NEW.source_snapshot_id IS NOT NULL AND NOT EXISTS
+      (SELECT 1 FROM student_memory_snapshots WHERE id=NEW.source_snapshot_id AND student_id=NEW.student_id))
+      OR (NEW.initial_operation_id IS NOT NULL AND NOT EXISTS
+      (SELECT 1 FROM profile_initial_enrichment_operations WHERE id=NEW.initial_operation_id AND student_id=NEW.student_id))
+      OR cardinality(NEW.source_lesson_memory_ids)=0
+      OR EXISTS(SELECT 1 FROM unnest(NEW.source_lesson_memory_ids) source(id)
+        WHERE NOT EXISTS(SELECT 1 FROM lesson_memory_entries l WHERE l.id=source.id AND l.student_id=NEW.student_id)) THEN
+      RAISE EXCEPTION 'Profile maintenance evidence ownership mismatch' USING ERRCODE='23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: record_student_candidate_activity(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.record_student_candidate_activity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -342,6 +508,11 @@ BEGIN
   RETURN NEW;
 END $$;
 
+
+--
+-- Name: record_student_homework_started_activity(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.record_student_homework_started_activity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -358,6 +529,11 @@ BEGIN
   RETURN NEW;
 END $$;
 
+
+--
+-- Name: record_student_job_failure_activity(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.record_student_job_failure_activity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -371,23 +547,31 @@ BEGIN
   RETURN NEW;
 END $$;
 
+
+--
+-- Name: record_student_lesson_activity(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.record_student_lesson_activity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 DECLARE event_type text; previous jsonb := NULL; current_value jsonb;
 BEGIN
+  -- Existing child-row readers reject mismatched ownership. Do not make this
+  -- recorder a new constraint on legacy/direct writers; never expose such rows.
   IF NOT EXISTS (SELECT 1 FROM students s WHERE s.id=NEW.student_id
     AND COALESCE(s.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)=
       COALESCE(NEW.workspace_id,'00000000-0000-4000-8000-000000000001'::uuid)) THEN RETURN NEW; END IF;
   current_value := jsonb_build_object('startsAt',NEW.starts_at,'timezone',NEW.timezone,
-    'durationMinutes',NEW.duration_minutes,'status',NEW.status,'consumesCredit',NEW.consumes_credit,
+    'durationMinutes',NEW.duration_minutes,'status',NEW.status,'consumesCredit',NEW.consumes_credit,'plannedCharge',NEW.planned_charge,
     'title',NEW.title);
   IF TG_OP = 'INSERT' THEN event_type := 'lesson_created';
   ELSE
     previous := jsonb_build_object('startsAt',OLD.starts_at,'timezone',OLD.timezone,
-      'durationMinutes',OLD.duration_minutes,'status',OLD.status,'consumesCredit',OLD.consumes_credit,
+      'durationMinutes',OLD.duration_minutes,'status',OLD.status,'consumesCredit',OLD.consumes_credit,'plannedCharge',OLD.planned_charge,
       'title',OLD.title);
     IF previous = current_value THEN RETURN NEW; END IF;
+    -- Placeholder titles filled by generation are enrichment, not a teacher edit.
     IF (previous - 'title') = (current_value - 'title') AND
       (OLD.title IS NULL OR btrim(OLD.title) = '' OR OLD.title = 'Untitled lesson')
       AND current_setting('app.student_activity_origin',true)='generated_title' THEN RETURN NEW; END IF;
@@ -404,6 +588,11 @@ BEGIN
       'generated',false));
   RETURN NEW;
 END $$;
+
+
+--
+-- Name: record_student_lifecycle_activity(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.record_student_lifecycle_activity() RETURNS trigger
     LANGUAGE plpgsql
@@ -428,6 +617,11 @@ BEGIN
     CASE WHEN student_activity_actor_id() IS NOT NULL THEN 'user' ELSE 'unknown' END,changes);
   RETURN NEW;
 END $$;
+
+
+--
+-- Name: record_student_profile_activity(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.record_student_profile_activity() RETURNS trigger
     LANGUAGE plpgsql
@@ -456,6 +650,11 @@ BEGIN
   RETURN NEW;
 END $$;
 
+
+--
+-- Name: record_student_reminder_activity(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.record_student_reminder_activity() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -479,6 +678,11 @@ BEGIN
   END LOOP;
   RETURN NEW;
 END $$;
+
+
+--
+-- Name: reject_historical_assignment_write(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.reject_historical_assignment_write() RETURNS trigger
     LANGUAGE plpgsql
@@ -514,6 +718,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: reject_legacy_profile_write(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.reject_legacy_profile_write() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -521,6 +730,11 @@ BEGIN
   RAISE EXCEPTION 'Legacy profile storage is frozen; reconcile ABO-12 before removal';
 END;
 $$;
+
+
+--
+-- Name: reject_mcp_profile_identity_update(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.reject_mcp_profile_identity_update() RETURNS trigger
     LANGUAGE plpgsql
@@ -532,6 +746,11 @@ BEGIN
   RETURN NEW;
 END $$;
 
+
+--
+-- Name: reject_student_activity_delete(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.reject_student_activity_delete() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -541,15 +760,26 @@ BEGIN
   RAISE EXCEPTION 'Student activity follows student retention' USING ERRCODE='23514';
 END $$;
 
+
+--
+-- Name: reject_student_activity_update(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.reject_student_activity_update() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
+  -- Only the user-retention FK may erase a deleted actor reference.
   IF NEW.actor_user_id IS NULL AND OLD.actor_user_id IS NOT NULL
     AND (to_jsonb(NEW) - 'actor_user_id') = (to_jsonb(OLD) - 'actor_user_id')
     AND NOT EXISTS (SELECT 1 FROM users WHERE id=OLD.actor_user_id) THEN RETURN NEW; END IF;
   RAISE EXCEPTION 'Student activity is append-only' USING ERRCODE = '23514';
 END $$;
+
+
+--
+-- Name: request_confirmed_source_audio_deletion(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.request_confirmed_source_audio_deletion() RETURNS trigger
     LANGUAGE plpgsql
@@ -564,6 +794,11 @@ BEGIN
     AND r.audio_lifecycle = 'retained';
   RETURN NEW;
 END $$;
+
+
+--
+-- Name: resolve_jobs_student_id(uuid, uuid, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.resolve_jobs_student_id(p_current_student_id uuid, p_recording_id uuid, p_prompt_package_id uuid, p_draft_id uuid, p_source_job_id uuid) RETURNS uuid
     LANGUAGE plpgsql
@@ -635,6 +870,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_drafts_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_drafts_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -644,6 +884,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_homework_memory_entries_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_homework_memory_entries_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -652,6 +897,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: set_jobs_student_id(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.set_jobs_student_id() RETURNS trigger
     LANGUAGE plpgsql
@@ -690,6 +940,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_jobs_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_jobs_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -698,6 +953,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: set_lesson_memory_entries_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.set_lesson_memory_entries_updated_at() RETURNS trigger
     LANGUAGE plpgsql
@@ -708,6 +968,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_ops_actions_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_ops_actions_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -716,6 +981,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: set_profiles_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.set_profiles_updated_at() RETURNS trigger
     LANGUAGE plpgsql
@@ -735,6 +1005,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_prompt_packages_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_prompt_packages_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -744,6 +1019,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_recordings_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_recordings_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -752,6 +1032,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: set_student_activity_actor(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.set_student_activity_actor() RETURNS trigger
     LANGUAGE plpgsql
@@ -766,6 +1051,11 @@ BEGIN
   RETURN NEW;
 END $$;
 
+
+--
+-- Name: set_student_memory_openai_batch_claims_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_student_memory_openai_batch_claims_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -774,6 +1064,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: set_student_memory_openai_batch_items_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.set_student_memory_openai_batch_items_updated_at() RETURNS trigger
     LANGUAGE plpgsql
@@ -784,6 +1079,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_student_memory_openai_batch_runs_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_student_memory_openai_batch_runs_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -792,6 +1092,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: set_student_memory_snapshots_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.set_student_memory_snapshots_updated_at() RETURNS trigger
     LANGUAGE plpgsql
@@ -802,6 +1107,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_student_profile_candidates_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_student_profile_candidates_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -810,6 +1120,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: set_students_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.set_students_updated_at() RETURNS trigger
     LANGUAGE plpgsql
@@ -820,6 +1135,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_transcripts_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_transcripts_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -828,6 +1148,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: set_uploaded_files_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.set_uploaded_files_updated_at() RETURNS trigger
     LANGUAGE plpgsql
@@ -838,6 +1163,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_user_settings_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_user_settings_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -847,6 +1177,11 @@ BEGIN
 END;
 $$;
 
+
+--
+-- Name: set_users_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
 CREATE FUNCTION public.set_users_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -855,6 +1190,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: student_activity_actor_id(); Type: FUNCTION; Schema: public; Owner: -
+--
 
 CREATE FUNCTION public.student_activity_actor_id() RETURNS uuid
     LANGUAGE sql STABLE
@@ -1512,6 +1852,7 @@ CREATE TABLE public.student_lessons (
     schedule_hidden_by uuid,
     schedule_hidden_reason text,
     schedule_origin_history jsonb DEFAULT '{}'::jsonb NOT NULL,
+    planned_charge boolean DEFAULT true,
     CONSTRAINT student_lessons_duration_check CHECK ((duration_minutes > 0)),
     CONSTRAINT student_lessons_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'completed'::text, 'canceled'::text, 'no_show'::text])))
 );
@@ -1692,6 +2033,56 @@ CREATE TABLE public.student_profile_candidates (
     CONSTRAINT student_profile_candidates_target_section_check CHECK ((target_section = ANY (ARRAY['goals_motivation'::text, 'work_communication_context'::text, 'interests_personal_context'::text, 'learning_preferences_study_habits'::text, 'long_running_strengths'::text, 'persistent_challenges_constraints'::text])))
 );
 
+CREATE TABLE public.student_profile_fact_suppressions (
+    student_id uuid NOT NULL,
+    fact_key text NOT NULL,
+    change_id uuid,
+    field text,
+    removed_value text,
+    source_latest_lesson_at timestamp with time zone,
+    source_lesson_ids uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+    reason text NOT NULL,
+    suppressed_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    reconsideration_evidence jsonb DEFAULT '[]'::jsonb CONSTRAINT student_profile_fact_suppress_reconsideration_evidence_not_null NOT NULL,
+    CONSTRAINT student_profile_fact_suppression_reconsideration_evidence_check CHECK ((jsonb_typeof(reconsideration_evidence) = 'array'::text)),
+    CONSTRAINT student_profile_fact_suppressions_field_check CHECK ((field = ANY (ARRAY['communicationContexts'::text, 'interestsAndUsefulThemes'::text, 'studyPreferences'::text, 'stableStrengths'::text])))
+);
+
+CREATE TABLE public.student_profile_maintenance_changes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    student_id uuid NOT NULL,
+    application_key text NOT NULL,
+    policy_version text NOT NULL,
+    fact_key text NOT NULL,
+    field text NOT NULL,
+    added_value text NOT NULL,
+    before_value jsonb NOT NULL,
+    after_value jsonb NOT NULL,
+    undo_expected_value jsonb,
+    evidence jsonb NOT NULL,
+    source_snapshot_id uuid,
+    initial_operation_id uuid,
+    source_lesson_memory_ids uuid[] CONSTRAINT student_profile_maintenance_c_source_lesson_memory_ids_not_null NOT NULL,
+    source_lesson_ids uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+    source_latest_lesson_at timestamp with time zone,
+    source_revision_id uuid NOT NULL,
+    result_revision_id uuid NOT NULL,
+    applied_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    undo_blocked_at timestamp with time zone,
+    undo_blocked_reason text,
+    undo_revision_id uuid,
+    undone_at timestamp with time zone,
+    undone_by uuid,
+    CONSTRAINT student_profile_maintenance_changes_added_value_check CHECK ((length(btrim(added_value)) > 0)),
+    CONSTRAINT student_profile_maintenance_changes_after_value_check CHECK ((jsonb_typeof(after_value) = 'array'::text)),
+    CONSTRAINT student_profile_maintenance_changes_before_value_check CHECK ((jsonb_typeof(before_value) = 'array'::text)),
+    CONSTRAINT student_profile_maintenance_changes_check CHECK (((undone_at IS NULL) = (undo_revision_id IS NULL))),
+    CONSTRAINT student_profile_maintenance_changes_evidence_check CHECK ((jsonb_typeof(evidence) = 'array'::text)),
+    CONSTRAINT student_profile_maintenance_changes_field_check CHECK ((field = ANY (ARRAY['communicationContexts'::text, 'interestsAndUsefulThemes'::text, 'studyPreferences'::text, 'stableStrengths'::text]))),
+    CONSTRAINT student_profile_maintenance_changes_policy_version_check CHECK ((policy_version = 'deterministic_v1'::text)),
+    CONSTRAINT student_profile_maintenance_changes_undo_expected_value_check CHECK (((undo_expected_value IS NULL) OR (jsonb_typeof(undo_expected_value) = 'array'::text)))
+);
+
 CREATE TABLE public.student_profile_revisions (
     id uuid NOT NULL,
     student_id uuid NOT NULL,
@@ -1710,7 +2101,9 @@ CREATE TABLE public.student_profile_revisions (
     legacy_profile_id text,
     legacy_revision_id uuid,
     legacy_version_label text,
-    CONSTRAINT student_profile_revisions_source_check CHECK ((source = ANY (ARRAY['create'::text, 'update'::text, 'restore'::text, 'starter_profile_form'::text, 'candidate_promotion'::text, 'legacy_normalization'::text, 'lesson_population'::text, 'profile_revision_refresh'::text]))),
+    base_active_revision_id uuid,
+    base_active_revision_known boolean DEFAULT false NOT NULL,
+    CONSTRAINT student_profile_revisions_source_check CHECK ((source = ANY (ARRAY['create'::text, 'update'::text, 'restore'::text, 'starter_profile_form'::text, 'candidate_promotion'::text, 'legacy_normalization'::text, 'lesson_population'::text, 'profile_revision_refresh'::text, 'automatic_maintenance'::text, 'maintenance_undo'::text]))),
     CONSTRAINT student_profile_revisions_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'deprecated'::text]))),
     CONSTRAINT student_profile_revisions_version_number_check CHECK ((version_number > 0))
 );
@@ -2100,6 +2493,18 @@ ALTER TABLE ONLY public.student_profile_candidates
 ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_student_id_id_key UNIQUE (student_id, id);
 
+ALTER TABLE ONLY public.student_profile_fact_suppressions
+    ADD CONSTRAINT student_profile_fact_suppressions_pkey PRIMARY KEY (student_id, fact_key);
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_chan_student_id_application_key_key UNIQUE (student_id, application_key);
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_changes_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_changes_student_id_id_key UNIQUE (student_id, id);
+
 ALTER TABLE ONLY public.student_profile_revisions
     ADD CONSTRAINT student_profile_revisions_pkey PRIMARY KEY (id);
 
@@ -2445,6 +2850,8 @@ CREATE INDEX profile_initial_enrichment_success_student_idx ON public.profile_in
 
 CREATE UNIQUE INDEX student_memory_snapshot_replay_key ON public.student_memory_snapshots USING btree (student_id, ((generation_notes ->> 'replayKey'::text))) WHERE (((generation_notes ->> 'replayKey'::text) IS NOT NULL) AND ((generation_notes ->> 'pendingEntryId'::text) IS NULL));
 
+CREATE INDEX student_profile_maintenance_changes_page ON public.student_profile_maintenance_changes USING btree (student_id, applied_at DESC, id DESC);
+
 CREATE UNIQUE INDEX student_profile_revisions_single_active ON public.student_profile_revisions USING btree (student_id) WHERE (status = 'active'::text);
 
 CREATE INDEX student_profile_revisions_student_created ON public.student_profile_revisions USING btree (student_id, created_at DESC);
@@ -2515,6 +2922,8 @@ CREATE TRIGGER preserve_assignment_draft_format BEFORE UPDATE ON public.drafts F
 
 CREATE TRIGGER preserve_transcript_completion_history BEFORE UPDATE ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.preserve_transcript_completion_history();
 
+CREATE TRIGGER profile_maintenance_activity_origin BEFORE INSERT ON public.student_activity FOR EACH ROW EXECUTE FUNCTION public.attribute_profile_maintenance_activity();
+
 CREATE TRIGGER prompt_packages_calendar_projection_guard BEFORE INSERT OR UPDATE OF lesson_id ON public.prompt_packages FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('lesson_id');
 
 CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
@@ -2578,6 +2987,10 @@ CREATE TRIGGER student_lifecycle_activity AFTER INSERT OR UPDATE ON public.stude
 CREATE TRIGGER student_profile_activity AFTER INSERT OR UPDATE ON public.student_profile_revisions FOR EACH ROW EXECUTE FUNCTION public.record_student_profile_activity();
 
 CREATE TRIGGER student_profile_candidates_calendar_projection_guard BEFORE INSERT OR UPDATE OF source_lesson_id ON public.student_profile_candidates FOR EACH ROW EXECUTE FUNCTION public.guard_calendar_projection_reference('source_lesson_id');
+
+CREATE TRIGGER student_profile_maintenance_evidence BEFORE INSERT OR UPDATE ON public.student_profile_maintenance_changes FOR EACH ROW EXECUTE FUNCTION public.protect_profile_maintenance_evidence();
+
+CREATE TRIGGER student_profile_maintenance_fence AFTER INSERT OR UPDATE OF status ON public.student_profile_revisions FOR EACH ROW EXECUTE FUNCTION public.fence_student_profile_maintenance();
 
 CREATE TRIGGER student_reminder_activity AFTER INSERT OR UPDATE ON public.student_reminder_preferences FOR EACH ROW EXECUTE FUNCTION public.record_student_reminder_activity();
 
@@ -2967,6 +3380,36 @@ ALTER TABLE ONLY public.student_profile_candidates
 ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_superseded_by_id_fkey FOREIGN KEY (superseded_by_id) REFERENCES public.student_profile_candidates(id) ON DELETE SET NULL;
 
+ALTER TABLE ONLY public.student_profile_fact_suppressions
+    ADD CONSTRAINT student_profile_fact_suppressions_student_id_change_id_fkey FOREIGN KEY (student_id, change_id) REFERENCES public.student_profile_maintenance_changes(student_id, id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_profile_fact_suppressions
+    ADD CONSTRAINT student_profile_fact_suppressions_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_c_student_id_result_revision_i_fkey FOREIGN KEY (student_id, result_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_c_student_id_source_revision_i_fkey FOREIGN KEY (student_id, source_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_ch_student_id_undo_revision_id_fkey FOREIGN KEY (student_id, undo_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_changes_initial_operation_id_fkey FOREIGN KEY (initial_operation_id) REFERENCES public.profile_initial_enrichment_operations(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_changes_source_snapshot_id_fkey FOREIGN KEY (source_snapshot_id) REFERENCES public.student_memory_snapshots(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_changes_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_profile_maintenance_changes
+    ADD CONSTRAINT student_profile_maintenance_changes_undone_by_fkey FOREIGN KEY (undone_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_profile_revisions
+    ADD CONSTRAINT student_profile_revision_base_owner_fkey FOREIGN KEY (student_id, base_active_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
+
 ALTER TABLE ONLY public.student_profile_revisions
     ADD CONSTRAINT student_profile_revision_restore_owner_fkey FOREIGN KEY (student_id, restored_from_revision_id) REFERENCES public.student_profile_revisions(student_id, id) ON DELETE RESTRICT;
 
@@ -3037,6 +3480,22 @@ ALTER TABLE ONLY public.workspace_memberships
     ADD CONSTRAINT workspace_memberships_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 CREATE POLICY jobs_user_scope_policy ON public.jobs USING ((public.app_rls_bypass() OR (user_id = public.app_current_user_id()))) WITH CHECK ((public.app_rls_bypass() OR (user_id = public.app_current_user_id())));
+
+CREATE POLICY student_profile_maintenance_workspace_policy ON public.student_profile_maintenance_changes USING ((public.app_rls_bypass() OR (EXISTS ( SELECT 1
+   FROM (public.students s
+     JOIN public.workspace_memberships m ON ((m.workspace_id = s.workspace_id)))
+  WHERE ((s.id = student_profile_maintenance_changes.student_id) AND (m.user_id = public.app_current_user_id())))))) WITH CHECK ((public.app_rls_bypass() OR (EXISTS ( SELECT 1
+   FROM (public.students s
+     JOIN public.workspace_memberships m ON ((m.workspace_id = s.workspace_id)))
+  WHERE ((s.id = student_profile_maintenance_changes.student_id) AND (m.user_id = public.app_current_user_id()))))));
+
+CREATE POLICY student_profile_suppression_workspace_policy ON public.student_profile_fact_suppressions USING ((public.app_rls_bypass() OR (EXISTS ( SELECT 1
+   FROM (public.students s
+     JOIN public.workspace_memberships m ON ((m.workspace_id = s.workspace_id)))
+  WHERE ((s.id = student_profile_fact_suppressions.student_id) AND (m.user_id = public.app_current_user_id())))))) WITH CHECK ((public.app_rls_bypass() OR (EXISTS ( SELECT 1
+   FROM (public.students s
+     JOIN public.workspace_memberships m ON ((m.workspace_id = s.workspace_id)))
+  WHERE ((s.id = student_profile_fact_suppressions.student_id) AND (m.user_id = public.app_current_user_id()))))));
 
 CREATE POLICY uploaded_files_user_scope_policy ON public.uploaded_files USING ((public.app_rls_bypass() OR (user_id = public.app_current_user_id()))) WITH CHECK ((public.app_rls_bypass() OR (user_id = public.app_current_user_id())));
 
@@ -3181,5 +3640,7 @@ VALUES
   ('0071_scheduler_retirement', '45ee490d0893537325b299c0e6ee161ec72f139fe2c260aa95d3a5a4abf1eb7c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0072_calendar_projection_reference_guard', '50cf12476c3fd513fa328777a12ca2260d2c6a1b99b15b4b8c623a9093b3ef06', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0073_gemini_tts_provider', 'cdaee92f0b9f19241844d93ed34db298c4cf0f6d852de4c21bca555dcd33a169', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0074_assignment_material', '355e87270ed685ba9cdf82ef8e0a192dc47724fcf8bbe71c4c49de830c7d104c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0074_assignment_material', '355e87270ed685ba9cdf82ef8e0a192dc47724fcf8bbe71c4c49de830c7d104c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0075_lesson_planned_charge', '0402bbb9e1f7d3f6cc009177d69bd0b3241ab827f834bec2ef7f1a79a2bdf545', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0076_student_profile_maintenance', '243745b0629ba63f128e732fcc6bb4a5eefb657791a4f7d55658ca437d698c25', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

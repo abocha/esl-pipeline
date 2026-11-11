@@ -1,3 +1,4 @@
+import { reconcileAutomaticProfileMaintenance } from '../domain/profile-maintenance-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { refreshStudentProfileCandidatesFromCanonicalMemory } from './student-profile-candidates.js';
 
@@ -28,6 +29,12 @@ export async function processStudentProfileCandidateRefreshJob(args: {
     });
     return;
   }
+
+  if (args.payload.sourceSnapshotId)
+    await reconcileAutomaticProfileMaintenance(
+      args.payload.studentId,
+      args.payload.sourceSnapshotId,
+    );
 
   logger.info('Student profile candidate refresh processed', {
     event: 'student_profile_candidate_refresh_processed',

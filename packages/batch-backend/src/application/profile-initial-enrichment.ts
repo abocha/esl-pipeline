@@ -5,6 +5,8 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { buildLessonMemoryExecutionSqlPredicate } from '../domain/lesson-memory-repository.js';
+import { recordInitialProfileMaintenance } from '../domain/profile-maintenance-repository.js';
+import { insertProfileRevisionWithClient } from '../domain/profile-revision-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
@@ -16,6 +18,13 @@ import {
 } from './foundational-profile.js';
 import { GenerationBudgetExceededError } from './generation-budget-guard.js';
 import { ProviderExecutionError } from './generation-providers.js';
+import {
+  deriveMaintenanceAdditions,
+  maintenanceFactKey,
+  maintenanceField,
+  normalizeMaintenanceFact,
+  type ProfileFactSource,
+} from './profile-maintenance-policy.js';
 import {
   generateProfileRevisionDraft,
   ProfileRevisionDraftingError,
@@ -206,35 +215,69 @@ async function supersede(client: PoolClient, op: OperationRow, code: string): Pr
   );
 }
 
-function preserveSeed(
+export function preserveInitialProfileSeed(
   seed: FoundationalProfile | null,
   seedContent: string | null,
   seedIsStructured: boolean,
   generated: FoundationalProfile,
+  lessonEvidence: unknown,
 ): FoundationalProfile {
-  const merged = { ...generated, overallLevel: seed?.overallLevel ?? generated.overallLevel };
-  for (const key of [
-    'primaryGoals',
-    'communicationContexts',
-    'interestsAndUsefulThemes',
-    'stableStrengths',
-    'persistentChallenges',
-    'studyPreferences',
-    'durableConstraints',
-  ] as const) {
-    merged[key] = [...new Set([...(seed?.[key] ?? []), ...generated[key]])];
+  const hasSeed =
+    seed &&
+    Object.entries(seed).some(
+      ([key, value]) =>
+        key !== 'schemaVersion' &&
+        (Array.isArray(value)
+          ? value.length > 0
+          : typeof value === 'string' && value.trim().length > 0),
+    );
+  // Preserve the established empty-seed first-profile bootstrap. Its generated values
+  // are not represented as undoable deterministic additions without an evidence ledger.
+  if (!hasSeed && !(seedContent?.trim() && !seedIsStructured))
+    return normalizeFoundationalProfile(generated);
+  if (!seedIsStructured && seedContent?.trim())
+    return normalizeFoundationalProfile({
+      ...(seed ?? generated),
+      teacherNotes: [
+        seed?.teacherNotes,
+        `Original tutor-authored profile (verbatim):\n${seedContent}`,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    });
+  if (!seed) return normalizeFoundationalProfile(generated);
+  const result = structuredClone(seed);
+  for (const addition of deriveMaintenanceAdditions(
+    initialFactSources(lessonEvidence),
+    initialFactSources(lessonEvidence).map((s) => s.id),
+  )) {
+    if (
+      !result[addition.field].some(
+        (value) => normalizeMaintenanceFact(value) === normalizeMaintenanceFact(addition.value),
+      )
+    )
+      result[addition.field].push(addition.value);
   }
-  merged.teacherNotes =
-    [
-      seed?.teacherNotes,
-      generated.teacherNotes,
-      !seedIsStructured && seedContent?.trim()
-        ? `Original tutor-authored profile (verbatim):\n${seedContent}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join('\n\n') || null;
-  return normalizeFoundationalProfile(merged);
+  return normalizeFoundationalProfile(result);
+}
+
+function initialFactSources(evidence: unknown): ProfileFactSource[] {
+  const source = evidence as {
+    id?: string;
+    source_content_hash?: string;
+    student_facts?: ProfileFactSource['facts'];
+  } | null;
+  return source?.id && source.source_content_hash && Array.isArray(source.student_facts)
+    ? [
+        {
+          id: source.id,
+          sourceContentHash: source.source_content_hash,
+          facts: source.student_facts,
+          sourceLessonId: null,
+          sourceLessonStartedAt: null,
+        },
+      ]
+    : [];
 }
 
 async function publishReadyResult(client: PoolClient, op: OperationRow): Promise<void> {
@@ -243,9 +286,8 @@ async function publishReadyResult(client: PoolClient, op: OperationRow): Promise
     await supersede(client, op, 'authority_changed');
     return;
   }
-  const content = renderFoundationalProfileContent(op.validated_result);
-  const hash = createHash('sha256').update(content, 'utf8').digest('hex');
-  if (hash !== op.result_hash) {
+  const validatedContent = renderFoundationalProfileContent(op.validated_result);
+  if (createHash('sha256').update(validatedContent, 'utf8').digest('hex') !== op.result_hash) {
     await client.query(
       `UPDATE profile_initial_enrichment_operations
        SET state = 'failed', failure_code = 'result_integrity_invalid', updated_at = NOW() WHERE id = $1`,
@@ -253,33 +295,107 @@ async function publishReadyResult(client: PoolClient, op: OperationRow): Promise
     );
     return;
   }
-  const revisionId = randomUUID();
-  await client.query(
-    `UPDATE student_profile_revisions SET status = 'deprecated',
-       deprecated_at = COALESCE(deprecated_at, NOW())
-     WHERE student_id = $1 AND status = 'active'`,
+  const current = await client.query<{ structured_content: FoundationalProfile | null }>(
+    "SELECT structured_content FROM student_profile_revisions WHERE student_id=$1 AND status='active'",
     [op.student_id],
   );
-  await client.query(
-    `INSERT INTO student_profile_revisions
-      (id, student_id, content, structured_content, content_hash, source, status,
-       version_number, version_label, activated_at)
-     SELECT $1, $2, $3, $4::jsonb, $5, 'lesson_population', 'active',
-       COALESCE(MAX(version_number), 0) + 1,
-       'v' || (COALESCE(MAX(version_number), 0) + 1)::text, NOW()
-     FROM student_profile_revisions WHERE student_id = $2`,
-    [revisionId, op.student_id, content, JSON.stringify(op.validated_result), hash],
+  const seed = current.rows[0]?.structured_content ?? null;
+  // Review choices may have changed while the provider request was in flight. The
+  // student lock serializes those choices with this final publication, including
+  // empty-seed bootstrap. Keep the validated result intact for safe retry.
+  const result = await filterInitialProfilePublication(
+    client,
+    op.student_id,
+    seed,
+    op.validated_result,
   );
+  const content = renderFoundationalProfileContent(result);
+  const hash = createHash('sha256').update(content, 'utf8').digest('hex');
+  const changed = JSON.stringify(seed) !== JSON.stringify(result);
+  let revisionId = op.seed_revision_id;
+  if (changed) {
+    const revision = await insertProfileRevisionWithClient(client, {
+      studentId: op.student_id,
+      expectedActiveRevisionId: op.seed_revision_id,
+      content,
+      structuredContent: result,
+      contentHash: hash,
+      source: 'lesson_population',
+      status: 'active',
+    });
+    revisionId = revision.id;
+    if (seed && op.seed_revision_id)
+      await recordInitialProfileMaintenance(client, {
+        studentId: op.student_id,
+        operationId: op.id,
+        sourceRevisionId: op.seed_revision_id,
+        resultRevisionId: revisionId,
+        seed,
+        result,
+        sources: initialFactSources(op.generation_input?.lessonEvidence),
+      });
+  }
   await client.query(
-    `UPDATE students SET profile_provenance = 'evidence_enriched',
-       profile_initial_enrichment_completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
-    [op.student_id],
+    `UPDATE students SET profile_provenance = CASE WHEN $2 THEN 'evidence_enriched' ELSE profile_provenance END,
+       profile_initial_enrichment_completed_at = CASE WHEN $2 THEN NOW() ELSE profile_initial_enrichment_completed_at END, updated_at = NOW() WHERE id = $1`,
+    [op.student_id, changed],
   );
   await client.query(
     `UPDATE profile_initial_enrichment_operations
      SET state = 'succeeded', result_revision_id = $2, updated_at = NOW() WHERE id = $1`,
     [op.id, revisionId],
   );
+}
+
+async function filterInitialProfilePublication(
+  client: PoolClient,
+  studentId: string,
+  seed: FoundationalProfile | null,
+  validated: FoundationalProfile,
+): Promise<FoundationalProfile> {
+  const reviewed = await client.query<{
+    target_section: string;
+    fact: string;
+    approved_fact: string | null;
+  }>(
+    `SELECT target_section,fact,approved_fact FROM student_profile_candidates
+     WHERE student_id=$1 AND review_state <> 'unreviewed' ORDER BY id FOR UPDATE`,
+    [studentId],
+  );
+  const denied = new Set(
+    reviewed.rows.flatMap((row) => {
+      const field = maintenanceField(row.target_section);
+      return field
+        ? [
+            maintenanceFactKey(field, row.fact),
+            maintenanceFactKey(field, row.approved_fact ?? row.fact),
+          ]
+        : [];
+    }),
+  );
+  const suppressed = await client.query<{ fact_key: string }>(
+    'SELECT fact_key FROM student_profile_fact_suppressions WHERE student_id=$1 ORDER BY fact_key FOR UPDATE',
+    [studentId],
+  );
+  for (const row of suppressed.rows) denied.add(row.fact_key);
+  const result = structuredClone(validated);
+  for (const field of [
+    'communicationContexts',
+    'interestsAndUsefulThemes',
+    'studyPreferences',
+    'stableStrengths',
+  ] as const) {
+    const preserved = seed?.[field] ?? [];
+    const seen = new Set(preserved.map(normalizeMaintenanceFact));
+    result[field] = [...preserved];
+    for (const value of validated[field]) {
+      const normalized = normalizeMaintenanceFact(value);
+      if (seen.has(normalized) || denied.has(maintenanceFactKey(field, value))) continue;
+      result[field].push(value);
+      seen.add(normalized);
+    }
+  }
+  return result;
 }
 
 async function prepareOrCommit(
@@ -469,11 +585,12 @@ export async function reconcileProfileInitialEnrichmentOperation(
   let reserved = initial;
   let persisted = false;
   const persistResult = async (generatedProfile: FoundationalProfile): Promise<void> => {
-    const result = preserveSeed(
+    const result = preserveInitialProfileSeed(
       reserved.input.seed,
       reserved.input.seedContent,
       reserved.input.seedIsStructured,
       generatedProfile,
+      reserved.input.lessonEvidence,
     );
     const content = renderFoundationalProfileContent(result);
     const hash = createHash('sha256').update(content, 'utf8').digest('hex');

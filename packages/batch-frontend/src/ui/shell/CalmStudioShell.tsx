@@ -20,6 +20,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  Link,
   NavLink,
   Outlet,
   UNSAFE_DataRouterContext,
@@ -30,13 +31,14 @@ import {
 
 import type { User } from '../../context/AuthContext';
 import { LegalLinks } from '../LegalLinks';
+import { useStudioV2 } from '../studio-v2/StudioV2Context';
 import {
   AssignmentNavigationGuardContext,
   type NavigationGuard,
   type NavigationGuardRegistration,
 } from './assignment-navigation-guard';
-
 import './CalmStudioShell.css';
+import '../studio-v2/StudioV2.css';
 
 export interface CalmStudioShellProps {
   user: User;
@@ -47,7 +49,7 @@ export interface CalmStudioShellProps {
 }
 
 const workspaceLinks = [
-  { to: '/', label: 'Assignments', icon: CalendarDays, end: true },
+  { to: '/', label: 'Assignments', icon: FileText, end: true },
   { to: '/students', label: 'Students', icon: Users },
   { to: '/business', label: 'Business', icon: ChartNoAxesCombined },
 ] as const;
@@ -87,6 +89,10 @@ export function CalmStudioShell({
   logoutError,
   children,
 }: CalmStudioShellProps) {
+  const v2 = useStudioV2();
+  const links = v2
+    ? [{ to: '/day', label: 'Your day', icon: CalendarDays, end: true }, ...workspaceLinks]
+    : workspaceLinks;
   const [menuOpen, setMenuOpen] = useState(false);
   const [railExpanded, setRailExpanded] = useState(() => {
     try {
@@ -97,7 +103,11 @@ export function CalmStudioShell({
     }
     return window.innerWidth > 900;
   });
-  const isStudents = useLocation().pathname.startsWith('/students');
+  const pathname = useLocation().pathname;
+  const isStudents = pathname.startsWith('/students');
+  useEffect(() => {
+    if (v2) document.getElementById('main-content')?.focus({ preventScroll: isStudents });
+  }, [pathname, v2, isStudents]);
   const toggleRail = () =>
     setRailExpanded((current) => {
       try {
@@ -177,7 +187,7 @@ export function CalmStudioShell({
         <AssignmentRouterNavigationBlocker guardRef={navigationGuardRef} />
       ) : null}
       <div
-        className={`calm-shell${menuOpen ? ' calm-shell--menu-open' : ''}${railExpanded ? '' : ' calm-shell--collapsed'}${isStudents ? ' calm-shell--students' : ''}`}
+        className={`calm-shell${v2 ? ' calm-shell--v2' : ''}${menuOpen ? ' calm-shell--menu-open' : ''}${railExpanded ? '' : ' calm-shell--collapsed'}${isStudents ? ' calm-shell--students' : ''}`}
       >
         <a
           className="calm-shell__skip"
@@ -204,7 +214,17 @@ export function CalmStudioShell({
           </button>
           <div className="calm-shell__mobile-brand">
             <span className="calm-shell__mark calm-shell__mark--compact" aria-hidden="true" />
-            <strong>ESL Pipeline</strong>
+            {v2 ? (
+              <Link
+                className="calm-shell__brand-home"
+                to="/day"
+                onClick={(event) => handleWorkspaceNavigation(event, '/day')}
+              >
+                ESL Pipeline
+              </Link>
+            ) : (
+              <strong>ESL Pipeline</strong>
+            )}
           </div>
         </header>
 
@@ -216,7 +236,17 @@ export function CalmStudioShell({
           }}
         >
           <div className="calm-shell__brand">
-            <strong>ESL Pipeline</strong>
+            {v2 ? (
+              <Link
+                className="calm-shell__brand-home"
+                to="/day"
+                onClick={(event) => handleWorkspaceNavigation(event, '/day')}
+              >
+                ESL Pipeline
+              </Link>
+            ) : (
+              <strong>ESL Pipeline</strong>
+            )}
             <button
               className="calm-shell__rail-toggle"
               type="button"
@@ -248,7 +278,7 @@ export function CalmStudioShell({
           </div>
           <nav className="calm-shell__nav" aria-label="Workspace">
             <p className="calm-shell__nav-label">Workspace</p>
-            {workspaceLinks.map(({ to, label, icon: Icon, ...linkProps }) => (
+            {links.map(({ to, label, icon: Icon, ...linkProps }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -256,7 +286,7 @@ export function CalmStudioShell({
                 title={label}
                 {...linkProps}
                 className={({ isActive }) =>
-                  `calm-shell__nav-link${isActive ? ' calm-shell__nav-link--active' : ''}`
+                  `calm-shell__nav-link${isActive || (v2 && to === '/' && pathname.startsWith('/assignments/')) ? ' calm-shell__nav-link--active' : ''}`
                 }
                 onClick={(event) => handleWorkspaceNavigation(event, to)}
               >

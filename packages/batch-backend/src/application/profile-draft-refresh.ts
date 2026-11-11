@@ -60,6 +60,7 @@ export interface RefreshProfileDraftFromApprovedCandidatesRequest {
   studentId: string;
   candidateIds: string[];
   baseRevisionId?: string | null;
+  expectedActiveRevisionId?: string | null;
   reviewerId?: string | null;
   reviewerNote?: string | null;
   maxOutputTokens?: number;
@@ -209,6 +210,7 @@ export async function refreshProfileDraftFromApprovedCandidates(args: {
     request.studentId,
     renderFoundationalProfileContent(structuredDraft),
     {
+      expectedActiveRevisionId: request.expectedActiveRevisionId,
       source: 'profile_revision_refresh',
       status: 'draft',
       createdBy: request.reviewerId ?? null,

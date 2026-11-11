@@ -532,6 +532,9 @@ export async function updateStudentProfileCandidateReview(
   const row = await withStudentActivityTransaction(
     params.reviewerId,
     async (client: PoolClient) => {
+      // Maintenance and revision writers lock student before candidate. Audit
+      // triggers also reference student, so review must use the same order.
+      await client.query('SELECT id FROM students WHERE id=$1 FOR UPDATE', [params.studentId]);
       const result = await client.query<StudentProfileCandidateRow>(
         `
       UPDATE student_profile_candidates
@@ -659,9 +662,10 @@ export async function markStudentProfileCandidatesPromotedByRevision(
     actorUserId?: string | null;
   },
   promotedAt?: Date,
+  transactionClient?: PoolClient,
 ): Promise<StudentProfileCandidatePromotionResult> {
-  return withPgClient(async (client: PoolClient) => {
-    await client.query('BEGIN');
+  const work = async (client: PoolClient) => {
+    if (!transactionClient) await client.query('BEGIN');
     try {
       await setStudentActivityActor(client, proof.actorUserId);
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [proof.studentId]);
@@ -713,13 +717,14 @@ export async function markStudentProfileCandidatesPromotedByRevision(
           [revisionId, appliedIds, promotedAt ?? null, proof.studentId],
         );
       }
-      await client.query('COMMIT');
+      if (!transactionClient) await client.query('COMMIT');
       return result;
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (!transactionClient) await client.query('ROLLBACK');
       throw error;
     }
-  });
+  };
+  return transactionClient ? work(transactionClient) : withPgClient(work);
 }
 
 export interface StudentProfileCandidatePromotionResult {

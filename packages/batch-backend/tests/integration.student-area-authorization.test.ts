@@ -56,7 +56,7 @@ async function seedTenant(mappedRevisionId?: string) {
   });
   const student = await createStudentProfile({ student: email, workspaceId });
   const initialized = await initializeStudentProfileDraft({
-    request: { studentId: student.id, reviewerId: userId },
+    request: { studentId: student.id, reviewerId: userId, expectedActiveRevisionId: null },
   });
   const revisionId = mappedRevisionId ?? initialized.draftRevision.id;
   if (mappedRevisionId) {
@@ -69,7 +69,13 @@ async function seedTenant(mappedRevisionId?: string) {
       ]),
     );
   }
-  await activateProfileRevision(student.id, revisionId);
+  await withPgClient((client) =>
+    client.query(
+      'UPDATE student_profile_revisions SET base_active_revision_known=true WHERE id=$1',
+      [revisionId],
+    ),
+  );
+  await activateProfileRevision(student.id, revisionId, undefined, null);
   const candidate = await insertStudentProfileCandidate({
     studentId: student.id,
     targetSection: 'goals_motivation',
@@ -247,6 +253,7 @@ describe('student-area authorization before student-owned reads', () => {
         method: 'POST',
         url: `/students/${tenant.studentId}/profile-drafts/initialize`,
         headers: tenant.headers,
+        payload: { expectedActiveRevisionId: tenant.revisionId },
       });
       expect(initialized.statusCode, initialized.body).toBe(409);
       expect(initialized.json().error).toBe('profile_already_initialized');
@@ -315,7 +322,7 @@ describe('student-area authorization before student-owned reads', () => {
             method: 'POST',
             url: `/students/${tenantA.studentId}/${path}`,
             headers: tenantA.headers,
-            payload,
+            payload: { ...payload, expectedActiveRevisionId: tenantA.revisionId },
           });
           expect(response.statusCode, response.body).toBe(404);
           expect(
@@ -378,7 +385,11 @@ describe('student-area authorization before student-owned reads', () => {
       workspaceId: tenantA.workspaceId,
     });
     const initialized = await initializeStudentProfileDraft({
-      request: { studentId: sibling.id, reviewerId: tenantA.userId },
+      request: {
+        studentId: sibling.id,
+        reviewerId: tenantA.userId,
+        expectedActiveRevisionId: null,
+      },
     });
     const foreignRevision = initialized.draftRevision.id;
     try {
@@ -388,6 +399,7 @@ describe('student-area authorization before student-owned reads', () => {
             method: action ? 'POST' : 'GET',
             url: `/students/${tenantA.studentId}/profile/revisions/${revisionId}${action}`,
             headers: tenantA.headers,
+            ...(action ? { payload: { expectedActiveRevisionId: tenantA.revisionId } } : {}),
           });
           expect(response.statusCode, response.body).toBe(404);
           expect(response.json()).toEqual({ error: 'not_found' });
@@ -402,6 +414,7 @@ describe('student-area authorization before student-owned reads', () => {
           url: `/students/${tenantA.studentId}/profile/revisions`,
           headers: tenantA.headers,
           payload: {
+            expectedActiveRevisionId: tenantA.revisionId,
             content: 'Unauthorized inheritance',
             status: 'draft',
             inheritCandidateLinksFromRevisionId: revisionId,
@@ -430,7 +443,7 @@ describe('student-area authorization before student-owned reads', () => {
       method: 'PUT',
       url: base,
       headers: tenantA.headers,
-      payload: { content: 'Tutor edit' },
+      payload: { content: 'Tutor edit', expectedActiveRevisionId: tenantA.revisionId },
     });
     expect(edited.statusCode, edited.body).toBe(200);
     expect(edited.json()).toMatchObject({ studentId: tenantA.studentId, content: 'Tutor edit' });
@@ -438,7 +451,11 @@ describe('student-area authorization before student-owned reads', () => {
       method: 'POST',
       url: `${base}/revisions`,
       headers: tenantA.headers,
-      payload: { content: 'Proposed draft', status: 'draft' },
+      payload: {
+        content: 'Proposed draft',
+        status: 'draft',
+        expectedActiveRevisionId: edited.json().activeRevisionId,
+      },
     });
     expect(drafted.statusCode, drafted.body).toBe(201);
     const draft = drafted.json();
@@ -454,12 +471,14 @@ describe('student-area authorization before student-owned reads', () => {
       method: 'POST',
       url: `${base}/revisions/${draft.id}/activate`,
       headers: tenantA.headers,
+      payload: { expectedActiveRevisionId: edited.json().activeRevisionId },
     });
     expect(activated.statusCode, activated.body).toBe(200);
     const restored = await app.inject({
       method: 'POST',
       url: `${base}/revisions/${tenantA.revisionId}/restore`,
       headers: tenantA.headers,
+      payload: { expectedActiveRevisionId: activated.json().id },
     });
     expect(restored.statusCode, restored.body).toBe(200);
     const restoredRevision = await getProfileRevisionById(

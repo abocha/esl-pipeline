@@ -261,7 +261,7 @@ export function registerJobActionTests() {
         expect(api.materializeDraft).not.toHaveBeenCalled();
         await previewCurrentDraft(user);
         const publishButton = screen.getByRole('button', { name: /Share assignment/i });
-        expect((publishButton as HTMLButtonElement).disabled).toBe(false);
+        await waitFor(() => expect((publishButton as HTMLButtonElement).disabled).toBe(false));
         expect(publishButton.className).toContain('minimal-primary');
       },
       INTEGRATION_TEST_TIMEOUT_MS,

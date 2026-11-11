@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StudentActivityItem, StudentActivityResponse } from '@esl-pipeline/contracts';
 
+import { StudioV2Provider } from '../studio-v2/StudioV2Context';
 import { StudentHistoryPage } from './StudentHistoryPage';
 
 const apiMocks = vi.hoisted(() => ({ getStudentActivity: vi.fn() }));
@@ -66,12 +67,14 @@ function LocationControl() {
     </>
   );
 }
-function history(url = '/students/student-alex/history') {
+function history(url = '/students/student-alex/history', studioV2 = false) {
   return (
-    <MemoryRouter initialEntries={[url]}>
-      <StudentHistoryPage />
-      <LocationControl />
-    </MemoryRouter>
+    <StudioV2Provider enabled={studioV2}>
+      <MemoryRouter initialEntries={[url]}>
+        <StudentHistoryPage />
+        <LocationControl />
+      </MemoryRouter>
+    </StudioV2Provider>
   );
 }
 
@@ -97,8 +100,30 @@ describe('StudentHistoryPage', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('shows factual activity and a useful destination with evidence in Details', async () => {
+  it('shows useful activity details and skips bookkeeping and empty disclosures', async () => {
     const user = userEvent.setup();
+    apiMocks.getStudentActivity.mockResolvedValue(
+      page({
+        timezone: 'Asia/Ho_Chi_Minh',
+        items: [
+          item({ actor: { kind: 'user' } }),
+          item({
+            id: 'credits',
+            type: 'credits_added',
+            category: 'billing',
+            subject: 'Credits added · +4 credits',
+            summary: null,
+            effects: [],
+            actor: { kind: 'unknown' },
+            evidence: 'retained',
+            details: [],
+            links: [
+              { label: 'Open credit ledger', href: '/students/student-alex/schedule-billing' },
+            ],
+          }),
+        ],
+      }),
+    );
     render(history());
     expect(
       await screen.findByRole('heading', { name: 'Lesson completed · Travel plans' }),
@@ -110,15 +135,107 @@ describe('StudentHistoryPage', () => {
         .getByRole('link', { name: 'Open lesson: Lesson completed · Travel plans' })
         .getAttribute('href'),
     ).toBe('/students/student-alex/schedule-billing');
-    expect(screen.getByText('Earlier changes may not have been recorded.')).toBeTruthy();
+    expect(screen.getByText('Time zone: Ho Chi Minh City (Asia)')).toBeTruthy();
+    expect(screen.queryByText('Earlier changes may not have been recorded.')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Credits added · +4 credits' })).toBeTruthy();
+    expect(screen.queryByLabelText('Details: Credits added · +4 credits')).toBeNull();
     await user.click(screen.getByText('Details', { selector: 'summary' }));
-    expect(screen.getByText('Recorded action')).toBeTruthy();
+    expect(screen.queryByText('Evidence')).toBeNull();
+    expect(screen.getByText('Tutor')).toBeTruthy();
     expect(screen.getByText('Reason')).toBeTruthy();
     expect(screen.queryByText('duration pending · format pending')).toBeNull();
     expect(apiMocks.getStudentActivity).toHaveBeenCalledWith('student-alex', {
       category: 'all',
       limit: 30,
     });
+  });
+
+  it('routes v2 legacy student links by activity category and preserves their query and hash', async () => {
+    apiMocks.getStudentActivity.mockResolvedValue(
+      page({
+        items: [
+          item({
+            id: 'payment',
+            category: 'billing',
+            subject: 'Payment recorded · USD 120.00',
+            links: [
+              {
+                label: 'Open payments',
+                href: '/students/student-alex/schedule-billing?tab=payments#latest',
+              },
+            ],
+          }),
+          item({
+            id: 'credit',
+            category: 'billing',
+            subject: 'Credit added · +2 credits',
+            links: [
+              {
+                label: 'Open credit ledger',
+                href: '/students/student-alex/schedule-billing',
+              },
+            ],
+          }),
+          item({
+            id: 'lesson',
+            category: 'lessons',
+            subject: 'Lesson completed · Travel plans',
+            links: [
+              {
+                label: 'Open lesson',
+                href: '/students/student-alex/schedule-billing?view=recent#lesson-1',
+              },
+              {
+                label: 'Open learning',
+                href: '/students/student-alex/learning?tab=profile#memory',
+              },
+              {
+                label: 'External detail',
+                href: 'https://example.test/student?tab=history#record',
+              },
+              {
+                label: 'Other student',
+                href: '/students/student-other/schedule-billing',
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    render(history('/students/student-alex/history', true));
+
+    expect(
+      (
+        await screen.findByRole('link', {
+          name: 'Open payments: Payment recorded · USD 120.00',
+        })
+      ).getAttribute('href'),
+    ).toBe('/students/student-alex/billing?tab=payments#latest');
+    expect(
+      screen
+        .getByRole('link', { name: 'Open credit ledger: Credit added · +2 credits' })
+        .getAttribute('href'),
+    ).toBe('/students/student-alex/billing');
+    expect(
+      screen
+        .getByRole('link', { name: 'Open lesson: Lesson completed · Travel plans' })
+        .getAttribute('href'),
+    ).toBe('/students/student-alex/schedule?view=recent#lesson-1');
+    expect(
+      screen
+        .getByRole('link', { name: 'Open learning: Lesson completed · Travel plans' })
+        .getAttribute('href'),
+    ).toBe('/students/student-alex/learning?tab=profile#memory');
+    expect(
+      screen
+        .getByRole('link', { name: 'External detail: Lesson completed · Travel plans' })
+        .getAttribute('href'),
+    ).toBe('https://example.test/student?tab=history#record');
+    expect(
+      screen
+        .getByRole('link', { name: 'Other student: Lesson completed · Travel plans' })
+        .getAttribute('href'),
+    ).toBe('/students/student-other/schedule-billing');
   });
 
   it('distinguishes known empty history from a failed request and recovers through Retry', async () => {
@@ -292,12 +409,39 @@ describe('StudentHistoryPage', () => {
 
   it('keeps effective date-only values on the supplied date across workspace midnight', async () => {
     apiMocks.getStudentActivity.mockResolvedValue(
-      page({ timezone: 'America/Los_Angeles', items: [item({ effectiveAt: '2026-01-01' })] }),
+      page({
+        timezone: 'America/Los_Angeles',
+        items: [
+          item({ effectiveAt: '2026-01-01' }),
+          item({
+            id: 'payment',
+            type: 'payment_recorded',
+            category: 'billing',
+            subject: 'Payment recorded · $120.00',
+            summary: 'Received 2026-01-01',
+            effectiveAt: '2026-01-01',
+            details: [
+              { label: 'Received date', value: '2026-01-01' },
+              { label: 'Method', value: 'Bank transfer' },
+            ],
+            links: [],
+          }),
+        ],
+      }),
     );
     render(history());
-    const details = (await screen.findByText('Details', { selector: 'summary' })).parentElement!;
+    await screen.findByText('Received Jan 1, 2026');
+    const lesson = screen.getByRole('heading', { name: 'Lesson completed · Travel plans' });
+    const details = within(lesson.closest('li')!).getByText('Details', { selector: 'summary' })
+      .parentElement!;
     fireEvent.click(within(details).getByText('Details', { selector: 'summary' }));
     expect(within(details).getByText('Jan 1, 2026')).toBeTruthy();
+    const payment = screen.getByRole('heading', { name: 'Payment recorded · $120.00' });
+    const paymentRow = within(payment.closest('li')!);
+    fireEvent.click(paymentRow.getByText('Details', { selector: 'summary' }));
+    expect(paymentRow.getByText('Bank transfer')).toBeTruthy();
+    expect(paymentRow.queryByText('Received date')).toBeNull();
+    expect(paymentRow.queryByText('Effective date')).toBeNull();
   });
 
   it('does not render executable or protocol-relative artifact destinations', async () => {

@@ -1,0 +1,238 @@
+/* Assignment-specific layout, scoped to the disposable Calm Studio preview. */
+.cs2 .cs2-assignment-workspace .cs2-back {
+  margin-bottom: 12px;
+  font-size: 15px;
+}
+.cs2 .cs2-assignment-workspace .cs2-page-heading {
+  margin-bottom: 18px;
+}
+.cs2 .cs2-assignment-workspace .cs2-page-heading p,
+.cs2 .cs2-assignment-workspace .cs2-save-state {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.cs2 .cs2-assignment-workspace .cs2-stepper {
+  gap: 6px;
+  margin: 0 0 20px;
+  padding: 0 0 12px;
+  scrollbar-width: thin;
+}
+.cs2 .cs2-assignment-workspace .cs2-stepper button {
+  min-height: 40px;
+  padding: 7px 10px;
+  border-radius: 5px;
+  color: #526b79;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cs2 .cs2-assignment-workspace .cs2-stepper button > span {
+  width: 25px;
+  height: 25px;
+  border-color: #bccdd0;
+  font-size: 13px;
+}
+.cs2 .cs2-assignment-workspace .cs2-stepper button[aria-current="step"] {
+  background: #e8f5f2;
+  color: #115e59;
+  font-weight: 650;
+}
+.cs2 .cs2-assignment-workspace .cs2-stepper button[aria-current="step"] > span {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: white;
+}
+.cs2 .cs2-assignment-workspace .cs2-focused-form {
+  max-width: 860px;
+}
+.cs2 .cs2-assignment-workspace .cs2-focused-form > h2 {
+  margin: 0 0 16px;
+  font-size: 22px;
+}
+.cs2 .cs2-assignment-workspace .cs2-focused-form > label,
+.cs2 .cs2-assignment-workspace .cs2-focused-form > fieldset,
+.cs2 .cs2-assignment-workspace .cs2-focused-form > p,
+.cs2 .cs2-assignment-workspace .cs2-focused-form > details {
+  margin-bottom: 18px;
+}
+.cs2 .cs2-assignment-workspace .cs2-focused-form label,
+.cs2 .cs2-assignment-workspace .cs2-focused-form textarea,
+.cs2 .cs2-assignment-workspace .cs2-focused-form select {
+  font-size: 16px;
+  line-height: 1.55;
+}
+.cs2 .cs2-assignment-workspace .cs2-choice {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cs2 .cs2-assignment-workspace .cs2-choice legend {
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.cs2 .cs2-assignment-workspace .cs2-choice label {
+  padding: 9px 12px;
+  border: 1px solid #d4dfe1;
+  border-radius: 5px;
+  background: #fff;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.cs2 .cs2-assignment-workspace .cs2-choice label:has(input:checked) {
+  border-color: #79b5ab;
+  background: #e8f5f2;
+  color: #115e59;
+}
+.cs2 .cs2-assignment-workspace .cs2-editor-toolbar {
+  margin-bottom: 16px;
+}
+.cs2 .cs2-assignment-workspace .cs2-mode-switch button {
+  min-height: 38px;
+  font-size: 15px;
+  color: #526b79;
+}
+.cs2 .cs2-assignment-workspace .cs2-mode-switch button[aria-pressed="true"] {
+  color: #115e59;
+  font-weight: 600;
+}
+.cs2 .cs2-assignment-workspace .cs2-editor-layout {
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 18px;
+}
+.cs2 .cs2-assignment-workspace .cs2-editor-layout > nav {
+  gap: 2px;
+  padding-top: 0;
+}
+.cs2 .cs2-assignment-workspace .cs2-editor-layout > nav a {
+  min-height: 40px;
+  padding: 9px 11px;
+  border-left-color: #dce5e6;
+  background: transparent;
+  color: #526b79;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.cs2 .cs2-assignment-workspace .cs2-editor-layout > nav a:hover {
+  background: #eff7f5;
+  color: #115e59;
+}
+.cs2 .cs2-assignment-workspace .cs2-editor-layout:has(#cs2-text:target) > nav a[href="#cs2-text"],
+.cs2
+  .cs2-assignment-workspace
+  .cs2-editor-layout:has(#cs2-questions:target)
+  > nav
+  a[href="#cs2-questions"],
+.cs2
+  .cs2-assignment-workspace
+  .cs2-editor-layout:has(#cs2-vocabulary:target)
+  > nav
+  a[href="#cs2-vocabulary"],
+.cs2
+  .cs2-assignment-workspace
+  .cs2-editor-layout:has(#cs2-practice:target)
+  > nav
+  a[href="#cs2-practice"],
+.cs2
+  .cs2-assignment-workspace
+  .cs2-editor-layout:has(#cs2-teacher:target)
+  > nav
+  a[href="#cs2-teacher"] {
+  border-left-color: #0f766e;
+  background: #e8f5f2;
+  color: #115e59;
+  font-weight: 600;
+}
+.cs2 .cs2-assignment-workspace .cs2-workbook {
+  padding: 24px 26px;
+}
+.cs2 .cs2-assignment-workspace .cs2-workbook:not(.cs2-learner-preview) {
+  max-width: none;
+}
+.cs2 .cs2-assignment-workspace .cs2-workbook label,
+.cs2 .cs2-assignment-workspace .cs2-workbook input,
+.cs2 .cs2-assignment-workspace .cs2-workbook textarea {
+  font-size: 16px;
+  line-height: 1.55;
+}
+.cs2 .cs2-assignment-workspace .cs2-workbook section {
+  margin-top: 24px;
+}
+.cs2 .cs2-assignment-workspace .cs2-workbook section h3 {
+  margin-bottom: 12px;
+  font-size: 20px;
+}
+.cs2 .cs2-assignment-workspace .cs2-editable-item {
+  margin-bottom: 12px;
+  padding-bottom: 14px;
+}
+.cs2 .cs2-assignment-workspace .cs2-editable-item .cs2-section-heading span:first-child {
+  font-size: 14px;
+  color: #536d79;
+}
+.cs2 .cs2-assignment-workspace .cs2-editor-footer {
+  gap: 16px;
+  margin: 18px 0 0 168px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cs2-line);
+}
+.cs2 .cs2-assignment-workspace .cs2-full-preview {
+  padding: 28px 32px;
+}
+.cs2 .cs2-assignment-workspace .cs2-learner-preview .cs2-passage {
+  font-size: 18px;
+  line-height: 1.75;
+}
+.cs2 .cs2-assignment-workspace .cs2-finished {
+  margin: 24px auto;
+}
+@media (max-width: 700px) {
+  .cs2 .cs2-assignment-workspace .cs2-stepper {
+    gap: 4px;
+  }
+  .cs2 .cs2-assignment-workspace .cs2-editor-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .cs2 .cs2-assignment-workspace .cs2-editor-layout > nav {
+    display: flex;
+    overflow-x: auto;
+    position: static;
+    padding: 0 0 6px;
+  }
+  .cs2 .cs2-assignment-workspace .cs2-editor-layout > nav a {
+    flex-shrink: 0;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+  }
+  .cs2 .cs2-assignment-workspace .cs2-editor-layout:has(#cs2-text:target) > nav a[href="#cs2-text"],
+  .cs2
+    .cs2-assignment-workspace
+    .cs2-editor-layout:has(#cs2-questions:target)
+    > nav
+    a[href="#cs2-questions"],
+  .cs2
+    .cs2-assignment-workspace
+    .cs2-editor-layout:has(#cs2-vocabulary:target)
+    > nav
+    a[href="#cs2-vocabulary"],
+  .cs2
+    .cs2-assignment-workspace
+    .cs2-editor-layout:has(#cs2-practice:target)
+    > nav
+    a[href="#cs2-practice"],
+  .cs2
+    .cs2-assignment-workspace
+    .cs2-editor-layout:has(#cs2-teacher:target)
+    > nav
+    a[href="#cs2-teacher"] {
+    border-bottom-color: #0f766e;
+  }
+  .cs2 .cs2-assignment-workspace .cs2-workbook,
+  .cs2 .cs2-assignment-workspace .cs2-full-preview {
+    padding: 20px;
+  }
+  .cs2 .cs2-assignment-workspace .cs2-editor-footer {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+}

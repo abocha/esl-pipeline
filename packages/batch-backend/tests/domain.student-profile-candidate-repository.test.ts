@@ -1,3 +1,4 @@
+import { getActiveProfileRevision } from '../src/domain/profile-revision-repository.js';
 import './support/bootstrap-pg-test-env.js';
 
 import { randomUUID } from 'node:crypto';
@@ -107,7 +108,14 @@ async function activateWithProfile(
       [revisionId, JSON.stringify(profile)],
     ),
   );
-  await activateProfileRevision(studentId, revisionId);
+  const head = (await getActiveProfileRevision(studentId))?.id ?? null;
+  await withPgClient((client) =>
+    client.query(
+      'UPDATE student_profile_revisions SET base_active_revision_id=$2,base_active_revision_known=true WHERE id=$1',
+      [revisionId, head],
+    ),
+  );
+  await activateProfileRevision(studentId, revisionId, undefined, head);
   return markStudentProfileCandidatesPromotedByRevision(revisionId, {
     studentId,
     contentHash,
@@ -154,6 +162,50 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
     expect(
       (await listStudentProfileCandidates({ studentId, limit: 25, offset: 0 })).items,
     ).toHaveLength(1);
+  });
+
+  it('waits for the student lock before acquiring the candidate review lock', async () => {
+    const { params, studentId } = await refreshFixture();
+    const candidate = await insertStudentProfileCandidate(params.proposals[0]!);
+    let review: ReturnType<typeof updateStudentProfileCandidateReview> | undefined;
+    await withPgClient(async (writer) => {
+      await writer.query('BEGIN');
+      try {
+        const writerPid = (await writer.query<{ pid: number }>('SELECT pg_backend_pid() AS pid'))
+          .rows[0]!.pid;
+        await writer.query('SELECT id FROM students WHERE id=$1 FOR UPDATE', [studentId]);
+        review = updateStudentProfileCandidateReview({
+          studentId,
+          candidateId: candidate.id,
+          status: 'rejected',
+          reviewState: 'rejected',
+        });
+        let blocked = false;
+        for (let attempt = 0; attempt < 200; attempt++) {
+          await writer.query('SELECT pg_stat_clear_snapshot()');
+          const waiting = await writer.query<{ blocked: boolean }>(
+            'SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) AS blocked',
+            [writerPid],
+          );
+          if (waiting.rows[0]?.blocked) {
+            blocked = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        expect(blocked).toBe(true);
+        // A candidate-first reviewer would already hold this row and fail NOWAIT,
+        // creating a student/candidate deadlock with maintenance publication.
+        const lock = await writer.query<{ id: string }>(
+          'SELECT id FROM student_profile_candidates WHERE id=$1 FOR UPDATE NOWAIT',
+          [candidate.id],
+        );
+        expect(lock.rows[0]?.id).toBe(candidate.id);
+      } finally {
+        await writer.query('ROLLBACK');
+      }
+    });
+    expect(await review).toMatchObject({ reviewState: 'rejected' });
   });
 
   it.each(['pending_review', 'approved', 'rejected', 'promoted', 'superseded'] as const)(
@@ -905,7 +957,11 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
         teacherNotes: 'Prefers short drills. Enjoys climbing.',
       };
       const draft = await refreshProfileDraftFromApprovedCandidates({
-        request: { studentId, candidateIds: selectedIds },
+        request: {
+          studentId,
+          candidateIds: selectedIds,
+          expectedActiveRevisionId: (await getActiveProfileRevision(studentId))?.id ?? null,
+        },
         overrides: {
           students: { getById: async () => ({ id: studentId, student: 'Ari', voices: {} }) },
           memory: { getOverview: async () => null },
@@ -964,11 +1020,14 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
           : draft.draftRevision.structuredContent!.studyPreferences,
       };
       const edited = await saveProfileRevisionContent(studentId, '', {
+        expectedActiveRevisionId: (await getActiveProfileRevision(studentId))?.id ?? null,
         status: 'draft',
         structuredContent: editedProfile,
         inheritCandidateLinksFromRevisionId: draft.draftRevision.id,
       });
-      const activated = await activateProfileRevisionForStudent(studentId, edited.id);
+      const activated = await activateProfileRevisionForStudent(studentId, edited.id, {
+        expectedActiveRevisionId: (await getActiveProfileRevision(studentId))?.id ?? null,
+      });
       expect(activated?.candidatePromotion).toEqual({
         linkedCandidateCount: 2,
         promotedCandidateIds: expect.arrayContaining(remove ? [candidates[1]!.id] : selectedIds),
@@ -985,7 +1044,9 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
         status: 'approved',
         promotedRevisionId: null,
       });
-      const retry = await activateProfileRevisionForStudent(studentId, edited.id);
+      const retry = await activateProfileRevisionForStudent(studentId, edited.id, {
+        expectedActiveRevisionId: (await getActiveProfileRevision(studentId))?.id ?? null,
+      });
       expect(retry?.candidatePromotion).toEqual(activated?.candidatePromotion);
     },
   );
@@ -1001,7 +1062,14 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
         [revisionId, studentId],
       ),
     );
-    await activateProfileRevision(studentId, revisionId);
+    const head = (await getActiveProfileRevision(studentId))?.id ?? null;
+    await withPgClient((client) =>
+      client.query(
+        'UPDATE student_profile_revisions SET base_active_revision_id=$2,base_active_revision_known=true WHERE id=$1',
+        [revisionId, head],
+      ),
+    );
+    await activateProfileRevision(studentId, revisionId, undefined, head);
     expect(await persistStudentProfileCandidateRefresh(params)).toMatchObject({
       outcome: 'active_profile_changed',
       created: [],

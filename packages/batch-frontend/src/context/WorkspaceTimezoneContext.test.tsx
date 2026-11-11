@@ -19,7 +19,9 @@ function Clock() {
   const workspace = useWorkspaceSettings();
   return (
     <>
-      <output>{formatTutorTime('2026-10-28T03:00:00Z', timezone)}</output>
+      <output aria-label="Workspace date">
+        {formatTutorTime('2026-10-28T03:00:00Z', timezone)}
+      </output>
       <button type="button" onClick={() => workspace.setSettings(settings('Asia/Kathmandu'))}>
         Change clock
       </button>
@@ -48,9 +50,12 @@ describe('authenticated workspace clock', () => {
         <Clock />
       </WorkspaceTimezoneProvider>,
     );
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Workspace date' })).toBeNull();
+    expect(screen.getByRole('status', { name: 'Preparing the teaching workspace' })).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
-    expect((await screen.findByRole('status')).textContent).toBe('Oct 28, 2026, 10:00 AM');
+    expect((await screen.findByRole('status', { name: 'Workspace date' })).textContent).toBe(
+      'Oct 28, 2026, 10:00 AM',
+    );
     expect(getBusinessSettings).toHaveBeenCalledTimes(2);
   });
   it('discards a previous auth scope and its late response before rendering another workspace', async () => {
@@ -68,8 +73,10 @@ describe('authenticated workspace clock', () => {
         <Clock />
       </WorkspaceTimezoneProvider>,
     );
-    expect(screen.queryByRole('status')).toBeNull();
-    expect((await screen.findByRole('status')).textContent).toBe('Oct 27, 2026, 11:00 PM');
+    expect(screen.queryByRole('status', { name: 'Workspace date' })).toBeNull();
+    expect((await screen.findByRole('status', { name: 'Workspace date' })).textContent).toBe(
+      'Oct 27, 2026, 11:00 PM',
+    );
     await act(async () => old.resolve(settings('Asia/Saigon')));
     expect(screen.getByRole('status').textContent).toBe('Oct 27, 2026, 11:00 PM');
   });
@@ -80,7 +87,9 @@ describe('authenticated workspace clock', () => {
         <Clock />
       </WorkspaceTimezoneProvider>,
     );
-    expect((await screen.findByRole('status')).textContent).toContain('10:00 AM');
+    expect((await screen.findByRole('status', { name: 'Workspace date' })).textContent).toContain(
+      '10:00 AM',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Change clock' }));
     expect(screen.getByRole('status').textContent).toBe('Oct 28, 2026, 8:45 AM');
     expect(getBusinessSettings).toHaveBeenCalledTimes(1);
@@ -97,7 +106,7 @@ describe('authenticated workspace clock', () => {
         <Clock />
       </WorkspaceTimezoneProvider>,
     );
-    await screen.findByRole('status');
+    await screen.findByRole('status', { name: 'Workspace date' });
     fireEvent.click(screen.getByRole('button', { name: 'Refresh clock' }));
     fireEvent.click(screen.getByRole('button', { name: 'Change clock' }));
     await act(async () => old.resolve(settings('America/Los_Angeles')));

@@ -314,7 +314,8 @@ a {
   transition: color var(--transition-fast);
 }
 
-a:hover {
+/* Button-styled links use the same hover treatment as native product buttons. */
+a:hover:where(:not(.product-button)) {
   color: var(--action-primary-hover);
 }
 
@@ -441,10 +442,8 @@ button:disabled {
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
   background: var(--action-primary-hover);
   border-color: var(--action-primary-hover);
-  box-shadow: var(--shadow-md);
 }
 
 .btn-primary:active:not(:disabled) {

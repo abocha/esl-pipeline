@@ -1,8 +1,9 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { StudioV2Provider } from '../studio-v2/StudioV2Context';
 import { StudentLearningPage } from './StudentLearningPage';
 
 const apiMocks = vi.hoisted(() => ({
@@ -16,6 +17,8 @@ const apiMocks = vi.hoisted(() => ({
   getStudentMemoryOverview: vi.fn(),
   initializeStudentProfileDraft: vi.fn(),
   listProfileRevisions: vi.fn(),
+  listProfileChanges: vi.fn(),
+  undoProfileChange: vi.fn(),
   listStudentProfileCandidates: vi.fn(),
   promoteStudentProfileCandidates: vi.fn(),
   refreshProfileDraftFromApprovedCandidates: vi.fn(),
@@ -28,6 +31,8 @@ const apiMocks = vi.hoisted(() => ({
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../utils/api', () => apiMocks);
+
+vi.mock('./LearningLessonContext', () => ({ LearningLessonContext: () => null }));
 
 vi.mock('./StudentAreaContext', () => ({
   useStudentAreaContext: useStudentAreaContextMock,
@@ -97,6 +102,12 @@ function createDeferred<T>(): Deferred<T> {
 }
 
 function seedLearningPageMocks() {
+  apiMocks.listProfileChanges.mockResolvedValue({
+    studentId: 'student-alex',
+    activeRevisionId: 'revision-active-1',
+    items: [],
+    nextCursor: null,
+  });
   apiMocks.getProfileContent.mockResolvedValue({
     studentId: 'student-alex',
     label: 'Alex',
@@ -114,6 +125,7 @@ function seedLearningPageMocks() {
       teacherNotes: 'Responds well to practical speaking tasks.',
     },
     currentRevisionId: 'revision-active-1',
+    activeRevisionId: 'revision-active-1',
     updatedAt: NOW,
   });
 
@@ -130,6 +142,8 @@ function seedLearningPageMocks() {
     createdAt: NOW,
     createdBy: 'teacher-1',
     restoredFromRevisionId: null,
+    baseActiveRevisionId: null,
+    baseActiveRevisionKnown: false,
     content: '# Foundational Profile',
     structuredContent: {
       schemaVersion: 'foundational_profile_v1',
@@ -160,6 +174,8 @@ function seedLearningPageMocks() {
         createdAt: NOW,
         createdBy: 'teacher-1',
         restoredFromRevisionId: null,
+        baseActiveRevisionId: null,
+        baseActiveRevisionKnown: false,
       },
     ],
     total: 1,
@@ -248,6 +264,8 @@ function seedLearningPageMocks() {
       createdAt: NOW,
       createdBy: 'teacher-1',
       restoredFromRevisionId: null,
+      baseActiveRevisionId: null,
+      baseActiveRevisionKnown: false,
       content: '# Foundational Profile',
       structuredContent: {
         schemaVersion: 'foundational_profile_v1',
@@ -276,6 +294,8 @@ function seedLearningPageMocks() {
     createdAt: NOW,
     createdBy: 'teacher-1',
     restoredFromRevisionId: null,
+    baseActiveRevisionId: null,
+    baseActiveRevisionKnown: false,
     content: '# Foundational Profile',
     structuredContent: {
       schemaVersion: 'foundational_profile_v1',
@@ -292,10 +312,12 @@ function seedLearningPageMocks() {
   });
 }
 
-function renderLearningPage(initialEntry = '/students/student-alex/learning') {
+function renderLearningPage(initialEntry = '/students/student-alex/learning', studioV2 = false) {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <StudentLearningPage />
+      <StudioV2Provider enabled={studioV2}>
+        <StudentLearningPage />
+      </StudioV2Provider>
     </MemoryRouter>,
   );
 }
@@ -374,6 +396,7 @@ function makeLearningSurface(overrides: Record<string, unknown> = {}) {
         teacherNotes: 'Responds well to practical speaking tasks.',
       },
       currentRevisionId: 'revision-active-1',
+      activeRevisionId: 'revision-active-1',
       updatedAt: NOW,
     },
     revisions: {
@@ -391,6 +414,8 @@ function makeLearningSurface(overrides: Record<string, unknown> = {}) {
           createdAt: NOW,
           createdBy: 'teacher-1',
           restoredFromRevisionId: null,
+          baseActiveRevisionId: null,
+          baseActiveRevisionKnown: false,
         },
       ],
       total: 1,
@@ -459,6 +484,268 @@ describe('StudentLearningPage', () => {
       studentError: null,
       refreshStudent: vi.fn(async () => {}),
     });
+  });
+
+  it('opens automatic profile updates from the default frontend', async () => {
+    const user = userEvent.setup();
+    renderLearningPage();
+    await user.click(await screen.findByRole('button', { name: 'Profile updates' }));
+    expect(await screen.findByText('No automatic profile updates yet.')).toBeTruthy();
+    expect(apiMocks.listProfileChanges).toHaveBeenCalledWith('student-alex', undefined);
+  });
+
+  it('keeps a dirty profile and its original active-head baseline when focus and a rejected save reveal a newer version', async () => {
+    const user = userEvent.setup();
+    renderLearningPage(undefined, true);
+    await user.click(await screen.findByRole('button', { name: 'Edit profile' }));
+    await user.clear(screen.getByLabelText('Teacher Notes'));
+    await user.type(screen.getByLabelText('Teacher Notes'), 'My local teaching context');
+    const original = makeLearningSurface().profile;
+    const newer = {
+      ...original,
+      currentRevisionId: 'revision-active-2',
+      activeRevisionId: 'revision-active-2',
+      structuredContent: {
+        ...original.structuredContent,
+        teacherNotes: 'New background teaching context',
+      },
+    };
+    apiMocks.getProfileContent.mockResolvedValue(newer);
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await screen.findByText('Profile updated');
+    expect((screen.getByLabelText('Teacher Notes') as HTMLTextAreaElement).value).toBe(
+      'My local teaching context',
+    );
+    const conflict = new Error('The learner profile has changed. Your edits are kept.');
+    conflict.name = 'ProfileRevisionConflictApiError';
+    apiMocks.upsertProfileContent.mockRejectedValueOnce(conflict);
+    await user.click(screen.getByRole('button', { name: 'Save learner profile' }));
+    await screen.findByRole('region', { name: 'Compare profile versions' });
+    expect(apiMocks.upsertProfileContent).toHaveBeenLastCalledWith(
+      'student-alex',
+      null,
+      expect.objectContaining({ teacherNotes: 'My local teaching context' }),
+      { expectedActiveRevisionId: 'revision-active-1' },
+    );
+    expect((screen.getByLabelText('Teacher Notes') as HTMLTextAreaElement).value).toBe(
+      'My local teaching context',
+    );
+    expect(screen.getByText('New background teaching context')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Keep my edits' }));
+    await user.click(screen.getByRole('button', { name: 'Save learner profile' }));
+    expect(apiMocks.upsertProfileContent).toHaveBeenLastCalledWith(
+      'student-alex',
+      null,
+      expect.objectContaining({ teacherNotes: 'My local teaching context' }),
+      { expectedActiveRevisionId: 'revision-active-2' },
+    );
+  });
+
+  it('keeps unsaved edits when a historical Open or Restore action is requested', async () => {
+    const surface = makeLearningSurface();
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce({
+      ...surface,
+      revisions: {
+        ...surface.revisions,
+        items: [
+          ...surface.revisions.items,
+          {
+            ...surface.revisions.items[0],
+            id: 'historical-revision',
+            status: 'deprecated',
+            versionLabel: 'v0',
+          },
+        ],
+      },
+    });
+    const user = userEvent.setup();
+    renderLearningPage();
+    await user.type(await screen.findByLabelText('Teacher Notes'), ' Local unsaved note.');
+    const notes = (screen.getByLabelText('Teacher Notes') as HTMLTextAreaElement).value;
+    const restore = screen.getByRole('button', { name: 'Restore' });
+    const open = screen.getByRole('button', { name: 'Open' });
+    expect((restore as HTMLButtonElement).disabled).toBe(true);
+    expect((open as HTMLButtonElement).disabled).toBe(true);
+    await user.click(restore);
+    await user.click(open);
+    expect(apiMocks.restoreProfileRevision).not.toHaveBeenCalled();
+    expect(apiMocks.getProfileRevision).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Teacher Notes') as HTMLTextAreaElement).value).toBe(notes);
+  });
+
+  it('ignores a completed save from the previous student after the page changes owner', async () => {
+    const user = userEvent.setup();
+    const pending = createDeferred<unknown>();
+    apiMocks.upsertProfileContent.mockReturnValueOnce(pending.promise);
+    const view = renderLearningPage(undefined, true);
+    await user.click(await screen.findByRole('button', { name: 'Edit profile' }));
+    await user.type(screen.getByLabelText('Teacher Notes'), ' Alex local note');
+    await user.click(screen.getByRole('button', { name: 'Save learner profile' }));
+    await waitFor(() => expect(apiMocks.upsertProfileContent).toHaveBeenCalledTimes(1));
+    const surface = makeLearningSurface();
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce({
+      ...surface,
+      profile: {
+        ...surface.profile,
+        studentId: 'student-bella',
+        currentRevisionId: 'bella-head',
+        activeRevisionId: 'bella-head',
+        structuredContent: {
+          ...surface.profile.structuredContent,
+          overallLevel: 'A2',
+          teacherNotes: 'Bella teaching context',
+        },
+      },
+      revisions: { ...surface.revisions, items: [] },
+    });
+    useStudentAreaContextMock.mockReturnValue({
+      student: { id: 'student-bella', student: 'Bella' },
+      studentId: 'student-bella',
+      studentLoading: false,
+      studentError: null,
+      refreshStudent: vi.fn(async () => {}),
+    });
+    view.rerender(
+      <MemoryRouter>
+        <StudioV2Provider enabled>
+          <StudentLearningPage />
+        </StudioV2Provider>
+      </MemoryRouter>,
+    );
+    await screen.findByText('A2');
+    await act(async () => {
+      pending.resolve({});
+      await pending.promise;
+    });
+    expect(screen.getByText('A2')).toBeTruthy();
+    expect(screen.queryByText('Learner profile saved.')).toBeNull();
+    expect(screen.queryByDisplayValue(/Alex local note/)).toBeNull();
+  });
+
+  it('requires a newly saved draft after comparing an older durable base instead of blessing its activation', async () => {
+    const surface = makeLearningSurface();
+    const draft = {
+      ...surface.revisions.items[0],
+      id: 'draft-old',
+      status: 'draft',
+      baseActiveRevisionKnown: true,
+      baseActiveRevisionId: 'head-old',
+      content: 'draft',
+      structuredContent: surface.profile.structuredContent,
+    };
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce({
+      ...surface,
+      revisions: { ...surface.revisions, items: [...surface.revisions.items, draft] },
+    });
+    apiMocks.getProfileRevision.mockResolvedValueOnce(draft);
+    apiMocks.saveProfileDraftRevision.mockResolvedValueOnce({
+      ...draft,
+      id: 'draft-new',
+      baseActiveRevisionId: 'revision-active-1',
+    });
+    const user = userEvent.setup();
+    renderLearningPage();
+    await user.click(await screen.findByRole('button', { name: 'Open' }));
+    await screen.findByRole('region', { name: 'Compare profile versions' });
+    expect(
+      (screen.getByRole('button', { name: 'Activate Draft' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Keep my edits' }));
+    expect(
+      (screen.getByRole('button', { name: 'Activate Draft' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+    await waitFor(() =>
+      expect(apiMocks.saveProfileDraftRevision).toHaveBeenCalledWith(
+        'student-alex',
+        expect.objectContaining({
+          expectedActiveRevisionId: 'revision-active-1',
+          inheritCandidateLinksFromRevisionId: 'draft-old',
+        }),
+      ),
+    );
+    expect(apiMocks.activateProfileRevision).not.toHaveBeenCalled();
+  });
+
+  it('shows the v2 profile and memory, and retains all nine fields through edit, cancel and save', async () => {
+    const user = userEvent.setup();
+    renderLearningPage(undefined, true);
+    await screen.findByRole('heading', { name: 'Learning profile' });
+    expect(screen.getByText('Recent learner memory summary.')).toBeTruthy();
+    expect(screen.getByText('B1').className).toContain('student-v2-level');
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Undo/i })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Edit profile' }));
+    const editor = screen.getByRole('dialog', { name: 'Edit profile' });
+    expect(within(editor).getAllByRole('textbox')).toHaveLength(9);
+    expect(document.activeElement).toBe(screen.getByLabelText('Current Level'));
+    await user.clear(screen.getByLabelText('Current Level'));
+    await user.type(screen.getByLabelText('Current Level'), 'B2');
+    await user.click(screen.getByRole('button', { name: 'Cancel editing' }));
+    await user.click(within(editor).getByRole('button', { name: 'Keep editing' }));
+    expect((screen.getByLabelText('Current Level') as HTMLInputElement).value).toBe('B2');
+    await user.click(within(editor).getByRole('button', { name: 'Close dialog' }));
+    await user.click(within(editor).getByRole('button', { name: 'Discard changes' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByText('B1')).toBeTruthy();
+    expect(apiMocks.upsertProfileContent).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Edit profile' }));
+    await user.clear(screen.getByLabelText('Teacher Notes'));
+    await user.type(screen.getByLabelText('Teacher Notes'), 'Use practical speaking tasks.');
+    await user.click(screen.getByRole('button', { name: 'Save learner profile' }));
+    await waitFor(() =>
+      expect(apiMocks.upsertProfileContent).toHaveBeenCalledWith(
+        'student-alex',
+        null,
+        expect.objectContaining({
+          overallLevel: 'B1',
+          primaryGoals: ['Lead standups clearly.'],
+          communicationContexts: ['Team updates'],
+          interestsAndUsefulThemes: ['Product work'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Short practical review loops'],
+          durableConstraints: ['Limited evening time'],
+          teacherNotes: 'Use practical speaking tasks.',
+        }),
+        { expectedActiveRevisionId: 'revision-active-1' },
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
+  });
+
+  it('opens v2 versions and suggestions in separate dialogs without changing the profile', async () => {
+    const user = userEvent.setup();
+    const surface = makeLearningSurface();
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce({
+      ...surface,
+      candidates: { ...surface.candidates, items: [], total: 0 },
+    });
+    renderLearningPage(undefined, true);
+
+    await user.click(await screen.findByRole('button', { name: 'Profile versions' }));
+    const versions = screen.getByRole('dialog', { name: 'Profile versions' });
+    expect(within(versions).getByText('v1')).toBeTruthy();
+    expect(within(versions).queryByRole('button', { name: 'Restore' })).toBeNull();
+    await user.click(within(versions).getByRole('button', { name: 'Close dialog' }));
+
+    await user.click(screen.getByRole('button', { name: 'Profile suggestions' }));
+    const suggestions = screen.getByRole('dialog', { name: 'Profile suggestions' });
+    expect(within(suggestions).getByText('No profile suggestions yet.')).toBeTruthy();
+    await user.click(within(suggestions).getByRole('button', { name: 'Close dialog' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(apiMocks.restoreProfileRevision).not.toHaveBeenCalled();
+    expect(apiMocks.upsertProfileContent).not.toHaveBeenCalled();
+  });
+
+  it('keeps available memory visible in v2 before a first profile is created', async () => {
+    apiMocks.getProfileContent.mockResolvedValue(null);
+    renderLearningPage(undefined, true);
+    expect(await screen.findByText('Recent learner memory summary.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create learner profile' })).toBeTruthy();
+    expect(apiMocks.initializeStudentProfileDraft).not.toHaveBeenCalled();
   });
 
   it('keeps a failed initial load unavailable until Retry succeeds', async () => {
@@ -535,7 +822,9 @@ describe('StudentLearningPage', () => {
     await user.click(screen.getByRole('button', { name: /Create learner profile/i }));
 
     await waitFor(() => {
-      expect(apiMocks.initializeStudentProfileDraft).toHaveBeenCalledWith('student-alex');
+      expect(apiMocks.initializeStudentProfileDraft).toHaveBeenCalledWith('student-alex', {
+        expectedActiveRevisionId: null,
+      });
     });
     await waitFor(() => {
       expect(refreshStudent).toHaveBeenCalled();
@@ -768,6 +1057,7 @@ describe('StudentLearningPage', () => {
         'student-alex',
         null,
         expect.objectContaining({ overallLevel: 'B1 plus' }),
+        { expectedActiveRevisionId: 'revision-active-1' },
       ),
     );
     expect(apiMocks.saveProfileDraftRevision).not.toHaveBeenCalled();
@@ -807,6 +1097,7 @@ describe('StudentLearningPage', () => {
         teacherNotes: string | null;
       };
       currentRevisionId: string | null;
+      activeRevisionId: string | null;
       updatedAt: string | null;
     }>();
     const studentARevisions = createDeferred<{
@@ -823,6 +1114,8 @@ describe('StudentLearningPage', () => {
         createdAt: string;
         createdBy: string | null;
         restoredFromRevisionId: null;
+        baseActiveRevisionId: string | null;
+        baseActiveRevisionKnown: boolean;
       }[];
       total: number;
       limit: number;
@@ -890,6 +1183,7 @@ describe('StudentLearningPage', () => {
           teacherNotes: 'Student B teacher note.',
         },
         currentRevisionId: null,
+        activeRevisionId: null,
         updatedAt: NOW,
       });
     });
@@ -910,6 +1204,8 @@ describe('StudentLearningPage', () => {
             createdAt: NOW,
             createdBy: 'teacher-1',
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: false,
           },
         ],
         total: 1,
@@ -1022,6 +1318,7 @@ describe('StudentLearningPage', () => {
           teacherNotes: 'Student A note.',
         },
         currentRevisionId: null,
+        activeRevisionId: null,
         updatedAt: NOW,
       });
       studentARevisions.resolve({
@@ -1039,6 +1336,8 @@ describe('StudentLearningPage', () => {
             createdAt: NOW,
             createdBy: 'teacher-1',
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: false,
           },
         ],
         total: 1,
@@ -1178,6 +1477,7 @@ describe('StudentLearningPage', () => {
               teacherNotes: null,
             },
             currentRevisionId: null,
+            activeRevisionId: null,
             updatedAt: NOW,
           },
           revisions: { items: [], total: 0, limit: 20, offset: 0, order: 'desc' },
@@ -1265,6 +1565,8 @@ describe('StudentLearningPage', () => {
         createdAt: NOW,
         createdBy: 'teacher-1',
         restoredFromRevisionId: null,
+        baseActiveRevisionId: 'revision-active-1',
+        baseActiveRevisionKnown: true,
         content: '# Foundational Profile',
         structuredContent: {
           schemaVersion: 'foundational_profile_v1',
@@ -1293,6 +1595,8 @@ describe('StudentLearningPage', () => {
       createdAt: NOW,
       createdBy: 'teacher-1',
       restoredFromRevisionId: null,
+      baseActiveRevisionId: 'revision-active-1',
+      baseActiveRevisionKnown: true,
       content: '# Foundational Profile',
       structuredContent: {
         schemaVersion: 'foundational_profile_v1',
@@ -1318,6 +1622,8 @@ describe('StudentLearningPage', () => {
         'student-alex',
         {
           candidateIds: ['candidate-alex'],
+          baseRevisionId: 'revision-active-1',
+          expectedActiveRevisionId: 'revision-active-1',
         },
       );
     });
@@ -1391,6 +1697,8 @@ describe('StudentLearningPage', () => {
       createdAt,
       createdBy: 'teacher-1',
       restoredFromRevisionId: null,
+      baseActiveRevisionId: null,
+      baseActiveRevisionKnown: false,
     });
     apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
       makeLearningSurface({
@@ -1411,6 +1719,7 @@ describe('StudentLearningPage', () => {
             teacherNotes: 'Responds well to practical speaking tasks.',
           },
           currentRevisionId: 'revision-draft-6',
+          activeRevisionId: 'revision-draft-6',
           updatedAt: NOW,
         },
         revisions: {

@@ -1,3 +1,4 @@
+import { getActiveProfileRevision } from '../src/domain/profile-revision-repository.js';
 import './support/bootstrap-pg-test-env.js';
 
 import { createHash, randomUUID } from 'node:crypto';
@@ -287,6 +288,36 @@ describe('domain/assignment-session-repository persistence contract', () => {
   });
   beforeEach(async () => {
     await resetTables();
+  });
+
+  it('paginates active sessions in stable owner-scoped order without capping the total', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const otherUserId = randomUUID();
+    const otherStudentId = randomUUID();
+    await insertUserAndStudent(userId, studentId);
+    await insertUserAndStudent(otherUserId, otherStudentId);
+    const ownIds = [randomUUID(), randomUUID(), randomUUID()].sort().reverse();
+    for (const id of ownIds) await insertStudentConfirmedSession({ id, userId, studentId });
+    await insertStudentConfirmedSession({
+      id: randomUUID(),
+      userId: otherUserId,
+      studentId: otherStudentId,
+    });
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query('UPDATE assignment_sessions SET updated_at = $2 WHERE user_id = $1', [
+        userId,
+        '2026-10-30T10:00:00Z',
+      ]);
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    const first = await repository.listAssignmentSessionsForUser(userId, 2, 'active', 0);
+    const next = await repository.listAssignmentSessionsForUser(userId, 2, 'active', 2);
+    expect(first.map((session) => session.id)).toEqual(ownIds.slice(0, 2));
+    expect(next.map((session) => session.id)).toEqual(ownIds.slice(2));
+    expect([...first, ...next].every((session) => session.userId === userId)).toBe(true);
+    expect(await repository.countAssignmentSessionsForUser(userId, 'active')).toBe(3);
+    expect(await repository.listAssignmentSessionsForUser(userId, 2, 'active', 3)).toEqual([]);
   });
 
   it('freezes validated typed confirmation and correction input with exact replay and direct mixed-format memory', async () => {
@@ -838,6 +869,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
 
     const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
     await insertProfileRevision({
+      expectedActiveRevisionId: (await getActiveProfileRevision(studentId))?.id ?? null,
       studentId,
       content: seedContent,
       contentHash: createHash('sha256').update(seedContent).digest('hex'),
@@ -900,108 +932,309 @@ describe('domain/assignment-session-repository persistence contract', () => {
     expect(result.revision.content).toContain('Speak confidently');
   });
 
-  it('merges a structured starter seed without copying its rendered Markdown into Teacher Notes', async () => {
-    const fixture = await createMixedSourceConfirmationFixture({
-      workingVersion: 1,
-      contentHash: 'a'.repeat(64),
-      mappingWorkingVersion: 1,
-      mappingContentHash: 'a'.repeat(64),
-    });
-    const studentId = fixture.studentId;
-    const structuredSeed = {
-      schemaVersion: 'foundational_profile_v1' as const,
-      overallLevel: 'A2',
-      primaryGoals: ['Prepare for interviews'],
-      communicationContexts: ['Weekly team calls'],
-      interestsAndUsefulThemes: ['Gardening'],
-      stableStrengths: [],
-      persistentChallenges: [],
-      studyPreferences: [],
-      durableConstraints: ['Avoid evening calls'],
-      teacherNotes: 'Use short examples.',
-    };
-    const { renderFoundationalProfileContent } = await import(
-      '../src/application/foundational-profile.js'
-    );
-    const seedContent = renderFoundationalProfileContent(structuredSeed);
-
-    const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
-    await insertProfileRevision({
-      studentId,
-      content: seedContent,
-      contentHash: createHash('sha256').update(seedContent).digest('hex'),
-      structuredContent: structuredSeed,
-      source: 'create',
-      status: 'active',
-    });
-    const repository = await import('../src/domain/assignment-session-repository.js');
-    const confirmed = await confirmMixedSource(repository, fixture);
-    const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      await client.query('UPDATE lesson_memory_entries SET status = $2 WHERE id = $1', [
-        confirmed.lessonMemoryIntent?.entryId,
-        'ready',
-      ]);
-      const result = await client.query<{ id: string }>(
-        'SELECT id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
-        [fixture.sessionId],
-      );
-      return result.rows[0]!;
-    });
-    const { loadConfig } = await import('../src/config/env.js');
-    const { reconcileProfileInitialEnrichmentOperation } = await import(
-      '../src/application/profile-initial-enrichment.js'
-    );
-    await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), async () => ({
-      structuredProfile: {
-        schemaVersion: 'foundational_profile_v1',
-        overallLevel: 'B1',
-        primaryGoals: ['Speak confidently'],
-        communicationContexts: [],
-        interestsAndUsefulThemes: [],
+  it.each([false, true])(
+    'protects a structured starter seed and tracks deterministic initial additions (evidence=%s)',
+    async (withEligibleFact) => {
+      const fixture = await createMixedSourceConfirmationFixture({
+        workingVersion: 1,
+        contentHash: 'a'.repeat(64),
+        mappingWorkingVersion: 1,
+        mappingContentHash: 'a'.repeat(64),
+      });
+      const studentId = fixture.studentId;
+      const structuredSeed = {
+        schemaVersion: 'foundational_profile_v1' as const,
+        overallLevel: 'A2',
+        primaryGoals: ['Prepare for interviews'],
+        communicationContexts: ['Weekly team calls'],
+        interestsAndUsefulThemes: ['Gardening'],
         stableStrengths: [],
         persistentChallenges: [],
         studyPreferences: [],
-        durableConstraints: [],
-        teacherNotes: 'Practice aloud.',
-      },
-      rawOutput: {},
-      rawText: '{}',
-      provider: 'openai',
-      model: 'test-model',
-    }));
-    const result = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      const operation = await client.query<{
-        generation_input: { seedContent: string; seedIsStructured: boolean };
-      }>('SELECT generation_input FROM profile_initial_enrichment_operations WHERE id = $1', [
-        op.id,
-      ]);
-      const revision = await client.query<{
-        content: string;
-        structured_content: {
-          primaryGoals: string[];
-          communicationContexts: string[];
-          durableConstraints: string[];
-          teacherNotes: string;
-        };
-      }>(
-        `SELECT content, structured_content FROM student_profile_revisions WHERE student_id = $1 AND status = 'active'`,
-        [studentId],
+        durableConstraints: ['Avoid evening calls'],
+        teacherNotes: 'Use short examples.',
+      };
+      const { renderFoundationalProfileContent } = await import(
+        '../src/application/foundational-profile.js'
       );
-      return { input: operation.rows[0]!.generation_input, revision: revision.rows[0]! };
-    });
-    expect(result.input).toMatchObject({ seedContent, seedIsStructured: true });
-    expect(result.revision.structured_content.primaryGoals).toEqual([
-      'Prepare for interviews',
-      'Speak confidently',
-    ]);
-    expect(result.revision.structured_content.communicationContexts).toContain('Weekly team calls');
-    expect(result.revision.structured_content.durableConstraints).toContain('Avoid evening calls');
-    expect(result.revision.structured_content.teacherNotes).toBe(
-      'Use short examples.\n\nPractice aloud.',
-    );
-    expect(result.revision.structured_content.teacherNotes).not.toContain('# Foundational Profile');
-    expect(result.revision.content).not.toContain('Original tutor-authored profile (verbatim)');
-  });
+      const seedContent = renderFoundationalProfileContent(structuredSeed);
+
+      const { insertProfileRevision } = await import(
+        '../src/domain/profile-revision-repository.js'
+      );
+      await insertProfileRevision({
+        expectedActiveRevisionId: (await getActiveProfileRevision(studentId))?.id ?? null,
+        studentId,
+        content: seedContent,
+        contentHash: createHash('sha256').update(seedContent).digest('hex'),
+        structuredContent: structuredSeed,
+        source: 'create',
+        status: 'active',
+      });
+      const repository = await import('../src/domain/assignment-session-repository.js');
+      const confirmed = await confirmMixedSource(repository, fixture);
+      const op = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        await client.query('UPDATE lesson_memory_entries SET status = $2 WHERE id = $1', [
+          confirmed.lessonMemoryIntent?.entryId,
+          'ready',
+        ]);
+        if (withEligibleFact)
+          await client.query(
+            'UPDATE lesson_memory_entries SET student_facts=$2::jsonb WHERE id=$1',
+            [
+              confirmed.lessonMemoryIntent?.entryId,
+              JSON.stringify([
+                {
+                  fact: 'Works with international clients.',
+                  category: 'profession',
+                  authority: 'student_stated',
+                  confidence: 'high',
+                  reviewNeeded: false,
+                  evidence: [
+                    { quote: 'I work with international clients.', speakerRole: 'student' },
+                  ],
+                },
+              ]),
+            ],
+          );
+        const result = await client.query<{ id: string }>(
+          'SELECT id FROM profile_initial_enrichment_operations WHERE assignment_session_id = $1',
+          [fixture.sessionId],
+        );
+        return result.rows[0]!;
+      });
+      const { loadConfig } = await import('../src/config/env.js');
+      const { reconcileProfileInitialEnrichmentOperation } = await import(
+        '../src/application/profile-initial-enrichment.js'
+      );
+      await reconcileProfileInitialEnrichmentOperation(op.id, loadConfig(), async () => ({
+        structuredProfile: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak confidently'],
+          communicationContexts: [],
+          interestsAndUsefulThemes: [],
+          stableStrengths: [],
+          persistentChallenges: [],
+          studyPreferences: [],
+          durableConstraints: [],
+          teacherNotes: 'Practice aloud.',
+        },
+        rawOutput: {},
+        rawText: '{}',
+        provider: 'openai',
+        model: 'test-model',
+      }));
+      const result = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        const operation = await client.query<{
+          generation_input: { seedContent: string; seedIsStructured: boolean };
+        }>('SELECT generation_input FROM profile_initial_enrichment_operations WHERE id = $1', [
+          op.id,
+        ]);
+        const revision = await client.query<{
+          content: string;
+          structured_content: {
+            primaryGoals: string[];
+            communicationContexts: string[];
+            durableConstraints: string[];
+            teacherNotes: string;
+          };
+        }>(
+          `SELECT content, structured_content FROM student_profile_revisions WHERE student_id = $1 AND status = 'active'`,
+          [studentId],
+        );
+        const changes = await client.query<{ initial_operation_id: string; evidence: unknown }>(
+          'SELECT initial_operation_id,evidence FROM student_profile_maintenance_changes WHERE student_id=$1',
+          [studentId],
+        );
+        const provenance = await client.query<{
+          profile_provenance: string;
+          profile_initial_enrichment_completed_at: Date | null;
+        }>(
+          'SELECT profile_provenance,profile_initial_enrichment_completed_at FROM students WHERE id=$1',
+          [studentId],
+        );
+        return {
+          input: operation.rows[0]!.generation_input,
+          revision: revision.rows[0]!,
+          changes: changes.rows,
+          provenance: provenance.rows[0]!,
+        };
+      });
+      expect(result.input).toMatchObject({ seedContent, seedIsStructured: true });
+      expect(result.revision.structured_content.primaryGoals).toEqual(['Prepare for interviews']);
+      expect(result.revision.structured_content.communicationContexts).toEqual(
+        withEligibleFact
+          ? ['Weekly team calls', 'Works with international clients.']
+          : ['Weekly team calls'],
+      );
+      expect(result.changes.map((change) => change.initial_operation_id)).toEqual(
+        withEligibleFact ? [op.id] : [],
+      );
+      expect(result.provenance.profile_provenance).toBe(
+        withEligibleFact ? 'evidence_enriched' : 'tutor_only',
+      );
+      expect(result.provenance.profile_initial_enrichment_completed_at !== null).toBe(
+        withEligibleFact,
+      );
+      expect(result.revision.structured_content.durableConstraints).toContain(
+        'Avoid evening calls',
+      );
+      expect(result.revision.structured_content.teacherNotes).toBe('Use short examples.');
+      expect(result.revision.structured_content.teacherNotes).not.toContain(
+        '# Foundational Profile',
+      );
+      expect(result.revision.content).not.toContain('Original tutor-authored profile (verbatim)');
+    },
+  );
+
+  it.each([
+    { decision: 'suppressed', emptySeed: false },
+    { decision: 'rejected', emptySeed: false },
+    { decision: 'deferred', emptySeed: false },
+    { decision: 'suppressed', emptySeed: true },
+    { decision: 'rejected', emptySeed: true },
+    { decision: 'deferred', emptySeed: true },
+    { decision: 'represented', emptySeed: false },
+  ] as const)(
+    'filters $decision initial facts before publication (empty=$emptySeed)',
+    async ({ decision, emptySeed }) => {
+      const fixture = await createMixedSourceConfirmationFixture({
+        workingVersion: 1,
+        contentHash: 'a'.repeat(64),
+        mappingWorkingVersion: 1,
+        mappingContentHash: 'a'.repeat(64),
+      });
+      const { createEmptyFoundationalProfile, renderFoundationalProfileContent } = await import(
+        '../src/application/foundational-profile.js'
+      );
+      const { insertProfileRevision } = await import(
+        '../src/domain/profile-revision-repository.js'
+      );
+      const { maintenanceFactKey } = await import(
+        '../src/application/profile-maintenance-policy.js'
+      );
+      const { insertStudentProfileCandidate, updateStudentProfileCandidateReview } = await import(
+        '../src/domain/student-profile-candidate-repository.js'
+      );
+      const seed = createEmptyFoundationalProfile();
+      if (!emptySeed) seed.teacherNotes = 'Keep the tutor note.';
+      if (decision === 'represented')
+        seed.communicationContexts = ['WORKS  with international clients.'];
+      const content = renderFoundationalProfileContent(seed);
+      const seedRevision = await insertProfileRevision({
+        studentId: fixture.studentId,
+        expectedActiveRevisionId: (await getActiveProfileRevision(fixture.studentId))?.id ?? null,
+        content,
+        contentHash: createHash('sha256').update(content).digest('hex'),
+        structuredContent: seed,
+        source: 'create',
+        status: 'active',
+      });
+      const repository = await import('../src/domain/assignment-session-repository.js');
+      const confirmed = await confirmMixedSource(repository, fixture);
+      const blockedFact = 'Works with international clients.';
+      const allowedFact = 'Works in customer support.';
+      const facts = [blockedFact, ...(decision === 'represented' ? [] : [allowedFact])].map(
+        (fact) => ({
+          fact,
+          category: 'profession',
+          authority: 'student_stated' as const,
+          confidence: 'high' as const,
+          reviewNeeded: false,
+          evidence: [{ quote: fact, speakerRole: 'student' as const }],
+        }),
+      );
+      const opId = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        await client.query(
+          "UPDATE lesson_memory_entries SET status='ready',student_facts=$2::jsonb WHERE id=$1",
+          [confirmed.lessonMemoryIntent?.entryId, JSON.stringify(facts)],
+        );
+        return (
+          await client.query<{ id: string }>(
+            'SELECT id FROM profile_initial_enrichment_operations WHERE assignment_session_id=$1',
+            [fixture.sessionId],
+          )
+        ).rows[0]!.id;
+      });
+      const candidate =
+        decision === 'rejected' || decision === 'deferred'
+          ? await insertStudentProfileCandidate({
+              studentId: fixture.studentId,
+              targetSection: 'work_communication_context',
+              candidateKey: 'work:clients',
+              ...facts[0]!,
+              sourceLessonMemoryIds: [confirmed.lessonMemoryIntent!.entryId],
+            })
+          : null;
+      const { reconcileProfileInitialEnrichmentOperation } = await import(
+        '../src/application/profile-initial-enrichment.js'
+      );
+      const { loadConfig } = await import('../src/config/env.js');
+      const generated = {
+        ...createEmptyFoundationalProfile(),
+        communicationContexts: [blockedFact, allowedFact],
+      };
+      const generator = vi.fn(async () => {
+        // The request is already reserved. A current tutor decision must win even
+        // when the validated response was based on the earlier evidence.
+        if (candidate && (decision === 'rejected' || decision === 'deferred'))
+          await updateStudentProfileCandidateReview({
+            studentId: fixture.studentId,
+            candidateId: candidate.id,
+            status: decision === 'rejected' ? 'rejected' : 'pending_review',
+            reviewState: decision,
+            reviewerId: fixture.userId,
+          });
+        if (decision === 'suppressed')
+          await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+            client.query(
+              "INSERT INTO student_profile_fact_suppressions(student_id,fact_key,reason) VALUES($1,$2,'tutor_removed')",
+              [fixture.studentId, maintenanceFactKey('communicationContexts', blockedFact)],
+            ),
+          );
+        return {
+          structuredProfile: generated,
+          rawOutput: {},
+          rawText: '{}',
+          provider: 'openai' as const,
+          model: 'test-model',
+        };
+      });
+      await reconcileProfileInitialEnrichmentOperation(opId, loadConfig(), generator);
+      await reconcileProfileInitialEnrichmentOperation(opId, loadConfig(), generator);
+      const result = await withPgClientSessionContext({ rlsBypass: true }, async (client) => ({
+        op: (
+          await client.query<{ state: string; validated_result: unknown }>(
+            'SELECT state,validated_result FROM profile_initial_enrichment_operations WHERE id=$1',
+            [opId],
+          )
+        ).rows[0]!,
+        changes: (
+          await client.query<{ added_value: string }>(
+            'SELECT added_value FROM student_profile_maintenance_changes WHERE student_id=$1',
+            [fixture.studentId],
+          )
+        ).rows,
+        revision: (
+          await client.query<{ id: string; structured_content: typeof seed }>(
+            "SELECT id,structured_content FROM student_profile_revisions WHERE student_id=$1 AND status='active'",
+            [fixture.studentId],
+          )
+        ).rows[0]!,
+      }));
+      expect(generator).toHaveBeenCalledTimes(1);
+      expect(result.op.state).toBe('succeeded');
+      expect(result.revision.structured_content.communicationContexts).toEqual(
+        decision === 'represented' ? seed.communicationContexts : [allowedFact],
+      );
+      expect(result.changes.map((change) => change.added_value)).toEqual(
+        decision === 'represented' ? [] : [allowedFact],
+      );
+      expect(result.revision.id === seedRevision.id).toBe(decision === 'represented');
+      expect(result.revision.structured_content.teacherNotes).toBe(seed.teacherNotes);
+    },
+  );
 
   it('does not resubmit an ambiguous reserved provider call after duplicate delivery', async () => {
     const fixture = await createMixedSourceConfirmationFixture({
@@ -1287,6 +1520,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     await entered;
     const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
     const tutor = await insertProfileRevision({
+      expectedActiveRevisionId: (await getActiveProfileRevision(op.student_id))?.id ?? null,
       studentId: op.student_id,
       content: '# Tutor edit',
       contentHash: 'b'.repeat(64),
@@ -1341,6 +1575,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
     const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
     const original = await insertProfileRevision({
+      expectedActiveRevisionId: (await getActiveProfileRevision(studentId))?.id ?? null,
       studentId,
       content: '# Tutor seed',
       contentHash: 'b'.repeat(64),
@@ -1349,6 +1584,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
     await expect(
       insertProfileRevision({
+        expectedActiveRevisionId: (await getActiveProfileRevision(studentId))?.id ?? null,
         id: original.id,
         studentId,
         content: '# Conflicting revision',
@@ -1501,6 +1737,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
       '../src/domain/profile-revision-repository.js'
     );
     const original = await insertProfileRevision({
+      expectedActiveRevisionId: (await getActiveProfileRevision(fixture.studentId))?.id ?? null,
       studentId: fixture.studentId,
       content: 'Original',
       contentHash: 'b'.repeat(64),
@@ -1574,6 +1811,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     });
     const { insertProfileRevision } = await import('../src/domain/profile-revision-repository.js');
     const tutor = await insertProfileRevision({
+      expectedActiveRevisionId: (await getActiveProfileRevision(operation.student_id))?.id ?? null,
       studentId: operation.student_id,
       content: '# Tutor correction while lesson evidence is pending',
       contentHash: 'b'.repeat(64),

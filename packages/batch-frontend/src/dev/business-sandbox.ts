@@ -39,6 +39,7 @@ export function createBusinessSandbox() {
     durationMinutes: index === 2 ? 100 : 50,
     status: 'scheduled',
     consumesCredit: true,
+    plannedCharge: true,
     title: null,
     notes: null,
     creditEventId: null,

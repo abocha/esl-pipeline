@@ -147,8 +147,8 @@ html:has(.business-dashboard-page) {
 .business-settings-form select {
   font-size: 14px;
 }
-.business-dashboard-page button,
-.business-status-actions > button {
+.business-dashboard-page button:where(:not(.product-button)),
+.business-status-actions > button:where(:not(.product-button)) {
   min-height: 40px;
   padding: 0.4rem 0.75rem;
   border-radius: 4px;
@@ -159,9 +159,12 @@ html:has(.business-dashboard-page) {
   font-size: 0.85rem;
   cursor: pointer;
 }
-.business-dashboard-page button:hover,
-.business-status-actions > button:hover {
-  background: var(--app-blue-soft);
+.business-dashboard-page
+  button:where(:not(.product-button)):hover:not(:disabled, [aria-disabled="true"]),
+.business-status-actions
+  > button:where(:not(.product-button)):hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--cs-control-hover-surface);
+  border-color: var(--cs-control-hover-border);
 }
 .business-dashboard-page button:disabled {
   opacity: 0.5;
@@ -172,15 +175,15 @@ html:has(.business-dashboard-page) {
   border-color: var(--cs-action);
   color: var(--cs-surface);
 }
-.business-dashboard-page .business-primary-button:hover {
+.business-dashboard-page .business-primary-button:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--cs-action-hover);
   border-color: var(--cs-action-hover);
 }
-.business-dashboard-page a {
+.business-dashboard-page a:where(:not(.product-button)) {
   color: var(--app-blue);
   text-underline-offset: 3px;
 }
-.business-dashboard-page a:hover {
+.business-dashboard-page a:where(:not(.product-button)):hover {
   text-decoration: underline;
 }
 .business-dashboard-page :focus-visible {

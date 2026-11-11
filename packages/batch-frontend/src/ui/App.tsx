@@ -1,14 +1,42 @@
 import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
 import { WorkspaceTimezoneProvider } from '../context/WorkspaceTimezoneContext';
-import { isFrontendSandboxEnabled } from '../dev/frontend-sandbox';
+import { isFrontendSandboxEnabled, readFrontendSandboxScenario } from '../dev/frontend-sandbox';
 import type { AuthMode } from './auth/AuthDialog';
 import { LegalLinks } from './LegalLinks';
 import { CalmStudioShell } from './shell/CalmStudioShell';
-
+import { StudioV2Provider, useStudioV2 } from './studio-v2/StudioV2Context';
+import { LoadingPlaceholder, PageLoading } from './system/LoadingPlaceholder';
 import './AppShell.css';
+
+const CalmStudioV2 = import.meta.env.DEV
+  ? lazy(() => import('../dev/calm-studio-v2/CalmStudioV2'))
+  : null;
+
+const AssignmentListPage = lazy(() => import('./studio-v2/AssignmentListPage'));
+const DayPage = lazy(() => import('./studio-v2/DayPage'));
+const StudentScheduleBillingLayout = lazy(async () => {
+  const module = await import('./students/StudentScheduleBillingPage');
+  return { default: module.StudentScheduleBillingLayout };
+});
+
+function hasAssignmentContext(search: string) {
+  const params = new URLSearchParams(search);
+  return ['sessionId', 'jobId', 'studentId', 'lessonId'].some((key) => params.has(key));
+}
+
+function AssignmentEntryRoute() {
+  const v2 = useStudioV2();
+  const { search } = useLocation();
+  return v2 && !hasAssignmentContext(search) ? <AssignmentListPage /> : <MinimalAssignment />;
+}
+
+function StudentScheduleRedirect({ target }: { target: 'schedule' | 'schedule-billing' }) {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: `../${target}`, search, hash }} replace />;
+}
 
 const AuthDialog = lazy(async () => {
   const module = await import('./auth/AuthDialog');
@@ -102,6 +130,21 @@ function oauthContinuation(location: Location): string | null {
 }
 
 export const App: React.FC = () => {
+  if (
+    CalmStudioV2 &&
+    isFrontendSandboxEnabled() &&
+    readFrontendSandboxScenario(window.location.search) === 'calm-studio-v2'
+  ) {
+    return (
+      <Suspense fallback={<PageLoading label="Loading design sandbox" />}>
+        <CalmStudioV2 />
+      </Suspense>
+    );
+  }
+  return <Application />;
+};
+
+const Application: React.FC = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -173,7 +216,7 @@ export const App: React.FC = () => {
   if (isLoading) {
     appBody = (
       <div className="auth-shell">
-        <LoadingPanel />
+        <LoadingPlaceholder label="Restoring your session" kind="inline" count={1} />
       </div>
     );
   } else if (!isAuthenticated || !user) {
@@ -190,7 +233,9 @@ export const App: React.FC = () => {
   } else {
     appBody = (
       <WorkspaceTimezoneProvider key={user.id} onLogout={handleLogout}>
-        <AuthenticatedApp user={user} onLogout={handleLogout} logoutError={logoutError} />
+        <StudioV2Provider enabled={import.meta.env.VITE_CALM_STUDIO_V2 === 'true'}>
+          <AuthenticatedApp user={user} onLogout={handleLogout} logoutError={logoutError} />
+        </StudioV2Provider>
       </WorkspaceTimezoneProvider>
     );
   }
@@ -224,6 +269,7 @@ interface AuthenticatedAppProps {
 }
 
 const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, logoutError }) => {
+  const v2 = useStudioV2();
   if (!user) return null;
   return (
     <Routes>
@@ -245,10 +291,30 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, log
           path="/"
           element={
             <Suspense fallback={<RouteLoadingFallback />}>
-              <MinimalAssignment />
+              <AssignmentEntryRoute />
             </Suspense>
           }
         />
+        {v2 && (
+          <Route
+            path="/assignments/new"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <MinimalAssignment />
+              </Suspense>
+            }
+          />
+        )}
+        {v2 && (
+          <Route
+            path="/day"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <DayPage />
+              </Suspense>
+            }
+          />
+        )}
         <Route
           path="/business"
           element={
@@ -327,7 +393,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, log
             <Route
               path="overview"
               element={
-                <Suspense fallback={<RouteLoadingFallback />}>
+                <Suspense fallback={<RouteLoadingFallback studentTab />}>
                   <StudentOverviewPage />
                 </Suspense>
               }
@@ -335,7 +401,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, log
             <Route
               path="learning"
               element={
-                <Suspense fallback={<RouteLoadingFallback />}>
+                <Suspense fallback={<RouteLoadingFallback studentTab />}>
                   <StudentLearningPage />
                 </Suspense>
               }
@@ -343,7 +409,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, log
             <Route
               path="history"
               element={
-                <Suspense fallback={<RouteLoadingFallback />}>
+                <Suspense fallback={<RouteLoadingFallback studentTab />}>
                   <StudentHistoryPage />
                 </Suspense>
               }
@@ -352,10 +418,37 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, log
               path="schedule-billing"
               element={
                 <Suspense fallback={<RouteLoadingFallback />}>
-                  <StudentScheduleBillingPage />
+                  {v2 ? (
+                    <StudentScheduleRedirect target="schedule" />
+                  ) : (
+                    <StudentScheduleBillingPage />
+                  )}
                 </Suspense>
               }
             />
+            {v2 ? (
+              <Route
+                element={
+                  <Suspense fallback={<RouteLoadingFallback studentTab />}>
+                    <StudentScheduleBillingLayout />
+                  </Suspense>
+                }
+              >
+                <Route path="schedule" element={null} />
+                <Route path="billing" element={null} />
+              </Route>
+            ) : (
+              <>
+                <Route
+                  path="schedule"
+                  element={<StudentScheduleRedirect target="schedule-billing" />}
+                />
+                <Route
+                  path="billing"
+                  element={<StudentScheduleRedirect target="schedule-billing" />}
+                />
+              </>
+            )}
           </Route>
         </Route>
       </Route>
@@ -364,28 +457,27 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout, log
   );
 };
 
-const RouteLoadingFallback: React.FC = () => (
-  <section className="route-loading-panel" aria-live="polite">
-    <span className="loading-eyebrow">Opening page…</span>
-    <h2>Preparing the teaching workspace</h2>
-    <p>Loading the next view without changing your session.</p>
-  </section>
-);
-
-const LoadingPanel: React.FC = () => (
-  <section className="loading-panel app-state-panel animate-fade-in">
-    <div className="loading-content">
-      <div className="loading-spinner">
-        <div className="spinner-ring" />
-      </div>
-      <div className="loading-text">
-        <span className="loading-eyebrow">Please wait</span>
-        <h2>Restoring your session…</h2>
-        <p>We&apos;re verifying your authentication with the server.</p>
-      </div>
-    </div>
-  </section>
-);
+function RouteLoadingFallback({ studentTab = false }: { studentTab?: boolean }) {
+  const studioV2 = useStudioV2();
+  const { pathname, search } = useLocation();
+  if (studioV2 && studentTab) {
+    const tab = pathname.split('/').filter(Boolean).at(-1);
+    if (
+      tab === 'overview' ||
+      tab === 'learning' ||
+      tab === 'history' ||
+      tab === 'schedule' ||
+      tab === 'billing'
+    )
+      return <PageLoading page={tab} />;
+  }
+  if (studioV2 && pathname === '/day') return <PageLoading page="day" />;
+  if (studioV2 && pathname === '/' && !hasAssignmentContext(search))
+    return <PageLoading page="assignments" />;
+  if (pathname === '/students') return <PageLoading page="students" />;
+  if (pathname === '/business') return <PageLoading page="business" />;
+  return <PageLoading />;
+}
 
 const UnauthenticatedNotice: React.FC<{
   hasInvite: boolean;

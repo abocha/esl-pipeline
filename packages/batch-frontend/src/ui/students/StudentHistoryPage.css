@@ -1,4 +1,4 @@
-.student-area-body:has(.student-activity-page) {
+.student-area-body:has(.student-activity-page:not(.student-v2)) {
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -6,7 +6,7 @@
   padding: 0;
   overflow: visible;
 }
-.student-area-body:has(.student-activity-page)::before {
+.student-area-body:has(.student-activity-page:not(.student-v2))::before {
   content: none;
 }
 .student-activity-page {
@@ -37,7 +37,7 @@
   color: var(--app-muted);
   font-size: 0.75rem;
 }
-.student-activity-page button {
+.student-activity-page button:where(:not(.student-area-icon-button)) {
   min-height: 36px;
   padding: 0.4rem 0.65rem;
   border: 1px solid var(--app-line);
@@ -47,17 +47,12 @@
   cursor: pointer;
   font: inherit;
 }
-.student-activity-page button:hover {
+.student-activity-page button:where(:not(.student-area-icon-button)):hover {
   background: var(--app-blue-soft);
 }
-.student-activity-page button:disabled {
+.student-activity-page button:where(:not(.student-area-icon-button)):disabled {
   opacity: 0.5;
   cursor: wait;
-}
-.student-activity-heading-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 .student-activity-toolbar {
   display: flex;
@@ -102,11 +97,6 @@
   color: var(--app-ink);
   font: inherit;
   font-size: 0.8rem;
-}
-.student-activity-coverage {
-  font-size: 0.8rem;
-  color: var(--app-muted);
-  margin: 1rem 0;
 }
 .student-activity-list {
   list-style: none;
@@ -226,4 +216,40 @@
   .student-activity-toolbar {
     align-items: start;
   }
+}
+
+.student-activity-page.student-v2 {
+  max-width: 1100px;
+  margin: 0 auto;
+  font-size: 16px;
+  line-height: 1.65;
+  color: #29485f;
+}
+.student-activity-page.student-v2 .student-activity-heading h2 {
+  font-size: 25px;
+  font-weight: 550;
+}
+.student-activity-page.student-v2 .student-activity-timezone,
+.student-activity-page.student-v2 .student-activity-dates label,
+.student-activity-page.student-v2 .student-activity-row time {
+  font-size: 14px;
+}
+.student-activity-page.student-v2 .student-activity-toolbar {
+  padding: 10px 0 22px;
+}
+.student-activity-page.student-v2 .student-activity-row {
+  padding: 24px 0;
+  border-color: #dce5eb;
+}
+.student-activity-page.student-v2 .student-activity-content h3 {
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 550;
+}
+.student-activity-page.student-v2 .student-activity-content p {
+  font-size: 16px;
+  line-height: 1.65;
+}
+.student-activity-page.student-v2 .student-activity-row-actions {
+  font-size: 15px;
 }

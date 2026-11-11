@@ -1,10 +1,12 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   useWorkspaceTimezone,
   WorkspaceTimezoneProvider,
 } from '../../context/WorkspaceTimezoneContext';
+import { StudioV2Provider } from '../studio-v2/StudioV2Context';
 import { CalendarSchedulingPanel } from './CalendarSchedulingPanel';
 
 const api = vi.hoisted(() => ({
@@ -85,6 +87,259 @@ describe('Google Calendar scheduling panel', () => {
     api.createCalendarSetup.mockResolvedValue(setup);
     api.getCalendarSetup.mockResolvedValue(setup);
   });
+
+  it('keeps the sync action busy until Calendar reports success separately', async () => {
+    vi.useFakeTimers();
+    try {
+      const previous = new Date(Date.now() - 600_000).toISOString();
+      const calendarStatus = { connectionId: 'connection-1', errorCode: null };
+      api.getCalendarSchedulingStatus.mockResolvedValue({
+        ...calendarStatus,
+        state: 'synced',
+        lastSyncedAt: previous,
+        operations: [],
+      });
+      let acceptSync!: () => void;
+      api.requestCalendarSync.mockImplementationOnce(
+        () => new Promise<void>((resolve) => (acceptSync = resolve)),
+      );
+      const page = render(<CalendarSchedulingPanel {...props} />);
+      await act(async () => {});
+
+      fireEvent.click(screen.getByRole('button', { name: 'Sync now' }));
+      expect(screen.getByRole('button', { name: 'Syncing…' })).toHaveProperty('disabled', true);
+      expect(screen.getByRole('status').textContent).toBe('Synced 10m ago');
+
+      api.getCalendarSchedulingStatus.mockResolvedValue({
+        ...calendarStatus,
+        state: 'syncing',
+        lastSyncedAt: previous,
+        operations: [{ id: 'manual-sync', kind: 'sync', state: 'pending' }],
+      });
+      await act(async () => acceptSync());
+      expect(screen.getByRole('button', { name: 'Syncing…' })).toHaveProperty('disabled', true);
+      expect(screen.getByRole('status').textContent).toBe('Syncing');
+
+      const completedAt = new Date().toISOString();
+      api.getCalendarSchedulingStatus.mockImplementation(async () => ({
+        ...calendarStatus,
+        state: 'synced',
+        lastSyncedAt: completedAt,
+        operations: [],
+      }));
+      await act(async () => vi.advanceTimersByTimeAsync(5000));
+      expect(screen.getByRole('button', { name: 'Sync now' })).toHaveProperty('disabled', false);
+      expect(screen.getByRole('status').textContent).toBe('Synced just now');
+      await act(async () => vi.advanceTimersByTimeAsync(115_000));
+      expect(screen.getByRole('status').textContent).toBe('Synced 2m ago');
+
+      api.getCalendarSchedulingStatus.mockResolvedValue({
+        ...calendarStatus,
+        state: 'synced',
+        lastSyncedAt: '2020-01-01T00:00:00.000Z',
+        operations: [],
+      });
+      await act(async () => vi.advanceTimersByTimeAsync(5000));
+      expect(screen.getByRole('status').textContent).toBe('Synced');
+      expect(api.requestCalendarSync).toHaveBeenCalledOnce();
+      page.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('keeps the v2 scheduling draft across drawer dismissals', async () => {
+    render(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel {...props} />
+      </StudioV2Provider>,
+    );
+    await screen.findByText('Synced');
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule lesson for Alex' }));
+    fireEvent.change(screen.getByLabelText('Invitation title'), {
+      target: { value: 'Friday practice' },
+    });
+    expect(screen.queryByRole('button', { name: 'Sync now' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Calendar settings' }));
+    expect(screen.getByRole('button', { name: 'Sync now' })).toBeTruthy();
+    expect(screen.queryByLabelText('Invitation title')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule lesson' }));
+    expect((screen.getByLabelText('Invitation title') as HTMLInputElement).value).toBe(
+      'Friday practice',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Close/ }));
+    expect(screen.queryByLabelText('Invitation title')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Manage/ }));
+    expect((screen.getByLabelText('Invitation title') as HTMLInputElement).value).toBe(
+      'Friday practice',
+    );
+    expect(api.createCalendarSetup).not.toHaveBeenCalled();
+  });
+  it('opens the v2 event picker directly and links only the chosen event', async () => {
+    api.getCalendarUnlinkedEvents.mockResolvedValue({
+      events: [
+        { id: 'event-a', title: 'Conversation practice', startsAt: '2030-01-08T03:00:00Z' },
+        { id: 'event-b', title: 'Weekly English lesson', startsAt: '2030-01-09T03:00:00Z' },
+      ],
+      nextPageToken: null,
+    });
+    api.bindCalendarEvent.mockResolvedValue(undefined);
+    render(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel {...props} />
+      </StudioV2Provider>,
+    );
+    await screen.findByText('Synced');
+    fireEvent.click(screen.getByRole('button', { name: /Manage/ }));
+    expect(api.getCalendarUnlinkedEvents).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Link existing event' }));
+    expect(screen.queryByLabelText('Invitation title')).toBeNull();
+    const event = await screen.findByRole('button', { name: 'Link Weekly English lesson to Alex' });
+    expect(api.bindCalendarEvent).not.toHaveBeenCalled();
+    fireEvent.click(event);
+    expect(await screen.findByText('Linked “Weekly English lesson” to Alex.')).toBeTruthy();
+    expect(api.bindCalendarEvent).toHaveBeenCalledWith('workspace-1', 'student-1', 'event-b');
+    expect(screen.getByRole('button', { name: 'Link Conversation practice to Alex' })).toBeTruthy();
+  });
+  it('shows the v2 unavailable state without unusable scheduling and linking controls', async () => {
+    api.getCalendarConnection.mockResolvedValue({
+      enabled: false,
+      canManage: true,
+      canSchedule: true,
+      unavailableReason: 'google_calendar_disabled',
+      connection: null,
+      grant: null,
+    });
+    api.getCalendarSchedulingStatus.mockResolvedValue({ state: 'disconnected', operations: [] });
+    render(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel {...props} />
+      </StudioV2Provider>,
+    );
+    await screen.findByText('Unavailable');
+    fireEvent.click(screen.getByRole('button', { name: /Manage/ }));
+    const drawer = within(screen.getByRole('dialog', { name: 'Teaching calendar' }));
+    expect(drawer.getByText('Unavailable')).toBeTruthy();
+    expect(drawer.getByText('Google Calendar is turned off in this environment.')).toBeTruthy();
+    expect(drawer.queryByRole('button', { name: 'Connect Google' })).toBeNull();
+    expect(drawer.queryByText('Connection settings')).toBeNull();
+    expect(drawer.queryByLabelText('Invitation title')).toBeNull();
+    expect(drawer.queryByText('Associate an existing Google event')).toBeNull();
+    fireEvent.click(drawer.getByText('Calendar access and privacy'));
+    expect(drawer.getByRole('link', { name: 'Privacy Policy (opens in a new tab)' })).toBeTruthy();
+  });
+  it('moves from connecting Google to choosing the lesson calendar in v2', async () => {
+    const user = userEvent.setup();
+    const disconnected = {
+      enabled: true,
+      canManage: true,
+      canSchedule: true,
+      connection: null,
+      grant: null,
+    };
+    api.getCalendarConnection.mockResolvedValue(disconnected);
+    api.getCalendarSchedulingStatus.mockResolvedValue({ state: 'disconnected', operations: [] });
+    api.getLessonCalendars.mockResolvedValue({
+      calendars: [
+        { id: 'lessons', summary: 'Lessons', timeZone: 'Asia/Bangkok', accessRole: 'owner' },
+        {
+          id: 'shared',
+          summary: 'Shared lessons',
+          timeZone: 'Europe/London',
+          accessRole: 'writer',
+        },
+      ],
+    });
+    const beforeOAuth = render(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel {...props} />
+      </StudioV2Provider>,
+    );
+    await screen.findByText('Disconnected');
+    fireEvent.click(screen.getByRole('button', { name: /Manage/ }));
+    expect(screen.getByRole('button', { name: 'Connect Google' })).toBeTruthy();
+    expect(screen.getByText(/Google grants access to events across your calendars/)).toBeTruthy();
+    api.getCalendarConnection.mockResolvedValue({
+      ...disconnected,
+      grant: { id: 'grant-1', googleEmail: 'tutor@example.test' },
+    });
+    // Returning from Google remounts the Calendar panel with the new grant.
+    beforeOAuth.unmount();
+    const afterOAuth = render(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel {...props} routeHash="#teaching-calendar" />
+      </StudioV2Provider>,
+    );
+    const drawer = within(afterOAuth.getByRole('dialog', { name: 'Teaching calendar' }));
+    fireEvent.click(await drawer.findByRole('button', { name: 'Choose lesson calendar' }));
+    const picker = within(await drawer.findByRole('group', { name: 'Lesson calendar' }));
+    const firstCalendar = picker.getByRole('radio', { name: /^Lessons / });
+    const secondCalendar = picker.getByRole('radio', { name: /Shared lessons.*London/ });
+    const confirm = drawer.getByRole('button', { name: 'Use this calendar' });
+    await waitFor(() => expect(document.activeElement).toBe(firstCalendar));
+    expect(confirm).toHaveProperty('disabled', true);
+    await user.keyboard('{ArrowDown}');
+    expect(secondCalendar).toHaveProperty('checked', true);
+    expect(api.selectLessonCalendar).not.toHaveBeenCalled();
+    await user.click(confirm);
+    await waitFor(() =>
+      expect(api.selectLessonCalendar).toHaveBeenCalledWith('workspace-1', 'shared', false),
+    );
+  });
+  it('opens the v2 drawer for the teaching calendar deep link', async () => {
+    window.history.replaceState(null, '', '#teaching-calendar');
+    try {
+      render(
+        <StudioV2Provider enabled>
+          <CalendarSchedulingPanel {...props} />
+        </StudioV2Provider>,
+      );
+      expect(screen.getByRole('dialog', { name: 'Teaching calendar' })).toBeTruthy();
+      expect(await screen.findByLabelText('Invitation title')).toBeTruthy();
+    } finally {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  });
+  it('does not open a hidden drawer for attention or a deep link', async () => {
+    api.getCalendarSchedulingStatus.mockResolvedValue({
+      state: 'reconnect_required',
+      operations: [],
+    });
+    const view = render(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel
+          {...props}
+          presentationActive={false}
+          routeHash="#teaching-calendar"
+        />
+      </StudioV2Provider>,
+    );
+    await screen.findByText('Reconnect required');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    view.rerender(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel {...props} presentationActive routeHash="" />
+      </StudioV2Provider>,
+    );
+    expect(await screen.findByRole('dialog', { name: 'Schedule lesson' })).toBeTruthy();
+  });
+  it('does not retain an inactive deep link after its hash is removed', async () => {
+    const view = render(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel
+          {...props}
+          presentationActive={false}
+          routeHash="#teaching-calendar"
+        />
+      </StudioV2Provider>,
+    );
+    await screen.findByText('Synced');
+    view.rerender(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel {...props} presentationActive routeHash="" />
+      </StudioV2Provider>,
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
   it('creates Monday and Friday independently with email invitations on by default and opt-out available', async () => {
     render(<CalendarSchedulingPanel {...props} email="student@example.test" />);
     await screen.findByText('Synced');
@@ -164,7 +419,7 @@ describe('Google Calendar scheduling panel', () => {
     expect(screen.getByText('Captured Tuesday lesson')).toBeTruthy();
     expect(screen.getByText('Tuesday · 14:30')).toBeTruthy();
     expect(screen.getByText(/50 min · From/)).toBeTruthy();
-    expect(screen.getByText('Asia/Bangkok · No invitation requested')).toBeTruthy();
+    expect(screen.getByText('Time zone: Bangkok (Asia) · No invitation requested')).toBeTruthy();
     expect(screen.queryByLabelText('Invitation title')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Create in Google' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry submitted setup' }));
@@ -247,7 +502,7 @@ describe('Google Calendar scheduling panel', () => {
     expect((screen.getByLabelText('Invitation title') as HTMLInputElement).value).toBe(
       'Review these local times',
     );
-    expect(screen.getByText('Europe/London')).toBeTruthy();
+    expect(screen.getByText('London (Europe)')).toBeTruthy();
     const rejected = api.createCalendarSetup.mock.calls[0]!;
     fireEvent.click(screen.getByRole('button', { name: 'Create in Google' }));
     await waitFor(() => expect(api.createCalendarSetup).toHaveBeenCalledTimes(2));

@@ -22,6 +22,8 @@ describe('application/legacy-profile-normalization', () => {
       createdAt: '2026-03-22T00:00:00.000Z',
       createdBy: 'teacher-1',
       restoredFromRevisionId: null,
+      baseActiveRevisionId: null,
+      baseActiveRevisionKnown: true,
       content: '# Normalized profile',
     }));
 
@@ -54,6 +56,8 @@ describe('application/legacy-profile-normalization', () => {
             createdAt: new Date('2026-02-01T00:00:00.000Z'),
             createdBy: 'teacher-1',
             restoredFromRevisionId: null,
+            baseActiveRevisionId: null,
+            baseActiveRevisionKnown: true,
           }),
         },
         memory: {

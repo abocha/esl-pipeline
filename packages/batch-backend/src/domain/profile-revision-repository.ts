@@ -3,12 +3,18 @@ import type { PoolClient } from 'pg';
 
 import type { FoundationalProfile } from '../application/foundational-profile.js';
 import { withPgClient } from '../infrastructure/db.js';
+import { suppressRemovedProfileFacts } from './profile-removal-suppression.js';
 import type {
   ProfileRevisionListResult,
   ProfileRevisionRecord,
   ProfileRevisionSource,
   RevisionStatus,
 } from './profile-revision-model.js';
+import {
+  assertProfileHead,
+  lockProfileHead,
+  ProfileWriteConflictError,
+} from './profile-write-authority.js';
 import { setStudentActivityActor } from './student-activity-recording.js';
 
 interface ProfileRevisionRow {
@@ -27,9 +33,12 @@ interface ProfileRevisionRow {
   created_by: string | null;
   restored_from_revision_id: string | null;
   legacy_version_label: string | null;
+  base_active_revision_id: string | null;
+  base_active_revision_known: boolean;
 }
 
 export interface InsertProfileRevisionParams {
+  expectedActiveRevisionId?: string | null;
   id?: string;
   studentId: string;
   content: string;
@@ -65,37 +74,75 @@ const SELECT_COLUMNS = `
   created_at,
   created_by,
   restored_from_revision_id,
-  legacy_version_label
+  legacy_version_label,
+  base_active_revision_id,
+  base_active_revision_known
 `;
+
+export async function checkProfileRevisionHead(
+  studentId: string,
+  expectedActiveRevisionId: string | null | undefined,
+): Promise<void> {
+  await withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const head = await lockProfileHead(client, studentId);
+      assertProfileHead(expectedActiveRevisionId, head?.id ?? null);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
 
 export async function insertProfileRevision(
   params: InsertProfileRevisionParams,
 ): Promise<ProfileRevisionRecord> {
-  const id = params.id ?? randomUUID();
-  const status = params.status ?? 'active';
-
-  const row = await withPgClient(async (client: PoolClient) => {
+  return withPgClient(async (client) => {
     await client.query('BEGIN');
     try {
-      await setStudentActivityActor(client, params.createdBy);
-      // Serialize revision versioning/activation per student to avoid write races.
-      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+      const revision = await insertProfileRevisionWithClient(client, params);
+      await client.query('COMMIT');
+      return revision;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
 
-      if (status === 'active') {
-        await client.query(
-          `
+/** Owns no transaction; callers compose revision/provenance atomically. */
+export async function insertProfileRevisionWithClient(
+  client: PoolClient,
+  params: InsertProfileRevisionParams,
+): Promise<ProfileRevisionRecord> {
+  const id = params.id ?? randomUUID();
+  const status = params.status ?? 'active';
+  await setStudentActivityActor(client, params.createdBy);
+  const head = await lockProfileHead(client, params.studentId);
+  assertProfileHead(params.expectedActiveRevisionId, head?.id ?? null);
+  if (status === 'active') {
+    await suppressRemovedProfileFacts(
+      client,
+      params.studentId,
+      head?.structured_content ?? null,
+      params.structuredContent ?? null,
+    );
+    await client.query(
+      `
           UPDATE student_profile_revisions
           SET
             status = 'deprecated',
             deprecated_at = COALESCE(deprecated_at, NOW())
           WHERE student_id = $1 AND status = 'active'
           `,
-          [params.studentId],
-        );
-      }
+      [params.studentId],
+    );
+  }
 
-      const result = await client.query(
-        `
+  const result = await client.query(
+    `
         WITH next_version AS (
           SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number
           FROM student_profile_revisions
@@ -115,7 +162,9 @@ export async function insertProfileRevision(
           deprecated_at,
           created_at,
           created_by,
-          restored_from_revision_id
+          restored_from_revision_id,
+          base_active_revision_id,
+          base_active_revision_known
         )
         SELECT
           $1,
@@ -131,32 +180,27 @@ export async function insertProfileRevision(
           CASE WHEN $7 = 'deprecated' THEN NOW() ELSE NULL END,
           NOW(),
           $8,
-          $9
+          $9,
+          $10,
+          true
         FROM next_version
         RETURNING ${SELECT_COLUMNS}
         `,
-        [
-          id,
-          params.studentId,
-          params.content,
-          JSON.stringify(params.structuredContent ?? null),
-          params.contentHash,
-          params.source ?? 'update',
-          status,
-          params.createdBy ?? null,
-          params.restoredFromRevisionId ?? null,
-        ],
-      );
+    [
+      id,
+      params.studentId,
+      params.content,
+      JSON.stringify(params.structuredContent ?? null),
+      params.contentHash,
+      params.source ?? 'update',
+      status,
+      params.createdBy ?? null,
+      params.restoredFromRevisionId ?? null,
+      params.expectedActiveRevisionId,
+    ],
+  );
 
-      await client.query('COMMIT');
-      return result.rows[0] as ProfileRevisionRow;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    }
-  });
-
-  return mapRow(row);
+  return mapRow(result.rows[0] as ProfileRevisionRow);
 }
 
 export async function listProfileRevisions(
@@ -305,12 +349,30 @@ export async function activateProfileRevision(
   studentId: string,
   revisionId: string,
   actorUserId?: string | null,
+  expectedActiveRevisionId?: string | null,
+  afterActivate?: (client: PoolClient, revision: ProfileRevisionRecord) => Promise<void>,
 ): Promise<ProfileRevisionRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
       await setStudentActivityActor(client, actorUserId);
-      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [studentId]);
+      const head = await lockProfileHead(client, studentId);
+      assertProfileHead(expectedActiveRevisionId, head?.id ?? null);
+      const draft = await client.query<{
+        status: string;
+        base_active_revision_id: string | null;
+        base_active_revision_known: boolean;
+        structured_content: unknown;
+      }>(
+        'SELECT status,base_active_revision_id,base_active_revision_known,structured_content FROM student_profile_revisions WHERE student_id=$1 AND id=$2',
+        [studentId, revisionId],
+      );
+      if (
+        draft.rows[0]?.status === 'draft' &&
+        (!draft.rows[0].base_active_revision_known ||
+          draft.rows[0].base_active_revision_id !== (head?.id ?? null))
+      )
+        throw new ProfileWriteConflictError('profile_revision_conflict', head?.id ?? null);
       const existsResult = await client.query(
         'SELECT 1 FROM student_profile_revisions WHERE student_id = $1 AND id = $2',
         [studentId, revisionId],
@@ -320,6 +382,12 @@ export async function activateProfileRevision(
         return null;
       }
 
+      await suppressRemovedProfileFacts(
+        client,
+        studentId,
+        head?.structured_content ?? null,
+        draft.rows[0]?.structured_content ?? null,
+      );
       await client.query(
         `
         UPDATE student_profile_revisions
@@ -344,6 +412,8 @@ export async function activateProfileRevision(
         [studentId, revisionId],
       );
 
+      if (result.rows[0] && afterActivate)
+        await afterActivate(client, mapRow(result.rows[0] as ProfileRevisionRow));
       await client.query('COMMIT');
       return result.rows[0] as ProfileRevisionRow | undefined;
     } catch (error) {
@@ -355,11 +425,16 @@ export async function activateProfileRevision(
   return row ? mapRow(row) : null;
 }
 
-export async function deprecateActiveProfileRevision(studentId: string): Promise<number> {
+export async function deprecateActiveProfileRevision(
+  studentId: string,
+  expectedActiveRevisionId?: string | null,
+): Promise<number> {
   const updated = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
-      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [studentId]);
+      const head = await lockProfileHead(client, studentId);
+      assertProfileHead(expectedActiveRevisionId, head?.id ?? null);
+      await suppressRemovedProfileFacts(client, studentId, head?.structured_content ?? null, null);
       const result = await client.query(
         `
         UPDATE student_profile_revisions
@@ -420,5 +495,7 @@ function mapRow(row: ProfileRevisionRow): ProfileRevisionRecord {
     createdBy: row.created_by ?? null,
     restoredFromRevisionId: row.restored_from_revision_id ?? null,
     legacyVersionLabel: row.legacy_version_label ?? null,
+    baseActiveRevisionId: row.base_active_revision_id ?? null,
+    baseActiveRevisionKnown: row.base_active_revision_known ?? false,
   };
 }

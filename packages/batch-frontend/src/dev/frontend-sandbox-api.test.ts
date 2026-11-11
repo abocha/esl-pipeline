@@ -24,6 +24,30 @@ function requestConfig(
 }
 
 describe('frontend sandbox API adapter', () => {
+  it('keeps memory available when the profile reloads after a selective undo', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+    const changes = await adapter(
+      requestConfig('get', '/api/students/student-alex/profile/changes'),
+    );
+    const change = changes.data.items.find((item: { canUndo: boolean }) => item.canUndo);
+    await adapter(
+      requestConfig('post', `/api/students/student-alex/profile/changes/${change.id}/undo`, {
+        expectedActiveRevisionId: changes.data.activeRevisionId,
+      }),
+    );
+    const memory = await adapter(requestConfig('get', '/api/students/student-alex/memory'));
+    const health = await adapter(requestConfig('get', '/api/students/student-alex/memory/health'));
+    expect(memory.data.studentId).toBe('student-alex');
+    expect(memory.data.latestReadyStudentMemorySnapshot).toBeTruthy();
+    expect(health.data.studentId).toBe('student-alex');
+    const entry = memory.data.recentReadyLessonMemory[0];
+    const transcript = await adapter(
+      requestConfig('get', `/api/recordings/${entry.recordingId}/transcript`),
+    );
+    expect(transcript.data.transcriptId).toBe(entry.transcriptId);
+    expect(transcript.data.contentHash).toBe(entry.sourceContentHash);
+    expect(Number.isFinite(Date.parse(entry.generatedAt))).toBe(true);
+  });
   it('persists editor-sandbox Context and Create confirmations without losing the draft', async () => {
     const adapter = createFrontendSandboxApiAdapter({ scenario: 'assignment-editor' });
     const initial = await adapter(requestConfig('get', '/api/assignment-sessions/session-editor'));
@@ -180,6 +204,21 @@ describe('frontend sandbox API adapter', () => {
     expect(restored.data.latestHiddenReminder).toBeNull();
   });
 
+  it('uses the workspace timezone for student schedule and activity after settings change', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+    for (const timezone of ['Asia/Bangkok', 'America/New_York']) {
+      await adapter(requestConfig('put', '/api/business/settings', { timezone }));
+      const settings = await adapter(requestConfig('get', '/api/business/settings'));
+      const schedule = await adapter(
+        requestConfig('get', '/api/students/student-alex/surfaces/schedule-billing'),
+      );
+      const activity = await adapter(requestConfig('get', '/api/students/student-alex/activity'));
+      expect(settings.data.timezone).toBe(timezone);
+      expect(schedule.data.lessonWindows.timezone).toBe(timezone);
+      expect(activity.data.timezone).toBe(timezone);
+    }
+  });
+
   it('creates and serves a manual transcript source', async () => {
     const adapter = createFrontendSandboxApiAdapter();
 
@@ -220,7 +259,6 @@ describe('frontend sandbox API adapter', () => {
     expect(response.data).toEqual({
       students: [
         { id: 'student-alex', name: 'Alex' },
-        { id: 'student-bella', name: 'Bella' },
         { id: 'student-cora', name: 'Cora Preview' },
       ],
     });
@@ -336,7 +374,7 @@ describe('frontend sandbox API adapter', () => {
       requestConfig(
         'post',
         '/api/students/student-cora/profile/revisions/profile-revision-cora-first-draft/activate',
-        {},
+        { expectedActiveRevisionId: null },
       ),
     );
 
@@ -451,20 +489,24 @@ describe('frontend sandbox API adapter', () => {
       requestConfig(
         'post',
         '/api/students/student-alex/profile-drafts/refresh-from-approved-candidates',
-        { candidateIds: ['candidate-sandbox-study-preference'] },
+        {
+          candidateIds: ['candidate-sandbox-study-preference'],
+          expectedActiveRevisionId: 'profile-revision-sandbox',
+        },
       ),
     );
     const saved = await adapter(
       requestConfig('post', '/api/students/student-alex/profile/revisions', {
         structuredContent: refresh.data.draftRevision.structuredContent,
         inheritCandidateLinksFromRevisionId: refresh.data.draftRevision.id,
+        expectedActiveRevisionId: 'profile-revision-sandbox',
       }),
     );
     const activated = await adapter(
       requestConfig(
         'post',
         `/api/students/student-alex/profile/revisions/${saved.data.id}/activate`,
-        {},
+        { expectedActiveRevisionId: 'profile-revision-sandbox' },
       ),
     );
 
@@ -508,6 +550,77 @@ describe('frontend sandbox API adapter', () => {
       id: 'profile-revision-sandbox-saved-draft',
       status: 'active',
     });
+  });
+
+  it('enforces profile CAS and one-item Undo against the current mock head while preserving other edits', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+    const before = await adapter(requestConfig('get', '/api/students/student-alex/profile'));
+    const changes = await adapter(
+      requestConfig('get', '/api/students/student-alex/profile/changes'),
+    );
+    expect(changes.data.items).toHaveLength(2);
+    expect(changes.data.items[0].evidence[0].facts[0].evidence[0].quote).toBe(
+      'Examples from my current work help me most.',
+    );
+    await expect(
+      adapter(requestConfig('put', '/api/students/student-alex/profile', { content: 'unchecked' })),
+    ).rejects.toMatchObject({
+      response: { status: 428, data: { code: 'profile_revision_precondition_required' } },
+    });
+    await expect(
+      adapter(
+        requestConfig('put', '/api/students/student-alex/profile', {
+          expectedActiveRevisionId: 'stale-head',
+          content: 'stale',
+        }),
+      ),
+    ).rejects.toMatchObject({
+      response: { status: 409, data: { code: 'profile_revision_conflict' } },
+    });
+    const saved = await adapter(
+      requestConfig('put', '/api/students/student-alex/profile', {
+        expectedActiveRevisionId: before.data.activeRevisionId,
+        structuredContent: {
+          ...before.data.structuredContent,
+          teacherNotes: 'Tutor context retained',
+        },
+      }),
+    );
+    expect(saved.data.activeRevisionId).not.toBe(before.data.activeRevisionId);
+    await expect(
+      adapter(
+        requestConfig(
+          'post',
+          `/api/students/student-alex/profile/changes/${changes.data.items[1].id}/undo`,
+          { expectedActiveRevisionId: saved.data.activeRevisionId },
+        ),
+      ),
+    ).rejects.toMatchObject({
+      response: { status: 409, data: { code: 'profile_change_conflict' } },
+    });
+    const undone = await adapter(
+      requestConfig(
+        'post',
+        `/api/students/student-alex/profile/changes/${changes.data.items[0].id}/undo`,
+        { expectedActiveRevisionId: saved.data.activeRevisionId },
+      ),
+    );
+    expect(undone.data.change.status).toBe('undone');
+    expect(undone.data.profile.structuredContent.teacherNotes).toBe('Tutor context retained');
+    expect(undone.data.profile.structuredContent.studyPreferences).not.toContain(
+      'Prefers examples from current work.',
+    );
+    expect(undone.data.profile.structuredContent.studyPreferences).toContain(
+      'Prefers ten-minute daily review.',
+    );
+    const retained = await adapter(
+      requestConfig('get', '/api/students/student-alex/profile/changes'),
+    );
+    expect(retained.data.items[1]).toMatchObject({ status: 'blocked', canUndo: false });
+    const surface = await adapter(
+      requestConfig('get', '/api/students/student-alex/surfaces/learning'),
+    );
+    expect(surface.data.profile.activeRevisionId).toBe(undone.data.profile.activeRevisionId);
   });
 
   it('serves a completed resume fixture for the all-stages-unlocked sandbox path', async () => {
@@ -561,7 +674,7 @@ describe('frontend sandbox API adapter', () => {
     const jobs = await adapter(requestConfig('get', '/api/user/jobs'));
     const sessions = await adapter(requestConfig('get', '/api/user/assignment-sessions'));
 
-    expect(students.data.students).toHaveLength(3);
+    expect(students.data.students).toHaveLength(2);
     expect(jobs.data.jobs).toEqual([expect.objectContaining({ state: 'succeeded' })]);
     expect(sessions.data.sessions).toEqual([
       expect.objectContaining({ confirmedStep: 'source', revision: 2 }),

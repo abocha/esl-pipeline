@@ -74,6 +74,8 @@
     "0071_scheduler_retirement": "incompatible",
     "0072_calendar_projection_reference_guard": "compatible",
     "0073_gemini_tts_provider": "incompatible",
-    "0074_assignment_material": "incompatible"
+    "0074_assignment_material": "incompatible",
+    "0075_lesson_planned_charge": "incompatible",
+    "0076_student_profile_maintenance": "incompatible"
   }
 }

@@ -1,0 +1,113 @@
+.learning-lesson-context {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 8px;
+  color: #29485f;
+}
+.learning-next-lesson {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: baseline;
+  min-block-size: calc(1lh + 33px);
+  padding: 16px 0;
+  border-bottom: 1px solid #dce5eb;
+  font-size: 16px;
+}
+.learning-next-lesson > span {
+  color: #647c8e;
+}
+.learning-next-lesson > strong {
+  font-weight: 500;
+}
+.learning-next-lesson > a {
+  margin-left: auto;
+}
+.learning-lesson-context a {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #0f766e;
+  font-size: 16px;
+}
+.learning-latest-transcript > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px 0;
+  font-size: 16px;
+}
+.learning-latest-transcript > summary::after {
+  content: "+";
+  margin-left: auto;
+  color: #0f766e;
+}
+.learning-latest-transcript[open] > summary::after {
+  content: "−";
+}
+.learning-latest-transcript pre {
+  max-height: 420px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 16px / 1.7 var(--font-sans);
+  padding: 16px;
+  border-left: 3px solid #9cb5c4;
+  background: #f2f6f8;
+}
+.learning-transcript-version {
+  color: #647c8e;
+  font-size: 14px;
+}
+.learning-latest-work {
+  justify-self: start;
+}
+.learning-latest-transcript--compact > summary {
+  width: 38px;
+  min-height: 38px;
+  justify-content: center;
+  border: 1px solid #cad7dd;
+  border-radius: 5px;
+  color: #0f766e;
+  list-style: none;
+  margin-top: 8px;
+  padding: 0;
+}
+.learning-latest-transcript--compact > summary > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.learning-latest-transcript--compact > summary::after {
+  display: none;
+}
+.student-memory-assignment-link {
+  width: 38px;
+  min-height: 38px;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cad7dd;
+  border-radius: 5px;
+  color: #0f766e;
+}
+.student-learning-background-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #0f766e;
+}
+.student-learning-background-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}

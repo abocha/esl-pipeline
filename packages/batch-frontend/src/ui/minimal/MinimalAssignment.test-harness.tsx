@@ -27,6 +27,13 @@ import {
 } from './MinimalAssignment.typed-test-fixtures';
 
 vi.mock('../../utils/api', () => ({
+  AssignmentLessonConflictApiError: class extends Error {
+    constructor(public readonly latestSession: api.AssignmentSession) {
+      super('Lesson changed. Review its charge before continuing. Your assignment link is saved.');
+    }
+  },
+  StudentLessonConflictApiError: class extends Error {},
+  updateStudentLesson: vi.fn(),
   activateProfileRevision: vi.fn(),
   attachAssignmentSource: vi.fn(),
   AssignmentSessionConflictApiError: class AssignmentSessionConflictApiError extends Error {
@@ -432,6 +439,7 @@ export function makeStudentLesson(
     durationMinutes: 60,
     status: 'completed',
     consumesCredit: true,
+    plannedCharge: true,
     title: 'Negotiation practice',
     notes: null,
     creditEventId: null,
@@ -1294,6 +1302,7 @@ export function setupMinimalAssignmentTest() {
       teacherNotes: 'Keep examples grounded in real workplace situations.',
     },
     currentRevisionId: 'revision-1',
+    activeRevisionId: 'revision-1',
     updatedAt: now,
   });
   vi.mocked(api.getProfileRevision).mockResolvedValue({
@@ -1304,6 +1313,8 @@ export function setupMinimalAssignmentTest() {
     createdAt: now,
     createdBy: null,
     restoredFromRevisionId: null,
+    baseActiveRevisionId: null,
+    baseActiveRevisionKnown: false,
     content: 'PROFILE CONTENT',
   });
   vi.mocked(api.listProfileRevisions).mockResolvedValue({
@@ -1316,6 +1327,8 @@ export function setupMinimalAssignmentTest() {
         createdAt: now,
         createdBy: null,
         restoredFromRevisionId: null,
+        baseActiveRevisionId: null,
+        baseActiveRevisionKnown: false,
       },
     ],
     total: 1,
@@ -1327,12 +1340,14 @@ export function setupMinimalAssignmentTest() {
     studentId: 'student-alex',
     content: 'PROFILE CONTENT',
     currentRevisionId: 'revision-1',
+    activeRevisionId: 'revision-1',
     updatedAt: now,
   });
   vi.mocked(api.restoreProfileRevision).mockResolvedValue({
     studentId: 'student-alex',
     content: 'PROFILE CONTENT',
     currentRevisionId: 'revision-1',
+    activeRevisionId: 'revision-1',
     updatedAt: now,
   });
   vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
@@ -1371,6 +1386,8 @@ export function setupMinimalAssignmentTest() {
     createdAt: now,
     createdBy: null,
     restoredFromRevisionId: null,
+    baseActiveRevisionId: null,
+    baseActiveRevisionKnown: false,
     content: 'PROFILE CONTENT',
     structuredContent: {
       schemaVersion: 'foundational_profile_v1',

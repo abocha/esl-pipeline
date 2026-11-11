@@ -92,6 +92,22 @@ Core surfaces:
   inputs retain their stricter validation.
   [ABO-12 reconciliation](../../docs/operations/student-profile-revision-cutover.md) explains
   the frozen legacy archive and exact historical IDs retained for assignments and prompt packages.
+- Profile mutations require `expectedActiveRevisionId` (canonical PostgreSQL UUID or explicit
+  null for no active profile). Missing authority returns 428; stale authority returns 409 without
+  writes. Drafts record `baseActiveRevisionId` plus `baseActiveRevisionKnown`; a historical unknown
+  base cannot be silently activated against a freshly read head. Learning surfaces expose the
+  active head independently of the revision selected in an editor.
+- Deterministic profile maintenance appends eligible communication context, interests, study
+  preferences and corroborated strengths from verified original lesson facts. Existing tutor
+  goals, level, constraints and notes stay protected, including initial enrichment. Empty-seed
+  bootstrap retains its existing behavior; untracked generated bootstrap values are not advertised
+  as undoable. The student-owned change ledger retains exact source observations and revisions.
+  `GET /students/:id/profile/changes` pages changes; `POST .../changes/:changeId/undo` removes one
+  recorded addition under CAS. Validated sibling Undo remains available; tutor/manual same-field
+  changes block it. Future tutor removals create durable same-fact suppression even without an
+  automatic ledger origin. Later evidence only flags reconsideration. See the
+  [profile delivery handoff](../../docs/plans/calm-studio-v2-profile-maintenance.md) for the paired
+  frontend/backend release, old-writer quiescence and test evidence boundary.
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
 - Schedule & Billing returns `lessonWindows`: all visible occurrences starting on the workspace
   Business calendar day (ascending), 10 before that day (descending), and three after it (ascending).
@@ -378,6 +394,9 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   retain their existing replay semantics. Intent, current completion/kind and exact-source finish
   history are distinct DTO fields. `GET /user/assignment-sessions?scope=history` discovers completed
   transcript results and retained finish history; default scope remains active workflows.
+  Both active and history scopes accept `limit` (1–50) and nonnegative `offset`, ordered by
+  most recently updated session with an ID tie-breaker. `total` remains the full user-scoped
+  count for the selected scope. Offset pages are live reads, not a frozen snapshot.
 - Completed transcript-only sessions are read-only results and leave active lists/counts. Explicit
   `POST /assignment-sessions/:id/start-homework` promotes the same owner to Context, clears current
   completion and retains history. It performs no reupload, reconfirmation, memory extraction or
@@ -910,3 +929,30 @@ measured approximately 24 ms for All and 22 ms for Payments & credits after reso
 billing-bearing parent IDs once in SQL. A correlated lookup per parent measured about
 1.5 seconds and was removed. These are local query-plan observations, not a production
 latency promise; measure again before adding indexes, caches or another pagination layer.
+
+## Lesson charge intent and completion
+
+Migration `0075_lesson_planned_charge` separates nullable `plannedCharge` from the existing
+`consumesCredit` billing flag. Existing rows remain unknown; no charge intent or balance is
+backfilled. New Calendar projections default to a planned charge of one credit while their actual
+billing flag remains false. An explicit planned free lesson stays free on completion. Legacy
+unknown intent retains the existing one-credit completion default, except an explicit legacy
+manual charge choice is honored. Existing recorded-outcome charge corrections remain supported;
+No-show consumes zero credits.
+
+Manual completion is admitted once the lesson starts. Assignment linking completes a scheduled
+lesson only after its end. Both use the shared lesson lock and existing credit-event reconciliation.
+Modern manual actions provide expected status and planned charge. Native confirm/recovery commands
+carry optional `expectedLessonPlannedCharge` and `expectedLessonStatus`, checked under the same
+completion lock. A mismatch returns `assignment_lesson_changed` with HTTP 409 and the already-saved
+assignment session, without charging. The native UI retains that link, requires fresh charge review
+and retries through the existing request-ID/revision flow. Older callers may omit these fields.
+
+Planned charge alone does not block same-identity Google timing changes or cancellation. Explicit
+tutor charge edits are recorded in lesson activity and retain the existing protection against
+replacing referenced occurrence identities, so a free choice is never silently assigned to a new
+provider identity. Default system-created projections remain replaceable.
+
+Migration 0075 is runtime-incompatible: old API/workers do not enforce the saved charge intent.
+Quiesce old writers through the normal migration protocol; an old image alone is not a safe rollback
+after new charge choices are saved. Local migration evidence does not authorize a production rollout.

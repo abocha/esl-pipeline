@@ -8,6 +8,7 @@ import {
   updateBusinessSettings,
 } from '../../utils/api';
 import { buildTimezoneOptions, detectDeviceTimezone } from '../../utils/timezones';
+import { LoadingPlaceholder } from '../system/LoadingPlaceholder';
 import { BusinessInfoHint } from './BusinessInfoHint';
 
 export const BusinessSettingsPage: React.FC = () => {
@@ -58,7 +59,7 @@ export const BusinessSettingsPage: React.FC = () => {
         <header className="business-agenda-heading">
           <h2>Settings</h2>
         </header>
-        <p className="business-empty">Loading business settings...</p>
+        <LoadingPlaceholder label="Loading business settings" kind="form" />
       </section>
     );
   }

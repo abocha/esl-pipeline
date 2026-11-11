@@ -1,3 +1,4 @@
+import { getActiveProfileRevision } from '../src/domain/profile-revision-repository.js';
 import { assignmentArtifactFixture } from './assignment-v1.test-harness.js';
 import './support/bootstrap-pg-test-env.js';
 import { randomUUID } from 'node:crypto';
@@ -742,6 +743,7 @@ describe('student activity owner-to-feed contract', () => {
     const profile = createEmptyFoundationalProfile();
     profile.primaryGoals = ['Discuss travel plans'];
     const r1 = await insertProfileRevision({
+      expectedActiveRevisionId: (await getActiveProfileRevision(f.studentId))?.id ?? null,
       studentId: f.studentId,
       content: 'Profile one',
       contentHash: 'a'.repeat(64),
@@ -749,7 +751,9 @@ describe('student activity owner-to-feed contract', () => {
       status: 'draft',
       createdBy: f.userId,
     });
+    await activateProfileRevision(f.studentId, r1.id, f.userId, null);
     const r2 = await insertProfileRevision({
+      expectedActiveRevisionId: (await getActiveProfileRevision(f.studentId))?.id ?? null,
       studentId: f.studentId,
       content: 'Profile two',
       contentHash: 'b'.repeat(64),
@@ -758,10 +762,9 @@ describe('student activity owner-to-feed contract', () => {
       source: 'restore',
       restoredFromRevisionId: r1.id,
     });
-    await activateProfileRevision(f.studentId, r1.id, f.userId);
-    await activateProfileRevision(f.studentId, r1.id, f.userId);
-    await activateProfileRevision(f.studentId, r2.id, f.userId);
-    await activateProfileRevision(f.studentId, r1.id, f.userId);
+    await activateProfileRevision(f.studentId, r1.id, f.userId, r1.id);
+    await activateProfileRevision(f.studentId, r2.id, f.userId, r1.id);
+    await activateProfileRevision(f.studentId, r1.id, f.userId, r2.id);
     const candidate = await insertStudentProfileCandidate({
       studentId: f.studentId,
       targetSection: 'goals_motivation',
@@ -834,6 +837,7 @@ describe('student activity owner-to-feed contract', () => {
     const profile = createEmptyFoundationalProfile();
     profile.primaryGoals = ['Discuss travel plans'];
     const revision = await insertProfileRevision({
+      expectedActiveRevisionId: (await getActiveProfileRevision(f.studentId))?.id ?? null,
       studentId: f.studentId,
       content: 'Travel goal',
       contentHash: 'c'.repeat(64),

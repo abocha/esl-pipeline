@@ -270,6 +270,7 @@ async function insertBusinessLesson(params: {
   startsAt: string;
   status?: 'scheduled' | 'completed' | 'canceled' | 'no_show';
   consumesCredit?: boolean;
+  plannedCharge?: boolean | null;
   durationMinutes?: number;
   title?: string | null;
 }) {
@@ -285,9 +286,10 @@ async function insertBusinessLesson(params: {
         duration_minutes,
         status,
         consumes_credit,
-        title
+        title,
+        planned_charge
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `,
       [
         id,
@@ -298,6 +300,7 @@ async function insertBusinessLesson(params: {
         params.status ?? 'scheduled',
         params.consumesCredit ?? false,
         params.title ?? null,
+        params.plannedCharge ?? null,
       ],
     );
   });
@@ -848,6 +851,7 @@ describeIfPg('application/student-schedule-billing', () => {
   });
 
   it('isolates dashboard reads, settings writes, without writes across workspaces', async () => {
+    vi.setSystemTime(new Date('2026-05-09T00:00:00.000Z'));
     const alpha = await seedWorkspaceTutor('alpha');
     const beta = await seedWorkspaceTutor('beta');
     const alphaStudentId = await seedStudentInWorkspace(alpha.workspaceId, 'Alpha student');
@@ -1154,6 +1158,7 @@ describeIfPg('application/student-schedule-billing', () => {
   });
 
   it('consumes exactly one credit when a chargeable lesson is completed and voids it if uncharged', async () => {
+    vi.setSystemTime(new Date('2026-05-09T00:00:00.000Z'));
     const { studentId, userId } = await seedStudent();
     await addStudentPackage(DEFAULT_WORKSPACE_ID, studentId, { lessons: 1 }, userId);
 
@@ -1612,6 +1617,342 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(surface?.lessons.find((lesson) => lesson.id === authoredLessonId)?.title).toBe(
       'Tutor title',
     );
+  });
+
+  it('rejects manual completion before start and accepts the exact start boundary', async () => {
+    const { studentId, userId } = await seedStudent();
+    const start = Date.now() + 60_000;
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: new Date(start).toISOString(),
+      plannedCharge: true,
+    });
+    const clock = vi.spyOn(Date, 'now');
+    try {
+      clock.mockReturnValue(start - 1);
+      await expect(
+        updateStudentLesson(
+          DEFAULT_WORKSPACE_ID,
+          studentId,
+          lessonId,
+          { status: 'completed' },
+          userId,
+        ),
+      ).rejects.toMatchObject({ status: 400, code: 'invalid_request' });
+      expect((await getStudentLesson(DEFAULT_WORKSPACE_ID, studentId, lessonId))?.status).toBe(
+        'scheduled',
+      );
+      clock.mockReturnValue(start);
+      const surface = await updateStudentLesson(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        lessonId,
+        { status: 'completed' },
+        userId,
+      );
+      expect(surface.creditSummary.consumed).toBe(1);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it.each([true, false])(
+    'completes homework only at lesson end and respects planned charge %s',
+    async (plannedCharge) => {
+      const { studentId, userId } = await seedStudent();
+      const end = Date.now() + 60_000;
+      const lessonId = await insertBusinessLesson({
+        studentId,
+        startsAt: new Date(end - 3_600_000).toISOString(),
+        plannedCharge,
+      });
+      const clock = vi.spyOn(Date, 'now');
+      try {
+        clock.mockReturnValue(end - 1);
+        expect(
+          await completeElapsedScheduledLessonForHomework(
+            DEFAULT_WORKSPACE_ID,
+            studentId,
+            lessonId,
+            userId,
+          ),
+        ).toBe(false);
+        clock.mockReturnValue(end);
+        await Promise.all([
+          completeElapsedScheduledLessonForHomework(
+            DEFAULT_WORKSPACE_ID,
+            studentId,
+            lessonId,
+            userId,
+          ),
+          completeElapsedScheduledLessonForHomework(
+            DEFAULT_WORKSPACE_ID,
+            studentId,
+            lessonId,
+            userId,
+          ),
+        ]);
+        const lesson = await getStudentLesson(DEFAULT_WORKSPACE_ID, studentId, lessonId);
+        expect(lesson).toMatchObject({
+          status: 'completed',
+          consumesCredit: plannedCharge,
+          plannedCharge,
+        });
+        const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+        expect(surface?.creditSummary.consumed).toBe(plannedCharge ? 1 : 0);
+        expect(
+          surface?.creditEvents.filter((event) => event.eventType === 'credit_consumed'),
+        ).toHaveLength(plannedCharge ? 1 : 0);
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
+
+  it.each([
+    { plannedCharge: false, legacyCharge: true, expected: false },
+    { plannedCharge: true, legacyCharge: false, expected: true },
+    { plannedCharge: null, legacyCharge: false, expected: false },
+    { plannedCharge: null, legacyCharge: undefined, expected: true },
+  ])(
+    'uses explicit intent before a legacy completion flag: $plannedCharge / $legacyCharge',
+    async ({ plannedCharge, legacyCharge, expected }) => {
+      const { studentId, userId } = await seedStudent();
+      const lessonId = await insertBusinessLesson({
+        studentId,
+        startsAt: '2000-01-01T10:00:00.000Z',
+        plannedCharge,
+      });
+      const body = {
+        status: 'completed' as const,
+        ...(legacyCharge === undefined ? {} : { consumesCredit: legacyCharge }),
+      };
+      await updateStudentLesson(DEFAULT_WORKSPACE_ID, studentId, lessonId, body, userId);
+      const surface = await updateStudentLesson(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        lessonId,
+        { status: 'completed' },
+        userId,
+      );
+      expect(surface.lessons.find((lesson) => lesson.id === lessonId)?.consumesCredit).toBe(
+        expected,
+      );
+      expect(surface.creditSummary.consumed).toBe(expected ? 1 : 0);
+    },
+  );
+
+  it('rejects stale charge/outcome actions, preserves a saved free choice and records No-show without a debit', async () => {
+    const { studentId, userId } = await seedStudent();
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      plannedCharge: null,
+    });
+    await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      lessonId,
+      { plannedCharge: false, expectedStatus: 'scheduled', expectedPlannedCharge: null },
+      userId,
+    );
+    await expect(
+      updateStudentLesson(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        lessonId,
+        { status: 'completed', expectedStatus: 'scheduled', expectedPlannedCharge: null },
+        userId,
+      ),
+    ).rejects.toMatchObject({ status: 409, code: 'lesson_conflict' });
+    await confirmStudentAssignmentSessionForUser(userId, {
+      requestId: randomUUID(),
+      studentId,
+      lessonId,
+    });
+    let surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+    expect(surface?.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
+      status: 'completed',
+      plannedCharge: false,
+      consumesCredit: false,
+    });
+    await expect(
+      updateStudentLesson(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        lessonId,
+        { plannedCharge: true, expectedStatus: 'scheduled' },
+        userId,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    surface = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      lessonId,
+      { status: 'no_show', consumesCredit: true },
+      userId,
+    );
+    expect(surface.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
+      status: 'no_show',
+      consumesCredit: false,
+    });
+    expect(surface.creditSummary.consumed).toBe(0);
+  });
+
+  it.each(['confirm', 'recovery'] as const)(
+    'rejects a changed displayed charge on %s without a debit and recovers the durable link',
+    async (entry) => {
+      const { studentId, userId } = await seedStudent();
+      const lessonId = await insertBusinessLesson({
+        studentId,
+        startsAt: '2000-01-01T10:00:00.000Z',
+        plannedCharge: false,
+      });
+      const requestId = randomUUID();
+      const unlinked =
+        entry === 'recovery'
+          ? await confirmStudentAssignmentSessionForUser(userId, { requestId, studentId })
+          : null;
+      // A different writer changes the charge after the native caller reviewed No charge.
+      await updateStudentLesson(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        lessonId,
+        { plannedCharge: true, expectedPlannedCharge: false, expectedStatus: 'scheduled' },
+        userId,
+      );
+      const request = {
+        requestId,
+        studentId,
+        lessonId,
+        expectedLessonPlannedCharge: false,
+        expectedLessonStatus: 'scheduled' as const,
+      };
+      const failure = await (entry === 'confirm'
+        ? confirmStudentAssignmentSessionForUser(userId, request)
+        : updateAssignmentSessionRecoveryForUser(userId, unlinked!.id, {
+            expectedRevision: unlinked!.revision,
+            patch: { lessonId },
+            expectedLessonPlannedCharge: false,
+            expectedLessonStatus: 'scheduled',
+          })
+      ).then(
+        () => {
+          throw new Error('Expected a lesson conflict');
+        },
+        (error: unknown) => error,
+      );
+      expect(failure).toMatchObject({
+        code: 'assignment_lesson_changed',
+        session: { studentId, lessonId },
+      });
+      const saved = (failure as { session: { id: string; revision: number } }).session;
+      let surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+      expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.status).toBe('scheduled');
+      expect(surface?.creditSummary.consumed).toBe(0);
+      // Fresh review explicitly chooses free again; retry uses the accepted session/link.
+      await updateStudentLesson(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        lessonId,
+        { plannedCharge: false, expectedPlannedCharge: true, expectedStatus: 'scheduled' },
+        userId,
+      );
+      const recovered =
+        entry === 'confirm'
+          ? await confirmStudentAssignmentSessionForUser(userId, request)
+          : await updateAssignmentSessionRecoveryForUser(userId, saved.id, {
+              expectedRevision: saved.revision,
+              patch: { lessonId },
+              expectedLessonPlannedCharge: false,
+              expectedLessonStatus: 'scheduled',
+            });
+      expect(recovered.id).toBe(saved.id);
+      if (entry === 'confirm')
+        expect((await confirmStudentAssignmentSessionForUser(userId, request)).id).toBe(saved.id);
+      surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+      expect(surface?.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
+        status: 'completed',
+        plannedCharge: false,
+        consumesCredit: false,
+      });
+      expect(surface?.creditSummary.consumed).toBe(0);
+    },
+  );
+
+  it('replays a reviewed paid entry without charging twice and rejects a changed No-show outcome', async () => {
+    const { studentId, userId } = await seedStudent();
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      plannedCharge: true,
+    });
+    const request = {
+      requestId: randomUUID(),
+      studentId,
+      lessonId,
+      expectedLessonPlannedCharge: true,
+      expectedLessonStatus: 'scheduled' as const,
+    };
+    const first = await confirmStudentAssignmentSessionForUser(userId, request);
+    expect((await confirmStudentAssignmentSessionForUser(userId, request)).id).toBe(first.id);
+    expect(
+      (await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId))?.creditSummary
+        .consumed,
+    ).toBe(1);
+    const absent = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-02T10:00:00.000Z',
+      plannedCharge: false,
+    });
+    await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      absent,
+      { status: 'no_show' },
+      userId,
+    );
+    await expect(
+      confirmStudentAssignmentSessionForUser(userId, {
+        requestId: randomUUID(),
+        studentId,
+        lessonId: absent,
+        expectedLessonPlannedCharge: false,
+        expectedLessonStatus: 'scheduled',
+      }),
+    ).rejects.toMatchObject({ code: 'assignment_lesson_changed' });
+    expect(
+      (await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId))?.creditSummary
+        .consumed,
+    ).toBe(1);
+  });
+
+  it('captures a legacy scheduled charge editor choice without conflating it with completion', async () => {
+    const { studentId, userId } = await seedStudent();
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      plannedCharge: true,
+    });
+    await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      lessonId,
+      { consumesCredit: false },
+      userId,
+    );
+    const surface = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      lessonId,
+      { status: 'completed', consumesCredit: true },
+      userId,
+    );
+    expect(surface.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
+      plannedCharge: false,
+      consumesCredit: false,
+    });
+    expect(surface.creditSummary.consumed).toBe(0);
   });
 
   it('marks an elapsed scheduled lesson completed when homework is added through an assignment session', async () => {

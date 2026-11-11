@@ -8,6 +8,8 @@ import {
   restoreStudentProfile,
   type StudentProfile,
 } from '../../utils/api';
+import { useStudioV2 } from '../studio-v2/StudioV2Context';
+import { LoadingPlaceholder } from '../system/LoadingPlaceholder';
 import { CreateStudentDialog } from './CreateStudentDialog';
 import {
   buildCreateStudentPayload,
@@ -22,6 +24,7 @@ type StudentDirectoryStatus = 'active' | 'archived';
 const PAGE_SIZE = 200;
 
 export const StudentDirectoryPage: React.FC = () => {
+  const studioV2 = useStudioV2();
   const navigate = useNavigate();
 
   const [params, setParams] = useSearchParams();
@@ -45,21 +48,21 @@ export const StudentDirectoryPage: React.FC = () => {
     Number.isSafeInteger(rawOffset) && rawOffset >= 0
       ? Math.floor(rawOffset / PAGE_SIZE) * PAGE_SIZE
       : 0;
+  const scopeKey = JSON.stringify([studentStatus, search, offset]);
 
   const paramsRef = useRef(params);
   paramsRef.current = params;
+  const setParamsRef = useRef(setParams);
+  setParamsRef.current = setParams;
 
-  const setOffset = useCallback(
-    (value: number) => {
-      const next = new URLSearchParams(paramsRef.current);
+  const setOffset = useCallback((value: number) => {
+    const next = new URLSearchParams(paramsRef.current);
 
-      if (value) next.set('offset', String(value));
-      else next.delete('offset');
+    if (value) next.set('offset', String(value));
+    else next.delete('offset');
 
-      setParams(next, { replace: true });
-    },
-    [setParams],
-  );
+    setParamsRef.current(next, { replace: true });
+  }, []);
 
   const studentHref = (id: string) => {
     const next = new URLSearchParams(params);
@@ -83,7 +86,8 @@ export const StudentDirectoryPage: React.FC = () => {
 
   const [studentsLoading, setStudentsLoading] = useState(true);
 
-  const [studentsError, setStudentsError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
+  const studentsError = failure?.key === scopeKey ? failure.message : null;
 
   const [studentActionError, setStudentActionError] = useState<string | null>(null);
 
@@ -118,6 +122,7 @@ export const StudentDirectoryPage: React.FC = () => {
       : null;
 
   const students = currentPage?.items ?? [];
+  const rosterPending = !currentPage && !studentsError;
 
   const changeStatus = (status: StudentDirectoryStatus) => {
     const next = new URLSearchParams(params);
@@ -151,7 +156,7 @@ export const StudentDirectoryPage: React.FC = () => {
 
     setStudentsLoading(true);
 
-    setStudentsError(null);
+    setFailure(null);
 
     try {
       const response = await listStudents({
@@ -190,13 +195,13 @@ export const StudentDirectoryPage: React.FC = () => {
 
       const message = error instanceof Error ? error.message : 'Unable to load students.';
 
-      setStudentsError(message);
+      setFailure({ key: scopeKey, message });
     } finally {
       if (latestStudentsRequestRef.current === requestId) {
         setStudentsLoading(false);
       }
     }
-  }, [studentStatus, search, offset, version, setOffset]);
+  }, [studentStatus, search, offset, version, scopeKey, setOffset]);
 
   const refreshCurrentPageRef = useRef(loadStudents);
 
@@ -276,9 +281,17 @@ export const StudentDirectoryPage: React.FC = () => {
       : 'No archived students.';
 
   return (
-    <aside className="student-roster" aria-label="Student directory">
+    <aside
+      className={`student-roster${studioV2 ? ' student-v2' : ''}`}
+      aria-label="Student directory"
+    >
       <header className="roster-heading">
-        <h1>Students</h1>
+        <h1>
+          Students
+          {studioV2 && currentPage && (
+            <span className="student-v2-roster-count"> {currentPage.total}</span>
+          )}
+        </h1>
         <CreateStudentDialog
           isOpen={createOpen}
           isBusy={createBusy}
@@ -307,7 +320,7 @@ export const StudentDirectoryPage: React.FC = () => {
         <input
           type="search"
           aria-label="Search students"
-          placeholder="Search students by name"
+          placeholder={studioV2 ? 'Search students' : 'Search students by name'}
           value={params.get('q') ?? ''}
           onChange={(event) => {
             const next = new URLSearchParams(params);
@@ -338,7 +351,7 @@ export const StudentDirectoryPage: React.FC = () => {
           </button>
         </div>
       </div>
-      <div className="roster-scroll" aria-busy={studentsLoading}>
+      <div className="roster-scroll" aria-busy={studentsLoading || rosterPending}>
         {studentsError && (
           <div role="alert" className="roster-message">
             {studentsError}
@@ -352,12 +365,8 @@ export const StudentDirectoryPage: React.FC = () => {
             {studentActionError}
           </p>
         )}
-        {studentsLoading && (
-          <p role="status" className="roster-message">
-            Loading students…
-          </p>
-        )}
-        {!studentsLoading && !studentsError && students.length === 0 && (
+        {rosterPending && <LoadingPlaceholder label="Loading students" kind="roster" />}
+        {currentPage && !studentsError && students.length === 0 && (
           <p role="status" className="roster-message">
             {emptyMessage}
           </p>

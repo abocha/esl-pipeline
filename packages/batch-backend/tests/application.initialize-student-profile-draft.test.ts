@@ -18,6 +18,8 @@ describe('application/initialize-student-profile-draft', () => {
       createdAt: '2026-04-22T00:00:00.000Z',
       createdBy: 'teacher-1',
       restoredFromRevisionId: null,
+      baseActiveRevisionId: null,
+      baseActiveRevisionKnown: true,
       content: '# Foundational Profile',
       structuredContent: {
         schemaVersion: 'foundational_profile_v1' as const,

@@ -6,12 +6,19 @@ import { useWorkspaceSettings, useWorkspaceTimezone } from '../../context/Worksp
 import {
   type BusinessScheduleSurface,
   getBusinessScheduleSurface,
+  getStudentLesson,
   hideStudentLessonFollowupReminder,
   undoLatestHiddenStudentReminder,
   updateStudentLesson,
 } from '../../utils/api';
-import { normalizeTimezone } from '../../utils/timezones';
+import { normalizeTimezone, timezoneName } from '../../utils/timezones';
 import { CalendarSchedulingPanel } from '../calendar/CalendarSchedulingPanel';
+import {
+  lessonChargeLabel,
+  lessonHasEnded,
+  useLessonChargeReview,
+} from '../students/LessonChargeReview';
+import { LoadingPlaceholder } from '../system/LoadingPlaceholder';
 import { BusinessInfoHint } from './BusinessInfoHint';
 import { formatDate, formatDateTime, formatMoney } from './business-format';
 
@@ -25,6 +32,7 @@ function formatReminderLessonDetail(
   return topic ? `${date} · ${topic}` : date;
 }
 export const BusinessSchedulePage: React.FC = () => {
+  const { requestChargeReview, chargeReview } = useLessonChargeReview();
   const navigate = useNavigate();
   const tutorTimezone = useWorkspaceTimezone();
   const { reconcileTimezone } = useWorkspaceSettings();
@@ -104,9 +112,15 @@ export const BusinessSchedulePage: React.FC = () => {
     setSavingLessonId(lesson.id);
     setError(null);
     try {
+      const reviewed =
+        status === 'completed' ? await requestChargeReview(lesson.studentId, lesson) : lesson;
+      if (!reviewed) return;
       await updateStudentLesson(lesson.studentId, lesson.id, {
         status,
-        consumesCredit: status === 'completed',
+        expectedStatus: 'scheduled',
+        ...(status === 'completed'
+          ? { expectedPlannedCharge: reviewed.plannedCharge }
+          : { consumesCredit: false }),
       });
       await load();
     } catch (actionError: unknown) {
@@ -115,21 +129,28 @@ export const BusinessSchedulePage: React.FC = () => {
       setSavingLessonId(null);
     }
   };
-  const runStartHomeworkFromReminder = async (
-    reminder: NonNullable<BusinessScheduleSurface['reminders'][number]>,
-  ) => {
-    if (!reminder.lessonId) return;
-    setSavingLessonId(reminder.lessonId);
+  const runStartHomework = async (studentId: string, lessonId: string | null | undefined) => {
+    if (!lessonId || savingLessonId !== null) return;
+    setSavingLessonId(lessonId);
     setError(null);
     try {
-      navigateToLessonAssignment(reminder.studentId, reminder.lessonId);
+      await navigateToLessonAssignment(studentId, lessonId);
     } catch (actionError: unknown) {
-      setError(actionError instanceof Error ? actionError.message : 'Unable to update lesson.');
+      setError(actionError instanceof Error ? actionError.message : 'Unable to start homework.');
     } finally {
       setSavingLessonId(null);
     }
   };
-  const navigateToLessonAssignment = (studentId: string, lessonId: string) => {
+  const navigateToLessonAssignment = async (studentId: string, lessonId: string) => {
+    const lesson =
+      surface?.lessons.find((item) => item.id === lessonId) ??
+      (await getStudentLesson(studentId, lessonId));
+    if (
+      lesson.status === 'scheduled' &&
+      lessonHasEnded(lesson) &&
+      !(await requestChargeReview(studentId, lesson))
+    )
+      return;
     navigate(
       `/?studentId=${encodeURIComponent(studentId)}&lessonId=${encodeURIComponent(lessonId)}`,
     );
@@ -138,8 +159,7 @@ export const BusinessSchedulePage: React.FC = () => {
     if (lesson.homework.status !== 'not_started') return false;
     if (lesson.status === 'completed') return true;
     if (lesson.status !== 'scheduled') return false;
-    const endsAt = new Date(lesson.startsAt).getTime() + lesson.durationMinutes * 60 * 1000;
-    return Number.isFinite(endsAt) && endsAt <= Date.now();
+    return true;
   };
   const runHideReminder = async (
     reminder: NonNullable<BusinessScheduleSurface['reminders'][number]>,
@@ -179,14 +199,18 @@ export const BusinessSchedulePage: React.FC = () => {
         <header className="business-agenda-heading">
           <h2>Schedule</h2>
         </header>
-        <p className="business-empty" role={error ? 'alert' : undefined}>
-          {error ?? 'Loading business schedule...'}
-        </p>
         {error ? (
-          <button type="button" onClick={() => void load()}>
-            Retry
-          </button>
-        ) : null}
+          <>
+            <p className="business-empty" role="alert">
+              {error}
+            </p>
+            <button type="button" onClick={() => void load()}>
+              Retry
+            </button>
+          </>
+        ) : (
+          <LoadingPlaceholder label="Loading business schedule" />
+        )}
       </section>
     );
   }
@@ -206,6 +230,7 @@ export const BusinessSchedulePage: React.FC = () => {
     );
   }
   const timezone = tutorTimezone ?? surface.settings.timezone;
+  const timezoneDisplay = timezoneName(timezone);
   const dayKey = (value: string) =>
     new Intl.DateTimeFormat('en-CA', {
       timeZone: timezone,
@@ -227,6 +252,7 @@ export const BusinessSchedulePage: React.FC = () => {
   const retainedPeriodNotice = `Showing lessons for ${surface.from} – ${surface.to}.`;
   return (
     <section ref={surfaceRef} className="business-dashboard-surface" aria-busy={loading}>
+      {chargeReview}
       <CalendarSchedulingPanel
         workspaceId={surface.workspaceId}
         timezone={timezone}
@@ -238,9 +264,9 @@ export const BusinessSchedulePage: React.FC = () => {
           <Link
             className="business-timezone"
             to="/business/settings"
-            aria-label={`Timezone: ${timezone}. Change in Business settings.`}
+            aria-label={`Time zone: ${timezoneDisplay}. Change in Business settings.`}
           >
-            {timezone}
+            Time zone: {timezoneDisplay}
           </Link>
         </div>
         <form
@@ -364,9 +390,19 @@ export const BusinessSchedulePage: React.FC = () => {
                     ) : canAddHomeworkForLesson(lesson) ? (
                       <button
                         type="button"
-                        onClick={() => navigateToLessonAssignment(lesson.studentId, lesson.id)}
+                        disabled={savingLessonId !== null}
+                        title={
+                          lesson.plannedCharge == null
+                            ? 'Review lesson charge'
+                            : lessonChargeLabel(lesson)
+                        }
+                        onClick={() => void runStartHomework(lesson.studentId, lesson.id)}
                       >
-                        Add homework
+                        {lesson.status === 'scheduled'
+                          ? lessonHasEnded(lesson)
+                            ? 'Complete & add homework'
+                            : 'Prepare homework'
+                          : 'Add homework'}
                       </button>
                     ) : lesson.homework.assignmentSessionId ? (
                       <Link
@@ -408,7 +444,17 @@ export const BusinessSchedulePage: React.FC = () => {
                               <div className="business-complete-action">
                                 <button
                                   type="button"
-                                  disabled={savingLessonId !== null}
+                                  disabled={
+                                    savingLessonId !== null ||
+                                    new Date(lesson.startsAt).getTime() > Date.now()
+                                  }
+                                  title={
+                                    new Date(lesson.startsAt).getTime() > Date.now()
+                                      ? 'Available once the lesson starts'
+                                      : lesson.plannedCharge == null
+                                        ? 'Review lesson charge'
+                                        : lessonChargeLabel(lesson)
+                                  }
                                   aria-describedby={`business-complete-hint-${lesson.id}`}
                                   onClick={() => void runLessonStatus(lesson, 'completed')}
                                 >
@@ -418,12 +464,18 @@ export const BusinessSchedulePage: React.FC = () => {
                                   id={`business-complete-hint-${lesson.id}`}
                                   label="completing a lesson"
                                 >
-                                  Completing uses 1 lesson credit.
+                                  {lesson.plannedCharge == null
+                                    ? 'Review lesson charge before completing.'
+                                    : lessonChargeLabel(lesson)}
                                 </BusinessInfoHint>
                               </div>
                               <button
                                 type="button"
-                                disabled={savingLessonId !== null}
+                                disabled={
+                                  savingLessonId !== null ||
+                                  new Date(lesson.startsAt).getTime() > Date.now()
+                                }
+                                title="No charge"
                                 onClick={() => void runLessonStatus(lesson, 'no_show')}
                               >
                                 No-show
@@ -472,7 +524,7 @@ export const BusinessSchedulePage: React.FC = () => {
                     type="button"
                     aria-label={`Open lesson for ${reminder.studentName}`}
                     disabled={savingLessonId !== null}
-                    onClick={() => void runStartHomeworkFromReminder(reminder)}
+                    onClick={() => void runStartHomework(reminder.studentId, reminder.lessonId)}
                   >
                     Open lesson
                   </button>

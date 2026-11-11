@@ -1,14 +1,8 @@
+import type { StudentProfileRevisionSource } from '@esl-pipeline/contracts';
+
 import type { FoundationalProfile } from '../application/foundational-profile.js';
 
-export type ProfileRevisionSource =
-  | 'create'
-  | 'update'
-  | 'restore'
-  | 'starter_profile_form'
-  | 'candidate_promotion'
-  | 'legacy_normalization'
-  | 'lesson_population'
-  | 'profile_revision_refresh';
+export type ProfileRevisionSource = StudentProfileRevisionSource;
 export type RevisionStatus = 'draft' | 'active' | 'deprecated';
 
 export interface ProfileRevisionRecord {
@@ -28,6 +22,8 @@ export interface ProfileRevisionRecord {
   restoredFromRevisionId: string | null;
   /** Original version label for a migrated historical revision, never authority. */
   legacyVersionLabel?: string | null;
+  baseActiveRevisionId?: string | null;
+  baseActiveRevisionKnown?: boolean;
 }
 
 export interface ProfileRevisionListResult {

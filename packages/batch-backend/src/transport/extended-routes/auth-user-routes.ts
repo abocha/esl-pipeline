@@ -888,6 +888,8 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       requestId: z.string().uuid(),
       studentId: z.string().uuid(),
       lessonId: z.string().uuid().nullable().optional(),
+      expectedLessonPlannedCharge: z.boolean().nullable().optional(),
+      expectedLessonStatus: z.enum(['scheduled', 'completed', 'canceled', 'no_show']).optional(),
     })
     .strict();
 
@@ -895,6 +897,8 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     .object({
       expectedRevision: z.number().int().positive(),
       patch: assignmentRecoveryPatchSchema,
+      expectedLessonPlannedCharge: z.boolean().nullable().optional(),
+      expectedLessonStatus: z.enum(['scheduled', 'completed', 'canceled', 'no_show']).optional(),
     })
     .strict();
   const attachAssignmentSourceSchema = z
@@ -965,16 +969,11 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     }
 
     const routePath = resolveRoutePath(request, 'GET /user/assignment-sessions');
-    const querySchema = z
-      .object({
-        limit: z.coerce.number().int().min(1).max(50).optional(),
-        scope: z.enum(['active', 'history']).optional(),
-        offset: z.coerce.number().int().min(0).optional(),
-      })
-      .refine((query) => !query.offset || query.scope === 'history', {
-        path: ['offset'],
-        message: 'Offset pagination is available for history only',
-      });
+    const querySchema = z.object({
+      limit: z.coerce.number().int().min(1).max(50).optional(),
+      scope: z.enum(['active', 'history']).optional(),
+      offset: z.coerce.number().int().min(0).optional(),
+    });
 
     try {
       const query = querySchema.parse(request.query ?? {});
@@ -1045,6 +1044,12 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
         return reply.code(200).send(session);
       } catch (error: unknown) {
+        if (getErrorCode(error) === 'assignment_lesson_changed')
+          return reply.code(409).send({
+            code: 'assignment_lesson_changed',
+            message: (error as Error).message,
+            session: getConflictSession(error),
+          });
         if (error instanceof HistoricalAssignmentReadOnlyError)
           return reply
             .code(410)
@@ -1583,6 +1588,12 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
             .code(410)
             .send({ error: error.code, code: error.code, message: error.message });
         const errorCode = getErrorCode(error);
+        if (errorCode === 'assignment_lesson_changed')
+          return reply.code(409).send({
+            code: errorCode,
+            message: (error as Error).message,
+            session: getConflictSession(error),
+          });
         if (errorCode === 'ASSIGNMENT_SESSION_REVISION_CONFLICT') {
           return reply.code(409).send({
             code: 'assignment_session_revision_conflict',

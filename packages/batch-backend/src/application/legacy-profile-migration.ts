@@ -325,6 +325,7 @@ export async function migrateLegacyProfiles(args: {
     const renderedContent = renderFoundationalProfileContent(structuredContent);
     const migratedRevision = request.apply
       ? await dependencies.profileContent.saveRevision(profile.studentId, renderedContent, {
+          expectedActiveRevisionId: activeRevision.id,
           source: 'legacy_normalization',
           status: request.status ?? 'draft',
           createdBy: request.reviewerId ?? null,

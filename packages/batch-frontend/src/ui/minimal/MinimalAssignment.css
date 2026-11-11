@@ -177,8 +177,8 @@
   cursor: pointer;
 }
 
-.minimal-homework-choice input[type='checkbox'],
-.minimal-transcript-result input[type='checkbox'] {
+.minimal-homework-choice input[type="checkbox"],
+.minimal-transcript-result input[type="checkbox"] {
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
@@ -1293,7 +1293,7 @@
   outline-offset: 2px;
 }
 
-.minimal-speaker-choice-option input[type='radio'] {
+.minimal-speaker-choice-option input[type="radio"] {
   flex: 0 0 auto;
   width: 1rem;
   height: 1rem;
@@ -1305,7 +1305,7 @@
   accent-color: var(--color-primary-600);
 }
 
-.minimal-speaker-choice-option input[type='radio']:focus {
+.minimal-speaker-choice-option input[type="radio"]:focus {
   box-shadow: none;
 }
 
@@ -1583,13 +1583,13 @@
   background: var(--bg-primary);
 }
 
-.minimal-assignment a {
+.minimal-assignment a:where(:not(.product-button)) {
   color: var(--color-primary-600);
   text-decoration: none;
   font-weight: 700;
 }
 
-.minimal-assignment a:hover {
+.minimal-assignment a:where(:not(.product-button)):hover {
   text-decoration: underline;
 }
 

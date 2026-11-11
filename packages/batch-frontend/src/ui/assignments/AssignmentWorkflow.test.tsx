@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
+import { StudioV2Provider } from '../studio-v2/StudioV2Context';
 import { AssignmentWorkflow } from './AssignmentWorkflow';
 import type { AssignmentWorkflowStep } from './assignment-workflow';
 
@@ -14,6 +16,44 @@ const steps: AssignmentWorkflowStep[] = [
 ];
 
 describe('AssignmentWorkflow', () => {
+  it('retains controller navigation, save recovery and locked steps in the v2 presentation', async () => {
+    const onStepRequest = vi.fn();
+    const onRetrySave = vi.fn();
+    const onContinue = vi.fn();
+    render(
+      <MemoryRouter>
+        <StudioV2Provider enabled>
+          <AssignmentWorkflow
+            steps={steps}
+            activeStep="source"
+            highestAvailableStep="source"
+            saveState="error"
+            onStepRequest={onStepRequest}
+            onBack={vi.fn()}
+            onRetrySave={onRetrySave}
+            onContinue={onContinue}
+            continueLabel="Confirm source"
+          >
+            Current transcript editor
+          </AssignmentWorkflow>
+        </StudioV2Provider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'Assignments' }).getAttribute('href')).toBe('/');
+    expect(screen.getByRole('button', { name: 'Lesson source' }).getAttribute('aria-current')).toBe(
+      'step',
+    );
+    expect(
+      (screen.getByRole('button', { name: 'Teaching context' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Student' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Retry save' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm source' }));
+    expect(onStepRequest).toHaveBeenCalledWith('student');
+    expect(onRetrySave).toHaveBeenCalledTimes(1);
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Current transcript editor')).toBeTruthy();
+  });
   it('renders semantic progress and focused content', () => {
     render(
       <AssignmentWorkflow

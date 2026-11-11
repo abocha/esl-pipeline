@@ -40,6 +40,7 @@ describe('frontend sandbox mode', () => {
 
   it.each([
     ['', 'default'],
+    ['?sandboxScenario=calm-studio-v2', 'calm-studio-v2'],
     ['?sandboxScenario=step-one-no-recent', 'step-one-no-recent'],
     ['?sandboxScenario=step-one-resume-states', 'step-one-resume-states'],
     ['?sandboxScenario=step-one-resume-error', 'step-one-resume-error'],

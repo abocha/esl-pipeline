@@ -5,6 +5,7 @@ import {
   detectDeviceTimezone,
   normalizeTimezone,
   timezoneLabel,
+  timezoneName,
 } from './timezones';
 import { formatPlainDate, formatTutorTime } from './tutor-time';
 
@@ -12,7 +13,7 @@ describe('tutor timezone presentation', () => {
   it('retains saved aliases, deduplicates equivalent choices and marks only the device region', () => {
     const choices = buildTimezoneOptions('Asia/Saigon', 'Asia/Ho_Chi_Minh');
     expect(choices.filter((choice) => choice.label.includes('Ho Chi Minh City'))).toEqual([
-      { value: 'Asia/Saigon', label: 'Ho Chi Minh City · UTC+07:00 · Device time' },
+      { value: 'Asia/Saigon', label: 'Ho Chi Minh City (Asia) · UTC+07:00 · Device time' },
     ]);
     expect(choices.find((choice) => choice.value === 'Asia/Bangkok')?.label).not.toContain(
       'Device time',
@@ -34,6 +35,9 @@ describe('tutor timezone presentation', () => {
     expect(normalizeTimezone('UTC+15')).toBeNull();
     expect(normalizeTimezone('Asia/Saigon')).toBe(normalizeTimezone('Asia/Ho_Chi_Minh'));
     expect(normalizeTimezone('Europe/Moscow')).not.toBe(normalizeTimezone('Europe/Istanbul'));
+    expect(timezoneName('Etc/GMT-7')).toBe('UTC+07:00');
+    expect(timezoneName('America/Argentina/Buenos_Aires')).toBe('Buenos Aires (Americas)');
+    expect(timezoneName('Atlantic/Cape_Verde')).toBe('Cape Verde (Atlantic)');
     expect(timezoneLabel('Asia/Kathmandu')).toContain('UTC+05:45');
     expect(timezoneLabel('Europe/London', new Date('2026-01-01T00:00:00Z'))).toContain('UTC+00:00');
     expect(timezoneLabel('Europe/London', new Date('2026-07-01T00:00:00Z'))).toContain('UTC+01:00');

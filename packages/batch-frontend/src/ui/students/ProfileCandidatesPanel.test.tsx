@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { StudentProfileCandidate } from '../../utils/api';
+import { StudioV2Provider } from '../studio-v2/StudioV2Context';
 import { ProfileCandidatesPanel } from './ProfileCandidatesPanel';
 import {
   PROFILE_CANDIDATE_APPROVED_FILTER,
@@ -54,6 +55,7 @@ function profileCandidate(
 }
 
 function renderProfileCandidatesPanel(options: {
+  studioV2?: boolean;
   candidates?: StudentProfileCandidate[];
   error?: string;
   filter?: ProfileCandidateFilter;
@@ -120,10 +122,36 @@ function renderProfileCandidatesPanel(options: {
     );
   }
 
-  return render(<Harness />);
+  return render(
+    <StudioV2Provider enabled={options.studioV2 ?? false}>
+      <Harness />
+    </StudioV2Provider>,
+  );
 }
 
 describe('ProfileCandidatesPanel', () => {
+  it('keeps saved suggestion wording distinct from an unapproved edit in v2', async () => {
+    const user = userEvent.setup();
+    const candidate = profileCandidate('pending', 'pending_review', 'unreviewed', null);
+    renderProfileCandidatesPanel({
+      studioV2: true,
+      candidates: [{ ...candidate, sourceLessonTitle: 'Workplace conversations' }],
+    });
+    await user.click(screen.getByRole('button', { name: 'Details' }));
+    expect(screen.getByText('Workplace conversations')).toBeTruthy();
+    expect(screen.getByText('Supporting excerpts')).toBeTruthy();
+    expect(screen.queryByText('Snapshot:')).toBeNull();
+    expect(screen.queryByText('student_memory_snapshot', { exact: false })).toBeNull();
+    const wording = screen.getByLabelText('Wording to approve');
+    fireEvent.change(wording, { target: { value: 'My edited suggestion' } });
+    await user.click(screen.getByRole('button', { name: 'Hide details' }));
+    expect(screen.getByText(candidate.proposedFact)).toBeTruthy();
+    expect(screen.getByText('Unsaved edit')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Details' }));
+    expect((screen.getByLabelText('Wording to approve') as HTMLTextAreaElement).value).toBe(
+      'My edited suggestion',
+    );
+  });
   it('does not claim an empty review or promotion queue when candidates could not load', () => {
     renderProfileCandidatesPanel({
       candidates: [],

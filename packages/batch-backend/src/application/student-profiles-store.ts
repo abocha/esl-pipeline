@@ -301,6 +301,7 @@ async function createStudentProfileDb(
       });
 
       await dependencies.revisions.saveRevision(id, starterProfileContent, {
+        expectedActiveRevisionId: null,
         source: 'starter_profile_form',
         status: 'active',
         createdBy: options?.audit?.changedBy ?? null,

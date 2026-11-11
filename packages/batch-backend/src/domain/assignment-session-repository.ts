@@ -2519,7 +2519,7 @@ export async function listAssignmentSessionsForUser(
       LIMIT $2
       OFFSET $3
       `,
-      [userId, limit, scope === 'history' ? offset : 0],
+      [userId, limit, offset],
     );
     return result.rows;
   });

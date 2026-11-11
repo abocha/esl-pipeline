@@ -189,6 +189,8 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
           createdAt: '2026-01-01T00:00:00.000Z',
           createdBy: options?.createdBy ?? null,
           restoredFromRevisionId: null,
+          baseActiveRevisionId: null,
+          baseActiveRevisionKnown: true,
           content,
         };
       },

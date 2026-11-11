@@ -553,6 +553,80 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
       ).rowCount,
     ).toBe(1);
   });
+  it.each([true, false])(
+    'keeps Google timing and cancellation available with planned charge %s',
+    async (plannedCharge) => {
+      const binding = await bindingFixture();
+      await project(binding, occurrence());
+      const original = (await q('SELECT * FROM student_lessons WHERE student_id=$1', [student]))
+        .rows[0];
+      expect(original).toMatchObject({
+        planned_charge: true,
+        consumes_credit: false,
+        credit_event_id: null,
+      });
+      await updateStudentLesson(workspace, student, original.id, { plannedCharge }, owner);
+      await project(
+        binding,
+        occurrence('moved-id', {
+          start: { dateTime: '2030-01-08T06:00:00Z', timeZone: 'Asia/Bangkok' },
+          end: { dateTime: '2030-01-08T07:00:00Z' },
+          etag: 'v2',
+          updated: '2029-01-02T00:00:00Z',
+        }),
+      );
+      let row = (await q('SELECT * FROM student_lessons WHERE id=$1', [original.id])).rows[0];
+      expect(row.starts_at.toISOString()).toBe('2030-01-08T06:00:00.000Z');
+      expect(row).toMatchObject({ planned_charge: plannedCharge, consumes_credit: false });
+      await project(
+        binding,
+        occurrence('moved-id', {
+          status: 'cancelled',
+          etag: 'v3',
+          updated: '2029-01-03T00:00:00Z',
+        }),
+      );
+      row = (await q('SELECT * FROM student_lessons WHERE id=$1', [original.id])).rows[0];
+      expect(row).toMatchObject({
+        status: 'canceled',
+        planned_charge: plannedCharge,
+        consumes_credit: false,
+        credit_event_id: null,
+      });
+    },
+  );
+
+  it('retains an explicit free occurrence when Google replaces provider identities', async () => {
+    const f = providerFixture(),
+      binding = await bindingFixture();
+    await project(binding, occurrence());
+    const old = (await q('SELECT id FROM student_lessons WHERE student_id=$1', [student])).rows[0]
+      .id;
+    await updateStudentLesson(workspace, student, old, { plannedCharge: false }, owner);
+    f.events.set('master', confirmed({ id: 'master', recurrence: ['RRULE:FREQ=WEEKLY'] }));
+    f.events.set('instance', { id: 'instance', status: 'cancelled' });
+    f.instances.mockResolvedValue({
+      items: [
+        occurrence('replacement', { originalStartTime: { dateTime: '2030-01-07T03:00:00Z' } }),
+      ],
+    });
+    await processCalendarRefresh(
+      await operationFixture('refresh', { bindingId: binding.id }),
+      f.provider,
+    );
+    expect(
+      (
+        await q(
+          'SELECT id,planned_charge,schedule_hidden_at FROM student_lessons WHERE student_id=$1',
+          [student],
+        )
+      ).rows,
+    ).toEqual([{ id: old, planned_charge: false, schedule_hidden_at: null }]);
+    expect((await getCalendarSchedulingStatus(workspace, owner)).state).toBe('needs_attention');
+    const activity = await getStudentActivity(workspace, student, owner, { category: 'lessons' });
+    expect(activity?.items.some((item) => item.type === 'lesson_changed')).toBe(true);
+  });
+
   it('keeps stable occurrence identity through moves, ignores older observations and protects completed history', async () => {
     const binding = await bindingFixture();
     await project(binding, occurrence());
