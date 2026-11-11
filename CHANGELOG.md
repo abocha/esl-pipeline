@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [23.1.0] - 2026-11-11
+
+### Changed
+
+- Automated release from PR #477: feat(studio): explain calendar issues and polish workspace actions (https://github.com/abocha/esl-pipeline/pull/477)
+
 ## [23.0.1] - 2026-11-11
 
 ### Changed
