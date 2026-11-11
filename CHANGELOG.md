@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [23.0.0] - 2026-11-11
+
+### Changed
+
+- Automated release from PR #474: feat(studio)!: integrate Calm Studio v2 and prepare the switch (https://github.com/abocha/esl-pipeline/pull/474)
+
 ## [22.5.4] - 2026-10-28
 
 ### Changed
