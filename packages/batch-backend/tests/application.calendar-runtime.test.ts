@@ -627,6 +627,36 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
     expect(activity?.items.some((item) => item.type === 'lesson_changed')).toBe(true);
   });
 
+  it('keeps an unmanaged lesson separate from a Google occurrence at the same time', async () => {
+    const legacyId = randomUUID();
+    await q(
+      `INSERT INTO student_lessons(id,student_id,workspace_id,starts_at,status)
+       VALUES($1,$2,$3,'2030-01-07T04:00:00Z','scheduled')`,
+      [legacyId, student, workspace],
+    );
+    const binding = await bindingFixture();
+    await project(binding, occurrence());
+    const { rows } = await q(
+      'SELECT lesson_id FROM calendar_lesson_bindings WHERE connection_id=$1',
+      [connection],
+    );
+    const googleLessonId = rows[0].lesson_id;
+    expect(googleLessonId).not.toBe(legacyId);
+
+    await project(binding, occurrence('instance', { status: 'cancelled', etag: 'v2' }));
+    expect(
+      (
+        await q('SELECT id,status FROM student_lessons WHERE id=$1 OR id=$2 ORDER BY status', [
+          legacyId,
+          googleLessonId,
+        ])
+      ).rows,
+    ).toEqual([
+      { id: googleLessonId, status: 'canceled' },
+      { id: legacyId, status: 'scheduled' },
+    ]);
+  });
+
   it('keeps stable occurrence identity through moves, ignores older observations and protects completed history', async () => {
     const binding = await bindingFixture();
     await project(binding, occurrence());
@@ -636,6 +666,7 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
       binding,
       occurrence('moved-id', {
         summary: 'Renamed in Google',
+        htmlLink: 'https://calendar.google.com/calendar/event?eid=moved',
         start: { dateTime: '2030-01-08T06:00:00Z', timeZone: 'Asia/Bangkok' },
         end: { dateTime: '2030-01-08T07:00:00Z' },
         etag: 'v2',
@@ -675,6 +706,20 @@ describePg('Calendar durable runtime with PostgreSQL and a controlled provider',
         ])
       ).rows[0].attention_code,
     ).toBe('protected_lesson_deleted');
+    const status = await getCalendarSchedulingStatus(workspace, member);
+    expect(status.issues).toEqual({
+      items: [
+        {
+          id: original.id,
+          studentName: 'Synthetic learner',
+          kind: 'lesson',
+          startsAt: '2030-01-08T06:00:00.000Z',
+          errorCode: 'protected_lesson_deleted',
+          eventUrl: 'https://calendar.google.com/calendar/event?eid=moved',
+        },
+      ],
+      hasMore: false,
+    });
   });
   it('rechecks committed source lineage after waiting for a concurrent FK insertion on the lesson', async () => {
     const binding = await bindingFixture();

@@ -740,7 +740,9 @@
   height: 25px;
   border-color: #bccdd0;
   border-radius: 50%;
-  font-size: 13px;
+}
+.assignment-workflow--v2 [data-status="complete"] .assignment-workflow__step-icon {
+  border-color: var(--cs-success);
 }
 .assignment-workflow--v2 button[aria-current="step"] .assignment-workflow__step-icon {
   border-color: var(--cs-action);

@@ -1,4 +1,4 @@
-import { ArrowLeft, AudioLines, BookOpen, Check, Send, Sparkles, UserRound } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardList, FileInput, Send, Sparkles, UserRound } from 'lucide-react';
 import type React from 'react';
 import { useLayoutEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
@@ -34,8 +34,8 @@ export interface AssignmentWorkflowProps {
 
 const stepIcons = {
   student: UserRound,
-  source: AudioLines,
-  context: BookOpen,
+  source: FileInput,
+  context: ClipboardList,
   assignment: Sparkles,
   review: Send,
 } as const;
@@ -147,8 +147,6 @@ export function AssignmentWorkflow({
                   <span className="assignment-workflow__step-icon">
                     {visualStatus === 'complete' ? (
                       <Check aria-hidden="true" />
-                    ) : studioV2 ? (
-                      <span aria-hidden="true">{index + 1}</span>
                     ) : (
                       <Icon aria-hidden="true" />
                     )}

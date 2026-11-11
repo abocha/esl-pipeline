@@ -50,6 +50,14 @@ export interface CalendarSetupDto {
   id: string;
   operations: CalendarOperationDto[];
 }
+export interface CalendarIssueDto {
+  id: string;
+  studentName: string;
+  kind: 'lesson' | 'one_off' | 'series';
+  startsAt: string | null;
+  errorCode: string;
+  eventUrl: string | null;
+}
 export interface CalendarSchedulingStatusDto {
   state: 'disconnected' | 'reconnect_required' | 'syncing' | 'synced' | 'needs_attention';
   connectionId: string | null;
@@ -58,6 +66,7 @@ export interface CalendarSchedulingStatusDto {
   lastSyncedAt: string | null;
   errorCode: string | null;
   operations: CalendarOperationDto[];
+  issues?: { items: CalendarIssueDto[]; hasMore: boolean };
 }
 export interface CalendarUnlinkedEventDto {
   id: string;

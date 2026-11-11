@@ -71,21 +71,14 @@
   color: var(--cs-ink-muted);
   font-size: var(--cs-text-meta);
 }
-.calm-shell__mark {
-  width: 38px;
-  height: 38px;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: var(--cs-radius-control);
-  background: var(--cs-action);
-  color: white;
-  font-size: 0.72rem;
-  font-weight: 850;
-  letter-spacing: 0.03em;
+.calm-shell__brand-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
 }
-.calm-shell__mark--compact::before {
-  content: "ESL";
+.calm-shell__brand-home img {
+  flex-shrink: 0;
 }
 
 .calm-shell__nav {
@@ -134,6 +127,25 @@
   margin-top: auto;
   padding: 0.8rem 0.75rem 1rem;
   border-top: 1px solid var(--cs-border);
+}
+.calm-shell__rail-footer .legal-links {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  margin: 0 0 0.5rem;
+  color: var(--cs-ink-muted);
+  font-size: var(--cs-text-meta);
+  text-align: center;
+}
+.calm-shell__rail-footer .legal-links a {
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.calm-shell__rail-footer .legal-links a:is(:hover, :focus-visible) {
+  background: var(--cs-selection);
+  color: var(--cs-action);
+  text-decoration-color: currentColor;
 }
 .calm-shell__rail-email {
   display: block;
@@ -210,10 +222,6 @@ html:has(.calm-shell--v2:not(.calm-shell--students)) {
     display: flex;
     min-height: 0;
   }
-  .calm-shell__mobile-brand .calm-shell__mark {
-    width: 32px;
-    height: 32px;
-  }
   .calm-shell__rail {
     transform: translateX(-100%);
     transition: transform var(--cs-motion-fast);
@@ -255,6 +263,7 @@ html:has(.calm-shell--v2:not(.calm-shell--students)) {
   min-height: 56px;
   padding: 0 14px;
   justify-content: space-between;
+  gap: 0.25rem;
   flex-shrink: 0;
 }
 .calm-shell__rail-toggle {

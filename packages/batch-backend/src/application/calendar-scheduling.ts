@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
 import type {
+  CalendarIssueDto,
   CalendarOperationDto,
   CalendarOperationReviewDto,
   CalendarSchedulingStatusDto,
@@ -21,6 +22,7 @@ import {
 } from '../domain/calendar-repository.js';
 import { assertWorkspaceCalendarRole } from '../domain/google-connection-repository.js';
 import { normalizeWorkspaceTimezone, readWorkspaceTimezone } from '../domain/workspace-timezone.js';
+import { safeCalendarEventUrl } from './calendar-sync.js';
 
 function wallParts(date: Date, timezone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -382,16 +384,51 @@ export async function getCalendarSchedulingStatus(
     );
     const flags = c
       ? (
-          await client.query<{ pending: boolean; needs_review: boolean; attention: boolean }>(
+          await client.query<{ pending: boolean; needs_review: boolean }>(
             `SELECT
     EXISTS(SELECT 1 FROM calendar_operations WHERE connection_id=$1 AND connection_generation=$2 AND state IN ('pending','running','retry_wait')) AS pending,
-    EXISTS(SELECT 1 FROM calendar_operations WHERE connection_id=$1 AND connection_generation=$2 AND state='needs_review') AS needs_review,
-    EXISTS(SELECT 1 FROM calendar_schedule_bindings WHERE connection_id=$1 AND attention_code IS NOT NULL) OR
-    EXISTS(SELECT 1 FROM calendar_lesson_bindings WHERE connection_id=$1 AND attention_code IS NOT NULL) AS attention`,
+    EXISTS(SELECT 1 FROM calendar_operations WHERE connection_id=$1 AND connection_generation=$2 AND state='needs_review') AS needs_review`,
             [c.id, c.generation],
           )
         ).rows[0]
       : null;
+    const issueLimit = 20;
+    const issueRows =
+      c && c.status !== 'disconnected'
+        ? (
+            await client.query<{
+              id: string;
+              student: string;
+              kind: CalendarIssueDto['kind'];
+              starts_at: Date | null;
+              attention_code: string;
+              event_url: string | null;
+            }>(
+              `WITH issues AS (
+             SELECT lb.lesson_id AS id, l.student_id, 'lesson' AS kind, l.starts_at,
+                    lb.attention_code, lb.event_url
+             FROM calendar_lesson_bindings lb
+             JOIN student_lessons l ON l.id=lb.lesson_id AND l.workspace_id=$2
+             WHERE lb.connection_id=$1 AND lb.attention_code IS NOT NULL
+             UNION ALL
+             SELECT b.id, b.student_id, b.kind, NULL, b.attention_code, NULL
+             FROM calendar_schedule_bindings b
+             WHERE b.connection_id=$1 AND b.workspace_id=$2 AND b.attention_code IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM calendar_lesson_bindings lb
+                 WHERE lb.schedule_binding_id=b.id AND lb.connection_id=b.connection_id
+                   AND lb.attention_code=b.attention_code
+               )
+           )
+           SELECT i.*, s.student FROM issues i
+           JOIN students s ON s.id=i.student_id AND s.workspace_id=$2
+           ORDER BY i.starts_at DESC NULLS FIRST, i.id
+           LIMIT $3`,
+              [c.id, workspaceId, issueLimit + 1],
+            )
+          ).rows
+        : [];
+    const attention = issueRows.length > 0;
     const stale = Boolean(c?.last_synced_at && Date.now() - c.last_synced_at.getTime() > 180_000);
     return {
       state:
@@ -399,7 +436,7 @@ export async function getCalendarSchedulingStatus(
           ? 'disconnected'
           : c.status === 'reconnect_required'
             ? 'reconnect_required'
-            : c.error_code || flags?.needs_review || flags?.attention
+            : c.error_code || flags?.needs_review || attention
               ? 'needs_attention'
               : flags?.pending
                 ? 'syncing'
@@ -413,9 +450,19 @@ export async function getCalendarSchedulingStatus(
       googleEmail: c?.google_email ?? null,
       lastSyncedAt: c?.last_synced_at?.toISOString() ?? null,
       errorCode:
-        c?.error_code ??
-        (stale ? 'sync_stale' : flags?.attention ? 'lesson_attention_required' : null),
+        c?.error_code ?? (stale ? 'sync_stale' : attention ? 'lesson_attention_required' : null),
       operations: ops.rows.map(calendarOperationDto),
+      issues: {
+        items: issueRows.slice(0, issueLimit).map((issue) => ({
+          id: issue.id,
+          studentName: issue.student,
+          kind: issue.kind,
+          startsAt: issue.starts_at?.toISOString() ?? null,
+          errorCode: issue.attention_code,
+          eventUrl: safeCalendarEventUrl(issue.event_url ?? undefined),
+        })),
+        hasMore: issueRows.length > issueLimit,
+      },
     };
   });
 }

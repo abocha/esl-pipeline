@@ -1,4 +1,4 @@
-import { BookOpen } from 'lucide-react';
+import { TextQuote } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
@@ -57,7 +57,7 @@ export function LessonTranscriptDisclosure({
       className={`learning-latest-transcript${compact ? ' learning-latest-transcript--compact' : ''}`}
     >
       <summary title={compact ? `Read transcript: ${lesson.lessonTitle || 'Lesson'}` : undefined}>
-        <BookOpen size={18} aria-hidden="true" />
+        <TextQuote size={18} aria-hidden="true" />
         <span>
           {compact
             ? `Read transcript: ${lesson.lessonTitle || 'Lesson'}`

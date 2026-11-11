@@ -47,7 +47,11 @@ Canonical behavior and current status live in:
 - Schedule and Billing retain one mounted controller and Calendar panel across the sibling
   routes, including independent lesson cursors, form drafts, operation recovery and mutation
   guards. Google remains authoritative for timing and recurrence. The v2 Calendar disclosure
-  keeps connection consent and provider actions available without crowding the agenda.
+  keeps connection consent and provider actions available without crowding the agenda. Calendar
+  warnings leave the drawer closed. **Review calendar issues** opens Calendar settings with the
+  affected lessons or events for the workspace and links to Google when available.
+- Scheduled legacy lessons can be hidden from the student’s Schedule list in the current browser.
+  **Show hidden legacy lessons** lets the tutor review and restore them.
 - The v2 assignment list loads active work, completed history and jobs in pages. Filters and
   search apply to loaded work and stay in the URL; older work remains available through Load
   older assignments. Exact session/job links open the full native editor and publication

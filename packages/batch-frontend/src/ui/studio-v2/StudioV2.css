@@ -194,6 +194,6 @@
     visibility: visible;
   }
   .calm-shell--v2.calm-shell--menu-open .calm-shell__rail .calm-shell__brand-home {
-    display: initial;
+    display: inline-flex;
   }
 }

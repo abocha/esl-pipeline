@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen } from 'lucide-react';
+import { ArrowRight, BookOpen, CalendarDays } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -109,8 +109,8 @@ export function LearningLessonContext({
           <Link
             to={`/students/${encodeURIComponent(studentId)}/schedule${nextLesson === null ? '#teaching-calendar' : ''}`}
           >
+            <CalendarDays size={16} aria-hidden="true" />
             {nextLesson === null ? 'Schedule lesson' : 'View schedule'}
-            <ArrowRight size={16} aria-hidden="true" />
           </Link>
         )}
       </div>

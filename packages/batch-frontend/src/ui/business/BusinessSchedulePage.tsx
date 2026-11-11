@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronDown, RefreshCw } from 'lucide-react';
+import { BookOpen, CalendarDays, ChevronDown, RefreshCw, TextQuote } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -381,10 +381,12 @@ export const BusinessSchedulePage: React.FC = () => {
                       <Link
                         to={`/?sessionId=${encodeURIComponent(lesson.homework.transcriptResultSessionId)}`}
                       >
+                        <TextQuote size={16} aria-hidden="true" />
                         View transcript
                       </Link>
                     ) : lesson.homework.htmlUrl ? (
                       <a href={lesson.homework.htmlUrl} target="_blank" rel="noreferrer">
+                        <BookOpen size={16} aria-hidden="true" />
                         Open homework
                       </a>
                     ) : canAddHomeworkForLesson(lesson) ? (
@@ -398,6 +400,7 @@ export const BusinessSchedulePage: React.FC = () => {
                         }
                         onClick={() => void runStartHomework(lesson.studentId, lesson.id)}
                       >
+                        <BookOpen size={16} aria-hidden="true" />
                         {lesson.status === 'scheduled'
                           ? lessonHasEnded(lesson)
                             ? 'Complete & add homework'
@@ -408,6 +411,7 @@ export const BusinessSchedulePage: React.FC = () => {
                       <Link
                         to={`/?sessionId=${encodeURIComponent(lesson.homework.assignmentSessionId)}`}
                       >
+                        <BookOpen size={16} aria-hidden="true" />
                         Continue assignment
                       </Link>
                     ) : null}

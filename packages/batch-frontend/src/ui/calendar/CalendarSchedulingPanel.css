@@ -197,6 +197,13 @@
   background: color-mix(in srgb, var(--cs-error) 7%, white);
 }
 
+.calendar-scheduling-panel .calendar-issue-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
 .calendar-scheduling-panel .calendar-intro,
 .calendar-scheduling-panel .calendar-connection-body,
 .calendar-scheduling-panel .calendar-creation,

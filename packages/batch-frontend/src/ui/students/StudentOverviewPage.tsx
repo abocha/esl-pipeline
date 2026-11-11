@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, CalendarDays } from 'lucide-react';
+import { ArrowRight, CalendarDays, Plus } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -560,7 +560,7 @@ export const StudentOverviewPage: React.FC = () => {
             className="product-button product-button--primary student-v2-start-assignment"
             to={`/?studentId=${encodeURIComponent(studentId)}`}
           >
-            <BookOpen size={18} aria-hidden="true" />
+            <Plus size={18} aria-hidden="true" />
             Start assignment
           </Link>
         </header>

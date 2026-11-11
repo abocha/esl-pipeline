@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, History, Pencil, Sparkles } from 'lucide-react';
+import { BookOpen, ChevronRight, History, Pencil, Plus, Sparkles } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -2101,7 +2101,7 @@ export const StudentLearningPage: React.FC = () => {
               className="learning-latest-work"
               to={`/?studentId=${encodeURIComponent(studentId)}`}
             >
-              <BookOpen size={18} aria-hidden="true" />
+              <Plus size={18} aria-hidden="true" />
               Start assignment
             </Link>
           )}

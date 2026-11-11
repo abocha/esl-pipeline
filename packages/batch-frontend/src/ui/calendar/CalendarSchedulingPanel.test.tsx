@@ -320,7 +320,7 @@ describe('Google Calendar scheduling panel', () => {
         <CalendarSchedulingPanel {...props} presentationActive routeHash="" />
       </StudioV2Provider>,
     );
-    expect(await screen.findByRole('dialog', { name: 'Schedule lesson' })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
   it('does not retain an inactive deep link after its hash is removed', async () => {
     const view = render(
@@ -525,7 +525,7 @@ describe('Google Calendar scheduling panel', () => {
     });
     render(<CalendarSchedulingPanel {...props} />);
     await screen.findByText('Needs attention');
-    expect(screen.getByText(/Some Google changes need review/)).toBeTruthy();
+    expect(screen.getByText(/The teaching calendar has lesson issues/)).toBeTruthy();
     expect(screen.queryByText('lesson_attention_required')).toBeNull();
     expect(screen.getByRole('button', { name: 'Sync now' })).toBeTruthy();
     const summary = screen.getByText('Connection settings');
@@ -535,6 +535,44 @@ describe('Google Calendar scheduling panel', () => {
     expect(details.open).toBe(true);
     expect(screen.getByRole('button', { name: 'Disconnect Google' })).toBeTruthy();
     expect(api.disconnectLessonCalendar).not.toHaveBeenCalled();
+  });
+  it('keeps the schedule visible until the tutor chooses to review a workspace calendar issue', async () => {
+    const eventUrl = 'https://calendar.google.com/calendar/event?eid=declined';
+    api.getCalendarSchedulingStatus.mockResolvedValue({
+      state: 'needs_attention',
+      errorCode: 'lesson_attention_required',
+      operations: [],
+      issues: {
+        items: [
+          {
+            id: 'lesson-2',
+            studentName: 'Jordan',
+            kind: 'lesson',
+            startsAt: '2026-11-02T08:00:00Z',
+            errorCode: 'invitation_declined',
+            eventUrl,
+          },
+        ],
+        hasMore: false,
+      },
+    });
+    render(
+      <StudioV2Provider enabled>
+        <CalendarSchedulingPanel {...props} />
+      </StudioV2Provider>,
+    );
+    const review = await screen.findByRole('button', { name: 'Review calendar issues' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Schedule lesson for Alex' })).toBeTruthy();
+    fireEvent.click(review);
+    const drawer = within(screen.getByRole('dialog', { name: 'Calendar settings' }));
+    const issues = within(drawer.getByRole('region', { name: 'Teaching calendar issues' }));
+    expect(issues.getByText('Jordan')).toBeTruthy();
+    expect(issues.getByText(/Nov 2, 2026, 3:00 PM/)).toBeTruthy();
+    expect(issues.getByText('The lesson invitation was declined in Google Calendar.')).toBeTruthy();
+    expect(issues.getByRole('link', { name: 'Open in Google' }).getAttribute('href')).toBe(
+      eventUrl,
+    );
   });
   it('requires review of captured recipient and time before explicit operation adoption', async () => {
     api.reviewCalendarOperation.mockResolvedValue({
