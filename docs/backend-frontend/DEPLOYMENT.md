@@ -304,43 +304,26 @@ Alpine-slim line; Caddy, PostgreSQL, and Redis remain on controlled official Alp
 the three production Dockerfiles and [`docker-compose.prod.yml`](../../docker-compose.prod.yml) for
 the current lines.
 
-The frontend runtime is pinned to `nginx:1.31.8-alpine3.24-slim`; the edge uses
-`caddy:2.11.7-alpine`. These patch versions include the upstream Nginx fixes through 1.31.7
-and Caddy's 2.11.6 security fixes plus 2.11.7 proxy regression fixes. See the
-[Nginx advisories](https://nginx.org/en/security_advisories.html) and
-[Caddy release notes](https://github.com/caddyserver/caddy/releases/tag/v2.11.7).
+The frontend runtime uses `nginx:1.31.8-alpine3.24-slim`. See the
+[Nginx advisories](https://nginx.org/en/security_advisories.html).
 The current Nginx configuration terminates no TLS/HTTP/3 and enables no AIO, alias, slice or SSI;
 version-based CVE matches alone do not establish exploitability. Keep patch selection current
 without treating this dated selection as a permanent security guarantee.
 
-Residual upstream limitation verified on 2026-10-22: the official Caddy 2.11.7 image contains
-Go 1.26.8 and `golang.org/x/net` 0.59.0. Its refreshed Alpine CA bundle addresses the eMudhra
-trust-store issue, but does not replace its compiled HTTP/2 implementation. October Go HTTP/2
-fixes require Go 1.26.9+ and the corresponding fixed `x/net` release; for example,
-[CVE-2026-78669](https://pkg.go.dev/vuln/GO-2026-6611). This upgrade does not claim to fix that
-remaining dependency gap.
+The public Caddy listeners offer HTTP/2 over TLS with HTTP/1.1 fallback. Cleartext HTTP/2 and
+HTTP/3 stay disabled. The digest-pinned official Caddy 2.11.9 image embeds Go 1.27.3 and
+`golang.org/x/net` 0.60.0 on linux/amd64, which address the October HTTP/2 issue and subsequent
+x509 issue. The advisory and configuration review is recorded in
+[ESL-97](https://linear.app/abocha/issue/ESL-97/upgrade-the-public-caddy-image-and-restore-tls-http2).
+See the [Caddy release notes](https://github.com/caddyserver/caddy/releases/tag/v2.11.9),
+[HTTP/2 advisory](https://pkg.go.dev/vuln/GO-2026-6611) and
+[x509 advisory](https://pkg.go.dev/vuln/GO-2026-6809).
 
-The public Caddy servers temporarily allow only `h1` (HTTP/1.1 over HTTPS), disabling HTTP/2,
-cleartext HTTP/2 and HTTP/3 while retaining certificates, redirects, compression and proxy routes.
-This mitigates the reachable HTTP/2 paths without changing the compiled binary. Browser SSE
-connections now share HTTP/1.1 connection limits across tabs; keep concurrent streaming tabs modest.
-Before rollout, validate all transition modes and exercise TLS ALPN, upload, SSE and MCP-style POST
-traffic locally. After rollout, confirm both public hosts negotiate `http/1.1` when offered
-`h2,http/1.1`, and recheck public routes and worker readiness.
-
-Restore HTTP/2 only after inspecting the official image digest and actual `caddy build-info`:
-the embedded Go toolchain and `golang.org/x/net` must address the relevant advisories at that time.
-The known CVE-2026-78669 floors are Go 1.26.9 and `x/net` 0.60.0, but these are not a substitute for
-checking newer advisories and actual binary vulnerability evidence. Refreshing Alpine packages or
-changing the Caddy version string alone is insufficient. Remove the `servers { protocols h1 }`
-restriction through a reviewed PR and the normal release/deployment flow, then verify ALPN and
-upload/SSE/MCP compatibility. Until then, retain HTTP/1.1-only operation; a custom edge image needs
-its own reviewed design. Roll back this mitigation by reverting its Caddyfile change and deploying
-through the same guarded flow. The normal planner should recreate only the edge when image and
-application configuration digests match; review the actual plan before apply.
-The edge recreation command uses `--no-deps`: Compose must not follow the frontend/backend
-dependency graph when new release-SHA aliases point to unchanged images. Planned application
-recreation and initial startup remain owned by their existing deployment steps.
+Before an edge upgrade, compare the inspected binary's actual Go and module versions against
+current advisories and the configured handlers. Validate all transition modes and exercise
+TLS ALPN, upload, SSE, and MCP-style POST traffic in a disposable stack. After rollout, confirm
+both public hosts negotiate `h2` when offered `h2,http/1.1`, and check HTTP/1.1 fallback,
+public routes, and worker readiness.
 
 **Refreshing the Caddy image.**
 
@@ -349,22 +332,22 @@ release that upgrades its reference, record the running edge image ID and reposi
 protected operator evidence, retain that image locally, and explicitly acquire the reviewed image:
 
 ```bash
-docker inspect --format '{{.Image}}' esl-pipeline-prod-caddy-edge-1
-docker image inspect caddy:2.11-alpine --format '{{json .RepoDigests}}'
-docker pull caddy:2.11.7-alpine
-docker run --rm --network none caddy:2.11.7-alpine caddy version
+edge_image=$(docker inspect --format '{{.Image}}' esl-pipeline-prod-caddy-edge-1)
+docker image inspect "$edge_image" --format '{{json .RepoDigests}}'
+docker pull "$reviewed_caddy_ref"
+docker run --rm --network none "$reviewed_caddy_ref" caddy build-info
 ```
 
-The old floating tag above describes the pre-upgrade baseline; on later upgrades inspect the
-actual running image reference. Never infer freshness from that tag or its build date. The exact
-new patch reference prevents reusing the old 2.11.4 image behind `caddy:2.11-alpine`. Follow the
-normal deployment plan/apply flow below: the Compose change selects runtime/edge recreation.
-Afterward verify `nginx -v` in the published frontend container and `caddy version` in the edge,
-then check HTTPS landing/app, SPA/assets, API health and OAuth/MCP discovery/auth routing.
+Set `reviewed_caddy_ref` to the exact image reference from the release checkout's production
+Compose file. Follow the normal deployment plan/apply flow. Changing the image reference changes
+the Compose digest, so plan for application runtime recreation even when image digests stay the
+same. An edge-only configuration change uses `--no-deps` to avoid restarting application
+services. Afterward verify `caddy version`, HTTPS landing/app, SPA/assets, API health, and
+OAuth/MCP discovery and authentication routing.
 
 `previous-images.env` records application images, not the old Caddy image. For edge rollback,
 use the recorded old repository digest in a protected Compose override for `caddy-edge`, with
-the intended checkout, production environment and application image state, and recreate only
+the prior release's Caddyfile, production environment and application image state, and recreate only
 that service with `--no-deps --no-build --force-recreate`. Recheck routes and the deployed
 Caddyfile. Preserve Caddy data/config volumes and previous application images; do not prune them
 until verification is complete. Application rollback still follows the compatibility-gated

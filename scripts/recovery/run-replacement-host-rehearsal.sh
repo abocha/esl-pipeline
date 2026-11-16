@@ -30,6 +30,7 @@ created_images=()
 host_image="$run_id-host:rehearsal"
 backend="$run_id/batch-backend:$revision"
 frontend="$run_id/batch-frontend:$revision"
+caddy="$run_id/caddy:$revision"
 cleanup_host() {
   if [[ -n "$container" ]]; then
     docker cp "$container:/evidence/." "$evidence/" 2>/dev/null || true
@@ -125,11 +126,23 @@ for service in batch-backend batch-frontend; do
   docker buildx build --builder "$builder" --load "${build_args[@]}" --label "org.opencontainers.image.revision=$revision" -f "$dockerfile" -t "$run_id/$service:$revision" "$work/source" > "$evidence/build-$service.log" 2>&1
   docker image inspect "$run_id/$service:$revision" --format '{{json .}}' > "$evidence/image-$service.json"
 done
-# Exact dependency refs from production Compose; no provider requests.
-for image in postgres:18.6-alpine3.24 redis:8.10.1-alpine3.23 caddy:2.11.7-alpine registry:2.8.3 motoserver/moto:5.1.15; do
-  docker pull "$image" > "$evidence/pull-${image//[\/:]/-}.log" 2>&1
+# Use the pinned source's dependency references, including when rehearsing an older release.
+compose_config="$(BATCH_BACKEND_IMAGE="$backend" BATCH_FRONTEND_IMAGE="$frontend" \
+  docker compose -f "$work/source/docker-compose.prod.yml" --profile edge \
+    config --no-env-resolution --format json)"
+dependency_images="$(node -e '
+  const { services } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+  for (const name of ["postgres", "redis", "caddy-edge"]) console.log(services[name].image);
+' <<< "$compose_config")"
+mapfile -t pinned_images <<< "$dependency_images"
+for image in "${pinned_images[@]}" registry:2.8.3 motoserver/moto:5.1.15; do
+  docker pull "$image" > "$evidence/pull-${image//[\/:@]/-}.log" 2>&1
 done
-docker save "$backend" "$frontend" postgres:18.6-alpine3.24 redis:8.10.1-alpine3.23 caddy:2.11.7-alpine registry:2.8.3 motoserver/moto:5.1.15 -o "$work/images.tar"
+# A local tag survives docker save/load even on stores that do not preserve digest references.
+if docker image inspect "$caddy" >/dev/null 2>&1; then echo 'Allocated image tag already exists' >&2; exit 1; fi
+docker tag "${pinned_images[2]}" "$caddy"
+created_images+=("$caddy")
+docker save "$backend" "$frontend" "${pinned_images[@]:0:2}" "$caddy" registry:2.8.3 motoserver/moto:5.1.15 -o "$work/images.tar"
 cat > "$work/host/Dockerfile" <<'DOCKERFILE'
 FROM ubuntu:24.04
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-sysv dbus ca-certificates && rm -rf /var/lib/apt/lists/*
