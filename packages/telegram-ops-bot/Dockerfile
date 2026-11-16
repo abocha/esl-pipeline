@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-trixie-slim AS build
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS build
 
 ENV CI=true
 
@@ -30,7 +30,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
     pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/telegram-ops-bot... run build \
     && pnpm --store-dir=/app/.pnpm-store/v11 --offline --filter @esl-pipeline/telegram-ops-bot deploy --prod /app/deployed
 
-FROM node:24-trixie-slim AS runtime
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS runtime
 
 ENV NODE_ENV=production \
     CI=true

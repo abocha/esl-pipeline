@@ -92,7 +92,7 @@ outcome, not proof of business success.
 
 Future delayed jobs are not runnable. Delayed jobs whose encoded due time has passed are runnable,
 because absent consumers can prevent promotion. Queue pause and delayed due-time interpretation use
-the installed BullMQ 6.3.4 layout. The collector reads at most 1001 new events per queue. Cursor loss,
+the installed BullMQ 6.3.19 layout. The collector reads at most 1001 new events per queue. Cursor loss,
 event-count discontinuity, stream reset, or more than 1000 new events creates a degraded
 `observationGap`, never inferred progress; it establishes a new cursor while retaining grace clocks.
 The first observation establishes a baseline and does not count historical events as new progress.

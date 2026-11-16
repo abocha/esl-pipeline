@@ -15,6 +15,7 @@ const backendPackage = JSON.parse(read('packages/batch-backend/package.json'));
 const compose = read('docker-compose.prod.yml').replaceAll('\r\n', '\n');
 const releaseWorkflow = read('.github/workflows/release-on-merge.yml');
 const orchestratorPackage = JSON.parse(read('packages/orchestrator/package.json'));
+const nodeVersion = read('.nvmrc').trim();
 
 const composeService = (serviceName) => {
   const heading = `\n  ${serviceName}:\n`;
@@ -26,16 +27,25 @@ const composeService = (serviceName) => {
   return compose.slice(start, end);
 };
 
-test('production application Node stages use Debian 13 slim and committed pnpm', () => {
+test('production application Node stages share the pinned Debian 13 slim base', () => {
+  const nodeBase = /^FROM (node:([\d.]+)-trixie-slim@sha256:[\da-f]{64}) AS build$/mu;
+  const sharedBase = nodeBase.exec(dockerfiles.get('backend'))?.[1];
+  assert.ok(sharedBase);
   for (const [name, dockerfile] of dockerfiles) {
-    assert.match(dockerfile, /FROM node:24-trixie-slim AS build/u, name);
+    const build = nodeBase.exec(dockerfile);
+    assert.equal(build?.[1], sharedBase, name);
+    assert.equal(build?.[2], nodeVersion, name);
     assert.doesNotMatch(dockerfile, /FROM node:[^\n]*alpine/u, name);
     assert.doesNotMatch(dockerfile, /corepack prepare|pnpm@10/u, name);
     assert.match(dockerfile, /corepack enable/u, name);
   }
 
-  assert.match(dockerfiles.get('backend'), /FROM node:24-trixie-slim AS runtime/u);
-  assert.match(dockerfiles.get('bot'), /FROM node:24-trixie-slim AS runtime/u);
+  for (const name of ['backend', 'bot']) {
+    assert.ok(
+      dockerfiles.get(name).split(/\r?\n/u).includes(`FROM ${sharedBase} AS runtime`),
+      name,
+    );
+  }
 });
 
 test('production builders fetch from the lockfile before copying package sources', () => {
@@ -125,7 +135,10 @@ test('backend runtime image copies the runtime-owned prompt asset tree', () => {
 });
 
 test('production infrastructure stays on controlled official image lines', () => {
-  assert.match(dockerfiles.get('frontend'), /FROM nginx:1\.31\.8-alpine3\.24-slim AS runtime/u);
+  assert.match(
+    dockerfiles.get('frontend'),
+    /^FROM nginx:1\.31\.8-alpine3\.24-slim@sha256:[\da-f]{64} AS runtime$/mu,
+  );
   assert.match(
     composeService('caddy-edge'),
     /^    image: caddy:2\.11\.9-alpine@sha256:[a-f0-9]{64}$/mu,

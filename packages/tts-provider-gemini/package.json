@@ -30,13 +30,13 @@
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/tts-core": "workspace:*",
-    "google-auth-library": "^11.3.1",
+    "google-auth-library": "^11.3.4",
     "js-yaml": "^5.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.5"
   },
   "engines": {
     "node": ">=24.15.0"

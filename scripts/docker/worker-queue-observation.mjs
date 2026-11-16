@@ -6,7 +6,7 @@ import { WORKERS } from '../deploy/verify-workers-ready.mjs';
 export const QUEUE_GRACE_MS = 10 * 60 * 1000;
 export const COLLECTOR_TIMEOUT_MS = 10_000;
 
-// BullMQ 6.3.4 Redis layout: delayed scores encode milliseconds * 4096.
+// BullMQ 6.3.19 encodes delayed scores as milliseconds * 4096.
 // EVAL_RO enforces Redis's non-writing script boundary, even if this script regresses.
 export const QUEUE_READ_SCRIPT = `
 local clock = redis.call('TIME')
