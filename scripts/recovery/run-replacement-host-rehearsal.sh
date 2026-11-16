@@ -79,6 +79,16 @@ mkdir "$work/source" "$work/host"
 # production checkout trust contract before bootstrap/backup/deployment reads any scripts.
 git -C "$ROOT_DIR" -c tar.umask=0022 archive "$revision" > "$work/repository.tar"
 tar -xf "$work/repository.tar" -C "$work/source"
+# Use the pinned source's dependency references, including when rehearsing an older release.
+compose_config="$(ESL_PRODUCTION_ENV_FILE=/dev/null \
+  BATCH_BACKEND_IMAGE="$backend" BATCH_FRONTEND_IMAGE="$frontend" \
+  docker compose -f "$work/source/docker-compose.prod.yml" --profile edge \
+    config --no-env-resolution --format json)"
+dependency_images="$(node -e '
+  const { services } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+  for (const name of ["postgres", "redis", "caddy-edge"]) console.log(services[name].image);
+' <<< "$compose_config")"
+mapfile -t pinned_images <<< "$dependency_images"
 # A dedicated builder owns its cache; remove it before guest image loads on small Cloud disks.
 # Native snapshotting works on nested filesystems without relying on an overlay-on-overlay mount.
 builder_args=(--name "$builder" --driver docker-container --buildkitd-flags '--oci-worker-snapshotter=native')
@@ -126,15 +136,6 @@ for service in batch-backend batch-frontend; do
   docker buildx build --builder "$builder" --load "${build_args[@]}" --label "org.opencontainers.image.revision=$revision" -f "$dockerfile" -t "$run_id/$service:$revision" "$work/source" > "$evidence/build-$service.log" 2>&1
   docker image inspect "$run_id/$service:$revision" --format '{{json .}}' > "$evidence/image-$service.json"
 done
-# Use the pinned source's dependency references, including when rehearsing an older release.
-compose_config="$(BATCH_BACKEND_IMAGE="$backend" BATCH_FRONTEND_IMAGE="$frontend" \
-  docker compose -f "$work/source/docker-compose.prod.yml" --profile edge \
-    config --no-env-resolution --format json)"
-dependency_images="$(node -e '
-  const { services } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
-  for (const name of ["postgres", "redis", "caddy-edge"]) console.log(services[name].image);
-' <<< "$compose_config")"
-mapfile -t pinned_images <<< "$dependency_images"
 for image in "${pinned_images[@]}" registry:2.8.3 motoserver/moto:5.1.15; do
   docker pull "$image" > "$evidence/pull-${image//[\/:@]/-}.log" 2>&1
 done
