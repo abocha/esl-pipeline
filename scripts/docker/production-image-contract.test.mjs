@@ -100,10 +100,11 @@ test('production deploys use dedicated lockfiles instead of legacy mode', () => 
 test('backend offline deploy uses layer-persisted fetched artifacts', () => {
   const backend = dockerfiles.get('backend');
   assert.match(backend, /RUN pnpm fetch --frozen-lockfile/u);
+  assert.match(backend, /^RUN --network=none find /mu);
   assert.match(backend, /install --offline --frozen-lockfile/u);
   assert.match(
     backend,
-    /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --filter [^\n]+ deploy --prod \/app\/deployed/u,
+    /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --trust-lockfile --frozen-lockfile --filter [^\n]+ deploy --prod \/app\/deployed/u,
   );
   assert.doesNotMatch(backend, /--mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11/u);
 });
@@ -112,12 +113,12 @@ test('bot portable deployment reuses its cached store without persisting it', ()
   const bot = dockerfiles.get('bot');
   assert.match(
     bot,
-    /RUN --mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11 \\\n    pnpm -r [^\n]+ run build/u,
+    /RUN --network=none --mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11 \\\n    pnpm -r [^\n]+ run build/u,
     'bot: deploy store cache mount',
   );
   assert.match(
     bot,
-    /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --filter [^\n]+ deploy --prod \/app\/deployed/u,
+    /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --trust-lockfile --frozen-lockfile --filter [^\n]+ deploy --prod \/app\/deployed/u,
   );
   assert.doesNotMatch(bot, /rm -rf \/app\/deployed\/\.pnpm-store/u);
 });
