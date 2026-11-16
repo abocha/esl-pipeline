@@ -130,9 +130,9 @@ test('production infrastructure stays on controlled official image lines', () =>
     composeService('caddy-edge'),
     /^    image: caddy:2\.11\.9-alpine@sha256:[a-f0-9]{64}$/mu,
   );
-  assert.match(composeService('postgres'), /^    image: postgres:18\.6-alpine3\.24$/mu);
+  assert.match(composeService('postgres'), /^    image: postgres:18\.7-alpine3\.24$/mu);
   const redisService = composeService('redis');
-  assert.match(redisService, /^    image: redis:8\.10\.1-alpine3\.23$/mu);
+  assert.match(redisService, /^    image: redis:8\.10\.3-alpine3\.23$/mu);
   assert.match(redisService, /^      - redis_data:\/data$/mu);
   assert.match(redisService, /^      - '127\.0\.0\.1:6379:6379'$/mu);
   for (const argument of [

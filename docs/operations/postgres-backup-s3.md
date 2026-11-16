@@ -103,7 +103,7 @@ An empty or mistargeted prefix produces `no_remote_dump_found` cleanly. S3 disco
 
 ## Disposable Restore Drill
 
-Restore the latest configured dump, or a selected dump, into isolated PostgreSQL 18.6:
+Restore the latest configured dump, or a selected dump, into isolated PostgreSQL 18.7:
 
 ```bash
 pnpm docker:db:restore-drill
@@ -116,12 +116,12 @@ restores and reads only the disposable database, records structured evidence, an
 container and volume through an exit trap. It does not reference or attach production
 `postgres18_data`.
 
-The default drill image is `postgres:18.6-alpine3.24`. Override it only as part of a reviewed runtime
+The default drill image is `postgres:18.7-alpine3.24`. Override it only as part of a reviewed runtime
 change:
 
 ```bash
-PG_BACKUP_RESTORE_DRILL_IMAGE=postgres:18.6-alpine3.24
-PG_BACKUP_RESTORE_DRILL_EXPECTED_VERSION=18.6
+PG_BACKUP_RESTORE_DRILL_IMAGE=postgres:18.7-alpine3.24
+PG_BACKUP_RESTORE_DRILL_EXPECTED_VERSION=18.7
 ```
 
 ## Intentional Restore into a Configured Database

@@ -22,8 +22,8 @@ HOST_STATE_DIR="$(pg_backup_resolve_host_state_dir)"
 LOG_DIR="${PG_BACKUP_LOG_DIR:-${HOST_STATE_DIR}/logs}"
 REPORT_DIR="${HOST_STATE_DIR}/reports"
 RUN_DIR="${HOST_STATE_DIR}/run"
-IMAGE="${PG_BACKUP_RESTORE_DRILL_IMAGE:-postgres:18.6-alpine3.24}"
-EXPECTED_VERSION="${PG_BACKUP_RESTORE_DRILL_EXPECTED_VERSION:-18.6}"
+IMAGE="${PG_BACKUP_RESTORE_DRILL_IMAGE:-postgres:18.7-alpine3.24}"
+EXPECTED_VERSION="${PG_BACKUP_RESTORE_DRILL_EXPECTED_VERSION:-18.7}"
 DRILL_DB="esl_restore_drill"
 DRILL_USER="esl_restore_drill"
 
@@ -228,7 +228,8 @@ container_created="true"
 result="wait_for_disposable_postgres"
 ready="false"
 for _ in $(seq 1 60); do
-  if docker exec "$container_name" pg_isready -U "$DRILL_USER" -d "$DRILL_DB" >/dev/null 2>&1; then
+  # Initialization uses a temporary socket-only server before starting the final server.
+  if docker exec "$container_name" pg_isready -h 127.0.0.1 -U "$DRILL_USER" -d "$DRILL_DB" >/dev/null 2>&1; then
     ready="true"
     break
   fi

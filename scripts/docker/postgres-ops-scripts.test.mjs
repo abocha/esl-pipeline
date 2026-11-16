@@ -77,10 +77,11 @@ test('artifact integrity and restore drill are separate evidence paths', () => {
   assert.match(drill, /pg_restore[\s\S]*--exit-on-error --no-owner --no-privileges/u);
 });
 
-test('restore drill targets disposable PostgreSQL 18.6 state and always removes it', () => {
+test('restore drill targets disposable PostgreSQL 18.7 state and always removes it', () => {
   const drill = readRepoFile('scripts/docker/run-postgres-restore-drill.sh');
-  assert.match(drill, /postgres:18\.6-alpine3\.24/u);
+  assert.match(drill, /postgres:18\.7-alpine3\.24/u);
   assert.match(drill, /--network none/u);
+  assert.match(drill, /pg_isready -h 127\.0\.0\.1/u);
   assert.match(drill, /target=\/var\/lib\/postgresql/u);
   assert.match(drill, /public\.schema_migrations/u);
   assert.match(drill, /public\.users/u);

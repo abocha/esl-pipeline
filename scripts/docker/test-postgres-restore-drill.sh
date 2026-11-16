@@ -50,7 +50,7 @@ aws() {
       echo "ERROR: offline test observed an unsafe latest-backup query: $query" >&2
       return 1
     fi
-    printf '%s\t%s\n' "$PG_BACKUP_TEST_REMOTE_KEY" '2026-09-13T00:00:00+00:00'
+    printf '%s\t%s\n' "$PG_BACKUP_TEST_REMOTE_KEY" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     return 0
   fi
   if [[ "$args" != *" s3 cp "* ]]; then
@@ -90,9 +90,9 @@ export PG_BACKUP_S3_REGION=ap-southeast-1
 export PG_BACKUP_S3_ENV=prod
 export PG_BACKUP_ALERT_TELEGRAM_DISABLE=true
 
-"${ROOT_DIR}/scripts/docker/run-postgres-restore-drill.sh" "$PG_BACKUP_TEST_REMOTE_KEY"
+bash "${ROOT_DIR}/scripts/docker/run-postgres-restore-drill.sh" "$PG_BACKUP_TEST_REMOTE_KEY"
 
-status_json="$("${ROOT_DIR}/scripts/docker/postgres-ops-status.sh" --json)"
+status_json="$(bash "${ROOT_DIR}/scripts/docker/postgres-ops-status.sh" --json)"
 # The program is intentionally single-quoted so JavaScript template literals remain untouched.
 # shellcheck disable=SC2016
 node -e '
@@ -117,7 +117,7 @@ const failures = [];
 if (report.status !== 'ok') failures.push(`status=${report.status}`);
 if (report.checksum_verified !== true) failures.push('checksum_verified=false');
 if (report.restore_verified !== true) failures.push('restore_verified=false');
-if (report.postgres_version !== '18.6') failures.push(`postgres_version=${report.postgres_version}`);
+if (report.postgres_version !== '18.7') failures.push(`postgres_version=${report.postgres_version}`);
 if (!(report.verification?.public_table_count > 0)) failures.push('public_table_count<=0');
 if (!(report.verification?.schema_migration_count > 0)) failures.push('schema_migration_count<=0');
 if (report.cleanup_status !== 'removed') failures.push(`cleanup_status=${report.cleanup_status}`);

@@ -2,7 +2,7 @@ name: esl-pipeline-smoke
 
 services:
   postgres:
-    image: postgres:18.6-alpine
+    image: postgres:18.7-alpine3.24
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
@@ -20,7 +20,7 @@ services:
       retries: 30
 
   redis:
-    image: redis:8.10.2-alpine3.23
+    image: redis:8.10.3-alpine3.23
     volumes:
       - redis_data:/data
     ports:

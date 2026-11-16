@@ -143,9 +143,9 @@ that the dump bytes match the recorded SHA-256 value. It does not prove restorea
 The restore drill first performs that integrity check, then:
 
 1. creates unique Docker container and volume names;
-2. starts `postgres:18.6-alpine3.24` with no published ports and `--network none`;
+2. starts `postgres:18.7-alpine3.24` with no published ports and `--network none`;
 3. restores with `pg_restore --exit-on-error --no-owner --no-privileges`;
-4. verifies PostgreSQL `18.6`, public-table and migration counts, and count-only reads from `users`,
+4. verifies PostgreSQL `18.7`, public-table and migration counts, and count-only reads from `users`,
    `jobs`, and `transcripts`;
 5. writes structured JSON evidence; and
 6. forcibly removes the disposable container and volume on success or failure.
