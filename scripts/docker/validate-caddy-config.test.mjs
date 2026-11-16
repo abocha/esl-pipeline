@@ -33,3 +33,9 @@ test('builds caddy validate docker args with an absolute Caddyfile bind mount', 
 test('public edge negotiates modern and fallback compression', () => {
   assert.match(caddyfile, /^\s*encode zstd gzip$/mu);
 });
+
+test('automatic redirects have an HTTP/1.1 listener and TLS offers HTTP/2', () => {
+  assert.match(caddyfile, /^\s*servers :443 \{\s+protocols h1 h2\s+\}/mu);
+  assert.match(caddyfile, /^\s*servers :80 \{\s+protocols h1\s+\}/mu);
+  assert.match(caddyfile, /^http:\/\/ \{\s+\}$/mu);
+});

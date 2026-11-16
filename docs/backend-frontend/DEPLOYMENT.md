@@ -310,8 +310,9 @@ The current Nginx configuration terminates no TLS/HTTP/3 and enables no AIO, ali
 version-based CVE matches alone do not establish exploitability. Keep patch selection current
 without treating this dated selection as a permanent security guarantee.
 
-The public Caddy listeners offer HTTP/2 over TLS with HTTP/1.1 fallback. Cleartext HTTP/2 and
-HTTP/3 stay disabled. The digest-pinned official Caddy 2.11.9 image embeds Go 1.27.3 and
+The public Caddy TLS listener offers HTTP/2 with HTTP/1.1 fallback. The explicit port 80
+listener serves HTTP/1.1 redirects. It keeps Caddy's generated redirect listener from accepting
+cleartext HTTP/2. HTTP/3 stays disabled. The digest-pinned official Caddy 2.11.9 image embeds Go 1.27.3 and
 `golang.org/x/net` 0.60.0 on linux/amd64, which address the October HTTP/2 issue and subsequent
 x509 issue. The advisory and configuration review is recorded in
 [ESL-97](https://linear.app/abocha/issue/ESL-97/upgrade-the-public-caddy-image-and-restore-tls-http2).
@@ -322,8 +323,8 @@ See the [Caddy release notes](https://github.com/caddyserver/caddy/releases/tag/
 Before an edge upgrade, compare the inspected binary's actual Go and module versions against
 current advisories and the configured handlers. Validate all transition modes and exercise
 TLS ALPN, upload, SSE, and MCP-style POST traffic in a disposable stack. After rollout, confirm
-both public hosts negotiate `h2` when offered `h2,http/1.1`, and check HTTP/1.1 fallback,
-public routes, and worker readiness.
+both public hosts negotiate `h2` when offered `h2,http/1.1`. Confirm HTTP/1.1 fallback, 308 redirects
+over HTTP, rejection of HTTP/2 prior knowledge on port 80, public routes, and worker readiness.
 
 **Refreshing the Caddy image.**
 
@@ -345,13 +346,16 @@ same. An edge-only configuration change uses `--no-deps` to avoid restarting app
 services. Afterward verify `caddy version`, HTTPS landing/app, SPA/assets, API health, and
 OAuth/MCP discovery and authentication routing.
 
-`previous-images.env` records application images, not the old Caddy image. For edge rollback,
-use the recorded old repository digest in a protected Compose override for `caddy-edge`, with
-the prior release's Caddyfile, production environment and application image state, and recreate only
-that service with `--no-deps --no-build --force-recreate`. Recheck routes and the deployed
-Caddyfile. Preserve Caddy data/config volumes and previous application images; do not prune them
-until verification is complete. Application rollback still follows the compatibility-gated
-procedure below; do not patch a running container or rebuild production images on the VPS.
+`previous-images.env` records application images. For an HTTP/2 rollback, prepare a protected
+Caddyfile with `protocols h1` on both listeners and keep the explicit `http://` site for redirects.
+Validate the file with the reviewed image before rollout. Use a protected Compose override for
+`caddy-edge` to mount this file and recreate only that service with
+`--no-deps --no-build --force-recreate`. If the new binary itself fails, use the recorded old image
+digest in the override and validate the hardened HTTP/1.1 file against it. The pre-restoration
+Caddyfile permits cleartext HTTP/2 on redirects. Recheck both listeners and public routes, then
+reconcile the rollback through the normal release path. Preserve Caddy volumes and previous
+application images through verification. Use the compatibility-gated procedure below for
+application rollback.
 
 All three production builders copy `pnpm-workspace.yaml`, root `package.json`, `pnpm-lock.yaml`,
 `tsconfig.base.json`, and the `packages` tree filtered by `.dockerignore`. The root files own pnpm

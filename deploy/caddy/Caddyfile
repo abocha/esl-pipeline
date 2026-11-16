@@ -1,7 +1,10 @@
 {
 	email {$CADDY_ACME_EMAIL}
-	servers {
+	servers :443 {
 		protocols h1 h2
+	}
+	servers :80 {
+		protocols h1
 	}
 	# Upstream error diagnostics contain the raw request URI/headers. nginx emits sanitized outcomes.
 	log default {
@@ -52,6 +55,10 @@ eslpipeline.com {
 	encode zstd gzip
 	root * /srv/landing
 	file_server
+}
+
+# Give automatic HTTPS redirects an explicit listener so they inherit the :80 limits.
+http:// {
 }
 
 import transition-{$CADDY_TRANSITION_MODE:disabled}
