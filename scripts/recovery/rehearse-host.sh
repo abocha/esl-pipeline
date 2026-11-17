@@ -96,6 +96,7 @@ services:
   redis:
     ports: !reset []
   caddy-edge:
+    image: ${REHEARSAL_CADDY_IMAGE:?}
     volumes:
       - /tmp/rehearsal-Caddyfile:/etc/caddy/Caddyfile:ro
     ports: !override
@@ -105,6 +106,7 @@ YAML
 # Deploy accepts one Compose file, so resolve the production file + disposable isolation overlay.
 export BATCH_BACKEND_IMAGE="localhost:15000/esl/batch-backend:$revision"
 export BATCH_FRONTEND_IMAGE="localhost:15000/esl/batch-frontend:$revision"
+export REHEARSAL_CADDY_IMAGE="$run_id/caddy:$revision"
 export BATCH_BACKEND_HOST_PORT=18080 BATCH_FRONTEND_HOST_PORT=15173
 export PROJECT_NAME=esl-recovery COMPOSE_PROJECT_NAME=esl-recovery
 export DEPLOY_INCLUDE_EDGE=false DEPLOY_INCLUDE_OPS_BOT=false
