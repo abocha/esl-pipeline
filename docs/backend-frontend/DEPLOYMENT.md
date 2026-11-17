@@ -297,9 +297,9 @@ or pull explicit image refs first, export the image variables above, then run `p
 
 ### Production image bases
 
-The backend, frontend builder, and Telegram bot Node stages use `node:24-trixie-slim`. Build and
-runtime stages stay on the same Debian/glibc family so native dependencies are never compiled
-against musl and run against glibc. The frontend runtime remains rootless nginx on the controlled
+The backend, frontend builder, and Telegram bot Node stages use digest-pinned
+`node:24.22.3-trixie-slim`. Build and runtime stages share Debian/glibc so native dependencies
+compile against the runtime's C library. The frontend runtime remains rootless nginx on the controlled
 Alpine-slim line; Caddy, PostgreSQL, and Redis remain on controlled official Alpine variants. See
 the three production Dockerfiles and [`docker-compose.prod.yml`](../../docker-compose.prod.yml) for
 the current lines.
@@ -365,7 +365,11 @@ the Docker context and no longer copied by the orchestrator postbuild step.
 
 Backend and Telegram runtime stages copy their `pnpm deploy --prod` output. The backend deployment
 includes `dist`, `migrations`, and `schema.sql`, with prompt assets copied separately to
-`/app/packages/batch-backend/prompt-assets`. Frontend runtime copies the built `dist` tree plus
+`/app/packages/batch-backend/prompt-assets`. Frozen fetch verifies the workspace lock against
+the registry and configured supply-chain policy. During the final network-disabled build step,
+pnpm installs the frozen workspace inputs offline and uses `--trust-lockfile` only when deploying
+the package-specific subset of those verified inputs. This avoids a second registry metadata
+lookup for the generated deployment lock. Frontend runtime copies the built `dist` tree plus
 `nginx-rootless.conf` and `nginx.conf`. The broad package-tree copy is intentional; production-image
 scope follows semantic workspace dependencies rather than every file in that build context.
 `scripts/release/production-image-scope.mjs` unions changed-package transitive dependents into the
@@ -379,7 +383,7 @@ every contributing reason, including mixed package/shared/unknown impacts. Unaff
 reuse/retag the previous version.
 
 Changed-image release builds use `pull: true`, commit-pinned Docker actions, persistent per-image GHA
-build caches, and controlled major/minor plus distribution tags. GHA cache export is best-effort
+build caches, and digest-pinned Node and nginx bases. GHA cache export is best-effort
 because it is only a build acceleration; image pushes and unchanged-image reuse remain fatal.
 Infrastructure-only releases reuse the prior image manifests without downloading and re-uploading
 their layers. Do not build production images on the Lightsail VPS, introduce a second worker image,

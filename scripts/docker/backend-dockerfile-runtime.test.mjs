@@ -7,8 +7,7 @@ const dockerfile = readFileSync(
   'utf8',
 );
 
-const runtimeMarker = 'FROM node:24-trixie-slim AS runtime';
-const runtimeStart = dockerfile.indexOf(runtimeMarker);
+const runtimeStart = dockerfile.search(/^FROM \S+ AS runtime$/mu);
 const runtimeStage = runtimeStart === -1 ? '' : dockerfile.slice(runtimeStart);
 
 test('backend runtime image creates writable tmp, uploads, and TTS cache before dropping privileges', () => {

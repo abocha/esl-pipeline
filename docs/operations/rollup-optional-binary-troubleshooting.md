@@ -29,9 +29,8 @@ store-path drift, or interrupted dependency setup).
 
 ## Toolchain Assumptions
 
-- Use the Node version in [`.nvmrc`](../../.nvmrc), currently `24.21.0`.
-- The root [`package.json`](../../package.json) pins pnpm `11.10.0`; use Corepack so the repository
-  package-manager pin is selected.
+- Use the Node version in [`.nvmrc`](../../.nvmrc).
+- Use Corepack to select the pnpm version pinned in the root [`package.json`](../../package.json).
 - Host installs use `storeDir: .pnpm-store/v11` from
   [`pnpm-workspace.yaml`](../../pnpm-workspace.yaml). There is no project `.npmrc` overriding it.
 - Windows, Linux, and WSL need separate host `node_modules` trees. Do not copy a host install between

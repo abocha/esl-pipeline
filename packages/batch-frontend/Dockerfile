@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-trixie-slim AS build
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS build
 
 ENV CI=true
 
@@ -23,7 +23,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
     pnpm --filter @esl-pipeline/batch-frontend... install --offline --frozen-lockfile
 RUN pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/batch-frontend... run build
 
-FROM nginx:1.31.8-alpine3.24-slim AS runtime
+FROM nginx:1.31.8-alpine3.24-slim@sha256:4c734d33ee731135dc9f2349914a34551c920f4451fca8bb05bf5880eb9079e8 AS runtime
 
 RUN mkdir -p /tmp/nginx \
     && chown -R nginx:nginx /tmp/nginx /var/cache/nginx /usr/share/nginx/html

@@ -9,22 +9,27 @@ syncInjectedDepsAfterScripts:
 storeDir: .pnpm-store/v11
 
 overrides:
+  # MCP's Node adapter supports both majors; select its patched Hono transport.
+  '@modelcontextprotocol/node@2.1.2>@hono/node-server': ^2.1.3
+  '@modelcontextprotocol/node@2.1.2>hono': ^4.13.16
   '@tootallnate/once': ^3.0.1
   'ajv@>=8.0.0 <8.18.0': ^8.18.0
   esbuild: ^0.28.1
+  'fast-uri@>=3.0.0 <3.1.9': ^3.1.9
+  'fast-uri@>=4.0.0 <4.2.3': ^4.2.3
   fast-xml-builder: ^1.2.0
-  fast-xml-parser: ^5.5.8
+  fast-xml-parser: ^5.12.0
   ioredis: ^6.0.0
   minimatch: ^10.2.4
   rollup: ^4.59.0
-  undici: ^7.29.1
+  undici: ^7.30.1
   uuid: ^11.1.1
   yaml: ^2.8.3
 
 # The published cookie types import Fastify but omit it from package metadata.
 # Keep the type augmentation attached to the backend's Fastify identity under pnpm's isolated linker.
 packageExtensions:
-  '@fastify/cookie@11.1.3':
+  '@fastify/cookie@11.1.5':
     peerDependencies:
       fastify: ^5.12.3
 
@@ -37,8 +42,5 @@ allowBuilds:
   unrs-resolver: true
 
 minimumReleaseAgeExclude:
-  - undici@7.29.1
   - '@types/node@24.13.4'
-  - fast-uri@3.1.6
   - js-yaml@4.3.2
-  - zod@4.6.4 || 4.6.6

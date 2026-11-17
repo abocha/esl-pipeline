@@ -1,4 +1,4 @@
-FROM node:24-alpine
+FROM node:24.22.3-alpine3.24@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
 
 ENV PNPM_HOME=/pnpm
 ENV PATH="${PNPM_HOME}:${PATH}" \
@@ -6,7 +6,7 @@ ENV PATH="${PNPM_HOME}:${PATH}" \
     CI=false
 
 # Install system dependencies
-RUN corepack enable && corepack prepare pnpm@11.27.0 --activate \
+RUN corepack enable && corepack prepare pnpm@11.28.12+sha512.94833387e35d503e8ad1010417cdeb82c120e7e69bafdf0a9db0690515beae7159274571e692b96abc2a085d3566fec54381afd978f65f64a85362dfd7e108f7 --activate \
     && apk add --no-cache ca-certificates \
     && mkdir -p /pnpm \
     && chmod 0777 /pnpm

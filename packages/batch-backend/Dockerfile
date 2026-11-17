@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-trixie-slim AS build
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS build
 
 ENV CI=true
 
@@ -23,12 +23,14 @@ RUN pnpm fetch --frozen-lockfile
 
 COPY packages ./packages
 
-RUN find packages -name '*.tsbuildinfo' -delete \
+# The frozen fetch verifies the workspace lock. Reuse its artifacts for the derived deploy lock
+# without requesting registry metadata again (pnpm/pnpm#18063).
+RUN --network=none find packages -name '*.tsbuildinfo' -delete \
     && pnpm --filter @esl-pipeline/batch-backend... install --offline --frozen-lockfile \
     && pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/batch-backend... run build \
-    && pnpm --store-dir=/app/.pnpm-store/v11 --offline --filter @esl-pipeline/batch-backend deploy --prod /app/deployed
+    && pnpm --store-dir=/app/.pnpm-store/v11 --offline --trust-lockfile --frozen-lockfile --filter @esl-pipeline/batch-backend deploy --prod /app/deployed
 
-FROM node:24-trixie-slim AS runtime
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS runtime
 
 ENV NODE_ENV=production \
     CI=true \

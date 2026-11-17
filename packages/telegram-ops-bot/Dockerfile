@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-trixie-slim AS build
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS build
 
 ENV CI=true
 
@@ -26,11 +26,12 @@ COPY packages ./packages
 RUN find packages -name '*.tsbuildinfo' -delete
 RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
     pnpm --filter @esl-pipeline/telegram-ops-bot... install --offline --frozen-lockfile
-RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
+# Deploy from the frozen, verified workspace lock's fetched artifacts (pnpm/pnpm#18063).
+RUN --network=none --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
     pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/telegram-ops-bot... run build \
-    && pnpm --store-dir=/app/.pnpm-store/v11 --offline --filter @esl-pipeline/telegram-ops-bot deploy --prod /app/deployed
+    && pnpm --store-dir=/app/.pnpm-store/v11 --offline --trust-lockfile --frozen-lockfile --filter @esl-pipeline/telegram-ops-bot deploy --prod /app/deployed
 
-FROM node:24-trixie-slim AS runtime
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS runtime
 
 ENV NODE_ENV=production \
     CI=true
