@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [23.1.2] - 2026-11-17
+
+### Changed
+
+- Automated release from PR #483: fix(security): refresh workspace dependencies and application images (https://github.com/abocha/esl-pipeline/pull/483)
+
 ## [23.1.1] - 2026-11-17
 
 ### Changed
