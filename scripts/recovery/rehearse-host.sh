@@ -153,6 +153,9 @@ trap retain_edge_logs EXIT
 iptables -I DOCKER-USER -o eth0 -j REJECT
 iptables -C DOCKER-USER -o eth0 -j REJECT
 compose up -d --wait --wait-timeout 120 postgres redis
+redis_container="$(compose ps -q redis)"
+redis_image="$(docker inspect "$redis_container" --format '{{.Config.Image}}')"
+redis_volume="$(docker inspect "$redis_container" --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')"
 [[ "$(docker network inspect "${PROJECT_NAME}_default" --format '{{.EnableIPv6}}')" == false ]]
 # S3 is an external dependency, not an application writer. Keep the emulator outside the
 # application Compose project so normal fail-closed writer discovery stays unchanged.
@@ -186,8 +189,7 @@ if [[ "$phase" == source ]]; then
   compose stop batch-backend batch-frontend
   bash scripts/docker/postgres-backup-restore.sh backup recovery
   compose stop redis
-  redis_volume="$(docker inspect "$(compose ps -aq redis)" --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')"
-  docker run --rm --network none -v "$redis_volume:/state:ro" -v /bundle:/bundle redis:8.10.1-alpine3.23 sh -ec 'tar -cf /bundle/redis.tar -C /state .'
+  docker run --rm --network none -v "$redis_volume:/state:ro" -v /bundle:/bundle "$redis_image" sh -ec 'tar -cf /bundle/redis.tar -C /state .'
   tar -cf /bundle/uploads.tar -C /opt/esl-pipeline uploads
   (cd /bundle; sha256sum uploads.tar redis.tar product.json media.json > state.sha256)
   printf '%s\n' "$revision" > /bundle/application-revision
@@ -211,8 +213,7 @@ else
   bash scripts/docker/postgres-backup-restore.sh restore /bundle/postgres/*.dump --clean > /evidence/restore.log
   tar -xf /bundle/uploads.tar -C /opt/esl-pipeline
   compose stop redis
-  redis_volume="$(docker inspect "$(compose ps -aq redis)" --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')"
-  docker run --rm --network none -v "$redis_volume:/state" -v /bundle:/bundle:ro redis:8.10.1-alpine3.23 sh -ec 'rm -rf /state/*; tar -xf /bundle/redis.tar -C /state'
+  docker run --rm --network none -v "$redis_volume:/state" -v /bundle:/bundle:ro "$redis_image" sh -ec 'rm -rf /state/*; tar -xf /bundle/redis.tar -C /state'
   compose up -d --wait --wait-timeout 120 redis
   [[ "$(compose exec -T redis redis-cli GET rehearsal:durable-marker)" == "$revision" ]]
   # Check schema against the image before the normal deploy can start application containers.

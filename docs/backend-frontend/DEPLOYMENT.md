@@ -27,7 +27,7 @@
 - Node `24.15.0+`
 - Docker + Docker Compose
 - Postgres 18+
-- Redis 8.10.1
+- Redis 8.10.3
 - ffmpeg available in backend runtime
 
 ## Fresh Ubuntu Production Host Bootstrap
@@ -794,7 +794,7 @@ chosen a non-sensitive key.
   - production Compose one-shot: `pnpm docker:prod:db:backup:s3 -- <label>`
   - production Compose listing: `pnpm docker:prod:db:list:s3`
   - remote download/checksum evidence: `pnpm docker:db:artifact-integrity -- <key.dump>`
-  - isolated PostgreSQL 18.6 restore/read evidence: `pnpm docker:db:restore-drill -- <key.dump>`
+  - isolated PostgreSQL 18.7 restore/read evidence: `pnpm docker:db:restore-drill -- <key.dump>`
 - Ops health status:
   - `pnpm ops:status`
 - Alert check (Telegram + cooldown/recovery):
@@ -828,10 +828,33 @@ capacity, container state/restarts, and the public application routes from the V
 report Lightsail burst balance or prove availability when the VPS itself is unreachable; see
 [`host-runtime-health.md`](../operations/host-runtime-health.md).
 
+## PostgreSQL Patch Rollout
+
+Routine application deployment leaves the PostgreSQL and Redis containers in place. For a
+PostgreSQL patch, record the running image digest, volume identity, server version, migration
+ledger, and installed extensions. Pull the reviewed image before stopping application writers.
+Once writers are quiescent, take and verify a logical backup using the
+[PostgreSQL backup and restore runbook](../operations/postgres-backup-restore.md).
+
+PostgreSQL 18.7 can start on an existing 18.x volume. Review the upstream index and extension
+notes before cutover. Reindex any existing `gist_trgm_ops` indexes and btree indexes on
+unconstrained `bpchar` after the update. Check for suspected GIN and TOAST index corruption and
+repair the affected indexes if indicated. The repository schema has three GIN trigram indexes on
+`recordings`. Check the live catalog before deciding whether any indexes need repair. The official
+image builds the bundled C extensions with its server. Check for additional C extensions or
+external libraries before upgrading, and use a logical `pg_dump` backup for this rollout.
+[PostgreSQL 18.7 release notes](https://www.postgresql.org/docs/18/release-18-7.html).
+
+Run `up -d --no-deps --no-build --wait postgres` with the production Compose project, current
+image state, and reviewed checkout to recreate PostgreSQL on its existing named volume. Verify
+`SHOW server_version`, the migration ledger, representative reads, and any required index work
+before restarting application services. If startup or verification fails, keep writers stopped
+and use the preserved previous image and verified backup to recover.
+
 ## Redis Queue Runtime
 
 Compose-managed Redis is used as durable queue/event infrastructure for BullMQ, not as a disposable
-cache. Production uses the exact official `redis:8.10.1-alpine3.23` image in standalone mode, with
+cache. Production uses the exact official `redis:8.10.3-alpine3.23` image in standalone mode, with
 the named `redis_data` volume mounted at `/data` and the host port published only on
 `127.0.0.1:6379`. Keep `maxmemory-policy noeviction` so Redis returns backpressure errors under
 memory pressure instead of evicting queue state. Production Compose enables AOF with
@@ -854,17 +877,16 @@ Treat a production Redis version change as a quiet stateful cutover. Before recr
 4. Pull the reviewed exact Redis image, recreate only the intended services, and never run the old
    and new Redis servers against the same volume concurrently.
 
-After recreation, require `redis_version:8.10.1`, a healthy Compose service, successful AOF load and
+After recreation, require `redis_version:8.10.3`, a healthy Compose service, successful AOF load and
 rewrite status, and the same effective persistence, eviction, and latency settings. Inspect Redis
 and worker logs for AOF/load, protocol, connection, and stalled-job errors. Resume consumers in a
 controlled order, verify all workers reconnect, and prove an ordinary queued job completes with its
 QueueEvents notification before restoring normal traffic.
 
 If Redis cannot load the persisted state or queue/runtime verification fails, stop the new Redis and
-consumers. Do not start Redis 8.6 against a volume that Redis 8.10.1 may have rewritten. Restore the
-verified pre-upgrade volume snapshot or copy, restore the recorded exact prior image, start Redis,
-verify its version/persistence/configuration, then reconnect workers and producers. Do not attempt
-ad-hoc AOF repair or data conversion on production.
+consumers. Restore the verified pre-upgrade volume snapshot or copy, start Redis with the recorded
+exact prior image, and verify its version, persistence, and configuration before reconnecting
+workers and producers. Do not attempt ad-hoc AOF repair or data conversion on production.
 
 Before the first BullMQ 6 deployment, run the read-only legacy-repeatable preflight against every
 configured ESL Pipeline queue while the currently running backend container still has BullMQ 5:

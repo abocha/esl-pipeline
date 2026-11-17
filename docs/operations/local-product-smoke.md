@@ -58,8 +58,8 @@ again. Do not point ordinary applications at smoke ports.
 
 | Component             | Execution           | Local address/state                                                |
 | --------------------- | ------------------- | ------------------------------------------------------------------ |
-| PostgreSQL 18.6       | Docker              | `127.0.0.1:55432`, `esl_smoke`, `esl-pipeline-smoke_postgres_data` |
-| Redis 8.10.2 Alpine   | Docker              | `127.0.0.1:56379`, `esl-pipeline-smoke_redis_data`                 |
+| PostgreSQL 18.7       | Docker              | `127.0.0.1:55432`, `esl_smoke`, `esl-pipeline-smoke_postgres_data` |
+| Redis 8.10.3 Alpine   | Docker              | `127.0.0.1:56379`, `esl-pipeline-smoke_redis_data`                 |
 | API                   | Host pnpm/tsx watch | `http://127.0.0.1:18080`                                           |
 | Student-memory worker | Host pnpm/tsx watch | isolated smoke queue/state                                         |
 | Frontend              | Host Vite           | `http://127.0.0.1:15173`, proxy to smoke API                       |
@@ -164,5 +164,5 @@ Keep the existing full stack for container/runtime fidelity or Docker-specific d
 [`windows-linux-dev.md`](windows-linux-dev.md) and
 [`DEPLOYMENT.md`](../backend-frontend/DEPLOYMENT.md) describe `pnpm docker:up` and recovery.
 It uses ordinary dev state and configuration, not this workflow's no-spend shield. Stop smoke before
-switching and explicitly inspect provider credentials. Development Redis is refreshed to the same
-official 8.10.2 Alpine tag; production Redis is unchanged.
+switching and explicitly inspect provider credentials. Development and smoke use the same
+PostgreSQL and Redis image versions as production, with separate volumes and ports.

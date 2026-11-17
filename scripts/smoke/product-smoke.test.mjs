@@ -74,7 +74,7 @@ test('explicit live key enables only foreground OpenAI with no retries', () => {
   assert.equal(env.GEMINI_API_KEY, '');
 });
 
-test('compose project, volumes, ports, and Redis version stay isolated from dev/prod', () => {
+test('smoke Compose isolates project, volumes, and ports while using the reviewed service images', () => {
   assert.deepEqual(composeArgs, [
     'compose',
     '--project-name',
@@ -86,12 +86,11 @@ test('compose project, volumes, ports, and Redis version stay isolated from dev/
   assert.match(smoke, /127\.0\.0\.1:55432:5432/u);
   assert.match(smoke, /127\.0\.0\.1:56379:6379/u);
   assert.doesNotMatch(smoke, /external:|container_name:|\bname:.*_data/u);
-  for (const file of ['docker-compose.yml', 'docker-compose.smoke.yml'])
-    assert.match(readFileSync(path.join(root, file), 'utf8'), /image: redis:8\.10\.2-alpine3\.23/u);
-  assert.match(
-    readFileSync(path.join(root, 'docker-compose.prod.yml'), 'utf8'),
-    /image: redis:8\.10\.1-alpine3\.23/u,
-  );
+  for (const file of ['docker-compose.yml', 'docker-compose.smoke.yml', 'docker-compose.prod.yml']) {
+    const compose = readFileSync(path.join(root, file), 'utf8');
+    assert.match(compose, /image: postgres:18\.7-alpine3\.24/u);
+    assert.match(compose, /image: redis:8\.10\.3-alpine3\.23/u);
+  }
 });
 
 test('smoke PostgreSQL readiness requires TCP instead of the startup Unix socket', () => {
