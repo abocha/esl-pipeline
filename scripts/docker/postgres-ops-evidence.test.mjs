@@ -72,7 +72,7 @@ if [[ "$1" == run ]]; then
 fi
 if [[ "$1" == exec ]]; then
   case "$*" in
-    *'SHOW server_version;'*) printf '18.6\\n' ;;
+    *'SHOW server_version;'*) printf '18.7\\n' ;;
     *'pg_catalog.pg_tables'*) printf '5\\n' ;;
     *'public.schema_migrations'*) printf '3\\n' ;;
     *'SELECT (SELECT count'*) printf '1\\t2\\t3\\n' ;;
