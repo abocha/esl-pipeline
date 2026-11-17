@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [23.1.1] - 2026-11-17
+
+### Changed
+
+- Automated release from PR #481: fix(infra): restore TLS HTTP/2 on the patched Caddy edge (https://github.com/abocha/esl-pipeline/pull/481)
+
 ## [23.1.0] - 2026-11-11
 
 ### Changed
