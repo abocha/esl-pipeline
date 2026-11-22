@@ -63,8 +63,8 @@ import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
 import { ReviewShareStep } from '../assignments/steps/ReviewShareStep';
 import { TeachingContextStep } from '../assignments/steps/TeachingContextStep';
 import { useAssignmentNavigationGuard } from '../shell/assignment-navigation-guard';
-import { PageLoading } from '../system/LoadingPlaceholder';
 import { useLessonChargeReview } from '../students/LessonChargeReview';
+import { PageLoading } from '../system/LoadingPlaceholder';
 import { assignmentMaterialErrors } from './AssignmentMaterialForm.validation';
 import {
   AdvancedActionsStage,
@@ -313,16 +313,6 @@ function buildSelectablePresetOptions(
   }));
 }
 
-function formatLessonContext(
-  lesson: ScheduleLesson | null,
-  lessonId: string,
-  timezone: string | null,
-): string {
-  if (!lesson) return `Lesson context: ${lessonId}`;
-  const topic = lesson.title?.trim() ? lesson.title.trim() : 'Untitled lesson';
-  return `Lesson context: ${formatTutorTime(lesson.startsAt, timezone)} - ${topic} - ${lesson.id}`;
-}
-
 function isRecentPassedNoHomeworkLesson(lesson: ScheduleLesson, nowMs: number): boolean {
   if (lesson.homework.status !== 'not_started') return false;
   if (lesson.status === 'canceled') return false;
@@ -402,7 +392,6 @@ export const MinimalAssignment: React.FC = () => {
     useState<PronunciationMode | null>(null);
 
   const sourceSectionRef = useRef<HTMLElement | null>(null);
-  const sourceHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const sourceStudentSelectRef = useRef<HTMLSelectElement | null>(null);
   const contextSectionRef = useRef<HTMLElement | null>(null);
   const contextHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -3097,9 +3086,9 @@ export const MinimalAssignment: React.FC = () => {
     exactLinkedLesson.lesson.id === linkedLessonId
       ? exactLinkedLesson.lesson
       : null);
-  const linkedLessonContextLabel = linkedLessonId
-    ? formatLessonContext(linkedLesson, linkedLessonId, timezone)
-    : null;
+  const lessonSummary = linkedLesson
+    ? `${linkedLesson.title?.trim() || 'Untitled lesson'} · ${formatTutorTime(linkedLesson.startsAt, timezone)}`
+    : source.selectedStudent?.name;
   const lessonSuggestions = useMemo<AssignmentLessonSuggestion[]>(() => {
     if (!scheduleSurface || scheduleSurface.studentId !== source.selectedStudentId) return [];
     const nowMs = Date.now();
@@ -3399,6 +3388,9 @@ export const MinimalAssignment: React.FC = () => {
             manualSaving={source.manualTranscriptSaving}
             manualError={source.manualTranscriptError}
             transcriptReady={transcriptReady}
+            lessonSummary={lessonSummary}
+            manualSource={source.recording?.source === 'manual_transcript'}
+            uploading={source.uploading}
             sourcePrepared={Boolean(source.recording || source.transcript)}
             preparedSourceKey={`${source.recording?.recordingId ?? ''}:${source.transcript?.transcriptId ?? ''}`}
             onCreateManualTranscript={handleCreateManualTranscript}
@@ -3431,7 +3423,6 @@ export const MinimalAssignment: React.FC = () => {
               }
               stage={sourceStage}
               sectionRef={sourceSectionRef}
-              headingRef={sourceHeadingRef}
               studentSelectRef={sourceStudentSelectRef}
               studentOptions={source.studentOptions}
               studentOptionsError={source.studentOptionsError}
@@ -3440,9 +3431,7 @@ export const MinimalAssignment: React.FC = () => {
                 if (linkedLessonId) return;
                 handleStudentSelectionChange(value);
               }}
-              selectedStudent={source.selectedStudent}
               linkedLessonId={linkedLessonId || null}
-              linkedLessonContextLabel={linkedLessonContextLabel}
               lessonSuggestions={lessonSuggestions}
               lessonSuggestionsError={scheduleSurfaceError}
               onSelectLessonSuggestion={handleLinkedLessonSelection}

@@ -167,17 +167,6 @@ vi.mock('../shared/DropZone', () => ({
   ),
 }));
 
-vi.mock('../shared/UploadProgress', () => ({
-  UploadProgress: ({ progress, onCancel }: { progress: number; onCancel: () => void }) => (
-    <div>
-      Upload progress: {progress}%
-      <button type="button" onClick={onCancel}>
-        Cancel upload
-      </button>
-    </div>
-  ),
-}));
-
 const now = '2026-02-05T00:00:00.000Z';
 const UI_WAIT_TIMEOUT_MS = 3_000;
 const INTEGRATION_TEST_TIMEOUT_MS = 15_000;

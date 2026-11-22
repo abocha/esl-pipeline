@@ -2001,11 +2001,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
       await user.click(screen.getByRole('button', { name: /^Step 2Lesson source$/i }));
 
       await user.click(screen.getByRole('button', { name: /Replace audio/i }));
-      expect(screen.getByText(/Recording: wrong-lesson\.mp3/i)).toBeTruthy();
+      expect(screen.getByText(/wrong-lesson\.mp3/i)).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /Drop replacement audio/i }));
 
       await screen.findByDisplayValue('Correct lesson transcript');
-      expect(screen.getByText(/Recording: correct-lesson\.mp3/i)).toBeTruthy();
+      expect(screen.getByText(/correct-lesson\.mp3/i)).toBeTruthy();
       await user.click(
         screen.getByRole('button', { name: /Confirm and continue|Continue to Create/i }),
       );
@@ -2089,7 +2089,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       await user.click(screen.getByRole('button', { name: /Drop replacement audio/i }));
 
       expect(await screen.findByText('Replacement upload failed')).toBeTruthy();
-      expect(screen.getByText(/Recording: current-lesson\.mp3/i)).toBeTruthy();
+      expect(screen.getByText(/current-lesson\.mp3/i)).toBeTruthy();
       expect(screen.getByDisplayValue('Current lesson transcript')).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
@@ -2267,7 +2267,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     await screen.findByDisplayValue('Student transcript text');
 
     expect(scrollIntoView).not.toHaveBeenCalled();
-    expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /Lesson recording/i })).toBeTruthy();
     expect(
       screen.getByRole('button', { name: /^Step 2Lesson source$/i }).getAttribute('aria-current'),
     ).toBe('step');

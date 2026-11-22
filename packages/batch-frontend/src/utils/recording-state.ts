@@ -28,12 +28,12 @@ export const RECORDING_ERROR_ACTIONS: Record<RecordingErrorCode, string> = {
 export const GENERIC_RECORDING_TERMINAL_ACTION =
   'Automatic transcription could not finish. Replace the recording or upload it again later.';
 
-const PRODUCT_STATE_LABELS: Record<RecordingProductState, string> = {
-  checking: 'Checking recording',
-  waiting: 'Waiting to transcribe',
-  transcribing: 'Transcribing',
-  retrying: 'Trying again automatically',
-  ready: 'Ready for review',
+const PRODUCT_STATE_LABELS: Record<RecordingProductState, string | null> = {
+  checking: 'Preparing transcript',
+  waiting: 'Preparing transcript',
+  transcribing: 'Preparing transcript',
+  retrying: 'Preparing transcript',
+  ready: null,
   attention: 'Recording needs attention',
 };
 
@@ -48,7 +48,7 @@ export function getRecordingProductLabel(
   uploading: boolean,
   uploadProgress: number,
 ): string | null {
-  if (uploading) return uploadProgress >= 100 ? 'Checking recording' : 'Uploading recording';
+  if (uploading) return uploadProgress >= 100 ? 'Preparing transcript' : 'Uploading recording';
   return recording ? PRODUCT_STATE_LABELS[recording.productState] : null;
 }
 

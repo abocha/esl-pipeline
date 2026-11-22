@@ -154,7 +154,7 @@ describe('MinimalAssignment upload operation ownership', () => {
     renderMinimalAssignment();
     await startNewAssignmentForLearner(user);
     fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
-    await screen.findByText(/Recording: original\.mp3/i);
+    await screen.findByText(/original\.mp3/i);
     fireEvent.click(screen.getByRole('button', { name: /Replace audio/i }));
     fireEvent.click(screen.getByRole('button', { name: /Drop replacement audio/i }));
 
@@ -202,8 +202,8 @@ describe('MinimalAssignment upload operation ownership', () => {
     renderMinimalAssignment();
     await startNewAssignmentForLearner(user);
     fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
-    await screen.findByRole('button', { name: /Cancel upload/i });
-    fireEvent.click(screen.getByRole('button', { name: /Cancel upload/i }));
+    await screen.findByRole('button', { name: /^Cancel$/i });
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
     await screen.findByText(/Upload canceled/i);
     fireEvent.click(screen.getByRole('button', { name: /Retry upload/i }));
 
@@ -317,7 +317,7 @@ describe('MinimalAssignment upload operation ownership', () => {
         '33333333-3333-4333-8333-333333333333',
       ),
     );
-    expect(screen.getAllByText('Trying again automatically')).not.toHaveLength(0);
+    expect(screen.getAllByText('Preparing transcript')).not.toHaveLength(0);
   });
 
   it('discards a completed reconciliation after a new assignment, student, and pending operation replace its owner', async () => {
@@ -475,7 +475,7 @@ describe('MinimalAssignment upload operation ownership', () => {
     await user.click(await screen.findByRole('button', { name: /Resume recent work/i }));
     await user.click((await screen.findAllByRole('radio'))[0]!);
     await user.click(screen.getByRole('button', { name: /Continue assignment/i }));
-    await screen.findByText(/Recording: assignment-b\.mp3/i);
+    await screen.findByText(/assignment-b\.mp3/i);
 
     expect(sessionStorage.getItem(workflowStorageKey)).not.toBe('workflow-assignment-a');
     expect(localStorage.getItem(pendingOperationStorageKey)).toBeNull();
@@ -502,7 +502,7 @@ describe('MinimalAssignment upload operation ownership', () => {
     });
 
     await waitFor(() => expect(screen.queryByText(/assignment-a-stale\.mp3/i)).toBeNull());
-    expect(screen.getByText(/Recording: assignment-b\.mp3/i)).toBeTruthy();
+    expect(screen.getByText(/assignment-b\.mp3/i)).toBeTruthy();
   });
 
   it('does not hydrate an operation persisted for a different workflow', async () => {

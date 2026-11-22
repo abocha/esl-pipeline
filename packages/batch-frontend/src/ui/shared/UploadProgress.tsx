@@ -15,7 +15,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ fileName, progre
     <div className="upload-progress">
       <div className="upload-progress-header">
         <div>
-          <span className="upload-progress-label">Uploading</span>
+          <span className="upload-progress-label">Uploading recording</span>
           {fileName ? <span className="upload-progress-name">{fileName}</span> : null}
         </div>
         {onCancel ? (
@@ -24,7 +24,14 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ fileName, progre
           </button>
         ) : null}
       </div>
-      <div className="upload-progress-bar">
+      <div
+        className="upload-progress-bar"
+        role="progressbar"
+        aria-label="Recording upload"
+        aria-valuenow={normalized}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
         <span style={{ transform: `scaleX(${normalized / 100})` }} />
       </div>
       <span className="upload-progress-value">{normalized}%</span>
