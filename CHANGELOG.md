@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [23.2.1] - 2026-11-22
+
+### Changed
+
+- Automated release from PR #487: feat(frontend): simplify lesson recording preparation and review (https://github.com/abocha/esl-pipeline/pull/487)
+
 ## [23.2.0] - 2026-11-22
 
 ### Changed
