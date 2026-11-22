@@ -455,6 +455,9 @@ describe('Calm Studio design journeys', () => {
     const router = renderStudio('overview');
     await user.click(screen.getByRole('button', { name: 'Learning' }));
     await user.click(screen.getByRole('button', { name: 'Edit profile' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('Current level')),
+    );
     await user.type(screen.getByLabelText('Learning goals'), ' Additional context.');
     await act(async () => {
       await router.navigate(-1);
