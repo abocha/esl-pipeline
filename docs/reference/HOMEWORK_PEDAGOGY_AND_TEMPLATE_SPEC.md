@@ -233,6 +233,8 @@ Purpose:
 
 Protected invariants:
 
+- start each practice part with a worked example numbered `0.` that models a complete response
+  using a separate prompt. Independent attempts and their answer key start at `1.`
 - controlled practice should be directly tied to the week's focus
 - it should include targeted correction of relevant learner errors
 - some items should revisit recent homework or recurring issues when that review is truly warranted

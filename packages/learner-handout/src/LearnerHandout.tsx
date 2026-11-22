@@ -110,35 +110,45 @@ function PracticeParts({
   const Heading = answers ? 'h4' : 'h3';
   return (
     <>
-      {assignment.practice.map((part, i) => (
-        <div className="practice-part" key={i}>
-          {(part.title !== null || assignment.practice.length > 1) && (
-            <Heading>
-              <span className="practice-part-number">Part {i + 1}</span>
-              {part.title && (
-                <>
-                  :{' '}
-                  <Inline>
-                    {part.title.replace(/^\s*(?:(?:Part|Часть)\s+)?\d+\s*[.):\-–—]\s*/iu, '')}
-                  </Inline>
-                </>
-              )}
-            </Heading>
-          )}
-          {!answers && part.instructions && <Text>{part.instructions}</Text>}
-          {answers ? (
-            <Answers questions={part.items} />
-          ) : (
-            <ol lang="en">
-              {part.items.map((q, j) => (
-                <li key={j} className="plain-text">
-                  <Inline>{q.prompt}</Inline>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      ))}
+      {assignment.practice.map((part, i) => {
+        const instructions = part.instructions ?? '';
+        const example = /(?:^|\r?\n)0\. Example: (.+)$/.exec(instructions.trimEnd());
+        const directions = example ? instructions.slice(0, example.index) : instructions;
+        return (
+          <div className="practice-part" key={i}>
+            {(part.title !== null || assignment.practice.length > 1) && (
+              <Heading>
+                <span className="practice-part-number">Part {i + 1}</span>
+                {part.title && (
+                  <>
+                    :{' '}
+                    <Inline>
+                      {part.title.replace(/^\s*(?:(?:Part|Часть)\s+)?\d+\s*[.):\-–—]\s*/iu, '')}
+                    </Inline>
+                  </>
+                )}
+              </Heading>
+            )}
+            {!answers && directions && <Text>{directions}</Text>}
+            {answers ? (
+              <Answers questions={part.items} />
+            ) : (
+              <ol lang="en" start={example ? 0 : undefined}>
+                {example && (
+                  <li>
+                    <strong>Example:</strong> <Inline>{example[1]!}</Inline>
+                  </li>
+                )}
+                {part.items.map((q, j) => (
+                  <li key={j} className="plain-text">
+                    <Inline>{q.prompt}</Inline>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }

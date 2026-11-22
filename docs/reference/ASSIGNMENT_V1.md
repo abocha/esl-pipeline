@@ -74,7 +74,10 @@ Markdown, HTML, links or code blocks. Highlights wrap, retain expression bold/ex
 and apply to learner content and answer copies. Machine IDs, enum values, URLs, speaker identity
 and media bindings are excluded. Generation authors selective cues without revealing the choice
 being tested. Practice titles are descriptive and unnumbered; rendering removes a bounded existing
-numeric prefix and supplies one part number. Canonical values stay exact. Derived study speech and
+numeric prefix and supplies one part number. For each practice part the template ends `instructions` with a separate
+`0. Example: <prompt> → <completed response>` line. The handout places this English example at
+the start of the exercise list. Independent items and their answer key start at 1. Earlier parts
+without the example line render as originally authored. Canonical values stay exact. Derived study speech and
 pronunciation projections remove paired delimiters; chunk reconstruction and lexical checks compare
 the derived text without mutating stored strings.
 
