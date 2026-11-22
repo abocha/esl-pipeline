@@ -74,7 +74,7 @@ describe('LessonSourceStep', () => {
       </LessonSourceStep>,
     );
 
-    await user.click(screen.getByRole('button', { name: /Change lesson source/i }));
+    await user.click(screen.getByRole('button', { name: /Change source/i }));
     expect(screen.getByRole('button', { name: /Upload lesson recording/i })).toBeTruthy();
     expect(screen.queryByText(/OPUS audio only/i)).toBeNull();
     expect(screen.getByRole('button', { name: /Use an existing transcript/i })).toBeTruthy();
@@ -82,7 +82,7 @@ describe('LessonSourceStep', () => {
     expect(screen.queryByRole('button', { name: /Use an existing transcript/i })).toBeNull();
     expect(screen.getByText('Current source summary')).toBeTruthy();
 
-    await user.click(screen.getByRole('button', { name: /Change lesson source/i }));
+    await user.click(screen.getByRole('button', { name: /Change source/i }));
     await user.click(screen.getByRole('button', { name: /Use an existing transcript/i }));
     await user.type(
       screen.getByRole('textbox', { name: /Existing lesson transcript/i }),

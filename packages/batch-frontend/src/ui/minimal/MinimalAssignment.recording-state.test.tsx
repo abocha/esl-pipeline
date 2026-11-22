@@ -53,14 +53,13 @@ describe('MinimalAssignment recording projection', () => {
     await act(async () => {
       resolveUpload?.(checking);
     });
-    expect(await screen.findAllByText('Checking recording')).not.toHaveLength(0);
+    expect(await screen.findAllByText('Preparing transcript')).not.toHaveLength(0);
   });
 
   it.each([
-    ['queued', 'waiting', 'queued', 'Waiting to transcribe'],
-    ['transcribing', 'transcribing', 'submitting', 'Transcribing'],
-    ['transcribing', 'retrying', 'retry_wait', 'Trying again automatically'],
-    ['transcribed', 'ready', 'succeeded', 'Ready for review'],
+    ['queued', 'waiting', 'queued', 'Preparing transcript'],
+    ['transcribing', 'transcribing', 'submitting', 'Preparing transcript'],
+    ['transcribing', 'retrying', 'retry_wait', 'Preparing transcript'],
   ] as const)(
     'renders canonical %s/%s state from upload and polling',
     async (status, productState, runState, label) => {
@@ -68,7 +67,7 @@ describe('MinimalAssignment recording projection', () => {
         status,
         productState,
         runState,
-        transcriptId: status === 'transcribed' ? 'tx-1' : null,
+        transcriptId: null,
       });
       vi.mocked(api.uploadRecording).mockResolvedValue(projected);
       vi.mocked(api.getRecording).mockResolvedValue(projected);
@@ -78,12 +77,14 @@ describe('MinimalAssignment recording projection', () => {
       await startNewAssignmentForLearner(user);
       fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
-      expect(await screen.findAllByText(label)).not.toHaveLength(0);
+      expect(await screen.findByText(label)).toBeTruthy();
+      expect(screen.queryByText('Transcript in progress.', { exact: false })).toBeNull();
       expect(screen.queryByRole('button', { name: /Retry transcript/i })).toBeNull();
     },
   );
 
   it('keeps retry_wait nonterminal across a fresh session resume', async () => {
+    vi.mocked(api.fetchRecordingTranscript).mockRejectedValue(new Error('Transcript pending'));
     vi.mocked(api.getRecording).mockResolvedValue(
       makeRecording({
         status: 'transcribing',
@@ -98,7 +99,7 @@ describe('MinimalAssignment recording projection', () => {
       { waitFor: 'none' },
     );
 
-    expect(screen.getAllByText('Trying again automatically')).not.toHaveLength(0);
+    expect(screen.getAllByText('Preparing transcript')).not.toHaveLength(0);
     expect(screen.queryByText('Recording needs attention')).toBeNull();
     expect(screen.queryByRole('button', { name: /Retry transcript/i })).toBeNull();
   });
@@ -170,7 +171,7 @@ describe('MinimalAssignment recording projection', () => {
     await startNewAssignmentForLearner(user);
     fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
-    expect(await screen.findAllByText('Ready for review')).not.toHaveLength(0);
+    expect(await screen.findByLabelText('Transcript text')).toBeTruthy();
     expect(document.querySelector('audio')).toBeNull();
     expect(screen.queryByRole('link', { name: /download audio/i })).toBeNull();
   });
@@ -189,7 +190,7 @@ describe('MinimalAssignment recording projection', () => {
 
     await renderResumedAssignment({ status: { state: 'succeeded' } }, { waitFor: 'none' });
 
-    expect(screen.getAllByText('Ready for review')).not.toHaveLength(0);
+    expect(await screen.findByLabelText('Transcript text')).toBeTruthy();
     expect(document.querySelector('audio')).toBeNull();
     expect(screen.queryByRole('link', { name: /download audio/i })).toBeNull();
   });
@@ -268,7 +269,7 @@ describe('MinimalAssignment recording projection', () => {
     await startNewAssignmentForLearner(user);
     fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
     await waitFor(() => expect(api.getRecording).toHaveBeenCalled());
-    expect(await screen.findAllByText('Trying again automatically')).not.toHaveLength(0);
+    expect(await screen.findAllByText('Preparing transcript')).not.toHaveLength(0);
 
     await act(async () => {
       receiveEvent?.({
@@ -277,13 +278,14 @@ describe('MinimalAssignment recording projection', () => {
           status: 'transcribing',
           productState: 'transcribing',
           runState: 'submitting',
+          displayName: 'stale-event.mp3',
           updatedAt: '2026-09-07T10:00:01.000Z',
         }),
       });
     });
 
-    expect(screen.getAllByText('Trying again automatically')).not.toHaveLength(0);
-    expect(screen.queryByText(/^Transcribing$/)).toBeNull();
+    expect(screen.getAllByText('Preparing transcript')).not.toHaveLength(0);
+    expect(screen.queryByText('stale-event.mp3')).toBeNull();
   });
 
   it('rejects delayed poll and SSE updates from a replaced recording', async () => {
@@ -320,11 +322,11 @@ describe('MinimalAssignment recording projection', () => {
     renderMinimalAssignment();
     await startNewAssignmentForLearner(user);
     fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
-    await screen.findByText(/Recording: old\.mp3/i);
+    await screen.findByText(/old\.mp3/i);
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledWith('recording-old'));
     fireEvent.click(screen.getByRole('button', { name: /Replace audio/i }));
     fireEvent.click(screen.getByRole('button', { name: /Drop replacement audio/i }));
-    await screen.findByText(/Recording: new\.mp3/i);
+    await screen.findByText(/new\.mp3/i);
 
     await act(async () => {
       resolveOldPoll?.(
@@ -350,7 +352,7 @@ describe('MinimalAssignment recording projection', () => {
       });
     });
 
-    expect(screen.getByText(/Recording: new\.mp3/i)).toBeTruthy();
+    expect(screen.getByText(/new\.mp3/i)).toBeTruthy();
     expect(screen.queryByText(/old-stale\.mp3/i)).toBeNull();
   });
 

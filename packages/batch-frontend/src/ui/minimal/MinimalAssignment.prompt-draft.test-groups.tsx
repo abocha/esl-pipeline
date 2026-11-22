@@ -470,9 +470,9 @@ export function registerPromptEditorTests() {
         expect(options?.audioTopology).toBeUndefined();
 
         await waitFor(() => {
-          expect(screen.getByText(/Recording: lesson\.mp3/i)).toBeTruthy();
+          expect(screen.getByText(/lesson\.mp3/i)).toBeTruthy();
         });
-        expect(screen.getByText(/Status: Ready for review/i)).toBeTruthy();
+        expect(await screen.findByLabelText('Transcript text')).toBeTruthy();
       } finally {
         vi.useRealTimers();
       }
@@ -969,7 +969,7 @@ export function registerPromptStudentSelectionTests() {
       expect(screen.getByText(/Selected for this assignment/i)).toBeTruthy();
 
       await user.click(screen.getByRole('button', { name: /^Continue$/i }));
-      await screen.findByText(/Lesson context: .*Pitch follow-up.*lesson-followup-1/i);
+      await screen.findByText(/^Pitch follow-up ·/i);
 
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await waitFor(() => {
@@ -1038,7 +1038,7 @@ export function registerPromptStudentSelectionTests() {
       await user.click(screen.getByRole('button', { name: /Continue assignment/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/Lesson context: .*Resume review.*lesson-resume-1/i)).toBeTruthy();
+        expect(screen.getByText(/^Resume review ·/i)).toBeTruthy();
       });
 
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
@@ -1120,9 +1120,7 @@ export function registerPromptStudentSelectionTests() {
 
       await screen.findByText(/Recent lessons without homework/i);
       await user.click(screen.getByRole('button', { name: /Client update practice/i }));
-      await screen.findByText(
-        /Lesson context: .*Client update practice.*lesson-recent-no-homework/i,
-      );
+      await screen.findByText(/^Client update practice ·/i);
 
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');

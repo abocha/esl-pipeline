@@ -12,6 +12,9 @@ export function LessonSourceStep({
   manualSaving,
   manualError,
   sourcePrepared = false,
+  uploading = false,
+  manualSource = false,
+  lessonSummary,
   preparedSourceKey,
   onCreateManualTranscript,
 }: LessonSourceStepProps) {
@@ -21,24 +24,31 @@ export function LessonSourceStep({
   useEffect(() => {
     if (sourcePrepared && preparedSourceKey !== undefined) setChangingSource(false);
   }, [preparedSourceKey, sourcePrepared]);
-  const showChooser = !sourcePrepared || changingSource;
+  const showChooser = !uploading && (!sourcePrepared || changingSource);
 
   return (
     <div className="assignment-step assignment-step--source">
-      {sourcePrepared && !changingSource ? (
-        <button type="button" className="minimal-secondary" onClick={() => setChangingSource(true)}>
-          Change lesson source
-        </button>
-      ) : null}
-      {sourcePrepared && changingSource ? (
-        <button
-          type="button"
-          className="minimal-secondary"
-          onClick={() => setChangingSource(false)}
-        >
-          Keep current source
-        </button>
-      ) : null}
+      <header className="lesson-source-header">
+        <div>
+          <h2>
+            {showChooser
+              ? 'Add lesson source'
+              : manualSource
+                ? 'Lesson transcript'
+                : 'Lesson recording'}
+          </h2>
+          {lessonSummary ? <p>{lessonSummary}</p> : null}
+        </div>
+        {sourcePrepared && !uploading ? (
+          <button
+            type="button"
+            className="lesson-source-action"
+            onClick={() => setChangingSource(!changingSource)}
+          >
+            {changingSource ? 'Keep current source' : 'Change source'}
+          </button>
+        ) : null}
+      </header>
       {showChooser ? (
         <fieldset className="assignment-source-choice">
           <legend>Choose the lesson source</legend>
@@ -100,7 +110,7 @@ export function LessonSourceStep({
           ) : null}
         </div>
       ) : null}
-      {sourcePrepared && !changingSource ? children : null}
+      {!showChooser ? children : null}
     </div>
   );
 }

@@ -12,11 +12,11 @@ import {
 
 describe('recording product state', () => {
   it.each([
-    ['checking', 'Checking recording'],
-    ['waiting', 'Waiting to transcribe'],
-    ['transcribing', 'Transcribing'],
-    ['retrying', 'Trying again automatically'],
-    ['ready', 'Ready for review'],
+    ['checking', 'Preparing transcript'],
+    ['waiting', 'Preparing transcript'],
+    ['transcribing', 'Preparing transcript'],
+    ['retrying', 'Preparing transcript'],
+    ['ready', null],
     ['attention', 'Recording needs attention'],
   ] as const)('renders %s with the approved product copy', (productState, label) => {
     expect(getRecordingProductLabel({ productState }, false, 0)).toBe(label);
@@ -24,7 +24,7 @@ describe('recording product state', () => {
 
   it('distinguishes upload transport from server-side checking', () => {
     expect(getRecordingProductLabel(null, true, 50)).toBe('Uploading recording');
-    expect(getRecordingProductLabel(null, true, 100)).toBe('Checking recording');
+    expect(getRecordingProductLabel(null, true, 100)).toBe('Preparing transcript');
   });
 
   it('maps every stable backend error and fails safely for unknown diagnostics', () => {

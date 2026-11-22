@@ -20,6 +20,9 @@ export interface LessonSourceStepProps extends FocusedStepProps {
   manualSaving: boolean;
   manualError: string | null;
   transcriptReady: boolean;
+  lessonSummary?: string | null;
+  manualSource?: boolean;
+  uploading?: boolean;
   sourcePrepared?: boolean;
   preparedSourceKey?: string;
   onCreateManualTranscript: (text: string, displayName?: string) => Promise<void>;

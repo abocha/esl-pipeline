@@ -1,13 +1,18 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  AudioLines,
   BarChart3,
   BookOpenText,
+  ChevronRight,
+  FileText,
   Heart,
+  LoaderCircle,
   MessageSquareText,
   NotebookText,
   Star,
   Target,
   TrendingUp,
+  TriangleAlert,
 } from 'lucide-react';
 import React from 'react';
 import type { Accept } from 'react-dropzone';
@@ -99,15 +104,12 @@ interface StartStageSectionProps {
 interface SourceStageSectionProps {
   stage: WorkflowStage;
   sectionRef?: React.Ref<HTMLElement>;
-  headingRef?: React.Ref<HTMLHeadingElement>;
   studentSelectRef?: React.Ref<HTMLSelectElement>;
   studentOptions: StudentOption[];
   studentOptionsError: string | null;
   selectedStudentId: string;
   onSelectedStudentIdChange: (value: string) => void;
-  selectedStudent: StudentOption | null;
   linkedLessonId?: string | null;
-  linkedLessonContextLabel?: string | null;
   lessonSuggestions: { id: string; label: string; detail: string }[];
   lessonSuggestionsError: string | null;
   onSelectLessonSuggestion: (lessonId: string) => void;
@@ -665,15 +667,12 @@ export function StartStageSection({
 export function SourceStageSection({
   stage,
   sectionRef,
-  headingRef,
   studentSelectRef,
   studentOptions,
   studentOptionsError,
   selectedStudentId,
   onSelectedStudentIdChange,
-  selectedStudent,
   linkedLessonId,
-  linkedLessonContextLabel,
   lessonSuggestions,
   lessonSuggestionsError,
   onSelectLessonSuggestion,
@@ -723,165 +722,181 @@ export function SourceStageSection({
       ? getTranscriptUnexpectedCharacterWarnings(transcriptText)
       : [];
 
+  if (stage.status === 'locked') return null;
+  const preparing = recordingProductLabel === 'Preparing transcript';
+  const needsAttention =
+    recordingProductLabel === 'Recording needs attention' || Boolean(recordingError);
+  const loadingTranscript =
+    !preparing &&
+    !needsAttention &&
+    !transcriptReady &&
+    (transcriptStatus === 'loading' || recording?.productState === 'ready');
+  const transcriptLoadFailed = transcriptStatus === 'failed' && !needsAttention;
+  const showTranscript = transcriptReady || loadingTranscript || transcriptLoadFailed;
+
   return (
-    <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
-      <div className="minimal-stage-layout">
-        <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-header">
-            <div className="minimal-stage-panel-title">
-              <h3>Recording</h3>
+    <section ref={sectionRef} className="lesson-source-body minimal-block">
+      <div className="minimal-block">
+        {!hideStudentSelection ? (
+          <label className="minimal-select">
+            Student
+            <select
+              ref={studentSelectRef}
+              className={
+                stage.status === 'current' && !selectedStudentId
+                  ? 'minimal-guided-field'
+                  : undefined
+              }
+              value={selectedStudentId}
+              onChange={(event) => onSelectedStudentIdChange(event.target.value)}
+              disabled={readOnly || Boolean(linkedLessonId) || Boolean(recording)}
+            >
+              <option value="">Select a student</option>
+              {studentOptions.map((student) => (
+                <option key={student.id} value={student.id}>
+                  {student.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {!linkedLessonId && lessonSuggestions.length > 0 ? (
+          <div className="minimal-block" aria-label="Recent lesson suggestions">
+            <p className="minimal-help">Recent lessons without homework</p>
+            <div className="minimal-inline">
+              {lessonSuggestions.map((lesson) => (
+                <button
+                  key={lesson.id}
+                  type="button"
+                  className="minimal-secondary"
+                  onClick={() => onSelectLessonSuggestion(lesson.id)}
+                  disabled={readOnly}
+                >
+                  {lesson.label}
+                  <span className="minimal-muted"> {lesson.detail}</span>
+                </button>
+              ))}
             </div>
           </div>
-          {!hideStudentSelection ? (
+        ) : null}
+        {lessonSuggestionsError ? (
+          <p className="minimal-muted">Recent lesson suggestions unavailable.</p>
+        ) : null}
+        {!hideStudentSelection && studentOptionsError ? (
+          <p className="minimal-error">{studentOptionsError}</p>
+        ) : null}
+        {!recording && !uploading ? (
+          <details className="minimal-details">
+            <summary>Recording settings</summary>
             <label className="minimal-select">
-              Student
+              Audio source
               <select
-                ref={studentSelectRef}
-                className={
-                  stage.status === 'current' && !selectedStudentId
-                    ? 'minimal-guided-field'
-                    : undefined
+                value={selectedAudioTopology}
+                onChange={(event) =>
+                  onSelectedAudioTopologyChange(event.target.value as AudioInputTopology)
                 }
-                value={selectedStudentId}
-                onChange={(event) => onSelectedStudentIdChange(event.target.value)}
-                disabled={readOnly || Boolean(linkedLessonId) || Boolean(recording)}
+                disabled={readOnly}
               >
-                <option value="">Select a student</option>
-                {studentOptions.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.name}
+                <option value="mixed_recording">Ordinary recording</option>
+                <option value="trusted_split_channels">
+                  Trusted OBS split: channel 1 tutor, channel 2 student
+                </option>
+              </select>
+            </label>
+            <label className="minimal-select">
+              Transcript engine
+              <select
+                value={sttProviderOverrideActive ? selectedSttProvider : 'auto'}
+                onChange={(event) =>
+                  onSelectedSttProviderChange(event.target.value as SttProvider | 'auto')
+                }
+                disabled={readOnly || sttProviders.length === 0}
+              >
+                <option value="auto">Automatic (recommended)</option>
+                {sttProviders.map((provider) => (
+                  <option key={provider} value={provider}>
+                    {formatSttProviderLabel(provider)}
                   </option>
                 ))}
               </select>
             </label>
-          ) : null}
-          {linkedLessonContextLabel ? (
-            <p className="minimal-muted">{linkedLessonContextLabel}</p>
-          ) : null}
-          {!linkedLessonId && lessonSuggestions.length > 0 ? (
-            <div className="minimal-block" aria-label="Recent lesson suggestions">
-              <p className="minimal-help">Recent lessons without homework</p>
-              <div className="minimal-inline">
-                {lessonSuggestions.map((lesson) => (
-                  <button
-                    key={lesson.id}
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={() => onSelectLessonSuggestion(lesson.id)}
-                    disabled={readOnly}
-                  >
-                    {lesson.label}
-                    <span className="minimal-muted"> {lesson.detail}</span>
-                  </button>
-                ))}
-              </div>
+          </details>
+        ) : null}
+        {(!recording || replacingAudio) && !uploading ? (
+          <div className="minimal-block">
+            <div
+              className={
+                stage.status === 'current' && selectedStudentId
+                  ? 'minimal-guided-surface'
+                  : undefined
+              }
+            >
+              <DropZone
+                title={replacingAudio ? 'Drop replacement audio' : 'Drop audio file'}
+                hint="Single supported recording file"
+                accept={recordingFileAccept}
+                multiple={false}
+                disabled={readOnly || uploading || !selectedStudentId}
+                onFiles={onFiles}
+              />
             </div>
-          ) : null}
-          {lessonSuggestionsError ? (
-            <p className="minimal-muted">Recent lesson suggestions unavailable.</p>
-          ) : null}
-          {!hideStudentSelection && studentOptionsError ? (
-            <p className="minimal-error">{studentOptionsError}</p>
-          ) : null}
-          {!recording ? (
-            <details className="minimal-details">
-              <summary>Recording settings</summary>
-              <label className="minimal-select">
-                Audio source
-                <select
-                  value={selectedAudioTopology}
-                  onChange={(event) =>
-                    onSelectedAudioTopologyChange(event.target.value as AudioInputTopology)
-                  }
-                  disabled={readOnly}
-                >
-                  <option value="mixed_recording">Ordinary recording</option>
-                  <option value="trusted_split_channels">
-                    Trusted OBS split: channel 1 tutor, channel 2 student
-                  </option>
-                </select>
-              </label>
-              <label className="minimal-select">
-                Transcript engine
-                <select
-                  value={sttProviderOverrideActive ? selectedSttProvider : 'auto'}
-                  onChange={(event) =>
-                    onSelectedSttProviderChange(event.target.value as SttProvider | 'auto')
-                  }
-                  disabled={readOnly || sttProviders.length === 0}
-                >
-                  <option value="auto">Automatic (recommended)</option>
-                  {sttProviders.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {formatSttProviderLabel(provider)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </details>
-          ) : null}
-          {!recording || replacingAudio ? (
-            <div className="minimal-block">
-              <div
-                className={
-                  stage.status === 'current' && selectedStudentId
-                    ? 'minimal-guided-surface'
-                    : undefined
-                }
+            {replacingAudio ? (
+              <button
+                type="button"
+                className="minimal-secondary"
+                onClick={onCancelAudioReplacement}
+                disabled={readOnly || uploading}
               >
-                <DropZone
-                  title={
-                    uploading
-                      ? 'Uploading...'
-                      : replacingAudio
-                        ? 'Drop replacement audio'
-                        : 'Drop audio file'
-                  }
-                  hint="Single supported recording file"
-                  accept={recordingFileAccept}
-                  multiple={false}
-                  disabled={readOnly || uploading || !selectedStudentId}
-                  onFiles={onFiles}
-                />
-              </div>
-              {replacingAudio ? (
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={onCancelAudioReplacement}
-                  disabled={readOnly || uploading}
-                >
-                  Cancel replacement
-                </button>
-              ) : null}
+                Cancel replacement
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {recordingProductLabel === 'Uploading recording' ? (
+          <UploadProgress
+            fileName={selectedFileName}
+            progress={uploadProgress}
+            onCancel={onCancelUpload}
+          />
+        ) : null}
+        {needsAttention || (preparing && !transcriptReady && transcriptStatus !== 'failed') ? (
+          <div
+            className={`lesson-source-status${needsAttention ? ' is-warning' : ''}`}
+            role="status"
+          >
+            {needsAttention ? (
+              <TriangleAlert aria-hidden="true" />
+            ) : (
+              <LoaderCircle className="lesson-source-spinner" aria-hidden="true" />
+            )}
+            <div>
+              <strong>
+                {needsAttention ? 'Recording needs attention' : 'Preparing transcript'}
+              </strong>
+              {needsAttention ? (
+                recordingError && <p>{recordingError}</p>
+              ) : (
+                <p>Your transcript will appear here automatically.</p>
+              )}
             </div>
-          ) : null}
-          {uploading ? (
-            <UploadProgress
-              fileName={selectedFileName}
-              progress={uploadProgress}
-              onCancel={onCancelUpload}
-            />
-          ) : null}
-          {recordingProductLabel ? (
-            <p className="minimal-help" role="status" aria-live="polite">
-              {recordingProductLabel}
-            </p>
-          ) : null}
-          {uploadError ? <p className="minimal-error">{uploadError}</p> : null}
-          {canRetryUpload && !uploading ? (
-            <button type="button" className="minimal-secondary" onClick={onRetryUpload}>
-              Retry upload
-            </button>
-          ) : null}
-          {uploadCacheNotice ? <p className="minimal-success">{uploadCacheNotice}</p> : null}
-          {recording ? (
-            <div className="minimal-block">
-              <div className="minimal-meta">
-                <span>Recording: {recording.displayName || recording.recordingId}</span>
-                <span>Status: {recordingProductLabel ?? 'Checking recording'}</span>
-                {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
-              </div>
+          </div>
+        ) : null}
+        {uploadError ? <p className="minimal-error">{uploadError}</p> : null}
+        {canRetryUpload && !uploading ? (
+          <button type="button" className="minimal-secondary" onClick={onRetryUpload}>
+            Retry upload
+          </button>
+        ) : null}
+        {uploadCacheNotice ? <p className="minimal-success">{uploadCacheNotice}</p> : null}
+        {recording ? (
+          <div className="minimal-block">
+            <div className="lesson-source-file">
+              {transcriptProvider === 'manual' ? (
+                <FileText aria-hidden="true" />
+              ) : (
+                <AudioLines aria-hidden="true" />
+              )}
+              <span>{recording.displayName || recording.recordingId}</span>
               {canReplaceAudio && !replacingAudio && !readOnly ? (
                 <button
                   type="button"
@@ -891,49 +906,41 @@ export function SourceStageSection({
                   Replace audio
                 </button>
               ) : null}
-              <details className="minimal-details">
-                <summary>Recording details</summary>
-                <div className="minimal-meta">
-                  <span>
-                    Audio source:{' '}
-                    {selectedAudioTopology === 'trusted_split_channels'
-                      ? 'Trusted OBS split'
-                      : 'Ordinary recording'}
-                  </span>
-                  <span>
-                    Transcript engine:{' '}
-                    {transcriptProvider === 'manual'
-                      ? 'Manual transcript'
-                      : transcriptProvider
-                        ? formatSttProviderLabel(transcriptProvider)
-                        : 'Processing'}
-                  </span>
-                </div>
-              </details>
             </div>
-          ) : null}
-          {recordingError ? <p className="minimal-error">{recordingError}</p> : null}
-        </div>
-
-        <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-header">
-            <div className="minimal-stage-panel-title">
-              <h3>Transcript</h3>
-            </div>
+            <details className="lesson-source-details">
+              <summary>
+                <ChevronRight aria-hidden="true" />
+                Recording details
+              </summary>
+              <div className="minimal-meta">
+                {linkedLessonId ? <span>Lesson ID: {linkedLessonId}</span> : null}
+                <span>
+                  Audio source:{' '}
+                  {selectedAudioTopology === 'trusted_split_channels'
+                    ? 'Trusted OBS split'
+                    : 'Ordinary recording'}
+                </span>
+                <span>
+                  Transcript engine:{' '}
+                  {transcriptProvider === 'manual'
+                    ? 'Manual transcript'
+                    : transcriptProvider
+                      ? formatSttProviderLabel(transcriptProvider)
+                      : 'Processing'}
+                </span>
+              </div>
+            </details>
           </div>
-          {recording ? (
-            transcriptStatus === 'processing' || transcriptStatus === 'idle' ? (
-              <p className="minimal-help">
-                Transcript in progress. We check every few seconds automatically.
-              </p>
-            ) : null
-          ) : (
-            <p className="minimal-help">Upload a recording to unlock the transcript.</p>
-          )}
-          {transcriptStatus === 'loading' ? (
+        ) : null}
+      </div>
+
+      {showTranscript ? (
+        <div className="lesson-source-transcript minimal-block">
+          <h3>Transcript</h3>
+          {loadingTranscript && !transcriptLoadFailed ? (
             <p className="minimal-help">Loading transcript...</p>
           ) : null}
-          {transcriptStatus === 'failed' ? (
+          {transcriptLoadFailed ? (
             <div className="minimal-block">
               <p className="minimal-error">{transcriptError ?? 'Transcript failed to load.'}</p>
             </div>
@@ -1028,8 +1035,8 @@ export function SourceStageSection({
             </div>
           ) : null}
         </div>
-      </div>
-    </StageSection>
+      ) : null}
+    </section>
   );
 }
 

@@ -779,3 +779,113 @@
     padding: 16px;
   }
 }
+
+/* The recording summary stays in place while the teacher waits or reviews. */
+.lesson-source-header,
+.lesson-source-file,
+.lesson-source-status {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+.lesson-source-header {
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+.lesson-source-header h2,
+.lesson-source-transcript h3 {
+  margin: 0;
+}
+.lesson-source-header h2 {
+  font-size: 1.25rem;
+}
+.lesson-source-header p,
+.lesson-source-status p {
+  margin: 0.25rem 0 0;
+  color: var(--cs-ink-muted);
+}
+.lesson-source-action {
+  padding: 0 0.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--cs-action);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.lesson-source-status,
+.lesson-source-body .upload-progress {
+  padding: 1rem;
+  border-radius: var(--cs-radius-surface);
+  background: color-mix(in srgb, var(--cs-action) 8%, var(--cs-surface));
+}
+.lesson-source-status > svg,
+.lesson-source-file > svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: none;
+  color: var(--cs-action);
+}
+.lesson-source-spinner {
+  animation: lesson-source-spin 1.3s linear infinite;
+}
+@keyframes lesson-source-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lesson-source-spinner {
+    animation: none;
+  }
+}
+.lesson-source-status.is-warning {
+  background: color-mix(in srgb, var(--cs-warning) 10%, var(--cs-surface));
+}
+.lesson-source-status.is-warning > svg {
+  color: var(--cs-warning);
+}
+.lesson-source-file {
+  flex-wrap: wrap;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-control);
+}
+.lesson-source-file > span {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lesson-source-file > button {
+  margin-inline-start: auto;
+}
+.lesson-source-details {
+  border-top: 1px solid var(--cs-border);
+}
+.lesson-source-details summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.lesson-source-details summary::-webkit-details-marker {
+  display: none;
+}
+.lesson-source-details svg {
+  width: 1rem;
+}
+.lesson-source-details[open] svg {
+  transform: rotate(90deg);
+}
+.lesson-source-details .minimal-meta {
+  overflow-wrap: anywhere;
+}
+.lesson-source-transcript {
+  border-top: 1px solid var(--cs-border);
+  padding-top: 1rem;
+}

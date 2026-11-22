@@ -87,14 +87,14 @@ Canonical behavior and current status live in:
   WebM/Opus). MP4/AAC, MOV/AAC, and WebM/Opus video are convenience inputs only: the backend
   stream-copies and retains their single audio stream without transcoding.
 - The browser rejects files larger than 2 GiB before making a request; backend byte, temp-capacity,
-  media-integrity, and 100-minute checks remain authoritative. Recording state is projected
-  consistently through upload reconciliation, polling, SSE, and resume as Checking, Waiting,
-  Transcribing, Trying again, Ready, or a terminal needs-attention state. Normal tutors cannot retry
+  media-integrity, and 100-minute checks remain authoritative. Lesson source shows cancellable upload
+  progress, then a single **Preparing transcript** panel through checking, queueing, transcription
+  and automatic retries. The editor and any required speaker choices take its place when ready. Normal tutors cannot retry
   successful STT; terminal recovery is a new or replacement recording upload. A provider-account
   terminal state instead tells the tutor to contact the service operator because replacing the recording
   will not help.
 - A same-workspace transcript-cache hit owns independent recording/transcript lineage, creates no
-  transcription run, retains no audio, and renders Ready with `audioLifecycle=not_retained` and no
+  transcription run, retains no audio, and opens the transcript editor with `audioLifecycle=not_retained` and no
   audio control.
 - An uploaded recording can be replaced in place while its assignment remains unfinished. The
   replacement retains the assignment session and scheduled lesson link; confirming the new Source

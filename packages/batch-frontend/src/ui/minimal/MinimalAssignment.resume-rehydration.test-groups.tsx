@@ -466,7 +466,7 @@ export function registerResumeBasicTests() {
       globalThis.history.replaceState(null, '', '/?sessionId=session-failed-upload');
       renderMinimalAssignment();
 
-      expect(await screen.findByText(/Recording: failed\.mp3/i)).toBeTruthy();
+      expect(await screen.findByText(/failed\.mp3/i)).toBeTruthy();
       expect(screen.getByRole('button', { name: /Replace audio/i })).toBeTruthy();
       vi.useFakeTimers();
       await act(async () => {
@@ -511,7 +511,7 @@ export function registerResumeBasicTests() {
       globalThis.history.replaceState(null, '', '/?sessionId=session-sharing');
       renderMinimalAssignment();
 
-      expect(await screen.findByText(/Recording: lesson\.mp3/i)).toBeTruthy();
+      expect(await screen.findByText(/lesson\.mp3/i)).toBeTruthy();
       expect(screen.queryByRole('button', { name: /Replace audio/i })).toBeNull();
     });
 
