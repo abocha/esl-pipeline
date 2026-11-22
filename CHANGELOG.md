@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [23.2.0] - 2026-11-22
+
+### Changed
+
+- Automated release from PR #485: feat(homework): show a worked example before each practice part (https://github.com/abocha/esl-pipeline/pull/485)
+
 ## [23.1.3] - 2026-11-17
 
 ### Changed
