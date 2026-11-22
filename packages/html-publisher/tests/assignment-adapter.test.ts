@@ -47,7 +47,8 @@ describe('native React publication adapter', () => {
     input.practice = [
       {
         title: null,
-        instructions: 'Опишите ситуации. Затем исправьте ошибку.',
+        instructions:
+          'Опишите ситуации. Затем исправьте ошибку.\n0. Example: Today Leo / travel / by train. → Leo is travelling by train today.',
         items: [
           {
             prompt: 'A temporary arrangement this week. Nina / work / from home.',
@@ -70,7 +71,15 @@ describe('native React publication adapter', () => {
       const doc = new JSDOM(await renderAssignmentToHtml(assignment, { preview })).window.document;
       const languageOf = (element: Element) => element.closest('[lang]')?.getAttribute('lang');
       const instructions = doc.querySelector('.practice-part > p')!;
-      expect(instructions.textContent).toBe(assignment.practice[0]!.instructions);
+      expect(instructions.textContent).toBe('Опишите ситуации. Затем исправьте ошибку.');
+      const list = doc.querySelector('.practice-part ol')!;
+      expect(list.getAttribute('start')).toBe('0');
+      expect(list.firstElementChild?.textContent).toBe(
+        'Example: Today Leo / travel / by train. → Leo is travelling by train today.',
+      );
+      expect(list.children[1]?.textContent).toBe(assignment.practice[0]!.items[0]!.prompt);
+      expect(doc.querySelector('details .practice-part ol')?.getAttribute('start')).toBeNull();
+      expect(doc.querySelector('details .practice-part')?.textContent).not.toContain('Leo');
       expect(languageOf(instructions)).toBe('ru');
       const prompts = [...doc.querySelectorAll('.practice-part li.plain-text')];
       const copies = [...doc.querySelectorAll('.practice-part .answer-key-item')];
