@@ -34,6 +34,62 @@ describe('ESL-32 shared learner surface', () => {
     expect(JSON.stringify(props)).toBe(before);
   });
 
+  it('separates the worked response and comparison alternatives while retaining blank hints', () => {
+    const props = createFixture();
+    const part = props.assignment.practice[0]!;
+    part.instructions =
+      'Compare the two sentences.\n0. Example: A: I ___ (`eat`). B: I ate. → A: In progress. B: Complete.';
+    part.items[0]!.prompt = 'A: She was leaving. B: She left.';
+    const doc = new JSDOM(renderLearnerHandoutDocument(props)).window.document;
+    const example = doc.querySelector('.worked-example')!;
+    expect(example.querySelector('.cloze-hint')?.textContent).toBe('___ (eat)');
+    expect(example.querySelector('.cloze-line')?.getAttribute('aria-label')).toBe('blank');
+    expect(example.querySelector('.worked-response')?.textContent).toBe(
+      ' → A: In progress. B: Complete.',
+    );
+    expect(
+      [...example.querySelectorAll('.practice-alternative')].map((el) => el.textContent),
+    ).toEqual(['B: I ate.', 'B: Complete.']);
+    expect(
+      doc.querySelector('.practice-part li.plain-text .practice-alternative')?.textContent,
+    ).toBe('B: She left.');
+    expect(doc.querySelector('.answer-question .practice-alternative')?.textContent).toBe(
+      'B: She left.',
+    );
+  });
+
+  it('marks an authored item direction in the exercise and its answer-key copy', () => {
+    const props = createFixture();
+    const prompt =
+      'The exhibition opened in June. Volunteers repaired radios in April and May.\nTask: Describe the repairs as background to the opening.';
+    props.assignment.practice[0]!.items[0]!.prompt = prompt;
+    const doc = new JSDOM(renderLearnerHandoutDocument(props)).window.document;
+    for (const selector of ['.practice-part li.plain-text', '.practice-part .answer-question']) {
+      const item = doc.querySelector(selector)!;
+      expect(item.textContent).toBe(prompt);
+      expect(item.querySelector('strong')?.textContent).toBe('Task:');
+    }
+  });
+
+  it('identifies a monologue once and prints an identical formula only in the pattern row', () => {
+    const props = createFixture();
+    props.assignment = validateAssignmentV1(grammar);
+    const study = props.assignment.input.studyText;
+    const first = study.turns[0]!;
+    study.type = 'monologue';
+    study.speakers = study.speakers.filter((s) => s.id === first.speakerId);
+    study.turns = [first, { ...first, text: 'Later that day, the audience arrived.' }];
+    const topic = props.assignment.toolkit.grammar[0]!;
+    if (!('formBlocks' in topic)) throw new Error('Structured grammar required');
+    topic.formBlocks[0]!.label = 'Past continuous: `subject + was/were + verb-ing`';
+    topic.formBlocks[0]!.pattern = 'subject + was/were + verb-ing';
+    const doc = new JSDOM(renderLearnerHandoutDocument(props)).window.document;
+    expect(doc.querySelectorAll('.transcript-speaker')).toHaveLength(1);
+    expect(doc.querySelectorAll('.transcript-turn')[1]?.textContent).toBe(study.turns[1]!.text);
+    expect(doc.querySelector('.grammar-form h5')?.textContent).toBe('Past continuous');
+    expect(doc.querySelector('.grammar-pattern')?.textContent).toBe(topic.formBlocks[0]!.pattern);
+  });
+
   it('admits the full retained lesson without shortening the visual fixture', () => {
     const props = createPolishFixture();
     expect(() => validateAssignmentV1(props.assignment)).not.toThrow();
@@ -46,6 +102,13 @@ describe('ESL-32 shared learner surface', () => {
     expect(props.assignment.practice.map((p) => p.items.length)).toEqual([5, 3, 3]);
     expect(props.assignment.practice[0]!.items[0]!.prompt).toContain('(be)');
     expect(props.assignment.practice[0]!.items[0]!.prompt).not.toContain('`be`');
+    const doc = new JSDOM(renderLearnerHandoutDocument(props)).window.document;
+    const item = doc.querySelector('.practice-part li')!;
+    expect(item.textContent).toBe(props.assignment.practice[0]!.items[0]!.prompt);
+    expect([...item.querySelectorAll('.cloze-hint')].map((hint) => hint.textContent)).toEqual([
+      '___ (be)',
+      '___ (not enter)',
+    ]);
   });
   it('renders plain pattern alternatives and authored chunks as escaped cues without mutating data', () => {
     const props = createFixture();
@@ -91,8 +154,15 @@ describe('ESL-32 shared learner surface', () => {
         (label) => label.getAttribute('aria-hidden') === 'true',
       ),
     ).toBe(true);
-    expect(doc.querySelector('.transcript-speaker')?.textContent).toBe(
-      `${props.assignment.input.studyText.speakers[0]!.displayName}:`,
+    const { speakers, turns } = props.assignment.input.studyText;
+    expect(
+      [...doc.querySelectorAll('.transcript-turn')].map(
+        (turn) => turn.querySelector('.transcript-speaker')?.textContent,
+      ),
+    ).toEqual(
+      turns.map(
+        (turn) => `${speakers.find((speaker) => speaker.id === turn.speakerId)!.displayName}:`,
+      ),
     );
     expect(doc.querySelector('.listening-panel audio')?.getAttribute('preload')).toBe('none');
     expect(doc.querySelector('.sample-mission')?.textContent).toBe(

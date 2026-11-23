@@ -53,6 +53,10 @@ visible Pattern label; their cues/alternative rows align with headings and examp
 forms retain their Form label and render directly
 without inferred blocks or data mutation.
 
+An item-specific direction can follow the facts on a final `Task: …` line. Its label is emphasized in the exercise and its answer-key copy.
+
+Worked item 0 separates its prompt and model response onto distinct lines. Explicit A/B comparison prompts show each alternative on its own line, including in answer-key prompt copies. Practice blanks appear as a single answer line with a muted italic hint that wraps with the line. Both paired-backtick cues and older plain parenthesized hints use this presentation.
+
 Practice uses section 4 → titled groups (h3) → numbered items, with pronunciation under its own
 heading. The answer key retains matching group/item numbers (h4 within the key). Existing mixed
 activities are presented without classification or rewriting. `batch-frontend` reuses the default
@@ -217,6 +221,8 @@ the exception to the static UI's Lucide icons. Source presentation is Listen fir
 audio then freely available transcript, with attribution/links and quieter generation provenance.
 Pronunciation mode is internal. Its existing natural/shadow sentence and audio sit in a callout.
 
+Monologue transcripts identify the speaker on the first paragraph. Dialogue turns each retain their attribution. Form headings omit a colon-delimited suffix when it exactly repeats the displayed formula after inline highlighting is removed.
+
 Each grammar correction/explanation has a decorative semantic marker, an accessible English label
 and independently hidden content
 with `aria-hidden` until its native reveal button is activated. Activation reveals once, removes
@@ -300,11 +306,9 @@ retry/switch clears that feedback through the existing guarded state transition.
 The fixed main headings are Your Goal; Listen and Read; Grammar and Vocabulary; Practice; Your Turn;
 Why This Helps You; Answers and Example. Numbers and section IDs remain stable; section 6 retains
 its legacy/new-shape visibility contract and section 7 keeps number 7. Fixed subheadings include
-Check Your Understanding; A. How the Grammar Works; B. Vocabulary; A. Exercises; and
-B. Say It Clearly (≈1 min). These use decorative, nonfocusable Lucide icons with accessible text
-names, stable A/B prefixes, 22px size and stroke 2. The hero retains its authored emoji; no Lucide icon is
-inferred from authored metadata. Authored titles, grammar/form/comparison labels, practice-part
-names, cues, literal emoji content and assignment values remain unchanged.
+Check Your Understanding, A. How the Grammar Works, B. Vocabulary and the optional Say It Clearly (≈1 min).
+These use decorative, nonfocusable Lucide icons with accessible text names, 22px size and stroke 2.
+Practice groups use their authored titles with renderer-owned part numbers. The hero retains its authored emoji.
 
 A small private semantic palette colors the icons: goal orange, listening/vocabulary/pronunciation
 teal, grammar/rationale violet, exercises amber and the answer key ochre. Your Turn,
@@ -312,8 +316,8 @@ understanding, Corrected and Answer checks use green (#2f6d46); Wrong stays red 
 stays slate. Heading prose, links, control text, blue rules/underlines and callout/cue surfaces retain
 their existing styling.
 
-Other fixed labels are Your Goal, Transcript, Word or Phrase, What to Do, Goal, Practise This Sentence,
-What to Include, Check Your Work, Understanding Answers, A. Exercise Answers, Example Response,
+Other fixed labels are Transcript, Word or Phrase, What to Do, Goal, Practise This Sentence,
+What to Include, Check Your Work, Understanding Answers, Exercise Answers, Example Response,
 Extra Task and Source. Key Language You Will Use and the Answer Key disclosure keep their exact
 labels. Listen first, Prepare, How to do it, Meaning/Example, Target/Focus, audio captions, Contour cue,
 source provenance and Part prefixes remain. Historical icon/copy experiments are local evidence,

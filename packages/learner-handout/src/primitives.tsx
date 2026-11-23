@@ -29,7 +29,19 @@ function FieldLabel({ label }: { label: string }) {
   );
 }
 
-export function Inline({ children }: { children: string }) {
+function ClozeHint({ blank, space, hint }: { blank: string; space: string; hint: string }) {
+  return (
+    <span className="cloze-hint">
+      <span className="cloze-line" role="img" aria-label="blank" lang="en">
+        {blank}
+      </span>
+      {space}
+      <i>({hint})</i>
+    </span>
+  );
+}
+
+export function Inline({ children, practice = false }: { children: string; practice?: boolean }) {
   const parts = assignmentInlineParts(children);
   const bracketed = (i: number) =>
     parts[i]?.highlighted &&
@@ -37,23 +49,46 @@ export function Inline({ children }: { children: string }) {
     !parts[i + 1]?.highlighted &&
     parts[i - 1]?.text.endsWith('(') &&
     parts[i + 1]?.text.startsWith(')');
+  const blankBefore = (i: number) =>
+    practice && bracketed(i) ? /(_{2,})([ \t]*)\($/.exec(parts[i - 1]!.text) : null;
   return (
     <span className="inline-text">
-      {parts.map((part, i) =>
-        part.highlighted ? (
-          bracketed(i) ? (
-            <span className="bracketed-cue" key={i}>
-              (<code className="linguistic-highlight">{part.text}</code>)
-            </span>
-          ) : (
+      {parts.map((part, i) => {
+        if (part.highlighted) {
+          const blank = blankBefore(i);
+          if (blank)
+            return <ClozeHint key={i} blank={blank[1]!} space={blank[2]!} hint={part.text} />;
+          const cue = (
             <code className="linguistic-highlight" key={i}>
               {part.text}
             </code>
-          )
-        ) : (
-          part.text.slice(bracketed(i - 1) ? 1 : 0, bracketed(i + 1) ? -1 : undefined)
-        ),
-      )}
+          );
+          return bracketed(i) ? (
+            <span className="bracketed-cue" key={i}>
+              ({cue})
+            </span>
+          ) : (
+            cue
+          );
+        }
+        const suffixLength = blankBefore(i + 1)?.[0].length ?? (bracketed(i + 1) ? 1 : 0);
+        const plain = part.text.slice(
+          bracketed(i - 1) ? 1 : 0,
+          suffixLength ? -suffixLength : undefined,
+        );
+        if (!practice) return plain;
+        // Earlier assignments use unmarked parenthetical hints after the same blank.
+        const fragments: ReactNode[] = [];
+        let start = 0;
+        for (const match of plain.matchAll(/(_{2,})([ \t]*)\(([^()`\r\n]+)\)/g)) {
+          fragments.push(
+            plain.slice(start, match.index),
+            <ClozeHint key={match.index} blank={match[1]!} space={match[2]!} hint={match[3]!} />,
+          );
+          start = match.index + match[0].length;
+        }
+        return [...fragments, plain.slice(start)];
+      })}
     </span>
   );
 }

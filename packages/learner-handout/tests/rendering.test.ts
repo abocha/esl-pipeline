@@ -291,7 +291,9 @@ describe('React learner handout static foundation', () => {
         expect(icon.getAttribute('aria-hidden')).toBe('true');
         expect(icon.querySelector('svg')?.getAttribute('focusable')).toBe('false');
       }
-      expect(doc.querySelector('main > aside .field-label')?.textContent).toBe('Your Goal:');
+      expect(doc.querySelector('main > aside > p')?.textContent).toBe(
+        assignmentPlainText(a.mission.goal),
+      );
       expect(doc.querySelector('main > aside > p > strong:not(.field-label)')?.textContent).toBe(
         'Key Language You Will Use:',
       );
@@ -315,7 +317,7 @@ describe('React learner handout static foundation', () => {
       expect(key.open).toBe(false);
       expect([...key.querySelectorAll('h3')].map((h) => h.textContent)).toEqual([
         'Understanding Answers',
-        'A. Exercise Answers',
+        'Exercise Answers',
         'Example Response',
       ]);
       expect(
