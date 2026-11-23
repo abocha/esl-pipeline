@@ -134,6 +134,7 @@ describe('AssignmentV1 generation policy boundary', () => {
       'do not repeat either inside `label`',
       'Questions and explanations use the selected instruction/support language',
       '0. Example: <prompt> → <completed response>',
+      '`Task: `',
       'Every `practice[].items[].prompt` must be entirely English',
       'including situation/direction text, bare lexical cues and target excerpts used for error repair',
       'Put support-language practice directions in `practice[].instructions`',

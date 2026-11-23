@@ -103,7 +103,12 @@ describe('ESL-32 shared learner surface', () => {
     expect(props.assignment.practice[0]!.items[0]!.prompt).toContain('(be)');
     expect(props.assignment.practice[0]!.items[0]!.prompt).not.toContain('`be`');
     const doc = new JSDOM(renderLearnerHandoutDocument(props)).window.document;
-    expect(doc.querySelector('.practice-part .cloze-hint i')?.textContent).toBe('(be)');
+    const item = doc.querySelector('.practice-part li')!;
+    expect(item.textContent).toBe(props.assignment.practice[0]!.items[0]!.prompt);
+    expect([...item.querySelectorAll('.cloze-hint')].map((hint) => hint.textContent)).toEqual([
+      '___ (be)',
+      '___ (not enter)',
+    ]);
   });
   it('renders plain pattern alternatives and authored chunks as escaped cues without mutating data', () => {
     const props = createFixture();
@@ -149,8 +154,15 @@ describe('ESL-32 shared learner surface', () => {
         (label) => label.getAttribute('aria-hidden') === 'true',
       ),
     ).toBe(true);
-    expect(doc.querySelector('.transcript-speaker')?.textContent).toBe(
-      `${props.assignment.input.studyText.speakers[0]!.displayName}:`,
+    const { speakers, turns } = props.assignment.input.studyText;
+    expect(
+      [...doc.querySelectorAll('.transcript-turn')].map(
+        (turn) => turn.querySelector('.transcript-speaker')?.textContent,
+      ),
+    ).toEqual(
+      turns.map(
+        (turn) => `${speakers.find((speaker) => speaker.id === turn.speakerId)!.displayName}:`,
+      ),
     );
     expect(doc.querySelector('.listening-panel audio')?.getAttribute('preload')).toBe('none');
     expect(doc.querySelector('.sample-mission')?.textContent).toBe(
