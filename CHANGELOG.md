@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [23.2.2] - 2026-11-23
+
+### Changed
+
+- Automated release from PR #489: fix(stt): upgrade ElevenLabs to Scribe v3 (https://github.com/abocha/esl-pipeline/pull/489)
+
 ## [23.2.1] - 2026-11-22
 
 ### Changed
