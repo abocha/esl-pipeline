@@ -126,6 +126,9 @@ Primary groups:
 - Worker/runtime:
   - `WORKER_CONCURRENCY`, `MAX_CONCURRENT_FFMPEG`, `FILESYSTEM_UPLOAD_DIR`, `PIPELINE_CWD`
 - Recording ingest:
+  - `ESL_STT_PROVIDER_ELEVENLABS_MODEL` defaults to `scribe_v3` for mixed recordings.
+    Update any explicit `scribe_v2` pin to `scribe_v3` or remove the override, then recreate the API
+    and transcribe worker through the normal deployment flow.
   - `RECORDINGS_MAX_FILE_SIZE` defaults to `2147483648` bytes (2 GiB). The browser applies the
     shared default before starting a request; a smaller backend override remains authoritative.
   - `RECORDINGS_DISK_RESERVE_BYTES` defaults to `10737418240` bytes (10 GiB). Admission requires

@@ -41,7 +41,7 @@ publication and historical Markdown compatibility are owned by
 - Prompt template/profile selection uses active revisions in Postgres as its source contract.
 - STT execution is provider-agnostic (`stt-core` + provider adapters); source exposes these adapters:
   - `deepgram`
-  - `elevenlabs` (Scribe v2)
+  - `elevenlabs` (Scribe v3)
   - `google` (Cloud STT V2 with required GCS staging for non-`gs://` inputs)
 - Historical staged manual is archived.
 

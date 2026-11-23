@@ -359,6 +359,16 @@ describe('config/env - STT provider defaults', () => {
     vi.resetModules();
   });
 
+  it.each([
+    [undefined, 'scribe_v3'],
+    ['scribe_v2', 'scribe_v2'],
+  ])('resolves the ElevenLabs model override %s to %s', async (override, expected) => {
+    await withEnv({ NODE_ENV: 'test', ESL_STT_PROVIDER_ELEVENLABS_MODEL: override }, async () => {
+      const cfg = await loadConfigFresh();
+      expect(cfg.stt.providers.elevenlabs.model).toBe(expected);
+    });
+  });
+
   it('uses ESL_STT_DEFAULT_PROVIDER when STT_PROVIDER is unset', async () => {
     await withEnv(
       {

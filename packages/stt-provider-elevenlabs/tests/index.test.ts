@@ -257,10 +257,11 @@ describe('stt-provider-elevenlabs', () => {
 
     await client.speechToText.convert({
       sourceUrl: 'https://storage.example.test/audio.mp3?X-Amz-Signature=test-secret',
-      modelId: 'scribe_v2',
+      modelId: 'scribe_v3',
     });
 
     const form = await requests[0]!.formData();
+    expect(form.get('model_id')).toBe('scribe_v3');
     expect(form.get('source_url')).toBe(
       'https://storage.example.test/audio.mp3?X-Amz-Signature=test-secret',
     );
@@ -302,7 +303,7 @@ describe('stt-provider-elevenlabs', () => {
         contentType: 'audio/wav',
         contentLength: sourceStats.size,
       },
-      modelId: 'scribe_v2',
+      modelId: 'scribe_v3',
     });
 
     const request = requests[0]!;
@@ -406,7 +407,7 @@ describe('stt-provider-elevenlabs', () => {
     }
   }, 30_000);
 
-  it('uses exactly one diarized Scribe v2 request for mixed audio', async () => {
+  it('uses exactly one diarized Scribe v3 request for mixed audio', async () => {
     const convert = vi.fn(async (_request: Record<string, unknown>) => ({
       text: 'Hello hi',
       words: [
@@ -450,7 +451,7 @@ describe('stt-provider-elevenlabs', () => {
     expect(convert).toHaveBeenCalledTimes(1);
     expect(convert).toHaveBeenCalledWith({
       sourceUrl: 'https://storage.example.test/audio.wav?X-Amz-Signature=secret',
-      modelId: 'scribe_v2',
+      modelId: 'scribe_v3',
       useMultiChannel: false,
       diarize: true,
       numSpeakers: 2,
@@ -692,7 +693,7 @@ describe('stt-provider-elevenlabs', () => {
         contentType: 'audio/wav',
         contentLength: sourceStats.size,
       },
-      modelId: 'scribe_v2',
+      modelId: 'scribe_v3',
       useMultiChannel: false,
       diarize: true,
       numSpeakers: 2,

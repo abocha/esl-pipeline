@@ -4,7 +4,7 @@ ElevenLabs STT adapter for `@esl-pipeline/stt-core`.
 
 Behavior:
 
-- `scribe_v2` model
+- `scribe_v3` by default, with explicit model overrides supported
 - one diarized request for ordinary mixed recordings (`useMultiChannel: false`, two speakers)
 - S3 sources use a fresh storage-owned `sourceUrl`, serialized by the installed SDK as `source_url`
 - filesystem sources stay file-backed with their probed MIME type and filename; there is no
@@ -25,7 +25,7 @@ Behavior:
   indexes (missing lexical starts sort as zero; missing event starts sort after timed segments).
 - SDK 2.67.0 retains optional word start/end numbers and token kinds `word`, `spacing`,
   and `audio_event`. Its schema does not constrain duration or explain missing lexical timing for
-  word-granularity Scribe v2. This alone does not justify repairing or dropping lexical text, or
+  word-granularity Scribe responses. This alone does not justify repairing or dropping lexical text, or
   synthesizing timing; untimed and otherwise malformed lexical timing remains visible to worker
   validation.
 - Before mapping or merging, lexical provider tokens are inspected into

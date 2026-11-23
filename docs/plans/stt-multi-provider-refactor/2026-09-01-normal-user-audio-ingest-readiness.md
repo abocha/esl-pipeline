@@ -61,7 +61,7 @@ Do not add or reopen:
 
 ### Already completed or fixed
 
-1. ElevenLabs Scribe v2 is the production `mixed_recording` route.
+1. ElevenLabs Scribe v3 is the production `mixed_recording` route.
 2. Explicit trusted OBS split remains `trusted_split_channels` and uses Deepgram multichannel.
 3. Mixed speaker-role confirmation in Source review is implemented and production-proven.
 4. The provider benchmark decision is closed.

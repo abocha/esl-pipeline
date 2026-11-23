@@ -171,8 +171,8 @@ Useful indexes:
   submitted for another student, the backend clones recording/transcript metadata for that student
   instead of reassigning the original learner-owned artifacts.
 - Audio uploads persist an explicit topology. Ordinary uploads default to `mixed_recording` and use
-  the configured ElevenLabs Scribe v2 mixed profile; only an explicit trusted OBS declaration uses
-  Deepgram's two-channel tutor/student path. Mixed diarization labels remain anonymous until the
+  the configured ElevenLabs mixed profile (Scribe v3 by default). An explicit trusted OBS
+  declaration uses Deepgram's two-channel tutor/student path. Mixed diarization labels remain anonymous until the
   tutor confirms the speaker-role mapping in the Source review flow.
 - Recording uploads spool incrementally to bounded temporary files. The browser and backend share a
   2 GiB default source guard, the backend preserves a configured 10 GiB free-space reserve at

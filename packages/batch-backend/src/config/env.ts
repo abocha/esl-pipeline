@@ -471,7 +471,7 @@ export function loadConfig(): BatchBackendConfig {
     readString('ESL_STT_PROVIDER_ELEVENLABS_API_TOKEN') ??
     readString('ELEVENLABS_API_KEY') ??
     readString('ELEVENLABS_API_TOKEN');
-  const elevenLabsSttModel = readString('ESL_STT_PROVIDER_ELEVENLABS_MODEL', 'scribe_v2')!;
+  const elevenLabsSttModel = readString('ESL_STT_PROVIDER_ELEVENLABS_MODEL', 'scribe_v3')!;
   const googleSttProjectId =
     readString('GOOGLE_STT_PROJECT_ID') ?? readString('GOOGLE_CLOUD_PROJECT');
   const googleSttLocation = readString('GOOGLE_STT_LOCATION', 'us')!;
