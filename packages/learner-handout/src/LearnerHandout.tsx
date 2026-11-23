@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 
-import type { AssignmentV1 } from '@esl-pipeline/contracts';
+import { type AssignmentV1, assignmentPlainText } from '@esl-pipeline/contracts';
 
 import { Pronunciation } from './Pronunciation.js';
 import {
@@ -75,17 +75,22 @@ function questionLanguage(prompt: string, supportLanguage: string): string {
 function Answers({
   questions,
   promptLanguage = 'en',
+  practice = false,
 }: {
   questions: Question[];
   promptLanguage?: string;
+  practice?: boolean;
 }) {
   return (
     <ol>
       {questions.map((q, i) => (
         <li className="answer-key-item" key={i}>
-          <Text className="answer-question" lang={questionLanguage(q.prompt, promptLanguage)}>
-            {q.prompt}
-          </Text>
+          <p
+            className="plain-text answer-question"
+            lang={questionLanguage(q.prompt, promptLanguage)}
+          >
+            {practice ? <PracticePrompt>{q.prompt}</PracticePrompt> : <Inline>{q.prompt}</Inline>}
+          </p>
           <Field label="Answer" lang="en" className="answer-content">
             {q.answer}
           </Field>
@@ -97,6 +102,34 @@ function Answers({
         </li>
       ))}
     </ol>
+  );
+}
+
+// Explicit A/B alternatives are common in comparison tasks, including answer-key copies.
+function PracticeText({ children }: { children: string }) {
+  const pair = /^(A: (?:`[^`]*`|[^`])*?)(\s+)(B: [\s\S]+)$/.exec(children);
+  return pair ? (
+    <>
+      <Inline practice>{pair[1]!}</Inline>
+      {pair[2]}
+      <span className="practice-alternative">
+        <Inline practice>{pair[3]!}</Inline>
+      </span>
+    </>
+  ) : (
+    <Inline practice>{children}</Inline>
+  );
+}
+
+function PracticePrompt({ children }: { children: string }) {
+  const direction = /\r?\nTask: ([^\r\n]+)$/.exec(children);
+  if (!direction || direction.index === 0) return <PracticeText>{children}</PracticeText>;
+  return (
+    <>
+      <PracticeText>{children.slice(0, direction.index)}</PracticeText>
+      {'\n'}
+      <strong>Task:</strong> <Inline practice>{direction[1]!}</Inline>
+    </>
   );
 }
 
@@ -113,6 +146,8 @@ function PracticeParts({
       {assignment.practice.map((part, i) => {
         const instructions = part.instructions ?? '';
         const example = /(?:^|\r?\n)0\. Example: (.+)$/.exec(instructions.trimEnd());
+        const worked = example?.[1];
+        const model = worked && /^((?:`[^`]*`|[^`])*?) → (.+)$/.exec(worked);
         const directions = example ? instructions.slice(0, example.index) : instructions;
         return (
           <div className="practice-part" key={i}>
@@ -131,17 +166,24 @@ function PracticeParts({
             )}
             {!answers && directions && <Text>{directions}</Text>}
             {answers ? (
-              <Answers questions={part.items} />
+              <Answers questions={part.items} practice />
             ) : (
               <ol lang="en" start={example ? 0 : undefined}>
-                {example && (
-                  <li>
-                    <strong>Example:</strong> <Inline>{example[1]!}</Inline>
+                {worked && (
+                  <li className="worked-example">
+                    <strong>Example:</strong>{' '}
+                    <PracticeText>{model ? model[1]! : worked}</PracticeText>
+                    {model && (
+                      <span className="worked-response">
+                        {' → '}
+                        <PracticeText>{model[2]!}</PracticeText>
+                      </span>
+                    )}
                   </li>
                 )}
                 {part.items.map((q, j) => (
                   <li key={j} className="plain-text">
-                    <Inline>{q.prompt}</Inline>
+                    <PracticePrompt>{q.prompt}</PracticePrompt>
                   </li>
                 ))}
               </ol>
@@ -189,9 +231,13 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
         <Disclosure label="Transcript" className="study-text connected-disclosure">
           {a.input.studyText.turns.map((turn, i) => (
             <p key={i} lang="en" className="plain-text transcript-turn">
-              <strong className="transcript-speaker">
-                {names.get(turn.speakerId) ?? turn.speakerId}:
-              </strong>{' '}
+              {(i === 0 || a.input.studyText.type === 'dialogue') && (
+                <>
+                  <strong className="transcript-speaker">
+                    {names.get(turn.speakerId) ?? turn.speakerId}:
+                  </strong>{' '}
+                </>
+              )}
               <Inline>{turn.text}</Inline>
             </p>
           ))}
@@ -218,6 +264,18 @@ function InputMaterial({ assignment: a, media, presentation }: LearnerHandoutPro
   );
 }
 
+// Some saved headings append the same formula that the next row displays.
+function formHeading(label: string, pattern: string) {
+  const colon = label.indexOf(':');
+  if (
+    colon > 0 &&
+    assignmentPlainText(label.slice(colon + 1)).trim() === assignmentPlainText(pattern).trim()
+  ) {
+    return label.slice(0, colon).trimEnd();
+  }
+  return label;
+}
+
 function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
   return (
     <>
@@ -238,7 +296,7 @@ function LanguageToolkit({ assignment: a }: { assignment: AssignmentV1 }) {
                 {g.formBlocks.map((block, j) => (
                   <section className="grammar-form" key={j}>
                     <h5>
-                      <Inline>{block.label}</Inline>
+                      <Inline>{formHeading(block.label, block.pattern)}</Inline>
                     </h5>
                     <GrammarPattern>{block.pattern}</GrammarPattern>
                     <ul lang="en">
@@ -446,7 +504,7 @@ export function LearnerHandout(props: LearnerHandoutProps) {
           Your Goal
         </IconHeading>
         <aside className="callout">
-          <Field label="Your Goal">{a.mission.goal}</Field>
+          <Text>{a.mission.goal}</Text>
           <p>
             <strong lang="en">Key Language You Will Use:</strong>
           </p>
@@ -534,7 +592,7 @@ export function LearnerHandout(props: LearnerHandoutProps) {
             questions={a.input.comprehension}
             promptLanguage={a.metadata.instructionLanguage ?? 'en'}
           />
-          <h3 lang="en">A. Exercise Answers</h3>
+          <h3 lang="en">Exercise Answers</h3>
           <PracticeParts assignment={a} answers />
           <h3 lang="en">Example Response</h3>
           <Text lang="en" className="sample-mission">

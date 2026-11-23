@@ -207,6 +207,18 @@
   padding: 0;
   margin-top: 24px;
 }
+:where(.learner-handout) .worked-example {
+  background: var(--handout-surface);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+:where(.learner-handout) .worked-response,
+:where(.learner-handout) .practice-alternative {
+  display: block;
+}
+:where(.learner-handout) .worked-response {
+  margin-top: 4px;
+}
 :where(.learner-handout) .practice-part-number {
   font-size: inherit;
   font-weight: inherit;
@@ -568,6 +580,23 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   vertical-align: baseline;
+}
+:where(.learner-handout) .cloze-hint {
+  display: inline-flex;
+  align-items: baseline;
+  max-width: 100%;
+  column-gap: 0.3em;
+  white-space: normal;
+}
+:where(.learner-handout) .cloze-line {
+  width: 3.5rem;
+  flex-shrink: 0;
+  font-size: 0;
+  border-bottom: 1px solid currentColor;
+}
+:where(.learner-handout) .cloze-hint i {
+  color: var(--handout-muted);
+  overflow-wrap: anywhere;
 }
 :where(.learner-handout) .bracketed-cue {
   display: inline-flex;
