@@ -88,6 +88,7 @@
 | `ESL_STT_PROVIDER_DEEPGRAM_MODEL` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_STT_PROVIDER_ELEVENLABS_API_KEY` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_STT_PROVIDER_ELEVENLABS_API_TOKEN` | `.env.example` | speech_runtime | `docs/reference/env.md` |
+| `ESL_STT_PROVIDER_ELEVENLABS_FALLBACK_API_KEY` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_STT_PROVIDER_ELEVENLABS_MODEL` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_STT_PROVIDER_ORDER` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_STT_STORE_RAW_RESPONSE` | `.env.example` | speech_runtime | `docs/reference/env.md` |

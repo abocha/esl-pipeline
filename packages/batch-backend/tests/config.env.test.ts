@@ -369,6 +369,23 @@ describe('config/env - STT provider defaults', () => {
     });
   });
 
+  it('keeps the optional ElevenLabs backup credential separate from the primary', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        ESL_STT_PROVIDER_ELEVENLABS_API_KEY: 'test-primary',
+        ESL_STT_PROVIDER_ELEVENLABS_FALLBACK_API_KEY: ' test-backup ',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.stt.providers.elevenlabs).toMatchObject({
+          apiKey: 'test-primary',
+          fallbackApiKey: 'test-backup',
+        });
+      },
+    );
+  });
+
   it('uses ESL_STT_DEFAULT_PROVIDER when STT_PROVIDER is unset', async () => {
     await withEnv(
       {

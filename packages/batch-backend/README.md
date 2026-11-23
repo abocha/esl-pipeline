@@ -174,6 +174,9 @@ Useful indexes:
   the configured ElevenLabs mixed profile (Scribe v3 by default). An explicit trusted OBS
   declaration uses Deepgram's two-channel tutor/student path. Mixed diarization labels remain anonymous until the
   tutor confirms the speaker-role mapping in the Source review flow.
+- An optional `ESL_STT_PROVIDER_ELEVENLABS_FALLBACK_API_KEY` lets the worker retry with an
+  independent ElevenLabs credential after a confirmed quota rejection. The backup request uses
+  its own durable submission slot and a fresh provider submission source.
 - Recording uploads spool incrementally to bounded temporary files. The browser and backend share a
   2 GiB default source guard, the backend preserves a configured 10 GiB free-space reserve at
   admission, and probed duration is capped at 6000 seconds. Direct MP3, PCM16 WAV, AAC/M4A,

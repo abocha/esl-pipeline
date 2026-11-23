@@ -192,44 +192,79 @@ async function processTranscribeJobWithinFence(
       }
       return null;
     }
-    submissionSlot = reserved.currentSubmissionSlot ?? reserved.submissionSlotsReserved;
     const storageUri = recording.storageUri;
     const readStorage =
       overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
-    const guard = createTranscriptionDispatchGuard({
-      claimTtlMs: config.transcription.claimTtlMs ?? 10 * 60 * 1000,
-      submissionSlot: reserved.currentSubmissionSlot ?? reserved.submissionSlotsReserved,
-      renew: async (submissionSlot) =>
-        Boolean(
-          await renewTranscriptionRunLease({
-            runId: claimed.id,
-            claimToken,
-            claimTtlMs: config.transcription.claimTtlMs ?? 10 * 60 * 1000,
-            submissionSlot,
-          }),
-        ),
-    });
-    guard.start();
-    let transcription;
-    try {
-      transcription = await sttTranscribe({
-        provider: sttProvider,
-        context: {
-          recordingId: recording.id,
-          storageUri,
-          getStream: () => readStorage.getStream(storageUri),
-          getSubmissionSource: async () => {
-            if (!readStorage.getProviderSubmissionSource) {
-              throw new Error('Transcription storage cannot prepare a provider submission source.');
-            }
-            return readStorage.getProviderSubmissionSource(storageUri);
-          },
-          providerTransport: { fetch: guard.fetch, signal: guard.signal },
-        },
-        configByProvider: buildSttProviderConfig(config, topology),
+    const submit = async (slot: number, elevenLabsApiKey?: string) => {
+      submissionSlot = slot;
+      const guard = createTranscriptionDispatchGuard({
+        claimTtlMs: config.transcription.claimTtlMs ?? 10 * 60 * 1000,
+        submissionSlot: slot,
+        renew: async (submissionSlot) =>
+          Boolean(
+            await renewTranscriptionRunLease({
+              runId: claimed.id,
+              claimToken,
+              claimTtlMs: config.transcription.claimTtlMs ?? 10 * 60 * 1000,
+              submissionSlot,
+            }),
+          ),
       });
-    } finally {
-      guard.stop();
+      guard.start();
+      try {
+        return await sttTranscribe({
+          provider: sttProvider,
+          context: {
+            recordingId: recording.id,
+            storageUri,
+            getStream: () => readStorage.getStream(storageUri),
+            getSubmissionSource: async () => {
+              if (!readStorage.getProviderSubmissionSource) {
+                throw new Error(
+                  'Transcription storage cannot prepare a provider submission source.',
+                );
+              }
+              return readStorage.getProviderSubmissionSource(storageUri);
+            },
+            providerTransport: { fetch: guard.fetch, signal: guard.signal },
+          },
+          configByProvider: buildSttProviderConfig(config, topology, elevenLabsApiKey),
+        });
+      } finally {
+        guard.stop();
+      }
+    };
+
+    let transcription: SttTranscriptionResult;
+    try {
+      transcription = await submit(
+        reserved.currentSubmissionSlot ?? reserved.submissionSlotsReserved,
+      );
+    } catch (error) {
+      const fallbackApiKey = config.stt.providers.elevenlabs.fallbackApiKey;
+      if (
+        sttProvider !== 'elevenlabs' ||
+        !fallbackApiKey ||
+        fallbackApiKey === resolveElevenLabsSttApiKey(config) ||
+        classifyTranscriptionFailure(error).errorCode !==
+          'transcription_provider_account_unavailable'
+      ) {
+        throw error;
+      }
+
+      const fallbackSlot = await reserveTranscriptionSubmissionSlot({
+        runId: claimed.id,
+        claimToken,
+      });
+      if (!fallbackSlot) throw error;
+
+      log.warn('Using the ElevenLabs STT backup credential after a quota rejection', {
+        event: 'recording_transcribe_elevenlabs_backup_credential',
+      });
+      transcription = await submit(
+        fallbackSlot.currentSubmissionSlot ?? fallbackSlot.submissionSlotsReserved,
+        fallbackApiKey,
+      );
     }
     if (config.stt.storeRawResponse && transcription.rawResponse !== null) {
       const rawStored = await storage.putRawResponse({
@@ -479,6 +514,7 @@ async function publishCommittedProjection(params: {
 function buildSttProviderConfig(
   config: BatchBackendConfig,
   topology: AudioInputTopology,
+  elevenLabsApiKey?: string,
 ): Partial<Record<SttProviderId, Record<string, unknown>>> {
   return {
     deepgram: {
@@ -489,7 +525,7 @@ function buildSttProviderConfig(
       trustedSplitChannels: topology === 'trusted_split_channels',
     },
     elevenlabs: {
-      apiKey: resolveElevenLabsSttApiKey(config),
+      apiKey: elevenLabsApiKey ?? resolveElevenLabsSttApiKey(config),
       modelId: config.stt.providers.elevenlabs.model,
     },
     google: {

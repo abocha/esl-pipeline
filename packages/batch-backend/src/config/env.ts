@@ -109,6 +109,7 @@ export interface BatchBackendConfig {
       };
       elevenlabs: {
         apiKey?: string;
+        fallbackApiKey?: string;
         model: string;
       };
       google: {
@@ -911,6 +912,8 @@ export function loadConfig(): BatchBackendConfig {
         },
         elevenlabs: {
           apiKey: elevenLabsSttApiKey ?? undefined,
+          fallbackApiKey:
+            readString('ESL_STT_PROVIDER_ELEVENLABS_FALLBACK_API_KEY')?.trim() || undefined,
           model: elevenLabsSttModel,
         },
         google: {
