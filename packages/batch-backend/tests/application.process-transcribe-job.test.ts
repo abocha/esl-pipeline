@@ -203,8 +203,8 @@ describe('application/process-transcribe-job', () => {
         .mockResolvedValueOnce({ kind: 'url', url: 'https://example.test/backup.wav' });
       const requests: Array<{
         key: string | null;
-        source: FormDataEntryValue | null;
-        model: FormDataEntryValue | null;
+        source: ReturnType<FormData['get']>;
+        model: ReturnType<FormData['get']>;
       }> = [];
       const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
         const request = new Request(input, init);
