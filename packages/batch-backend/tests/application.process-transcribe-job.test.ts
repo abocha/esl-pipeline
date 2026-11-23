@@ -182,6 +182,118 @@ describe('application/process-transcribe-job', () => {
     expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain('PROVIDER_SECRET');
   });
 
+  it.each([
+    { detail: { code: 'insufficient_credits' }, status: 402, hasSlot: true, usesBackup: true },
+    { detail: { status: 'quota_exceeded' }, status: 401, hasSlot: true, usesBackup: true },
+    { detail: { code: 'invalid_api_key' }, status: 401, hasSlot: true, usesBackup: false },
+    { detail: { code: 'insufficient_credits' }, status: 402, hasSlot: false, usesBackup: false },
+  ])(
+    'fences ElevenLabs backup dispatch for $detail with a fresh slot available: $hasSlot',
+    async ({ detail, status, hasSlot, usesBackup }) => {
+      const recording = createRecording('elevenlabs-credential-backup');
+      const config = createConfig();
+      config.stt.providers.elevenlabs = {
+        apiKey: 'test-primary',
+        fallbackApiKey: 'test-backup',
+        model: 'scribe_v3',
+      };
+      const getProviderSubmissionSource = vi
+        .fn(async () => ({ kind: 'url' as const, url: 'https://example.test/primary.wav' }))
+        .mockResolvedValueOnce({ kind: 'url', url: 'https://example.test/primary.wav' })
+        .mockResolvedValueOnce({ kind: 'url', url: 'https://example.test/backup.wav' });
+      const requests: Array<{
+        key: string | null;
+        source: ReturnType<FormData['get']>;
+        model: ReturnType<FormData['get']>;
+      }> = [];
+      const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+        const request = new Request(input, init);
+        const form = await request.formData();
+        requests.push({
+          key: request.headers.get('xi-api-key'),
+          source: form.get('source_url'),
+          model: form.get('model_id'),
+        });
+        if (requests.length === 1) return Response.json({ detail }, { status });
+        return Response.json({
+          language_code: 'eng',
+          language_probability: 1,
+          text: 'Hello there',
+          words: [
+            {
+              type: 'word',
+              text: 'Hello',
+              logprob: -0.1,
+              speaker_id: 'speaker_0',
+              start: 0,
+              end: 0.5,
+            },
+            {
+              type: 'word',
+              text: 'there',
+              logprob: -0.1,
+              speaker_id: 'speaker_1',
+              start: 1,
+              end: 1.5,
+            },
+          ],
+        });
+      });
+      transcriptionRuns.reserve.mockClear();
+      transcriptionRuns.renew.mockClear();
+      const firstSlot = hasSlot ? 1 : 3;
+      transcriptionRuns.reserve.mockResolvedValueOnce({
+        id: recording.id,
+        submissionSlotsReserved: firstSlot,
+        currentSubmissionSlot: firstSlot,
+      });
+      if (usesBackup) {
+        transcriptionRuns.reserve.mockResolvedValueOnce({
+          id: recording.id,
+          submissionSlotsReserved: 2,
+          currentSubmissionSlot: 2,
+        });
+      } else if (!hasSlot) {
+        transcriptionRuns.reserve.mockResolvedValueOnce(null as never);
+      }
+
+      let result: TranscriptRecord | null;
+      try {
+        result = await processTranscribeJob(
+          { recordingId: recording.id },
+          {
+            config,
+            storage: { ...createStorageStub(), getProviderSubmissionSource },
+            recordings: { getById: async () => recording, updateStatus: async () => recording },
+            publishEvent: vi.fn(),
+          },
+        );
+      } finally {
+        fetch.mockRestore();
+      }
+
+      const expectedRequests = [
+        { key: 'test-primary', source: 'https://example.test/primary.wav', model: 'scribe_v3' },
+      ];
+      if (usesBackup) {
+        expectedRequests.push({
+          key: 'test-backup',
+          source: 'https://example.test/backup.wav',
+          model: 'scribe_v3',
+        });
+        expect(result).toMatchObject({ model: 'scribe_v3', sttProvider: 'elevenlabs' });
+        expect(transcriptionRuns.renew).toHaveBeenCalledWith(
+          expect.objectContaining({ submissionSlot: 2 }),
+        );
+      } else {
+        expect(result).toBeNull();
+      }
+      expect(requests).toEqual(expectedRequests);
+      expect(transcriptionRuns.reserve).toHaveBeenCalledTimes(status === 402 || usesBackup ? 2 : 1);
+      expect(getProviderSubmissionSource).toHaveBeenCalledTimes(expectedRequests.length);
+    },
+  );
+
   it('marks a recording failed when a forced route-resolution error occurs before provider execution', async () => {
     const recording = {
       ...createRecording('trusted-override'),

@@ -41,7 +41,7 @@ publication and historical Markdown compatibility are owned by
 - Prompt template/profile selection uses active revisions in Postgres as its source contract.
 - STT execution is provider-agnostic (`stt-core` + provider adapters); source exposes these adapters:
   - `deepgram`
-  - `elevenlabs` (Scribe v2)
+  - `elevenlabs` (Scribe v3)
   - `google` (Cloud STT V2 with required GCS staging for non-`gs://` inputs)
 - Historical staged manual is archived.
 
@@ -132,7 +132,9 @@ Archived detailed version:
 ## Mixed and trusted recording topology
 
 Ordinary uploads persist `mixed_recording` and route to the versioned
-`mixed-recording-elevenlabs-scribe-v2-v1` profile. Initial diarized labels are anonymous; Source
+`mixed-recording-elevenlabs-scribe-v2-v1` request profile with the configured Scribe model
+(Scribe v3 by default). Cache reuse checks the model separately from this stable profile ID.
+Initial diarized labels are anonymous. Source
 confirmation requires a tutor-confirmed Teacher/Student mapping. An explicit
 `trusted_split_channels` declaration retains Deepgram multichannel channel 0 tutor / channel 1
 student semantics and fails closed if that two-channel contract is not returned. Cache reuse also

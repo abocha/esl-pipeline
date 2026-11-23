@@ -126,6 +126,14 @@ Primary groups:
 - Worker/runtime:
   - `WORKER_CONCURRENCY`, `MAX_CONCURRENT_FFMPEG`, `FILESYSTEM_UPLOAD_DIR`, `PIPELINE_CWD`
 - Recording ingest:
+  - `ESL_STT_PROVIDER_ELEVENLABS_MODEL` defaults to `scribe_v3` for mixed recordings.
+    Update any explicit `scribe_v2` pin to `scribe_v3` or remove the override, then recreate the API
+    and transcribe worker through the normal deployment flow.
+  - Set `ESL_STT_PROVIDER_ELEVENLABS_FALLBACK_API_KEY` in `/etc/esl-pipeline/production.env`
+    (or repository-local `.env` for development) to enable the optional STT backup. Use a key
+    with Speech to Text permission and an independent credit balance. The worker tries it once
+    per delivery after an explicit ElevenLabs insufficient-credit or quota-exhaustion response,
+    when the run still has a submission slot. Recreate the transcribe worker after saving the key.
   - `RECORDINGS_MAX_FILE_SIZE` defaults to `2147483648` bytes (2 GiB). The browser applies the
     shared default before starting a request; a smaller backend override remains authoritative.
   - `RECORDINGS_DISK_RESERVE_BYTES` defaults to `10737418240` bytes (10 GiB). Admission requires

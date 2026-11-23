@@ -31,7 +31,7 @@ interface ElevenLabsMultichannelResponse {
   text?: string;
 }
 
-type ElevenLabsModelId = 'scribe_v1' | 'scribe_v2';
+type ElevenLabsModelId = 'scribe_v1' | 'scribe_v2' | 'scribe_v3';
 
 interface ElevenLabsClientLike {
   speechToText: {
@@ -54,7 +54,7 @@ export interface ElevenLabsSttDependencies {
   ) => ElevenLabsClientLike;
 }
 
-const DEFAULT_MODEL_ID = 'scribe_v2';
+const DEFAULT_MODEL_ID = 'scribe_v3';
 
 export function createElevenLabsSttProvider(
   deps: ElevenLabsSttDependencies = {},

@@ -359,6 +359,33 @@ describe('config/env - STT provider defaults', () => {
     vi.resetModules();
   });
 
+  it.each([
+    [undefined, 'scribe_v3'],
+    ['scribe_v2', 'scribe_v2'],
+  ])('resolves the ElevenLabs model override %s to %s', async (override, expected) => {
+    await withEnv({ NODE_ENV: 'test', ESL_STT_PROVIDER_ELEVENLABS_MODEL: override }, async () => {
+      const cfg = await loadConfigFresh();
+      expect(cfg.stt.providers.elevenlabs.model).toBe(expected);
+    });
+  });
+
+  it('keeps the optional ElevenLabs backup credential separate from the primary', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        ESL_STT_PROVIDER_ELEVENLABS_API_KEY: 'test-primary',
+        ESL_STT_PROVIDER_ELEVENLABS_FALLBACK_API_KEY: ' test-backup ',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.stt.providers.elevenlabs).toMatchObject({
+          apiKey: 'test-primary',
+          fallbackApiKey: 'test-backup',
+        });
+      },
+    );
+  });
+
   it('uses ESL_STT_DEFAULT_PROVIDER when STT_PROVIDER is unset', async () => {
     await withEnv(
       {

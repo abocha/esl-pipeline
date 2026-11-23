@@ -571,6 +571,7 @@ describe('recording media boundary', () => {
     };
 
     expect(shouldReuseCachedTranscriptForFingerprint(base)).toBe(true);
+    expect(shouldReuseCachedTranscriptForFingerprint({ ...base, model: 'scribe_v3' })).toBe(false);
     expect(
       shouldReuseCachedTranscriptForFingerprint({
         ...base,

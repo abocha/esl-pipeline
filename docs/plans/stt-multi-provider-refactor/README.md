@@ -19,7 +19,7 @@ audio/deletion smoke, and representative export evidence satisfy the Goal Contra
 
 Current locked decisions:
 
-1. ElevenLabs Scribe v2 owns ordinary `mixed_recording` transcription with exactly two speakers.
+1. ElevenLabs Scribe v3 owns ordinary `mixed_recording` transcription with exactly two speakers.
 2. Deepgram multichannel owns explicitly trusted split-channel transcription.
 3. There is no automatic cross-provider fallback.
 4. Normal tutors do not need provider or topology knowledge.

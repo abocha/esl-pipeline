@@ -109,6 +109,7 @@ export interface BatchBackendConfig {
       };
       elevenlabs: {
         apiKey?: string;
+        fallbackApiKey?: string;
         model: string;
       };
       google: {
@@ -471,7 +472,7 @@ export function loadConfig(): BatchBackendConfig {
     readString('ESL_STT_PROVIDER_ELEVENLABS_API_TOKEN') ??
     readString('ELEVENLABS_API_KEY') ??
     readString('ELEVENLABS_API_TOKEN');
-  const elevenLabsSttModel = readString('ESL_STT_PROVIDER_ELEVENLABS_MODEL', 'scribe_v2')!;
+  const elevenLabsSttModel = readString('ESL_STT_PROVIDER_ELEVENLABS_MODEL', 'scribe_v3')!;
   const googleSttProjectId =
     readString('GOOGLE_STT_PROJECT_ID') ?? readString('GOOGLE_CLOUD_PROJECT');
   const googleSttLocation = readString('GOOGLE_STT_LOCATION', 'us')!;
@@ -911,6 +912,8 @@ export function loadConfig(): BatchBackendConfig {
         },
         elevenlabs: {
           apiKey: elevenLabsSttApiKey ?? undefined,
+          fallbackApiKey:
+            readString('ESL_STT_PROVIDER_ELEVENLABS_FALLBACK_API_KEY')?.trim() || undefined,
           model: elevenLabsSttModel,
         },
         google: {
