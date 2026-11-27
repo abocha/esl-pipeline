@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [24.0.0] - 2026-11-27
+
+### Changed
+
+- Automated release from PR #494: feat(tts): add authored Gemini delivery direction and casting (ESL-105) (https://github.com/abocha/esl-pipeline/pull/494)
+
 ## [23.2.3] - 2026-11-23
 
 ### Changed
