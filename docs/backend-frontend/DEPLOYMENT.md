@@ -425,8 +425,11 @@ read-only at `/app/secrets`. Keep the real service-account file on the VPS at
 `/opt/esl-pipeline/.secrets/google-service-account.json`; production containers use
 `GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`. For Gemini TTS with a
 dedicated Google identity, put the Google-generated AWS federation configuration in this same
-read-only mount and set `ESL_TTS_PROVIDER_GEMINI_CREDENTIALS_FILE` to its container path. The
-Gemini library reads the worker's AWS runtime credentials and exchanges them for short-lived
+read-only mount as `/opt/esl-pipeline/.secrets/gemini-tts-aws-credentials.json` with owner
+**root:1000** and mode **`0640`**. Set
+`ESL_TTS_PROVIDER_GEMINI_CREDENTIALS_FILE=/app/secrets/gemini-tts-aws-credentials.json`.
+The deployment guard allows only the two credential filenames in this mount. The Gemini library
+reads the worker's AWS runtime credentials and exchanges them for short-lived
 Google tokens. Restrict the AWS provider to the worker's verified AWS identity and grant that
 subject impersonation only on the Gemini inference service account. Do not commit `.secrets`
 or replace it from git during deploys.
