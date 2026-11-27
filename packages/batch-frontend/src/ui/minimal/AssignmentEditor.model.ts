@@ -1,17 +1,18 @@
 import {
+  ASSIGNMENT_DELIVERY_DIRECTION_MAX_LENGTH,
   assignmentPlainText,
-  type FreshAssignmentV1,
-  FreshAssignmentV1Schema,
+  type EditableAssignmentV1,
+  EditableAssignmentV1Schema,
 } from '@esl-pipeline/contracts';
 
 export type EditorPath = readonly (string | number)[];
 export const fieldKey = (path: EditorPath) => path.join('.');
 
 /** Same AssignmentV1 object locally, including temporarily incomplete text; never a second format. */
-export function readEditorAssignment(text: string): FreshAssignmentV1 | null {
+export function readEditorAssignment(text: string): EditableAssignmentV1 | null {
   try {
     const value: unknown = JSON.parse(text);
-    const checked = FreshAssignmentV1Schema.safeParse(value);
+    const checked = EditableAssignmentV1Schema.safeParse(value);
     if (checked.success) return checked.data;
     // These are the only string-format constraints in the current shape. Keep their invalid
     // buffers visible too. All other schema/structure errors stay outside the current editor.
@@ -25,7 +26,7 @@ export function readEditorAssignment(text: string): FreshAssignmentV1 | null {
         );
       })
     )
-      return value as FreshAssignmentV1;
+      return value as EditableAssignmentV1;
   } catch {
     /* Missing or unsupported content is displayed by the owning workflow. */
   }
@@ -43,10 +44,10 @@ export function editorValue(value: unknown, path: EditorPath): unknown {
 }
 
 export function editAssignment(
-  assignment: FreshAssignmentV1,
+  assignment: EditableAssignmentV1,
   path: EditorPath,
   value: unknown,
-): FreshAssignmentV1 {
+): EditableAssignmentV1 {
   const copy = structuredClone(assignment);
   const parent = editorValue(copy, path.slice(0, -1)) as Record<string | number, unknown>;
   parent[path[path.length - 1]!] = value;
@@ -56,12 +57,17 @@ export function editAssignment(
 export function textProblem(value: string, path: EditorPath, optional: boolean): string | null {
   if (!value.trim()) return optional ? null : 'Enter text. This change has not saved.';
   if (
+    fieldKey(path) === 'input.studyText.deliveryDirection' &&
+    value.length > ASSIGNMENT_DELIVERY_DIRECTION_MAX_LENGTH
+  )
+    return `Use ${ASSIGNMENT_DELIVERY_DIRECTION_MAX_LENGTH} characters or fewer.`;
+  if (
     fieldKey(path) === 'metadata.instructionLanguage' &&
     !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(value)
   )
     return 'Use a language tag, for example en, ru or pt-BR.';
   if (fieldKey(path) === 'metadata.icon') {
-    const checked = FreshAssignmentV1Schema.shape.metadata.shape.icon.safeParse(value);
+    const checked = EditableAssignmentV1Schema.shape.metadata.shape.icon.safeParse(value);
     if (
       !checked.success ||
       [...value].length > 32 ||

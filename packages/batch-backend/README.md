@@ -805,7 +805,7 @@ mode. The original immutable evidence retains its historical interpretation.
 ## Structured assignment generation
 
 Homework drafting pins the active `hw_prompt_assignment_v1.md` revision and strict
-`assignment_v1_generation_v8` response schema and matching first-line template marker in the existing
+`assignment_v1_generation_v9` response schema and matching first-line template marker in the existing
 prompt-package envelope. Runtime reads accept legacy root rationale without normalization or the
 new learner/teacher shape; post-provider fresh admission requires `learnerRationale` and required
 nullable `teacherRationale`, with no root `rationale`, plus a structured outputTask with task text,
@@ -826,6 +826,9 @@ through explicit legacy reads. There is no model-driven
 Markdown repair. See [contract and rollout](../../docs/reference/ASSIGNMENT_V1.md).
 
 Fresh generation additionally requires `metadata.instructionLanguage` (for example `en` or `ru`).
+It also requires nullable `input.studyText.deliveryDirection` for passage-level pacing and tone.
+The editor and runtime allow earlier assignments to omit it. Fresh v9 drafting requires explicit
+activation of the shipped v9 template, and pending v8 prompt packages must be recreated to generate.
 The shipped policy chooses current tutor notes, durable learner preferences in the rendered profile
 or snapshot, strong current/recent learner-level evidence, then English. Russian scaffolding can
 support instructions, explanations and glosses; English targets, practice, answers and samples stay

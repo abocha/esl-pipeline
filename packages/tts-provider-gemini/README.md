@@ -33,18 +33,30 @@ authoritative: dialogue remains dialogue and monologue remains monologue, even w
 joins the authored turn text without reading speaker labels. Other speaker counts in dialogue fail
 before authentication or synthesis; use an authored monologue or another provider instead.
 
-The package exposes the 30 supported prebuilt voices as a static catalog, so catalog lookup needs
-no credentials. Plain authored words are sent without delivery prompts, inline annotations or an
-external speech planner/voice ranker. Default voices are Puck then Kore for dialogue and Kore for
-monologue. A validated prepared voice plan takes precedence; otherwise explicit speaker-profile
-voices, `voices.yml` speaker mappings, `voices.yml.default`/operator default voice, then deterministic
-defaults apply. Unknown, custom and other-provider voice IDs fail explicitly. Example:
+The static catalog contains Google's 30 prebuilt voices plus the allowlisted Cloud library voices
+`en-us-mako` (Mako) and `en-us-kira` (Kira). Overrides can also use their short names. Catalog
+lookup needs no credentials. A validated prepared voice plan takes precedence,
+followed by explicit speaker-profile voices, `voices.yml` speaker mappings, and the configured
+default in `voices.yml` or operator settings.
+
+Automatic casting matches the authored speaker gender and broad role or delivery cues against a
+shortlist with US English locale metadata. When the shortlist cannot match, **Mako** is the male
+fallback and **Kira** is the female fallback. A speaker without a male or female hint uses the
+general Puck/Kore defaults. Automatic dialogue voices are distinct where a candidate is available.
+A requested accent outside the shortlist falls back to a voice matching the speaker's gender. The
+adapter records that the accent could not be verified when selecting the default voice. Unknown
+voice IDs fail explicitly. Example:
 
 ```yaml
 auto: true
 Alex: Puck
 Maya: Kore
 ```
+
+The adapter sends the authored transcript and uses its optional delivery direction as
+`speechMetadata.style`. One shared direction applies to the monologue or each dialogue turn.
+Synthesis still uses identity speech plans and local voice selection. Pronunciation requests use
+plain text and the selected voice.
 
 Pronunciation text and shadow sentences use the same plain single-speaker transport and explicit
 selected voice when routed to this adapter. The assignment pipeline sends the full pronunciation
@@ -60,7 +72,7 @@ file. Truncated RIFF/data chunks, blocked/incomplete output and `MAX_TOKENS` fai
 Valid audio is converted into MP3; temporary files and atomic renames keep interrupted conversions
 out of the cache. The authored text is not silently split, retargeted or retried.
 
-Cache identity contains provider, selected model, Cloud project, full request text/speaker/voice
+Cache identity contains provider, selected model, Cloud project, full request text/style/speaker/voice
 mapping, synthesis kind and the MP3 rendering policy. Output-directory changes can reuse the same
 cache; changed model, project, voice or text cannot. `force` bypasses reuse. Preview, static catalog
 lookup and successful cache hits never discover credentials or make inference calls. Cache data is

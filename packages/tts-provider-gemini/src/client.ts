@@ -10,7 +10,7 @@ import {
 
 export interface GeminiPart {
   text: string;
-  speechMetadata?: { speaker: string };
+  speechMetadata?: { speaker?: string; style?: string };
 }
 export interface GeminiRequest {
   contents: [{ role: 'user'; parts: GeminiPart[] }];

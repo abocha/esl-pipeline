@@ -2,10 +2,10 @@ import { z } from 'zod';
 
 import { assignmentPlainText } from './assignment-inline.js';
 
-export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_generation_v8';
+export const ASSIGNMENT_RESPONSE_SCHEMA_NAME = 'assignment_v1_generation_v9';
 export const ASSIGNMENT_TEMPLATE_ID = 'hw_prompt_assignment_v1.md';
-export const ASSIGNMENT_TEMPLATE_CONTRACT =
-  'Assignment output contract: assignment_v1_generation_v8';
+export const ASSIGNMENT_TEMPLATE_CONTRACT = `Assignment output contract: ${ASSIGNMENT_RESPONSE_SCHEMA_NAME}`;
+export const ASSIGNMENT_DELIVERY_DIRECTION_MAX_LENGTH = 400;
 
 const text = z.string();
 const optionalText = text.nullable();
@@ -108,6 +108,7 @@ const assignmentFields = {
     media: z.array(z.strictObject({ kind: z.enum(['audio', 'video']), url: text })),
     studyText: z.strictObject({
       type: z.enum(['monologue', 'dialogue']),
+      deliveryDirection: optionalText.optional(),
       speakers: z.array(
         z.strictObject({
           id: text,
@@ -148,15 +149,21 @@ const learnerRationaleAssignment = z.strictObject({
   learnerRationale: text,
   teacherRationale: optionalText,
 });
-export const FreshAssignmentV1Schema = learnerRationaleAssignment.extend({
+export const EditableAssignmentV1Schema = learnerRationaleAssignment.extend({
   metadata: metadata.extend({ instructionLanguage, icon: text.min(1) }),
   outputTask: structuredOutputTask,
   toolkit: assignmentFields.toolkit.extend({ grammar: z.array(structuredGrammar) }),
+});
+export const FreshAssignmentV1Schema = EditableAssignmentV1Schema.extend({
+  input: assignmentFields.input.extend({
+    studyText: assignmentFields.input.shape.studyText.extend({ deliveryDirection: optionalText }),
+  }),
 });
 /** Durable runtime/read admission, without normalization or inserted defaults. */
 export const AssignmentV1Schema = z.union([LegacyAssignmentV1Schema, learnerRationaleAssignment]);
 
 export type AssignmentV1 = z.infer<typeof AssignmentV1Schema>;
+export type EditableAssignmentV1 = z.infer<typeof EditableAssignmentV1Schema>;
 export type FreshAssignmentV1 = z.infer<typeof FreshAssignmentV1Schema>;
 export type AssignmentGrammar = AssignmentV1['toolkit']['grammar'][number];
 export type StructuredAssignmentGrammar = z.infer<typeof structuredGrammar>;
@@ -256,7 +263,11 @@ function validateAssignmentDomain<T extends AssignmentV1>(
     errors.push('metadata.student must match the canonical student display name');
   if (context.inputKind && assignment.input.kind !== context.inputKind)
     errors.push('input.kind does not match the supplied source type');
-  const { speakers, turns, type } = assignment.input.studyText;
+  const { speakers, turns, type, deliveryDirection } = assignment.input.studyText;
+  if (deliveryDirection && deliveryDirection.length > ASSIGNMENT_DELIVERY_DIRECTION_MAX_LENGTH)
+    errors.push(
+      `studyText.deliveryDirection must be ${ASSIGNMENT_DELIVERY_DIRECTION_MAX_LENGTH} characters or fewer`,
+    );
   const ids = new Set(speakers.map((speaker) => speaker.id));
   if (ids.size !== speakers.length) errors.push('studyText speaker IDs must be unique');
   if (type === 'monologue' ? speakers.length !== 1 : speakers.length < 2 || speakers.length > 4)

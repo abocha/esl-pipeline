@@ -4,8 +4,10 @@ import { dirname, join, resolve } from 'node:path';
 import { load } from 'js-yaml';
 
 import {
+  assignmentPlainText,
   ConfigurationError,
   type GeminiTtsModelId,
+  type SpeakerProfile,
   ValidationError,
 } from '@esl-pipeline/contracts';
 import {
@@ -70,17 +72,85 @@ export const GEMINI_PREBUILT_VOICES = [
   'Sadaltager',
   'Sulafat',
 ] as const;
+const GENDER_FALLBACKS = {
+  male: { id: 'en-us-mako', name: 'Mako' },
+  female: { id: 'en-us-kira', name: 'Kira' },
+} as const;
+const GEMINI_LIBRARY_VOICES = Object.values(GENDER_FALLBACKS);
+const AUTOMATIC_VOICES = {
+  male: [
+    { id: 'Charon', cues: /\b(informative|instructional|formal|teacher|instructor|expert)\b/i },
+    { id: 'Puck', cues: /\b(upbeat|energetic|enthusiastic|playful)\b/i },
+    { id: 'Zubenelgenubi', cues: /\b(casual|relaxed|laid-back|conversational)\b/i },
+    { id: 'Achird', cues: /\b(friendly|approachable|storyteller|narrator)\b/i },
+  ],
+  female: [
+    { id: 'Erinome', cues: /\b(clear|instructional|formal|teacher|instructor|expert)\b/i },
+    { id: 'Sulafat', cues: /\b(warm|friendly|approachable)\b/i },
+    { id: 'Vindemiatrix', cues: /\b(gentle|patient|reassuring|soft)\b/i },
+    { id: 'Callirrhoe', cues: /\b(casual|relaxed|easy-going|conversational)\b/i },
+  ],
+} as const satisfies Record<
+  keyof typeof GENDER_FALLBACKS,
+  readonly {
+    id: (typeof GEMINI_PREBUILT_VOICES)[number];
+    cues: RegExp;
+  }[]
+>;
 const POLICY = 'gemini-plain-wav-mp3-v1';
 
 function voiceId(value: string): string {
-  const voice = GEMINI_PREBUILT_VOICES.find(
-    (candidate) => candidate.toLowerCase() === value.trim().toLowerCase(),
-  );
+  const token = value.trim().toLowerCase();
+  const voice =
+    GEMINI_PREBUILT_VOICES.find((candidate) => candidate.toLowerCase() === token) ??
+    GEMINI_LIBRARY_VOICES.find(({ id, name }) => id === token || name.toLowerCase() === token)?.id;
   if (!voice)
     throw new ConfigurationError(
-      'Gemini TTS requires a supported prebuilt voice. Custom and other-provider voices are not supported.',
+      'Gemini TTS requires a supported prebuilt or allowlisted library voice.',
     );
   return voice;
+}
+
+function pickVoice(
+  profile: SpeakerProfile | undefined,
+  defaultAccent: string | undefined,
+  defaultVoice: string,
+  usedVoices: ReadonlySet<string>,
+): { id: string; reason: string } {
+  const gender = profile?.gender;
+  if (!profile || (gender !== 'male' && gender !== 'female')) {
+    const available = [defaultVoice, 'Puck', 'Kore'].find((id) => !usedVoices.has(id));
+    return { id: available ?? defaultVoice, reason: 'General Gemini voice fallback.' };
+  }
+
+  const requestedAccent = (profile.accent ?? defaultAccent)?.trim().toLowerCase();
+  const accent = requestedAccent && !/^(neutral|standard|default)$/.test(requestedAccent);
+  const candidates = AUTOMATIC_VOICES[gender].filter(({ id }) => !usedVoices.has(id));
+  // Studio verifies only the US English locale for this shortlist.
+  const matchesLocale =
+    accent && /^(american( english)?|us( english)?|en-us)$/.test(requestedAccent);
+  const useShortlist = !accent || matchesLocale;
+  const match = useShortlist
+    ? [profile.voice_direction, profile.persona, profile.role]
+        .map((hint) => hint && candidates.find(({ cues }) => cues.test(hint)))
+        .find(Boolean)
+    : undefined;
+  if (match) return { id: match.id, reason: 'Matched speaker gender and delivery cues.' };
+  if (matchesLocale && candidates[0]) {
+    return { id: candidates[0].id, reason: 'Matched speaker gender and US English locale.' };
+  }
+
+  const fallback = GENDER_FALLBACKS[gender].id;
+  if (usedVoices.has(fallback) && candidates[0]) {
+    return { id: candidates[0].id, reason: 'Selected a distinct voice matching speaker gender.' };
+  }
+  return {
+    id: fallback,
+    reason:
+      accent && !matchesLocale
+        ? 'Used gender fallback because the requested accent is unverified.'
+        : 'Used the configured gender fallback.',
+  };
 }
 
 function modelId(model?: string): GeminiTtsModelId {
@@ -154,22 +224,43 @@ async function assignmentsFor(
   }
   const mapping = await voiceMap(options.voiceMapPath);
   const profiles = resolveAssignmentMetadata(input).speaker_profiles ?? [];
-  const assignments = speakers.map((speaker, index): SpeakerVoiceAssignment => {
+  const defaultVoice = mapping.default ?? options.defaultVoiceId;
+  const preferences = speakers.map((speaker) => {
     const profile = profiles.find((candidate) => speakerKey(candidate.id) === speakerKey(speaker));
     const explicit = profile?.voice;
     const mapped = mapping[speakerKey(speaker)];
-    const defaultVoice = mapping.default ?? options.defaultVoiceId;
-    const selected =
-      explicit ?? mapped ?? defaultVoice ?? (dialogue && index === 0 ? 'Puck' : 'Kore');
+    const override = explicit ?? mapped ?? defaultVoice;
     return {
       speaker,
-      voiceId: voiceId(selected),
+      profile,
+      override: override === undefined ? undefined : voiceId(override),
       source: explicit ? 'profile' : mapped ? 'voiceMap' : defaultVoice ? 'default' : 'auto',
-      capabilities,
-      language: 'en-US',
-      selectionReason: 'Deterministic prebuilt Gemini voice; external ranking is not used.',
-    };
+    } as const;
   });
+  const usedVoices = new Set<string>(
+    preferences.flatMap(({ override }) => (override ? [override] : [])),
+  );
+  const assignments = preferences.map(
+    ({ speaker, profile, override, source }, index): SpeakerVoiceAssignment => {
+      const voice = override
+        ? { id: override, reason: 'Used an explicit Gemini voice selection.' }
+        : pickVoice(
+            profile,
+            options.defaultAccent,
+            dialogue && index === 0 ? 'Puck' : 'Kore',
+            usedVoices,
+          );
+      usedVoices.add(voice.id);
+      return {
+        speaker,
+        voiceId: voice.id,
+        source,
+        capabilities,
+        language: 'en-US',
+        selectionReason: voice.reason,
+      };
+    },
+  );
   if (!dialogue) for (const assignment of assignments) assignment.voiceId = assignments[0]!.voiceId;
   throwIfTtsCancelled(options);
   return assignments;
@@ -302,10 +393,11 @@ export function createGeminiTtsProvider(
       async loadCatalog(): Promise<VoiceCatalog> {
         return {
           capabilities: { provider: 'gemini' },
-          voices: GEMINI_PREBUILT_VOICES.map((id) => ({
-            id,
-            name: id,
-            category: 'prebuilt',
+          voices: [
+            ...GEMINI_PREBUILT_VOICES.map((id) => ({ id, name: id, category: 'prebuilt' })),
+            ...GEMINI_LIBRARY_VOICES.map((voice) => ({ ...voice, category: 'library' })),
+          ].map((voice) => ({
+            ...voice,
             verifiedLanguages: [{ language: 'en', locale: 'en-US' }],
           })),
         };
@@ -322,6 +414,9 @@ export function createGeminiTtsProvider(
         if (plan.mode !== 'identity' || plan.schemaVersion !== 1)
           throw new ConfigurationError('Gemini TTS uses plain identity speech plans only.');
       }
+      const direction = input.assignment.input.studyText.deliveryDirection;
+      const style = direction ? assignmentPlainText(direction).trim() : '';
+      const styleMetadata = style ? { style } : undefined;
       const request: GeminiRequest = {
         contents: [
           {
@@ -329,9 +424,14 @@ export function createGeminiTtsProvider(
             parts: dialogue
               ? prepared.segments.map((segment) => ({
                   text: segment.text,
-                  speechMetadata: { speaker: segment.speaker! },
+                  speechMetadata: { speaker: segment.speaker!, ...styleMetadata },
                 }))
-              : [{ text: prepared.segments.map((segment) => segment.text).join('\n') }],
+              : [
+                  {
+                    text: prepared.segments.map((segment) => segment.text).join('\n'),
+                    ...(styleMetadata && { speechMetadata: styleMetadata }),
+                  },
+                ],
           },
         ],
         generationConfig: {

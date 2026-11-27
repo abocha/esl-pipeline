@@ -128,7 +128,7 @@ describe('Gemini provider boundary', () => {
       requestBody().generationConfig.speechConfig.multiSpeakerVoiceConfig.speakerVoiceConfigs,
     ).toEqual([
       { speaker: 'Alex', voiceConfig: { voice: 'Puck' } },
-      { speaker: 'Jo', voiceConfig: { voice: 'Kore' } },
+      { speaker: 'Jo', voiceConfig: { voice: 'en-us-kira' } },
     ]);
     expect(result).toMatchObject({
       provider: 'gemini',
@@ -155,7 +155,7 @@ describe('Gemini provider boundary', () => {
       requestBody().generationConfig.speechConfig.multiSpeakerVoiceConfig.speakerVoiceConfigs,
     ).toEqual([
       { speaker: 'Alex', voiceConfig: { voice: 'Puck' } },
-      { speaker: 'Jo', voiceConfig: { voice: 'Kore' } },
+      { speaker: 'Jo', voiceConfig: { voice: 'en-us-kira' } },
     ]);
     expect(
       requestBody().contents[0].parts.map(
@@ -191,20 +191,104 @@ describe('Gemini provider boundary', () => {
     expect(requestBody().generationConfig.speechConfig).toEqual({ voiceConfig: { voice: 'Kore' } });
   });
 
+  it('passes monologue direction separately from the transcript and keys the cache by direction', async () => {
+    assignment.input.studyText.type = 'monologue';
+    assignment.input.studyText.speakers = assignment.input.studyText.speakers.slice(0, 1);
+    assignment.input.studyText.turns = [{ speakerId: 'alex', text: 'I found my shoe.' }];
+    const studyText = assignment.input.studyText;
+    const adapter = provider();
+    const plain = await adapter.synthesizeStudyText({ assignment }, options());
+
+    studyText.deliveryDirection = ' Leave a beat before the reveal. ';
+    const styled = await adapter.synthesizeStudyText({ assignment }, options());
+    const repeat = await adapter.synthesizeStudyText({ assignment }, options());
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(styled.hash).not.toBe(plain.hash);
+    expect(repeat.hash).toBe(styled.hash);
+    expect(repeat.cachedCharacters).toBe('I found my shoe.'.length);
+    expect(JSON.parse(mocks.fetch.mock.calls[1]![1].body).contents[0].parts).toEqual([
+      { text: 'I found my shoe.', speechMetadata: { style: 'Leave a beat before the reveal.' } },
+    ]);
+
+    studyText.deliveryDirection = null;
+    expect((await adapter.synthesizeStudyText({ assignment }, options())).hash).toBe(plain.hash);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps speaker routing when applying a shared direction to dialogue', async () => {
+    const style = 'Speak at an unhurried pace and leave a beat between speakers.';
+    assignment.input.studyText.deliveryDirection = style;
+    await provider().synthesizeStudyText({ assignment }, options());
+    expect(requestBody().contents[0].parts).toEqual([
+      { text: 'First, open the app.', speechMetadata: { speaker: 'Alex', style } },
+      { text: 'What happens next?', speechMetadata: { speaker: 'Jo', style } },
+      { text: 'Then, select a feature.', speechMetadata: { speaker: 'Alex', style } },
+    ]);
+  });
+
   it('honors explicit voice maps and validates unsupported voices before credentials or dispatch', async () => {
     const map = join(directory, 'voices.yml');
-    await writeFile(map, 'Alex: Charon\nJo: Leda\n');
+    await writeFile(map, 'Alex: Charon\nJo: Kira\n');
     await provider().synthesizeStudyText({ assignment }, { ...options(), voiceMapPath: map });
     expect(
-      requestBody().generationConfig.speechConfig.multiSpeakerVoiceConfig.speakerVoiceConfigs[0]
-        .voiceConfig.voice,
-    ).toBe('Charon');
+      requestBody().generationConfig.speechConfig.multiSpeakerVoiceConfig.speakerVoiceConfigs,
+    ).toEqual([
+      { speaker: 'Alex', voiceConfig: { voice: 'Charon' } },
+      { speaker: 'Jo', voiceConfig: { voice: 'en-us-kira' } },
+    ]);
     await writeFile(map, 'Alex: Ashley\n');
     await expect(
       provider().synthesizeStudyText({ assignment }, { ...options(), voiceMapPath: map }),
-    ).rejects.toThrow('supported prebuilt voice');
+    ).rejects.toThrow('supported prebuilt or allowlisted library voice');
     expect(mocks.accessToken).toHaveBeenCalledTimes(1);
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the authored profile to cast both speakers before using gender fallbacks', async () => {
+    const [alex, jo] = assignment.input.studyText.speakers;
+    Object.assign(alex!, {
+      gender: 'male',
+      role: 'Instructor',
+      voiceDirection: 'Upbeat',
+      accent: null,
+    });
+    Object.assign(jo!, { gender: 'female', voiceDirection: 'Warm', accent: 'American English' });
+
+    const result = await provider().synthesizeStudyText({ assignment }, options());
+
+    expect(result.voiceAssignments).toEqual({ Alex: 'Puck', Jo: 'Sulafat' });
+    expect(
+      requestBody().generationConfig.speechConfig.multiSpeakerVoiceConfig.speakerVoiceConfigs,
+    ).toEqual([
+      { speaker: 'Alex', voiceConfig: { voice: 'Puck' } },
+      { speaker: 'Jo', voiceConfig: { voice: 'Sulafat' } },
+    ]);
+  });
+
+  it('uses Mako and Kira when the casting shortlist cannot match the speaker', async () => {
+    const [alex, jo] = assignment.input.studyText.speakers;
+    Object.assign(alex!, { gender: 'male', voiceDirection: null, accent: null });
+    Object.assign(jo!, { gender: 'female', voiceDirection: 'Warm', accent: 'British' });
+
+    const result = await provider().synthesizeStudyText({ assignment }, options());
+
+    expect(result.voiceAssignments).toEqual({ Alex: 'en-us-mako', Jo: 'en-us-kira' });
+    expect(result.voices[1]?.selectionReason).toMatch(/requested accent is unverified/);
+  });
+
+  it('keeps an automatic voice distinct from a later explicit dialogue override', async () => {
+    const [alex, jo] = assignment.input.studyText.speakers;
+    Object.assign(alex!, { gender: 'male', voiceDirection: 'Upbeat', accent: null });
+    Object.assign(jo!, { gender: 'male', accent: null });
+    const map = join(directory, 'voices.yml');
+    await writeFile(map, 'Jo: Puck\n');
+
+    const result = await provider().synthesizeStudyText(
+      { assignment },
+      { ...options(), voiceMapPath: map },
+    );
+
+    expect(result.voiceAssignments).toEqual({ Alex: 'en-us-mako', Jo: 'Puck' });
   });
 
   it('rejects unsupported speaker counts and stale prepared voice/speech plans before dispatch', async () => {
@@ -354,9 +438,12 @@ describe('Gemini provider boundary', () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it('keeps catalog lookup credential-free and limited to supported prebuilt voices', async () => {
+  it('keeps catalog lookup credential-free and includes the supported library fallbacks', async () => {
     const catalog = await createGeminiTtsProvider().voice.loadCatalog();
-    expect(catalog.voices).toHaveLength(30);
+    expect(catalog.voices.filter((voice) => voice.category === 'prebuilt')).toHaveLength(30);
+    expect(
+      catalog.voices.filter((voice) => voice.category === 'library').map((voice) => voice.id),
+    ).toEqual(['en-us-mako', 'en-us-kira']);
     expect(catalog.voices.some((voice) => voice.id === 'Kore')).toBe(true);
     expect(mocks.accessToken).not.toHaveBeenCalled();
   });

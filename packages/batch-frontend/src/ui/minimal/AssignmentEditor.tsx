@@ -37,7 +37,7 @@ import {
   type AssignmentValidationContext,
   assignmentInlineParts,
   assignmentPlainText,
-  type FreshAssignmentV1,
+  type EditableAssignmentV1,
   validateAssignmentV1,
 } from '@esl-pipeline/contracts';
 
@@ -61,7 +61,7 @@ type Snapshot = { text: string; selected: string | null; focus: Focus | null; ro
 type History = { past: Snapshot[]; future: Snapshot[] };
 type Drag = { list: string; from: number; to: number; x: number; y: number; label: string };
 interface EditorContext {
-  assignment: FreshAssignmentV1;
+  assignment: EditableAssignmentV1;
   disabled: boolean;
   readOnly: boolean;
   selected: string | null;
@@ -476,7 +476,7 @@ function TextList({
 }
 function Questions({ path, title }: { path: EditorPath; title: string }) {
   const e = useEditor(),
-    items = editorValue(e.assignment, path) as FreshAssignmentV1['practice'][number]['items'];
+    items = editorValue(e.assignment, path) as EditableAssignmentV1['practice'][number]['items'];
   return (
     <>
       <div className="assignment-editor-question-heading">
@@ -686,7 +686,7 @@ export function AssignmentEditor({
     setHistory({ past: [...history.past, snapshot()], future: history.future.slice(0, -1) });
     restore(entry);
   };
-  const commit = (next: FreshAssignmentV1, group?: string) => {
+  const commit = (next: EditableAssignmentV1, group?: string) => {
     if (disabled || readOnly || !assignment || JSON.stringify(next) === JSON.stringify(assignment))
       return false;
     dragCleanup.current?.();
@@ -1283,6 +1283,13 @@ function InputMaterial() {
           </Entity>
         ))}
       </div>
+      {(!e.readOnly || study.deliveryDirection) && (
+        <TextField
+          path={['input', 'studyText', 'deliveryDirection']}
+          label="Audio delivery direction"
+          optional
+        />
+      )}
       {study.turns.map((turn, i) => (
         <div className="assignment-editor-turn" key={i}>
           <span className="assignment-editor-label">

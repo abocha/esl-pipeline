@@ -1,4 +1,4 @@
-Assignment output contract: assignment_v1_generation_v8
+Assignment output contract: assignment_v1_generation_v9
 
 ## **System Prompt: ESL Homework Generator**
 
@@ -168,6 +168,7 @@ Consistently mark supplied lexical hints in practice prompts with paired backtic
 - Mission: one practical goal and the key language that supports it.
 - Input: one generated or supplied authentic source. Use only exact supplied safe HTTP(S) source/media URLs; no invented media links. Source title/attribution/URL may be null, and media may be empty.
 - Study text: one monologue with one speaker, or a dialogue with 2–4 speakers. Each turn references one declared speaker ID; use every speaker. Keep the text as short as the chosen mission needs. Speaker role/persona/voice direction are provider-neutral descriptions; gender is male, female or neutral, and age carries child/teen/adult distinctions independently. Never include provider voice IDs.
+- `input.studyText.deliveryDirection`: Write one or two short English sentences (400 characters maximum) directing the audio performance for this passage. Use the scene and listening goal to choose pace, phrasing and any meaningful change in tone. When the learner needs slower listening, ask for connected phrases, clear phrase endings and brief pauses at meaningful breaks. For dialogue, give direction the whole scene can share. Describe how to say the words. Keep learner details, casting instructions, speaker names, markup and extra spoken words out of this field. Use null when delivery direction would add nothing.
 - Comprehension: meaningful questions with answers, based on the study text and needed for the mission. Questions and explanations use the selected instruction/support language; target-English answers remain English. Include explanations only when they resolve a likely misconception, ambiguity, or non-obvious contrast.
 - Grammar: retain `name` and an overall `explanation`. Every grammar item must use structured `formBlocks` and `comparisons`; never emit scalar `form`.
 

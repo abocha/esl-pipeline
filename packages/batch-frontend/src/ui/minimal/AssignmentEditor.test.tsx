@@ -2,14 +2,18 @@ import { act, createEvent, fireEvent, render, screen, within } from '@testing-li
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { validateFreshAssignmentV1 } from '@esl-pipeline/contracts';
+import { type EditableAssignmentV1, validateFreshAssignmentV1 } from '@esl-pipeline/contracts';
 
 import { editorFixture, pronunciationFixture } from '../../dev/assignment-editor-fixture';
 import { AssignmentEditor } from './AssignmentEditor';
 import { restoreTextSelection, textSelection } from './AssignmentEditor.inline';
 
 const context = { studentName: 'Alex', inputKind: 'generate' as const, suppliedUrls: [] };
-function setup(value = editorFixture(), readOnly = false, section = 'Practice') {
+function setup(
+  value: EditableAssignmentV1 = editorFixture(),
+  readOnly = false,
+  section = 'Practice',
+) {
   let current = value;
   const changed = vi.fn();
   function Harness() {
@@ -64,6 +68,25 @@ const edit = (label: string, value: string) => {
   fireEvent.input(field);
 };
 describe('current AssignmentV1 workbook editor', () => {
+  it('edits and clears audio direction on a draft saved before the field existed', () => {
+    const before: EditableAssignmentV1 = editorFixture();
+    delete before.input.studyText.deliveryDirection;
+    const h = setup(before, false, 'Your goal');
+    click('Listen and read');
+    expect(h.changed).not.toHaveBeenCalled();
+
+    const direction = 'Speak in connected phrases with a brief pause after each direction.';
+    edit('Audio delivery direction', direction);
+    expect(h.current().input.studyText.deliveryDirection).toBe(direction);
+    expect(h.current().input.studyText.turns).toEqual(before.input.studyText.turns);
+
+    edit('Audio delivery direction', 'Slowly. '.repeat(60));
+    expect(screen.getByText('Use 400 characters or fewer.')).toBeTruthy();
+    edit('Audio delivery direction', '');
+    expect(h.current().input.studyText.deliveryDirection).toBeNull();
+    expect(() => validateFreshAssignmentV1(h.current(), context)).not.toThrow();
+  });
+
   it('starts on the first section and preserves explicit navigation across edits and Undo', () => {
     setup(editorFixture(), false, 'Your goal');
     const nav = screen.getByRole('navigation', { name: 'Assignment sections' });
@@ -141,6 +164,7 @@ describe('current AssignmentV1 workbook editor', () => {
     const value = editorFixture();
     value.input.studyText = {
       type: 'monologue',
+      deliveryDirection: 'Retell the plan in a relaxed, conversational voice.',
       speakers: [value.input.studyText.speakers[0]!],
       turns: [{ speakerId: 'alex', text: 'A weekend plan.' }],
     };
@@ -150,6 +174,9 @@ describe('current AssignmentV1 workbook editor', () => {
       { speakerId: 'alex', text: 'A revised weekend plan.' },
     ]);
     expect(h.current().input.studyText.type).toBe('monologue');
+    expect(h.current().input.studyText.deliveryDirection).toBe(
+      value.input.studyText.deliveryDirection,
+    );
     expect(() => validateFreshAssignmentV1(h.current(), context)).not.toThrow();
   });
   it('edits prompts, answers and explanations together on the workbook', () => {
