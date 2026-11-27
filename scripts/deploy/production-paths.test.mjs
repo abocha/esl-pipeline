@@ -13,8 +13,6 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   assertCheckout,
-  assertDeployPaths,
-  assertDeployState,
   assertProductionEnv,
   assertRuntimeSecrets,
   assertTrustedPath,
@@ -132,6 +130,11 @@ test(
     const key = join(secrets, 'google-service-account.json');
     writeFileSync(key, '{}', { mode: 0o640 });
     chownSync(key, 0, 1000);
+    const geminiConfig = join(secrets, 'gemini-tts-aws-credentials.json');
+    writeFileSync(geminiConfig, '{}', { mode: 0o644 });
+    chownSync(geminiConfig, 0, 1000);
+    assert.throws(() => assertRuntimeSecrets(root), /Unexpected ownership or permissions/);
+    chmodSync(geminiConfig, 0o640);
     assertRuntimeSecrets(root);
     const probeCredential = () =>
       spawnSync(
@@ -156,9 +159,9 @@ test(
     chmodSync(root, 0o751);
     assert.equal(probeCredential().status, 0);
     chmodSync(root, 0o750);
-    writeFileSync(join(secrets, '.env.backup'), 'fixture-only\n');
+    writeFileSync(`${geminiConfig}.backup`, 'fixture-only\n');
     assert.throws(() => assertRuntimeSecrets(root), /Unexpected runtime secret/);
-    rmSync(join(secrets, '.env.backup'));
+    rmSync(`${geminiConfig}.backup`);
     rmSync(key);
     symlinkSync('/etc/passwd', key);
     assert.throws(() => assertRuntimeSecrets(root), /Unsafe path type/);

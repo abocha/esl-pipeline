@@ -76,7 +76,7 @@ export function assertRuntimeSecrets(root) {
   const directory = `${root}/.secrets`;
   assertTrustedPath(directory, { directory: true, gid: 1000, mode: 0o750 });
   for (const name of readdirSync(directory)) {
-    if (name !== 'google-service-account.json')
+    if (name !== 'google-service-account.json' && name !== 'gemini-tts-aws-credentials.json')
       throw new Error(
         `Unexpected runtime secret entry: ${directory}/${name}; move operator backups outside runtime mounts`,
       );
