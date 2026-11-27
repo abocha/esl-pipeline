@@ -64,11 +64,14 @@ describe('native React publication adapter', () => {
       },
     ];
     input.metadata.icon = '🧭';
+    input.input.studyText.deliveryDirection =
+      'DELIVERY_DIRECTION_SENTINEL. Pause after each phrase.';
     const assignment = validateFreshAssignmentV1(input);
     const before = JSON.stringify(assignment);
     expect(ASSIGNMENT_HTML_RENDERER_VERSION).toBe(3);
     for (const preview of [true, false]) {
       const doc = new JSDOM(await renderAssignmentToHtml(assignment, { preview })).window.document;
+      expect(doc.documentElement.outerHTML).not.toContain('DELIVERY_DIRECTION_SENTINEL');
       const languageOf = (element: Element) => element.closest('[lang]')?.getAttribute('lang');
       const instructions = doc.querySelector('.practice-part > p')!;
       expect(instructions.textContent).toBe('Опишите ситуации. Затем исправьте ошибку.');

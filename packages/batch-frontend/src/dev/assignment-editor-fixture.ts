@@ -22,6 +22,7 @@ export function editorFixture(): FreshAssignmentV1 {
       media: [],
       studyText: {
         type: 'dialogue',
+        deliveryDirection: null,
         speakers: [
           {
             id: 'alex',

@@ -58,7 +58,9 @@ Provider catalogs do not shape authored content. `role` and optional `persona` a
 `gender`, `age`, and regional `accent` remain basic provider-neutral hints. Optional
 `voiceDirection` describes the desired vocal qualities without naming provider tags. Placeholder
 accents such as `neutral`, `standard`, and `default` are ignored because they describe qualities,
-not regions. Provider-specific `voice` and dynamic `style` values do not belong in AssignmentV1.
+not regions. The provider-neutral `studyText.deliveryDirection` gives concise passage-level
+performance guidance. Gemini renders it as style metadata while preserving the transcript.
+Provider voice IDs and provider-specific style syntax are runtime details.
 Operators apply explicit voice overrides through runtime configuration such as
 `voices.yml`, job flags, or provider settings.
 

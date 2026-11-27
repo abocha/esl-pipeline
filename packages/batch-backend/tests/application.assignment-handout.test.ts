@@ -72,17 +72,17 @@ describe('ESL-32 fresh handout and derived text boundary', () => {
     );
   });
 
-  it.each(['v7 marker', 'v7 schema', 'new name without icon'])(
+  it.each(['v8 marker', 'v8 schema', 'new name without icon'])(
     'rejects %s before dispatch without repinning',
     async (kind) => {
       const prompt = promptPackageFixture();
-      if (kind === 'v7 marker')
+      if (kind === 'v8 marker')
         prompt.requestEnvelope.instructions =
-          'Assignment output contract: assignment_v1_generation_v7\nOld';
-      if (kind === 'v7 schema')
+          'Assignment output contract: assignment_v1_generation_v8\nOld';
+      if (kind === 'v8 schema')
         prompt.requestEnvelope.responseSchema = {
           ...ASSIGNMENT_RESPONSE_SCHEMA,
-          name: 'assignment_v1_generation_v7',
+          name: 'assignment_v1_generation_v8',
         };
       if (kind === 'new name without icon') {
         const schema = structuredClone(ASSIGNMENT_RESPONSE_SCHEMA.schema) as any;

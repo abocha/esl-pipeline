@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  ASSIGNMENT_DELIVERY_DIRECTION_MAX_LENGTH,
   ASSIGNMENT_RESPONSE_SCHEMA,
   ASSIGNMENT_TEMPLATE_CONTRACT,
   ASSIGNMENT_TEMPLATE_ID,
@@ -39,7 +40,7 @@ describe('AssignmentV1 generation policy boundary', () => {
 
   it('requires a language tag in the closed fresh provider metadata', () => {
     const metadata = (ASSIGNMENT_RESPONSE_SCHEMA.schema as any).properties.metadata;
-    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v8');
+    expect(ASSIGNMENT_RESPONSE_SCHEMA.name).toBe('assignment_v1_generation_v9');
     expect(metadata.required).toContain('instructionLanguage');
     expect(metadata.additionalProperties).toBe(false);
     for (const language of ['en', 'ru', 'pt-BR']) {
@@ -54,6 +55,27 @@ describe('AssignmentV1 generation policy boundary', () => {
       expect(() => validateFreshAssignmentV1(assignment)).toThrow('schema validation');
       expect(() => validateAssignmentV1(assignment)).toThrow('schema validation');
     }
+  });
+
+  it('requires nullable audio direction on fresh output and preserves earlier drafts exactly', () => {
+    const schema = (ASSIGNMENT_RESPONSE_SCHEMA.schema as any).properties.input.properties.studyText;
+    expect(schema.required).toContain('deliveryDirection');
+    expect(schema.properties.deliveryDirection).toEqual({ type: ['string', 'null'] });
+
+    const assignment = freshAssignmentFixture();
+    const { deliveryDirection: _old, ...oldStudyText } = assignment.input.studyText;
+    const old = { ...assignment, input: { ...assignment.input, studyText: oldStudyText } };
+    const saved = serializeAssignmentV1(old);
+    expect(serializeAssignmentV1(validateAssignmentV1(old))).toBe(saved);
+    expect(validateAssignmentV1(old).input.studyText).not.toHaveProperty('deliveryDirection');
+    expect(() => validateFreshAssignmentV1(old)).toThrow('deliveryDirection');
+
+    assignment.input.studyText.deliveryDirection = 'Pause briefly before announcing the time.';
+    expect(validateFreshAssignmentV1(assignment)).toEqual(assignment);
+    assignment.input.studyText.deliveryDirection = 'x'.repeat(
+      ASSIGNMENT_DELIVERY_DIRECTION_MAX_LENGTH + 1,
+    );
+    expect(() => validateFreshAssignmentV1(assignment)).toThrow('deliveryDirection');
   });
 
   it('carries tutor guidance, durable profile preference and lesson evidence into the real package', async () => {
@@ -133,6 +155,8 @@ describe('AssignmentV1 generation policy boundary', () => {
       'Put the full structural formula in `pattern` and illustrative sentences in `examples`',
       'do not repeat either inside `label`',
       'Questions and explanations use the selected instruction/support language',
+      '`input.studyText.deliveryDirection`',
+      'connected phrases, clear phrase endings and brief pauses',
       '0. Example: <prompt> → <completed response>',
       '`Task: `',
       'Every `practice[].items[].prompt` must be entirely English',

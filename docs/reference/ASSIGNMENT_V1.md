@@ -14,7 +14,7 @@
 [ESL-4](https://linear.app/abocha/issue/ESL-4) /
 [GitHub #308](https://github.com/abocha/esl-pipeline/issues/308) implements Slice 1.
 `packages/contracts/src/assignment-v1.ts` owns the Zod schema, inferred TypeScript domain and
-provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v8`, and the
+provider JSON Schema. Schema version is `1`, Responses schema name is `assignment_v1_generation_v9`, and the
 repository prompt compatibility version is `3.0.0` because old generation packages must be recreated.
 
 The object contains metadata, mission, one input source, declared speakers and turns,
@@ -25,7 +25,7 @@ six existing modes. Gender is male/female/neutral; child is represented by age, 
 
 The backend preserves source ownership checks before generation. Fresh packages must select the
 active `hw_prompt_assignment_v1.md` revision with the exact first-line declaration
-`Assignment output contract: assignment_v1_generation_v8`. The envelope retains the read-format
+`Assignment output contract: assignment_v1_generation_v9`. The envelope retains the read-format
 discriminator `promptVersion: assignment_v1` and pins
 the full strict schema and trusted validation context (canonical student display text, known input
 kind and exact URLs supplied in notes/transcript). Revision ID/hash and existing profile, memory,
@@ -37,8 +37,9 @@ ESL-24 uses two explicit closed rationale read shapes: legacy requires
 root `rationale` and forbids both new fields; new requires `learnerRationale` and nullable
 `teacherRationale`, forbidding root `rationale`. Mixed, absent and partial forms are rejected.
 `validateAssignmentV1` accepts either complete shape without defaults or normalization.
-`validateFreshAssignmentV1` admits only explicit instruction-language metadata, new rationale, structured mission and structured grammar after
-provider receipt (also in generation evaluation); requesting a strict provider schema alone is
+`validateFreshAssignmentV1` admits only explicit instruction-language metadata, new rationale,
+structured mission and grammar, and the nullable study-text delivery direction after provider
+receipt (also in generation evaluation). Requesting a strict provider schema alone is
 insufficient. Learner rationale speaks
 directly to the learner about practical benefit; lesson evidence, diagnosis and teacher selection
 reasoning belong in teacher rationale. Teacher rationale remains typed data only.
@@ -56,6 +57,17 @@ Native section 6 renders only learner rationale; legacy rationale omits the whol
 renumbering section 7; ESL-32 removes the teacher follow-up section. Whole-document and mock-upload sentinel checks ensure no teacher or
 ambiguous legacy text appears in learner HTML, including hidden or serialized copies. The ESL-20
 fixture, snapshot and pinned canonical hash remain the unchanged compatibility guard.
+
+### Study-text audio delivery (ESL-105)
+
+Fresh v9 drafts include `input.studyText.deliveryDirection`, a nullable, provider-neutral note of
+up to 400 characters about how to read the study text. The assignment writer uses the learning
+goal and scene to choose pace, phrasing and tone. The tutor can edit or clear the direction in
+the assignment editor. In Gemini study-text synthesis it becomes `speechMetadata.style`, shared
+across dialogue turns. It stays out of the transcript and learner HTML. Earlier assignments
+can be read and edited without adding the field. To enable v9 drafting after deployment,
+activate the shipped v9 template and recreate any pending v8 prompt packages that still need
+generation.
 
 ### Learner handout convention and authored emoji (ESL-32)
 

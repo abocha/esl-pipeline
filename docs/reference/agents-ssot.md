@@ -332,7 +332,7 @@ checks from the [docs-only recipe](TESTING_GUIDELINES.md#docs-only-changes).
 AssignmentV1 runtime/read admission accepts exactly the closed legacy root `rationale` shape or
 the new required `learnerRationale` plus required nullable `teacherRationale` shape. Mixed, missing
 and partial shapes fail. Fresh generation admits only the new shape after provider receipt; the
-provider schema and template marker identify `assignment_v1_generation_v8`. Stored prompt pins and
+provider schema and template marker identify `assignment_v1_generation_v9`. Stored prompt pins and
 old active template markers fail the existing unsupported-contract path before dispatch. Reads
 never normalize old assignments or add fields; canonical serialization 1 and frozen hashes remain
 unchanged. Native learner HTML renders only learner rationale; ambiguous legacy rationale omits
@@ -360,6 +360,11 @@ Support-language scaffolding stays separate from target English. Economy is the 
 teaching sequence, with no fixed vocabulary/exercise quotas or omission of useful scaffolding for
 JSON brevity. The existing prompt context sources own this evidence; no second profile system is
 introduced. See [AssignmentV1 policy](ASSIGNMENT_V1.md#fresh-teaching-policy-and-support-language-esl-27).
+
+Fresh study text requires a nullable `deliveryDirection`. Runtime reads and the editor admit
+earlier objects without it. It is provider-neutral tutor-editable guidance for audio delivery.
+Gemini study-text synthesis passes it as style metadata and preserves the transcript. Learner
+HTML excludes it. See [the delivery-direction contract](ASSIGNMENT_V1.md#study-text-audio-delivery-esl-105).
 
 Structured jobs execute frozen, validated AssignmentV1 directly through orchestrator, TTS and native
 HTML; typed preview uses the same renderer. No active PMD projection or temporary Markdown source

@@ -69,6 +69,9 @@ Primary groups:
   - `gemini` TTS uses Google Cloud ADC plus explicit
     `ESL_TTS_PROVIDER_GEMINI_PROJECT_ID`. `ESL_TTS_PROVIDER_GEMINI_MODEL` defaults to
     `gemini-3.8-flash-lite-tts`; `gemini-3.8-flash-tts` is selectable.
+    `ESL_TTS_PROVIDER_GEMINI_CREDENTIALS_FILE` optionally selects a trusted Google credential
+    configuration file for Gemini TTS. Production AWS workload identity uses the Google-generated
+    configuration mounted read-only under `/app/secrets`.
     `ESL_TTS_PROVIDER_GEMINI_TIMEOUT_MS` defaults to 180000 (1000–300000). This lane uses the
     fixed global Cloud endpoint, deterministic prebuilt voices and identity speech planning, with
     no external planner/ranker calls or AI Studio key. The full pronunciation sentence follows the
