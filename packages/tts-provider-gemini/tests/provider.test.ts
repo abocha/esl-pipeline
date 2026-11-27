@@ -15,8 +15,13 @@ import { encodeGeminiMp3 } from '../src/audio.js';
 import { createGeminiClient, GeminiTtsError, validateGeminiWav } from '../src/client.js';
 import { createGeminiTtsProvider } from '../src/index.js';
 
-const mocks = vi.hoisted(() => ({ accessToken: vi.fn(), fetch: vi.fn() }));
+const mocks = vi.hoisted(() => ({ awsOptions: vi.fn(), accessToken: vi.fn(), fetch: vi.fn() }));
 vi.mock('google-auth-library', () => ({
+  AwsClient: class {
+    constructor(options: unknown) {
+      mocks.awsOptions(options);
+    }
+  },
   GoogleAuth: class {
     getAccessToken = mocks.accessToken;
   },
@@ -98,6 +103,16 @@ const options = () => ({
 });
 const provider = () => createGeminiTtsProvider({ projectId: 'test-project-123' });
 const requestBody = () => JSON.parse(mocks.fetch.mock.calls[0]![1].body);
+
+const awsCredentialConfig = {
+  type: 'external_account',
+  audience:
+    '//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/test/providers/aws',
+  token_url: 'https://sts.googleapis.com/v1/token',
+  credential_source: { environment_id: 'aws1' },
+  service_account_impersonation_url:
+    'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/gemini@test-project-123.iam.gserviceaccount.com:generateAccessToken',
+};
 
 describe('Gemini provider boundary', () => {
   it('uses one native dialogue request with separate exact transcript turns and no ranker', async () => {
@@ -446,6 +461,41 @@ describe('Gemini provider boundary', () => {
     ).toEqual(['en-us-mako', 'en-us-kira']);
     expect(catalog.voices.some((voice) => voice.id === 'Kore')).toBe(true);
     expect(mocks.accessToken).not.toHaveBeenCalled();
+  });
+
+  it('uses Gemini-specific credentials only when it needs to synthesize audio', async () => {
+    const file = join(directory, 'gemini-aws.json');
+    await writeFile(file, JSON.stringify(awsCredentialConfig));
+    vi.stubEnv('ESL_TTS_PROVIDER_GEMINI_CREDENTIALS_FILE', file);
+    vi.stubEnv('GOOGLE_APPLICATION_CREDENTIALS', '/app/secrets/other-google.json');
+    const adapter = provider();
+    const input = { text: 'Wait by the station.', voiceId: 'Kore' };
+    await adapter.synthesizePronunciationText(input, { ...options(), preview: true });
+    expect(mocks.awsOptions).not.toHaveBeenCalled();
+    await adapter.synthesizePronunciationText(input, options());
+    expect(mocks.awsOptions).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        audience: awsCredentialConfig.audience,
+        token_url: awsCredentialConfig.token_url,
+        service_account_impersonation_url: awsCredentialConfig.service_account_impersonation_url,
+      }),
+    );
+    expect(process.env.GOOGLE_APPLICATION_CREDENTIALS).toBe('/app/secrets/other-google.json');
+  });
+
+  it('rejects an unexpected federation token endpoint before authentication or synthesis', async () => {
+    const file = join(directory, 'gemini-aws.json');
+    await writeFile(
+      file,
+      JSON.stringify({ ...awsCredentialConfig, token_url: 'https://example.test/token' }),
+    );
+    vi.stubEnv('ESL_TTS_PROVIDER_GEMINI_CREDENTIALS_FILE', file);
+    await expect(
+      provider().synthesizePronunciationText({ text: 'Wait here.', voiceId: 'Kore' }, options()),
+    ).rejects.toThrow('could not obtain Google credentials');
+    expect(mocks.awsOptions).not.toHaveBeenCalled();
+    expect(mocks.accessToken).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it('bounds pending ADC work with the configured timeout instead of waiting indefinitely', async () => {

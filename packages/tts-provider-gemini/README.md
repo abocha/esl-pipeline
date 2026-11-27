@@ -9,7 +9,10 @@ Chirp/Cloud Text-to-Speech adapter and of the retired Google AI Studio LLM lane.
   environment variable to another provider to override fresh generation. Explicit saved selections
   take precedence.
 - Set `ESL_TTS_PROVIDER_GEMINI_PROJECT_ID` to the Cloud project receiving the requests and charges.
-- Authentication uses Google Application Default Credentials: `GOOGLE_APPLICATION_CREDENTIALS`,
+- Optional `ESL_TTS_PROVIDER_GEMINI_CREDENTIALS_FILE` selects the operator-provisioned, Google-generated
+  AWS workload identity configuration for this adapter. Mount it read-only. The adapter exchanges
+  credentials with Google's standard STS endpoint and impersonates an account in the Gemini project.
+- When the Gemini file is unset, authentication uses Google Application Default Credentials: `GOOGLE_APPLICATION_CREDENTIALS`,
   workload identity, or local ADC configured with `gcloud auth application-default login`. The
   ordinary `gcloud auth login` credential store alone is not ADC. The adapter never shells out to
   `gcloud`, uses AI Studio keys, or copies credentials into artifacts.

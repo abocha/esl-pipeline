@@ -1,4 +1,5 @@
-import { GoogleAuth } from 'google-auth-library';
+import { readFile } from 'node:fs/promises';
+import { AwsClient, type AwsClientOptions, GoogleAuth } from 'google-auth-library';
 
 import type { PipelineLogger, VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import { ConfigurationError } from '@esl-pipeline/contracts';
@@ -106,6 +107,50 @@ export function validateGeminiWav(audio: Buffer): number {
   return dataSize / byteRate;
 }
 
+async function loadGoogleAuth(project: string): Promise<GoogleAuth> {
+  const scopes = ['https://www.googleapis.com/auth/cloud-platform'];
+  const file = process.env.ESL_TTS_PROVIDER_GEMINI_CREDENTIALS_FILE?.trim();
+  if (!file) return new GoogleAuth({ scopes });
+
+  const config: Partial<AwsClientOptions> = JSON.parse(await readFile(file, 'utf8'));
+  const audience = config.audience;
+  const impersonationUrl = config.service_account_impersonation_url;
+  const accountProject =
+    /^https:\/\/iamcredentials\.googleapis\.com\/v1\/projects\/-\/serviceAccounts\/[a-z][a-z0-9-]+@([a-z][a-z0-9-]+)\.iam\.gserviceaccount\.com:generateAccessToken$/.exec(
+      impersonationUrl ?? '',
+    )?.[1];
+  const tokenUrl = 'https://sts.googleapis.com/v1/token';
+  if (
+    config.type !== 'external_account' ||
+    config.credential_source?.environment_id !== 'aws1' ||
+    config.token_url !== tokenUrl ||
+    accountProject !== project ||
+    !audience ||
+    !/^\/\/iam\.googleapis\.com\/projects\/\d+\/locations\/global\/workloadIdentityPools\/[\w-]+\/providers\/[\w-]+$/.test(
+      audience,
+    )
+  ) {
+    throw new Error('Invalid Gemini AWS federation configuration.');
+  }
+
+  return new GoogleAuth({
+    authClient: new AwsClient({
+      audience,
+      token_url: tokenUrl,
+      subject_token_type: 'urn:ietf:params:aws:token-type:aws4_request',
+      service_account_impersonation_url: impersonationUrl,
+      credential_source: {
+        environment_id: 'aws1',
+        regional_cred_verification_url:
+          'https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15',
+        region_url: 'http://169.254.169.254/latest/meta-data/placement/availability-zone',
+        url: 'http://169.254.169.254/latest/meta-data/iam/security-credentials',
+      },
+      scopes,
+    }),
+  });
+}
+
 export function createGeminiClient(options: { projectId?: string; timeoutMs?: number } = {}) {
   // GoogleAuth is lazy: catalog, preview and cache hits do not discover ADC or make auth calls.
   let auth: GoogleAuth | undefined;
@@ -128,14 +173,14 @@ export function createGeminiClient(options: { projectId?: string; timeoutMs?: nu
       ]);
       const started = Date.now();
       try {
-        auth ??= new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
         let token: string | null | undefined;
         try {
+          auth ??= await bounded(loadGoogleAuth(project), signal);
           token = await bounded(auth.getAccessToken(), signal);
         } catch {
           if (signal.aborted) throw signal.reason;
           throw new ConfigurationError(
-            'Gemini Cloud TTS could not obtain Application Default Credentials. Configure GOOGLE_APPLICATION_CREDENTIALS, workload identity, or local ADC.',
+            'Gemini Cloud TTS could not obtain Google credentials. Check the configured Gemini credentials file or Application Default Credentials.',
           );
         }
         throwIfTtsCancelled(control);
