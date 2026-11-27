@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [24.0.1] - 2026-11-27
+
+### Changed
+
+- Automated release from PR #495: fix(deploy): allow the Gemini federation credential file (ESL-105) (https://github.com/abocha/esl-pipeline/pull/495)
+
 ## [24.0.0] - 2026-11-27
 
 ### Changed
